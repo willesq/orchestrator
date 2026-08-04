@@ -6,6 +6,8 @@ package daemon
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -21,6 +23,7 @@ import (
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/embed"
+	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/prs"
 	"github.com/willesq/orchestrator/internal/qdrant"
@@ -122,14 +125,26 @@ func Run(ctx context.Context) error {
 		return err
 	}
 
+	// Resolve the qdrant API key once (persisted, generated on first run) so the
+	// engine and the client share it independent of any ambient env var.
+	apiKey, err := resolveQdrantAPIKey(s)
+	if err != nil {
+		return err
+	}
+
+	// First run downloads the embedding model so search/ingest work out of the box.
+	if err := ensureModel(ctx, s); err != nil {
+		return err
+	}
+
 	// In binary mode, orchd owns the native (Docker-free) qdrant engine's lifecycle.
-	qStop, qURL, err := startQdrant(ctx, s)
+	qStop, qURL, err := startQdrant(ctx, s, apiKey)
 	if err != nil {
 		return err
 	}
 	defer qStop()
 
-	svc, emb := buildRAG(s, qURL)
+	svc, emb := buildRAG(s, qURL, apiKey)
 	defer emb.Close()
 
 	// Durable workflow engine: worker drains AgentTask instances; dispatcher enqueues.
@@ -188,21 +203,17 @@ func Run(ctx context.Context) error {
 // startQdrant brings up the vector store per config. In binary mode orchd runs
 // and owns the native qdrant engine; otherwise it just dials the configured URL.
 // Returns a stop func and the effective base URL the RAG store should use.
-func startQdrant(ctx context.Context, s config.Settings) (func(), string, error) {
+func startQdrant(ctx context.Context, s config.Settings, apiKey string) (func(), string, error) {
 	if s.RAG.Qdrant.Mode != "binary" {
 		return func() {}, s.RAG.Qdrant.URL, nil
-	}
-	storage := s.RAG.Qdrant.Storage
-	if storage == "" {
-		storage = filepath.Join(paths.DataDir(), "qdrant")
 	}
 	qp := qdrant.New(qdrant.Config{
 		Version:  s.RAG.Qdrant.Version,
 		BinDir:   filepath.Join(paths.DataDir(), "bin"),
-		Storage:  storage,
+		Storage:  resolveStorageDir(s),
 		HTTPPort: s.RAG.Qdrant.HTTPPort,
 		GRPCPort: s.RAG.Qdrant.GRPCPort,
-		APIKey:   os.Getenv(orDefault(s.RAG.Qdrant.APIKeyEnv, "QDRANT_API_KEY")),
+		APIKey:   apiKey,
 	})
 	if err := qp.Start(ctx); err != nil {
 		return nil, "", fmt.Errorf("start qdrant: %w", err)
@@ -211,11 +222,7 @@ func startQdrant(ctx context.Context, s config.Settings) (func(), string, error)
 }
 
 // buildRAG constructs the embedder + RAG service from config against a qdrant URL.
-func buildRAG(s config.Settings, qdrantURL string) (*rag.Service, *embed.Embedder) {
-	modelDir := s.Embedder.ModelDir
-	if modelDir == "" {
-		modelDir = filepath.Join(paths.DataDir(), "models", "minilm")
-	}
+func buildRAG(s config.Settings, qdrantURL, apiKey string) (*rag.Service, *embed.Embedder) {
 	onnxDir := s.Embedder.OnnxLibDir
 	if onnxDir == "" {
 		onnxDir = resolveOnnxLibDir()
@@ -223,15 +230,74 @@ func buildRAG(s config.Settings, qdrantURL string) (*rag.Service, *embed.Embedde
 	idle, _ := time.ParseDuration(s.Embedder.IdleUnload)
 
 	emb := embed.New(embed.Config{
-		ModelDir:   modelDir,
+		ModelDir:   resolveModelDir(s),
 		OnnxLibDir: onnxDir,
 		IdleUnload: idle,
 		Dimension:  384,
 	})
 
-	apiKey := os.Getenv(orDefault(s.RAG.Qdrant.APIKeyEnv, "QDRANT_API_KEY"))
 	qs := rag.NewQdrantStore(qdrantURL, s.RAG.Qdrant.Collection, apiKey)
 	return rag.NewService(emb, qs, s.Embedder.ChunkSize, s.Embedder.ChunkOverlap), emb
+}
+
+// resolveStorageDir is the qdrant storage directory (config override or the
+// default XDG data location, <data>/qdrant).
+func resolveStorageDir(s config.Settings) string {
+	if s.RAG.Qdrant.Storage != "" {
+		return s.RAG.Qdrant.Storage
+	}
+	return filepath.Join(paths.DataDir(), "qdrant")
+}
+
+// resolveModelDir is the embedding model directory (config override or default).
+func resolveModelDir(s config.Settings) string {
+	if s.Embedder.ModelDir != "" {
+		return s.Embedder.ModelDir
+	}
+	return filepath.Join(paths.DataDir(), "models", "minilm")
+}
+
+// ensureModel downloads the embedding model on first run if it is not present.
+func ensureModel(ctx context.Context, s config.Settings) error {
+	dir := resolveModelDir(s)
+	mp := model.New(model.Config{Dir: dir})
+	if mp.Present() {
+		return nil
+	}
+	log.Printf("orchd: fetching embedding model into %s ...", dir)
+	return mp.Ensure(ctx)
+}
+
+// resolveQdrantAPIKey returns the native engine's API key: an explicit env
+// override if set, otherwise a key persisted under the data dir (generated on
+// first run) so the engine and client always agree without an ambient env var.
+func resolveQdrantAPIKey(s config.Settings) (string, error) {
+	if k := os.Getenv(orDefault(s.RAG.Qdrant.APIKeyEnv, "QDRANT_API_KEY")); k != "" {
+		return k, nil
+	}
+	return ensureQdrantAPIKey(filepath.Join(paths.DataDir(), "qdrant-api-key"))
+}
+
+// ensureQdrantAPIKey reads the persisted key, generating and storing one (0600)
+// if it is absent or empty.
+func ensureQdrantAPIKey(path string) (string, error) {
+	if b, err := os.ReadFile(path); err == nil {
+		if k := strings.TrimSpace(string(b)); k != "" {
+			return k, nil
+		}
+	}
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	key := hex.EncodeToString(buf)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, []byte(key+"\n"), 0o600); err != nil {
+		return "", err
+	}
+	return key, nil
 }
 
 // resolveOnnxLibDir finds the onnxruntime shared-library directory via Homebrew,

@@ -89,10 +89,9 @@ func setDefaults(v *viper.Viper) {
 	// Docker-free by default: orchd runs the native qdrant release binary.
 	v.SetDefault("rag.qdrant.mode", "binary")
 	v.SetDefault("rag.qdrant.url", "http://127.0.0.1:6333")
-	// Distinct from the Python system's "orchestrator" collection so the Go
-	// rewrite never clobbers the live index during parallel development. At
-	// cutover this becomes "orchestrator" pointing at the shared storage.
-	v.SetDefault("rag.qdrant.collection", "orchestrator_go")
+	// The canonical collection served by orchd's native engine (cutover complete;
+	// the earlier "orchestrator_go" parallel-dev name is retired).
+	v.SetDefault("rag.qdrant.collection", "orchestrator")
 	v.SetDefault("rag.qdrant.api_key_env", "QDRANT_API_KEY")
 	// Pinned to match the Python system's engine for storage compatibility at cutover.
 	v.SetDefault("rag.qdrant.version", "v1.17.1")

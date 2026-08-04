@@ -348,3 +348,36 @@ func TestPlistEdit(t *testing.T) {
 		})
 	}
 }
+
+func TestPlistEditHomebrewManaged(t *testing.T) {
+	tests := []struct {
+		name     string
+		orchd    string
+		wantNoOp bool
+	}{
+		{name: "cellar path is a no-op (brew services owns it)", orchd: "/opt/homebrew/Cellar/orch/0.2.0/bin/orchd", wantNoOp: true},
+		{name: "source-build path creates a plist", orchd: "/Users/me/build/bin/orchd", wantNoOp: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := plistEdit(tt.orchd, t.TempDir())
+			existing := []byte("prior-plist")
+			nw, summary, err := e.Compute(existing)
+			if err != nil {
+				t.Fatalf("compute: %v", err)
+			}
+			if tt.wantNoOp {
+				if string(nw) != string(existing) {
+					t.Errorf("expected no-op (unchanged bytes), got rewrite:\n%s", nw)
+				}
+				if !strings.Contains(summary, "skipped") {
+					t.Errorf("summary should note skip: %s", summary)
+				}
+			} else {
+				if !strings.Contains(string(nw), tt.orchd) {
+					t.Errorf("plist should reference orchd path: %s", nw)
+				}
+			}
+		})
+	}
+}

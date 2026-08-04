@@ -14,7 +14,7 @@ func TestLoadDefaults(t *testing.T) {
 	}{
 		{name: "embedder idle_unload default", key: "embedder.idle_unload", want: "10m"},
 		{name: "qdrant mode default is docker-free", key: "rag.qdrant.mode", want: "binary"},
-		{name: "collection is isolated from python", key: "rag.qdrant.collection", want: "orchestrator_go"},
+		{name: "collection default is orchestrator", key: "rag.qdrant.collection", want: "orchestrator"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -107,7 +107,7 @@ func TestUnmarshalTyped(t *testing.T) {
 		wantURL string
 		wantCol string
 	}{
-		{name: "defaults decode into typed struct", wantURL: "http://127.0.0.1:6333", wantCol: "orchestrator_go"},
+		{name: "defaults decode into typed struct", wantURL: "http://127.0.0.1:6333", wantCol: "orchestrator"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

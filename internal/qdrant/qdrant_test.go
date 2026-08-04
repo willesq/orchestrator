@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestAssetName(t *testing.T) {
@@ -242,7 +243,9 @@ func TestStartStop(t *testing.T) {
 			_ = os.WriteFile(p.BinaryPath(), []byte("x"), 0o755) // EnsureBinary no-op
 
 			stopped := false
-			p.run = func(string, []string) (stopFunc, error) {
+			var gotDir string
+			p.run = func(_, dir string, _ []string) (stopFunc, error) {
+				gotDir = dir
 				if tt.runErr != nil {
 					return nil, tt.runErr
 				}
@@ -260,6 +263,9 @@ func TestStartStop(t *testing.T) {
 				}
 				if !stopped {
 					t.Errorf("stop handle not invoked")
+				}
+				if want := filepath.Join(dir, "store"); gotDir != want {
+					t.Errorf("run working dir = %q, want storage dir %q", gotDir, want)
 				}
 			}
 		})
@@ -280,7 +286,7 @@ func TestStartReusesRunningEngine(t *testing.T) {
 			defer closeSrv()
 			p := New(Config{HTTPPort: port})
 			spawned := false
-			p.run = func(string, []string) (stopFunc, error) {
+			p.run = func(string, string, []string) (stopFunc, error) {
 				spawned = true
 				return func() error { return nil }, nil
 			}
@@ -300,7 +306,7 @@ func TestEnvHardening(t *testing.T) {
 		apiKey string
 		want   []string
 	}{
-		{name: "no key", apiKey: "", want: []string{"QDRANT__SERVICE__HOST=127.0.0.1", "QDRANT__TELEMETRY_DISABLED=true", "QDRANT__SERVICE__ENABLE_CORS=false"}},
+		{name: "no key", apiKey: "", want: []string{"QDRANT__SERVICE__HOST=127.0.0.1", "QDRANT__STORAGE__STORAGE_PATH=/tmp/s", "QDRANT__STORAGE__SNAPSHOTS_PATH=/tmp/s/snapshots", "QDRANT__TELEMETRY_DISABLED=true", "QDRANT__SERVICE__ENABLE_CORS=false"}},
 		{name: "with key", apiKey: "secret", want: []string{"QDRANT__SERVICE__API_KEY=secret"}},
 	}
 	for _, tt := range tests {
@@ -404,16 +410,31 @@ func TestExecRun(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
+			cwdFile := filepath.Join(dir, "cwd.txt")
 			script := filepath.Join(dir, "stayalive.sh")
-			if err := os.WriteFile(script, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+			if err := os.WriteFile(script, []byte("#!/bin/sh\npwd -P > \""+cwdFile+"\"\nsleep 30\n"), 0o755); err != nil {
 				t.Fatalf("write script: %v", err)
 			}
-			stop, err := execRun(script, os.Environ())
+			stop, err := execRun(script, dir, os.Environ())
 			if err != nil {
 				t.Fatalf("execRun: %v", err)
 			}
+			// Poll until the script records its working directory (avoids a race).
+			var got string
+			for range 50 {
+				if b, err := os.ReadFile(cwdFile); err == nil && strings.TrimSpace(string(b)) != "" {
+					got = strings.TrimSpace(string(b))
+					break
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
 			if err := stop(); err != nil {
 				t.Errorf("stop: %v", err)
+			}
+			wantDir, _ := filepath.EvalSymlinks(dir)
+			gotDir, _ := filepath.EvalSymlinks(got)
+			if gotDir != wantDir {
+				t.Errorf("working dir = %q, want %q", gotDir, wantDir)
 			}
 		})
 	}
