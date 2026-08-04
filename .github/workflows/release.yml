@@ -90,7 +90,7 @@ jobs:
           echo "id=$ASSET_ID" >> "$GITHUB_OUTPUT"
 
       # The `secrets` context is NOT allowed in `if:` conditions, so surface the
-      # token's presence as a step output and gate the bump on that instead.
+      # token's presence as a step output and gate the dispatch on that instead.
       - name: Check for tap token
         id: taptoken
         env:
@@ -102,12 +102,16 @@ jobs:
             echo "present=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Bump Homebrew tap formula
+      # Trigger the tap's bump-formula workflow_dispatch, which updates orch.rb's
+      # version / asset id / sha256 in place (no full-file rewrite). Requires
+      # HOMEBREW_TAP_TOKEN to have Actions: write on willesq/homebrew-tap.
+      - name: Dispatch tap formula bump
         if: steps.taptoken.outputs.present == 'true'
         env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          ./scripts/bump_formula.sh \
-            "${{ steps.package.outputs.version }}" \
-            "${{ steps.package.outputs.sha256 }}" \
-            "${{ steps.asset.outputs.id }}"
+          gh workflow run bump-formula.yml --repo willesq/homebrew-tap \
+            -f formula=orch \
+            -f version="${{ steps.package.outputs.version }}" \
+            -f sha256="${{ steps.package.outputs.sha256 }}" \
+            -f asset_id="${{ steps.asset.outputs.id }}"
