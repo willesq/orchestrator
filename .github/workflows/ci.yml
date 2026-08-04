@@ -1,0 +1,48 @@
+# PR/branch checks: pure-Go tests + per-file coverage gate, plus a real cgo (-tags
+# ORT) build to validate the release recipe on a GitHub macOS runner. No release.
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  TOKENIZERS_VERSION: v1.27.0
+
+jobs:
+  test-and-build:
+    runs-on: macos-14 # Apple Silicon (arm64)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test + per-file coverage gate (pure Go)
+        run: make cover
+
+      - name: Fetch libtokenizers static lib (darwin-arm64)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build/lib/darwin-arm64
+          gh release download "$TOKENIZERS_VERSION" --repo daulet/tokenizers \
+            --pattern 'libtokenizers.darwin-arm64.tar.gz' --dir /tmp
+          tar xzf /tmp/libtokenizers.darwin-arm64.tar.gz -C build/lib/darwin-arm64
+
+      - name: Build (cgo, -tags ORT) + smoke
+        run: |
+          export CGO_ENABLED=1
+          export CGO_LDFLAGS="-Lbuild/lib/darwin-arm64"
+          for b in orch orchd orch-hook; do
+            go build -tags ORT -o "build/bin/$b" "./cmd/$b"
+          done
+          build/bin/orch version
