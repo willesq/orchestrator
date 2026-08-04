@@ -1,0 +1,93 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+.eggs/
+
+# uv
+.uv/
+uv.lock.bak
+
+# tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# typing
+.pyright/
+
+# secrets — must never be committed
+.env
+.env.*
+!.env.example
+.qdrant-key
+
+# runtime state — committed schemas only, not actual content
+queue/pending/*.md
+queue/in_progress/*.md
+queue/complete/*.md
+queue/blocked/*.md
+queue/archive/**
+sessions/*.yaml
+sessions/*.checkpoint.yaml
+events/**
+pending_ingest/**
+logs/**
+backups/**
+data/qdrant/**
+data/pr_babysitter_state.json
+registry/sources.yaml
+
+# misc local detritus (not part of the orchestrator)
+research/
+state/
+tmp_audit/
+# Literal `~` directory created by a tilde-not-expanded shell command
+/~
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# --- Go rewrite: this repo is Go-only. The legacy Python orchestrator runs
+# --- locally until cutover and is intentionally NOT tracked here.
+/cli/
+/lib/
+/hooks/
+/daemons/
+/mcp_servers/
+/agents/
+/commands/
+/skills/
+/tests/
+/ui/
+/registry/
+/config.yaml
+/pyproject.toml
+/uv.lock
+/PLANNING.md
+/TASK.md
+/INSTALL_PROMPT.md
+/SHARE_README.md
+/.env.example
+/.qdrant-initialized
+/.claude/
+/.serena/
+/snapshots/
+/queue/
+/docs/SPEC.md
+
+# Go build output + CI artifacts
+/build/
+/dist/
+/vendor/
+*.test
+# staged tokenizers static lib (downloaded per-build, never committed)
+build/lib/

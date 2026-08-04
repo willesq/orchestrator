@@ -1,0 +1,84 @@
+# Build the three cgo binaries on a native macOS arm64 runner, attach a tarball to
+# a GitHub Release, and bump the Homebrew tap formula to point at it.
+#
+# Triggered by pushing a version tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`).
+#
+# The build is cgo: it links a prebuilt libtokenizers.a at build time. onnxruntime is
+# NOT needed at build time (it is dlopen'd at runtime) — it's the formula's runtime dep.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the GitHub Release
+
+env:
+  TOKENIZERS_VERSION: v1.27.0
+
+jobs:
+  release:
+    runs-on: macos-14 # Apple Silicon (arm64)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Fetch libtokenizers static lib (darwin-arm64)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build/lib/darwin-arm64
+          gh release download "$TOKENIZERS_VERSION" --repo daulet/tokenizers \
+            --pattern 'libtokenizers.darwin-arm64.tar.gz' --dir /tmp
+          tar xzf /tmp/libtokenizers.darwin-arm64.tar.gz -C build/lib/darwin-arm64
+
+      - name: Test (pure Go, no ORT tag)
+        run: go test ./...
+
+      - name: Build binaries (cgo, -tags ORT)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          export CGO_ENABLED=1
+          export CGO_LDFLAGS="-Lbuild/lib/darwin-arm64"
+          LDFLAGS="-s -w -X github.com/willesq/orchestrator/internal/version.Version=${VERSION} -X github.com/willesq/orchestrator/internal/version.Commit=${GITHUB_SHA::12}"
+          for b in orch orchd orch-hook; do
+            go build -tags ORT -ldflags "$LDFLAGS" -o "dist/$b" "./cmd/$b"
+          done
+          dist/orch version
+
+      # --- SIGNING SEAM (future PR) -------------------------------------------
+      # Insert codesign + notarization of dist/{orch,orchd,orch-hook} here,
+      # BEFORE packaging, once the Apple Developer ID secrets are configured.
+      # -----------------------------------------------------------------------
+
+      - name: Package + checksum
+        id: package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          TARBALL="orch_${VERSION}_darwin_arm64.tar.gz"
+          tar -C dist -czf "$TARBALL" orch orchd orch-hook
+          SHA=$(shasum -a 256 "$TARBALL" | awk '{print $1}')
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.tarball }}" \
+            --title "$GITHUB_REF_NAME" --generate-notes
+
+      - name: Bump Homebrew tap formula
+        if: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          ./scripts/bump_formula.sh \
+            "${{ steps.package.outputs.version }}" \
+            "${{ steps.package.outputs.sha256 }}"

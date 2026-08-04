@@ -1,0 +1,269 @@
+// Package qdrant provisions and manages a NATIVE qdrant engine — no Docker. It
+// downloads the pinned qdrant release binary, runs it hardened (localhost-only,
+// telemetry off, CORS off) against a storage directory, and health-checks it.
+//
+// This is what makes the "same data, different engine" cutover possible: point
+// the native binary at the existing storage dir (e.g. ~/.claude/orchestrator/
+// data/qdrant/) and it serves the existing collections. Only one engine may own
+// a storage dir at a time, so the install cutover is stop-docker → start-native.
+//
+// The network download and process spawn are injected seams so the logic is
+// testable without pulling a real binary or opening ports.
+package qdrant
+
+import (
+	"archive/tar"
+	"compress/gzip"
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"syscall"
+	"time"
+)
+
+// Config controls the native engine.
+type Config struct {
+	Version  string // pinned release, e.g. v1.17.1
+	BinDir   string // where the qdrant binary is cached
+	Storage  string // storage directory (the data location)
+	HTTPPort int
+	GRPCPort int
+	APIKey   string // optional; health checks don't require it
+}
+
+// downloadFunc fetches url into dest.
+type downloadFunc func(ctx context.Context, url, dest string) error
+
+// stopFunc terminates a running process.
+type stopFunc func() error
+
+// runFunc starts a binary with env and returns a stop handle.
+type runFunc func(bin string, env []string) (stopFunc, error)
+
+// Provisioner manages one native qdrant engine.
+type Provisioner struct {
+	cfg      Config
+	download downloadFunc
+	run      runFunc
+	stop     stopFunc
+	httpc    *http.Client
+}
+
+// New builds a provisioner with real download + exec, overridable in tests.
+func New(cfg Config) *Provisioner {
+	return &Provisioner{
+		cfg:      cfg,
+		download: httpDownload,
+		run:      execRun,
+		httpc:    &http.Client{Timeout: 3 * time.Second},
+	}
+}
+
+// BinaryPath is where the qdrant binary is cached.
+func (p *Provisioner) BinaryPath() string { return filepath.Join(p.cfg.BinDir, "qdrant") }
+
+// releaseURL is the GitHub download URL for the pinned version on this platform.
+func releaseURL(version string) (string, error) {
+	asset, err := assetName(runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("https://github.com/qdrant/qdrant/releases/download/%s/%s", version, asset), nil
+}
+
+// assetName maps GOOS/GOARCH to the qdrant release asset filename.
+func assetName(goos, goarch string) (string, error) {
+	switch {
+	case goos == "darwin" && goarch == "arm64":
+		return "qdrant-aarch64-apple-darwin.tar.gz", nil
+	case goos == "darwin" && goarch == "amd64":
+		return "qdrant-x86_64-apple-darwin.tar.gz", nil
+	case goos == "linux" && goarch == "arm64":
+		return "qdrant-aarch64-unknown-linux-musl.tar.gz", nil
+	case goos == "linux" && goarch == "amd64":
+		return "qdrant-x86_64-unknown-linux-musl.tar.gz", nil
+	default:
+		return "", fmt.Errorf("no qdrant release asset for %s/%s", goos, goarch)
+	}
+}
+
+// EnsureBinary downloads + extracts the pinned qdrant binary if not already present.
+func (p *Provisioner) EnsureBinary(ctx context.Context) error {
+	if _, err := os.Stat(p.BinaryPath()); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(p.cfg.BinDir, 0o755); err != nil {
+		return err
+	}
+	url, err := releaseURL(p.cfg.Version)
+	if err != nil {
+		return err
+	}
+	tmp := filepath.Join(p.cfg.BinDir, "qdrant-download.tar.gz")
+	if err := p.download(ctx, url, tmp); err != nil {
+		return fmt.Errorf("download qdrant: %w", err)
+	}
+	defer func() { _ = os.Remove(tmp) }()
+	if err := extractBinary(tmp, "qdrant", p.BinaryPath()); err != nil {
+		return fmt.Errorf("extract qdrant: %w", err)
+	}
+	return os.Chmod(p.BinaryPath(), 0o755)
+}
+
+// Start ensures the binary, launches it hardened against the storage dir, and
+// waits until it reports ready. If an engine is already serving on the port
+// (e.g. an orphan from a hard kill), it is reused rather than double-spawned.
+func (p *Provisioner) Start(ctx context.Context) error {
+	if p.Ready(ctx) {
+		return nil
+	}
+	if err := p.EnsureBinary(ctx); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(p.cfg.Storage, 0o755); err != nil {
+		return err
+	}
+	stop, err := p.run(p.BinaryPath(), p.env())
+	if err != nil {
+		return err
+	}
+	p.stop = stop
+	if err := p.waitReady(ctx, 30*time.Second); err != nil {
+		_ = stop()
+		p.stop = nil
+		return err
+	}
+	return nil
+}
+
+// Stop terminates the engine if running.
+func (p *Provisioner) Stop() error {
+	if p.stop == nil {
+		return nil
+	}
+	err := p.stop()
+	p.stop = nil
+	return err
+}
+
+// env is the hardened qdrant configuration (localhost, telemetry off, CORS off).
+func (p *Provisioner) env() []string {
+	env := append(os.Environ(),
+		"QDRANT__SERVICE__HOST=127.0.0.1",
+		fmt.Sprintf("QDRANT__SERVICE__HTTP_PORT=%d", p.cfg.HTTPPort),
+		fmt.Sprintf("QDRANT__SERVICE__GRPC_PORT=%d", p.cfg.GRPCPort),
+		"QDRANT__STORAGE__STORAGE_PATH="+p.cfg.Storage,
+		"QDRANT__TELEMETRY_DISABLED=true",
+		"QDRANT__SERVICE__ENABLE_CORS=false",
+	)
+	if p.cfg.APIKey != "" {
+		env = append(env, "QDRANT__SERVICE__API_KEY="+p.cfg.APIKey)
+	}
+	return env
+}
+
+// Ready reports whether the engine answers its readiness probe.
+func (p *Provisioner) Ready(ctx context.Context) bool {
+	url := fmt.Sprintf("http://127.0.0.1:%d/readyz", p.cfg.HTTPPort)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := p.httpc.Do(req)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return resp.StatusCode == http.StatusOK
+}
+
+func (p *Provisioner) waitReady(ctx context.Context, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if p.Ready(ctx) {
+			return nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return fmt.Errorf("qdrant did not become ready within %s", timeout)
+}
+
+// httpDownload fetches url into dest (the real download seam).
+func httpDownload(ctx context.Context, url, dest string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download %s: %s", url, resp.Status)
+	}
+	out, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = out.Close() }()
+	_, err = io.Copy(out, resp.Body)
+	return err
+}
+
+// execRun starts a binary and returns a stop handle that SIGTERMs and reaps it.
+func execRun(bin string, env []string) (stopFunc, error) {
+	cmd := exec.Command(bin)
+	cmd.Env = env
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	return func() error {
+		if cmd.Process != nil {
+			_ = cmd.Process.Signal(syscall.SIGTERM)
+		}
+		_ = cmd.Wait()
+		return nil
+	}, nil
+}
+
+// extractBinary pulls the entry named `want` out of a .tar.gz into dest.
+func extractBinary(tarGzPath, want, dest string) error {
+	f, err := os.Open(tarGzPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = gz.Close() }()
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return fmt.Errorf("%q not found in archive", want)
+		}
+		if err != nil {
+			return err
+		}
+		if filepath.Base(hdr.Name) != want {
+			continue
+		}
+		out, err := os.Create(dest)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = out.Close() }()
+		if _, err := io.Copy(out, tr); err != nil { //nolint:gosec // trusted release archive
+			return err
+		}
+		return nil
+	}
+}
