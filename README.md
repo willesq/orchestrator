@@ -10,7 +10,11 @@ macOS, single-user. Ships three binaries: `orch` (CLI), `orchd` (daemon), `orch-
 
 ## Install (Homebrew)
 
+The tap and this repo are private, so Homebrew needs a token with read access to
+`willesq/orchestrator` to fetch the release asset:
+
 ```sh
+export HOMEBREW_GITHUB_API_TOKEN=<token>   # read access to willesq/orchestrator
 brew install willesq/tap/orch     # pulls the prebuilt binaries + onnxruntime
 orch model fetch                  # download the embedding model (~90MB, once)
 orch install --apply              # wire hooks + MCP + alias + launchd (backs up first)

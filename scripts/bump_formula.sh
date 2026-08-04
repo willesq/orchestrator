@@ -14,6 +14,11 @@ git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPO}.g
 mkdir -p "$WORK/Formula"
 
 cat > "$WORK/Formula/orch.rb" <<RUBY
+# The orchestrator repo is private, so release assets can't be fetched anonymously.
+# GitHubPrivateRepositoryReleaseDownloadStrategy signs the download with the
+# HOMEBREW_GITHUB_API_TOKEN env var (the user sets this; it must have read access
+# to willesq/orchestrator).
+require_relative "../custom_download_strategy.rb"
 class Orch < Formula
   desc "Local-first agent orchestrator (CLI + daemon + hooks)"
   homepage "https://github.com/willesq/orchestrator"
@@ -23,7 +28,7 @@ class Orch < Formula
   # Prebuilt binaries; arm64 only for now.
   on_macos do
     on_arm do
-      url "${URL}"
+      url "${URL}", using: GitHubPrivateRepositoryReleaseDownloadStrategy
       sha256 "${SHA_ARM64}"
     end
   end
@@ -44,6 +49,10 @@ class Orch < Formula
 
   def caveats
     <<~EOS
+      This tap and the orchestrator repo are private. Before installing/upgrading,
+      export a GitHub token with read access to willesq/orchestrator:
+        export HOMEBREW_GITHUB_API_TOKEN=<your token>
+
       First-time setup:
         orch model fetch          # download the embedding model (~90MB)
         orch install --apply      # wire hooks + MCP + alias (dry-run without --apply)
