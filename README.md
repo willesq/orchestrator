@@ -10,12 +10,14 @@ macOS, single-user. Ships three binaries: `orch` (CLI), `orchd` (daemon), `orch-
 
 ## Install (Homebrew)
 
-The tap and this repo are private. The formula authenticates the download with the
-gh CLI, so an authenticated `gh` (with read access to `willesq/orchestrator`) is all
-you need — no manual token export:
+The tap and this repo are private, so tap over **SSH** (HTTPS tapping fails to
+authenticate). The formula then authenticates the asset download with the gh CLI,
+so an authenticated `gh` (with read access to `willesq/orchestrator`) is all you
+need — no manual token export:
 
 ```sh
 brew install gh && gh auth login   # once, if you haven't already
+brew tap willesq/tap git@github.com:willesq/homebrew-tap.git   # SSH — the tap is private
 brew install willesq/tap/orch     # pulls the prebuilt binaries + gh + onnxruntime
 orch model fetch                  # download the embedding model (~90MB, once)
 orch install --apply              # wire hooks + MCP + alias + launchd (backs up first)
