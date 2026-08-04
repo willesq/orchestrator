@@ -42,8 +42,8 @@ type downloadFunc func(ctx context.Context, url, dest string) error
 // stopFunc terminates a running process.
 type stopFunc func() error
 
-// runFunc starts a binary with env and returns a stop handle.
-type runFunc func(bin string, env []string) (stopFunc, error)
+// runFunc starts a binary in the given working dir with env and returns a stop handle.
+type runFunc func(bin, dir string, env []string) (stopFunc, error)
 
 // Provisioner manages one native qdrant engine.
 type Provisioner struct {
@@ -128,7 +128,7 @@ func (p *Provisioner) Start(ctx context.Context) error {
 	if err := os.MkdirAll(p.cfg.Storage, 0o755); err != nil {
 		return err
 	}
-	stop, err := p.run(p.BinaryPath(), p.env())
+	stop, err := p.run(p.BinaryPath(), p.cfg.Storage, p.env())
 	if err != nil {
 		return err
 	}
@@ -158,6 +158,9 @@ func (p *Provisioner) env() []string {
 		fmt.Sprintf("QDRANT__SERVICE__HTTP_PORT=%d", p.cfg.HTTPPort),
 		fmt.Sprintf("QDRANT__SERVICE__GRPC_PORT=%d", p.cfg.GRPCPort),
 		"QDRANT__STORAGE__STORAGE_PATH="+p.cfg.Storage,
+		// Absolute snapshots path: qdrant's default is the relative "./snapshots",
+		// which panics when the process cwd is read-only (e.g. "/" under launchd).
+		"QDRANT__STORAGE__SNAPSHOTS_PATH="+filepath.Join(p.cfg.Storage, "snapshots"),
 		"QDRANT__TELEMETRY_DISABLED=true",
 		"QDRANT__SERVICE__ENABLE_CORS=false",
 	)
@@ -217,8 +220,9 @@ func httpDownload(ctx context.Context, url, dest string) error {
 }
 
 // execRun starts a binary and returns a stop handle that SIGTERMs and reaps it.
-func execRun(bin string, env []string) (stopFunc, error) {
+func execRun(bin, dir string, env []string) (stopFunc, error) {
 	cmd := exec.Command(bin)
+	cmd.Dir = dir
 	cmd.Env = env
 	if err := cmd.Start(); err != nil {
 		return nil, err

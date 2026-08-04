@@ -166,7 +166,7 @@ func TestStartQdrant(t *testing.T) {
 			s.RAG.Qdrant.HTTPPort = port
 			s.RAG.Qdrant.Version = "v1.17.1"
 
-			stop, url, err := startQdrant(context.Background(), s)
+			stop, url, err := startQdrant(context.Background(), s, "")
 			if err != nil {
 				t.Fatalf("startQdrant: %v", err)
 			}
@@ -218,6 +218,18 @@ func TestRunServesAndShutsDown(t *testing.T) {
 			// plus the test name blows past that, so use a short explicit path.
 			t.Setenv("ORCH_SOCKET", filepath.Join(os.TempDir(), "orchd-daemontest.sock"))
 
+			// Pre-seed dummy model files so the first-run fetch is a no-op (the
+			// embedder is lazy and this test only pings).
+			modelDir := filepath.Join(dir, "data", "models", "minilm")
+			if err := os.MkdirAll(modelDir, 0o755); err != nil {
+				t.Fatalf("mkdir model: %v", err)
+			}
+			for _, f := range []string{"model.onnx", "tokenizer.json"} {
+				if err := os.WriteFile(filepath.Join(modelDir, f), []byte("x"), 0o644); err != nil {
+					t.Fatalf("seed model: %v", err)
+				}
+			}
+
 			ctx, cancel := context.WithCancel(context.Background())
 			errCh := make(chan error, 1)
 			go func() { errCh <- Run(ctx) }()
@@ -263,4 +275,110 @@ func waitForFile(path string, timeout time.Duration) bool {
 		time.Sleep(10 * time.Millisecond)
 	}
 	return false
+}
+
+func TestEnsureQdrantAPIKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		preseed  string
+		wantSame bool
+	}{
+		{name: "generates and persists when absent", preseed: "", wantSame: false},
+		{name: "reuses an existing key", preseed: "existing-key", wantSame: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "qdrant-api-key")
+			if tt.preseed != "" {
+				if err := os.WriteFile(path, []byte(tt.preseed+"\n"), 0o600); err != nil {
+					t.Fatalf("seed: %v", err)
+				}
+			}
+			k1, err := ensureQdrantAPIKey(path)
+			if err != nil {
+				t.Fatalf("ensureQdrantAPIKey: %v", err)
+			}
+			if k1 == "" {
+				t.Fatal("empty key")
+			}
+			if tt.wantSame && k1 != tt.preseed {
+				t.Errorf("key = %q, want preseeded %q", k1, tt.preseed)
+			}
+			k2, err := ensureQdrantAPIKey(path) // must be stable across calls
+			if err != nil {
+				t.Fatalf("second ensureQdrantAPIKey: %v", err)
+			}
+			if k2 != k1 {
+				t.Errorf("key not stable: %q != %q", k1, k2)
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatalf("stat: %v", err)
+			}
+			if info.Mode().Perm() != 0o600 {
+				t.Errorf("key file mode = %v, want 0600", info.Mode().Perm())
+			}
+		})
+	}
+}
+
+func TestResolveQdrantAPIKeyEnvOverride(t *testing.T) {
+	tests := []struct {
+		name   string
+		envVal string
+		want   string
+	}{
+		{name: "env override wins over persisted", envVal: "from-env", want: "from-env"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+			t.Setenv("QDRANT_API_KEY", tt.envVal)
+			s := config.Settings{}
+			s.RAG.Qdrant.APIKeyEnv = "QDRANT_API_KEY"
+			got, err := resolveQdrantAPIKey(s)
+			if err != nil {
+				t.Fatalf("resolveQdrantAPIKey: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("key = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveDirs(t *testing.T) {
+	tests := []struct {
+		name               string
+		storage            string
+		modelDir           string
+		wantStorageDefault bool
+		wantModelDefault   bool
+	}{
+		{name: "defaults resolve under data dir", wantStorageDefault: true, wantModelDefault: true},
+		{name: "config overrides win", storage: "/tmp/store", modelDir: "/tmp/model"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+			s := config.Settings{}
+			s.RAG.Qdrant.Storage = tt.storage
+			s.Embedder.ModelDir = tt.modelDir
+			gotStorage, gotModel := resolveStorageDir(s), resolveModelDir(s)
+			if tt.wantStorageDefault {
+				if want := filepath.Join(paths.DataDir(), "qdrant"); gotStorage != want {
+					t.Errorf("storage = %q, want %q", gotStorage, want)
+				}
+			} else if gotStorage != tt.storage {
+				t.Errorf("storage = %q, want %q", gotStorage, tt.storage)
+			}
+			if tt.wantModelDefault {
+				if want := filepath.Join(paths.DataDir(), "models", "minilm"); gotModel != want {
+					t.Errorf("model = %q, want %q", gotModel, want)
+				}
+			} else if gotModel != tt.modelDir {
+				t.Errorf("model = %q, want %q", gotModel, tt.modelDir)
+			}
+		})
+	}
 }
