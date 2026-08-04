@@ -1,23 +1,30 @@
 #!/usr/bin/env bash
 # Generate/update Formula/orch.rb in willesq/homebrew-tap to point at a release.
-# Usage: bump_formula.sh <version> <arm64-sha256>
+# Usage: bump_formula.sh <version> <arm64-sha256> <asset-id>
 # Requires: HOMEBREW_TAP_TOKEN (PAT with write to willesq/homebrew-tap).
+#
+# <asset-id> is the numeric id of the darwin_arm64 tarball release asset. The
+# formula points at the api.github.com asset endpoint (not the public
+# releases/download URL) so GitHubPrivateReleaseAssetDownloadStrategy can fetch
+# it from the private repo using a gh-CLI-resolved token.
 set -euo pipefail
 
 VERSION="${1:?version required}"
 SHA_ARM64="${2:?arm64 sha256 required}"
+ASSET_ID="${3:?asset id required}"
 TAP_REPO="willesq/homebrew-tap"
-URL="https://github.com/willesq/orchestrator/releases/download/v${VERSION}/orch_${VERSION}_darwin_arm64.tar.gz"
+URL="https://api.github.com/repos/willesq/orchestrator/releases/assets/${ASSET_ID}"
 
 WORK="$(mktemp -d)"
 git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPO}.git" "$WORK"
 mkdir -p "$WORK/Formula"
 
 cat > "$WORK/Formula/orch.rb" <<RUBY
-# The orchestrator repo is private, so release assets can't be fetched anonymously.
-# GitHubPrivateRepositoryReleaseDownloadStrategy signs the download with the
-# HOMEBREW_GITHUB_API_TOKEN env var (the user sets this; it must have read access
-# to willesq/orchestrator).
+# The orchestrator repo is private. GitHubPrivateReleaseAssetDownloadStrategy
+# (defined in the tap's custom_download_strategy.rb) resolves a token from
+# \`gh auth token\` at formula-load time, so an authenticated gh CLI is all
+# that's required — no HOMEBREW_GITHUB_API_TOKEN export. The url is the
+# api.github.com asset endpoint; the numeric asset id is injected at publish.
 require_relative "../custom_download_strategy.rb"
 class Orch < Formula
   desc "Local-first agent orchestrator (CLI + daemon + hooks)"
@@ -28,11 +35,12 @@ class Orch < Formula
   # Prebuilt binaries; arm64 only for now.
   on_macos do
     on_arm do
-      url "${URL}", using: GitHubPrivateRepositoryReleaseDownloadStrategy
+      url "${URL}", using: GitHubPrivateReleaseAssetDownloadStrategy
       sha256 "${SHA_ARM64}"
     end
   end
 
+  depends_on "gh"          # used to authenticate the private-asset download
   depends_on "onnxruntime" # runtime dylib, resolved via \`brew --prefix onnxruntime\`
   depends_on :macos
 
@@ -49,9 +57,10 @@ class Orch < Formula
 
   def caveats
     <<~EOS
-      This tap and the orchestrator repo are private. Before installing/upgrading,
-      export a GitHub token with read access to willesq/orchestrator:
-        export HOMEBREW_GITHUB_API_TOKEN=<your token>
+      This tap and the orchestrator repo are private. Install and authenticate
+      the gh CLI once (the formula downloads the release asset with its token):
+        brew install gh
+        gh auth login
 
       First-time setup:
         orch model fetch          # download the embedding model (~90MB)

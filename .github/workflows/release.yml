@@ -74,6 +74,21 @@ jobs:
           gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.tarball }}" \
             --title "$GITHUB_REF_NAME" --generate-notes
 
+      # The formula points at the api.github.com asset endpoint, which needs the
+      # numeric asset id (assigned when the asset is uploaded above).
+      - name: Resolve release asset id
+        id: asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ASSET_ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" \
+            --jq '.assets[] | select(.name=="'"${{ steps.package.outputs.tarball }}"'") | .id')
+          if [ -z "$ASSET_ID" ]; then
+            echo "::error::could not resolve asset id for ${{ steps.package.outputs.tarball }}"
+            exit 1
+          fi
+          echo "id=$ASSET_ID" >> "$GITHUB_OUTPUT"
+
       # The `secrets` context is NOT allowed in `if:` conditions, so surface the
       # token's presence as a step output and gate the bump on that instead.
       - name: Check for tap token
@@ -94,4 +109,5 @@ jobs:
         run: |
           ./scripts/bump_formula.sh \
             "${{ steps.package.outputs.version }}" \
-            "${{ steps.package.outputs.sha256 }}"
+            "${{ steps.package.outputs.sha256 }}" \
+            "${{ steps.asset.outputs.id }}"
