@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package orchd.v1;
+
+option go_package = "github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1";
+
+// Orchd is the local control-plane the CLI, hooks, and MCP servers dial over a
+// Unix-domain socket.
+service Orchd {
+  // Ping is a liveness/health check.
+  rpc Ping(PingRequest) returns (PingResponse);
+  // Ingest chunks, embeds, and stores text in the vector store.
+  rpc Ingest(IngestRequest) returns (IngestResponse);
+  // Search embeds the query and returns the top matching chunks.
+  rpc Search(SearchRequest) returns (SearchResponse);
+  // Dispatch enqueues a durable agent-task workflow and returns its instance ID.
+  rpc Dispatch(DispatchRequest) returns (DispatchResponse);
+}
+
+message PingRequest {}
+
+message PingResponse {
+  string version = 1;
+  int64 uptime_seconds = 2;
+}
+
+message IngestRequest {
+  string text = 1;
+  string source_uri = 2;
+  string source_type = 3;
+  string scope = 4;
+  repeated string tags = 5;
+}
+
+message IngestResponse {
+  int32 chunks = 1;
+}
+
+message SearchRequest {
+  string query = 1;
+  int32 top_k = 2;
+  string scope = 3;        // optional exact-match filter
+  string source_type = 4;  // optional exact-match filter
+  repeated string tags = 5; // optional: payload.tags contains any
+}
+
+message SearchResponse {
+  repeated SearchHit hits = 1;
+}
+
+message SearchHit {
+  string text = 1;
+  string source_uri = 2;
+  string source_type = 3;
+  float score = 4;
+  string scope = 5;
+  repeated string tags = 6;
+}
+
+message DispatchRequest {
+  string agent = 1;
+  string body = 2;
+}
+
+message DispatchResponse {
+  string instance_id = 1;
+}
