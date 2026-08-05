@@ -33,6 +33,9 @@ func TestDaemonStartWithoutPlist(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Point HOME at an empty dir so the plist is absent.
 			t.Setenv("HOME", t.TempDir())
+			savedHB := daemonIsHomebrew
+			daemonIsHomebrew = func() bool { return false }
+			t.Cleanup(func() { daemonIsHomebrew = savedHB })
 			_, err := run(factory(&fakeClient{}, nil), "", tt.args...)
 			if err == nil {
 				t.Errorf("expected error when orchd plist is absent")
@@ -62,6 +65,9 @@ func TestDaemonStartStopSuccess(t *testing.T) {
 			saved := runCommand
 			runCommand = func(string, ...string) error { return nil }
 			t.Cleanup(func() { runCommand = saved })
+			savedHB := daemonIsHomebrew
+			daemonIsHomebrew = func() bool { return false } // exercise the launchd path
+			t.Cleanup(func() { daemonIsHomebrew = savedHB })
 
 			out, err := run(factory(&fakeClient{}, nil), "", tt.args...)
 			if err != nil {
@@ -69,6 +75,46 @@ func TestDaemonStartStopSuccess(t *testing.T) {
 			}
 			if !strings.Contains(out, tt.want) {
 				t.Errorf("output %q missing %q", out, tt.want)
+			}
+		})
+	}
+}
+
+func TestDaemonControlHomebrew(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantOp  string
+		wantOut string
+	}{
+		{name: "start via brew services", args: []string{"daemon", "start"}, wantOp: "start", wantOut: "started"},
+		{name: "stop via brew services", args: []string{"daemon", "stop"}, wantOp: "stop", wantOut: "stopped"},
+		{name: "restart via brew services", args: []string{"daemon", "restart"}, wantOp: "restart", wantOut: "restarted"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			savedHB := daemonIsHomebrew
+			daemonIsHomebrew = func() bool { return true }
+			t.Cleanup(func() { daemonIsHomebrew = savedHB })
+
+			var gotArgs []string
+			saved := runCommand
+			runCommand = func(name string, args ...string) error {
+				gotArgs = append([]string{name}, args...)
+				return nil
+			}
+			t.Cleanup(func() { runCommand = saved })
+
+			out, err := run(factory(&fakeClient{}, nil), "", tt.args...)
+			if err != nil {
+				t.Fatalf("%v: %v", tt.args, err)
+			}
+			want := strings.Join([]string{"brew", "services", tt.wantOp, "orch"}, " ")
+			if got := strings.Join(gotArgs, " "); got != want {
+				t.Errorf("ran %q, want %q", got, want)
+			}
+			if !strings.Contains(out, tt.wantOut) {
+				t.Errorf("output %q missing %q", out, tt.wantOut)
 			}
 		})
 	}

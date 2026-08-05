@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/server"
@@ -223,7 +224,7 @@ func newPingCmd(cf clientFactory) *cobra.Command {
 }
 
 func newDaemonCmd(cf clientFactory) *cobra.Command {
-	cmd := &cobra.Command{Use: "daemon", Short: "Manage the orchd daemon (launchd)"}
+	cmd := &cobra.Command{Use: "daemon", Short: "Manage the orchd daemon"}
 	cmd.AddCommand(
 		&cobra.Command{
 			Use:   "status",
@@ -242,24 +243,21 @@ func newDaemonCmd(cf clientFactory) *cobra.Command {
 		},
 		&cobra.Command{
 			Use:   "start",
-			Short: "Start orchd via launchd (also starts qdrant in binary mode)",
+			Short: "Start orchd (brew services when Homebrew-managed, else launchd)",
 			Args:  cobra.NoArgs,
-			RunE:  func(c *cobra.Command, _ []string) error { return serviceControl(c.OutOrStdout(), "load", "started") },
+			RunE:  func(c *cobra.Command, _ []string) error { return daemonControl(c.OutOrStdout(), "start") },
 		},
 		&cobra.Command{
 			Use:   "stop",
-			Short: "Stop orchd via launchd",
+			Short: "Stop orchd (brew services when Homebrew-managed, else launchd)",
 			Args:  cobra.NoArgs,
-			RunE:  func(c *cobra.Command, _ []string) error { return serviceControl(c.OutOrStdout(), "unload", "stopped") },
+			RunE:  func(c *cobra.Command, _ []string) error { return daemonControl(c.OutOrStdout(), "stop") },
 		},
 		&cobra.Command{
 			Use:   "restart",
-			Short: "Restart orchd via launchd",
+			Short: "Restart orchd (brew services when Homebrew-managed, else launchd)",
 			Args:  cobra.NoArgs,
-			RunE: func(c *cobra.Command, _ []string) error {
-				_ = serviceControl(io.Discard, "unload", "stopped")
-				return serviceControl(c.OutOrStdout(), "load", "started")
-			},
+			RunE:  func(c *cobra.Command, _ []string) error { return daemonControl(c.OutOrStdout(), "restart") },
 		},
 	)
 	return cmd
@@ -270,8 +268,52 @@ var runCommand = func(name string, args ...string) error {
 	return exec.Command(name, args...).Run()
 }
 
-// serviceControl loads/unloads the orchd launchd plist written by `orch install`.
-func serviceControl(w io.Writer, action, verb string) error {
+// daemonIsHomebrew reports whether this orch is a Homebrew install (binary under
+// a Cellar prefix), in which case `brew services` supervises orchd. A var so
+// tests can force either path.
+var daemonIsHomebrew = func() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	if resolved, rerr := filepath.EvalSymlinks(exe); rerr == nil {
+		exe = resolved
+	}
+	return strings.Contains(exe, "/Cellar/")
+}
+
+// daemonControl performs a lifecycle op (start|stop|restart) against whatever
+// supervises orchd: `brew services` for a Homebrew install, launchctl otherwise.
+// This keeps the lifecycle commands consistent with how the daemon was started.
+func daemonControl(w io.Writer, op string) error {
+	if daemonIsHomebrew() {
+		if err := runCommand("brew", "services", op, "orch"); err != nil {
+			return fmt.Errorf("brew services %s orch: %w", op, err)
+		}
+		verbs := map[string]string{"start": "started", "stop": "stopped", "restart": "restarted"}
+		fmt.Fprintf(w, "orchd %s (brew services %s orch)\n", verbs[op], op)
+		return nil
+	}
+	return launchctlControl(w, op)
+}
+
+// launchctlControl drives the orchd launchd plist written by `orch install` (used
+// for source builds not managed by Homebrew).
+func launchctlControl(w io.Writer, op string) error {
+	switch op {
+	case "start":
+		return launchctlAction(w, "load", "started")
+	case "stop":
+		return launchctlAction(w, "unload", "stopped")
+	case "restart":
+		_ = launchctlAction(io.Discard, "unload", "stopped")
+		return launchctlAction(w, "load", "started")
+	default:
+		return fmt.Errorf("unknown daemon op %q", op)
+	}
+}
+
+func launchctlAction(w io.Writer, action, verb string) error {
 	plist := orchdPlistPath()
 	if _, err := os.Stat(plist); err != nil {
 		return fmt.Errorf("orchd plist not found at %s — run 'orch install --apply' first", plist)
