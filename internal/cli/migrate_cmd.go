@@ -85,8 +85,8 @@ func newQdrantMigrateCmd() *cobra.Command {
 // realMigrateDeps builds the production side effects (launchctl + live qdrant).
 func realMigrateDeps(ctx context.Context, port int, collection string) migrateDeps {
 	return migrateDeps{
-		stop:        func() error { return serviceControl(io.Discard, "unload", "stopped") },
-		start:       func() error { return serviceControl(io.Discard, "load", "started") },
+		stop:        func() error { return daemonControl(io.Discard, "stop") },
+		start:       func() error { return daemonControl(io.Discard, "start") },
 		ready:       func() bool { return qdrant.New(qdrant.Config{HTTPPort: port}).Ready(ctx) },
 		present:     func() bool { return collectionPresent(port, collection) },
 		downTimeout: 20 * time.Second,
