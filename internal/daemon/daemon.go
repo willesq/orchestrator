@@ -22,6 +22,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
+	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/embed"
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
@@ -175,6 +176,22 @@ func Run(ctx context.Context) error {
 	)
 	go scheduler.Run(ctx)
 
+	// Docs subsystem: GitHub code-repo markdown ingestion on a cadence (separate
+	// from the generic sources scheduler; gh-CLI-driven with repo/file skipping).
+	docsScan, _ := time.ParseDuration(s.Docs.ScanInterval)
+	docsScheduler := docs.NewScheduler(
+		docs.NewRegistry(store), svc,
+		docs.SyncOpts{
+			RepoCache:       resolveRepoCache(s),
+			IncludeArchived: s.Docs.IncludeArchived,
+			IncludeForks:    s.Docs.IncludeForks,
+			GH:              docs.NewGitHub(),
+			Git:             docs.NewGit(),
+		},
+		docsScan,
+	)
+	go docsScheduler.Run(ctx)
+
 	// PR babysitter: poll open PRs via gh and cache state + events on transitions.
 	if s.PRBabysitter.Enabled {
 		pollInterval, _ := time.ParseDuration(s.PRBabysitter.PollInterval)
@@ -255,6 +272,14 @@ func resolveModelDir(s config.Settings) string {
 		return s.Embedder.ModelDir
 	}
 	return filepath.Join(paths.DataDir(), "models", "minilm")
+}
+
+// resolveRepoCache is the docs clone cache dir (config override or <data>/repos).
+func resolveRepoCache(s config.Settings) string {
+	if s.Docs.RepoCache != "" {
+		return s.Docs.RepoCache
+	}
+	return filepath.Join(paths.DataDir(), "repos")
 }
 
 // ensureModel downloads the embedding model on first run if it is not present.

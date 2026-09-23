@@ -23,7 +23,17 @@ type Settings struct {
 	RAG          RAGSettings          `mapstructure:"rag"`
 	Hooks        HooksSettings        `mapstructure:"hooks"`
 	Sources      SourcesSettings      `mapstructure:"sources"`
+	Docs         DocsSettings         `mapstructure:"docs"`
 	PRBabysitter PRBabysitterSettings `mapstructure:"pr_babysitter"`
+}
+
+// DocsSettings controls the GitHub code-docs subsystem (orch docs).
+type DocsSettings struct {
+	ScanInterval    string `mapstructure:"scan_interval"`    // how often to scan for due owners
+	RepoCache       string `mapstructure:"repo_cache"`       // clone cache dir (empty → <data>/repos)
+	DefaultRefresh  string `mapstructure:"default_refresh"`  // default per-owner cadence
+	IncludeArchived bool   `mapstructure:"include_archived"` // ingest archived repos
+	IncludeForks    bool   `mapstructure:"include_forks"`    // ingest forks
 }
 
 // PRBabysitterSettings controls the PR-polling daemon.
@@ -107,6 +117,13 @@ func setDefaults(v *viper.Viper) {
 	// Source registry + freshness scheduler.
 	v.SetDefault("sources.known_roots", []string{"~/code"})
 	v.SetDefault("sources.scan_interval", "5m")
+	// docs: the GitHub code-docs subsystem (orch docs). Short scan tick so a
+	// manual `orch docs sync` (which marks an owner due) runs near-immediately.
+	v.SetDefault("docs.scan_interval", "1m")
+	v.SetDefault("docs.repo_cache", "") // resolved to <data>/repos if empty
+	v.SetDefault("docs.default_refresh", "6h")
+	v.SetDefault("docs.include_archived", false)
+	v.SetDefault("docs.include_forks", false)
 	// PR babysitter: poll open PRs via gh and cache their state.
 	v.SetDefault("pr_babysitter.enabled", true)
 	v.SetDefault("pr_babysitter.poll_interval", "10m")
