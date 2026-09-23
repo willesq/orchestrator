@@ -42,6 +42,7 @@ func NewRootCmd(cf clientFactory) *cobra.Command {
 		newModelCmd(),
 		newQdrantCmd(),
 		newSourceCmd(),
+		newDocsCmd(),
 		newPRsCmd(),
 		newRepoCmd(),
 	)
