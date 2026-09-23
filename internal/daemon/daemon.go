@@ -182,7 +182,7 @@ func Run(ctx context.Context) error {
 	docsScheduler := docs.NewScheduler(
 		docs.NewRegistry(store), svc,
 		docs.SyncOpts{
-			RepoCache:       resolveRepoCache(s),
+			RepoCache:       s.RepoCacheDir(),
 			IncludeArchived: s.Docs.IncludeArchived,
 			IncludeForks:    s.Docs.IncludeForks,
 			GH:              docs.NewGitHub(),
@@ -272,14 +272,6 @@ func resolveModelDir(s config.Settings) string {
 		return s.Embedder.ModelDir
 	}
 	return filepath.Join(paths.DataDir(), "models", "minilm")
-}
-
-// resolveRepoCache is the docs clone cache dir (config override or <data>/repos).
-func resolveRepoCache(s config.Settings) string {
-	if s.Docs.RepoCache != "" {
-		return s.Docs.RepoCache
-	}
-	return filepath.Join(paths.DataDir(), "repos")
 }
 
 // ensureModel downloads the embedding model on first run if it is not present.

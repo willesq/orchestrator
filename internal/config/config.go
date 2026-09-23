@@ -9,6 +9,7 @@ package config
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -34,6 +35,16 @@ type DocsSettings struct {
 	DefaultRefresh  string `mapstructure:"default_refresh"`  // default per-owner cadence
 	IncludeArchived bool   `mapstructure:"include_archived"` // ingest archived repos
 	IncludeForks    bool   `mapstructure:"include_forks"`    // ingest forks
+}
+
+// RepoCacheDir is the docs clone cache dir (config override or <data>/repos).
+// Shared by orchd's scheduler and the CLI's foreground sync so both clone into
+// the same place and keep each other's incremental caches warm.
+func (s Settings) RepoCacheDir() string {
+	if s.Docs.RepoCache != "" {
+		return s.Docs.RepoCache
+	}
+	return filepath.Join(paths.DataDir(), "repos")
 }
 
 // PRBabysitterSettings controls the PR-polling daemon.
