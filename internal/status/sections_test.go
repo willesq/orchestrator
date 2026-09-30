@@ -71,6 +71,54 @@ func TestSubsystemSectionDetails(t *testing.T) {
 	}
 }
 
+// An unreachable orchd and an absent one need different remedies: `orch daemon
+// start` is a no-op against a wedged daemon, because the supervisor already
+// considers the job started.
+func TestServiceSectionReachability(t *testing.T) {
+	tests := []struct {
+		name      string
+		orchd     func(context.Context) (*orchdv1.StatusResponse, error)
+		socket    bool
+		wantValue string
+		wantLevel string
+		wantHas   string
+	}{
+		{
+			name: "reachable",
+			orchd: func(context.Context) (*orchdv1.StatusResponse, error) {
+				return &orchdv1.StatusResponse{Version: "1.2.3", UptimeSeconds: 3600}, nil
+			},
+			socket: true, wantValue: "running", wantLevel: LevelOK, wantHas: "1.2.3",
+		},
+		{
+			name:      "socket left behind by a wedged daemon",
+			orchd:     func(context.Context) (*orchdv1.StatusResponse, error) { return nil, errors.New("refused") },
+			socket:    true,
+			wantValue: "unreachable", wantLevel: LevelBad, wantHas: "orch daemon restart",
+		},
+		{
+			name:      "no socket at all",
+			orchd:     func(context.Context) (*orchdv1.StatusResponse, error) { return nil, errors.New("no such file") },
+			socket:    false,
+			wantValue: "not running", wantLevel: LevelBad, wantHas: "orch daemon start",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := healthyDeps(t)
+			d.Orchd = tt.orchd
+			d.SocketPresent = func() bool { return tt.socket }
+			got := line(t, section(t, Collect(context.Background(), d), "service"), "orchd")
+			if got.Value != tt.wantValue || got.Level != tt.wantLevel {
+				t.Errorf("orchd line = %q/%q, want %q/%q", got.Value, got.Level, tt.wantValue, tt.wantLevel)
+			}
+			if !strings.Contains(got.Detail, tt.wantHas) {
+				t.Errorf("detail %q missing %q", got.Detail, tt.wantHas)
+			}
+		})
+	}
+}
+
 func TestSubsystemSectionNotes(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -80,7 +128,7 @@ func TestSubsystemSectionNotes(t *testing.T) {
 		{
 			name:  "daemon down",
 			orchd: func(context.Context) (*orchdv1.StatusResponse, error) { return nil, errors.New("nope") },
-			want:  "orchd is not running",
+			want:  "orchd is not answering",
 		},
 		{
 			name: "daemon up but supervising nothing",

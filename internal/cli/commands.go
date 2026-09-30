@@ -223,9 +223,9 @@ func newDaemonCmd(cf clientFactory) *cobra.Command {
 			Short: "Show whether orchd is reachable",
 			Args:  cobra.NoArgs,
 			RunE: func(c *cobra.Command, _ []string) error {
-				resp, err := doPing(cf, 2*time.Second)
+				resp, err := doPing(cf, daemonProbeTimeout)
 				if err != nil {
-					fmt.Fprintln(c.OutOrStdout(), "orchd: not running")
+					fmt.Fprintln(c.OutOrStdout(), daemonDownLine())
 					return nil
 				}
 				fmt.Fprintf(c.OutOrStdout(), "orchd: running (%s, uptime %ds)\n",
@@ -237,28 +237,47 @@ func newDaemonCmd(cf clientFactory) *cobra.Command {
 			Use:   "start",
 			Short: "Start orchd (brew services when Homebrew-managed, else launchd)",
 			Args:  cobra.NoArgs,
-			RunE:  func(c *cobra.Command, _ []string) error { return daemonControl(c.OutOrStdout(), "start") },
+			RunE:  func(c *cobra.Command, _ []string) error { return daemonControl(c.OutOrStdout(), cf, "start") },
 		},
 		&cobra.Command{
 			Use:   "stop",
 			Short: "Stop orchd (brew services when Homebrew-managed, else launchd)",
 			Args:  cobra.NoArgs,
-			RunE:  func(c *cobra.Command, _ []string) error { return daemonControl(c.OutOrStdout(), "stop") },
+			RunE:  func(c *cobra.Command, _ []string) error { return daemonControl(c.OutOrStdout(), cf, "stop") },
 		},
 		&cobra.Command{
 			Use:   "restart",
 			Short: "Restart orchd (brew services when Homebrew-managed, else launchd)",
 			Args:  cobra.NoArgs,
-			RunE:  func(c *cobra.Command, _ []string) error { return daemonControl(c.OutOrStdout(), "restart") },
+			RunE:  func(c *cobra.Command, _ []string) error { return daemonControl(c.OutOrStdout(), cf, "restart") },
 		},
 	)
 	return cmd
+}
+
+// daemonDownLine describes an unreachable orchd. A leftover socket means the
+// daemon is up but no longer accepting — a state `orch daemon start` cannot fix,
+// because the supervisor already considers the job started.
+func daemonDownLine() string {
+	if _, err := os.Stat(paths.SocketPath()); err == nil {
+		return "orchd: unreachable (socket present but not answering — run 'orch daemon restart')"
+	}
+	return "orchd: not running (start with 'orch daemon start')"
 }
 
 // runCommand runs an external command; overridable in tests.
 var runCommand = func(name string, args ...string) error {
 	return exec.Command(name, args...).Run()
 }
+
+// How long a lifecycle command waits for orchd to reach the state it asked for,
+// how often it probes while waiting, and how long one probe may take. Vars so
+// tests can collapse the wait.
+var (
+	daemonWait         = 20 * time.Second
+	daemonPoll         = 250 * time.Millisecond
+	daemonProbeTimeout = 2 * time.Second
+)
 
 // daemonIsHomebrew reports whether this orch is a Homebrew install (binary under
 // a Cellar prefix), in which case `brew services` supervises orchd. A var so
@@ -274,10 +293,27 @@ var daemonIsHomebrew = func() bool {
 	return strings.Contains(exe, "/Cellar/")
 }
 
-// daemonControl performs a lifecycle op (start|stop|restart) against whatever
-// supervises orchd: `brew services` for a Homebrew install, launchctl otherwise.
-// This keeps the lifecycle commands consistent with how the daemon was started.
-func daemonControl(w io.Writer, op string) error {
+// daemonControl performs a lifecycle op (start|stop|restart) and only reports
+// success once orchd has actually reached the requested state.
+func daemonControl(w io.Writer, cf clientFactory, op string) error {
+	if op == "start" {
+		if resp, err := doPing(cf, daemonProbeTimeout); err == nil {
+			fmt.Fprintf(w, "orchd already running (%s, uptime %ds)\n",
+				resp.GetVersion(), resp.GetUptimeSeconds())
+			return nil
+		}
+	}
+	if err := superviseDaemon(w, op); err != nil {
+		return err
+	}
+	return awaitDaemon(w, cf, op)
+}
+
+// superviseDaemon hands the lifecycle op to whatever supervises orchd: `brew
+// services` for a Homebrew install, launchctl otherwise. This keeps the lifecycle
+// commands consistent with how the daemon was started. It reports only that the
+// supervisor accepted the op — awaitDaemon decides whether it took effect.
+func superviseDaemon(w io.Writer, op string) error {
 	if daemonIsHomebrew() {
 		if err := runCommand("brew", "services", op, "orch"); err != nil {
 			return fmt.Errorf("brew services %s orch: %w", op, err)
@@ -287,6 +323,42 @@ func daemonControl(w io.Writer, op string) error {
 		return nil
 	}
 	return launchctlControl(w, op)
+}
+
+// awaitDaemon blocks until orchd has actually reached the state op asked for, and
+// reports what really happened rather than what the supervisor accepted.
+//
+// Supervisors return success too eagerly to be trusted on their own: `brew
+// services start` exits zero for a job it already considers started, even when
+// the daemon behind it is wedged and refusing connections — which turns `orch
+// daemon start` into a no-op that claims success while `orch status` keeps
+// reporting the daemon down.
+func awaitDaemon(w io.Writer, cf clientFactory, op string) error {
+	wantUp := op != "stop"
+	deadline := time.Now().Add(daemonWait)
+	for {
+		resp, err := doPing(cf, daemonProbeTimeout)
+		if up := err == nil; up == wantUp {
+			if wantUp {
+				fmt.Fprintf(w, "orchd is answering on %s (%s)\n", paths.SocketPath(), resp.GetVersion())
+			}
+			return nil
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(daemonPoll)
+	}
+	if wantUp {
+		return fmt.Errorf("orchd did not answer on %s within %s.\n"+
+			"The service manager accepted the %s, so orchd is likely wedged, crash-looping, "+
+			"or still running an older binary.\n"+
+			"Try 'orch daemon restart'; if that does not help, check orchd's log",
+			paths.SocketPath(), daemonWait, op)
+	}
+	return fmt.Errorf("orchd is still answering on %s %s after the stop — "+
+		"the service manager accepted it but the daemon has not exited",
+		paths.SocketPath(), daemonWait)
 }
 
 // launchctlControl drives the orchd launchd plist written by `orch install` (used

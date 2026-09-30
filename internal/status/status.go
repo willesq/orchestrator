@@ -86,6 +86,9 @@ type Deps struct {
 	QdrantReady func(ctx context.Context) bool
 	// Service reports how orchd is installed as a service.
 	Service func() ServiceInfo
+	// SocketPresent reports whether orchd's socket file exists, which separates a
+	// daemon that is down from one that is up but no longer answering.
+	SocketPresent func() bool
 	// Checks are the daemon-independent preconditions (see check.Preconditions).
 	Checks []check.Check
 	// Store opens orch.db for the registry/queue counts.
@@ -137,6 +140,9 @@ func (d Deps) withDefaults() Deps {
 	if d.Service == nil {
 		d.Service = func() ServiceInfo { return ServiceInfo{Manager: "unknown"} }
 	}
+	if d.SocketPresent == nil {
+		d.SocketPresent = func() bool { return exists(paths.SocketPath()) }
+	}
 	if d.Harness == nil {
 		d.Harness = func() []HarnessInfo { return nil }
 	}
@@ -148,16 +154,26 @@ func (d Deps) withDefaults() Deps {
 
 func serviceSection(d Deps, resp *orchdv1.StatusResponse, err error) Section {
 	sec := Section{Title: "service"}
-	if err != nil {
-		sec.Lines = append(sec.Lines, Line{
-			Name: "orchd", Value: "not running",
-			Detail: "start with: orch daemon start", Level: LevelBad,
-		})
-	} else {
+	switch {
+	case err == nil:
 		sec.Lines = append(sec.Lines, Line{
 			Name: "orchd", Value: "running", Level: LevelOK,
 			Detail: fmt.Sprintf("%s, up %s", resp.GetVersion(),
 				humanDuration(time.Duration(resp.GetUptimeSeconds())*time.Second)),
+		})
+	case d.SocketPresent():
+		// Something bound the socket and left it behind: a wedged daemon that no
+		// longer accepts, or one that died without unlinking. Either way `orch
+		// daemon start` is a no-op — the supervisor already considers it started —
+		// so point at the restart that actually clears it.
+		sec.Lines = append(sec.Lines, Line{
+			Name: "orchd", Value: "unreachable", Level: LevelBad,
+			Detail: "socket present but not answering — run: orch daemon restart",
+		})
+	default:
+		sec.Lines = append(sec.Lines, Line{
+			Name: "orchd", Value: "not running",
+			Detail: "start with: orch daemon start", Level: LevelBad,
 		})
 	}
 
@@ -202,7 +218,7 @@ func harnessSection(d Deps) Section {
 func subsystemSection(d Deps, resp *orchdv1.StatusResponse, err error) Section {
 	sec := Section{Title: "subsystems"}
 	if err != nil {
-		sec.Note = "unavailable — orchd is not running"
+		sec.Note = "unavailable — orchd is not answering"
 		return sec
 	}
 	if len(resp.GetSubsystems()) == 0 {
