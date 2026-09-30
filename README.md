@@ -28,6 +28,31 @@ orch check                        # verify preconditions are green
 `orch install` is **dry-run by default** — run `orch install` (no `--apply`) to see exactly
 what it would change. It is surgical (preserves other tools' hooks) and idempotent.
 
+## Status and restart
+
+`orch status` is the whole-system sitrep: the `orchd` service, every supervised subsystem
+(with its last tick and restart count), the vector store, the on-disk stores and their
+freshness, harness wiring drift, and the daemon-independent preconditions. It stays useful
+with `orchd` down — which is when you usually run it — and always exits zero. Use
+`orch check` when you want a pass/fail gate with a non-zero exit, and `--json` when you
+want to script it.
+
+`orch restart` restarts the whole system by bouncing the `orchd` process through its
+service manager, then waits for it to answer again. Naming a component restarts just that
+one **in place**, without dropping the socket, the warm embedder, or the other subsystems:
+
+```sh
+orch status                      # full report (add --json for scripts)
+orch restart                     # everything: bounce orchd (== orch restart orchd)
+orch restart --list              # what can be restarted, per the running daemon
+orch restart sources-scheduler   # one subsystem, in place
+orch restart subsystems          # every subsystem, in place (no process bounce)
+```
+
+Subsystems are `qdrant` (binary mode only), `workflow-worker`, `sources-scheduler`,
+`docs-scheduler`, and `pr-babysitter`. Every restart is idempotent: a component that is
+already stopped is simply started.
+
 ## Build from source
 
 The ORT embedder is cgo: it links a prebuilt `libtokenizers.a` at build time and loads
@@ -40,6 +65,7 @@ brew install onnxruntime
 make build      # -> build/bin/{orch,orchd,orch-hook}
 make test       # pure-Go tests (no ORT tag)
 make cover      # per-file coverage gate (>= 80%)
+make proto      # regenerate the orchd gRPC stubs after editing the .proto
 ```
 
 ## Architecture
@@ -51,4 +77,4 @@ the multi-harness install adapters, and the packaging story.
 ## Command surface
 
 `orch check | config | daemon | dispatch | ingest | install | mcp | model | ping | prs |
-qdrant | repo | search | source | version`
+qdrant | repo | restart | search | source | status | version`

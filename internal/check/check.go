@@ -95,8 +95,16 @@ func SocketCheck(name string) Check {
 	}
 }
 
-// Default assembles the standard precondition checks from config + paths.
+// Default assembles the standard precondition checks from config + paths,
+// including orchd reachability.
 func Default() []Check {
+	return append(Preconditions(), SocketCheck("orchd"))
+}
+
+// Preconditions are the checks that do not need orchd to be running: the native
+// libs, the model files, and the external CLIs. `orch status` reuses these and
+// reports orchd's own liveness separately, so it does not probe the socket twice.
+func Preconditions() []Check {
 	v, _ := config.Load()
 	s, _ := config.Unmarshal(v)
 
@@ -119,7 +127,6 @@ func Default() []Check {
 			}
 			return Result{Name: "embedding model", Detail: "missing (run: orch model fetch)", OK: false}
 		},
-		SocketCheck("orchd"),
 		CommandCheck("gh auth", "gh", "auth", "status"),
 	}
 }

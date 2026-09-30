@@ -15,6 +15,11 @@ service Orchd {
   rpc Search(SearchRequest) returns (SearchResponse);
   // Dispatch enqueues a durable agent-task workflow and returns its instance ID.
   rpc Dispatch(DispatchRequest) returns (DispatchResponse);
+  // Status reports orchd's own health plus one entry per supervised subsystem.
+  rpc Status(StatusRequest) returns (StatusResponse);
+  // Restart restarts one supervised subsystem in place — no process bounce.
+  // An empty name restarts every subsystem.
+  rpc Restart(RestartRequest) returns (RestartResponse);
 }
 
 message PingRequest {}
@@ -64,4 +69,31 @@ message DispatchRequest {
 
 message DispatchResponse {
   string instance_id = 1;
+}
+
+message StatusRequest {}
+
+message StatusResponse {
+  string version = 1;
+  int64 uptime_seconds = 2;
+  repeated SubsystemStatus subsystems = 3;
+}
+
+// SubsystemStatus is one supervised unit's liveness, as `orch status` prints it.
+message SubsystemStatus {
+  string name = 1;
+  string state = 2;       // running | stopped | failed
+  string detail = 3;      // static descriptor, e.g. the qdrant port
+  string error = 4;       // last start/stop failure, empty when healthy
+  int64 started_at = 5;   // unix seconds; 0 when never started
+  int64 last_beat = 6;    // unix seconds of the last tick; 0 when not tick-driven
+  int32 restarts = 7;
+}
+
+message RestartRequest {
+  string name = 1; // empty restarts every subsystem
+}
+
+message RestartResponse {
+  repeated string restarted = 1;
 }

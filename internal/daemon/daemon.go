@@ -2,14 +2,21 @@
 // (lazily-loaded) embedder and RAG service, and serves the Orchd gRPC service
 // over a Unix-domain socket. Run takes a context so shutdown is testable; signal
 // handling lives in the thin cmd/orchd entrypoint.
+//
+// orchd's long-lived pieces — the native qdrant engine, the workflow worker, the
+// sources and docs schedulers, the PR babysitter — run as named supervisor units
+// rather than bare goroutines, so `orch status` can report each one's liveness
+// and `orch restart <name>` can bounce one without restarting the process.
 package daemon
 
 import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -17,21 +24,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cschleiden/go-workflows/worker"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
-	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/embed"
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
-	"github.com/willesq/orchestrator/internal/prs"
-	"github.com/willesq/orchestrator/internal/qdrant"
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
-	"github.com/willesq/orchestrator/internal/sources"
+	"github.com/willesq/orchestrator/internal/supervisor"
 	"github.com/willesq/orchestrator/internal/version"
 	"github.com/willesq/orchestrator/internal/workflows"
 )
@@ -47,11 +52,21 @@ type dispatcher interface {
 	Dispatch(ctx context.Context, agent, body string) (string, error)
 }
 
+// supervisorAPI is the subset of *supervisor.Supervisor the Status and Restart
+// handlers depend on, so they are testable without live subsystems.
+type supervisorAPI interface {
+	Status() []supervisor.Status
+	Restart(name string) error
+	RestartAll() error
+	Names() []string
+}
+
 type server struct {
 	orchdv1.UnimplementedOrchdServer
 	start time.Time
 	rag   ragService
 	disp  dispatcher
+	sup   supervisorAPI
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -106,6 +121,74 @@ func (s *server) Dispatch(ctx context.Context, req *orchdv1.DispatchRequest) (*o
 	return &orchdv1.DispatchResponse{InstanceId: id}, nil
 }
 
+// Status reports orchd's own liveness plus one entry per supervised subsystem.
+func (s *server) Status(_ context.Context, _ *orchdv1.StatusRequest) (*orchdv1.StatusResponse, error) {
+	resp := &orchdv1.StatusResponse{
+		Version:       version.Version,
+		UptimeSeconds: int64(time.Since(s.start).Seconds()),
+	}
+	if s.sup == nil {
+		return resp, nil
+	}
+	for _, st := range s.sup.Status() {
+		resp.Subsystems = append(resp.Subsystems, &orchdv1.SubsystemStatus{
+			Name:      st.Name,
+			State:     st.State,
+			Detail:    st.Detail,
+			Error:     st.Err,
+			StartedAt: unixOrZero(st.StartedAt),
+			LastBeat:  unixOrZero(st.LastBeat),
+			Restarts:  clampInt32(st.Restarts),
+		})
+	}
+	return resp, nil
+}
+
+// Restart bounces one supervised subsystem in place, or every subsystem when no
+// name is given. The orchd process itself is never restarted here — that is the
+// service manager's job (`orch restart` with no component).
+func (s *server) Restart(_ context.Context, req *orchdv1.RestartRequest) (*orchdv1.RestartResponse, error) {
+	if s.sup == nil {
+		return nil, grpcstatus.Error(codes.Unavailable, "orchd is running without supervised subsystems")
+	}
+	if name := req.GetName(); name != "" {
+		if err := s.sup.Restart(name); err != nil {
+			if errors.Is(err, supervisor.ErrUnknownUnit) {
+				return nil, grpcstatus.Errorf(codes.NotFound, "%v (known subsystems: %s)",
+					err, strings.Join(s.sup.Names(), ", "))
+			}
+			return nil, grpcstatus.Error(codes.Internal, err.Error())
+		}
+		return &orchdv1.RestartResponse{Restarted: []string{name}}, nil
+	}
+	if err := s.sup.RestartAll(); err != nil {
+		return nil, grpcstatus.Error(codes.Internal, err.Error())
+	}
+	return &orchdv1.RestartResponse{Restarted: s.sup.Names()}, nil
+}
+
+// unixOrZero renders a timestamp for the wire, mapping the zero time to 0 so a
+// client can tell "never" apart from "at the epoch".
+func unixOrZero(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
+}
+
+// clampInt32 saturates rather than wrapping, so an absurd restart count reports
+// as a very large number instead of a negative one.
+func clampInt32(n int) int32 {
+	switch {
+	case n > math.MaxInt32:
+		return math.MaxInt32
+	case n < math.MinInt32:
+		return math.MinInt32
+	default:
+		return int32(n)
+	}
+}
+
 // Run serves orchd until ctx is canceled.
 func Run(ctx context.Context) error {
 	if err := paths.Ensure(); err != nil {
@@ -138,65 +221,29 @@ func Run(ctx context.Context) error {
 		return err
 	}
 
-	// In binary mode, orchd owns the native (Docker-free) qdrant engine's lifecycle.
-	qStop, qURL, err := startQdrant(ctx, s, apiKey)
-	if err != nil {
-		return err
-	}
-	defer qStop()
-
-	svc, emb := buildRAG(s, qURL, apiKey)
+	svc, emb := buildRAG(s, s.QdrantURL(), apiKey)
 	defer emb.Close()
 
-	// Durable workflow engine: worker drains AgentTask instances; dispatcher enqueues.
+	// Durable workflow engine: the worker unit drains AgentTask instances; the
+	// dispatcher (used by the RPC handler, not a subsystem) enqueues them.
 	b, err := queue.NewBackend()
 	if err != nil {
 		return err
 	}
 	defer func() { _ = b.Close() }()
 	workflows.SetStore(queue.NewSQLTaskStore(store))
-	w := worker.New(b, nil)
-	if err := w.RegisterWorkflow(workflows.AgentTask); err != nil {
-		return err
-	}
-	if err := w.RegisterActivity(workflows.ProcessActivity); err != nil {
-		return err
-	}
-	if err := w.Start(ctx); err != nil {
-		return err
-	}
 	disp := queue.NewDispatcher(b)
 
-	// Source freshness scheduler: refresh registered web/repo/owner sources on cadence.
-	scanInterval, _ := time.ParseDuration(s.Sources.ScanInterval)
-	scheduler := sources.NewScheduler(
-		sources.NewRegistry(store), svc,
-		sources.RefreshOpts{KnownRoots: expandRoots(s.Sources.KnownRoots)},
-		scanInterval,
-	)
-	go scheduler.Run(ctx)
-
-	// Docs subsystem: GitHub code-repo markdown ingestion on a cadence (separate
-	// from the generic sources scheduler; gh-CLI-driven with repo/file skipping).
-	docsScan, _ := time.ParseDuration(s.Docs.ScanInterval)
-	docsScheduler := docs.NewScheduler(
-		docs.NewRegistry(store), svc,
-		docs.SyncOpts{
-			RepoCache:       s.RepoCacheDir(),
-			IncludeArchived: s.Docs.IncludeArchived,
-			IncludeForks:    s.Docs.IncludeForks,
-			GH:              docs.NewGitHub(),
-			Git:             docs.NewGit(),
-		},
-		docsScan,
-	)
-	go docsScheduler.Run(ctx)
-
-	// PR babysitter: poll open PRs via gh and cache state + events on transitions.
-	if s.PRBabysitter.Enabled {
-		pollInterval, _ := time.ParseDuration(s.PRBabysitter.PollInterval)
-		go runBabysitter(ctx, prs.New(paths.PRStateFile(), paths.EventsDir()), pollInterval)
+	sup := supervisor.New(ctx)
+	for _, u := range subsystems(deps{settings: s, apiKey: apiKey, rag: svc, backend: b, store: store}) {
+		if err := sup.Add(u); err != nil {
+			return err
+		}
 	}
+	if err := sup.StartAll(); err != nil {
+		return err
+	}
+	defer func() { _ = sup.StopAll() }()
 
 	sock := paths.SocketPath()
 	_ = os.Remove(sock)
@@ -205,37 +252,24 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	defer func() { _ = os.Remove(sock) }()
+	// The socket is the only trust boundary: anything that can connect gets the
+	// whole RPC surface (Dispatch, Restart, the RAG store). Left to the ambient
+	// umask the mode is an accident, so pin it to owner-only rather than relying
+	// on the caller's environment.
+	if err := os.Chmod(sock, 0o600); err != nil {
+		return fmt.Errorf("secure socket %s: %w", sock, err)
+	}
 
 	gs := grpc.NewServer()
-	orchdv1.RegisterOrchdServer(gs, &server{start: time.Now(), rag: svc, disp: disp})
+	orchdv1.RegisterOrchdServer(gs, &server{start: time.Now(), rag: svc, disp: disp, sup: sup})
 	go func() {
 		<-ctx.Done()
 		gs.GracefulStop()
 	}()
 
-	log.Printf("orchd %s listening on %s", version.Version, sock)
+	log.Printf("orchd %s listening on %s (subsystems: %s)",
+		version.Version, sock, strings.Join(sup.Names(), ", "))
 	return gs.Serve(lis)
-}
-
-// startQdrant brings up the vector store per config. In binary mode orchd runs
-// and owns the native qdrant engine; otherwise it just dials the configured URL.
-// Returns a stop func and the effective base URL the RAG store should use.
-func startQdrant(ctx context.Context, s config.Settings, apiKey string) (func(), string, error) {
-	if s.RAG.Qdrant.Mode != "binary" {
-		return func() {}, s.RAG.Qdrant.URL, nil
-	}
-	qp := qdrant.New(qdrant.Config{
-		Version:  s.RAG.Qdrant.Version,
-		BinDir:   filepath.Join(paths.DataDir(), "bin"),
-		Storage:  resolveStorageDir(s),
-		HTTPPort: s.RAG.Qdrant.HTTPPort,
-		GRPCPort: s.RAG.Qdrant.GRPCPort,
-		APIKey:   apiKey,
-	})
-	if err := qp.Start(ctx); err != nil {
-		return nil, "", fmt.Errorf("start qdrant: %w", err)
-	}
-	return func() { _ = qp.Stop() }, fmt.Sprintf("http://127.0.0.1:%d", s.RAG.Qdrant.HTTPPort), nil
 }
 
 // buildRAG constructs the embedder + RAG service from config against a qdrant URL.
@@ -255,15 +289,6 @@ func buildRAG(s config.Settings, qdrantURL, apiKey string) (*rag.Service, *embed
 
 	qs := rag.NewQdrantStore(qdrantURL, s.RAG.Qdrant.Collection, apiKey)
 	return rag.NewService(emb, qs, s.Embedder.ChunkSize, s.Embedder.ChunkOverlap), emb
-}
-
-// resolveStorageDir is the qdrant storage directory (config override or the
-// default XDG data location, <data>/qdrant).
-func resolveStorageDir(s config.Settings) string {
-	if s.RAG.Qdrant.Storage != "" {
-		return s.RAG.Qdrant.Storage
-	}
-	return filepath.Join(paths.DataDir(), "qdrant")
 }
 
 // resolveModelDir is the embedding model directory (config override or default).
@@ -333,25 +358,6 @@ func orDefault(s, def string) string {
 		return def
 	}
 	return s
-}
-
-// runBabysitter sweeps PRs on a cadence until ctx is canceled. gh failures (e.g.
-// not authenticated) are non-fatal — the cache simply stays as-is.
-func runBabysitter(ctx context.Context, bb *prs.Babysitter, interval time.Duration) {
-	if interval <= 0 {
-		interval = 10 * time.Minute
-	}
-	t := time.NewTicker(interval)
-	defer t.Stop()
-	_ = bb.Sweep(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			_ = bb.Sweep(ctx)
-		}
-	}
 }
 
 // expandRoots expands a leading ~ in each configured source root.

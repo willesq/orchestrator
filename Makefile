@@ -17,7 +17,13 @@ CGO_LDFLAGS := -L$(TOK_LIB_DIR)
 
 export CGO_ENABLED = 1
 
-.PHONY: build orch orchd orch-hook test cover vet fmt clean tools
+.PHONY: build orch orchd orch-hook test cover vet fmt clean tools proto
+
+# Pinned to the versions stamped in the committed *.pb.go headers so regenerating
+# produces a diff of the schema change only.
+PROTOC_GEN_GO      := google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+PROTOC_GEN_GO_GRPC := google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2
+PROTO              := internal/rpc/orchdv1/orchd.proto
 
 build: orch orchd orch-hook
 
@@ -41,6 +47,19 @@ cover:
 
 vet:
 	go vet ./...
+
+# Install the codegen plugins protoc shells out to (into $(go env GOPATH)/bin).
+tools:
+	go install $(PROTOC_GEN_GO)
+	go install $(PROTOC_GEN_GO_GRPC)
+
+# Regenerate the orchd gRPC stubs. Run after editing the .proto; needs `make tools`
+# and protoc (brew install protobuf) once.
+proto: tools
+	PATH="$$(go env GOPATH)/bin:$$PATH" protoc \
+	  --go_out=. --go_opt=module=github.com/willesq/orchestrator \
+	  --go-grpc_out=. --go-grpc_opt=module=github.com/willesq/orchestrator \
+	  $(PROTO)
 
 fmt:
 	gofmt -w cmd internal

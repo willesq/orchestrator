@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/willesq/orchestrator/internal/paths"
 )
 
 func TestLoadDefaults(t *testing.T) {
@@ -152,6 +154,59 @@ func TestGetAndList(t *testing.T) {
 			}
 			if all := List(v); len(all) == 0 {
 				t.Errorf("List returned no settings")
+			}
+		})
+	}
+}
+
+func TestQdrantURL(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+		port int
+		url  string
+		want string
+	}{
+		{name: "binary uses the local port", mode: "binary", port: 6333, url: "http://example:6333", want: "http://127.0.0.1:6333"},
+		{name: "external uses the configured url", mode: "external", port: 6333, url: "http://example:6333", want: "http://example:6333"},
+		{name: "docker uses the configured url", mode: "docker", port: 6333, url: "http://localhost:6333", want: "http://localhost:6333"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := Settings{}
+			s.RAG.Qdrant.Mode = tt.mode
+			s.RAG.Qdrant.HTTPPort = tt.port
+			s.RAG.Qdrant.URL = tt.url
+			if got := s.QdrantURL(); got != tt.want {
+				t.Errorf("QdrantURL() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestQdrantStorageDir(t *testing.T) {
+	tests := []struct {
+		name        string
+		storage     string
+		wantDefault bool
+	}{
+		{name: "default resolves under the data dir", wantDefault: true},
+		{name: "config override wins", storage: "/tmp/qdrant-store"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+			s := Settings{}
+			s.RAG.Qdrant.Storage = tt.storage
+			got := s.QdrantStorageDir()
+			if tt.wantDefault {
+				if want := filepath.Join(paths.DataDir(), "qdrant"); got != want {
+					t.Errorf("QdrantStorageDir() = %q, want %q", got, want)
+				}
+				return
+			}
+			if got != tt.storage {
+				t.Errorf("QdrantStorageDir() = %q, want %q", got, tt.storage)
 			}
 		})
 	}

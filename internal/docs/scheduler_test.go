@@ -3,7 +3,6 @@ package docs
 import (
 	"context"
 	"testing"
-	"time"
 )
 
 func TestSchedulerScan(t *testing.T) {
@@ -22,7 +21,7 @@ func TestSchedulerScan(t *testing.T) {
 				Git:       git,
 				Now:       func() int64 { return now },
 			}
-			s := NewScheduler(reg, ing, opts, time.Minute)
+			s := NewScheduler(reg, ing, opts)
 
 			s.Scan(ctx)
 			if len(ing.uris) != 1 {
@@ -44,31 +43,15 @@ func TestSchedulerScan(t *testing.T) {
 }
 
 func TestNewSchedulerDefaults(t *testing.T) {
-	tests := []struct{ name string }{{name: "zero tick and nil clock get defaults"}}
+	tests := []struct{ name string }{{name: "nil clock gets a default"}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewScheduler(nil, nil, SyncOpts{}, 0)
-			if s.tick <= 0 || s.opts.Now == nil {
-				t.Fatal("defaults not applied")
+			s := NewScheduler(nil, nil, SyncOpts{})
+			if s.opts.Now == nil {
+				t.Fatal("default clock not applied")
 			}
-		})
-	}
-}
-
-func TestSchedulerRunCancels(t *testing.T) {
-	tests := []struct{ name string }{{name: "Run returns promptly on ctx cancel"}}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			reg := testRegistry(t)
-			ctx, cancel := context.WithCancel(context.Background())
-			s := NewScheduler(reg, &fakeIng{}, SyncOpts{GH: fakeGH{}, Git: &fakeGit{}, Now: func() int64 { return 0 }}, time.Hour)
-			done := make(chan struct{})
-			go func() { s.Run(ctx); close(done) }()
-			cancel()
-			select {
-			case <-done:
-			case <-time.After(2 * time.Second):
-				t.Fatal("Run did not return on cancel")
+			if s.opts.Now() <= 0 {
+				t.Errorf("default clock returned %d, want a unix timestamp", s.opts.Now())
 			}
 		})
 	}

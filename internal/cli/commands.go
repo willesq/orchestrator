@@ -95,17 +95,9 @@ func newInstallCmd() *cobra.Command {
 				}
 				home = h
 			}
-			if binDir == "" {
-				exe, err := os.Executable()
-				if err != nil {
-					return err
-				}
-				binDir = filepath.Dir(exe)
-			}
-			bins := install.Bins{
-				Orch:     filepath.Join(binDir, "orch"),
-				OrchHook: filepath.Join(binDir, "orch-hook"),
-				Orchd:    filepath.Join(binDir, "orchd"),
+			bins, err := installBins(binDir)
+			if err != nil {
+				return err
 			}
 			var adapters []install.Adapter
 			if target == "all" {

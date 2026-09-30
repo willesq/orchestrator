@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/rag"
@@ -39,42 +38,6 @@ func TestRegistryMarkDue(t *testing.T) {
 			}
 			if due, _ := reg.Due(ctx, 1000); len(due) != 1 {
 				t.Errorf("expected 1 due after MarkDue")
-			}
-		})
-	}
-}
-
-func TestSchedulerRun(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "runs and scans until ctx canceled"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				_, _ = w.Write([]byte("content"))
-			}))
-			defer srv.Close()
-			reg := newRegistry(t)
-			_ = reg.Add(context.Background(), Source{Kind: KindWeb, URI: srv.URL, RefreshSecs: 0})
-
-			ing := &fakeIngester{}
-			sc := NewScheduler(reg, ing, RefreshOpts{}, 5*time.Millisecond)
-			sc.now = func() int64 { return 1_000_000 }
-
-			ctx, cancel := context.WithCancel(context.Background())
-			done := make(chan struct{})
-			go func() { sc.Run(ctx); close(done) }()
-			time.Sleep(30 * time.Millisecond)
-			cancel()
-			select {
-			case <-done:
-			case <-time.After(2 * time.Second):
-				t.Fatal("Run did not stop on ctx cancel")
-			}
-			if ing.calls == 0 {
-				t.Errorf("scheduler never scanned")
 			}
 		})
 	}
@@ -314,16 +277,50 @@ func TestSchedulerScan(t *testing.T) {
 			_ = reg.Add(ctx, Source{Kind: KindWeb, URI: srv.URL, RefreshSecs: 10})
 
 			ing := &fakeIngester{}
-			sc := NewScheduler(reg, ing, RefreshOpts{}, 0)
-			sc.now = func() int64 { return 1_000_000 } // far in the future → due
+			sc := NewScheduler(reg, ing, RefreshOpts{})
+			const now int64 = 1_000_000
+			sc.now = func() int64 { return now } // far in the future → due
 			sc.Scan(ctx)
 
 			if ing.calls == 0 {
 				t.Errorf("scheduler did not refresh the due source")
 			}
 			list, _ := reg.List(ctx)
-			if list[0].Status != "ok" {
-				t.Errorf("status = %q, want ok", list[0].Status)
+			if list[0].Status != "ok" || list[0].LastFetched != now {
+				t.Errorf("source not marked fetched: %+v", list[0])
+			}
+		})
+	}
+}
+
+func TestNewSchedulerDefaultClock(t *testing.T) {
+	tests := []struct{ name string }{{name: "default clock returns wall-clock unix seconds"}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sc := NewScheduler(nil, nil, RefreshOpts{})
+			if got := sc.now(); got < 1_700_000_000 {
+				t.Errorf("default clock returned %d, want a current unix timestamp", got)
+			}
+		})
+	}
+}
+
+func TestSchedulerScanRegistryError(t *testing.T) {
+	tests := []struct{ name string }{{name: "an unreadable registry is a silent no-op"}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+			conn, err := db.Open()
+			if err != nil {
+				t.Fatalf("db.Open: %v", err)
+			}
+			_ = conn.Close() // queries now fail
+
+			ing := &fakeIngester{}
+			sc := NewScheduler(NewRegistry(conn), ing, RefreshOpts{})
+			sc.Scan(context.Background()) // must not panic
+			if ing.calls != 0 {
+				t.Errorf("ingested %d times against a dead registry, want 0", ing.calls)
 			}
 		})
 	}

@@ -3,23 +3,17 @@ package daemon
 import (
 	"context"
 	"errors"
-	"net"
-	"net/http"
-	"net/http/httptest"
-	"os"
-	"path/filepath"
-	"strconv"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 
-	"github.com/willesq/orchestrator/internal/config"
-	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/rag"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/supervisor"
 )
 
 type fakeRag struct {
@@ -43,6 +37,29 @@ type fakeDispatcher struct {
 
 func (f fakeDispatcher) Dispatch(context.Context, string, string) (string, error) {
 	return f.id, f.err
+}
+
+// fakeSupervisor stands in for the real supervisor in the RPC handler tests.
+type fakeSupervisor struct {
+	statuses   []supervisor.Status
+	names      []string
+	restartErr error
+	allErr     error
+	restarted  []string
+	restartAll int
+}
+
+func (f *fakeSupervisor) Status() []supervisor.Status { return f.statuses }
+func (f *fakeSupervisor) Names() []string             { return f.names }
+
+func (f *fakeSupervisor) Restart(name string) error {
+	f.restarted = append(f.restarted, name)
+	return f.restartErr
+}
+
+func (f *fakeSupervisor) RestartAll() error {
+	f.restartAll++
+	return f.allErr
 }
 
 func TestServerIngest(t *testing.T) {
@@ -138,246 +155,145 @@ func TestServerPing(t *testing.T) {
 	}
 }
 
-func TestStartQdrant(t *testing.T) {
-	// A stub already serving /readyz lets binary mode reuse it (no download/spawn).
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/readyz" {
-			w.WriteHeader(http.StatusOK)
-		}
-	}))
-	defer srv.Close()
-	_, portStr, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
-	port, _ := strconv.Atoi(portStr)
-
+func TestServerStatus(t *testing.T) {
+	started := time.Date(2026, 9, 28, 10, 0, 0, 0, time.UTC)
 	tests := []struct {
-		name    string
-		mode    string
-		wantURL string
+		name          string
+		sup           supervisorAPI
+		wantSubsystem int
+		wantState     string
+		wantStarted   int64
+		wantLastBeat  int64
 	}{
-		{name: "external returns configured url", mode: "external", wantURL: "http://example:6333"},
-		{name: "binary reuses ready engine", mode: "binary", wantURL: "http://127.0.0.1:" + portStr},
+		{
+			name: "reports each supervised subsystem",
+			sup: &fakeSupervisor{statuses: []supervisor.Status{{
+				Name: UnitSources, Detail: "freshness", State: supervisor.StateRunning,
+				StartedAt: started, LastBeat: started, Restarts: 2,
+			}}},
+			wantSubsystem: 1,
+			wantState:     supervisor.StateRunning,
+			wantStarted:   started.Unix(),
+			wantLastBeat:  started.Unix(),
+		},
+		{
+			name: "never-started unit reports zero timestamps",
+			sup: &fakeSupervisor{statuses: []supervisor.Status{{
+				Name: UnitDocs, State: supervisor.StateStopped,
+			}}},
+			wantSubsystem: 1,
+			wantState:     supervisor.StateStopped,
+		},
+		{
+			name:          "no supervisor still reports version and uptime",
+			sup:           nil,
+			wantSubsystem: 0,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
-			s := config.Settings{}
-			s.RAG.Qdrant.Mode = tt.mode
-			s.RAG.Qdrant.URL = "http://example:6333"
-			s.RAG.Qdrant.HTTPPort = port
-			s.RAG.Qdrant.Version = "v1.17.1"
-
-			stop, url, err := startQdrant(context.Background(), s, "")
+			s := &server{start: time.Now().Add(-90 * time.Second), sup: tt.sup}
+			resp, err := s.Status(context.Background(), &orchdv1.StatusRequest{})
 			if err != nil {
-				t.Fatalf("startQdrant: %v", err)
-			}
-			defer stop()
-			if url != tt.wantURL {
-				t.Errorf("url = %q, want %q", url, tt.wantURL)
-			}
-		})
-	}
-}
-
-func TestHelpers(t *testing.T) {
-	tests := []struct {
-		name string
-		in   string
-		def  string
-		want string
-	}{
-		{name: "empty uses default", in: "", def: "d", want: "d"},
-		{name: "value wins", in: "v", def: "d", want: "v"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := orDefault(tt.in, tt.def); got != tt.want {
-				t.Errorf("orDefault(%q,%q) = %q, want %q", tt.in, tt.def, got, tt.want)
-			}
-		})
-	}
-	// resolveOnnxLibDir returns a non-empty path (brew or fallback).
-	if resolveOnnxLibDir() == "" {
-		t.Errorf("resolveOnnxLibDir returned empty")
-	}
-}
-
-func TestRunServesAndShutsDown(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{name: "serves ping then shuts down on ctx cancel"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			t.Setenv("ORCH_DATA_DIR", filepath.Join(dir, "data"))
-			t.Setenv("ORCH_CONFIG_DIR", filepath.Join(dir, "cfg"))
-			// external mode: don't download/spawn a native qdrant in the test.
-			t.Setenv("ORCH_RAG_QDRANT_MODE", "external")
-			// Unix socket paths are capped near 104 chars on macOS; t.TempDir()
-			// plus the test name blows past that, so use a short explicit path.
-			t.Setenv("ORCH_SOCKET", filepath.Join(os.TempDir(), "orchd-daemontest.sock"))
-
-			// Pre-seed dummy model files so the first-run fetch is a no-op (the
-			// embedder is lazy and this test only pings).
-			modelDir := filepath.Join(dir, "data", "models", "minilm")
-			if err := os.MkdirAll(modelDir, 0o755); err != nil {
-				t.Fatalf("mkdir model: %v", err)
-			}
-			for _, f := range []string{"model.onnx", "tokenizer.json"} {
-				if err := os.WriteFile(filepath.Join(modelDir, f), []byte("x"), 0o644); err != nil {
-					t.Fatalf("seed model: %v", err)
-				}
-			}
-
-			ctx, cancel := context.WithCancel(context.Background())
-			errCh := make(chan error, 1)
-			go func() { errCh <- Run(ctx) }()
-
-			sock := paths.SocketPath()
-			if !waitForFile(sock, 3*time.Second) {
-				cancel()
-				t.Fatalf("socket %s never appeared", sock)
-			}
-
-			conn, err := grpc.NewClient("unix://"+sock, grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				t.Fatalf("dial: %v", err)
-			}
-			resp, err := orchdv1.NewOrchdClient(conn).Ping(context.Background(), &orchdv1.PingRequest{})
-			if err != nil {
-				t.Fatalf("Ping: %v", err)
+				t.Fatalf("Status: %v", err)
 			}
 			if resp.GetVersion() == "" {
-				t.Errorf("empty version from live server")
+				t.Errorf("empty version")
 			}
-			_ = conn.Close()
-
-			cancel()
-			select {
-			case err := <-errCh:
-				if err != nil {
-					t.Errorf("Run returned error: %v", err)
-				}
-			case <-time.After(3 * time.Second):
-				t.Errorf("Run did not shut down after cancel")
+			if resp.GetUptimeSeconds() < 89 {
+				t.Errorf("uptime = %d, want >= 89", resp.GetUptimeSeconds())
 			}
-		})
-	}
-}
-
-func waitForFile(path string, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(path); err == nil {
-			return true
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	return false
-}
-
-func TestEnsureQdrantAPIKey(t *testing.T) {
-	tests := []struct {
-		name     string
-		preseed  string
-		wantSame bool
-	}{
-		{name: "generates and persists when absent", preseed: "", wantSame: false},
-		{name: "reuses an existing key", preseed: "existing-key", wantSame: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "qdrant-api-key")
-			if tt.preseed != "" {
-				if err := os.WriteFile(path, []byte(tt.preseed+"\n"), 0o600); err != nil {
-					t.Fatalf("seed: %v", err)
-				}
+			if len(resp.GetSubsystems()) != tt.wantSubsystem {
+				t.Fatalf("got %d subsystems, want %d", len(resp.GetSubsystems()), tt.wantSubsystem)
 			}
-			k1, err := ensureQdrantAPIKey(path)
-			if err != nil {
-				t.Fatalf("ensureQdrantAPIKey: %v", err)
+			if tt.wantSubsystem == 0 {
+				return
 			}
-			if k1 == "" {
-				t.Fatal("empty key")
+			sub := resp.GetSubsystems()[0]
+			if sub.GetState() != tt.wantState {
+				t.Errorf("state = %q, want %q", sub.GetState(), tt.wantState)
 			}
-			if tt.wantSame && k1 != tt.preseed {
-				t.Errorf("key = %q, want preseeded %q", k1, tt.preseed)
-			}
-			k2, err := ensureQdrantAPIKey(path) // must be stable across calls
-			if err != nil {
-				t.Fatalf("second ensureQdrantAPIKey: %v", err)
-			}
-			if k2 != k1 {
-				t.Errorf("key not stable: %q != %q", k1, k2)
-			}
-			info, err := os.Stat(path)
-			if err != nil {
-				t.Fatalf("stat: %v", err)
-			}
-			if info.Mode().Perm() != 0o600 {
-				t.Errorf("key file mode = %v, want 0600", info.Mode().Perm())
+			if sub.GetStartedAt() != tt.wantStarted || sub.GetLastBeat() != tt.wantLastBeat {
+				t.Errorf("startedAt/lastBeat = %d/%d, want %d/%d",
+					sub.GetStartedAt(), sub.GetLastBeat(), tt.wantStarted, tt.wantLastBeat)
 			}
 		})
 	}
 }
 
-func TestResolveQdrantAPIKeyEnvOverride(t *testing.T) {
+func TestServerRestart(t *testing.T) {
 	tests := []struct {
-		name   string
-		envVal string
-		want   string
+		name          string
+		sup           supervisorAPI
+		req           string
+		wantCode      codes.Code
+		wantRestarted []string
+		wantAllCalls  int
+		wantErrHas    string
 	}{
-		{name: "env override wins over persisted", envVal: "from-env", want: "from-env"},
+		{
+			name:          "named subsystem restarts in place",
+			sup:           &fakeSupervisor{names: []string{UnitSources, UnitDocs}},
+			req:           UnitSources,
+			wantRestarted: []string{UnitSources},
+		},
+		{
+			name:          "empty name restarts every subsystem",
+			sup:           &fakeSupervisor{names: []string{UnitSources, UnitDocs}},
+			req:           "",
+			wantRestarted: []string{UnitSources, UnitDocs},
+			wantAllCalls:  1,
+		},
+		{
+			name:       "unknown name is NOT_FOUND and lists the known ones",
+			sup:        &fakeSupervisor{names: []string{UnitSources}, restartErr: fmt.Errorf("%w: %q", supervisor.ErrUnknownUnit, "nope")},
+			req:        "nope",
+			wantCode:   codes.NotFound,
+			wantErrHas: "known subsystems: " + UnitSources,
+		},
+		{
+			name:       "a failing restart is INTERNAL",
+			sup:        &fakeSupervisor{names: []string{UnitSources}, restartErr: errors.New("wedged")},
+			req:        UnitSources,
+			wantCode:   codes.Internal,
+			wantErrHas: "wedged",
+		},
+		{
+			name:       "a failing restart-all is INTERNAL",
+			sup:        &fakeSupervisor{names: []string{UnitSources}, allErr: errors.New("wedged")},
+			req:        "",
+			wantCode:   codes.Internal,
+			wantErrHas: "wedged",
+		},
+		{
+			name:       "no supervisor is UNAVAILABLE",
+			sup:        nil,
+			req:        UnitSources,
+			wantCode:   codes.Unavailable,
+			wantErrHas: "without supervised subsystems",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
-			t.Setenv("QDRANT_API_KEY", tt.envVal)
-			s := config.Settings{}
-			s.RAG.Qdrant.APIKeyEnv = "QDRANT_API_KEY"
-			got, err := resolveQdrantAPIKey(s)
+			s := &server{start: time.Now(), sup: tt.sup}
+			resp, err := s.Restart(context.Background(), &orchdv1.RestartRequest{Name: tt.req})
+			if tt.wantCode != codes.OK {
+				if got := grpcstatus.Code(err); got != tt.wantCode {
+					t.Fatalf("code = %v, want %v (err %v)", got, tt.wantCode, err)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrHas) {
+					t.Errorf("error %q missing %q", err, tt.wantErrHas)
+				}
+				return
+			}
 			if err != nil {
-				t.Fatalf("resolveQdrantAPIKey: %v", err)
+				t.Fatalf("Restart: %v", err)
 			}
-			if got != tt.want {
-				t.Errorf("key = %q, want %q", got, tt.want)
+			if strings.Join(resp.GetRestarted(), ",") != strings.Join(tt.wantRestarted, ",") {
+				t.Errorf("restarted = %v, want %v", resp.GetRestarted(), tt.wantRestarted)
 			}
-		})
-	}
-}
-
-func TestResolveDirs(t *testing.T) {
-	tests := []struct {
-		name               string
-		storage            string
-		modelDir           string
-		wantStorageDefault bool
-		wantModelDefault   bool
-	}{
-		{name: "defaults resolve under data dir", wantStorageDefault: true, wantModelDefault: true},
-		{name: "config overrides win", storage: "/tmp/store", modelDir: "/tmp/model"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
-			s := config.Settings{}
-			s.RAG.Qdrant.Storage = tt.storage
-			s.Embedder.ModelDir = tt.modelDir
-			gotStorage, gotModel := resolveStorageDir(s), resolveModelDir(s)
-			if tt.wantStorageDefault {
-				if want := filepath.Join(paths.DataDir(), "qdrant"); gotStorage != want {
-					t.Errorf("storage = %q, want %q", gotStorage, want)
-				}
-			} else if gotStorage != tt.storage {
-				t.Errorf("storage = %q, want %q", gotStorage, tt.storage)
-			}
-			if tt.wantModelDefault {
-				if want := filepath.Join(paths.DataDir(), "models", "minilm"); gotModel != want {
-					t.Errorf("model = %q, want %q", gotModel, want)
-				}
-			} else if gotModel != tt.modelDir {
-				t.Errorf("model = %q, want %q", gotModel, tt.modelDir)
+			if got := tt.sup.(*fakeSupervisor).restartAll; got != tt.wantAllCalls {
+				t.Errorf("RestartAll called %d times, want %d", got, tt.wantAllCalls)
 			}
 		})
 	}

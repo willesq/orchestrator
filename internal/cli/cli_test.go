@@ -562,7 +562,14 @@ type fakeClient struct {
 	ingest   *orchdv1.IngestResponse
 	search   *orchdv1.SearchResponse
 	dispatch *orchdv1.DispatchResponse
-	err      error
+	status   *orchdv1.StatusResponse
+	restart  *orchdv1.RestartResponse
+	// statusErr and restartErr override err for those two calls, so a test can
+	// have a reachable daemon that still refuses one specific request.
+	statusErr    error
+	restartErr   error
+	restartNames []string
+	err          error
 }
 
 func (f *fakeClient) Ping(context.Context, *orchdv1.PingRequest, ...grpc.CallOption) (*orchdv1.PingResponse, error) {
@@ -579,6 +586,21 @@ func (f *fakeClient) Search(context.Context, *orchdv1.SearchRequest, ...grpc.Cal
 
 func (f *fakeClient) Dispatch(context.Context, *orchdv1.DispatchRequest, ...grpc.CallOption) (*orchdv1.DispatchResponse, error) {
 	return f.dispatch, f.err
+}
+
+func (f *fakeClient) Status(context.Context, *orchdv1.StatusRequest, ...grpc.CallOption) (*orchdv1.StatusResponse, error) {
+	if f.statusErr != nil {
+		return nil, f.statusErr
+	}
+	return f.status, f.err
+}
+
+func (f *fakeClient) Restart(_ context.Context, req *orchdv1.RestartRequest, _ ...grpc.CallOption) (*orchdv1.RestartResponse, error) {
+	f.restartNames = append(f.restartNames, req.GetName())
+	if f.restartErr != nil {
+		return nil, f.restartErr
+	}
+	return f.restart, f.err
 }
 
 func factory(c orchdv1.OrchdClient, dialErr error) clientFactory {

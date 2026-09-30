@@ -36,6 +36,14 @@ func (f *fakeClient) Dispatch(context.Context, *orchdv1.DispatchRequest, ...grpc
 	return nil, f.err
 }
 
+func (f *fakeClient) Status(context.Context, *orchdv1.StatusRequest, ...grpc.CallOption) (*orchdv1.StatusResponse, error) {
+	return nil, f.err
+}
+
+func (f *fakeClient) Restart(context.Context, *orchdv1.RestartRequest, ...grpc.CallOption) (*orchdv1.RestartResponse, error) {
+	return nil, f.err
+}
+
 func factory(c orchdv1.OrchdClient, dialErr error) clientFactory {
 	return func() (orchdv1.OrchdClient, func(), error) {
 		if dialErr != nil {

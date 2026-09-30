@@ -68,6 +68,24 @@ func AllAdapters() []Adapter {
 	return []Adapter{ClaudeCode{}, Codex{}, Gemini{}}
 }
 
+// Pending counts the edits that would change a file, writing nothing. It is how
+// `orch status` reports harness-wiring drift: 0 means this harness is fully wired
+// to the current binaries, anything higher means `orch install --apply` has work.
+func (p Plan) Pending() (int, error) {
+	pending := 0
+	for _, e := range p.Edits {
+		old, _ := os.ReadFile(e.Path)
+		nw, _, err := e.Compute(old)
+		if err != nil {
+			return 0, fmt.Errorf("%s: %w", e.Path, err)
+		}
+		if !bytes.Equal(old, nw) {
+			pending++
+		}
+	}
+	return pending, nil
+}
+
 // Print renders the plan without writing anything (the default, safe mode).
 // Edits whose target already equals what's on disk are reported as UNCHANGED, so
 // re-running against an already-installed harness shows a clean no-op.
