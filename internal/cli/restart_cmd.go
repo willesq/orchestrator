@@ -37,6 +37,10 @@ With no component, the orchd process is restarted via its service manager, which
 takes every supervised subsystem (and the orchd-managed qdrant engine) down and
 back up, and picks up config and binary changes.
 
+orchd already watches its own binary and restarts itself within a minute of a new
+build being installed, so this is the manual way to close the gap when that did
+not happen — which 'orch status' reports as a drifted build.
+
 Components:
   orchd        the daemon process — the default, same as passing nothing
   subsystems   every supervised subsystem, in place, without bouncing the process
@@ -112,7 +116,7 @@ func restartSubsystem(ctx context.Context, cf clientFactory, w io.Writer, name s
 func listComponents(ctx context.Context, cf clientFactory, w io.Writer) error {
 	type row struct{ name, detail string }
 	rows := []row{
-		{componentOrchd, "the daemon process (default) — restarts everything"},
+		{componentOrchd, "the daemon process (default) — restarts everything, onto the installed build"},
 		{componentSubsystems, "every subsystem, in place"},
 	}
 

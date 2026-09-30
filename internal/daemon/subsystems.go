@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"path/filepath"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/willesq/orchestrator/internal/prs"
 	"github.com/willesq/orchestrator/internal/qdrant"
 	"github.com/willesq/orchestrator/internal/rag"
+	"github.com/willesq/orchestrator/internal/selfupdate"
 	"github.com/willesq/orchestrator/internal/sources"
 	"github.com/willesq/orchestrator/internal/supervisor"
 	"github.com/willesq/orchestrator/internal/workflows"
@@ -28,11 +30,12 @@ import (
 // Supervised subsystem names. These are the stable identifiers `orch restart
 // <name>` accepts and `orch status` prints, so treat them as a public contract.
 const (
-	UnitQdrant  = "qdrant"
-	UnitWorker  = "workflow-worker"
-	UnitSources = "sources-scheduler"
-	UnitDocs    = "docs-scheduler"
-	UnitPRs     = "pr-babysitter"
+	UnitQdrant     = "qdrant"
+	UnitWorker     = "workflow-worker"
+	UnitSources    = "sources-scheduler"
+	UnitDocs       = "docs-scheduler"
+	UnitPRs        = "pr-babysitter"
+	UnitSelfUpdate = "self-update"
 )
 
 // deps is what the supervised subsystems need in order to be constructed.
@@ -42,6 +45,15 @@ type deps struct {
 	rag      *rag.Service
 	backend  backend.Backend
 	store    *sql.DB
+	// selfUpdate watches the binary orchd was launched from. Nil — as in tests,
+	// or when the process cannot identify its own executable — drops the unit.
+	selfUpdate *selfupdate.Watcher
+	// supervised says whether something would start orchd again if it exited,
+	// which is what makes exiting on a new build a restart rather than a stop.
+	supervised bool
+	// restart asks orchd to shut down so its service manager starts it again.
+	// Nil drops the self-update unit for the same reason.
+	restart func(reason string)
 }
 
 // subsystems lists orchd's supervised units in start order (stopped in reverse).
@@ -56,7 +68,49 @@ func subsystems(d deps) []supervisor.Unit {
 	if d.settings.PRBabysitter.Enabled {
 		out = append(out, prsUnit(d.settings))
 	}
+	if d.selfUpdate != nil && d.restart != nil {
+		out = append(out, selfUpdateUnit(d.selfUpdate, d.restart, d.supervised))
+	}
 	return out
+}
+
+// selfUpdateCheckInterval is how often orchd looks at the binary behind its own
+// launch path. Stating one file costs nothing, so the cadence is about how long
+// a freshly installed build should have to wait, not about the cost of looking.
+// A variable only so a test need not wait out a real minute.
+var selfUpdateCheckInterval = time.Minute
+
+// selfUpdateUnit watches the binary the service manager launches orchd from and
+// asks orchd to exit once a different build appears there — which is what makes
+// `brew upgrade orch` take effect without anyone running `orch restart`.
+//
+// Exiting is safe at any tick: orchd's shutdown path drains the workflow worker
+// and stops the qdrant engine, and agent tasks are durable, so work in flight
+// resumes from its last persisted step under the new binary.
+//
+// When nothing supervises this process, exiting would replace a stale daemon
+// with no daemon at all, so the drift is reported and orchd keeps serving.
+func selfUpdateUnit(w *selfupdate.Watcher, restart func(reason string), supervised bool) supervisor.Unit {
+	return supervisor.Unit{
+		Name:     UnitSelfUpdate,
+		Detail:   "restarts orchd when a new build is installed",
+		Interval: selfUpdateCheckInterval,
+		Tick: func(context.Context) {
+			b, changed := w.Changed()
+			if !changed {
+				return
+			}
+			if !supervised {
+				// Adopting the build keeps this to one line per new build rather
+				// than one per check, for as long as the process stays up.
+				log.Printf("orchd: a new build is installed at %s (%s), but nothing supervises "+
+					"this process — run 'orch restart' to pick it up", w.Path(), b)
+				w.Adopt(b)
+				return
+			}
+			restart(fmt.Sprintf("a new build is installed at %s (%s)", w.Path(), b))
+		},
+	}
 }
 
 // qdrantUnit owns the native (Docker-free) engine's lifecycle. In docker or

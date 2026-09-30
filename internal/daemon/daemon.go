@@ -36,6 +36,7 @@ import (
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/selfupdate"
 	"github.com/willesq/orchestrator/internal/supervisor"
 	"github.com/willesq/orchestrator/internal/version"
 	"github.com/willesq/orchestrator/internal/workflows"
@@ -240,8 +241,24 @@ func Run(ctx context.Context) error {
 	workflows.SetStore(queue.NewSQLTaskStore(store))
 	disp := queue.NewDispatcher(b)
 
-	sup := supervisor.New(ctx)
-	for _, u := range subsystems(deps{settings: s, apiKey: apiKey, rag: svc, backend: b, store: store}) {
+	// Reason: the self-update unit restarts orchd by ending this process, and it
+	// must take the same shutdown path as SIGTERM. Serving therefore hangs off a
+	// context orchd can cancel itself, derived from the caller's.
+	runCtx, stopSelf := context.WithCancel(ctx)
+	defer stopSelf()
+	restart := func(reason string) {
+		log.Printf("orchd %s: %s — exiting so the service manager starts the new one",
+			version.Version, reason)
+		stopSelf()
+	}
+
+	watcher, supervised := selfUpdateWatch()
+
+	sup := supervisor.New(runCtx)
+	for _, u := range subsystems(deps{
+		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
+		selfUpdate: watcher, supervised: supervised, restart: restart,
+	}) {
 		if err := sup.Add(u); err != nil {
 			return err
 		}
@@ -269,13 +286,36 @@ func Run(ctx context.Context) error {
 	gs := grpc.NewServer()
 	orchdv1.RegisterOrchdServer(gs, &server{start: time.Now(), rag: svc, disp: disp, sup: sup})
 	go func() {
-		<-ctx.Done()
+		<-runCtx.Done()
 		gs.GracefulStop()
 	}()
 
 	log.Printf("orchd %s listening on %s (subsystems: %s)",
 		version.Version, sock, strings.Join(sup.Names(), ", "))
 	return gs.Serve(lis)
+}
+
+// selfUpdateWatch reports the binary orchd should watch for a new build of
+// itself, and whether exiting would actually be picked up by a service manager.
+//
+// The path watched is the one orchd was launched from — the stable path the
+// service manager will re-exec (the Homebrew opt symlink, or the built binary)
+// rather than the versioned path it happens to resolve to today.
+//
+// A process that cannot identify or read its own executable simply goes without
+// the self-update unit; every other subsystem still comes up. It is a variable
+// so a test can drive the self-restart path against a binary it controls.
+var selfUpdateWatch = func() (*selfupdate.Watcher, bool) {
+	exe, err := os.Executable()
+	if err == nil {
+		var w *selfupdate.Watcher
+		if w, err = selfupdate.NewWatcher(exe); err == nil {
+			log.Printf("orchd: watching %s for new builds (%s)", w.Path(), w.Baseline())
+			return w, selfupdate.Supervised()
+		}
+	}
+	log.Printf("orchd: self-update watch disabled: %v", err)
+	return nil, false
 }
 
 // buildRAG constructs the embedder + RAG service from config against a qdrant URL.

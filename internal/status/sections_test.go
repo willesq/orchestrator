@@ -15,6 +15,7 @@ import (
 	"github.com/willesq/orchestrator/internal/db"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/supervisor"
+	"github.com/willesq/orchestrator/internal/version"
 )
 
 func TestSubsystemSectionDetails(t *testing.T) {
@@ -114,6 +115,67 @@ func TestServiceSectionReachability(t *testing.T) {
 			}
 			if !strings.Contains(got.Detail, tt.wantHas) {
 				t.Errorf("detail %q missing %q", got.Detail, tt.wantHas)
+			}
+		})
+	}
+}
+
+// TestServiceSectionBuildDrift covers the line that tells the user orchd is
+// still serving an older build than the one installed — the symptom that used
+// to be invisible unless you compared the header against the orchd line.
+func TestServiceSectionBuildDrift(t *testing.T) {
+	tests := []struct {
+		name      string
+		running   string
+		wantValue string
+		wantLevel string
+		wantHas   []string
+	}{
+		{
+			name:    "orchd matches the installed orch",
+			running: version.Version, wantValue: version.Version, wantLevel: LevelOK,
+		},
+		{
+			name:    "a stale daemon names both builds and the fix",
+			running: "0.4.1", wantValue: "drifted", wantLevel: LevelWarn,
+			wantHas: []string{"0.4.1", version.Version, "orch restart"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := healthyDeps(t)
+			d.Orchd = func(context.Context) (*orchdv1.StatusResponse, error) {
+				return &orchdv1.StatusResponse{Version: tt.running, UptimeSeconds: 60}, nil
+			}
+			got := line(t, section(t, Collect(context.Background(), d), "service"), "build")
+			if got.Value != tt.wantValue || got.Level != tt.wantLevel {
+				t.Errorf("build line = %q/%q, want %q/%q", got.Value, got.Level, tt.wantValue, tt.wantLevel)
+			}
+			for _, want := range tt.wantHas {
+				if !strings.Contains(got.Detail, want) {
+					t.Errorf("detail %q missing %q", got.Detail, want)
+				}
+			}
+		})
+	}
+}
+
+// TestServiceSectionOmitsBuildWhenOrchdIsDown guards against reporting drift
+// against a version we never learned: an unreachable daemon has no build.
+func TestServiceSectionOmitsBuildWhenOrchdIsDown(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{name: "an unreachable daemon has no build line"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := healthyDeps(t)
+			d.Orchd = func(context.Context) (*orchdv1.StatusResponse, error) { return nil, errors.New("refused") }
+			for _, l := range section(t, Collect(context.Background(), d), "service").Lines {
+				if l.Name == "build" {
+					t.Fatalf("got a build line %+v while orchd was unreachable", l)
+				}
 			}
 		})
 	}
