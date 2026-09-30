@@ -304,6 +304,84 @@ func TestNormalizeRoundTrips(t *testing.T) {
 	}
 }
 
+// TestEditRejectsUnparseableFile pins the other half of that contract: a file the
+// edit itself cannot parse must fail loudly, naming the file, rather than being
+// silently overwritten with a tree built from nothing.
+func TestEditRejectsUnparseableFile(t *testing.T) {
+	tests := []struct {
+		name    string
+		edit    func(Bins, string) Edit
+		rel     string
+		content string
+		wantErr string
+	}{
+		{
+			name:    "claude settings.json",
+			edit:    func(b Bins, home string) Edit { return ClaudeCode{}.settingsEdit(b, home) },
+			rel:     ".claude/settings.json",
+			content: "{ not json",
+			wantErr: "parse settings.json",
+		},
+		{
+			name:    "claude .claude.json",
+			edit:    func(b Bins, home string) Edit { return ClaudeCode{}.claudeJSONEdit(b, home) },
+			rel:     ".claude.json",
+			content: "{ not json",
+			wantErr: "parse .claude.json",
+		},
+		{
+			name:    "codex config.toml",
+			edit:    codexTOMLEdit,
+			rel:     ".codex/config.toml",
+			content: "= not toml",
+			wantErr: "parse codex config.toml",
+		},
+		{
+			name:    "codex hooks.json",
+			edit:    codexHooksEdit,
+			rel:     ".codex/hooks.json",
+			content: "{ not json",
+			wantErr: "parse codex hooks.json",
+		},
+		{
+			name:    "gemini settings.json",
+			edit:    geminiSettingsEdit,
+			rel:     ".gemini/settings.json",
+			content: "{ not json",
+			wantErr: "parse gemini settings.json",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			path := filepath.Join(home, filepath.FromSlash(tt.rel))
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			e := tt.edit(testBins(), home)
+			if e.Path != path {
+				t.Fatalf("edit path = %s, want %s", e.Path, path)
+			}
+			if _, err := e.evaluate(); err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("evaluate() err = %v, want one mentioning %q", err, tt.wantErr)
+			} else if !strings.Contains(err.Error(), path) {
+				t.Errorf("error %q should name the file", err)
+			}
+			// The bad file must survive untouched for the user to fix by hand.
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != tt.content {
+				t.Errorf("file was modified: %q", after)
+			}
+		})
+	}
+}
+
 // TestEvaluateKeepsUnparseableFilePending makes sure the semantic comparison never
 // masks a broken file: if it can't be normalized, the edit stays pending.
 func TestEvaluateKeepsUnparseableFilePending(t *testing.T) {
