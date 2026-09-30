@@ -14,9 +14,13 @@ import (
 )
 
 type fakeClient struct {
-	search      *orchdv1.SearchResponse
-	err         error
-	ingestCalls int
+	listSources  *orchdv1.ListSourcesResponse
+	deleteSource *orchdv1.DeleteSourceResponse
+	listTasks    *orchdv1.ListTasksResponse
+	getTask      *orchdv1.GetTaskResponse
+	search       *orchdv1.SearchResponse
+	err          error
+	ingestCalls  int
 }
 
 func (f *fakeClient) Ping(context.Context, *orchdv1.PingRequest, ...grpc.CallOption) (*orchdv1.PingResponse, error) {
@@ -182,4 +186,20 @@ func TestDispatchAndRun(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (f *fakeClient) ListSources(context.Context, *orchdv1.ListSourcesRequest, ...grpc.CallOption) (*orchdv1.ListSourcesResponse, error) {
+	return f.listSources, f.err
+}
+
+func (f *fakeClient) DeleteSource(context.Context, *orchdv1.DeleteSourceRequest, ...grpc.CallOption) (*orchdv1.DeleteSourceResponse, error) {
+	return f.deleteSource, f.err
+}
+
+func (f *fakeClient) ListTasks(context.Context, *orchdv1.ListTasksRequest, ...grpc.CallOption) (*orchdv1.ListTasksResponse, error) {
+	return f.listTasks, f.err
+}
+
+func (f *fakeClient) GetTask(context.Context, *orchdv1.GetTaskRequest, ...grpc.CallOption) (*orchdv1.GetTaskResponse, error) {
+	return f.getTask, f.err
 }

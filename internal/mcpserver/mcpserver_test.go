@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"testing"
 
@@ -13,10 +14,14 @@ import (
 )
 
 type fakeClient struct {
-	search   *orchdv1.SearchResponse
-	ingest   *orchdv1.IngestResponse
-	dispatch *orchdv1.DispatchResponse
-	err      error
+	listSources  *orchdv1.ListSourcesResponse
+	deleteSource *orchdv1.DeleteSourceResponse
+	listTasks    *orchdv1.ListTasksResponse
+	getTask      *orchdv1.GetTaskResponse
+	search       *orchdv1.SearchResponse
+	ingest       *orchdv1.IngestResponse
+	dispatch     *orchdv1.DispatchResponse
+	err          error
 }
 
 func (f *fakeClient) Ping(context.Context, *orchdv1.PingRequest, ...grpc.CallOption) (*orchdv1.PingResponse, error) {
@@ -190,13 +195,20 @@ func TestGetInt(t *testing.T) {
 	tests := []struct {
 		name string
 		args map[string]any
-		def  int
-		want int
+		def  int32
+		want int32
 	}{
 		{name: "float64 json number", args: map[string]any{"k": float64(7)}, def: 5, want: 7},
 		{name: "int value", args: map[string]any{"k": 9}, def: 5, want: 9},
 		{name: "missing uses default", args: map[string]any{}, def: 5, want: 5},
 		{name: "wrong type uses default", args: map[string]any{"k": "nope"}, def: 5, want: 5},
+		// Bounded so the int32 narrowing downstream cannot wrap — a wrapped 0
+		// reads as "no limit" on some paths, which is the opposite of intent.
+		{name: "huge float is clamped", args: map[string]any{"k": float64(1e18)}, def: 5, want: maxArgInt},
+		{name: "huge int is clamped", args: map[string]any{"k": 1 << 40}, def: 5, want: maxArgInt},
+		{name: "negative falls back to the default", args: map[string]any{"k": float64(-3)}, def: 5, want: 5},
+		{name: "negative int falls back", args: map[string]any{"k": -3}, def: 5, want: 5},
+		{name: "NaN falls back", args: map[string]any{"k": math.NaN()}, def: 5, want: 5},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -238,4 +250,20 @@ func TestServersConstruct(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (f *fakeClient) ListSources(context.Context, *orchdv1.ListSourcesRequest, ...grpc.CallOption) (*orchdv1.ListSourcesResponse, error) {
+	return f.listSources, f.err
+}
+
+func (f *fakeClient) DeleteSource(context.Context, *orchdv1.DeleteSourceRequest, ...grpc.CallOption) (*orchdv1.DeleteSourceResponse, error) {
+	return f.deleteSource, f.err
+}
+
+func (f *fakeClient) ListTasks(context.Context, *orchdv1.ListTasksRequest, ...grpc.CallOption) (*orchdv1.ListTasksResponse, error) {
+	return f.listTasks, f.err
+}
+
+func (f *fakeClient) GetTask(context.Context, *orchdv1.GetTaskRequest, ...grpc.CallOption) (*orchdv1.GetTaskResponse, error) {
+	return f.getTask, f.err
 }

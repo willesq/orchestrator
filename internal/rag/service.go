@@ -6,6 +6,8 @@ package rag
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -40,6 +42,12 @@ func NewService(emb Embedder, store *QdrantStore, chunkSize, overlap int) *Servi
 // IngestText chunks, embeds, and upserts text. Chunks for the same source_uri
 // are replaced via deterministic point IDs (uri#index).
 func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, error) {
+	// Required here, not just in the callers: the prune below deletes by
+	// source_uri, so an empty one would match every URI-less point in the store
+	// and destroy it. The layer that performs a delete validates its own input.
+	if m.SourceURI == "" {
+		return 0, fmt.Errorf("source_uri is required")
+	}
 	chunks := chunkText(text, s.chunkSize, s.overlap)
 	if len(chunks) == 0 {
 		return 0, nil
@@ -74,7 +82,145 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 	if err := s.store.Upsert(ctx, points); err != nil {
 		return 0, err
 	}
+	// Re-ingesting a source that shrank would otherwise leave the previous
+	// version's surplus chunks behind: point IDs are uri#index, so indices past
+	// the new length are never overwritten and would keep matching searches.
+	if err := s.pruneChunksFrom(ctx, m.SourceURI, len(chunks)); err != nil {
+		return 0, err
+	}
 	return len(chunks), nil
+}
+
+// pruneChunksFrom deletes chunks of a source at index >= from.
+func (s *Service) pruneChunksFrom(ctx context.Context, uri string, from int) error {
+	filter := map[string]any{"must": []any{
+		map[string]any{"key": "source_uri", "match": map[string]any{"value": uri}},
+		map[string]any{"key": "chunk_index", "range": map[string]any{"gte": from}},
+	}}
+	n, err := s.store.Count(ctx, filter)
+	if err != nil || n == 0 {
+		return err
+	}
+	return s.store.DeleteByFilter(ctx, filter)
+}
+
+// maxScrollPages bounds a full-collection scan at 10M points (1000 per page).
+// Reaching it means the store outgrew this aggregation strategy or the cursor is
+// misbehaving; either way, failing beats looping.
+const maxScrollPages = 10_000
+
+// SourceSummary is one distinct source held in the store.
+type SourceSummary struct {
+	SourceURI  string
+	SourceType string
+	Scope      string
+	Tags       []string
+	Chunks     int
+}
+
+// ListSourcesOpts filters the inventory.
+type ListSourcesOpts struct {
+	SourceType string
+	Scope      string
+	URIPrefix  string
+	Limit      int
+}
+
+// ListSources enumerates distinct sources in the store with their chunk counts.
+//
+// This scans the collection rather than consulting an index, because nothing
+// maintains a source-level table — the vector store is the only record of what
+// has been ingested. Cost is linear in points, which is acceptable at this
+// store's scale and honest about where the data lives.
+// Returns the (possibly limited) summaries, the distinct source count before
+// the limit, and the total chunks across them.
+func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]SourceSummary, int, int, error) {
+	must := map[string]string{}
+	if opts.Scope != "" {
+		must["scope"] = opts.Scope
+	}
+	if opts.SourceType != "" {
+		must["source_type"] = opts.SourceType
+	}
+	filter := buildFilter(must, nil)
+	fields := []string{"source_uri", "source_type", "scope", "tags"}
+
+	agg := map[string]*SourceSummary{}
+	total := 0
+	var offset any
+	// A server that returns a non-advancing cursor would otherwise spin forever:
+	// the per-request timeout bounds each call but not the loop.
+	for page := 0; ; page++ {
+		if page >= maxScrollPages {
+			return nil, 0, 0, fmt.Errorf("list sources: exceeded %d pages; aborting scan", maxScrollPages)
+		}
+		pts, next, err := s.store.Scroll(ctx, filter, fields, 1000, offset)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		for _, p := range pts {
+			uri := str(p.Payload["source_uri"])
+			if opts.URIPrefix != "" && !strings.HasPrefix(uri, opts.URIPrefix) {
+				continue
+			}
+			total++
+			cur, ok := agg[uri]
+			if !ok {
+				cur = &SourceSummary{
+					SourceURI:  uri,
+					SourceType: str(p.Payload["source_type"]),
+					Scope:      str(p.Payload["scope"]),
+					Tags:       strSlice(p.Payload["tags"]),
+				}
+				agg[uri] = cur
+			}
+			cur.Chunks++
+		}
+		if next == nil {
+			break
+		}
+		if offset != nil && fmt.Sprint(next) == fmt.Sprint(offset) {
+			return nil, 0, 0, fmt.Errorf("list sources: scroll cursor did not advance")
+		}
+		offset = next
+	}
+
+	out := make([]SourceSummary, 0, len(agg))
+	for _, v := range agg {
+		out = append(out, *v)
+	}
+	// Chunk count descending, then URI, so the ordering is stable across calls.
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Chunks != out[j].Chunks {
+			return out[i].Chunks > out[j].Chunks
+		}
+		return out[i].SourceURI < out[j].SourceURI
+	})
+	distinct := len(out)
+	if opts.Limit > 0 && len(out) > opts.Limit {
+		out = out[:opts.Limit]
+	}
+	return out, distinct, total, nil
+}
+
+// DeleteSource removes every chunk belonging to one source URI, returning how
+// many were removed. A missing source is not an error — it deletes nothing.
+func (s *Service) DeleteSource(ctx context.Context, uri string) (int, error) {
+	if uri == "" {
+		return 0, fmt.Errorf("source_uri is required")
+	}
+	filter := EqFilter("source_uri", uri)
+	n, err := s.store.Count(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+	if n == 0 {
+		return 0, nil
+	}
+	if err := s.store.DeleteByFilter(ctx, filter); err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 // Hit is a search result surfaced to callers.

@@ -17,9 +17,26 @@ import (
 )
 
 type fakeRag struct {
-	chunks int
-	hits   []rag.Hit
-	err    error
+	chunks  int
+	hits    []rag.Hit
+	err     error
+	sources []rag.SourceSummary
+	deleted int
+}
+
+func (f fakeRag) ListSources(context.Context, rag.ListSourcesOpts) ([]rag.SourceSummary, int, int, error) {
+	if f.err != nil {
+		return nil, 0, 0, f.err
+	}
+	chunks := 0
+	for _, s := range f.sources {
+		chunks += s.Chunks
+	}
+	return f.sources, len(f.sources), chunks, nil
+}
+
+func (f fakeRag) DeleteSource(context.Context, string) (int, error) {
+	return f.deleted, f.err
 }
 
 func (f fakeRag) IngestText(context.Context, string, rag.Meta) (int, error) {

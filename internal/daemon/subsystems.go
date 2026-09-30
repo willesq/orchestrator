@@ -157,6 +157,9 @@ func workerUnit(b backend.Backend) supervisor.Unit {
 			if err := w.RegisterWorkflow(workflows.AgentTask); err != nil {
 				return err
 			}
+			if err := w.RegisterActivity(workflows.StartActivity); err != nil {
+				return err
+			}
 			if err := w.RegisterActivity(workflows.ProcessActivity); err != nil {
 				return err
 			}
