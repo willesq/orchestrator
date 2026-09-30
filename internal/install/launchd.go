@@ -30,11 +30,23 @@ func plistEdit(orchdBin, home string) Edit {
 	}
 }
 
-// isHomebrewManaged reports whether the binary lives under a Homebrew Cellar
+// isHomebrewManaged reports whether the binary resolves to a Homebrew Cellar
 // (both /opt/homebrew/Cellar and /usr/local/Cellar contain "/Cellar/"), in which
-// case `brew services` is the daemon supervisor.
+// case `brew services` is the daemon supervisor. The path may be either the
+// Cellar target or the symlink in <brew prefix>/bin that points at it.
 func isHomebrewManaged(bin string) bool {
-	return strings.Contains(bin, "/Cellar/")
+	if strings.Contains(bin, "/Cellar/") {
+		return true
+	}
+	// Reason: the path we are handed comes from os.Executable(), which on macOS
+	// reports the symlink in <brew prefix>/bin rather than its Cellar target. Left
+	// unresolved, a Homebrew install looks like a source build and the plan tries
+	// to add a launchd agent that competes with `brew services` for the socket.
+	resolved, err := filepath.EvalSymlinks(bin)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(resolved, "/Cellar/")
 }
 
 func plistContent(orchdBin, home string) string {
