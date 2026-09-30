@@ -2,6 +2,7 @@ package docs
 
 import (
 	"context"
+	"log"
 	"time"
 )
 
@@ -29,10 +30,16 @@ func (s *Scheduler) Scan(ctx context.Context) {
 	now := s.opts.Now()
 	due, err := s.reg.DueOwners(ctx, now)
 	if err != nil {
+		log.Printf("docs: list due owners: %v", err)
 		return
 	}
 	for _, o := range due {
-		status, _ := SyncOwner(ctx, s.reg, o, s.ing, s.opts)
-		_ = s.reg.MarkSynced(ctx, o.Owner, now, status)
+		status, err := SyncOwner(ctx, s.reg, o, s.ing, s.opts)
+		if err != nil {
+			log.Printf("docs: sync %s: %v", o.Owner, err)
+		}
+		if err := s.reg.MarkSynced(ctx, o.Owner, now, status); err != nil {
+			log.Printf("docs: mark %s synced: %v", o.Owner, err)
+		}
 	}
 }

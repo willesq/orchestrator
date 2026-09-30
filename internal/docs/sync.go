@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -148,8 +149,18 @@ func sha256Hex(b []byte) string {
 // runFunc runs an external command and returns its stdout.
 type runFunc func(ctx context.Context, name string, args ...string) ([]byte, error)
 
+// execRun runs a command and folds its stderr into the returned error, so a
+// failure reported as an owner's "error" status carries the reason (bad auth,
+// missing binary, clone rejection) instead of just an exit code.
 func execRun(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).Output()
+	out, err := exec.CommandContext(ctx, name, args...).Output()
+	var ee *exec.ExitError
+	if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+		// Reason: git/gh error text can echo a credential-bearing remote URL.
+		msg, _ := redact.Redact(strings.TrimSpace(string(ee.Stderr)))
+		return out, fmt.Errorf("%w: %s", err, msg)
+	}
+	return out, err
 }
 
 // NewGitHub returns the default gh-CLI-backed enumerator.

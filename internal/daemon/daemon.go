@@ -194,6 +194,12 @@ func Run(ctx context.Context) error {
 	if err := paths.Ensure(); err != nil {
 		return err
 	}
+	// Reason: launchd (and `brew services`) start orchd with PATH=/usr/bin:/bin:
+	// /usr/sbin:/sbin, which hides Homebrew-installed CLIs that subsystems shell
+	// out to — gh most importantly, without which docs sync and PR polling fail.
+	if err := paths.EnsureToolPATH(); err != nil {
+		return err
+	}
 	store, err := db.Open()
 	if err != nil {
 		return err
