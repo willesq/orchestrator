@@ -109,6 +109,8 @@ internal/
   install/           # HarnessAdapter + dry-run-by-default surgical installer [done: claude-code]
   model/             # embedding model provisioner (download on install)  [done]
   check/             # `orch check` preconditions verifier                 [done]
+  supervisor/        # named, independently restartable orchd subsystems  [done]
+  status/            # `orch status` whole-system report (human + JSON)    [done]
   sources/           # source registry + freshness scheduler (web/repo/owner) [done]
   prs/               # PR babysitter (gh poll → cache + events)          [done]
   redact/            # secret redaction before ingest                    [done]
@@ -145,7 +147,9 @@ entrypoints are the only exclusions.
 
 ```
 orch install [--target claude-code|codex|gemini|all]   # prompts if omitted; bootstraps whole system
-orch uninstall / check / status / reload
+orch uninstall / check / reload
+orch status [--json]                                    # full sitrep, always exits zero
+orch restart [orchd|subsystems|<subsystem>] [--list]    # whole system, or one in place
 orch config     get|set|list                            # persists (orch.db + YAML)
 orch daemon     start|stop|restart|logs|status          # manages orchd via launchd
 orch search <q> [--scope --tag --type --repo --owner]
@@ -216,11 +220,21 @@ MCP is the portable core; hooks exist on all three (prompt-injection everywhere)
 `AGENTS.md` is the memory pivot. **Build risk:** hook stdin/stdout JSON schemas differ
 per tool — the shared `orch-hook` binary needs per-harness payload parsing.
 
-### 7.7 check vs status
+### 7.7 check vs status vs restart  **[done]**
 - `orch check` — preconditions: onnxruntime dylib, Qdrant reachable, workflow store, `gh`
   auth, harness wiring, orchd socket. Pass/fail per requirement, **non-zero exit**.
-- `orch status` — live health: `orchd` + each scheduler job (last tick, PID, restarts) +
-  the existing sitrep (Qdrant/queue/harness/disk).
+- `orch status` — live health: `orchd` + every supervised subsystem (state, last tick,
+  restart count) + the sitrep (Qdrant/registries/queue/harness-drift/preconditions).
+  Always exits zero and degrades gracefully with `orchd` down; `--json` for scripts.
+- `orch restart [component]` — no component bounces the `orchd` process via its service
+  manager (and waits for it to answer again); a component name restarts that **subsystem in
+  place** over the `Restart` RPC, keeping the socket and warm embedder. Every operation is
+  idempotent. `orch restart --list` names the live components.
+
+`orchd`'s long-lived pieces are `supervisor.Unit`s rather than bare goroutines: each owns a
+child context, records a heartbeat per tick, and counts its restarts. That single mechanism
+is what makes both the per-subsystem status detail and the per-subsystem restart possible;
+it also replaced three hand-rolled ticker loops (sources, docs, PR babysitter).
 
 ### 7.8 Packaging & auto-update (DEFERRED — Homebrew work is a later scope)
 Target: single binary with `//go:embed`'d assets (skills, agents, plist, migrations,
@@ -255,7 +269,7 @@ only the brew-trigger wiring is deferred.
 | 14 | `orchd` foundational daemon | Locked, foundational. |
 | 15 | Qdrant docker/non-docker configurable | `rag.qdrant.mode`. |
 | 16 | `orch check` verifies all required preconditions | Non-zero exit. |
-| 17 | `orch status` includes daemon health | orchd + per-daemon liveness. |
+| 17 | `orch status` includes daemon health | **Done.** orchd + per-subsystem liveness (state, last tick, restarts) via the `Status` RPC; `orch restart [component]` bounces the process or one subsystem in place. |
 | 18 | `install` spins up the entire system | One-shot idempotent bootstrapper. |
 | 19 | Single binary incl. text files | `//go:embed` + extract-on-install. |
 | 20 | Homebrew install + management | Tap `willesq/homebrew-tap` — **deferred**. |
@@ -367,8 +381,9 @@ package) land with each phase.
   records → RAG; `orch project add` (per-project hooks + enrichment filter); `orch
   source-type add`. *Deliverable:* session capture on wired harnesses; in-project RAG scoped.
 - **Phase 7 — check / status / self-reconciliation.** `orch check` (preconditions,
-  non-zero exit); `orch status` (orchd + per-daemon health); version-marker self-reconcile
-  + `orchd` re-exec watchdog. *(Homebrew trigger deferred.)*
+  non-zero exit) **[done]**; `orch status` + `orch restart` over supervised subsystems
+  **[done]**; version-marker self-reconcile + `orchd` re-exec watchdog *(pending)*.
+  *(Homebrew trigger deferred.)*
 
 Cross-cutting: rewrite `docs/SPEC.md` to match as phases land.
 

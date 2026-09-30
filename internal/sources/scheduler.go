@@ -5,38 +5,20 @@ import (
 	"time"
 )
 
-// Scheduler periodically refreshes due sources. Sleep-safe: due-ness is computed
+// Scheduler refreshes due sources when scanned. Sleep-safe: due-ness is computed
 // from the persisted last_fetched against wall-clock, so after the laptop sleeps
 // or orchd restarts, any overdue source is refreshed on the next scan (catch-up).
+// Cadence is the caller's concern — orchd drives Scan from a supervisor unit.
 type Scheduler struct {
 	reg  *Registry
 	ing  Ingester
 	opts RefreshOpts
-	tick time.Duration
 	now  func() int64
 }
 
-// NewScheduler builds a scheduler. tick is how often the registry is scanned.
-func NewScheduler(reg *Registry, ing Ingester, opts RefreshOpts, tick time.Duration) *Scheduler {
-	if tick <= 0 {
-		tick = 5 * time.Minute
-	}
-	return &Scheduler{reg: reg, ing: ing, opts: opts, tick: tick, now: func() int64 { return time.Now().Unix() }}
-}
-
-// Run scans immediately (catch-up) then every tick until ctx is canceled.
-func (s *Scheduler) Run(ctx context.Context) {
-	t := time.NewTicker(s.tick)
-	defer t.Stop()
-	s.Scan(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.Scan(ctx)
-		}
-	}
+// NewScheduler builds a scheduler over a registry and an ingester.
+func NewScheduler(reg *Registry, ing Ingester, opts RefreshOpts) *Scheduler {
+	return &Scheduler{reg: reg, ing: ing, opts: opts, now: func() int64 { return time.Now().Unix() }}
 }
 
 // Scan refreshes every source whose interval has elapsed.

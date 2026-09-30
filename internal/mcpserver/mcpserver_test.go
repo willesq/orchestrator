@@ -35,6 +35,14 @@ func (f *fakeClient) Dispatch(context.Context, *orchdv1.DispatchRequest, ...grpc
 	return f.dispatch, f.err
 }
 
+func (f *fakeClient) Status(context.Context, *orchdv1.StatusRequest, ...grpc.CallOption) (*orchdv1.StatusResponse, error) {
+	return nil, f.err
+}
+
+func (f *fakeClient) Restart(context.Context, *orchdv1.RestartRequest, ...grpc.CallOption) (*orchdv1.RestartResponse, error) {
+	return nil, f.err
+}
+
 func toolReq(args map[string]any) mcp.CallToolRequest {
 	var r mcp.CallToolRequest
 	r.Params.Arguments = args

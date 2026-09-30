@@ -3,6 +3,8 @@ package install
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -377,6 +379,69 @@ func TestPlistEditHomebrewManaged(t *testing.T) {
 				if !strings.Contains(string(nw), tt.orchd) {
 					t.Errorf("plist should reference orchd path: %s", nw)
 				}
+			}
+		})
+	}
+}
+
+func TestPlanPending(t *testing.T) {
+	tests := []struct {
+		name        string
+		applyFirst  bool
+		wantPending bool
+	}{
+		{name: "an unwired harness has edits pending", applyFirst: false, wantPending: true},
+		{name: "an installed harness has none", applyFirst: true, wantPending: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			plan := BuildPlan(ClaudeCode{}, testBins(), home)
+			if tt.applyFirst {
+				if err := plan.Apply(io.Discard, filepath.Join(t.TempDir(), "backups")); err != nil {
+					t.Fatalf("Apply: %v", err)
+				}
+			}
+			n, err := plan.Pending()
+			if err != nil {
+				t.Fatalf("Pending: %v", err)
+			}
+			if got := n > 0; got != tt.wantPending {
+				t.Errorf("Pending() = %d, want pending=%v", n, tt.wantPending)
+			}
+			// Pending must never write: a status report is read-only.
+			if !tt.applyFirst {
+				if _, err := os.Stat(filepath.Join(home, ".claude", "settings.json")); !os.IsNotExist(err) {
+					t.Errorf("Pending must not create settings.json")
+				}
+			}
+		})
+	}
+}
+
+func TestPlanPendingComputeError(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{name: "a failing edit is reported with its path"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plan := Plan{Target: "broken", Edits: []Edit{{
+				Path: "/tmp/orch-pending-test",
+				Compute: func([]byte) ([]byte, string, error) {
+					return nil, "", errors.New("bad edit")
+				},
+			}}}
+			n, err := plan.Pending()
+			if err == nil || !strings.Contains(err.Error(), "bad edit") {
+				t.Fatalf("got %v, want an error mentioning the failure", err)
+			}
+			if !strings.Contains(err.Error(), "/tmp/orch-pending-test") {
+				t.Errorf("error %q should name the path", err)
+			}
+			if n != 0 {
+				t.Errorf("count = %d, want 0 on error", n)
 			}
 		})
 	}

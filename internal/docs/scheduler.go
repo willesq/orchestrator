@@ -5,41 +5,23 @@ import (
 	"time"
 )
 
-// Scheduler periodically syncs due owners. Sleep-safe: due-ness is computed from
+// Scheduler syncs due owners when scanned. Sleep-safe: due-ness is computed from
 // persisted last_synced against wall-clock, so an owner whose window elapsed while
-// the laptop slept is synced on the next scan (catch-up). A short tick makes
+// the laptop slept is synced on the next scan (catch-up). Cadence is the caller's
+// concern — orchd drives Scan from a supervisor unit on a short tick, which makes
 // `orch docs sync` (which just marks an owner due) feel near-immediate.
 type Scheduler struct {
 	reg  *Registry
 	ing  Ingester
 	opts SyncOpts
-	tick time.Duration
 }
 
-// NewScheduler builds a docs scheduler. tick is how often the registry is scanned.
-func NewScheduler(reg *Registry, ing Ingester, opts SyncOpts, tick time.Duration) *Scheduler {
-	if tick <= 0 {
-		tick = time.Minute
-	}
+// NewScheduler builds a docs scheduler over a registry and an ingester.
+func NewScheduler(reg *Registry, ing Ingester, opts SyncOpts) *Scheduler {
 	if opts.Now == nil {
 		opts.Now = func() int64 { return time.Now().Unix() }
 	}
-	return &Scheduler{reg: reg, ing: ing, opts: opts, tick: tick}
-}
-
-// Run scans immediately (catch-up) then every tick until ctx is canceled.
-func (s *Scheduler) Run(ctx context.Context) {
-	t := time.NewTicker(s.tick)
-	defer t.Stop()
-	s.Scan(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-			s.Scan(ctx)
-		}
-	}
+	return &Scheduler{reg: reg, ing: ing, opts: opts}
 }
 
 // Scan syncs every owner whose interval has elapsed.

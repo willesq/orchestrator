@@ -109,3 +109,71 @@ func TestOpenEnsureError(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenReader(t *testing.T) {
+	tests := []struct {
+		name     string
+		create   bool
+		wantErr  bool
+		writable bool
+	}{
+		{name: "reads an existing store", create: true},
+		{name: "fails when the store does not exist", create: false, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+			if tt.create {
+				conn, err := Open()
+				if err != nil {
+					t.Fatalf("Open: %v", err)
+				}
+				_ = conn.Close()
+			}
+
+			ro, err := OpenReader()
+			if tt.wantErr {
+				if err == nil {
+					_ = ro.Close()
+					t.Fatal("expected OpenReader to fail on a missing store")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("OpenReader: %v", err)
+			}
+			defer func() { _ = ro.Close() }()
+
+			var n int
+			if err := ro.QueryRow(`SELECT COUNT(*) FROM tasks`).Scan(&n); err != nil {
+				t.Errorf("read query failed: %v", err)
+			}
+			// Read-only really is read-only: writes must be refused, so a status
+			// report can never mutate someone else's store.
+			if _, err := ro.Exec(`INSERT INTO meta (key, value) VALUES ('k','v')`); err == nil {
+				t.Errorf("expected a write to a read-only handle to fail")
+			}
+		})
+	}
+}
+
+func TestOpenReaderEnsureError(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{name: "an unbuildable data dir fails before opening"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := filepath.Join(t.TempDir(), "afile")
+			if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+				t.Fatalf("write file: %v", err)
+			}
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(f, "nested"))
+			t.Setenv("ORCH_CONFIG_DIR", filepath.Join(f, "nested-cfg"))
+			if _, err := OpenReader(); err == nil {
+				t.Errorf("expected OpenReader to fail when the data dir is unbuildable")
+			}
+		})
+	}
+}

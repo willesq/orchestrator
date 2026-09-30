@@ -52,3 +52,23 @@ func migrate(conn *sql.DB) error {
 	}
 	return goose.Up(conn, "migrations")
 }
+
+// OpenReader opens an existing orch.db for reading without applying migrations.
+// Read-only callers (notably `orch status`) must not migrate a store they do not
+// own, and must not print goose's migration chatter into a report.
+func OpenReader() (*sql.DB, error) {
+	if err := paths.Ensure(); err != nil {
+		return nil, err
+	}
+	dsn := "file:" + paths.DBFile() +
+		"?mode=ro&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
+	conn, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, err
+	}
+	if err := conn.Ping(); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return conn, nil
+}

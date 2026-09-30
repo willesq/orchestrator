@@ -8,6 +8,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,6 +46,25 @@ func (s Settings) RepoCacheDir() string {
 		return s.Docs.RepoCache
 	}
 	return filepath.Join(paths.DataDir(), "repos")
+}
+
+// QdrantURL is the base URL of the vector store: the local port orchd's own
+// native engine listens on in binary mode, else the configured URL. Shared by
+// orchd (which dials it) and `orch status` (which reports it).
+func (s Settings) QdrantURL() string {
+	if s.RAG.Qdrant.Mode == "binary" {
+		return fmt.Sprintf("http://127.0.0.1:%d", s.RAG.Qdrant.HTTPPort)
+	}
+	return s.RAG.Qdrant.URL
+}
+
+// QdrantStorageDir is the native engine's storage directory (config override or
+// <data>/qdrant). Only meaningful in binary mode.
+func (s Settings) QdrantStorageDir() string {
+	if s.RAG.Qdrant.Storage != "" {
+		return s.RAG.Qdrant.Storage
+	}
+	return filepath.Join(paths.DataDir(), "qdrant")
 }
 
 // PRBabysitterSettings controls the PR-polling daemon.
