@@ -36,7 +36,8 @@ func (g Gemini) Edits(bins Bins, home string) []Edit {
 func geminiSettingsEdit(bins Bins, home string) Edit {
 	path := filepath.Join(home, ".gemini", "settings.json")
 	return Edit{
-		Path: path,
+		Path:      path,
+		Normalize: normalizeJSON,
 		Compute: func(old []byte) ([]byte, string, error) {
 			root := map[string]any{}
 			if len(old) > 0 {
@@ -46,11 +47,10 @@ func geminiSettingsEdit(bins Bins, home string) Edit {
 			}
 			mcpSummary := applyMCP(root, bins.Orch)
 			hookSummary := applyHooksWithEvents(root, bins.OrchHook, geminiEvents)
-			out, err := json.MarshalIndent(root, "", "  ")
+			out, err := marshalJSON(root)
 			if err != nil {
 				return nil, "", err
 			}
-			out = append(out, '\n')
 			return out, mcpSummary + "\n" + hookSummary, nil
 		},
 	}

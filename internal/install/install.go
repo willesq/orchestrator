@@ -4,8 +4,12 @@
 // only when explicitly asked — backing up every file it touches first.
 //
 // Edits are surgical: hook/MCP registration replaces only orchestrator-owned
-// entries and preserves third-party ones (Serena, Orca). A --home override lets
-// the whole plan run against a throwaway directory for testing.
+// entries in place, preserving third-party ones (Serena, Orca) and their order. A
+// --home override lets the whole plan run against a throwaway directory for testing.
+//
+// Drift is measured on meaning, not bytes: harnesses rewrite their own settings in
+// their own style, so an edit that would only reorder keys or change escaping is
+// reported as already installed and is never written.
 package install
 
 import (
@@ -33,9 +37,42 @@ type Adapter interface {
 
 // Edit is one file transform. Compute is a pure function of the current bytes,
 // returning the new bytes plus a human-readable summary of the change.
+//
+// Normalize, when set, re-encodes the current bytes through the same encoder
+// Compute writes with. Drift is then judged on meaning rather than on formatting
+// the harness owns — key order, string escaping, indentation — so a file that
+// already carries the right wiring reads as installed even though Claude Code,
+// Codex or Gemini rewrote it in their own style.
 type Edit struct {
-	Path    string
-	Compute func(old []byte) (newBytes []byte, summary string, err error)
+	Path      string
+	Compute   func(old []byte) (newBytes []byte, summary string, err error)
+	Normalize func(old []byte) (normalized []byte, err error)
+}
+
+// evaluated is an edit measured against the file currently on disk.
+type evaluated struct {
+	old     []byte
+	next    []byte
+	summary string
+	changed bool
+}
+
+// evaluate computes the edit against the file on disk, writing nothing.
+func (e Edit) evaluate() (evaluated, error) {
+	old, _ := os.ReadFile(e.Path)
+	next, summary, err := e.Compute(old)
+	if err != nil {
+		return evaluated{}, fmt.Errorf("%s: %w", e.Path, err)
+	}
+	ev := evaluated{old: old, next: next, summary: summary, changed: !bytes.Equal(old, next)}
+	if ev.changed && e.Normalize != nil {
+		// Reason: an unparseable file can't be compared semantically, so leave it
+		// marked as changed and let Compute's own error surface on apply.
+		if norm, nerr := e.Normalize(old); nerr == nil && bytes.Equal(norm, next) {
+			ev.changed = false
+		}
+	}
+	return ev, nil
 }
 
 // Plan is an ordered set of edits for a target harness.
@@ -74,12 +111,11 @@ func AllAdapters() []Adapter {
 func (p Plan) Pending() (int, error) {
 	pending := 0
 	for _, e := range p.Edits {
-		old, _ := os.ReadFile(e.Path)
-		nw, _, err := e.Compute(old)
+		ev, err := e.evaluate()
 		if err != nil {
-			return 0, fmt.Errorf("%s: %w", e.Path, err)
+			return 0, err
 		}
-		if !bytes.Equal(old, nw) {
+		if ev.changed {
 			pending++
 		}
 	}
@@ -93,21 +129,20 @@ func (p Plan) Print(w io.Writer) error {
 	fmt.Fprintf(w, "DRY RUN — target %q. No files will be written.\n", p.Target)
 	changed := 0
 	for _, e := range p.Edits {
-		old, _ := os.ReadFile(e.Path)
-		nw, summary, err := e.Compute(old)
+		ev, err := e.evaluate()
 		if err != nil {
-			return fmt.Errorf("%s: %w", e.Path, err)
+			return err
 		}
-		if bytes.Equal(old, nw) {
+		if !ev.changed {
 			fmt.Fprintf(w, "\n=== UNCHANGED %s ===\n(already installed)\n", e.Path)
 			continue
 		}
 		changed++
 		action := "MODIFY"
-		if len(old) == 0 {
+		if len(ev.old) == 0 {
 			action = "CREATE"
 		}
-		fmt.Fprintf(w, "\n=== %s %s ===\n%s\n", action, e.Path, summary)
+		fmt.Fprintf(w, "\n=== %s %s ===\n%s\n", action, e.Path, ev.summary)
 	}
 	if changed == 0 {
 		fmt.Fprintf(w, "\nAlready fully installed for %q — nothing to do.\n", p.Target)
@@ -124,28 +159,27 @@ func (p Plan) Apply(w io.Writer, backupDir string) error {
 	dest := filepath.Join(backupDir, stamp)
 	changed := 0
 	for _, e := range p.Edits {
-		old, _ := os.ReadFile(e.Path)
-		nw, summary, err := e.Compute(old)
+		ev, err := e.evaluate()
 		if err != nil {
-			return fmt.Errorf("%s: %w", e.Path, err)
+			return err
 		}
-		if bytes.Equal(old, nw) {
+		if !ev.changed {
 			fmt.Fprintf(w, "unchanged %s\n", e.Path)
 			continue
 		}
 		changed++
-		if len(old) > 0 {
-			if err := backup(dest, e.Path, old); err != nil {
+		if len(ev.old) > 0 {
+			if err := backup(dest, e.Path, ev.old); err != nil {
 				return fmt.Errorf("backup %s: %w", e.Path, err)
 			}
 		}
 		if err := os.MkdirAll(filepath.Dir(e.Path), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(e.Path, nw, 0o644); err != nil {
+		if err := os.WriteFile(e.Path, ev.next, 0o644); err != nil {
 			return err
 		}
-		fmt.Fprintf(w, "wrote %s — %s\n", e.Path, firstLine(summary))
+		fmt.Fprintf(w, "wrote %s — %s\n", e.Path, firstLine(ev.summary))
 	}
 	if changed == 0 {
 		fmt.Fprintf(w, "already fully installed for %q — nothing changed.\n", p.Target)

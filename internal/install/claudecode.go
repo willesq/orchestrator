@@ -41,7 +41,8 @@ func (c ClaudeCode) Edits(bins Bins, home string) []Edit {
 func (ClaudeCode) claudeJSONEdit(bins Bins, home string) Edit {
 	path := filepath.Join(home, ".claude.json")
 	return Edit{
-		Path: path,
+		Path:      path,
+		Normalize: normalizeJSON,
 		Compute: func(old []byte) ([]byte, string, error) {
 			if len(old) == 0 {
 				return old, "mcp (~/.claude.json): skipped — file not present", nil
@@ -51,11 +52,10 @@ func (ClaudeCode) claudeJSONEdit(bins Bins, home string) Edit {
 				return nil, "", fmt.Errorf("parse .claude.json: %w", err)
 			}
 			summary := applyMCP(root, bins.Orch)
-			out, err := json.MarshalIndent(root, "", "  ")
+			out, err := marshalJSON(root)
 			if err != nil {
 				return nil, "", err
 			}
-			out = append(out, '\n')
 			return out, "mcp (~/.claude.json): " + summary, nil
 		},
 	}
@@ -64,7 +64,8 @@ func (ClaudeCode) claudeJSONEdit(bins Bins, home string) Edit {
 func (ClaudeCode) settingsEdit(bins Bins, home string) Edit {
 	path := filepath.Join(home, ".claude", "settings.json")
 	return Edit{
-		Path: path,
+		Path:      path,
+		Normalize: normalizeJSON,
 		Compute: func(old []byte) ([]byte, string, error) {
 			root := map[string]any{}
 			if len(old) > 0 {
@@ -74,11 +75,10 @@ func (ClaudeCode) settingsEdit(bins Bins, home string) Edit {
 			}
 			hookSummary := applyHooks(root, bins.OrchHook)
 			mcpSummary := applyMCP(root, bins.Orch)
-			out, err := json.MarshalIndent(root, "", "  ")
+			out, err := marshalJSON(root)
 			if err != nil {
 				return nil, "", err
 			}
-			out = append(out, '\n')
 			return out, hookSummary + "\n" + mcpSummary, nil
 		},
 	}
@@ -99,27 +99,40 @@ func applyHooksWithEvents(root map[string]any, orchHookBin string, events eventM
 	if hooks == nil {
 		hooks = map[string]any{}
 	}
-	removed, preserved := 0, 0
+	inPlace, added, preserved := 0, 0, 0
 	for _, ev := range events {
+		entry := map[string]any{
+			"hooks": []any{map[string]any{"type": "command", "command": orchHookBin + " " + ev.Slug}},
+		}
 		arr, _ := hooks[ev.Event].([]any)
 		var kept []any
+		placed := false
 		for _, item := range arr {
-			if isOrchHook(item, orchHookBin) {
-				removed++
+			if !isOrchHook(item, orchHookBin) {
+				kept = append(kept, item)
+				preserved++
 				continue
 			}
-			kept = append(kept, item)
-			preserved++
+			// Reason: reuse the first orchestrator slot instead of appending. A
+			// harness or third-party tool that registers its own hook after ours
+			// would otherwise make the wiring look drifted forever, and applying
+			// would silently reshuffle hook execution order.
+			if !placed {
+				kept = append(kept, entry)
+				placed = true
+				inPlace++
+			}
 		}
-		kept = append(kept, map[string]any{
-			"hooks": []any{map[string]any{"type": "command", "command": orchHookBin + " " + ev.Slug}},
-		})
+		if !placed {
+			kept = append(kept, entry)
+			added++
+		}
 		hooks[ev.Event] = kept
 	}
 	root["hooks"] = hooks
 	return fmt.Sprintf(
-		"hooks: wired orch-hook for %d events; removed %d prior orchestrator entr(ies); preserved %d third-party entr(ies)",
-		len(events), removed, preserved)
+		"hooks: wired orch-hook for %d events (%d replaced in place, %d appended); preserved %d third-party entr(ies)",
+		len(events), inPlace, added, preserved)
 }
 
 // isOrchHook reports whether a hook entry belongs to the orchestrator (old Python

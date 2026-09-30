@@ -32,7 +32,8 @@ func (c Codex) Edits(bins Bins, home string) []Edit {
 func codexTOMLEdit(bins Bins, home string) Edit {
 	path := filepath.Join(home, ".codex", "config.toml")
 	return Edit{
-		Path: path,
+		Path:      path,
+		Normalize: normalizeTOML,
 		Compute: func(old []byte) ([]byte, string, error) {
 			root := map[string]any{}
 			if len(old) > 0 {
@@ -53,7 +54,7 @@ func codexTOMLEdit(bins Bins, home string) Edit {
 			mcp["orch_rag"] = map[string]any{"command": bins.Orch, "args": []any{"mcp", "rag"}}
 			mcp["orch_queue"] = map[string]any{"command": bins.Orch, "args": []any{"mcp", "queue"}}
 			root["mcp_servers"] = mcp
-			out, err := toml.Marshal(root)
+			out, err := marshalTOML(root)
 			if err != nil {
 				return nil, "", err
 			}
@@ -65,7 +66,8 @@ func codexTOMLEdit(bins Bins, home string) Edit {
 func codexHooksEdit(bins Bins, home string) Edit {
 	path := filepath.Join(home, ".codex", "hooks.json")
 	return Edit{
-		Path: path,
+		Path:      path,
+		Normalize: normalizeJSON,
 		Compute: func(old []byte) ([]byte, string, error) {
 			root := map[string]any{}
 			if len(old) > 0 {
@@ -74,11 +76,10 @@ func codexHooksEdit(bins Bins, home string) Edit {
 				}
 			}
 			summary := applyHooksWithEvents(root, bins.OrchHook, eventSlugs)
-			out, err := json.MarshalIndent(root, "", "  ")
+			out, err := marshalJSON(root)
 			if err != nil {
 				return nil, "", err
 			}
-			out = append(out, '\n')
 			return out, summary, nil
 		},
 	}
