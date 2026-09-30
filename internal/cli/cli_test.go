@@ -21,6 +21,55 @@ import (
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
+// togglingClient is an orchd client whose reachability a test flips, so the
+// lifecycle commands can be driven through the real "down → supervisor acts → up"
+// sequence instead of a daemon that is conveniently always reachable.
+type togglingClient struct {
+	*fakeClient
+	up *bool
+}
+
+func (t togglingClient) Ping(context.Context, *orchdv1.PingRequest, ...grpc.CallOption) (*orchdv1.PingResponse, error) {
+	if !*t.up {
+		return nil, errors.New("connect: connection refused")
+	}
+	return &orchdv1.PingResponse{Version: "9.9.9"}, nil
+}
+
+// toggling wires a client that starts at `up` and is flipped to `then` the first
+// time the supervisor is invoked, plus the supervisor spy itself.
+func toggling(t *testing.T, up, then bool) (togglingClient, *[]string) {
+	t.Helper()
+	state := up
+	var gotArgs []string
+	saved := runCommand
+	runCommand = func(name string, args ...string) error {
+		gotArgs = append([]string{name}, args...)
+		state = then
+		return nil
+	}
+	t.Cleanup(func() { runCommand = saved })
+	return togglingClient{fakeClient: &fakeClient{}, up: &state}, &gotArgs
+}
+
+// fastDaemonWaits collapses the lifecycle poll so the timeout paths are covered
+// without burning the real 20s budget.
+func fastDaemonWaits(t *testing.T) {
+	t.Helper()
+	wait, poll, probe := daemonWait, daemonPoll, daemonProbeTimeout
+	daemonWait, daemonPoll, daemonProbeTimeout = 40*time.Millisecond, 5*time.Millisecond, 20*time.Millisecond
+	t.Cleanup(func() { daemonWait, daemonPoll, daemonProbeTimeout = wait, poll, probe })
+}
+
+// isolateSocket points the socket path somewhere disposable so a test never
+// reads (or reports) the developer's live orchd socket.
+func isolateSocket(t *testing.T) string {
+	t.Helper()
+	sock := filepath.Join(t.TempDir(), "orchd.sock")
+	t.Setenv("ORCH_SOCKET", sock)
+	return sock
+}
+
 func TestDaemonStartWithoutPlist(t *testing.T) {
 	tests := []struct {
 		name string
@@ -33,10 +82,13 @@ func TestDaemonStartWithoutPlist(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Point HOME at an empty dir so the plist is absent.
 			t.Setenv("HOME", t.TempDir())
+			isolateSocket(t)
+			fastDaemonWaits(t)
 			savedHB := daemonIsHomebrew
 			daemonIsHomebrew = func() bool { return false }
 			t.Cleanup(func() { daemonIsHomebrew = savedHB })
-			_, err := run(factory(&fakeClient{}, nil), "", tt.args...)
+			// A daemon that is already up would short-circuit `start`, so keep it down.
+			_, err := run(factory(nil, errors.New("no socket")), "", tt.args...)
 			if err == nil {
 				t.Errorf("expected error when orchd plist is absent")
 			}
@@ -46,35 +98,51 @@ func TestDaemonStartWithoutPlist(t *testing.T) {
 
 func TestDaemonStartStopSuccess(t *testing.T) {
 	tests := []struct {
-		name string
-		args []string
-		want string
+		name    string
+		args    []string
+		up      bool // reachable before the command runs
+		then    bool // reachable after the supervisor acts
+		wantHas []string
 	}{
-		{name: "start loads plist", args: []string{"daemon", "start"}, want: "started"},
-		{name: "stop unloads plist", args: []string{"daemon", "stop"}, want: "stopped"},
-		{name: "restart", args: []string{"daemon", "restart"}, want: "started"},
+		{
+			name: "start loads plist and waits for the socket",
+			args: []string{"daemon", "start"}, up: false, then: true,
+			wantHas: []string{"started", "is answering", "9.9.9"},
+		},
+		{
+			name: "stop unloads plist and waits for the socket to go quiet",
+			args: []string{"daemon", "stop"}, up: true, then: false,
+			wantHas: []string{"stopped"},
+		},
+		{
+			name: "restart waits for the daemon to come back",
+			args: []string{"daemon", "restart"}, up: true, then: true,
+			wantHas: []string{"started", "is answering"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			home := t.TempDir()
 			t.Setenv("HOME", home)
+			isolateSocket(t)
+			fastDaemonWaits(t)
 			plist := filepath.Join(home, "Library", "LaunchAgents", "com.orchestrator.orchd.plist")
 			_ = os.MkdirAll(filepath.Dir(plist), 0o755)
 			_ = os.WriteFile(plist, []byte("<plist/>"), 0o644)
 
-			saved := runCommand
-			runCommand = func(string, ...string) error { return nil }
-			t.Cleanup(func() { runCommand = saved })
+			client, _ := toggling(t, tt.up, tt.then)
 			savedHB := daemonIsHomebrew
 			daemonIsHomebrew = func() bool { return false } // exercise the launchd path
 			t.Cleanup(func() { daemonIsHomebrew = savedHB })
 
-			out, err := run(factory(&fakeClient{}, nil), "", tt.args...)
+			out, err := run(factory(client, nil), "", tt.args...)
 			if err != nil {
 				t.Fatalf("%v: %v", tt.args, err)
 			}
-			if !strings.Contains(out, tt.want) {
-				t.Errorf("output %q missing %q", out, tt.want)
+			for _, want := range tt.wantHas {
+				if !strings.Contains(out, want) {
+					t.Errorf("output %q missing %q", out, want)
+				}
 			}
 		})
 	}
@@ -84,37 +152,105 @@ func TestDaemonControlHomebrew(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    []string
+		up      bool
+		then    bool
 		wantOp  string
 		wantOut string
 	}{
-		{name: "start via brew services", args: []string{"daemon", "start"}, wantOp: "start", wantOut: "started"},
-		{name: "stop via brew services", args: []string{"daemon", "stop"}, wantOp: "stop", wantOut: "stopped"},
-		{name: "restart via brew services", args: []string{"daemon", "restart"}, wantOp: "restart", wantOut: "restarted"},
+		{
+			name: "start via brew services", args: []string{"daemon", "start"},
+			up: false, then: true, wantOp: "start", wantOut: "started",
+		},
+		{
+			name: "stop via brew services", args: []string{"daemon", "stop"},
+			up: true, then: false, wantOp: "stop", wantOut: "stopped",
+		},
+		{
+			name: "restart via brew services", args: []string{"daemon", "restart"},
+			up: true, then: true, wantOp: "restart", wantOut: "restarted",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			isolateSocket(t)
+			fastDaemonWaits(t)
 			savedHB := daemonIsHomebrew
 			daemonIsHomebrew = func() bool { return true }
 			t.Cleanup(func() { daemonIsHomebrew = savedHB })
 
-			var gotArgs []string
-			saved := runCommand
-			runCommand = func(name string, args ...string) error {
-				gotArgs = append([]string{name}, args...)
-				return nil
-			}
-			t.Cleanup(func() { runCommand = saved })
-
-			out, err := run(factory(&fakeClient{}, nil), "", tt.args...)
+			client, gotArgs := toggling(t, tt.up, tt.then)
+			out, err := run(factory(client, nil), "", tt.args...)
 			if err != nil {
 				t.Fatalf("%v: %v", tt.args, err)
 			}
 			want := strings.Join([]string{"brew", "services", tt.wantOp, "orch"}, " ")
-			if got := strings.Join(gotArgs, " "); got != want {
+			if got := strings.Join(*gotArgs, " "); got != want {
 				t.Errorf("ran %q, want %q", got, want)
 			}
 			if !strings.Contains(out, tt.wantOut) {
 				t.Errorf("output %q missing %q", out, tt.wantOut)
+			}
+		})
+	}
+}
+
+// A supervisor that accepts the op is not evidence the daemon reached the state:
+// `brew services start` exits zero for a job it already considers started, even
+// when the daemon behind it is wedged. These cases are the ones that used to
+// report a cheerful success while `orch status` kept saying the daemon was down.
+func TestDaemonControlReportsWhatActuallyHappened(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		up      bool
+		then    bool
+		wantErr bool
+		wantHas string
+		wantRan bool
+	}{
+		{
+			name: "start on a wedged daemon fails instead of claiming success",
+			args: []string{"daemon", "start"}, up: false, then: false,
+			wantErr: true, wantHas: "orch daemon restart", wantRan: true,
+		},
+		{
+			name: "start on a healthy daemon is a no-op, not a supervisor call",
+			args: []string{"daemon", "start"}, up: true, then: true,
+			wantHas: "already running", wantRan: false,
+		},
+		{
+			name: "restart that never comes back fails",
+			args: []string{"daemon", "restart"}, up: true, then: false,
+			wantErr: true, wantHas: "did not answer", wantRan: true,
+		},
+		{
+			name: "stop that leaves the daemon answering fails",
+			args: []string{"daemon", "stop"}, up: true, then: true,
+			wantErr: true, wantHas: "still answering", wantRan: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isolateSocket(t)
+			fastDaemonWaits(t)
+			savedHB := daemonIsHomebrew
+			daemonIsHomebrew = func() bool { return true }
+			t.Cleanup(func() { daemonIsHomebrew = savedHB })
+
+			client, gotArgs := toggling(t, tt.up, tt.then)
+			out, err := run(factory(client, nil), "", tt.args...)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			}
+			got := out
+			if err != nil {
+				got += err.Error()
+			}
+			if !strings.Contains(got, tt.wantHas) {
+				t.Errorf("result %q missing %q", got, tt.wantHas)
+			}
+			if ran := len(*gotArgs) > 0; ran != tt.wantRan {
+				t.Errorf("supervisor invoked = %v, want %v (%v)", ran, tt.wantRan, *gotArgs)
 			}
 		})
 	}
@@ -715,6 +851,7 @@ func TestPingAndDaemonStatus(t *testing.T) {
 		args         []string
 		client       *fakeClient
 		dialErr      error
+		socket       bool // seed a leftover socket file
 		wantErr      bool
 		wantContains string
 	}{
@@ -742,9 +879,24 @@ func TestPingAndDaemonStatus(t *testing.T) {
 			client:       &fakeClient{err: errors.New("down")},
 			wantContains: "not running",
 		},
+		{
+			// A leftover socket means orchd is up but no longer accepting, which
+			// `orch daemon start` cannot fix — say so and point at the restart.
+			name:         "daemon status unreachable with a leftover socket",
+			args:         []string{"daemon", "status"},
+			client:       &fakeClient{err: errors.New("connection refused")},
+			socket:       true,
+			wantContains: "unreachable",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			sock := isolateSocket(t)
+			if tt.socket {
+				if err := os.WriteFile(sock, nil, 0o600); err != nil {
+					t.Fatalf("seed socket: %v", err)
+				}
+			}
 			out, err := run(factory(tt.client, tt.dialErr), "", tt.args...)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)

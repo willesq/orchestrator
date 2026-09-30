@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/willesq/orchestrator/internal/paths"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/status"
 	"github.com/willesq/orchestrator/internal/supervisor"
@@ -31,6 +32,7 @@ func TestStatusCmd(t *testing.T) {
 		name      string
 		client    *fakeClient
 		dialErr   error
+		socket    bool // seed a leftover socket file
 		wantHas   []string
 		wantNotIn []string
 	}{
@@ -54,12 +56,26 @@ func TestStatusCmd(t *testing.T) {
 		{
 			name:    "still reports with the daemon down",
 			dialErr: errNoDaemon,
-			wantHas: []string{" ! orchd", "not running", "unavailable — orchd is not running"},
+			wantHas: []string{" ! orchd", "not running", "unavailable — orchd is not answering"},
+		},
+		{
+			// A wedged daemon leaves its socket behind, and `orch daemon start`
+			// cannot clear that — so the report has to name the restart instead.
+			name:      "a leftover socket reports unreachable, not absent",
+			dialErr:   errNoDaemon,
+			socket:    true,
+			wantHas:   []string{" ! orchd", "unreachable", "orch daemon restart"},
+			wantNotIn: []string{"not running"},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			isolate(t)
+			if tt.socket {
+				if err := os.WriteFile(paths.SocketPath(), nil, 0o600); err != nil {
+					t.Fatalf("seed socket: %v", err)
+				}
+			}
 			client := tt.client
 			if client == nil {
 				client = &fakeClient{}

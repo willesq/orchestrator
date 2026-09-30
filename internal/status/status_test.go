@@ -50,9 +50,10 @@ func healthyDeps(t *testing.T) Deps {
 		Service: func() ServiceInfo {
 			return ServiceInfo{Manager: "launchd", Detail: "/plist", Installed: true}
 		},
-		Checks:  []check.Check{func() check.Result { return check.Result{Name: "gh auth", Detail: "ok", OK: true} }},
-		Harness: func() []HarnessInfo { return []HarnessInfo{{Name: "claude-code"}} },
-		DirSize: func(string) int64 { return 1024 },
+		SocketPresent: func() bool { return true },
+		Checks:        []check.Check{func() check.Result { return check.Result{Name: "gh auth", Detail: "ok", OK: true} }},
+		Harness:       func() []HarnessInfo { return []HarnessInfo{{Name: "claude-code"}} },
+		DirSize:       func(string) int64 { return 1024 },
 	}
 }
 

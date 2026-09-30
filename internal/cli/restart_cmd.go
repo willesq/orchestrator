@@ -70,7 +70,7 @@ Restarting is idempotent: a component that is already stopped is simply started.
 // restartProcess bounces orchd through its service manager, then waits for it to
 // answer again so the command only reports success once the system is back.
 func restartProcess(cf clientFactory, w io.Writer) error {
-	if err := daemonControl(w, "restart"); err != nil {
+	if err := superviseDaemon(w, "restart"); err != nil {
 		return err
 	}
 	resp, err := waitForOrchd(cf, 30*time.Second)
