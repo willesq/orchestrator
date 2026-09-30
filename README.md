@@ -50,8 +50,23 @@ orch restart subsystems          # every subsystem, in place (no process bounce)
 ```
 
 Subsystems are `qdrant` (binary mode only), `workflow-worker`, `sources-scheduler`,
-`docs-scheduler`, and `pr-babysitter`. Every restart is idempotent: a component that is
-already stopped is simply started.
+`docs-scheduler`, `pr-babysitter`, and `self-update`. Every restart is idempotent: a
+component that is already stopped is simply started.
+
+### Picking up a new build
+
+Upgrading `orch` replaces the binaries on disk but leaves the running `orchd` serving the
+old code. The `self-update` subsystem closes that gap by itself: it watches the path the
+service manager launches `orchd` from and, within a minute of a new build appearing there,
+exits — and the KeepAlive supervisor behind `orchd` (`brew services`, or the launchd agent
+`orch install` writes) starts the new binary. Nothing in flight is lost: the shutdown
+drains the workflow worker, and agent tasks are durable, so they resume under the new
+build.
+
+`orch status` reports the `build` line as `drifted` when `orchd` is nonetheless still
+running an older version than the installed `orch` — which means the self-restart did not
+happen, typically because `orchd` was started by hand with nothing supervising it. `orch
+restart` is the manual way to close it.
 
 ## Build from source
 

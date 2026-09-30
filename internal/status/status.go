@@ -177,6 +177,10 @@ func serviceSection(d Deps, resp *orchdv1.StatusResponse, err error) Section {
 		})
 	}
 
+	if err == nil {
+		sec.Lines = append(sec.Lines, buildLine(resp.GetVersion()))
+	}
+
 	svc := d.Service()
 	managed := Line{Name: "service manager", Value: svc.Manager, Detail: svc.Detail, Level: LevelOK}
 	if !svc.Installed {
@@ -190,6 +194,26 @@ func serviceSection(d Deps, resp *orchdv1.StatusResponse, err error) Section {
 		Line{Name: "socket", Value: paths.SocketPath()},
 	)
 	return sec
+}
+
+// buildLine compares the build orchd is *running* against the one installed on
+// this machine, and reports drift with the command that closes it.
+//
+// The installed build is this CLI's own version: `orch` and `orchd` are built
+// and shipped together, so the binary printing this report is the build orchd
+// should be running. orchd normally notices an upgrade within a minute and
+// restarts itself, so drift that survives long enough to be seen here means
+// that did not happen — a foreground daemon with no service manager behind it,
+// or a restart the supervisor never completed.
+func buildLine(running string) Line {
+	if running == version.Version {
+		return Line{Name: "build", Value: running, Detail: "orchd matches the installed orch", Level: LevelOK}
+	}
+	return Line{
+		Name: "build", Value: "drifted", Level: LevelWarn,
+		Detail: fmt.Sprintf("orchd is running %s, %s is installed — run: orch restart",
+			running, version.Version),
+	}
 }
 
 // harnessSection reports whether each coding-agent harness's hooks and MCP

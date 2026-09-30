@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/willesq/orchestrator/internal/config"
+	"github.com/willesq/orchestrator/internal/selfupdate"
 )
 
 func TestQdrantUnit(t *testing.T) {
@@ -100,6 +102,7 @@ func TestSubsystems(t *testing.T) {
 		name     string
 		mode     string
 		prs      bool
+		watch    bool
 		wantUnit []string
 	}{
 		{
@@ -112,6 +115,13 @@ func TestSubsystems(t *testing.T) {
 			mode: "external", prs: false,
 			wantUnit: []string{UnitWorker, UnitSources, UnitDocs},
 		},
+		{
+			// A watcher orchd could not build (an unreadable executable path)
+			// must cost it the unit, not the daemon.
+			name: "a watched binary adds the self-update unit last",
+			mode: "external", prs: false, watch: true,
+			wantUnit: []string{UnitWorker, UnitSources, UnitDocs, UnitSelfUpdate},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -121,8 +131,21 @@ func TestSubsystems(t *testing.T) {
 			s.RAG.Qdrant.HTTPPort = 6333
 			s.PRBabysitter.Enabled = tt.prs
 
+			d := deps{settings: s}
+			if tt.watch {
+				bin := filepath.Join(t.TempDir(), "orchd")
+				if err := os.WriteFile(bin, []byte("build"), 0o755); err != nil {
+					t.Fatalf("write: %v", err)
+				}
+				w, err := selfupdate.NewWatcher(bin)
+				if err != nil {
+					t.Fatalf("NewWatcher: %v", err)
+				}
+				d.selfUpdate, d.restart = w, func(string) {}
+			}
+
 			var got []string
-			for _, u := range subsystems(deps{settings: s}) {
+			for _, u := range subsystems(d) {
 				// Every unit must be well-formed for the supervisor: exactly one
 				// of Run (service) or Tick (periodic), and a periodic one needs a
 				// positive cadence.
@@ -158,6 +181,65 @@ func TestInterval(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := interval(tt.spec, tt.fallback); got != tt.want {
 				t.Errorf("interval(%q) = %v, want %v", tt.spec, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSelfUpdateUnit covers the decision the unit makes on each tick: exit so
+// the service manager can bring the new build up, or — when nothing would bring
+// orchd back — report the drift and keep serving the old one.
+func TestSelfUpdateUnit(t *testing.T) {
+	tests := []struct {
+		name        string
+		upgrade     bool
+		supervised  bool
+		wantRestart bool
+	}{
+		{name: "an installed build restarts a supervised orchd", upgrade: true, supervised: true, wantRestart: true},
+		{name: "an unsupervised orchd keeps serving", upgrade: true, supervised: false, wantRestart: false},
+		{name: "an unchanged binary is left alone", upgrade: false, supervised: true, wantRestart: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			bin := filepath.Join(dir, "orchd")
+			if err := os.WriteFile(bin, []byte("old build"), 0o755); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+			w, err := selfupdate.NewWatcher(bin)
+			if err != nil {
+				t.Fatalf("NewWatcher: %v", err)
+			}
+
+			var reasons []string
+			u := selfUpdateUnit(w, func(reason string) { reasons = append(reasons, reason) }, tt.supervised)
+			if u.Name != UnitSelfUpdate || u.Tick == nil || u.Interval <= 0 {
+				t.Fatalf("unit = %+v, want a periodic unit named %q", u, UnitSelfUpdate)
+			}
+
+			if tt.upgrade {
+				if err := os.WriteFile(bin, []byte("a visibly longer new build"), 0o755); err != nil {
+					t.Fatalf("rewrite: %v", err)
+				}
+			}
+			u.Tick(context.Background())
+			// A second tick only happens on the paths that keep serving — the
+			// supervised one cancels the daemon's context and ends the loop.
+			if !tt.wantRestart {
+				u.Tick(context.Background())
+			}
+
+			if got := len(reasons) > 0; got != tt.wantRestart {
+				t.Fatalf("restart requested = %v (%v), want %v", got, reasons, tt.wantRestart)
+			}
+			if tt.wantRestart && !strings.Contains(reasons[0], bin) {
+				t.Errorf("reason = %q, want it to name the launch path %q", reasons[0], bin)
+			}
+			if !tt.supervised && tt.upgrade {
+				if _, changed := w.Changed(); changed {
+					t.Error("an unsupervised tick left the drift unadopted, so it will re-report forever")
+				}
 			}
 		})
 	}

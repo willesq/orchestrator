@@ -13,6 +13,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/paths"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/selfupdate"
 	"github.com/willesq/orchestrator/internal/supervisor"
 )
 
@@ -24,26 +25,7 @@ func TestRunServesAndShutsDown(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			t.Setenv("ORCH_DATA_DIR", filepath.Join(dir, "data"))
-			t.Setenv("ORCH_CONFIG_DIR", filepath.Join(dir, "cfg"))
-			// external mode: don't download/spawn a native qdrant in the test.
-			t.Setenv("ORCH_RAG_QDRANT_MODE", "external")
-			// Unix socket paths are capped near 104 chars on macOS; t.TempDir()
-			// plus the test name blows past that, so use a short explicit path.
-			t.Setenv("ORCH_SOCKET", filepath.Join(os.TempDir(), "orchd-daemontest.sock"))
-
-			// Pre-seed dummy model files so the first-run fetch is a no-op (the
-			// embedder is lazy and this test only pings).
-			modelDir := filepath.Join(dir, "data", "models", "minilm")
-			if err := os.MkdirAll(modelDir, 0o755); err != nil {
-				t.Fatalf("mkdir model: %v", err)
-			}
-			for _, f := range []string{"model.onnx", "tokenizer.json"} {
-				if err := os.WriteFile(filepath.Join(modelDir, f), []byte("x"), 0o644); err != nil {
-					t.Fatalf("seed model: %v", err)
-				}
-			}
+			seedRunEnv(t, "orchd-daemontest.sock")
 
 			ctx, cancel := context.WithCancel(context.Background())
 			errCh := make(chan error, 1)
@@ -81,34 +63,88 @@ func TestRunServesAndShutsDown(t *testing.T) {
 	}
 }
 
+// TestRunExitsWhenANewBuildIsInstalled is the whole point of the self-update
+// unit: a new binary at the launch path has to end this process, because the
+// KeepAlive service manager behind it is what starts the new one. Exiting is
+// the upgrade, so a Run that keeps serving is the bug.
+func TestRunExitsWhenANewBuildIsInstalled(t *testing.T) {
+	tests := []struct {
+		name       string
+		supervised bool
+		wantExit   bool
+	}{
+		{name: "a supervised daemon steps aside for the new build", supervised: true, wantExit: true},
+		{name: "an unsupervised daemon keeps serving the old one", supervised: false, wantExit: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := seedRunEnv(t, "orchd-selfupdatetest.sock")
+
+			// Stand in for the binary the service manager launches orchd from.
+			bin := filepath.Join(dir, "orchd")
+			if err := os.WriteFile(bin, []byte("old build"), 0o755); err != nil {
+				t.Fatalf("write binary: %v", err)
+			}
+			w, err := selfupdate.NewWatcher(bin)
+			if err != nil {
+				t.Fatalf("NewWatcher: %v", err)
+			}
+			swap(t, &selfUpdateWatch, func() (*selfupdate.Watcher, bool) { return w, tt.supervised })
+			swap(t, &selfUpdateCheckInterval, 10*time.Millisecond)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			errCh := make(chan error, 1)
+			go func() { errCh <- Run(ctx) }()
+			if !waitForFile(paths.SocketPath(), 5*time.Second) {
+				t.Fatalf("socket %s never appeared", paths.SocketPath())
+			}
+
+			if err := os.WriteFile(bin, []byte("a visibly longer new build"), 0o755); err != nil {
+				t.Fatalf("install new build: %v", err)
+			}
+
+			select {
+			case err := <-errCh:
+				if !tt.wantExit {
+					t.Fatalf("Run exited (%v) with nothing to restart it", err)
+				}
+				if err != nil {
+					t.Errorf("Run returned error: %v", err)
+				}
+			case <-time.After(3 * time.Second):
+				if tt.wantExit {
+					t.Fatal("Run kept serving the old build after a new one was installed")
+				}
+			}
+		})
+	}
+}
+
+// swap sets *p to v for the duration of the test and restores it afterwards.
+func swap[T any](t *testing.T, p *T, v T) {
+	t.Helper()
+	old := *p
+	t.Cleanup(func() { *p = old })
+	*p = v
+}
+
 func TestRunSupervisesAndRestartsSubsystems(t *testing.T) {
 	tests := []struct {
 		name     string
 		wantUnit []string
 	}{
 		{
+			// self-update is always present: Run watches whatever binary the
+			// process was launched from, which under `go test` is the test binary.
 			name:     "live orchd reports and restarts its subsystems",
-			wantUnit: []string{UnitWorker, UnitSources, UnitDocs},
+			wantUnit: []string{UnitWorker, UnitSources, UnitDocs, UnitSelfUpdate},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			t.Setenv("ORCH_DATA_DIR", filepath.Join(dir, "data"))
-			t.Setenv("ORCH_CONFIG_DIR", filepath.Join(dir, "cfg"))
-			t.Setenv("ORCH_RAG_QDRANT_MODE", "external") // no native engine in tests
 			t.Setenv("ORCH_PR_BABYSITTER_ENABLED", "false")
-			t.Setenv("ORCH_SOCKET", filepath.Join(os.TempDir(), "orchd-supervisortest.sock"))
-
-			modelDir := filepath.Join(dir, "data", "models", "minilm")
-			if err := os.MkdirAll(modelDir, 0o755); err != nil {
-				t.Fatalf("mkdir model: %v", err)
-			}
-			for _, f := range []string{"model.onnx", "tokenizer.json"} {
-				if err := os.WriteFile(filepath.Join(modelDir, f), []byte("x"), 0o644); err != nil {
-					t.Fatalf("seed model: %v", err)
-				}
-			}
+			seedRunEnv(t, "orchd-supervisortest.sock")
 
 			ctx, cancel := context.WithCancel(context.Background())
 			errCh := make(chan error, 1)
@@ -185,6 +221,33 @@ func TestRunSupervisesAndRestartsSubsystems(t *testing.T) {
 			}
 		})
 	}
+}
+
+// seedRunEnv points Run at a throwaway data/config dir and pre-seeds enough of
+// it that the daemon comes up without touching the network: external qdrant so
+// no native engine is downloaded or spawned, and dummy model files so the
+// first-run fetch is a no-op (the embedder is lazy; these tests never embed).
+// It returns the temp dir so a test can place files of its own beside it.
+func seedRunEnv(t *testing.T, sockName string) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(dir, "data"))
+	t.Setenv("ORCH_CONFIG_DIR", filepath.Join(dir, "cfg"))
+	t.Setenv("ORCH_RAG_QDRANT_MODE", "external")
+	// Unix socket paths are capped near 104 chars on macOS; t.TempDir() plus the
+	// test name blows past that, so use a short explicit path.
+	t.Setenv("ORCH_SOCKET", filepath.Join(os.TempDir(), sockName))
+
+	modelDir := filepath.Join(dir, "data", "models", "minilm")
+	if err := os.MkdirAll(modelDir, 0o755); err != nil {
+		t.Fatalf("mkdir model: %v", err)
+	}
+	for _, f := range []string{"model.onnx", "tokenizer.json"} {
+		if err := os.WriteFile(filepath.Join(modelDir, f), []byte("x"), 0o644); err != nil {
+			t.Fatalf("seed model: %v", err)
+		}
+	}
+	return dir
 }
 
 func waitForFile(path string, timeout time.Duration) bool {
