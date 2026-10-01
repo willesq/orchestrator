@@ -75,11 +75,15 @@ func (ClaudeCode) settingsEdit(bins Bins, home string) Edit {
 			}
 			hookSummary := applyHooks(root, bins.OrchHook)
 			mcpSummary := applyMCP(root, bins.Orch)
+			permSummary, err := applyPermissions(root)
+			if err != nil {
+				return nil, "", err
+			}
 			out, err := marshalJSON(root)
 			if err != nil {
 				return nil, "", err
 			}
-			return out, hookSummary + "\n" + mcpSummary, nil
+			return out, strings.Join([]string{hookSummary, mcpSummary, permSummary}, "\n"), nil
 		},
 	}
 }
@@ -166,14 +170,195 @@ func applyMCP(root map[string]any, orchBin string) string {
 	}
 	preserved := 0
 	for k := range mcp {
-		if k != "rag" && k != "queue" {
+		if !isOrchMCPServer(k) {
 			preserved++
 		}
 	}
-	mcp["rag"] = map[string]any{"command": orchBin, "args": []any{"mcp", "rag"}}
-	mcp["queue"] = map[string]any{"command": orchBin, "args": []any{"mcp", "queue"}}
+	for _, name := range orchMCPServers {
+		mcp[name] = map[string]any{"command": orchBin, "args": []any{"mcp", name}}
+	}
 	root["mcpServers"] = mcp
 	return fmt.Sprintf(
-		"mcpServers: registered orch rag + queue (-> %s mcp ...); preserved %d other server(s) (e.g. serena)",
-		orchBin, preserved)
+		"mcpServers: registered orch %s (-> %s mcp ...); preserved %d other server(s) (e.g. serena)",
+		strings.Join(orchMCPServers, " + "), orchBin, preserved)
+}
+
+// orchMCPServers names the MCP servers the orchestrator registers with a
+// harness. Each is served by `orch mcp <name>`, and each needs a matching
+// permission rule, so the list is shared by both steps rather than repeated.
+//
+// A new name must be normalization-stable: Claude Code normalizes server
+// spellings before matching permission rules, while mcpToolRule concatenates, so
+// a name containing a hyphen or uppercase would emit a rule that silently
+// matches nothing — granting no access while reporting success, and missing a
+// deny on the same server. Stick to lowercase and underscores.
+var orchMCPServers = []string{"rag", "queue"}
+
+func isOrchMCPServer(name string) bool {
+	for _, s := range orchMCPServers {
+		if s == name {
+			return true
+		}
+	}
+	return false
+}
+
+// mcpToolRule is the Claude Code permission rule matching every tool exposed by
+// an MCP server (e.g. "mcp__rag__*" covers mcp__rag__rag_search).
+//
+// Accepted risk: the wildcard also covers rag_delete_source, which is
+// irreversible, and its confirm flag is set by the model — so for content the
+// store ingested from untrusted text, the interactive prompt was the one guard a
+// prompt injection could not forge. Granting per-server was chosen anyway, to
+// match the rule shape users already have and to cover tools added later without
+// a reinstall. Narrowing means replacing this with a per-server tool allowlist;
+// allowsServer already treats an existing wildcard as covering, so doing so
+// would not re-prompt anyone. Revisit if the store starts ingesting more
+// untrusted input, or when queue_dispatch stops being a stub.
+func mcpToolRule(server string) string { return "mcp__" + server + "__*" }
+
+// allowsServer reports whether the allow list already covers every tool of the
+// named server. Claude Code honours the blanket "mcp__*" and the bare server
+// form ("mcp__rag") as well as the per-server wildcard, so any of the three
+// counts — appending ours would only leave a redundant rule behind.
+func allowsServer(allow []any, server string) bool {
+	for _, r := range allow {
+		s, ok := r.(string)
+		if !ok {
+			continue
+		}
+		if s == "mcp__*" || s == "mcp__"+server || s == mcpToolRule(server) {
+			return true
+		}
+	}
+	return false
+}
+
+// overlapsServer reports whether any rule in the list could match even one tool
+// of the named server. It serves both of the categories that outrank allow —
+// deny and ask — so neither is treated as the special case.
+//
+// Reason: the matching here is deliberately broader than allowsServer, and the
+// asymmetry is the point. Skipping an allow we would otherwise add needs proof
+// that the whole server is already covered, so that check stays exact. Holding
+// one back needs only the suspicion of an overlap, because both deny and ask
+// outrank allow in Claude Code: a wildcard appended over a single-tool deny, or
+// over an ask the user added precisely to keep a destructive tool gated, is dead
+// config at best and a bypass if that precedence ever became specificity-based.
+func overlapsServer(rules []any, server string) bool {
+	prefix := "mcp__" + server
+	for _, r := range rules {
+		s, ok := r.(string)
+		if !ok {
+			continue
+		}
+		if s == "mcp__*" || s == prefix || strings.HasPrefix(s, prefix+"__") {
+			return true
+		}
+	}
+	return false
+}
+
+// permissionsObject returns the permissions block, or an empty one when absent.
+//
+// Reason: a value of some other type is reported rather than replaced. The
+// discarded-ok form of this assertion conflates "absent" with "present but
+// another shape", and the empty fallback would then overwrite whatever the user
+// actually had. settings.json is the user's file; refusing is the safe failure.
+func permissionsObject(root map[string]any) (map[string]any, error) {
+	switch v := root["permissions"].(type) {
+	case nil:
+		return map[string]any{}, nil
+	case map[string]any:
+		return v, nil
+	default:
+		return nil, fmt.Errorf("settings.json: permissions is %T, not an object — "+
+			"refusing to overwrite it; fix or remove it and re-run", v)
+	}
+}
+
+// ruleList returns one of the permission rule arrays, with the same refusal as
+// permissionsObject for a value of an unexpected shape.
+func ruleList(perms map[string]any, key string) ([]any, error) {
+	switch v := perms[key].(type) {
+	case nil:
+		return nil, nil
+	case []any:
+		return v, nil
+	default:
+		return nil, fmt.Errorf("settings.json: permissions.%s is %T, not an array — "+
+			"refusing to overwrite it; fix or remove it and re-run", key, v)
+	}
+}
+
+// applyPermissions allows the orchestrator's MCP tools in Claude Code's user
+// permission list.
+//
+// Reason: registering the server is only half the wiring. Under the default
+// "ask" permission mode every rag/queue call stops for interactive
+// confirmation, so lifecycle hooks and background agents — which have nobody to
+// answer the prompt — silently lose access to durable memory. A deny rule beats
+// an allow rule in Claude Code, so a server the user has explicitly denied is
+// left alone and reported instead of being fought over.
+func applyPermissions(root map[string]any) (string, error) {
+	perms, err := permissionsObject(root)
+	if err != nil {
+		return "", err
+	}
+	allow, err := ruleList(perms, "allow")
+	if err != nil {
+		return "", err
+	}
+	deny, err := ruleList(perms, "deny")
+	if err != nil {
+		return "", err
+	}
+	ask, err := ruleList(perms, "ask")
+	if err != nil {
+		return "", err
+	}
+
+	var added, already, denied, asked []string
+	for _, server := range orchMCPServers {
+		switch {
+		case overlapsServer(deny, server):
+			denied = append(denied, server)
+		case overlapsServer(ask, server):
+			asked = append(asked, server)
+		case allowsServer(allow, server):
+			already = append(already, server)
+		default:
+			allow = append(allow, mcpToolRule(server))
+			added = append(added, server)
+		}
+	}
+	if len(added) > 0 {
+		perms["allow"] = allow
+		root["permissions"] = perms
+	}
+
+	var notes []string
+	if len(added) > 0 {
+		rules := make([]string, len(added))
+		for i, s := range added {
+			rules[i] = mcpToolRule(s)
+		}
+		notes = append(notes, "added "+strings.Join(rules, " + ")+
+			" — these tools will no longer prompt for confirmation, in every project")
+	}
+	if len(already) > 0 {
+		notes = append(notes, strings.Join(already, " + ")+" already allowed")
+	}
+	// The wording says what was not written rather than claiming the server is
+	// unallowed: the user may already have an allow rule of their own, which a
+	// deny or ask simply outranks.
+	if len(denied) > 0 {
+		notes = append(notes,
+			"added no allow for "+strings.Join(denied, " + ")+" — an existing deny rule covers it, so those orch MCP tools stay blocked")
+	}
+	if len(asked) > 0 {
+		notes = append(notes,
+			"added no allow for "+strings.Join(asked, " + ")+" — an existing ask rule keeps those tools behind a confirmation")
+	}
+	return "permissions.allow: " + strings.Join(notes, "; "), nil
 }

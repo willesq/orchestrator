@@ -28,6 +28,25 @@ orch check                        # verify preconditions are green
 `orch install` is **dry-run by default** — run `orch install` (no `--apply`) to see exactly
 what it would change. It is surgical (preserves other tools' hooks) and idempotent.
 
+For Claude Code, install registers the `rag` and `queue` MCP servers in the user-global
+`~/.claude/settings.json` (and in `~/.claude.json` when present) and allows their tools in
+`permissions.allow` as `mcp__rag__*` and `mcp__queue__*`. Registration alone is not enough:
+under the default `ask` permission mode every call waits for interactive confirmation, so
+lifecycle hooks and background agents — which have nobody to answer the prompt — lose access
+to durable memory. Because the grant is user-global, it applies in every project, and the
+dry-run summary says so before you apply it.
+
+Existing rules are scanned before anything is appended, so repeat installs add no duplicates;
+`mcp__*`, `mcp__rag` and `mcp__rag__*` all count as already covering a server. Both categories
+that outrank `allow` hold the matching rule back entirely and are reported instead: a `deny`
+rule, and an `ask` rule — the one you add precisely to keep a destructive tool such as
+`rag_delete_source` behind a confirmation. Either is honored whether written as a blanket
+`mcp__*`, a bare `mcp__rag`, a wildcard `mcp__rag__*`, or a single tool
+`mcp__rag__rag_delete_source`. A `permissions` block, or an `allow`, `deny` or `ask` of an
+unexpected JSON type, aborts the install with an error rather than being overwritten, and no
+file is written when any edit fails to compute. Codex and Gemini use different permission
+models and are unaffected.
+
 To wire every supported coding agent, use `orch install --target all`, then
 `orch install --target all --apply`. The default target remains `claude-code`;
 `--target codex` and `--target gemini` install those harnesses individually.
@@ -53,7 +72,13 @@ imports. An existing nonempty `AGENTS.override.md` receives the directive instea
 because Codex loads it preferentially. Personal instructions remain in each
 harness's entry file; only its Orchestrator-managed reference is updated.
 Existing files, including the installed shared policy, are backed up before
-modification. If upgrading an earlier installation that copied personal rules
+modification. Backups are written owner-only (`0600`) into owner-only
+directories, because harness config can carry OAuth state and MCP server `env`
+blocks and these copies are retained indefinitely. Backups written by releases
+before this change used `0644` under `0755`, and tightening is not retroactive —
+clean up any you still have with
+`chmod -R go-rwx ~/.local/share/orch/backups` (or the same path under
+`$ORCH_DATA_DIR` / `$XDG_DATA_HOME/orch` if you set either). If upgrading an earlier installation that copied personal rules
 into the shared file, recover those rules from its backup into your personal
 harness entry files before relying on the replacement policy.
 
