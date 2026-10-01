@@ -83,7 +83,7 @@ func TestDispatch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b := sqlite.NewInMemoryBackend(sqlite.WithApplyMigrations(true))
 			t.Cleanup(func() { _ = b.Close() })
-			d := NewDispatcher(b)
+			d := NewDispatcher(b, nil)
 
 			id, err := d.Dispatch(context.Background(), tt.agent, tt.body)
 			if err != nil {

@@ -13,8 +13,18 @@ service Orchd {
   rpc Ingest(IngestRequest) returns (IngestResponse);
   // Search embeds the query and returns the top matching chunks.
   rpc Search(SearchRequest) returns (SearchResponse);
+  // ListSources enumerates the distinct sources held in the vector store, with
+  // per-source chunk counts. This is the store's inventory, as opposed to the
+  // cadence-refresh registry that `orch source list` reports.
+  rpc ListSources(ListSourcesRequest) returns (ListSourcesResponse);
+  // DeleteSource removes every chunk belonging to one source_uri.
+  rpc DeleteSource(DeleteSourceRequest) returns (DeleteSourceResponse);
   // Dispatch enqueues a durable agent-task workflow and returns its instance ID.
   rpc Dispatch(DispatchRequest) returns (DispatchResponse);
+  // ListTasks returns dispatched tasks, newest first, optionally by status.
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  // GetTask returns one dispatched task by ID.
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
   // Status reports orchd's own health plus one entry per supervised subsystem.
   rpc Status(StatusRequest) returns (StatusResponse);
   // Restart restarts one supervised subsystem in place — no process bounce.
@@ -62,6 +72,40 @@ message SearchHit {
   repeated string tags = 6;
 }
 
+message ListSourcesRequest {
+  string source_type = 1; // optional exact-match filter
+  string scope = 2;       // optional exact-match filter
+  string uri_prefix = 3;  // optional prefix filter, e.g. "session://"
+  int32 limit = 4;        // 0 means no cap
+}
+
+message ListSourcesResponse {
+  repeated SourceSummary sources = 1;
+  int32 total_sources = 2; // distinct sources before `limit` was applied
+  int32 total_chunks = 3;  // chunks across those sources
+}
+
+// SourceSummary is one distinct source_uri and what the store holds for it.
+message SourceSummary {
+  string source_uri = 1;
+  string source_type = 2;
+  string scope = 3;
+  int32 chunks = 4;
+  repeated string tags = 5;
+}
+
+message DeleteSourceRequest {
+  string source_uri = 1;
+  // confirm must be set. Deletion is unrecoverable, so the gate lives here
+  // rather than only in the CLI: every caller — CLI, MCP, a direct gRPC
+  // client — has to opt in deliberately, not by omission.
+  bool confirm = 2;
+}
+
+message DeleteSourceResponse {
+  int32 deleted = 1; // chunks removed; 0 when the source was not present
+}
+
 message DispatchRequest {
   string agent = 1;
   string body = 2;
@@ -69,6 +113,35 @@ message DispatchRequest {
 
 message DispatchResponse {
   string instance_id = 1;
+}
+
+message ListTasksRequest {
+  string status = 1; // optional: pending | in_progress | complete | failed
+  string agent = 2;  // optional exact-match filter
+  int32 limit = 3;   // 0 defaults to 50
+}
+
+message ListTasksResponse {
+  repeated Task tasks = 1;
+}
+
+message GetTaskRequest {
+  string id = 1;
+}
+
+message GetTaskResponse {
+  Task task = 1;
+  bool found = 2;
+}
+
+// Task is one dispatched agent task as recorded in orch.db.
+message Task {
+  string id = 1;
+  string agent = 2;
+  string body = 3;
+  string result = 4;
+  string status = 5;
+  string updated_at = 6;
 }
 
 message StatusRequest {}

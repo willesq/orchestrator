@@ -19,12 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Orchd_Ping_FullMethodName     = "/orchd.v1.Orchd/Ping"
-	Orchd_Ingest_FullMethodName   = "/orchd.v1.Orchd/Ingest"
-	Orchd_Search_FullMethodName   = "/orchd.v1.Orchd/Search"
-	Orchd_Dispatch_FullMethodName = "/orchd.v1.Orchd/Dispatch"
-	Orchd_Status_FullMethodName   = "/orchd.v1.Orchd/Status"
-	Orchd_Restart_FullMethodName  = "/orchd.v1.Orchd/Restart"
+	Orchd_Ping_FullMethodName         = "/orchd.v1.Orchd/Ping"
+	Orchd_Ingest_FullMethodName       = "/orchd.v1.Orchd/Ingest"
+	Orchd_Search_FullMethodName       = "/orchd.v1.Orchd/Search"
+	Orchd_ListSources_FullMethodName  = "/orchd.v1.Orchd/ListSources"
+	Orchd_DeleteSource_FullMethodName = "/orchd.v1.Orchd/DeleteSource"
+	Orchd_Dispatch_FullMethodName     = "/orchd.v1.Orchd/Dispatch"
+	Orchd_ListTasks_FullMethodName    = "/orchd.v1.Orchd/ListTasks"
+	Orchd_GetTask_FullMethodName      = "/orchd.v1.Orchd/GetTask"
+	Orchd_Status_FullMethodName       = "/orchd.v1.Orchd/Status"
+	Orchd_Restart_FullMethodName      = "/orchd.v1.Orchd/Restart"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -40,8 +44,18 @@ type OrchdClient interface {
 	Ingest(ctx context.Context, in *IngestRequest, opts ...grpc.CallOption) (*IngestResponse, error)
 	// Search embeds the query and returns the top matching chunks.
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
+	// ListSources enumerates the distinct sources held in the vector store, with
+	// per-source chunk counts. This is the store's inventory, as opposed to the
+	// cadence-refresh registry that `orch source list` reports.
+	ListSources(ctx context.Context, in *ListSourcesRequest, opts ...grpc.CallOption) (*ListSourcesResponse, error)
+	// DeleteSource removes every chunk belonging to one source_uri.
+	DeleteSource(ctx context.Context, in *DeleteSourceRequest, opts ...grpc.CallOption) (*DeleteSourceResponse, error)
 	// Dispatch enqueues a durable agent-task workflow and returns its instance ID.
 	Dispatch(ctx context.Context, in *DispatchRequest, opts ...grpc.CallOption) (*DispatchResponse, error)
+	// ListTasks returns dispatched tasks, newest first, optionally by status.
+	ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error)
+	// GetTask returns one dispatched task by ID.
+	GetTask(ctx context.Context, in *GetTaskRequest, opts ...grpc.CallOption) (*GetTaskResponse, error)
 	// Status reports orchd's own health plus one entry per supervised subsystem.
 	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
 	// Restart restarts one supervised subsystem in place — no process bounce.
@@ -87,10 +101,50 @@ func (c *orchdClient) Search(ctx context.Context, in *SearchRequest, opts ...grp
 	return out, nil
 }
 
+func (c *orchdClient) ListSources(ctx context.Context, in *ListSourcesRequest, opts ...grpc.CallOption) (*ListSourcesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSourcesResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListSources_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) DeleteSource(ctx context.Context, in *DeleteSourceRequest, opts ...grpc.CallOption) (*DeleteSourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteSourceResponse)
+	err := c.cc.Invoke(ctx, Orchd_DeleteSource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) Dispatch(ctx context.Context, in *DispatchRequest, opts ...grpc.CallOption) (*DispatchResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DispatchResponse)
 	err := c.cc.Invoke(ctx, Orchd_Dispatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListTasksResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListTasks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) GetTask(ctx context.Context, in *GetTaskRequest, opts ...grpc.CallOption) (*GetTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTaskResponse)
+	err := c.cc.Invoke(ctx, Orchd_GetTask_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -130,8 +184,18 @@ type OrchdServer interface {
 	Ingest(context.Context, *IngestRequest) (*IngestResponse, error)
 	// Search embeds the query and returns the top matching chunks.
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
+	// ListSources enumerates the distinct sources held in the vector store, with
+	// per-source chunk counts. This is the store's inventory, as opposed to the
+	// cadence-refresh registry that `orch source list` reports.
+	ListSources(context.Context, *ListSourcesRequest) (*ListSourcesResponse, error)
+	// DeleteSource removes every chunk belonging to one source_uri.
+	DeleteSource(context.Context, *DeleteSourceRequest) (*DeleteSourceResponse, error)
 	// Dispatch enqueues a durable agent-task workflow and returns its instance ID.
 	Dispatch(context.Context, *DispatchRequest) (*DispatchResponse, error)
+	// ListTasks returns dispatched tasks, newest first, optionally by status.
+	ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error)
+	// GetTask returns one dispatched task by ID.
+	GetTask(context.Context, *GetTaskRequest) (*GetTaskResponse, error)
 	// Status reports orchd's own health plus one entry per supervised subsystem.
 	Status(context.Context, *StatusRequest) (*StatusResponse, error)
 	// Restart restarts one supervised subsystem in place — no process bounce.
@@ -156,8 +220,20 @@ func (UnimplementedOrchdServer) Ingest(context.Context, *IngestRequest) (*Ingest
 func (UnimplementedOrchdServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Search not implemented")
 }
+func (UnimplementedOrchdServer) ListSources(context.Context, *ListSourcesRequest) (*ListSourcesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSources not implemented")
+}
+func (UnimplementedOrchdServer) DeleteSource(context.Context, *DeleteSourceRequest) (*DeleteSourceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteSource not implemented")
+}
 func (UnimplementedOrchdServer) Dispatch(context.Context, *DispatchRequest) (*DispatchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Dispatch not implemented")
+}
+func (UnimplementedOrchdServer) ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTasks not implemented")
+}
+func (UnimplementedOrchdServer) GetTask(context.Context, *GetTaskRequest) (*GetTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTask not implemented")
 }
 func (UnimplementedOrchdServer) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Status not implemented")
@@ -240,6 +316,42 @@ func _Orchd_Search_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_ListSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSourcesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListSources(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListSources_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListSources(ctx, req.(*ListSourcesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_DeleteSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteSourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).DeleteSource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_DeleteSource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).DeleteSource(ctx, req.(*DeleteSourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_Dispatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DispatchRequest)
 	if err := dec(in); err != nil {
@@ -254,6 +366,42 @@ func _Orchd_Dispatch_Handler(srv interface{}, ctx context.Context, dec func(inte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).Dispatch(ctx, req.(*DispatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ListTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTasksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListTasks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListTasks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListTasks(ctx, req.(*ListTasksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_GetTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetTask(ctx, req.(*GetTaskRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -314,8 +462,24 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Orchd_Search_Handler,
 		},
 		{
+			MethodName: "ListSources",
+			Handler:    _Orchd_ListSources_Handler,
+		},
+		{
+			MethodName: "DeleteSource",
+			Handler:    _Orchd_DeleteSource_Handler,
+		},
+		{
 			MethodName: "Dispatch",
 			Handler:    _Orchd_Dispatch_Handler,
+		},
+		{
+			MethodName: "ListTasks",
+			Handler:    _Orchd_ListTasks_Handler,
+		},
+		{
+			MethodName: "GetTask",
+			Handler:    _Orchd_GetTask_Handler,
 		},
 		{
 			MethodName: "Status",

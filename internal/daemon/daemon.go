@@ -46,11 +46,21 @@ import (
 type ragService interface {
 	IngestText(ctx context.Context, text string, m rag.Meta) (int, error)
 	Search(ctx context.Context, query string, opts rag.SearchOpts) ([]rag.Hit, error)
+	ListSources(ctx context.Context, opts rag.ListSourcesOpts) ([]rag.SourceSummary, int, int, error)
+	DeleteSource(ctx context.Context, uri string) (int, error)
 }
 
 // dispatcher enqueues durable agent-task workflows.
 type dispatcher interface {
 	Dispatch(ctx context.Context, agent, body string) (string, error)
+}
+
+// taskReader reads the dispatch ledger. Read-only on purpose: task state is
+// owned by the workflow engine, and letting callers write it would let the
+// ledger disagree with the durable workflow it is supposed to describe.
+type taskReader interface {
+	List(ctx context.Context, f queue.ListFilter) ([]queue.Task, error)
+	Get(ctx context.Context, id string) (queue.Task, bool, error)
 }
 
 // supervisorAPI is the subset of *supervisor.Supervisor the Status and Restart
@@ -68,6 +78,7 @@ type server struct {
 	rag   ragService
 	disp  dispatcher
 	sup   supervisorAPI
+	tasks taskReader
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -87,7 +98,7 @@ func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchd
 	if err != nil {
 		return nil, err
 	}
-	return &orchdv1.IngestResponse{Chunks: int32(n)}, nil
+	return &orchdv1.IngestResponse{Chunks: count32(n)}, nil
 }
 
 func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchdv1.SearchResponse, error) {
@@ -112,6 +123,111 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 		})
 	}
 	return out, nil
+}
+
+func (s *server) ListSources(ctx context.Context, req *orchdv1.ListSourcesRequest) (*orchdv1.ListSourcesResponse, error) {
+	sources, distinct, chunks, err := s.rag.ListSources(ctx, rag.ListSourcesOpts{
+		SourceType: req.GetSourceType(),
+		Scope:      req.GetScope(),
+		URIPrefix:  req.GetUriPrefix(),
+		Limit:      int(req.GetLimit()),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := &orchdv1.ListSourcesResponse{
+		Sources:      make([]*orchdv1.SourceSummary, 0, len(sources)),
+		TotalSources: count32(distinct),
+		TotalChunks:  count32(chunks),
+	}
+	for _, src := range sources {
+		out.Sources = append(out.Sources, &orchdv1.SourceSummary{
+			SourceUri:  src.SourceURI,
+			SourceType: src.SourceType,
+			Scope:      src.Scope,
+			Chunks:     count32(src.Chunks),
+			Tags:       src.Tags,
+		})
+	}
+	return out, nil
+}
+
+// DeleteSource permanently removes a source's chunks.
+//
+// This is the only unrecoverable operation orchd exposes, so it is gated and
+// logged here rather than in any one client: a gate that lives in the CLI only
+// protects the caller that already chose to use the CLI, and an agent reaching
+// the same RPC over MCP would bypass it entirely.
+func (s *server) DeleteSource(ctx context.Context, req *orchdv1.DeleteSourceRequest) (*orchdv1.DeleteSourceResponse, error) {
+	uri := req.GetSourceUri()
+	if uri == "" {
+		return nil, grpcstatus.Error(codes.InvalidArgument, "source_uri is required")
+	}
+	if !req.GetConfirm() {
+		return nil, grpcstatus.Error(codes.FailedPrecondition,
+			"refusing to delete without confirm=true: this is permanent and cannot be undone")
+	}
+	log.Printf("orchd: DELETE source %q — permanent, no undo", uri)
+	n, err := s.rag.DeleteSource(ctx, uri)
+	if err != nil {
+		log.Printf("orchd: DELETE source %q failed: %v", uri, err)
+		return nil, err
+	}
+	log.Printf("orchd: DELETE source %q removed %d chunk(s)", uri, n)
+	return &orchdv1.DeleteSourceResponse{Deleted: count32(n)}, nil
+}
+
+func (s *server) ListTasks(ctx context.Context, req *orchdv1.ListTasksRequest) (*orchdv1.ListTasksResponse, error) {
+	if s.tasks == nil {
+		return nil, grpcstatus.Error(codes.Unavailable, "task ledger unavailable")
+	}
+	list, err := s.tasks.List(ctx, queue.ListFilter{
+		Status: req.GetStatus(),
+		Agent:  req.GetAgent(),
+		Limit:  int(req.GetLimit()),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := &orchdv1.ListTasksResponse{Tasks: make([]*orchdv1.Task, 0, len(list))}
+	for _, t := range list {
+		out.Tasks = append(out.Tasks, taskPB(t))
+	}
+	return out, nil
+}
+
+func (s *server) GetTask(ctx context.Context, req *orchdv1.GetTaskRequest) (*orchdv1.GetTaskResponse, error) {
+	if s.tasks == nil {
+		return nil, grpcstatus.Error(codes.Unavailable, "task ledger unavailable")
+	}
+	t, found, err := s.tasks.Get(ctx, req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return &orchdv1.GetTaskResponse{Found: false}, nil
+	}
+	return &orchdv1.GetTaskResponse{Task: taskPB(t), Found: true}, nil
+}
+
+// count32 narrows a store count for the wire without wrapping. The counts are
+// our own and realistically small, but a silent wrap would turn "too many" into
+// a negative or zero — a worse answer than a saturated one.
+func count32(n int) int32 {
+	if n < 0 {
+		return 0
+	}
+	if n > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	return int32(n)
+}
+
+func taskPB(t queue.Task) *orchdv1.Task {
+	return &orchdv1.Task{
+		Id: t.ID, Agent: t.Agent, Body: t.Body,
+		Result: t.Result, Status: t.Status, UpdatedAt: t.UpdatedAt,
+	}
 }
 
 func (s *server) Dispatch(ctx context.Context, req *orchdv1.DispatchRequest) (*orchdv1.DispatchResponse, error) {
@@ -238,8 +354,9 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	defer func() { _ = b.Close() }()
-	workflows.SetStore(queue.NewSQLTaskStore(store))
-	disp := queue.NewDispatcher(b)
+	tasks := queue.NewSQLTaskStore(store)
+	workflows.SetStore(tasks)
+	disp := queue.NewDispatcher(b, tasks)
 
 	// Reason: the self-update unit restarts orchd by ending this process, and it
 	// must take the same shutdown path as SIGTERM. Serving therefore hangs off a
@@ -284,7 +401,9 @@ func Run(ctx context.Context) error {
 	}
 
 	gs := grpc.NewServer()
-	orchdv1.RegisterOrchdServer(gs, &server{start: time.Now(), rag: svc, disp: disp, sup: sup})
+	orchdv1.RegisterOrchdServer(gs, &server{
+		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks,
+	})
 	go func() {
 		<-runCtx.Done()
 		gs.GracefulStop()
