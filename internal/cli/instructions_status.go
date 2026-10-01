@@ -33,7 +33,7 @@ func repositoryInstructionsAt(dir string) []status.Line {
 		return nil
 	}
 	var lines []status.Line
-	for _, name := range []string{"AGENTS.md", "CLAUDE.md"} {
+	for _, name := range []string{"AGENTS.md", "CLAUDE.md", "internal/install/agent-instructions.md"} {
 		line := status.Line{Name: name, Value: "consistent", Level: status.LevelOK, Detail: "matches committed guidance in " + root}
 		baseline, err := exec.Command("git", "-C", root, "show", "HEAD:"+name).Output()
 		if err != nil || len(bytes.TrimSpace(baseline)) == 0 {

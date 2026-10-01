@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestSharedInstructionsMigration(t *testing.T) {
+func TestVersionControlledSharedInstructions(t *testing.T) {
 	home := t.TempDir()
 	legacy := filepath.Join(home, ".claude", "CLAUDE.md")
 	write := func(path, value string) {
@@ -42,14 +42,22 @@ func TestSharedInstructionsMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Personal rule", "Tail rule", "rag_search", "rag_ingest_text"} {
-		if !strings.Contains(string(b), want) {
-			t.Errorf("shared instructions missing %q", want)
+	if string(b) != memoryInstructions {
+		t.Fatal("installed policy differs from embedded repository source")
+	}
+	personal, err := os.ReadFile(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Personal rule", "Tail rule"} {
+		if !strings.Contains(string(personal), want) {
+			t.Fatalf("lost personal instruction %q", want)
 		}
 	}
-	if strings.Contains(string(b), "Old Claude-only policy") {
-		t.Fatal("stale policy survived migration")
+	if strings.Contains(string(personal), "Old Claude-only policy") {
+		t.Fatal("stale managed section retained")
 	}
+
 	for _, path := range []string{legacy, filepath.Join(home, ".codex", "AGENTS.override.md"), filepath.Join(home, ".gemini", "GEMINI.md")} {
 		b, err := os.ReadFile(path)
 		if err != nil {
@@ -59,15 +67,24 @@ func TestSharedInstructionsMigration(t *testing.T) {
 			t.Errorf("%s missing shared reference", path)
 		}
 	}
-	// Edits to the canonical personal rules survive reinstall and all harnesses
-	// remain clean without copying those rules into their entry files.
-	write(shared, "New shared preference\n"+string(b))
+	// The local policy must match the embedded source; reinstall repairs drift.
+	write(shared, "Modified policy\n")
+	for _, adapter := range AllAdapters() {
+		pending, err := BuildPlan(adapter, testBins(), home).Pending()
+		if err != nil || pending != 1 {
+			t.Fatalf("%s pending=%d err=%v", adapter.Name(), pending, err)
+		}
+	}
+	if err := BuildPlan(Codex{}, testBins(), home).Apply(&bytes.Buffer{}, backupDir); err != nil {
+		t.Fatal(err)
+	}
 	for _, adapter := range AllAdapters() {
 		pending, err := BuildPlan(adapter, testBins(), home).Pending()
 		if err != nil || pending != 0 {
-			t.Errorf("%s pending=%d err=%v", adapter.Name(), pending, err)
+			t.Fatalf("%s pending=%d err=%v", adapter.Name(), pending, err)
 		}
 	}
+
 	b, _ = os.ReadFile(filepath.Join(home, ".codex", "AGENTS.override.md"))
 	if !strings.Contains(string(b), "Codex-specific rule") {
 		t.Fatal("lost Codex-specific instructions")
@@ -82,7 +99,7 @@ func TestManagedInstructionsMalformed(t *testing.T) {
 	}
 }
 
-func TestExistingSharedInstructionsPreserved(t *testing.T) {
+func TestExistingSharedPolicyBackedUpAndReplaced(t *testing.T) {
 	home := t.TempDir()
 	path := filepath.Join(home, ".config", "orch", "AGENTS.md")
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -91,13 +108,35 @@ func TestExistingSharedInstructionsPreserved(t *testing.T) {
 	if err := os.WriteFile(path, []byte("Existing shared rule\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	backupDir := t.TempDir()
 	plan := BuildPlan(Codex{}, testBins(), home)
-	if err := plan.Apply(&bytes.Buffer{}, t.TempDir()); err != nil {
+	if err := plan.Apply(&bytes.Buffer{}, backupDir); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(path)
-	if !strings.Contains(string(b), "Existing shared rule") {
-		t.Fatal("lost existing instructions")
+	if string(b) != memoryInstructions {
+		t.Fatal("did not install embedded policy")
+	}
+	found := false
+	if err := filepath.WalkDir(backupDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !entry.IsDir() {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if string(content) == "Existing shared rule\n" {
+				found = true
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("previous shared content was not backed up")
 	}
 	if n, err := BuildPlan(Codex{}, testBins(), home).Pending(); err != nil || n != 0 {
 		t.Fatalf("reinstall pending=%d err=%v", n, err)

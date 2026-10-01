@@ -21,6 +21,7 @@ func TestRepositoryInstructions(t *testing.T) {
 	}{
 		{name: "clean", baseline: "@AGENTS.md\n", agents: "Shared rules\n", claude: "@AGENTS.md\n", want: "consistent"},
 		{name: "missing guidance", baseline: "@AGENTS.md\n", claude: "@AGENTS.md\n", missing: true, want: "drifted", fix: "git restore --source=HEAD -- AGENTS.md"},
+		{name: "edited shared policy", baseline: "@AGENTS.md\n", agents: "Shared rules\n", claude: "@AGENTS.md\n", want: "drifted", fix: "git restore --source=HEAD -- internal/install/agent-instructions.md"},
 		{name: "edited guidance", baseline: "@AGENTS.md\n", agents: "Changed rules\n", claude: "@AGENTS.md\n", want: "drifted", fix: "commit intentional changes"},
 		{name: "broken import", baseline: "@AGENTS.md\n", agents: "Shared rules\n", claude: "`@AGENTS.md`\n", want: "drifted", fix: "git restore --source=HEAD -- CLAUDE.md"},
 		{name: "committed broken import", baseline: "`@AGENTS.md`\n", agents: "Shared rules\n", claude: "`@AGENTS.md`\n", want: "drifted", fix: "standalone @AGENTS.md"},
@@ -44,6 +45,10 @@ func TestRepositoryInstructions(t *testing.T) {
 			write("go.mod", "module github.com/willesq/orchestrator\n")
 			write("AGENTS.md", "Shared rules\n")
 			write("CLAUDE.md", tt.baseline)
+			if err := os.MkdirAll(filepath.Join(dir, "internal", "install"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			write("internal/install/agent-instructions.md", "Shared memory policy\n")
 			git("add", ".")
 			// Fixture history only; never contacts the developer's signing agent.
 			git("-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture")
@@ -55,12 +60,15 @@ func TestRepositoryInstructions(t *testing.T) {
 				write("AGENTS.md", tt.agents)
 			}
 			write("CLAUDE.md", tt.claude)
+			if tt.name == "edited shared policy" {
+				write("internal/install/agent-instructions.md", "Modified policy\n")
+			}
 			sub := filepath.Join(dir, "sub")
 			if err := os.Mkdir(sub, 0755); err != nil {
 				t.Fatal(err)
 			}
 			lines := repositoryInstructionsAt(sub)
-			if len(lines) != 2 {
+			if len(lines) != 3 {
 				t.Fatalf("lines=%v", lines)
 			}
 			found := false
@@ -104,25 +112,57 @@ func TestGlobalInstructionDriftInHarnessStatus(t *testing.T) {
 			t.Fatalf("installed: %+v", info)
 		}
 	}
-	path := filepath.Join(home, ".codex", "AGENTS.md")
-	if err := os.WriteFile(path, []byte("Personal instructions\n"), 0644); err != nil {
+	for _, tt := range []struct {
+		adapter   install.Adapter
+		dir, file string
+	}{
+		{install.Codex{}, ".codex", "AGENTS.md"},
+		{install.ClaudeCode{}, ".claude", "CLAUDE.md"},
+		{install.Gemini{}, ".gemini", "GEMINI.md"},
+	} {
+		path := filepath.Join(home, tt.dir, tt.file)
+		if err := os.WriteFile(path, []byte("Personal instructions\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		infos := harnessInfo()
+		for _, info := range infos {
+			if info.Name == tt.adapter.Name() && (info.Err != "" || info.Pending != 1) {
+				t.Fatalf("entry drift not detected: %+v", info)
+			}
+		}
+		r := status.Collect(context.Background(), status.Deps{Harness: func() []status.HarnessInfo { return infos }})
+		var out bytes.Buffer
+		r.Render(&out)
+		if !strings.Contains(out.String(), "orch install --target "+tt.adapter.Name()+" --apply") {
+			t.Fatalf("missing repair: %s", out.String())
+		}
+		if err := install.BuildPlan(tt.adapter, bins, home).Apply(&bytes.Buffer{}, t.TempDir()); err != nil {
+			t.Fatal(err)
+		}
+		for _, info := range harnessInfo() {
+			if info.Pending != 0 || info.Err != "" {
+				t.Fatalf("repaired: %+v", info)
+			}
+		}
+	}
+	shared := filepath.Join(home, ".config", "orch", "AGENTS.md")
+	if err := os.WriteFile(shared, []byte("Tampered local policy\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	infos := harnessInfo()
-	r := status.Collect(context.Background(), status.Deps{Harness: func() []status.HarnessInfo { return infos }})
-	var out bytes.Buffer
-	r.Render(&out)
-	if !strings.Contains(out.String(), "orch install --target codex --apply") {
-		t.Fatalf("missing repair: %s", out.String())
+	for _, info := range harnessInfo() {
+		if info.Pending != 1 || info.Err != "" {
+			t.Fatalf("local policy drift not detected: %+v", info)
+		}
 	}
 	if err := install.BuildPlan(install.Codex{}, bins, home).Apply(&bytes.Buffer{}, t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
 	for _, info := range harnessInfo() {
 		if info.Pending != 0 || info.Err != "" {
-			t.Fatalf("repaired: %+v", info)
+			t.Fatalf("local policy repair failed: %+v", info)
 		}
 	}
+
 	if err := os.Remove(filepath.Join(home, ".config", "orch", "AGENTS.md")); err != nil {
 		t.Fatal(err)
 	}

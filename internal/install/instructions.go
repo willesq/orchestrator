@@ -1,7 +1,7 @@
 package install
 
 import (
-	"bytes"
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,22 +11,10 @@ import (
 const instructionBegin = "<!-- BEGIN orchestrator-managed -->"
 const instructionEnd = "<!-- END orchestrator-managed -->"
 
-const memoryInstructions = `## Orchestrator memory
-
-Orchestrator stores durable memory locally across coding agents and sessions.
-Use the registered RAG MCP server's rag_search tool to recall relevant prior
-decisions and memories before substantive work. Use rag_ingest_text to save
-durable user preferences, lessons, and decisions with a stable source_uri.
-When updating a memory, reuse its source_uri. Cite source URIs when using memory.
-Keep durable memories in RAG rather than harness-specific auto-memory files.
-Do not store secrets or facts readily derived from the repository.
-
-MCP server names vary by harness: rag in Claude/Gemini, orch_rag in Codex.
-If MCP is unavailable, use orch search and orch ingest text (text on stdin).
-Use orch status to diagnose availability. Automatic recall and session capture
-depend on the harness's supported hooks; do not assume they ran. Explicit search
-and ingest work independently of lifecycle hooks.
-`
+// memoryInstructions is the version-controlled policy shipped with the CLI.
+//
+//go:embed agent-instructions.md
+var memoryInstructions string
 
 // managedInstructions replaces only our block, leaving personal text untouched.
 // Reject broken markers rather than risk deleting user instructions.
@@ -47,41 +35,17 @@ func managedInstructions(old []byte, body string) ([]byte, error) {
 	return []byte(s), nil
 }
 
-// instructionEdits seeds one shared file from the legacy global CLAUDE.md,
-// then installs native imports (Claude/Gemini) or a startup read directive
-// (Codex, which does not implement @ imports). Snapshot the legacy source so
-// dry-run and apply calculate the same migration before any file is changed.
+// instructionEdits installs the embedded repository policy, then wires native
+// imports (Claude/Gemini) or an explicit startup read directive (Codex).
+// Personal instructions stay in the harness entry files; the shared copy is
+// Orchestrator-owned and repaired to the policy shipped with this CLI build.
 func instructionEdits(home, target string) []Edit {
 	shared := filepath.Join(home, ".config", "orch", "AGENTS.md")
-	legacyPath := filepath.Join(home, ".claude", "CLAUDE.md")
-	legacy, legacyErr := os.ReadFile(legacyPath)
-	if os.IsNotExist(legacyErr) {
-		legacyErr = nil
-	}
-	sharedOld, sharedErr := os.ReadFile(shared)
-	if os.IsNotExist(sharedErr) {
-		sharedErr = nil
-	}
-	seed := len(sharedOld) == 0
-	// A Codex-only install may already have seeded the shared file while leaving
-	// Claude's entry untouched. Migrate it later only if all its rules are present.
-	migratedLegacy, migrationErr := managedInstructions(legacy, memoryInstructions)
-	legacyPreserved := migrationErr == nil && bytes.Equal(sharedOld, migratedLegacy)
 	canonical := Edit{Path: shared, Compute: func(old []byte) ([]byte, string, error) {
-		if sharedErr != nil {
-			return nil, "", sharedErr
-		}
-		if len(old) == 0 {
-			if legacyErr != nil {
-				return nil, "", legacyErr
-			}
-			old = legacy
-		}
-		next, err := managedInstructions(old, memoryInstructions)
-		return next, "instructions: shared agent-neutral memory policy (seeds existing global CLAUDE.md on first install)", err
+		return []byte(memoryInstructions), "instructions: install version-controlled agent-instructions.md shipped with this CLI", nil
 	}}
 	dir, name := ".claude", "CLAUDE.md"
-	body := "@" + shared + "\n"
+	body := "@" + strings.ReplaceAll(shared, " ", "\\ ") + "\n"
 	if target == "codex" {
 		dir, name = ".codex", "AGENTS.md"
 		// Codex prefers the override if present. Wire the file it actually loads.
@@ -95,10 +59,6 @@ func instructionEdits(home, target string) []Edit {
 		dir, name = ".gemini", "GEMINI.md"
 	}
 	bridge := Edit{Path: filepath.Join(home, dir, name), Compute: func(old []byte) ([]byte, string, error) {
-		if target == "claude-code" && (seed || legacyPreserved) && bytes.Equal(old, legacy) {
-			// The preceding edit has preserved these instructions in the shared file.
-			old = nil
-		}
 		next, err := managedInstructions(old, body)
 		return next, "instructions: load shared policy from " + shared, err
 	}}
