@@ -210,6 +210,7 @@ InstallSkills, WriteMemoryFile, TranscriptReader }`. Findings
 | Surface | Claude Code | Codex | Gemini |
 |---|---|---|---|
 | MCP servers | `.mcp.json` / `~/.claude.json` | `~/.codex/config.toml` `[mcp_servers]` | `settings.json` `mcpServers` |
+| Tool permissions | `settings.json` `permissions.{allow,deny,ask}` | not wired | not wired |
 | Prompt-injection hook | `UserPromptSubmit` | `UserPromptSubmit` | `BeforeAgent` |
 | Subagent defs | `.claude/agents/*.md` | ❌ (→ skills) | `.gemini/agents/*.md` |
 | Skills/commands | `SKILL.md` | `SKILL.md` | `*.toml` (transpile) |
