@@ -124,7 +124,7 @@ func newInstallCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&apply, "apply", false, "write the changes (default: dry-run, writes nothing)")
-	cmd.Flags().StringVar(&target, "target", "claude-code", "harness: claude-code")
+	cmd.Flags().StringVar(&target, "target", "claude-code", "harness: claude-code, codex, gemini, or all")
 	cmd.Flags().StringVar(&home, "home", "", "override HOME (for testing against a temp dir)")
 	cmd.Flags().StringVar(&binDir, "bin-dir", "", "dir of the built binaries (default: dir of this executable)")
 	return cmd

@@ -28,6 +28,32 @@ orch check                        # verify preconditions are green
 `orch install` is **dry-run by default** — run `orch install` (no `--apply`) to see exactly
 what it would change. It is surgical (preserves other tools' hooks) and idempotent.
 
+To wire every supported coding agent, use `orch install --target all`, then
+`orch install --target all --apply`. The default target remains `claude-code`;
+`--target codex` and `--target gemini` install those harnesses individually.
+There is no separate setup command: `install` handles harness configuration.
+
+All targets share `~/.config/orch/AGENTS.md`. The first install seeds it from
+the existing global `~/.claude/CLAUDE.md`, preserves personal instructions, and
+replaces the old Orchestrator-managed section with an agent-neutral memory policy.
+Subsequent installs preserve shared personal rules and update only that section.
+Edit the shared file for rules that should apply across agents.
+
+Claude's global `~/.claude/CLAUDE.md` and Gemini's `~/.gemini/GEMINI.md` import
+the shared file. Codex's global `~/.codex/AGENTS.md` explicitly directs the agent
+to read it at session start; Codex does not expand Claude-style `@` imports.
+An existing nonempty `AGENTS.override.md` receives the directive instead because
+Codex loads it preferentially. Existing harness-specific rules are preserved;
+Claude's legacy rules move into the shared file when safe to do so. Backups are
+created before modifying existing files. `orch status` includes instruction drift.
+
+These paths assume the standard harness homes; `--home` relocates the whole
+install for testing. Custom `CODEX_HOME` locations are not currently resolved.
+The legacy rules are carried over verbatim: review any Claude-specific tool names
+or relative imports when adapting personal instructions for other agents.
+Codex hooks must be reviewed and trusted in Codex before they execute. Memory
+search and ingest through MCP work independently of automatic hook execution.
+
 ## Status and restart
 
 `orch status` is the whole-system sitrep: the `orchd` service, every supervised subsystem

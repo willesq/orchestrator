@@ -59,7 +59,10 @@ type evaluated struct {
 
 // evaluate computes the edit against the file on disk, writing nothing.
 func (e Edit) evaluate() (evaluated, error) {
-	old, _ := os.ReadFile(e.Path)
+	old, readErr := os.ReadFile(e.Path)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return evaluated{}, fmt.Errorf("%s: %w", e.Path, readErr)
+	}
 	next, summary, err := e.Compute(old)
 	if err != nil {
 		return evaluated{}, fmt.Errorf("%s: %w", e.Path, err)
