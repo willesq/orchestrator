@@ -12,8 +12,7 @@ import (
 // (TOML) and hooks in ~/.codex/hooks.json (JSON). Codex's hook engine uses the
 // same event names as Claude ("Claude-style engine"), so the event map is reused.
 //
-// NOTE: the codex hooks.json shape was not field-verified; review the dry-run
-// before --apply into Codex.
+// Non-managed hooks require review and trust in Codex before they execute.
 type Codex struct{}
 
 // Name implements Adapter.
@@ -21,12 +20,12 @@ func (Codex) Name() string { return "codex" }
 
 // Edits implements Adapter.
 func (c Codex) Edits(bins Bins, home string) []Edit {
-	return []Edit{
+	return append(instructionEdits(home, c.Name()), []Edit{
 		codexTOMLEdit(bins, home),
 		codexHooksEdit(bins, home),
 		aliasEdit(bins.Orch, home),
 		plistEdit(bins.Orchd, home),
-	}
+	}...)
 }
 
 func codexTOMLEdit(bins Bins, home string) Edit {

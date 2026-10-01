@@ -28,6 +28,52 @@ orch check                        # verify preconditions are green
 `orch install` is **dry-run by default** — run `orch install` (no `--apply`) to see exactly
 what it would change. It is surgical (preserves other tools' hooks) and idempotent.
 
+To wire every supported coding agent, use `orch install --target all`, then
+`orch install --target all --apply`. The default target remains `claude-code`;
+`--target codex` and `--target gemini` install those harnesses individually.
+There is no separate setup command: `install` handles harness configuration.
+
+The shared policy is version-controlled in
+[`internal/install/agent-instructions.md`](internal/install/agent-instructions.md).
+It contains agent-neutral coding expectations for exploration, structure,
+testing, security, credentials, Git/GitHub workflows, reviews, documentation,
+and durable memory. Repository `AGENTS.md` loads that policy and adds this
+project's conventions; repository `CLAUDE.md` imports `AGENTS.md`.
+It is embedded in the CLI at build time. `orch install` writes that policy to
+`~/.config/orch/AGENTS.md`; it never seeds the policy from a user's global files.
+Change the repository source, rebuild or upgrade the CLI, and rerun install to
+publish policy updates locally. The installed copy is Orchestrator-owned;
+`orch status` detects missing or modified content against the policy shipped
+with the running CLI, and recommends reinstalling to repair it.
+
+Claude's global `~/.claude/CLAUDE.md` and Gemini's `~/.gemini/GEMINI.md` import
+the installed shared file. Codex's global `~/.codex/AGENTS.md` explicitly directs
+the agent to read it at session start; Codex does not expand Claude-style `@`
+imports. An existing nonempty `AGENTS.override.md` receives the directive instead
+because Codex loads it preferentially. Personal instructions remain in each
+harness's entry file; only its Orchestrator-managed reference is updated.
+Existing files, including the installed shared policy, are backed up before
+modification. If upgrading an earlier installation that copied personal rules
+into the shared file, recover those rules from its backup into your personal
+harness entry files before relying on the replacement policy.
+
+These paths assume the standard harness homes; `--home` relocates the whole
+install for testing. Custom `CODEX_HOME` locations are not currently resolved.
+Codex hooks must be reviewed and trusted in Codex before they execute. Memory
+search and ingest through MCP work independently of automatic hook execution.
+
+When run inside the Orchestrator checkout (including subdirectories and linked
+worktrees), `orch status` also reports **repository instructions** in text and
+JSON. It checks `AGENTS.md`, `CLAUDE.md`, and the version-controlled shared policy
+against the current committed revision and verifies that the committed Claude
+entry is the standalone `@AGENTS.md` import. Missing or edited files are reported as drift, with advice to review
+local edits before restoring the affected file from `HEAD`, or to commit an
+intentional instruction change. A committed broken import needs correction and
+a new commit. Status is read-only; `orch install` repairs global wiring, while
+Git owns repository guidance. Outside this repository the project check is not
+applicable. These checks compare files on disk; they do not verify that a running
+agent has loaded the latest instructions.
+
 ## Status and restart
 
 `orch status` is the whole-system sitrep: the `orchd` service, every supervised subsystem
