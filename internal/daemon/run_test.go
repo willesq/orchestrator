@@ -275,7 +275,14 @@ func TestRunSocketIsOwnerOnly(t *testing.T) {
 			t.Setenv("ORCH_CONFIG_DIR", filepath.Join(dir, "cfg"))
 			t.Setenv("ORCH_RAG_QDRANT_MODE", "external")
 			t.Setenv("ORCH_PR_BABYSITTER_ENABLED", "false")
-			t.Setenv("ORCH_SOCKET", filepath.Join(os.TempDir(), "orchd-permtest.sock"))
+			// Keep the path short enough for macOS's Unix socket limit and unique
+			// across simultaneous test processes.
+			socketDir, err := os.MkdirTemp(os.TempDir(), "orch-perm-")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+			t.Setenv("ORCH_SOCKET", filepath.Join(socketDir, "d.sock"))
 			seedModel(t, filepath.Join(dir, "data"))
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -289,6 +296,19 @@ func TestRunSocketIsOwnerOnly(t *testing.T) {
 			sock := paths.SocketPath()
 			if !waitForFile(sock, 5*time.Second) {
 				t.Fatalf("socket %s never appeared", sock)
+			}
+			// File creation precedes chmod during startup. Wait for an actual RPC
+			// response, which can only happen after permissions have been set;
+			// waiting for mode 0600 itself would conceal a permission regression.
+			conn, err := grpc.NewClient("unix://"+sock, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				t.Fatalf("dial socket: %v", err)
+			}
+			defer conn.Close()
+			readyCtx, readyCancel := context.WithTimeout(ctx, 5*time.Second)
+			defer readyCancel()
+			if _, err := orchdv1.NewOrchdClient(conn).Ping(readyCtx, &orchdv1.PingRequest{}, grpc.WaitForReady(true)); err != nil {
+				t.Fatalf("wait for daemon readiness: %v", err)
 			}
 			fi, err := os.Stat(sock)
 			if err != nil {
