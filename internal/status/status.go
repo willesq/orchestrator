@@ -95,6 +95,8 @@ type Deps struct {
 	Store func() (*sql.DB, error)
 	// Harness reports per-harness install drift.
 	Harness func() []HarnessInfo
+	// RepositoryInstructions checks the current repository's shared guidance.
+	RepositoryInstructions func() []Line
 	// DirSize sums a directory's bytes.
 	DirSize func(path string) int64
 }
@@ -112,6 +114,14 @@ func Collect(ctx context.Context, d Deps) Report {
 		dataSection(ctx, d),
 		harnessSection(d),
 		preconditionSection(d),
+	}
+	if d.RepositoryInstructions != nil {
+		lines := d.RepositoryInstructions()
+		sec := Section{Title: "repository instructions", Lines: lines}
+		if len(lines) == 0 {
+			sec.Note = "not applicable outside the Orchestrator repository"
+		}
+		r.Sections = append(r.Sections, sec)
 	}
 	for _, s := range r.Sections {
 		for _, l := range s.Lines {

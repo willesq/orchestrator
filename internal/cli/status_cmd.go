@@ -30,7 +30,7 @@ func newStatusCmd(cf clientFactory) *cobra.Command {
 		Long: `Report the live state of every component: the orchd service, each
 supervised subsystem (qdrant engine, workflow worker, sources and docs schedulers,
 PR babysitter), the vector store, the on-disk stores and their freshness, harness
-wiring, and the daemon-independent preconditions.
+	wiring, repository instructions, and the daemon-independent preconditions.
 
 Exits zero even when components are down; use 'orch check' for a pass/fail gate.`,
 		Args: cobra.NoArgs,
@@ -74,11 +74,12 @@ func statusDeps(cf clientFactory, s config.Settings) status.Deps {
 			defer cancel()
 			return client.Status(ctx, &orchdv1.StatusRequest{})
 		},
-		QdrantReady: func(ctx context.Context) bool { return qdrantReady(ctx, s.QdrantURL()) },
-		Service:     serviceInfo,
-		Checks:      check.Preconditions(),
-		Store:       db.OpenReader,
-		Harness:     harnessInfo,
+		QdrantReady:            func(ctx context.Context) bool { return qdrantReady(ctx, s.QdrantURL()) },
+		Service:                serviceInfo,
+		Checks:                 check.Preconditions(),
+		Store:                  db.OpenReader,
+		Harness:                harnessInfo,
+		RepositoryInstructions: repositoryInstructions,
 	}
 }
 
@@ -122,7 +123,7 @@ func serviceInfo() status.ServiceInfo {
 }
 
 // harnessInfo reports, per coding-agent harness, how many install edits are still
-// pending — i.e. whether its hooks and MCP servers point at the current binaries.
+// pending — including shared instructions, native entry files, hooks and MCP.
 func harnessInfo() []status.HarnessInfo {
 	home, err := os.UserHomeDir()
 	if err != nil {

@@ -54,6 +54,18 @@ or relative imports when adapting personal instructions for other agents.
 Codex hooks must be reviewed and trusted in Codex before they execute. Memory
 search and ingest through MCP work independently of automatic hook execution.
 
+When run inside the Orchestrator checkout (including subdirectories and linked
+worktrees), `orch status` also reports **repository instructions** in text and
+JSON. It checks `AGENTS.md` and `CLAUDE.md` against the current committed revision
+and verifies that the committed Claude entry is the standalone `@AGENTS.md`
+import. Missing or edited files are reported as drift, with advice to review
+local edits before restoring the affected file from `HEAD`, or to commit an
+intentional instruction change. A committed broken import needs correction and
+a new commit. Status is read-only; `orch install` repairs global wiring, while
+Git owns repository guidance. Outside this repository the project check is not
+applicable. These checks compare files on disk; they do not verify that a running
+agent has loaded the latest instructions.
+
 ## Status and restart
 
 `orch status` is the whole-system sitrep: the `orchd` service, every supervised subsystem
