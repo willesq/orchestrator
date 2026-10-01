@@ -35,6 +35,10 @@ There is no separate setup command: `install` handles harness configuration.
 
 The shared policy is version-controlled in
 [`internal/install/agent-instructions.md`](internal/install/agent-instructions.md).
+It contains agent-neutral coding expectations for exploration, structure,
+testing, security, credentials, Git/GitHub workflows, reviews, documentation,
+and durable memory. Repository `AGENTS.md` loads that policy and adds this
+project's conventions; repository `CLAUDE.md` imports `AGENTS.md`.
 It is embedded in the CLI at build time. `orch install` writes that policy to
 `~/.config/orch/AGENTS.md`; it never seeds the policy from a user's global files.
 Change the repository source, rebuild or upgrade the CLI, and rerun install to

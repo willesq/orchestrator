@@ -1,5 +1,12 @@
 # Repository guidance
 
+Before editing, read and follow the complete shared coding expectations in
+`internal/install/agent-instructions.md`. That version-controlled policy covers
+project exploration, modularity, testing and coverage, scope discipline, security
+and credentials, Git/GitHub delivery, reviews, documentation, and durable memory.
+These repository conventions supplement that policy. Keep shared expectations
+in the policy source so every installed coding agent receives the same rules.
+
 ## Purpose
 
 Orchestrator is a local-first memory and workflow layer for coding agents. It
