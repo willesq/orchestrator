@@ -28,7 +28,7 @@ func newDocsCmd(cf clientFactory) *cobra.Command {
 	}
 	cmd.AddCommand(
 		newDocsAddCmd(), newDocsStatusCmd(), newDocsSyncCmd(cf),
-		newDocsRefreshCmd(cf), newDocsListCmd(), newDocsRemoveCmd(),
+		newDocsRefreshCmd(cf), newDocsListCmd(), newDocsOwnersCmd(), newDocsRemoveCmd(),
 	)
 	return cmd
 }
@@ -77,6 +77,42 @@ func newDocsAddCmd() *cobra.Command {
 }
 
 func newDocsListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List ingested documents and how long since each was last ingested",
+		Args:  cobra.NoArgs,
+		RunE: func(c *cobra.Command, _ []string) error {
+			reg, closeFn, err := openDocsRegistry()
+			if err != nil {
+				return err
+			}
+			defer closeFn()
+			docList, err := reg.ListDocs(c.Context())
+			if err != nil {
+				return err
+			}
+			if len(docList) == 0 {
+				fmt.Fprintln(c.OutOrStdout(), "no docs ingested")
+				return nil
+			}
+			for _, d := range docList {
+				fmt.Fprintf(c.OutOrStdout(), "%-10s %s\n", humanAgo(d.UpdatedAt), d.URI)
+			}
+			return nil
+		},
+	}
+}
+
+func newDocsOwnersCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "owners",
+		Short: "Inspect registered docs owners",
+	}
+	cmd.AddCommand(newDocsOwnersListCmd())
+	return cmd
+}
+
+func newDocsOwnersListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List registered docs owners",
