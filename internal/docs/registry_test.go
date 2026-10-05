@@ -112,6 +112,13 @@ func TestRepoAndHashState(t *testing.T) {
 				t.Fatal(err)
 			}
 			_ = reg.SetHash(ctx, uri, "h2", 6) // update
+			docList, err := reg.ListDocs(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(docList) != 1 || docList[0] != (Doc{URI: uri, UpdatedAt: 6}) {
+				t.Fatalf("ListDocs = %+v", docList)
+			}
 			if h, _ := reg.Hash(ctx, uri); h != "h2" {
 				t.Fatalf("want h2, got %q", h)
 			}

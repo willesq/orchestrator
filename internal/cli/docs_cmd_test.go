@@ -69,8 +69,11 @@ func TestDocsCLIFlow(t *testing.T) {
 			if out := mustRun("docs", "add", "willesq", "--refresh", "6h", "--tag", "x"); !strings.Contains(out, "added docs owner willesq") {
 				t.Errorf("add: %q", out)
 			}
-			if out := mustRun("docs", "list"); !strings.Contains(out, "willesq") {
-				t.Errorf("list: %q", out)
+			if out := mustRun("docs", "owners", "list"); !strings.Contains(out, "willesq") {
+				t.Errorf("owners list: %q", out)
+			}
+			if out := mustRun("docs", "list"); !strings.Contains(out, "no docs ingested") {
+				t.Errorf("list before sync: %q", out)
 			}
 			if out := mustRun("docs", "status"); !strings.Contains(out, "willesq") || !strings.Contains(out, "last=never") {
 				t.Errorf("status: %q", out)
@@ -84,8 +87,8 @@ func TestDocsCLIFlow(t *testing.T) {
 			if out := mustRun("docs", "remove", "willesq"); !strings.Contains(out, "removed docs owner willesq") {
 				t.Errorf("remove: %q", out)
 			}
-			if out := mustRun("docs", "list"); !strings.Contains(out, "no docs owners") {
-				t.Errorf("list after remove: %q", out)
+			if out := mustRun("docs", "owners", "list"); !strings.Contains(out, "no docs owners") {
+				t.Errorf("owners list after remove: %q", out)
 			}
 			if out := mustRun("docs", "status"); !strings.Contains(out, "no docs owners") {
 				t.Errorf("status after remove: %q", out)
@@ -166,6 +169,34 @@ func TestDocsSyncForeground(t *testing.T) {
 				t.Errorf("output %q should not contain %q", out, tt.wantSkip)
 			}
 		})
+	}
+}
+
+func TestDocsListShowsEachDocWithStaleness(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	stubDocsTooling(t,
+		fakeGH{repos: []docs.Repo{{Name: "infra", HeadSHA: "abc"}}},
+		fakeGit{files: map[string]string{"README.md": "# hello", "docs/guide.md": "# guide"}})
+	f := factory(&fakeClient{ingest: &orchdv1.IngestResponse{Chunks: 1}}, nil)
+	for _, args := range [][]string{{"docs", "add", "willesq"}, {"docs", "sync", "willesq"}} {
+		if out, err := run(f, "", args...); err != nil {
+			t.Fatalf("%v: %v (%q)", args, err, out)
+		}
+	}
+	out, err := run(f, "", "docs", "list")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	want := []string{"repo://willesq/infra/README.md", "repo://willesq/infra/docs/guide.md"}
+	if len(lines) != len(want) {
+		t.Fatalf("want %d lines, got %q", len(want), out)
+	}
+	for i, uri := range want {
+		if !strings.HasSuffix(lines[i], uri) || !strings.HasPrefix(lines[i], "just now") {
+			t.Errorf("line %d = %q, want staleness + %s", i, lines[i], uri)
+		}
 	}
 }
 

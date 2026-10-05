@@ -201,3 +201,28 @@ func scanOwners(rows *sql.Rows) ([]Owner, error) {
 	}
 	return out, rows.Err()
 }
+
+// Doc is one ingested markdown document, keyed by its repo:// URI.
+type Doc struct {
+	URI       string
+	UpdatedAt int64 // unix seconds of the last content-changing ingest
+}
+
+// ListDocs returns every ingested document ordered by URI.
+func (r *Registry) ListDocs(ctx context.Context) ([]Doc, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT uri, updated_at FROM doc_hashes WHERE uri LIKE 'repo://%' ORDER BY uri`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Doc
+	for rows.Next() {
+		var d Doc
+		if err := rows.Scan(&d.URI, &d.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
