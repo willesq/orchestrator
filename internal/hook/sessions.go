@@ -54,11 +54,14 @@ func sessionEnd(p Payload, cf clientFactory) error {
 	defer cleanup()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
+	// Tagged with the checkout so a later prompt in the same project ranks this
+	// session's work alongside the project's documentation.
+	tags := detectProject(p.Cwd).sessionTags()
 	_, _ = client.Ingest(ctx, &orchdv1.IngestRequest{
-		Text: rec.Summary, SourceUri: "session://" + p.SessionID + "/record", SourceType: "session_record",
+		Text: rec.Summary, SourceUri: "session://" + p.SessionID + "/record", SourceType: "session_record", Tags: tags,
 	})
 	_, _ = client.Ingest(ctx, &orchdv1.IngestRequest{
-		Text: session.TranscriptText(msgs), SourceUri: "session://" + p.SessionID + "/transcript", SourceType: "session_transcript",
+		Text: session.TranscriptText(msgs), SourceUri: "session://" + p.SessionID + "/transcript", SourceType: "session_transcript", Tags: tags,
 	})
 	return nil
 }

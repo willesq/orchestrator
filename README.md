@@ -99,6 +99,27 @@ Git owns repository guidance. Outside this repository the project check is not
 applicable. These checks compare files on disk; they do not verify that a running
 agent has loaded the latest instructions.
 
+## Session memory
+
+`orch-hook` gives every wired session durable memory without the agent asking for it.
+
+- **Prompt enrichment.** For question-shaped prompts, `user-prompt-submit` searches the
+  store and prepends the strongest hits (`hooks.auto_rag.*` sets the count, score floor,
+  and size). Hits from the project you are working in come first: the hook resolves the
+  session's working directory to its repository (linked worktrees count as their main
+  checkout) and searches that project's registered docs (`repo:<name>`, named from the
+  `origin` remote, else the checkout folder) and its past sessions (`checkout:<path>`)
+  before topping up the remaining slots from the whole store.
+- **Session capture.** `session-end` writes a record under the data directory and ingests
+  the summary and transcript as `session_record` / `session_transcript`, tagged with the
+  main checkout's absolute path. Sessions never receive the remote-derived `repo:` tag:
+  a repository's own config chooses its remote, so it could otherwise claim another
+  project's name and have its session content promoted there. Transcripts, records,
+  checkpoints, and subagent completion summaries are passed through secret redaction
+  first, as repo docs, web sources, and native config already were. Redaction is
+  pattern-based (private keys, cloud and vendor API keys, GitHub tokens, JWTs); it does
+  not catch every secret shape, such as bare `PASSWORD=` lines.
+
 ## Status and restart
 
 `orch status` is the whole-system sitrep: the `orchd` service, every supervised subsystem

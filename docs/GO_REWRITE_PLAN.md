@@ -201,6 +201,12 @@ closed set. Future: emails (personal vs work), slack messages, project-scoped it
 `orch project add` registers a cwd → `{extra_hooks, enrichment_filter}`. The
 auto-RAG-enrichment path (on every prompt, on all 3 harnesses) always applies the active
 project's filter key → clean, scoped results.
+**[partial]** Without a registry, the hook derives the project from the session cwd
+and searches its docs (`repo:<name>`, from the origin remote or checkout name) and its
+sessions (`checkout:<main-checkout path>`) before the whole store. Sessions carry only
+the checkout tag, which repository content cannot spoof. Same-named repos under
+different owners share a `repo:` tag. `orch project add` and custom filters remain
+unbuilt.
 
 ### 7.6 Harness adapters
 `HarnessAdapter{ ConfigPaths, RegisterMCP, RegisterHooks(eventMap), InstallAgents,
