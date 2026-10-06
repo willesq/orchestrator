@@ -21,14 +21,16 @@ type fakeClient struct {
 	search       *orchdv1.SearchResponse
 	err          error
 	ingestCalls  int
+	ingested     []*orchdv1.IngestRequest
 }
 
 func (f *fakeClient) Ping(context.Context, *orchdv1.PingRequest, ...grpc.CallOption) (*orchdv1.PingResponse, error) {
 	return nil, f.err
 }
 
-func (f *fakeClient) Ingest(context.Context, *orchdv1.IngestRequest, ...grpc.CallOption) (*orchdv1.IngestResponse, error) {
+func (f *fakeClient) Ingest(_ context.Context, req *orchdv1.IngestRequest, _ ...grpc.CallOption) (*orchdv1.IngestResponse, error) {
 	f.ingestCalls++
+	f.ingested = append(f.ingested, req)
 	return &orchdv1.IngestResponse{}, f.err
 }
 
