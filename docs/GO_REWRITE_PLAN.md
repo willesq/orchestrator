@@ -180,6 +180,11 @@ MiniLM reference vector and assert Go output matches (naive ONNX pooling can dri
 Agent tasks are **durable workflows** over `workflows.db`: a task survives an `orchd`
 restart *mid-run*, gets step-level retries, and the queue is the workflow engine's job
 store. Cadence jobs are workflows with catch-up timers — **sleep-safety is inherited**.
+**[done]** `RunActivity` runs each task as a headless `claude -p --agent` session
+(`internal/agentrun`), opt-in via `queue.worker.enabled`. The run activity is never
+retried (agent work has side effects); a worker shutdown abandons it instead, and the
+re-delivered activity resumes the task's deterministic Claude Code session. Codex is not
+yet a worker harness.
 
 ### 7.3 Source registry + freshness (unifies several requirements)
 Repos, web URLs, comms threads = rows in a `sources` registry, each

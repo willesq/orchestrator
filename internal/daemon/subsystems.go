@@ -9,14 +9,17 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/cschleiden/go-workflows/backend"
 	"github.com/cschleiden/go-workflows/worker"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/docs"
+	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/prs"
 	"github.com/willesq/orchestrator/internal/qdrant"
@@ -64,7 +67,10 @@ func subsystems(d deps) []supervisor.Unit {
 	if u, ok := qdrantUnit(d.settings, d.apiKey); ok {
 		out = append(out, u)
 	}
-	out = append(out, workerUnit(d.backend), sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, d.store, d.rag))
+	if d.settings.Queue.Worker.Enabled {
+		out = append(out, workerUnit(d.backend, d.settings.Queue.Worker, secretEnv(d.settings)))
+	}
+	out = append(out, sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, d.store, d.rag))
 	if d.settings.PRBabysitter.Enabled {
 		out = append(out, prsUnit(d.settings))
 	}
@@ -142,25 +148,31 @@ func qdrantUnit(s config.Settings, apiKey string) (supervisor.Unit, bool) {
 	}, true
 }
 
-// workerUnit drains durable agent-task workflows. A restart builds a fresh
-// worker over the same backend, so an in-flight task resumes from its last
-// persisted step rather than being lost.
-func workerUnit(b backend.Backend) supervisor.Unit {
+// workerUnit drains durable agent-task workflows, running each as a headless
+// agent session. A restart builds a fresh worker over the same backend: a session
+// cut short by the restart is abandoned, handed out again once its lease lapses,
+// and resumed rather than started over (see agentrun).
+func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []string) supervisor.Unit {
 	// Held across Run/Stop so the unit can join the worker it started: without
 	// that, a restart would leave the previous worker draining the same backend.
 	var current *worker.Worker
 	return supervisor.Unit{
 		Name:   UnitWorker,
-		Detail: "durable agent-task workflows",
+		Detail: fmt.Sprintf("durable agent-task workflows (%d at a time)", maxConcurrent(cfg)),
 		Run: func(ctx context.Context, beat func()) error {
-			w := worker.New(b, nil)
+			// The unit context is the runner's stop signal: canceling it on stop or
+			// restart ends in-flight sessions instead of waiting them out.
+			workflows.SetRunner(newTaskRunner(cfg, ctx, dropEnv))
+			opts := worker.DefaultOptions
+			opts.MaxParallelActivityTasks = maxConcurrent(cfg)
+			w := worker.New(b, &opts)
 			if err := w.RegisterWorkflow(workflows.AgentTask); err != nil {
 				return err
 			}
 			if err := w.RegisterActivity(workflows.StartActivity); err != nil {
 				return err
 			}
-			if err := w.RegisterActivity(workflows.ProcessActivity); err != nil {
+			if err := w.RegisterActivity(workflows.RunActivity); err != nil {
 				return err
 			}
 			if err := w.Start(ctx); err != nil {
@@ -230,4 +242,64 @@ func interval(spec string, fallback time.Duration) time.Duration {
 		return d
 	}
 	return fallback
+}
+
+func maxConcurrent(cfg config.QueueWorkerSettings) int {
+	if cfg.MaxConcurrent > 0 {
+		return cfg.MaxConcurrent
+	}
+	return 1
+}
+
+// taskRunner adapts agentrun to the workflows package's Runner.
+type taskRunner struct{ r *agentrun.Runner }
+
+// secretEnv names the variables carrying credentials orchd holds, which queued
+// sessions must not inherit.
+func secretEnv(s config.Settings) []string {
+	env := []string{"QDRANT_API_KEY"}
+	if k := s.RAG.Qdrant.APIKeyEnv; k != "" && k != env[0] {
+		env = append(env, k)
+	}
+	return env
+}
+
+func newTaskRunner(cfg config.QueueWorkerSettings, stop context.Context, dropEnv []string) taskRunner {
+	home, _ := os.UserHomeDir()
+	mode := cfg.PermissionMode
+	if mode == "" {
+		mode = "auto"
+	}
+	return taskRunner{r: &agentrun.Runner{
+		Bin:            agentrun.FindClaude(cfg.ClaudeBin, home),
+		DropEnv:        dropEnv,
+		PermissionMode: mode,
+		Timeout:        interval(cfg.Timeout, time.Hour),
+		Home:           home,
+		ScratchDir:     filepath.Join(paths.DataDir(), "tasks"),
+		Stop:           stop,
+	}}
+}
+
+func (t taskRunner) Run(ctx context.Context, in workflows.AgentTaskInput) (workflows.Outcome, error) {
+	o, err := t.r.Run(ctx, agentrun.Task{ID: in.ID, Agent: in.Agent, Body: in.Body, Cwd: in.Cwd})
+	return workflows.Outcome{Status: o.Status, Result: o.Result}, err
+}
+
+// taskEventStream is the event log finished queue tasks are reported to; the
+// SessionStart digest reads it so results reach the next session.
+const taskEventStream = "queue"
+
+// notifyTaskDone reports a finished task to the queue event stream. The event
+// names the task and how it ended but carries none of the result: the digest
+// replays this stream into every new session's context, and a result is text an
+// unattended agent wrote, possibly steered by an untrusted repository. Readers
+// fetch the result deliberately with queue_read.
+func notifyTaskDone(in workflows.AgentTaskInput, o workflows.Outcome) {
+	summary := in.ID + " finished " + o.Status + "; read the result with queue_read or `orch task " + in.ID + "`"
+	if err := events.Append(paths.EventsDir(), taskEventStream, events.Event{
+		Kind: o.Status, Source: in.Agent, Summary: summary, Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		log.Printf("queue: record completion of %s: %v", in.ID, err)
+	}
 }

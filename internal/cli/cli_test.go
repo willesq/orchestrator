@@ -15,6 +15,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/prs"
@@ -698,6 +699,7 @@ type fakeClient struct {
 	ingest       *orchdv1.IngestResponse
 	search       *orchdv1.SearchResponse
 	dispatch     *orchdv1.DispatchResponse
+	dispatchReq  *orchdv1.DispatchRequest
 	listSources  *orchdv1.ListSourcesResponse
 	deleteSource *orchdv1.DeleteSourceResponse
 	listTasks    *orchdv1.ListTasksResponse
@@ -724,7 +726,8 @@ func (f *fakeClient) Search(context.Context, *orchdv1.SearchRequest, ...grpc.Cal
 	return f.search, f.err
 }
 
-func (f *fakeClient) Dispatch(context.Context, *orchdv1.DispatchRequest, ...grpc.CallOption) (*orchdv1.DispatchResponse, error) {
+func (f *fakeClient) Dispatch(_ context.Context, req *orchdv1.DispatchRequest, _ ...grpc.CallOption) (*orchdv1.DispatchResponse, error) {
+	f.dispatchReq = req
 	return f.dispatch, f.err
 }
 
@@ -1011,31 +1014,71 @@ func TestInstallCommand(t *testing.T) {
 }
 
 func TestDispatchCommand(t *testing.T) {
+	wd, _ := os.Getwd()
 	tests := []struct {
 		name    string
+		args    []string
 		client  *fakeClient
-		wantOut string
+		wantOut []string
+		wantNot string
+		wantCwd string
+		taskID  string
 		wantErr bool
 	}{
 		{
-			name:    "success prints instance id",
+			name:    "runs in the current directory by default",
+			args:    []string{"dispatch", "fix the bug"},
+			client:  &fakeClient{dispatch: &orchdv1.DispatchResponse{InstanceId: "task-abc", WorkerEnabled: true}},
+			wantOut: []string{"task-abc", "runs in " + wd},
+			wantNot: "disabled",
+			wantCwd: wd,
+		},
+		{
+			name:    "relative --cwd is made absolute",
+			args:    []string{"dispatch", "--cwd", "sub", "fix the bug"},
+			client:  &fakeClient{dispatch: &orchdv1.DispatchResponse{InstanceId: "task-abc", WorkerEnabled: true}},
+			wantCwd: filepath.Join(wd, "sub"),
+		},
+		{
+			name:    "disabled worker is called out",
+			args:    []string{"dispatch", "fix the bug"},
 			client:  &fakeClient{dispatch: &orchdv1.DispatchResponse{InstanceId: "task-abc"}},
-			wantOut: "task-abc",
+			wantOut: []string{"task-abc", "worker is disabled", "queue.worker.enabled"},
+		},
+		{
+			name:    "refused inside a queued task",
+			args:    []string{"dispatch", "fix the bug"},
+			taskID:  "task-parent",
+			client:  &fakeClient{dispatch: &orchdv1.DispatchResponse{InstanceId: "task-abc"}},
+			wantErr: true,
 		},
 		{
 			name:    "server error",
+			args:    []string{"dispatch", "fix the bug"},
 			client:  &fakeClient{err: errors.New("boom")},
 			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			out, err := run(factory(tt.client, nil), "", "dispatch", "fix the bug")
+			t.Setenv(agentrun.TaskIDEnv, tt.taskID)
+			out, err := run(factory(tt.client, nil), "", tt.args...)
+			if tt.taskID != "" && tt.client.dispatchReq != nil {
+				t.Errorf("orchd was called from inside a task")
+			}
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
-			if tt.wantOut != "" && !strings.Contains(out, tt.wantOut) {
-				t.Errorf("output %q missing %q", out, tt.wantOut)
+			for _, w := range tt.wantOut {
+				if !strings.Contains(out, w) {
+					t.Errorf("output %q missing %q", out, w)
+				}
+			}
+			if tt.wantNot != "" && strings.Contains(out, tt.wantNot) {
+				t.Errorf("output %q unexpectedly contains %q", out, tt.wantNot)
+			}
+			if tt.wantCwd != "" && tt.client.dispatchReq.GetCwd() != tt.wantCwd {
+				t.Errorf("cwd = %q, want %q", tt.client.dispatchReq.GetCwd(), tt.wantCwd)
 			}
 		})
 	}

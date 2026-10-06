@@ -15,10 +15,13 @@ func TestSQLTaskStoreSaveResult(t *testing.T) {
 	tests := []struct {
 		name   string
 		id     string
+		status string
 		result string
 	}{
-		{name: "insert", id: "task-1", result: "processed: a"},
-		{name: "upsert same id", id: "task-1", result: "processed: b"},
+		{name: "insert", id: "task-1", status: "complete", result: "opened PR #1"},
+		{name: "upsert same id", id: "task-1", status: "complete", result: "opened PR #2"},
+		{name: "upsert records a failed run", id: "task-1", status: "failed", result: "tests broke"},
+		{name: "blocked run", id: "task-2", status: "blocked", result: "BLOCKED: need a token scope"},
 	}
 	// Shared db across subtests to exercise the ON CONFLICT upsert path.
 	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
@@ -32,7 +35,7 @@ func TestSQLTaskStoreSaveResult(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			in := workflows.AgentTaskInput{ID: tt.id, Agent: "dev", Body: "a"}
-			if err := store.SaveResult(context.Background(), in, tt.result); err != nil {
+			if err := store.SaveResult(context.Background(), in, tt.status, tt.result); err != nil {
 				t.Fatalf("SaveResult: %v", err)
 			}
 			var result, status string
@@ -43,8 +46,8 @@ func TestSQLTaskStoreSaveResult(t *testing.T) {
 			if result != tt.result {
 				t.Errorf("result = %q, want %q", result, tt.result)
 			}
-			if status != "complete" {
-				t.Errorf("status = %q, want complete", status)
+			if status != tt.status {
+				t.Errorf("status = %q, want %q", status, tt.status)
 			}
 		})
 	}
@@ -85,7 +88,7 @@ func TestDispatch(t *testing.T) {
 			t.Cleanup(func() { _ = b.Close() })
 			d := NewDispatcher(b, nil)
 
-			id, err := d.Dispatch(context.Background(), tt.agent, tt.body)
+			id, err := d.Dispatch(context.Background(), tt.agent, tt.body, "")
 			if err != nil {
 				t.Fatalf("Dispatch: %v", err)
 			}

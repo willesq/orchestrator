@@ -3,6 +3,7 @@ package workflows
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -26,61 +27,123 @@ func (f *fakeStore) SetStatus(_ context.Context, _ string, status string) error 
 	return nil
 }
 
-func (f *fakeStore) SaveResult(_ context.Context, in AgentTaskInput, result string) error {
+func (f *fakeStore) SaveResult(_ context.Context, in AgentTaskInput, status, result string) error {
 	if f.err != nil {
 		return f.err
 	}
 	f.saved = &in
+	f.statuses = append(f.statuses, status)
 	f.result = result
 	return nil
 }
 
-func TestProcessActivity(t *testing.T) {
+type fakeRunner struct {
+	out Outcome
+	err error
+	got *AgentTaskInput
+}
+
+func (f *fakeRunner) Run(_ context.Context, in AgentTaskInput) (Outcome, error) {
+	f.got = &in
+	return f.out, f.err
+}
+
+func TestRunActivity(t *testing.T) {
+	interrupted := fmt.Errorf("shutdown: %w", context.Canceled)
 	tests := []struct {
-		name    string
-		store   *fakeStore
-		body    string
-		want    string
-		wantErr bool
+		name         string
+		runner       *fakeRunner
+		store        *fakeStore
+		want         string
+		wantErr      error
+		wantStatus   string
+		wantNotified bool
 	}{
-		{name: "persists and returns result", store: &fakeStore{}, body: "do X", want: "processed: do X"},
-		{name: "store error propagates", store: &fakeStore{err: errors.New("db down")}, body: "y", wantErr: true},
+		{
+			name:   "records the run's status and result and notifies",
+			runner: &fakeRunner{out: Outcome{Status: "complete", Result: "opened PR #7"}},
+			store:  &fakeStore{}, want: "opened PR #7", wantStatus: "complete", wantNotified: true,
+		},
+		{
+			name:   "a failed run is recorded, not returned as an error",
+			runner: &fakeRunner{out: Outcome{Status: "failed", Result: "tests broke"}},
+			store:  &fakeStore{}, want: "tests broke", wantStatus: "failed", wantNotified: true,
+		},
+		{
+			name:   "an interrupted run is abandoned without touching the ledger",
+			runner: &fakeRunner{err: interrupted},
+			store:  &fakeStore{}, wantErr: context.Canceled,
+		},
+		{
+			name:   "store error propagates",
+			runner: &fakeRunner{out: Outcome{Status: "complete", Result: "x"}},
+			store:  &fakeStore{err: errors.New("db down")}, wantErr: errors.New("db down"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var notified []Outcome
 			SetStore(tt.store)
-			t.Cleanup(func() { SetStore(nil) })
+			SetRunner(tt.runner)
+			SetNotifier(func(_ AgentTaskInput, o Outcome) { notified = append(notified, o) })
+			t.Cleanup(func() { SetStore(nil); SetRunner(nil); SetNotifier(nil) })
 
-			got, err := ProcessActivity(context.Background(), AgentTaskInput{ID: "id", Agent: "dev", Body: tt.body})
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr {
+			in := AgentTaskInput{ID: "id", Agent: "dev", Body: "b", Cwd: "/src"}
+			got, err := RunActivity(context.Background(), in)
+			if tt.wantErr != nil {
+				if err == nil || (errors.Is(tt.wantErr, context.Canceled) && !errors.Is(err, context.Canceled)) {
+					t.Fatalf("err = %v, want %v", err, tt.wantErr)
+				}
+				if len(notified) != 0 {
+					t.Errorf("notified on error: %v", notified)
+				}
+				if errors.Is(tt.wantErr, context.Canceled) && tt.store.saved != nil {
+					t.Errorf("interrupted run wrote the ledger")
+				}
 				return
+			}
+			if err != nil {
+				t.Fatalf("RunActivity: %v", err)
 			}
 			if got != tt.want {
 				t.Errorf("result = %q, want %q", got, tt.want)
 			}
-			if tt.store.saved == nil {
-				t.Errorf("store did not persist the task")
+			if *tt.runner.got != in {
+				t.Errorf("runner got %+v, want %+v", *tt.runner.got, in)
+			}
+			if len(tt.store.statuses) != 1 || tt.store.statuses[0] != tt.wantStatus {
+				t.Errorf("saved statuses = %v, want [%s]", tt.store.statuses, tt.wantStatus)
+			}
+			if tt.wantNotified && len(notified) != 1 {
+				t.Errorf("notified %d times, want 1", len(notified))
 			}
 		})
 	}
 }
 
+func TestRunActivityWithoutRunner(t *testing.T) {
+	SetRunner(nil)
+	if _, err := RunActivity(context.Background(), AgentTaskInput{ID: "id"}); !errors.Is(err, errNoRunner) {
+		t.Fatalf("err = %v, want errNoRunner", err)
+	}
+}
+
 func TestAgentTaskWorkflow(t *testing.T) {
 	tests := []struct {
-		name       string
-		activityRV string
-		want       string
+		name    string
+		runRV   string
+		runErr  error
+		want    string
+		wantErr bool
 	}{
-		{name: "sleeps then processes", activityRV: "processed: hi", want: "processed: hi"},
+		{name: "marks running then runs", runRV: "done", want: "done"},
+		{name: "a failing run is attempted exactly once", runErr: errors.New("boom"), wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			wt := tester.NewWorkflowTester[string](AgentTask, tester.WithTestTimeout(5*time.Second))
 			wt.OnActivity(StartActivity, mock.Anything, mock.Anything).Return("id", nil)
-			wt.OnActivity(ProcessActivity, mock.Anything, mock.Anything).Return(tt.activityRV, nil)
+			wt.OnActivity(RunActivity, mock.Anything, mock.Anything).Return(tt.runRV, tt.runErr).Once()
 
 			wt.Execute(context.Background(), AgentTaskInput{ID: "id", Agent: "dev", Body: "hi"})
 
@@ -88,12 +151,13 @@ func TestAgentTaskWorkflow(t *testing.T) {
 				t.Fatalf("workflow did not finish")
 			}
 			got, err := wt.WorkflowResult()
-			if err != nil {
-				t.Fatalf("workflow error: %v", err)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("workflow error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if got != tt.want {
 				t.Errorf("result = %q, want %q", got, tt.want)
 			}
+			wt.AssertExpectations(t)
 		})
 	}
 }

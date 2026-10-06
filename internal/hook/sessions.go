@@ -79,7 +79,9 @@ func subagentStop(p Payload) error {
 // sessionStart prints a compact digest of recent events + pending ingests.
 func sessionStart(p Payload, out io.Writer) error {
 	var lines []string
-	for _, stream := range []string{p.SessionID, "pr-babysitter"} {
+	// "queue" carries finished background tasks, so their results reach the next
+	// session without anyone polling the ledger.
+	for _, stream := range []string{p.SessionID, "pr-babysitter", "queue"} {
 		if stream == "" {
 			continue
 		}

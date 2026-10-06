@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/willesq/orchestrator/internal/paths"
+	"github.com/willesq/orchestrator/internal/redact"
 	"github.com/willesq/orchestrator/internal/workflows"
 )
 
@@ -37,14 +39,14 @@ type SQLTaskStore struct {
 // NewSQLTaskStore constructs a task store over an open orch.db handle.
 func NewSQLTaskStore(db *sql.DB) *SQLTaskStore { return &SQLTaskStore{db: db} }
 
-// SaveResult upserts the terminal result of a task (idempotent by id).
-func (s *SQLTaskStore) SaveResult(ctx context.Context, in workflows.AgentTaskInput, result string) error {
+// SaveResult upserts the terminal status and result of a task (idempotent by id).
+func (s *SQLTaskStore) SaveResult(ctx context.Context, in workflows.AgentTaskInput, status, result string) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO tasks (id, agent, body, result, status, updated_at)
-		 VALUES (?, ?, ?, ?, 'complete', datetime('now'))
+		 VALUES (?, ?, ?, ?, ?, datetime('now'))
 		 ON CONFLICT(id) DO UPDATE SET
-		   result=excluded.result, status='complete', updated_at=datetime('now')`,
-		in.ID, in.Agent, in.Body, result)
+		   result=excluded.result, status=excluded.status, updated_at=datetime('now')`,
+		in.ID, in.Agent, in.Body, result, status)
 	return err
 }
 
@@ -136,6 +138,14 @@ func (s *SQLTaskStore) List(ctx context.Context, f ListFilter) ([]Task, error) {
 	return out, rows.Err()
 }
 
+// ActiveCount counts tasks that are pending or in progress.
+func (s *SQLTaskStore) ActiveCount(ctx context.Context) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE status IN ('pending', 'in_progress')`).Scan(&n)
+	return n, err
+}
+
 // Get returns one task. found is false when no such ID exists.
 func (s *SQLTaskStore) Get(ctx context.Context, id string) (Task, bool, error) {
 	var t Task
@@ -151,10 +161,18 @@ func (s *SQLTaskStore) Get(ctx context.Context, id string) (Task, bool, error) {
 	return t, true, nil
 }
 
+// ErrQueueFull rejects a dispatch while too many tasks are pending or running.
+var ErrQueueFull = errors.New("queue full")
+
 // Dispatcher creates durable AgentTask workflow instances.
 type Dispatcher struct {
 	client *client.Client
 	store  *SQLTaskStore
+	// MaxActive caps tasks pending or in progress; zero means no cap. Queued
+	// sessions run unattended, so a task that keeps dispatching more (directly or
+	// through injected instructions) must hit a hard ceiling rather than grow
+	// without bound.
+	MaxActive int
 }
 
 // NewDispatcher builds a dispatcher over a go-workflows backend. store may be
@@ -163,10 +181,23 @@ func NewDispatcher(b backend.Backend, store *SQLTaskStore) *Dispatcher {
 	return &Dispatcher{client: client.New(b), store: store}
 }
 
-// Dispatch enqueues an agent task and returns its durable instance ID.
-func (d *Dispatcher) Dispatch(ctx context.Context, agent, body string) (string, error) {
+// Dispatch enqueues an agent task and returns its durable instance ID. cwd is
+// where the agent session will run; empty runs it in a scratch directory.
+func (d *Dispatcher) Dispatch(ctx context.Context, agent, body, cwd string) (string, error) {
+	if d.store != nil && d.MaxActive > 0 {
+		active, err := d.store.ActiveCount(ctx)
+		if err != nil {
+			return "", err
+		}
+		if active >= d.MaxActive {
+			return "", fmt.Errorf("%w: %d tasks pending or running (queue.max_active=%d)", ErrQueueFull, active, d.MaxActive)
+		}
+	}
+	// The body is stored in the ledger and replayed through queue_read, so it is
+	// held to the same redaction as everything else orch persists.
+	body, _ = redact.Redact(body)
 	id := "task-" + uuid.NewString()
-	in := workflows.AgentTaskInput{ID: id, Agent: agent, Body: body}
+	in := workflows.AgentTaskInput{ID: id, Agent: agent, Body: body, Cwd: cwd}
 	// Record before enqueuing: a row with no workflow is a visible, diagnosable
 	// state, whereas a workflow with no row is invisible to every reader.
 	if d.store != nil {

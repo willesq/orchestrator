@@ -741,6 +741,7 @@ type DispatchRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Agent         string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
 	Body          string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
+	Cwd           string                 `protobuf:"bytes,3,opt,name=cwd,proto3" json:"cwd,omitempty"` // optional: absolute directory the agent session runs in
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -789,9 +790,17 @@ func (x *DispatchRequest) GetBody() string {
 	return ""
 }
 
+func (x *DispatchRequest) GetCwd() string {
+	if x != nil {
+		return x.Cwd
+	}
+	return ""
+}
+
 type DispatchResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	WorkerEnabled bool                   `protobuf:"varint,2,opt,name=worker_enabled,json=workerEnabled,proto3" json:"worker_enabled,omitempty"` // false: the task stays pending until a worker is enabled
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -831,6 +840,13 @@ func (x *DispatchResponse) GetInstanceId() string {
 		return x.InstanceId
 	}
 	return ""
+}
+
+func (x *DispatchResponse) GetWorkerEnabled() bool {
+	if x != nil {
+		return x.WorkerEnabled
+	}
+	return false
 }
 
 type ListTasksRequest struct {
@@ -1456,13 +1472,15 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"source_uri\x18\x01 \x01(\tR\tsourceUri\x12\x18\n" +
 	"\aconfirm\x18\x02 \x01(\bR\aconfirm\"0\n" +
 	"\x14DeleteSourceResponse\x12\x18\n" +
-	"\adeleted\x18\x01 \x01(\x05R\adeleted\";\n" +
+	"\adeleted\x18\x01 \x01(\x05R\adeleted\"M\n" +
 	"\x0fDispatchRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x12\n" +
-	"\x04body\x18\x02 \x01(\tR\x04body\"3\n" +
+	"\x04body\x18\x02 \x01(\tR\x04body\x12\x10\n" +
+	"\x03cwd\x18\x03 \x01(\tR\x03cwd\"Z\n" +
 	"\x10DispatchResponse\x12\x1f\n" +
 	"\vinstance_id\x18\x01 \x01(\tR\n" +
-	"instanceId\"V\n" +
+	"instanceId\x12%\n" +
+	"\x0eworker_enabled\x18\x02 \x01(\bR\rworkerEnabled\"V\n" +
 	"\x10ListTasksRequest\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x14\n" +

@@ -144,6 +144,7 @@ func TestRunSupervisesAndRestartsSubsystems(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_PR_BABYSITTER_ENABLED", "false")
+			t.Setenv("ORCH_QUEUE_WORKER_ENABLED", "true")
 			seedRunEnv(t, "orchd-supervisortest.sock")
 
 			ctx, cancel := context.WithCancel(context.Background())

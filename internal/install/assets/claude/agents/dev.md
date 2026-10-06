@@ -30,9 +30,13 @@ You always work in a `gittree`-managed worktree that you create yourself in Phas
 
 ## How you receive work and report back
 
-There is no queue to read from or write to. The orch MCP servers expose `rag_search`, `rag_ingest_text`, `rag_list_sources`,
-`rag_delete_source`, `queue_dispatch`, `queue_list` and `queue_read`, but the queue
-worker is a stub that never executes anything.
+The orch MCP servers expose `rag_search`, `rag_ingest_text`, `rag_list_sources`,
+`rag_delete_source`, `queue_dispatch`, `queue_list` and `queue_read`. You run one of two
+ways: spawned by a parent session's Agent tool, or headless as an orchestrator queue task.
+As a queue task, `ORCH_TASK_ID` is set in your environment, nobody can answer a question,
+actions the permission policy refuses fail instead of prompting, `queue_dispatch` refuses
+to fan out further tasks, and your final message is recorded as the task result. The
+rules below hold either way.
 
 - **Your task arrives inline in the prompt.** Everything you need is there. If it
   isn't, you cannot go look it up — say what's missing and stop.

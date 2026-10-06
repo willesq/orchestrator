@@ -151,16 +151,18 @@ func TestSessionStart(t *testing.T) {
 	tests := []struct {
 		name      string
 		seedEvent bool
+		stream    string
 		wantOut   bool
 	}{
-		{name: "digest emitted when events present", seedEvent: true, wantOut: true},
+		{name: "digest emitted when events present", seedEvent: true, stream: "sid", wantOut: true},
+		{name: "finished queue tasks reach new sessions", seedEvent: true, stream: "queue", wantOut: true},
 		{name: "silent when nothing to report", seedEvent: false, wantOut: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 			if tt.seedEvent {
-				_ = events.Append(paths.EventsDir(), "sid", events.Event{Kind: "complete", Source: "dev", Summary: "shipped"})
+				_ = events.Append(paths.EventsDir(), tt.stream, events.Event{Kind: "complete", Source: "dev", Summary: "shipped"})
 			}
 			var out bytes.Buffer
 			if err := sessionStart(Payload{SessionID: "sid"}, &out); err != nil {
@@ -168,6 +170,9 @@ func TestSessionStart(t *testing.T) {
 			}
 			if bytes.Contains(out.Bytes(), []byte("Orchestrator digest")) != tt.wantOut {
 				t.Errorf("digest present = %v, want %v (out=%q)", !tt.wantOut, tt.wantOut, out.String())
+			}
+			if tt.wantOut && !bytes.Contains(out.Bytes(), []byte("shipped")) {
+				t.Errorf("digest omits the seeded event: %q", out.String())
 			}
 		})
 	}

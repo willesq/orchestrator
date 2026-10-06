@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"math"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"google.golang.org/grpc"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
@@ -21,6 +23,7 @@ type fakeClient struct {
 	search       *orchdv1.SearchResponse
 	ingest       *orchdv1.IngestResponse
 	dispatch     *orchdv1.DispatchResponse
+	dispatchReq  *orchdv1.DispatchRequest
 	err          error
 }
 
@@ -36,7 +39,8 @@ func (f *fakeClient) Search(context.Context, *orchdv1.SearchRequest, ...grpc.Cal
 	return f.search, f.err
 }
 
-func (f *fakeClient) Dispatch(context.Context, *orchdv1.DispatchRequest, ...grpc.CallOption) (*orchdv1.DispatchResponse, error) {
+func (f *fakeClient) Dispatch(_ context.Context, req *orchdv1.DispatchRequest, _ ...grpc.CallOption) (*orchdv1.DispatchResponse, error) {
+	f.dispatchReq = req
 	return f.dispatch, f.err
 }
 
@@ -152,19 +156,46 @@ func TestRAGIngest(t *testing.T) {
 }
 
 func TestQueueDispatch(t *testing.T) {
+	wd, _ := os.Getwd()
 	tests := []struct {
 		name         string
 		args         map[string]any
 		client       *fakeClient
 		wantErr      bool
 		wantContains string
+		wantCwd      string
+		taskID       string
+		wantNoCall   bool
 	}{
 		{name: "missing body", args: map[string]any{}, client: &fakeClient{}, wantErr: true, wantContains: "body is required"},
 		{
-			name:         "success",
+			name:         "success defaults cwd to the session directory",
+			args:         map[string]any{"body": "fix it"},
+			client:       &fakeClient{dispatch: &orchdv1.DispatchResponse{InstanceId: "task-1", WorkerEnabled: true}},
+			wantContains: "task-1",
+			wantCwd:      wd,
+		},
+		{
+			name:         "explicit cwd passes through",
+			args:         map[string]any{"body": "fix it", "cwd": "/src/widget"},
+			client:       &fakeClient{dispatch: &orchdv1.DispatchResponse{InstanceId: "task-1", WorkerEnabled: true}},
+			wantContains: "runs in /src/widget",
+			wantCwd:      "/src/widget",
+		},
+		{
+			name:         "disabled worker is called out",
 			args:         map[string]any{"body": "fix it"},
 			client:       &fakeClient{dispatch: &orchdv1.DispatchResponse{InstanceId: "task-1"}},
-			wantContains: "task-1",
+			wantContains: "worker is disabled",
+		},
+		{
+			name:         "a queued task cannot dispatch more tasks",
+			args:         map[string]any{"body": "fix it"},
+			taskID:       "task-parent",
+			client:       &fakeClient{dispatch: &orchdv1.DispatchResponse{InstanceId: "task-1", WorkerEnabled: true}},
+			wantErr:      true,
+			wantContains: "cannot dispatch further tasks",
+			wantNoCall:   true,
 		},
 		{
 			name:         "client error",
@@ -176,8 +207,15 @@ func TestQueueDispatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(agentrun.TaskIDEnv, tt.taskID)
 			qt := queueTools{client: tt.client}
 			res, err := qt.dispatch(context.Background(), toolReq(tt.args))
+			if tt.wantNoCall && tt.client.dispatchReq != nil {
+				t.Errorf("orchd was called despite the refusal")
+			}
+			if tt.wantCwd != "" && tt.client.dispatchReq.GetCwd() != tt.wantCwd {
+				t.Errorf("cwd = %q, want %q", tt.client.dispatchReq.GetCwd(), tt.wantCwd)
+			}
 			if err != nil {
 				t.Fatalf("handler go error: %v", err)
 			}
