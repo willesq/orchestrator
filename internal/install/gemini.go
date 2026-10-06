@@ -26,11 +26,13 @@ var geminiEvents = eventMap{
 
 // Edits implements Adapter.
 func (g Gemini) Edits(bins Bins, home string) []Edit {
-	return append(instructionEdits(home, g.Name()), []Edit{
+	edits := append(instructionEdits(home, g.Name()), []Edit{
 		geminiSettingsEdit(bins, home),
 		aliasEdit(bins.Orch, home),
 		plistEdit(bins.Orchd, home),
 	}...)
+	edits = append(edits, toolEdits(home)...)
+	return edits
 }
 
 func geminiSettingsEdit(bins Bins, home string) Edit {

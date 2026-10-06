@@ -45,10 +45,19 @@ type Adapter interface {
 // the harness owns — key order, string escaping, indentation — so a file that
 // already carries the right wiring reads as installed even though Claude Code,
 // Codex or Gemini rewrote it in their own style.
+//
+// Writes follow symlinks by default, so a settings file a dotfile manager links
+// in place keeps its link. Unlink opts specific paths out: a symlink found at any
+// of them is removed (the link, never its target) before the write, so the write
+// lands in a real file. Compute must refuse any link it has not vetted as
+// replaceable, because Apply removes whatever links it finds there.
 type Edit struct {
 	Path      string
 	Compute   func(old []byte) (newBytes []byte, summary string, err error)
 	Normalize func(old []byte) (normalized []byte, err error)
+	Unlink    []string
+	// Mode is the written file's permission; zero means 0644.
+	Mode os.FileMode
 }
 
 // evaluated is an edit measured against the file currently on disk.
@@ -213,11 +222,24 @@ func (p Plan) Apply(w io.Writer, backupDir string) error {
 				return fmt.Errorf("backup %s: %w", e.Path, err)
 			}
 		}
+		if err := unlinkSymlinks(e.Unlink); err != nil {
+			return err
+		}
 		if err := os.MkdirAll(filepath.Dir(e.Path), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(e.Path, ev.next, 0o644); err != nil {
+		mode := e.Mode
+		if mode == 0 {
+			mode = 0o644
+		}
+		if err := os.WriteFile(e.Path, ev.next, mode); err != nil {
 			return err
+		}
+		// WriteFile applies the mode only when it creates the file.
+		if e.Mode != 0 {
+			if err := os.Chmod(e.Path, mode); err != nil {
+				return err
+			}
 		}
 		// Reason: print every summary line, not just the first. One of them is a
 		// permission grant, and an apply that only showed the leading hooks line
@@ -232,6 +254,26 @@ func (p Plan) Apply(w io.Writer, backupDir string) error {
 		fmt.Fprintf(w, "already fully installed for %q — nothing changed.\n", p.Target)
 	} else {
 		fmt.Fprintf(w, "%d file(s) changed; backups in %s\n", changed, dest)
+	}
+	return nil
+}
+
+// unlinkSymlinks removes each path that is currently a symlink, leaving regular
+// files, directories and link targets alone.
+func unlinkSymlinks(paths []string) error {
+	for _, p := range paths {
+		info, err := os.Lstat(p)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			if err := os.Remove(p); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

@@ -25,14 +25,18 @@ var eventSlugs = []struct{ Slug, Event string }{
 }
 
 // Edits implements Adapter: settings.json (hooks + MCP), ~/.claude.json (MCP, if
-// present, where user-scope servers like serena live), the shell alias, the plist.
+// present, where user-scope servers like serena live), the shell alias, the plist,
+// the orchestrator subagents and skills, and the gittree helper.
 func (c ClaudeCode) Edits(bins Bins, home string) []Edit {
-	return append(instructionEdits(home, c.Name()), []Edit{
+	edits := append(instructionEdits(home, c.Name()), []Edit{
 		c.settingsEdit(bins, home),
 		c.claudeJSONEdit(bins, home),
 		aliasEdit(bins.Orch, home),
 		plistEdit(bins.Orchd, home),
 	}...)
+	edits = append(edits, claudeAssetEdits(home)...)
+	edits = append(edits, toolEdits(home)...)
+	return edits
 }
 
 // claudeJSONEdit updates rag/queue MCP registration in ~/.claude.json ONLY if the

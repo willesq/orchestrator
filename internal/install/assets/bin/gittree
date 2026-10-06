@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# managed-by: orch — installed by `orch install` from internal/install/assets in the orchestrator repo.
+# Local edits are overwritten on the next install; change the repo copy instead.
+
+# Creates a new git worktree from the default branch with a new branch.
+# Worktrees are placed at ../reponame.worktrees/<branch-name> relative to the repo root.
+# Usage: ./git_worktree_create.sh <branch-name>
+# Example: ./git_worktree_create.sh feature/my-new-feature
+
+set -euo pipefail
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# ============================================
+# Argument validation
+# ============================================
+if [ $# -ne 1 ]; then
+    echo -e "${RED}Error: Expected exactly one argument${NC}"
+    echo "Usage: $0 <branch-name>"
+    echo "Example: $0 feature/my-new-feature"
+    exit 1
+fi
+
+BRANCH_NAME="$1"
+
+# Reject names git would refuse as a branch (leading "-", "..", refspec syntax)
+# before they reach paths or fetch refspecs below.
+if ! git check-ref-format --branch "$BRANCH_NAME" >/dev/null 2>&1; then
+    echo -e "${RED}Error: invalid branch name: ${BRANCH_NAME}${NC}"
+    exit 1
+fi
+
+# ============================================
+# Dependency checks
+# ============================================
+if ! command -v git &> /dev/null; then
+    echo -e "${RED}Error: git is not installed${NC}"
+    exit 1
+fi
+
+# ============================================
+# Git repo detection
+# ============================================
+if ! git rev-parse --is-inside-work-tree &> /dev/null 2>&1; then
+    echo -e "${RED}Error: Not inside a git repository${NC}"
+    exit 1
+fi
+
+GIT_ROOT=$(git rev-parse --show-toplevel)
+REPO_NAME=$(basename "$GIT_ROOT")
+REPO_PARENT=$(dirname "$GIT_ROOT")
+
+echo -e "${BLUE}=== Git Worktree Creator ===${NC}"
+echo -e "${BLUE}Repository:  ${REPO_NAME}${NC}"
+echo -e "${BLUE}Git root:    ${GIT_ROOT}${NC}"
+echo -e "${BLUE}Branch:      ${BRANCH_NAME}${NC}"
+
+# ============================================
+# Resolve default branch (main or master)
+# ============================================
+DEFAULT_BRANCH=""
+for candidate in main master; do
+    if git show-ref --verify --quiet "refs/heads/${candidate}" || \
+       git show-ref --verify --quiet "refs/remotes/origin/${candidate}"; then
+        DEFAULT_BRANCH="$candidate"
+        break
+    fi
+done
+
+if [ -z "$DEFAULT_BRANCH" ]; then
+    echo -e "${RED}Error: Could not determine default branch (tried main, master)${NC}"
+    exit 1
+fi
+
+echo -e "${BLUE}Default branch: ${DEFAULT_BRANCH}${NC}\n"
+
+# ============================================
+# Check if branch already exists locally or remotely
+# ============================================
+BRANCH_EXISTS_LOCAL=false
+BRANCH_EXISTS_REMOTE=false
+USE_EXISTING=false
+
+if git show-ref --verify --quiet "refs/heads/${BRANCH_NAME}"; then
+    BRANCH_EXISTS_LOCAL=true
+fi
+if git show-ref --verify --quiet "refs/remotes/origin/${BRANCH_NAME}"; then
+    BRANCH_EXISTS_REMOTE=true
+fi
+
+if [ "$BRANCH_EXISTS_LOCAL" = true ] || [ "$BRANCH_EXISTS_REMOTE" = true ]; then
+    if [ "$BRANCH_EXISTS_LOCAL" = true ] && [ "$BRANCH_EXISTS_REMOTE" = true ]; then
+        echo -e "${YELLOW}Branch '${BRANCH_NAME}' already exists locally and on remote.${NC}"
+    elif [ "$BRANCH_EXISTS_LOCAL" = true ]; then
+        echo -e "${YELLOW}Branch '${BRANCH_NAME}' already exists locally.${NC}"
+    else
+        echo -e "${YELLOW}Branch '${BRANCH_NAME}' already exists on remote.${NC}"
+    fi
+
+    echo -e "Use existing branch for the new worktree? [y/N] \c"
+    read -r REPLY </dev/tty
+    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+        USE_EXISTING=true
+    else
+        echo -e "${RED}Aborted.${NC}"
+        exit 1
+    fi
+fi
+
+# ============================================
+# Resolve worktree destination
+# ============================================
+WORKTREES_DIR="${REPO_PARENT}/${REPO_NAME}.worktrees"
+WORKTREE_PATH="${WORKTREES_DIR}/${BRANCH_NAME}"
+
+echo -e "${YELLOW}[Step 1/3] Preparing worktrees directory...${NC}"
+
+if [ -d "$WORKTREE_PATH" ]; then
+    echo -e "${RED}Error: Worktree path already exists: ${WORKTREE_PATH}${NC}"
+    exit 1
+fi
+
+mkdir -p "$WORKTREES_DIR"
+echo -e "${GREEN}✓ Worktrees directory ready: ${WORKTREES_DIR}${NC}\n"
+
+# ============================================
+# Ensure default branch ref is up to date
+# ============================================
+echo -e "${YELLOW}[Step 2/3] Verifying base branch '${DEFAULT_BRANCH}'...${NC}"
+
+if ! git show-ref --verify --quiet "refs/heads/${DEFAULT_BRANCH}"; then
+    # Branch only exists on remote — fetch it
+    echo -e "  Local branch not found, fetching from origin..."
+    git fetch origin "${DEFAULT_BRANCH}:${DEFAULT_BRANCH}"
+fi
+
+echo -e "${GREEN}✓ Base branch '${DEFAULT_BRANCH}' is available${NC}\n"
+
+# ============================================
+# Create the worktree
+# ============================================
+echo -e "${YELLOW}[Step 3/3] Creating worktree at: ${WORKTREE_PATH}${NC}"
+
+if [ "$USE_EXISTING" = true ]; then
+    # If only on remote, ensure we have a local tracking branch first
+    if [ "$BRANCH_EXISTS_LOCAL" = false ]; then
+        echo -e "  Fetching remote branch..."
+        git fetch origin "${BRANCH_NAME}:${BRANCH_NAME}"
+    fi
+    git worktree add "$WORKTREE_PATH" "$BRANCH_NAME"
+else
+    git worktree add --no-checkout -b "$BRANCH_NAME" "$WORKTREE_PATH" "$DEFAULT_BRANCH"
+    # Do a proper checkout inside the new worktree so the working tree is populated
+    git -C "$WORKTREE_PATH" checkout "$BRANCH_NAME"
+fi
+
+echo -e "${GREEN}✓ Worktree created successfully${NC}\n"
+
+echo -e "${GREEN}=== Done ===${NC}"
+echo -e "  Branch:   ${BRANCH_NAME}"
+echo -e "  Location: ${WORKTREE_PATH}"
+echo ""
+echo -e "To switch to the new worktree:"
+echo -e "  cd ${WORKTREE_PATH}"
