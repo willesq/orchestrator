@@ -16,8 +16,7 @@ const (
 // compiled artifact even while the code is iterated.
 func aliasEdit(orchBin, home string) Edit {
 	path := filepath.Join(home, ".zprofile")
-	block := aliasBegin + "\nalias orch=\"" + orchBin + "\"\n" +
-		"alias gittree=\"" + gittreePath(home) + "\"\n" + aliasEnd + "\n"
+	block := aliasBegin + "\nalias orch=\"" + orchBin + "\"\n" + aliasEnd + "\n"
 	return Edit{
 		Path: path,
 		Compute: func(old []byte) ([]byte, string, error) {
@@ -28,7 +27,7 @@ func aliasEdit(orchBin, home string) Edit {
 			if replaced {
 				verb = "updated"
 			}
-			summary := fmt.Sprintf("alias: %s managed block -> alias orch=\"%s\", alias gittree=\"%s\"", verb, orchBin, gittreePath(home))
+			summary := fmt.Sprintf("alias: %s managed block -> alias orch=\"%s\"", verb, orchBin)
 			return []byte(next), summary, nil
 		},
 	}

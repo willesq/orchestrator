@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// assets holds the subagents, skills and helper scripts shipped with the CLI, so
+// assets holds the subagents and skills shipped with the CLI, so
 // an install never depends on a separate checkout being present on disk.
 //
 //go:embed assets
@@ -28,11 +28,6 @@ func legacyCheckout(home string) string {
 	return filepath.Join(home, ".claude", "orchestrator")
 }
 
-// gittreePath is where the gittree worktree helper is installed.
-func gittreePath(home string) string {
-	return filepath.Join(home, ".config", "orch", "bin", "gittree")
-}
-
 // claudeAssetEdits installs the orchestrator's Claude Code subagents into
 // ~/.claude/agents and its skills into ~/.claude/skills.
 func claudeAssetEdits(home string) []Edit {
@@ -41,7 +36,7 @@ func claudeAssetEdits(home string) []Edit {
 	for _, src := range agents {
 		dst := filepath.Join(home, ".claude", "agents", path.Base(src))
 		label := "agent " + strings.TrimSuffix(path.Base(src), ".md")
-		edits = append(edits, assetEdit(home, src, dst, []string{dst}, 0, label))
+		edits = append(edits, assetEdit(home, src, dst, []string{dst}, label))
 	}
 	skills, _ := fs.Glob(assets, "assets/claude/skills/*/SKILL.md")
 	for _, src := range skills {
@@ -49,26 +44,19 @@ func claudeAssetEdits(home string) []Edit {
 		dir := filepath.Join(home, ".claude", "skills", name)
 		dst := filepath.Join(dir, "SKILL.md")
 		// The legacy install linked the skill directory rather than the file.
-		edits = append(edits, assetEdit(home, src, dst, []string{dir, dst}, 0, "skill "+name))
+		edits = append(edits, assetEdit(home, src, dst, []string{dir, dst}, "skill "+name))
 	}
 	return edits
-}
-
-// toolEdits installs helper scripts every harness's agents use.
-func toolEdits(home string) []Edit {
-	dst := gittreePath(home)
-	return []Edit{assetEdit(home, "assets/bin/gittree", dst, []string{dst}, 0o755, "gittree worktree helper")}
 }
 
 // assetEdit installs one embedded asset at dst. It creates a missing file,
 // refreshes one carrying managedMarker, and replaces a symlink at any of links
 // that points into the legacy checkout. Anything else is the user's and fails the
 // whole plan rather than being overwritten.
-func assetEdit(home, src, dst string, links []string, mode os.FileMode, label string) Edit {
+func assetEdit(home, src, dst string, links []string, label string) Edit {
 	return Edit{
 		Path:   dst,
 		Unlink: links,
-		Mode:   mode,
 		Compute: func(old []byte) ([]byte, string, error) {
 			body, err := assets.ReadFile(src)
 			if err != nil {

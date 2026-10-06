@@ -20,14 +20,12 @@ func (Codex) Name() string { return "codex" }
 
 // Edits implements Adapter.
 func (c Codex) Edits(bins Bins, home string) []Edit {
-	edits := append(instructionEdits(home, c.Name()), []Edit{
+	return append(instructionEdits(home, c.Name()), []Edit{
 		codexTOMLEdit(bins, home),
 		codexHooksEdit(bins, home),
 		aliasEdit(bins.Orch, home),
 		plistEdit(bins.Orchd, home),
 	}...)
-	edits = append(edits, toolEdits(home)...)
-	return edits
 }
 
 func codexTOMLEdit(bins Bins, home string) Edit {

@@ -56,8 +56,6 @@ type Edit struct {
 	Compute   func(old []byte) (newBytes []byte, summary string, err error)
 	Normalize func(old []byte) (normalized []byte, err error)
 	Unlink    []string
-	// Mode is the written file's permission; zero means 0644.
-	Mode os.FileMode
 }
 
 // evaluated is an edit measured against the file currently on disk.
@@ -228,18 +226,8 @@ func (p Plan) Apply(w io.Writer, backupDir string) error {
 		if err := os.MkdirAll(filepath.Dir(e.Path), 0o755); err != nil {
 			return err
 		}
-		mode := e.Mode
-		if mode == 0 {
-			mode = 0o644
-		}
-		if err := os.WriteFile(e.Path, ev.next, mode); err != nil {
+		if err := os.WriteFile(e.Path, ev.next, 0o644); err != nil {
 			return err
-		}
-		// WriteFile applies the mode only when it creates the file.
-		if e.Mode != 0 {
-			if err := os.Chmod(e.Path, mode); err != nil {
-				return err
-			}
 		}
 		// Reason: print every summary line, not just the first. One of them is a
 		// permission grant, and an apply that only showed the leading hooks line

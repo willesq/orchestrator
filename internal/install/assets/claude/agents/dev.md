@@ -48,8 +48,7 @@ worker is a stub that never executes anything.
 
 ## Phase 0: Workspace setup (runs before any other work)
 
-The harness no longer auto-provisions your worktree. You create it yourself via the `gittree` worktree-helper script that `orch install`
-places at `~/.config/orch/bin/gittree`. The script takes one argument — the branch name — and creates `<repo-parent>/<repo>.worktrees/<branch>/` off `main`. It must be run from the canonical clone, never from inside an existing worktree.
+The harness no longer auto-provisions your worktree. You create it yourself with the `gittree` command, run by name from your PATH like any other CLI. The command takes one argument — the branch name — and creates `<repo-parent>/<repo>.worktrees/<branch>/` off `main`. It must be run from the canonical clone, never from inside an existing worktree.
 
 The dispatcher provides the branch name and canonical repo via a `## Worktree` section in your prompt:
 
@@ -65,7 +64,7 @@ Decide:
 
 | Worktree section in prompt? | Action |
 |---|---|
-| Yes | Single Bash invocation: `cd <Canonical repo> && ~/.config/orch/bin/gittree <Branch>`. Then prefix every subsequent Bash command with `cd <Path> && …`, since Bash CWD does not persist between tool calls. ALL reads, edits, commits, tests, and the PR happen inside `<Path>`. Never modify files in the canonical clone. |
+| Yes | Single Bash invocation: `cd <Canonical repo> && gittree <Branch>`. Then prefix every subsequent Bash command with `cd <Path> && …`, since Bash CWD does not persist between tool calls. ALL reads, edits, commits, tests, and the PR happen inside `<Path>`. Never modify files in the canonical clone. |
 | No | Block immediately and exit. `gittree` requires a branch name and a canonical clone — without those, you have no workspace to operate in. Return: `BLOCKED: no ## Worktree section in prompt — need branch + canonical repo path. The dev agent always works in a gittree-managed worktree.` and stop. |
 
 Confirm worktree creation succeeded by running `pwd` and `git status` from inside `<Path>` before proceeding to Phase 1.
