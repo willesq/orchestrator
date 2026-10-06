@@ -1,11 +1,9 @@
 package install
 
 import (
-	"bytes"
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -43,17 +41,14 @@ func TestShippedAssetsAreWellFormed(t *testing.T) {
 			if !strings.Contains(s, managedMarker) {
 				t.Errorf("missing %q marker", managedMarker)
 			}
-			if strings.Contains(s, ".claude/orchestrator") {
-				t.Errorf("references the retired ~/.claude/orchestrator checkout")
+			// Assets ship to other machines, so tools are invoked by name from PATH
+			// (gittree included) rather than by a path that exists only here.
+			for _, local := range []string{".claude/orchestrator", "git_worktree_create.sh", "/Users/"} {
+				if strings.Contains(s, local) {
+					t.Errorf("hard-codes the machine-specific path %q", local)
+				}
 			}
 		})
-	}
-	script, err := assets.ReadFile("assets/bin/gittree")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.HasPrefix(script, []byte("#!/usr/bin/env bash\n")) || !bytes.Contains(script, []byte(managedMarker)) {
-		t.Errorf("gittree must start with a bash shebang and carry the marker")
 	}
 }
 
@@ -76,7 +71,7 @@ func (h assetHome) skillDir(name string) string {
 }
 
 func (h assetHome) plan() Plan {
-	return Plan{Target: "claude-code", Edits: append(claudeAssetEdits(h.home), toolEdits(h.home)...)}
+	return Plan{Target: "claude-code", Edits: claudeAssetEdits(h.home)}
 }
 
 func writeFile(t *testing.T, p, body string) {
@@ -193,21 +188,6 @@ func TestAssetEditsInstall(t *testing.T) {
 				}
 			},
 		},
-		{
-			name: "gittree is executable even when a stale copy was not",
-			setup: func(t *testing.T, h assetHome) {
-				writeFile(t, gittreePath(h.home), "#!/bin/sh\n# "+managedMarker+"\n")
-			},
-			check: func(t *testing.T, h assetHome) {
-				info, err := os.Stat(gittreePath(h.home))
-				if err != nil {
-					t.Fatal(err)
-				}
-				if info.Mode().Perm() != 0o755 {
-					t.Errorf("gittree mode = %v, want 0755", info.Mode().Perm())
-				}
-			},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -264,8 +244,8 @@ func TestAssetEditsRefuseForeignFiles(t *testing.T) {
 				t.Fatalf("apply err = %v, want one containing %q", err, tt.wantErr)
 			}
 			// All-or-nothing: no other asset was written either.
-			if _, err := os.Stat(gittreePath(h.home)); !os.IsNotExist(err) {
-				t.Errorf("plan wrote files despite refusing one (gittree stat err=%v)", err)
+			if _, err := os.Lstat(h.agent("ops")); !os.IsNotExist(err) {
+				t.Errorf("plan wrote files despite refusing one (ops agent stat err=%v)", err)
 			}
 		})
 	}
@@ -284,30 +264,18 @@ func TestAdaptersShipAssets(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.adapter.Name(), func(t *testing.T) {
-			var gittree, agents bool
+			var agents bool
 			for _, e := range tt.adapter.Edits(bins, home) {
-				gittree = gittree || e.Path == gittreePath(home)
 				agents = agents || strings.HasPrefix(e.Path, filepath.Join(home, ".claude", "agents"))
-			}
-			if !gittree {
-				t.Errorf("gittree helper not installed")
+				// gittree is owned outside orch; no target installs helper scripts.
+				if strings.HasPrefix(e.Path, filepath.Join(home, ".config", "orch", "bin")) {
+					t.Errorf("installs a helper script at %s", e.Path)
+				}
 			}
 			if agents != tt.wantAgents {
 				t.Errorf("installs Claude agents = %v, want %v", agents, tt.wantAgents)
 			}
 		})
-	}
-}
-
-func TestAliasBlockIncludesGittree(t *testing.T) {
-	home := t.TempDir()
-	next, summary, err := aliasEdit("/opt/orch/orch", home).Compute(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := `alias gittree="` + gittreePath(home) + `"`
-	if !strings.Contains(string(next), want) || !strings.Contains(summary, "gittree") {
-		t.Errorf("alias block missing %s:\n%s", want, next)
 	}
 }
 
@@ -325,61 +293,5 @@ func TestUnlinkSymlinksLeavesRegularFiles(t *testing.T) {
 	}
 	if _, err := os.Lstat(link); !os.IsNotExist(err) {
 		t.Errorf("symlink not removed (err=%v)", err)
-	}
-}
-
-func TestGittreeScript(t *testing.T) {
-	if _, err := exec.LookPath("bash"); err != nil {
-		t.Skip("bash not available")
-	}
-	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	script := filepath.Join(t.TempDir(), "gittree")
-	writeFile(t, script, shipped(t, "assets/bin/gittree"))
-	repo := filepath.Join(t.TempDir(), "widget")
-	git := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
-		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.com",
-			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.com")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	if err := os.MkdirAll(repo, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	git("init", "-q", "-b", "main")
-	git("commit", "-q", "--allow-empty", "-m", "init")
-
-	tests := []struct {
-		name    string
-		branch  string
-		wantErr bool
-	}{
-		{name: "leading dash rejected", branch: "-x", wantErr: true},
-		{name: "dot-dot rejected", branch: "a..b", wantErr: true},
-		{name: "refspec syntax rejected", branch: "+x:y", wantErr: true},
-		{name: "nested branch creates worktree beside the repo", branch: "feat/x"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := exec.Command("bash", script, tt.branch)
-			cmd.Dir = repo
-			out, err := cmd.CombinedOutput()
-			if tt.wantErr {
-				if err == nil {
-					t.Fatalf("expected failure, got success:\n%s", out)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("gittree %s: %v\n%s", tt.branch, err, out)
-			}
-			wt := filepath.Join(filepath.Dir(repo), "widget.worktrees", "feat", "x")
-			if _, err := os.Stat(filepath.Join(wt, ".git")); err != nil {
-				t.Errorf("worktree not created at %s: %v", wt, err)
-			}
-		})
 	}
 }

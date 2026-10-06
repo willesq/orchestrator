@@ -52,14 +52,12 @@ To wire every supported coding agent, use `orch install --target all`, then
 `--target codex` and `--target gemini` install those harnesses individually.
 There is no separate setup command: `install` handles harness configuration.
 
-Install also ships the orchestrator's own agent tooling, embedded in the CLI from
-[`internal/install/assets/`](internal/install/assets/):
-
-- **Claude Code subagents and skills** — `dev`, `dispatcher`, `ops`, `research`,
-  `reviewer`, `triage` into `~/.claude/agents/`, and the `orch-*` skills into
-  `~/.claude/skills/`. Claude Code target only; Codex and Gemini do not receive them yet.
-- **`gittree`** — the worktree helper the agents use, at `~/.config/orch/bin/gittree`
-  (every target), plus a `gittree` alias in the managed `~/.zprofile` block.
+Install also ships the orchestrator's Claude Code subagents and skills, embedded in the
+CLI from [`internal/install/assets/`](internal/install/assets/): `dev`, `dispatcher`, `ops`,
+`research`, `reviewer`, `triage` into `~/.claude/agents/`, and the `orch-*` skills into
+`~/.claude/skills/`. Claude Code target only; Codex and Gemini do not receive them yet.
+The agents invoke tools such as `gittree` by name from PATH; orch does not ship them, so a
+missing one fails with the shell's usual "command not found".
 
 Each shipped file carries a `managed-by: orch` marker. Install creates missing files,
 refreshes marked ones, and replaces symlinks left pointing into the retired
