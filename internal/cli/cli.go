@@ -45,6 +45,7 @@ func NewRootCmd(cf clientFactory) *cobra.Command {
 		newInstallCmd(),
 		newCheckCmd(),
 		newModelCmd(),
+		newProviderCmd(),
 		newQdrantCmd(),
 		newSourceCmd(),
 		newDocsCmd(cf),
