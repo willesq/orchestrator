@@ -118,9 +118,13 @@ agent has loaded the latest instructions.
 
 `orch-hook` gives every wired session durable memory without the agent asking for it.
 
-- **Prompt enrichment.** For question-shaped prompts, `user-prompt-submit` searches the
-  store and prepends the strongest hits (`hooks.auto_rag.*` sets the count, score floor,
-  and size). Hits from the project you are working in come first: the hook resolves the
+- **Prompt enrichment.** On every prompt, `user-prompt-submit` searches the store and
+  prepends the strongest hits (`hooks.auto_rag.*` sets the count, score floors and size).
+  Question-shaped prompts need `min_score` (default 0.25). Instructions such as "fix the
+  flaky test" need the stricter `min_score_statement` (default 0.45), since they say less
+  about what they need. A chunk already injected earlier in the session is not injected
+  again; that memory is a small owner-only file per session, removed when the session
+  ends. Hits from the project you are working in come first: the hook resolves the
   session's working directory to its repository (linked worktrees count as their main
   checkout) and searches that project's registered docs (`repo:<name>`, named from the
   `origin` remote, else the checkout folder) and its past sessions (`checkout:<path>`)

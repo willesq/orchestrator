@@ -73,7 +73,7 @@ func factory(c orchdv1.OrchdClient, dialErr error) clientFactory {
 }
 
 func defaultAutoRAG() config.AutoRAGSettings {
-	return config.AutoRAGSettings{Enabled: true, TopK: 3, MinScore: 0.25, MaxChars: 2000, MinPromptChars: 12}
+	return config.AutoRAGSettings{Enabled: true, TopK: 3, MinScore: 0.25, MinScoreStatement: 0.45, MaxChars: 2000, MinPromptChars: 12}
 }
 
 func hitsResp(score float32) *orchdv1.SearchResponse {
@@ -92,7 +92,9 @@ func TestUserPromptSubmit(t *testing.T) {
 		wantInject bool
 	}{
 		{name: "question with strong hit injects", cfg: defaultAutoRAG(), prompt: "how did we handle retries?", client: &fakeClient{search: hitsResp(0.8)}, wantInject: true},
-		{name: "non-question no inject", cfg: defaultAutoRAG(), prompt: "please refactor this now", client: &fakeClient{search: hitsResp(0.8)}, wantInject: false},
+		{name: "instruction with a strong hit injects", cfg: defaultAutoRAG(), prompt: "please refactor this now", client: &fakeClient{search: hitsResp(0.8)}, wantInject: true},
+		{name: "instruction must clear the stricter floor", cfg: defaultAutoRAG(), prompt: "please refactor this now", client: &fakeClient{search: hitsResp(0.35)}, wantInject: false},
+		{name: "a question accepts the same mid-score hit", cfg: defaultAutoRAG(), prompt: "how should we refactor this?", client: &fakeClient{search: hitsResp(0.35)}, wantInject: true},
 		{name: "too short no inject", cfg: defaultAutoRAG(), prompt: "hi?", client: &fakeClient{search: hitsResp(0.8)}, wantInject: false},
 		{name: "weak hit filtered out", cfg: defaultAutoRAG(), prompt: "what is our policy?", client: &fakeClient{search: hitsResp(0.1)}, wantInject: false},
 		{name: "disabled no inject", cfg: config.AutoRAGSettings{Enabled: false}, prompt: "what is our policy?", client: &fakeClient{search: hitsResp(0.9)}, wantInject: false},
@@ -151,10 +153,17 @@ func TestFormatInjection(t *testing.T) {
 			for i := 0; i < tt.hits; i++ {
 				hits = append(hits, &orchdv1.SearchHit{SourceUri: "manual://x", SourceType: "manual", Score: 0.9, Text: "some text"})
 			}
-			got := formatInjection(hits, tt.maxChars)
+			got, written := formatInjection(hits, tt.maxChars)
 			has := strings.Contains(got, "manual://x")
 			if has != tt.wantOne {
 				t.Errorf("contains hit = %v, want %v", has, tt.wantOne)
+			}
+			if has != (len(written) > 0) {
+				t.Errorf("written = %d hits but text contains hit = %v", len(written), has)
+			}
+			// Nothing fitting means nothing at all, not an empty heading.
+			if !tt.wantOne && got != "" {
+				t.Errorf("got %q, want no output", got)
 			}
 		})
 	}
