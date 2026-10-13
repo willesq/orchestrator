@@ -90,6 +90,8 @@ type server struct {
 	// saying why, when the routing policy in config is invalid.
 	router    modelRouter
 	routerErr error
+	// rater records task verdicts; nil when unavailable.
+	rater taskRater
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -240,7 +242,7 @@ func taskPB(t queue.Task) *orchdv1.Task {
 		Result: t.Result, Status: t.Status, UpdatedAt: t.UpdatedAt,
 		CostUsd: t.CostUSD, DurationMs: t.DurationMS, Turns: int32(t.Turns),
 		SessionId: t.SessionID, Models: t.Models, Prs: t.PRs, Verification: t.Verification,
-		Route: taskRoutePB(t),
+		Route: taskRoutePB(t), Rating: t.Rating, PrOutcome: t.PROutcome,
 	}
 }
 
@@ -468,6 +470,7 @@ func Run(ctx context.Context) error {
 		workerEnabled: s.Queue.Worker.Enabled,
 		summaries:     summaries,
 		router:        router, routerErr: routerErr,
+		rater: dbRater{db: store},
 	})
 	go func() {
 		<-runCtx.Done()

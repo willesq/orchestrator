@@ -47,6 +47,9 @@ type RoutingSettings struct {
 	Efforts map[string]string `mapstructure:"efforts"`
 	// Ranks is how many fallback routes each kind keeps.
 	Ranks int `mapstructure:"ranks"`
+	// MinEvidence is how many observed outcomes (ratings, PR fates, failures) a
+	// model needs on a kind before they move its rank.
+	MinEvidence int `mapstructure:"min_evidence"`
 }
 
 // DocsSettings controls the GitHub code-docs subsystem (orch docs).
@@ -275,6 +278,7 @@ func setDefaults(v *viper.Viper) {
 	}
 	v.SetDefault("routing.providers", []string{"claude-code", "codex"})
 	v.SetDefault("routing.ranks", 3)
+	v.SetDefault("routing.min_evidence", 5)
 	// Read-only commands a queued session needs constantly; granting them up front
 	// keeps a dontAsk run from failing on its first `git status`.
 	v.SetDefault("queue.worker.allowed_tools.claude", []string{

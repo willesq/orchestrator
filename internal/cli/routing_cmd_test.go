@@ -158,3 +158,31 @@ func TestQueuedTasksCannotChangeRouting(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestTaskRate(t *testing.T) {
+	orig := fakeRate
+	t.Cleanup(func() { fakeRate = orig })
+	var got *orchdv1.RateTaskRequest
+	fakeRate = func(req *orchdv1.RateTaskRequest) (*orchdv1.RateTaskResponse, error) {
+		got = req
+		return &orchdv1.RateTaskResponse{}, nil
+	}
+	t.Setenv(agentrun.TaskIDEnv, "")
+	out, err := run(factory(&fakeClient{}, nil), "", "task", "task-1", "--rate", "rework")
+	if err != nil || !strings.Contains(out, "rated task-1 rework") {
+		t.Fatalf("out = %q, %v", out, err)
+	}
+	if got.GetId() != "task-1" || got.GetRating() != "rework" {
+		t.Fatalf("request = %+v", got)
+	}
+
+	got = nil
+	t.Setenv(agentrun.TaskIDEnv, "task-parent")
+	if _, err := run(factory(&fakeClient{}, nil), "", "task", "task-1", "--rate", "good"); err == nil ||
+		!strings.Contains(err.Error(), "cannot rate tasks") {
+		t.Fatalf("err = %v", err)
+	}
+	if got != nil {
+		t.Fatal("a queued task reached orchd with a rating")
+	}
+}

@@ -88,6 +88,10 @@ func (r *Router) Recommend(ctx context.Context, kind string, runnable func(provi
 	if err != nil {
 		return Recommendation{}, err
 	}
+	ev, err := r.Store.Evidence(ctx)
+	if err != nil {
+		return Recommendation{}, err
+	}
 	for _, rt := range routes {
 		m, ok := usable[rt.Provider+"/"+rt.Model]
 		if !ok {
@@ -96,13 +100,17 @@ func (r *Router) Recommend(ctx context.Context, kind string, runnable func(provi
 		if !m.SupportsEffort(rt.Effort) {
 			rt.Effort = ""
 		}
+		// The count is current, not the one recorded when the table was applied.
+		rt.EvidenceN = ev.For(kind, rt.Provider, rt.Model).N()
 		return Recommendation{Route: rt, Confidence: confidence(rt.EvidenceN), FromTable: true}, nil
 	}
 	var pool []models.Model
 	for _, m := range usable {
 		pool = append(pool, m)
 	}
-	live := proposeKind(r.Policy, kind, pool, time.Now().Unix())
+	// The fallback ranks by declared capability alone: evidence reaches dispatch
+	// only through a table the user applied.
+	live := proposeKind(r.Policy, kind, pool, nil, time.Now().Unix())
 	if len(live) == 0 {
 		return Recommendation{}, fmt.Errorf("%w for task kind %q: enable one with `orch model enable`", ErrNoRoute, kind)
 	}

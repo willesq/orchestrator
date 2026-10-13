@@ -17,3 +17,12 @@ var fakeRecommend = func(*orchdv1.RecommendModelRequest) (*orchdv1.RecommendMode
 func (f *fakeClient) RecommendModel(_ context.Context, req *orchdv1.RecommendModelRequest, _ ...grpc.CallOption) (*orchdv1.RecommendModelResponse, error) {
 	return fakeRecommend(req)
 }
+
+// fakeRate answers RateTask for every fakeClient.
+var fakeRate = func(*orchdv1.RateTaskRequest) (*orchdv1.RateTaskResponse, error) {
+	return &orchdv1.RateTaskResponse{}, nil
+}
+
+func (f *fakeClient) RateTask(_ context.Context, req *orchdv1.RateTaskRequest, _ ...grpc.CallOption) (*orchdv1.RateTaskResponse, error) {
+	return fakeRate(req)
+}

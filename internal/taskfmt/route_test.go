@@ -34,3 +34,22 @@ func TestOutcomeShowsRouteBeforeFinish(t *testing.T) {
 		t.Fatalf("got %q", done)
 	}
 }
+
+func TestOutcomeShowsVerdict(t *testing.T) {
+	tests := []struct {
+		task *orchdv1.Task
+		want string
+	}{
+		{&orchdv1.Task{Turns: 1, Rating: "good", PrOutcome: "rework"}, "verdict: rated good · PRs rework\n"},
+		{&orchdv1.Task{Turns: 1, PrOutcome: "bad"}, "verdict: PRs bad\n"},
+		{&orchdv1.Task{Turns: 1, Rating: "bad"}, "verdict: rated bad\n"},
+	}
+	for _, tt := range tests {
+		if got := Outcome(tt.task); !strings.HasSuffix(got, tt.want) {
+			t.Errorf("got %q, want suffix %q", got, tt.want)
+		}
+	}
+	if strings.Contains(Outcome(&orchdv1.Task{Turns: 1}), "verdict") {
+		t.Error("unlabeled task shows a verdict")
+	}
+}

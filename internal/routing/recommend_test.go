@@ -77,7 +77,7 @@ func TestRecommend(t *testing.T) {
 			t.Fatalf("unrestricted rec = %+v, %v", rec, err)
 		}
 		rec, err = r.Recommend(ctx, "code", onlyClaude)
-		if err != nil || rec.Ref() != "claude-code/opus" || rec.Rank != 2 || rec.Confidence != "medium" {
+		if err != nil || rec.Ref() != "claude-code/opus" || rec.Rank != 2 || rec.Confidence != "low" || rec.EvidenceN != 0 {
 			t.Fatalf("restricted rec = %+v, %v", rec, err)
 		}
 	})

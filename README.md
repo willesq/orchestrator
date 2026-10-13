@@ -348,16 +348,33 @@ orch dispatch --model claude-code/opus "<task>"
   for classify). `routing.providers` orders the providers that may be proposed. A provider
   that is not listed is never proposed. `routing.efforts.<kind>` asks models that declare
   effort levels for one. `routing.ranks` (default 3) sets how many fallbacks each kind keeps.
-- **Ranking is declared capability only, for now.** Models rank by distance from the wanted
-  tier, then provider order, then alias over pinned ID. Every route reports `evidence_n: 0`
-  and `confidence: low` until outcomes are recorded.
+- **Ranking starts from declared capability.** With no evidence, models rank by distance
+  from the wanted tier, then provider order, then alias over pinned ID. Every route reports
+  how many observed outcomes back it (`evidence_n`). Confidence is `low` below 5, `medium`
+  below 20, and `high` from 20.
+- **Outcomes move ranks.** Each routed task counts once, by its best label:
+  - your rating: `orch task <id> --rate good|rework|bad`;
+  - else the fate of the PRs it opened, which the PR babysitter checks once they close (merged
+    as the task left it is good; merged after more authored commits is rework; closed unmerged
+    is bad). A PR counts only if you opened it after the task was dispatched, so a session
+    cannot claim someone else's merged work. Checks are capped per task and per sweep, and
+    stop after 30 days;
+  - else `bad` if it failed.
+
+  A task that only completed carries no verdict, and turns and duration never count, so speed
+  cannot stand in for quality. Once a model has `routing.min_evidence` (default 5) outcomes
+  on a kind, its success rate is blended with the tier prior, weighted by how many there are.
+  `orch routing evaluate` then proposes the change. Evidence reaches dispatch only through a
+  table you apply; with no table route, dispatch ranks by declared capability alone.
 - **Routes are fixed at dispatch.** orchd resolves the model when the task is queued and
   records it on the task (`orch task <id>` shows it), so a resumed task keeps its model. The
   worker runs Claude Code only. A route to another provider falls to the next rank. A kind
   with no routable model runs on the agent's own model.
 - **Only you change it.** Inside a queued task, `orch routing apply|set|clear|rollback`,
-  `orch model enable|disable|tier` and `orch provider enable|disable` refuse, so a session
-  steered by an untrusted repository cannot redirect later work. A pending task whose model
+  `orch model enable|disable|tier`, `orch provider enable|disable` and `orch task --rate`
+  refuse. This stops a session that an untrusted repository is steering from casually
+  redirecting later work or grading its own. It is a guard, not a boundary: a session runs as
+  you and could reach orch.db another way. A pending task whose model
   you disable or hide before it starts runs on the agent's own model instead.
 - **Sessions can ask.** The `model_recommend` MCP tool returns the model for a kind with its
   rationale and evidence count. `queue_dispatch` takes `task_kind` and `model`. The

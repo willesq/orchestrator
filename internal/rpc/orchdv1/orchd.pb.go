@@ -1091,8 +1091,10 @@ type Task struct {
 	SessionId     string   `protobuf:"bytes,10,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	Models        []string `protobuf:"bytes,11,rep,name=models,proto3" json:"models,omitempty"`
 	Prs           []string `protobuf:"bytes,12,rep,name=prs,proto3" json:"prs,omitempty"`
-	Verification  string   `protobuf:"bytes,13,opt,name=verification,proto3" json:"verification,omitempty"` // passed: … | failed: … | skipped: …
-	Route         *Route   `protobuf:"bytes,14,opt,name=route,proto3" json:"route,omitempty"`               // the model the task was dispatched to, if routed
+	Verification  string   `protobuf:"bytes,13,opt,name=verification,proto3" json:"verification,omitempty"`            // passed: … | failed: … | skipped: …
+	Route         *Route   `protobuf:"bytes,14,opt,name=route,proto3" json:"route,omitempty"`                          // the model the task was dispatched to, if routed
+	Rating        string   `protobuf:"bytes,15,opt,name=rating,proto3" json:"rating,omitempty"`                        // good | rework | bad, set by the user
+	PrOutcome     string   `protobuf:"bytes,16,opt,name=pr_outcome,json=prOutcome,proto3" json:"pr_outcome,omitempty"` // good | rework | bad, from the fate of the task's PRs
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1223,6 +1225,20 @@ func (x *Task) GetRoute() *Route {
 		return x.Route
 	}
 	return nil
+}
+
+func (x *Task) GetRating() string {
+	if x != nil {
+		return x.Rating
+	}
+	return ""
+}
+
+func (x *Task) GetPrOutcome() string {
+	if x != nil {
+		return x.PrOutcome
+	}
+	return ""
 }
 
 type StatusRequest struct {
@@ -1797,6 +1813,94 @@ func (x *RecommendModelResponse) GetFromTable() bool {
 	return false
 }
 
+type RateTaskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Rating        string                 `protobuf:"bytes,2,opt,name=rating,proto3" json:"rating,omitempty"` // good | rework | bad
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RateTaskRequest) Reset() {
+	*x = RateTaskRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RateTaskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RateTaskRequest) ProtoMessage() {}
+
+func (x *RateTaskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RateTaskRequest.ProtoReflect.Descriptor instead.
+func (*RateTaskRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *RateTaskRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *RateTaskRequest) GetRating() string {
+	if x != nil {
+		return x.Rating
+	}
+	return ""
+}
+
+type RateTaskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RateTaskResponse) Reset() {
+	*x = RateTaskResponse{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RateTaskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RateTaskResponse) ProtoMessage() {}
+
+func (x *RateTaskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RateTaskResponse.ProtoReflect.Descriptor instead.
+func (*RateTaskResponse) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{30}
+}
+
 var File_internal_rpc_orchdv1_orchd_proto protoreflect.FileDescriptor
 
 const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
@@ -1880,7 +1984,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"K\n" +
 	"\x0fGetTaskResponse\x12\"\n" +
 	"\x04task\x18\x01 \x01(\v2\x0e.orchd.v1.TaskR\x04task\x12\x14\n" +
-	"\x05found\x18\x02 \x01(\bR\x05found\"\xf5\x02\n" +
+	"\x05found\x18\x02 \x01(\bR\x05found\"\xac\x03\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x12\n" +
@@ -1899,7 +2003,10 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x06models\x18\v \x03(\tR\x06models\x12\x10\n" +
 	"\x03prs\x18\f \x03(\tR\x03prs\x12\"\n" +
 	"\fverification\x18\r \x01(\tR\fverification\x12%\n" +
-	"\x05route\x18\x0e \x01(\v2\x0f.orchd.v1.RouteR\x05route\"\x0f\n" +
+	"\x05route\x18\x0e \x01(\v2\x0f.orchd.v1.RouteR\x05route\x12\x16\n" +
+	"\x06rating\x18\x0f \x01(\tR\x06rating\x12\x1d\n" +
+	"\n" +
+	"pr_outcome\x18\x10 \x01(\tR\tprOutcome\"\x0f\n" +
 	"\rStatusRequest\"\x8c\x01\n" +
 	"\x0eStatusResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12%\n" +
@@ -1943,7 +2050,11 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x16RecommendModelResponse\x12%\n" +
 	"\x05route\x18\x01 \x01(\v2\x0f.orchd.v1.RouteR\x05route\x12\x1d\n" +
 	"\n" +
-	"from_table\x18\x02 \x01(\bR\tfromTable2\xc9\x06\n" +
+	"from_table\x18\x02 \x01(\bR\tfromTable\"9\n" +
+	"\x0fRateTaskRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
+	"\x06rating\x18\x02 \x01(\tR\x06rating\"\x12\n" +
+	"\x10RateTaskResponse2\x8c\a\n" +
 	"\x05Orchd\x125\n" +
 	"\x04Ping\x12\x15.orchd.v1.PingRequest\x1a\x16.orchd.v1.PingResponse\x12;\n" +
 	"\x06Ingest\x12\x17.orchd.v1.IngestRequest\x1a\x18.orchd.v1.IngestResponse\x12;\n" +
@@ -1956,7 +2067,8 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x06Status\x12\x17.orchd.v1.StatusRequest\x1a\x18.orchd.v1.StatusResponse\x12>\n" +
 	"\aRestart\x12\x18.orchd.v1.RestartRequest\x1a\x19.orchd.v1.RestartResponse\x12Y\n" +
 	"\x10SummarizeSession\x12!.orchd.v1.SummarizeSessionRequest\x1a\".orchd.v1.SummarizeSessionResponse\x12S\n" +
-	"\x0eRecommendModel\x12\x1f.orchd.v1.RecommendModelRequest\x1a .orchd.v1.RecommendModelResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
+	"\x0eRecommendModel\x12\x1f.orchd.v1.RecommendModelRequest\x1a .orchd.v1.RecommendModelResponse\x12A\n" +
+	"\bRateTask\x12\x19.orchd.v1.RateTaskRequest\x1a\x1a.orchd.v1.RateTaskResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
 
 var (
 	file_internal_rpc_orchdv1_orchd_proto_rawDescOnce sync.Once
@@ -1970,7 +2082,7 @@ func file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP() []byte {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescData
 }
 
-var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*PingRequest)(nil),              // 0: orchd.v1.PingRequest
 	(*PingResponse)(nil),             // 1: orchd.v1.PingResponse
@@ -2001,6 +2113,8 @@ var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*Route)(nil),                    // 26: orchd.v1.Route
 	(*RecommendModelRequest)(nil),    // 27: orchd.v1.RecommendModelRequest
 	(*RecommendModelResponse)(nil),   // 28: orchd.v1.RecommendModelResponse
+	(*RateTaskRequest)(nil),          // 29: orchd.v1.RateTaskRequest
+	(*RateTaskResponse)(nil),         // 30: orchd.v1.RateTaskResponse
 }
 var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	6,  // 0: orchd.v1.SearchResponse.hits:type_name -> orchd.v1.SearchHit
@@ -2023,20 +2137,22 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	22, // 17: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
 	24, // 18: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
 	27, // 19: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
-	1,  // 20: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
-	3,  // 21: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
-	5,  // 22: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
-	8,  // 23: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
-	11, // 24: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
-	13, // 25: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
-	15, // 26: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
-	17, // 27: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
-	20, // 28: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
-	23, // 29: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
-	25, // 30: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
-	28, // 31: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
-	20, // [20:32] is the sub-list for method output_type
-	8,  // [8:20] is the sub-list for method input_type
+	29, // 20: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
+	1,  // 21: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
+	3,  // 22: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
+	5,  // 23: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
+	8,  // 24: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
+	11, // 25: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
+	13, // 26: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
+	15, // 27: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
+	17, // 28: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
+	20, // 29: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
+	23, // 30: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
+	25, // 31: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
+	28, // 32: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
+	30, // 33: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
+	21, // [21:34] is the sub-list for method output_type
+	8,  // [8:21] is the sub-list for method input_type
 	8,  // [8:8] is the sub-list for extension type_name
 	8,  // [8:8] is the sub-list for extension extendee
 	0,  // [0:8] is the sub-list for field type_name
@@ -2053,7 +2169,7 @@ func file_internal_rpc_orchdv1_orchd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_rpc_orchdv1_orchd_proto_rawDesc), len(file_internal_rpc_orchdv1_orchd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   29,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

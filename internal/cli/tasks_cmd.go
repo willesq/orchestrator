@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/taskfmt"
 )
@@ -79,11 +81,17 @@ func newTasksCmd(cf clientFactory) *cobra.Command {
 const maxStatsTasks = 500
 
 func newTaskCmd(cf clientFactory) *cobra.Command {
-	return &cobra.Command{
+	var rate string
+	cmd := &cobra.Command{
 		Use:   "task <id>",
-		Short: "Show one dispatched agent task",
+		Short: "Show one dispatched agent task, or rate it with --rate",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			// A rating is evidence routing acts on, so a queued session must not
+			// grade its own work.
+			if id := os.Getenv(agentrun.TaskIDEnv); rate != "" && id != "" {
+				return fmt.Errorf("queue tasks cannot rate tasks (running as %s)", id)
+			}
 			client, cleanup, err := cf()
 			if err != nil {
 				return err
@@ -91,6 +99,13 @@ func newTaskCmd(cf clientFactory) *cobra.Command {
 			defer cleanup()
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
+			if rate != "" {
+				if _, err := client.RateTask(ctx, &orchdv1.RateTaskRequest{Id: args[0], Rating: rate}); err != nil {
+					return err
+				}
+				fmt.Fprintf(c.OutOrStdout(), "rated %s %s\n", args[0], rate)
+				return nil
+			}
 			resp, err := client.GetTask(ctx, &orchdv1.GetTaskRequest{Id: args[0]})
 			if err != nil {
 				return err
@@ -107,6 +122,8 @@ func newTaskCmd(cf clientFactory) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().StringVar(&rate, "rate", "", "record your verdict on a finished task: good, rework or bad")
+	return cmd
 }
 
 // firstLine trims a body to one readable line for list output.

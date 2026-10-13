@@ -10,10 +10,11 @@ import (
 
 func testPolicy() Policy {
 	return Policy{
-		Tiers:     map[string]string{"code": models.TierFrontier, "classify": models.TierFast, "docs": models.TierBalanced},
-		Providers: []string{"claude-code", "codex"},
-		Efforts:   map[string]string{"code": "high"},
-		Ranks:     3,
+		Tiers:       map[string]string{"code": models.TierFrontier, "classify": models.TierFast, "docs": models.TierBalanced},
+		Providers:   []string{"claude-code", "codex"},
+		Efforts:     map[string]string{"code": "high"},
+		Ranks:       3,
+		MinEvidence: 5,
 	}
 }
 
@@ -60,7 +61,7 @@ func TestProposeKind(t *testing.T) {
 		t.Run(tt.kind, func(t *testing.T) {
 			p := testPolicy()
 			p.Ranks = tt.ranks
-			got := proposeKind(p, tt.kind, cands, 7)
+			got := proposeKind(p, tt.kind, cands, nil, 7)
 			if r := refs(got); r != tt.want {
 				t.Fatalf("got %s, want %s", r, tt.want)
 			}
@@ -78,7 +79,7 @@ func TestProposeUntieredLast(t *testing.T) {
 	got := proposeKind(p, "code", []models.Model{
 		enabled("claude-code", "mystery", "", "alias"),
 		enabled("codex", "gpt-luna", models.TierFast, "cache"),
-	}, 1)
+	}, nil, 1)
 	if r := refs(got); r != "codex/gpt-luna,claude-code/mystery" {
 		t.Fatalf("got %s", r)
 	}
@@ -88,11 +89,11 @@ func TestProposeUntieredLast(t *testing.T) {
 }
 
 func TestProposeAllKinds(t *testing.T) {
-	got := Propose(testPolicy(), []models.Model{enabled("claude-code", "opus", models.TierFrontier, "alias")}, 1)
+	got := Propose(testPolicy(), []models.Model{enabled("claude-code", "opus", models.TierFrontier, "alias")}, nil, 1)
 	if len(got) != len(Kinds) {
 		t.Fatalf("got %d routes, want one per kind", len(got))
 	}
-	if Propose(testPolicy(), nil, 1) != nil {
+	if Propose(testPolicy(), nil, nil, 1) != nil {
 		t.Fatal("no candidates should propose nothing")
 	}
 }
@@ -109,6 +110,7 @@ func TestPolicyValidate(t *testing.T) {
 		{name: "effort kind", mutate: func(p *Policy) { p.Efforts["poetry"] = "low" }, wantErr: "unknown task kind"},
 		{name: "effort value", mutate: func(p *Policy) { p.Efforts["code"] = "--max" }, wantErr: "invalid effort"},
 		{name: "ranks", mutate: func(p *Policy) { p.Ranks = 0 }, wantErr: "at least 1"},
+		{name: "min evidence", mutate: func(p *Policy) { p.MinEvidence = 0 }, wantErr: "min_evidence"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -147,7 +149,7 @@ func TestPolicyFromDefaults(t *testing.T) {
 			t.Errorf("no default tier for %s", k)
 		}
 	}
-	if p.Tiers["code"] != models.TierFrontier || p.Tiers["classify"] != models.TierFast || p.Ranks != 3 {
+	if p.Tiers["code"] != models.TierFrontier || p.Tiers["classify"] != models.TierFast || p.Ranks != 3 || p.MinEvidence != 5 {
 		t.Errorf("defaults = %+v", p)
 	}
 }
