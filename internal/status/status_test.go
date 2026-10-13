@@ -264,3 +264,24 @@ func TestDirSizeMissingDir(t *testing.T) {
 
 // prsPath mirrors where the babysitter cache lives, for seeding it in tests.
 func prsPath() string { return filepath.Join(os.Getenv("ORCH_DATA_DIR"), "pr_babysitter_state.json") }
+
+func TestInstructionLoadSection(t *testing.T) {
+	r := Collect(context.Background(), Deps{InstructionLoad: func() []Line {
+		return []Line{{Name: "claude-code", Value: "≈9.2k tokens", Level: LevelOK}}
+	}})
+	var sec *Section
+	for i := range r.Sections {
+		if r.Sections[i].Title == "always-loaded instructions" {
+			sec = &r.Sections[i]
+		}
+	}
+	if sec == nil || len(sec.Lines) != 1 || sec.Lines[0].Value != "≈9.2k tokens" {
+		t.Fatalf("section = %+v", sec)
+	}
+	empty := Collect(context.Background(), Deps{InstructionLoad: func() []Line { return nil }})
+	for _, s := range empty.Sections {
+		if s.Title == "always-loaded instructions" && s.Note == "" {
+			t.Errorf("an empty section must say why")
+		}
+	}
+}

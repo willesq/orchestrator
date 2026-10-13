@@ -195,3 +195,18 @@ func TestRepositoryInstructionStatusRendering(t *testing.T) {
 		}
 	}
 }
+
+func TestInstructionLoadAt(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".claude", "CLAUDE.md"), []byte(strings.Repeat("x", 4096)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lines := instructionLoadAt(home)
+	if len(lines) != 1 || lines[0].Name != "claude-code" || lines[0].Value != "≈1.0k tokens" ||
+		!strings.Contains(lines[0].Detail, "4.0 KB in 1 file(s): ~/.claude/CLAUDE.md") {
+		t.Errorf("lines = %+v", lines)
+	}
+}

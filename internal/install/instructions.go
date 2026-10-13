@@ -1,9 +1,11 @@
 package install
 
 import (
-	_ "embed"
+	"embed"
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -15,6 +17,32 @@ const instructionEnd = "<!-- END orchestrator-managed -->"
 //
 //go:embed agent-instructions.md
 var memoryInstructions string
+
+// policyFiles is guidance that applies only to particular work. It installs
+// beside the shared policy, which points at each file, so it is read on demand
+// instead of loading into every session. Plain files rather than harness
+// skills, because every harness reads the shared policy.
+//
+//go:embed policy/*.md
+var policyFiles embed.FS
+
+// policyDir is where the on-demand policy files install, under the home.
+func policyDir(home string) string { return filepath.Join(home, ".config", "orch", "policy") }
+
+// policyEdits installs each on-demand policy file, Orchestrator-owned like the
+// shared policy.
+func policyEdits(home string) []Edit {
+	names, _ := fs.Glob(policyFiles, "policy/*.md")
+	edits := make([]Edit, 0, len(names))
+	for _, src := range names {
+		body, _ := policyFiles.ReadFile(src)
+		name := path.Base(src)
+		edits = append(edits, Edit{Path: filepath.Join(policyDir(home), name), Compute: func([]byte) ([]byte, string, error) {
+			return body, "instructions: install on-demand policy " + name, nil
+		}})
+	}
+	return edits
+}
 
 // managedInstructions replaces only our block, leaving personal text untouched.
 // Reject broken markers rather than risk deleting user instructions.
@@ -62,5 +90,5 @@ func instructionEdits(home, target string) []Edit {
 		next, err := managedInstructions(old, body)
 		return next, "instructions: load shared policy from " + shared, err
 	}}
-	return []Edit{canonical, bridge}
+	return append([]Edit{canonical, bridge}, policyEdits(home)...)
 }

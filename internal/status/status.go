@@ -97,6 +97,9 @@ type Deps struct {
 	Harness func() []HarnessInfo
 	// RepositoryInstructions checks the current repository's shared guidance.
 	RepositoryInstructions func() []Line
+	// InstructionLoad sizes the instructions each harness loads into every
+	// session, so their growth stays visible.
+	InstructionLoad func() []Line
 	// DirSize sums a directory's bytes.
 	DirSize func(path string) int64
 }
@@ -114,6 +117,13 @@ func Collect(ctx context.Context, d Deps) Report {
 		dataSection(ctx, d),
 		harnessSection(d),
 		preconditionSection(d),
+	}
+	if d.InstructionLoad != nil {
+		sec := Section{Title: "always-loaded instructions", Lines: d.InstructionLoad()}
+		if len(sec.Lines) == 0 {
+			sec.Note = "no harness instruction files found"
+		}
+		r.Sections = append(r.Sections, sec)
 	}
 	if d.RepositoryInstructions != nil {
 		lines := d.RepositoryInstructions()

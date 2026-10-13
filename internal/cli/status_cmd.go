@@ -80,6 +80,7 @@ func statusDeps(cf clientFactory, s config.Settings) status.Deps {
 		Store:                  db.OpenReader,
 		Harness:                harnessInfo,
 		RepositoryInstructions: repositoryInstructions,
+		InstructionLoad:        instructionLoad,
 	}
 }
 
