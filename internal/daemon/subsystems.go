@@ -82,6 +82,9 @@ func subsystems(d deps) []supervisor.Unit {
 	if d.settings.PRBabysitter.Enabled {
 		out = append(out, prsUnit(d.settings, d.store))
 	}
+	if u, ok := routingEvaluatorUnit(d.settings, d.store); ok {
+		out = append(out, u)
+	}
 	if d.summaries != nil {
 		sum := d.settings.Sessions.Summarize
 		out = append(out, summariesUnit(d.summaries, newSummarizer(sum, secretEnv(d.settings)), d.rag,

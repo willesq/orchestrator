@@ -3,9 +3,12 @@ package hook
 import (
 	"fmt"
 	"io"
+	"strings"
+	"unicode"
 
 	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/paths"
+	"github.com/willesq/orchestrator/internal/redact"
 )
 
 // updateStreams are the event streams surfaced mid-session: the session's own
@@ -55,7 +58,7 @@ func takeUpdates(st *sessionState, sessionID string) []string {
 			continue
 		}
 		for _, e := range evs[seen:] {
-			lines = append(lines, fmt.Sprintf("- [%s] %s: %s", e.Kind, e.Source, e.Summary))
+			lines = append(lines, eventLine(e))
 		}
 	}
 	if extra := len(lines) - maxUpdateLines; extra > 0 {
@@ -70,4 +73,26 @@ func writeUpdates(out io.Writer, lines []string) {
 		fmt.Fprintln(out, l)
 	}
 	fmt.Fprintln(out)
+}
+
+// maxEventLine caps one event's line in a digest or update block.
+const maxEventLine = 300
+
+// eventLine renders an event as one digest line. Event streams are files any
+// process running as the user can append to, and the line lands in a session's
+// context, so it is flattened to a single line, redacted, and capped: an event
+// cannot open a section of its own or smuggle a secret into the transcript.
+func eventLine(e events.Event) string {
+	line := fmt.Sprintf("- [%s] %s: %s", e.Kind, e.Source, e.Summary)
+	line = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return ' '
+		}
+		return r
+	}, line)
+	line, _ = redact.Redact(line)
+	if r := []rune(line); len(r) > maxEventLine {
+		line = string(r[:maxEventLine-1]) + "…"
+	}
+	return line
 }
