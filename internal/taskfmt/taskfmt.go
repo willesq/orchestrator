@@ -33,6 +33,9 @@ func Outcome(t *orchdv1.Task) string {
 	if p := t.GetPrs(); len(p) > 0 {
 		fmt.Fprintf(&b, "prs:     %s\n", strings.Join(p, ", "))
 	}
+	if v := t.GetVerification(); v != "" {
+		fmt.Fprintf(&b, "verify:  %s\n", v)
+	}
 	return b.String()
 }
 

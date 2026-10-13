@@ -1065,6 +1065,7 @@ type Task struct {
 	SessionId     string   `protobuf:"bytes,10,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	Models        []string `protobuf:"bytes,11,rep,name=models,proto3" json:"models,omitempty"`
 	Prs           []string `protobuf:"bytes,12,rep,name=prs,proto3" json:"prs,omitempty"`
+	Verification  string   `protobuf:"bytes,13,opt,name=verification,proto3" json:"verification,omitempty"` // passed: … | failed: … | skipped: …
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1181,6 +1182,13 @@ func (x *Task) GetPrs() []string {
 		return x.Prs
 	}
 	return nil
+}
+
+func (x *Task) GetVerification() string {
+	if x != nil {
+		return x.Verification
+	}
+	return ""
 }
 
 type StatusRequest struct {
@@ -1540,7 +1548,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"K\n" +
 	"\x0fGetTaskResponse\x12\"\n" +
 	"\x04task\x18\x01 \x01(\v2\x0e.orchd.v1.TaskR\x04task\x12\x14\n" +
-	"\x05found\x18\x02 \x01(\bR\x05found\"\xaa\x02\n" +
+	"\x05found\x18\x02 \x01(\bR\x05found\"\xce\x02\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x12\n" +
@@ -1557,7 +1565,8 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"session_id\x18\n" +
 	" \x01(\tR\tsessionId\x12\x16\n" +
 	"\x06models\x18\v \x03(\tR\x06models\x12\x10\n" +
-	"\x03prs\x18\f \x03(\tR\x03prs\"\x0f\n" +
+	"\x03prs\x18\f \x03(\tR\x03prs\x12\"\n" +
+	"\fverification\x18\r \x01(\tR\fverification\"\x0f\n" +
 	"\rStatusRequest\"\x8c\x01\n" +
 	"\x0eStatusResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12%\n" +

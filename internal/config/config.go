@@ -70,6 +70,22 @@ func (s Settings) QdrantStorageDir() string {
 	return filepath.Join(paths.DataDir(), "qdrant")
 }
 
+// QueueVerifySettings controls the check run against a queued task's work. orchd
+// finds the checkouts of the task's repository whose HEAD moved during the task
+// and runs each one's detected test command (a make test target, else go test,
+// cargo test or the package.json test script).
+type QueueVerifySettings struct {
+	Enabled bool `mapstructure:"enabled"`
+	// Repos lists the repositories (main checkout paths, ~ allowed) whose tests
+	// orchd may run. A check executes the repository's own code outside the
+	// agent's permission checks, so only listed repositories are verified.
+	Repos   []string `mapstructure:"repos"`
+	Timeout string   `mapstructure:"timeout"` // per check command
+	// Retries is how often a failing check goes back to the agent, resuming its
+	// session with the output, before the task fails.
+	Retries int `mapstructure:"retries"`
+}
+
 // QueueSettings controls the durable dispatch queue.
 type QueueSettings struct {
 	Worker QueueWorkerSettings `mapstructure:"worker"`
@@ -94,6 +110,8 @@ type QueueWorkerSettings struct {
 	// headless sessions get without asking. Each harness spells its rules its own
 	// way, so lists are kept per harness; only "claude" is used today.
 	AllowedTools map[string][]string `mapstructure:"allowed_tools"`
+	// Verify checks the agent's work before a task counts as complete.
+	Verify QueueVerifySettings `mapstructure:"verify"`
 }
 
 // IngestSettings controls which files the repo walkers (sources and docs) ingest.
@@ -208,6 +226,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("queue.worker.permission_mode", "auto")
 	v.SetDefault("queue.worker.timeout", "60m")
 	v.SetDefault("queue.worker.max_concurrent", 1)
+	v.SetDefault("queue.worker.verify.enabled", true)
+	v.SetDefault("queue.worker.verify.timeout", "15m")
+	v.SetDefault("queue.worker.verify.retries", 1)
+	v.SetDefault("queue.worker.verify.repos", []string{})
 	// Read-only commands a queued session needs constantly; granting them up front
 	// keeps a dontAsk run from failing on its first `git status`.
 	v.SetDefault("queue.worker.allowed_tools.claude", []string{

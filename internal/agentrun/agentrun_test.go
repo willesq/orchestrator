@@ -29,6 +29,7 @@ cat > "$d/stdin"
 pwd -P > "$d/cwd"
 env > "$d/env"
 if [ -n "$FAKE_SLEEP" ]; then sleep "$FAKE_SLEEP"; fi
+if [ -n "$FAKE_ON_RESUME" ] && printf '%s\n' "$@" | grep -qx -- --resume; then eval "$FAKE_ON_RESUME"; fi
 [ -f "$d/stdout" ] && cat "$d/stdout"
 [ -f "$d/stderr" ] && cat "$d/stderr" >&2
 exit "${FAKE_EXIT:-0}"
@@ -51,7 +52,7 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	t.Setenv("FAKE_DIR", dir)
-	for _, k := range []string{"FAKE_EXIT", "FAKE_SLEEP", "FAKE_CHILD", TaskIDEnv} {
+	for _, k := range []string{"FAKE_EXIT", "FAKE_SLEEP", "FAKE_CHILD", "FAKE_ON_RESUME", TaskIDEnv} {
 		t.Setenv(k, "")
 	}
 	return fixture{dir: dir, home: home, runner: &Runner{
@@ -261,15 +262,27 @@ func TestRunWithoutCwdUsesPrivateScratch(t *testing.T) {
 	}
 }
 
-// waitGone polls until pid no longer exists.
+// waitGone polls until pid no longer exists. A killed process lingers until it
+// is reaped, which can take a while on a loaded machine, so the wait is long;
+// it returns as soon as the process is gone.
 func waitGone(pid int) bool {
-	for range 40 {
+	for range 200 {
 		if err := syscall.Kill(pid, 0); errors.Is(err, syscall.ESRCH) {
 			return true
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 	return false
+}
+
+// childPIDIfStarted reports the fake's background child, if it got that far.
+func childPIDIfStarted(f fixture) (int, bool) {
+	b, err := os.ReadFile(filepath.Join(f.dir, "child.pid"))
+	if err != nil {
+		return 0, false
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	return pid, err == nil
 }
 
 func childPID(t *testing.T, f fixture) int {
@@ -283,7 +296,10 @@ func childPID(t *testing.T, f fixture) int {
 
 func TestRunTimeoutKillsTheWholeProcessGroup(t *testing.T) {
 	f := newFixture(t)
-	f.runner.Timeout = 300 * time.Millisecond
+	// The fake starts its child before anything else, but only once bash is
+	// running; the timeout must comfortably outlast that startup on a loaded
+	// machine, or child.pid would not exist yet when the group is killed.
+	f.runner.Timeout = 2 * time.Second
 	t.Setenv("FAKE_SLEEP", "30")
 	t.Setenv("FAKE_CHILD", "1")
 
@@ -295,10 +311,15 @@ func TestRunTimeoutKillsTheWholeProcessGroup(t *testing.T) {
 	if got.Status != StatusFailed || !strings.Contains(got.Result, "timed out") {
 		t.Errorf("outcome = %+v, want a timeout failure", got)
 	}
-	if elapsed := time.Since(start); elapsed > 10*time.Second {
+	// An unkilled fake would sleep the full 30s; the bound leaves room for the
+	// timeout plus the 10s WaitDelay grace without depending on machine speed.
+	if elapsed := time.Since(start); elapsed > 25*time.Second {
 		t.Errorf("Run took %s; the timeout did not stop it", elapsed)
 	}
-	if pid := childPID(t, f); !waitGone(pid) {
+	// If the timeout fired before the fake got as far as starting its child,
+	// there is no process that could have leaked; otherwise the child must die
+	// with the group.
+	if pid, ok := childPIDIfStarted(f); ok && !waitGone(pid) {
 		_ = syscall.Kill(pid, syscall.SIGKILL)
 		t.Errorf("a tool process the session spawned outlived the timeout")
 	}

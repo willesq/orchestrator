@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -380,5 +381,28 @@ func TestTaskPBCarriesOutcome(t *testing.T) {
 	if pb.GetCostUsd() != 1.5 || pb.GetDurationMs() != 42 || pb.GetTurns() != 7 || pb.GetSessionId() != "s" ||
 		len(pb.GetModels()) != 1 || len(pb.GetPrs()) != 1 {
 		t.Errorf("taskPB dropped outcome fields: %+v", pb)
+	}
+}
+
+func TestTaskRunnerPassesVerifyAndDispatchTime(t *testing.T) {
+	stop, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := config.QueueWorkerSettings{ClaudeBin: "/x/claude",
+		Verify: config.QueueVerifySettings{Enabled: true, Repos: []string{"~/code/w"}, Timeout: "3m", Retries: 2}}
+	r := newTaskRunner(cfg, stop, nil).r
+	if want := (agentrun.VerifyOptions{Enabled: true, Repos: []string{"~/code/w"}, Timeout: 3 * time.Minute, Retries: 2}); !reflect.DeepEqual(r.Verify, want) {
+		t.Errorf("Verify = %+v, want %+v", r.Verify, want)
+	}
+	neg := newTaskRunner(config.QueueWorkerSettings{Verify: config.QueueVerifySettings{Retries: -3}}, stop, nil).r
+	if neg.Verify.Retries != 0 || neg.Verify.Timeout != 15*time.Minute {
+		t.Errorf("negative retries / unset timeout = %+v", neg.Verify)
+	}
+}
+
+func TestAgentTaskCarriesTheBaseline(t *testing.T) {
+	heads := map[string]string{"/src": "abc"}
+	got := agentTask(workflows.AgentTaskInput{ID: "t", Agent: "dev", Body: "b", Cwd: "/src", Heads: heads})
+	if got.Heads["/src"] != "abc" || got.Cwd != "/src" {
+		t.Errorf("agentTask = %+v", got)
 	}
 }

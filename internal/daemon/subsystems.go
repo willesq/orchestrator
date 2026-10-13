@@ -272,9 +272,15 @@ func newTaskRunner(cfg config.QueueWorkerSettings, stop context.Context, dropEnv
 		mode = "auto"
 	}
 	return taskRunner{r: &agentrun.Runner{
-		Bin:            agentrun.FindClaude(cfg.ClaudeBin, home),
-		DropEnv:        dropEnv,
-		AllowedTools:   cfg.AllowedTools["claude"],
+		Bin:          agentrun.FindClaude(cfg.ClaudeBin, home),
+		DropEnv:      dropEnv,
+		AllowedTools: cfg.AllowedTools["claude"],
+		Verify: agentrun.VerifyOptions{
+			Enabled: cfg.Verify.Enabled,
+			Repos:   cfg.Verify.Repos,
+			Timeout: interval(cfg.Verify.Timeout, 15*time.Minute),
+			Retries: max(cfg.Verify.Retries, 0),
+		},
 		PermissionMode: mode,
 		Timeout:        interval(cfg.Timeout, time.Hour),
 		Home:           home,
@@ -284,12 +290,17 @@ func newTaskRunner(cfg config.QueueWorkerSettings, stop context.Context, dropEnv
 }
 
 func (t taskRunner) Run(ctx context.Context, in workflows.AgentTaskInput) (workflows.Outcome, error) {
-	o, err := t.r.Run(ctx, agentrun.Task{ID: in.ID, Agent: in.Agent, Body: in.Body, Cwd: in.Cwd})
+	o, err := t.r.Run(ctx, agentTask(in))
 	return workflows.Outcome{
 		Status: o.Status, Result: o.Result,
 		CostUSD: o.CostUSD, DurationMS: o.DurationMS, Turns: o.Turns,
-		SessionID: o.SessionID, Models: o.Models, PRs: o.PRs,
+		SessionID: o.SessionID, Models: o.Models, PRs: o.PRs, Verification: o.Verification,
 	}, err
+}
+
+// agentTask converts a durable task input for the runner.
+func agentTask(in workflows.AgentTaskInput) agentrun.Task {
+	return agentrun.Task{ID: in.ID, Agent: in.Agent, Body: in.Body, Cwd: in.Cwd, Heads: in.Heads}
 }
 
 // taskEventStream is the event log finished queue tasks are reported to; the

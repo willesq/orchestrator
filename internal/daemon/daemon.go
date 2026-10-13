@@ -232,7 +232,7 @@ func taskPB(t queue.Task) *orchdv1.Task {
 		Id: t.ID, Agent: t.Agent, Body: t.Body,
 		Result: t.Result, Status: t.Status, UpdatedAt: t.UpdatedAt,
 		CostUsd: t.CostUSD, DurationMs: t.DurationMS, Turns: int32(t.Turns),
-		SessionId: t.SessionID, Models: t.Models, Prs: t.PRs,
+		SessionId: t.SessionID, Models: t.Models, Prs: t.PRs, Verification: t.Verification,
 	}
 }
 
@@ -388,6 +388,7 @@ func Run(ctx context.Context) error {
 	workflows.SetNotifier(notifyTaskDone)
 	disp := queue.NewDispatcher(b, tasks)
 	disp.MaxActive = s.Queue.MaxActive
+	disp.Snapshot = agentrun.Snapshot
 
 	// Reason: the self-update unit restarts orchd by ending this process, and it
 	// must take the same shutdown path as SIGTERM. Serving therefore hangs off a

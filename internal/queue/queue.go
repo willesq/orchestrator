@@ -44,15 +44,16 @@ func NewSQLTaskStore(db *sql.DB) *SQLTaskStore { return &SQLTaskStore{db: db} }
 func (s *SQLTaskStore) SaveResult(ctx context.Context, in workflows.AgentTaskInput, out workflows.Outcome) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO tasks (id, agent, body, result, status, updated_at,
-		                    cost_usd, duration_ms, turns, session_id, models, prs)
-		 VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)
+		                    cost_usd, duration_ms, turns, session_id, models, prs, verification)
+		 VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   result=excluded.result, status=excluded.status, updated_at=datetime('now'),
 		   cost_usd=excluded.cost_usd, duration_ms=excluded.duration_ms, turns=excluded.turns,
-		   session_id=excluded.session_id, models=excluded.models, prs=excluded.prs`,
+		   session_id=excluded.session_id, models=excluded.models, prs=excluded.prs,
+		   verification=excluded.verification`,
 		in.ID, in.Agent, in.Body, out.Result, out.Status,
 		out.CostUSD, out.DurationMS, out.Turns, out.SessionID,
-		strings.Join(out.Models, ","), strings.Join(out.PRs, ","))
+		strings.Join(out.Models, ","), strings.Join(out.PRs, ","), out.Verification)
 	return err
 }
 
@@ -87,18 +88,19 @@ type Task struct {
 	Status    string
 	UpdatedAt string
 	// Outcome metrics; zero until the task finishes.
-	CostUSD    float64
-	DurationMS int64
-	Turns      int
-	SessionID  string
-	Models     []string
-	PRs        []string
+	CostUSD      float64
+	DurationMS   int64
+	Turns        int
+	SessionID    string
+	Models       []string
+	PRs          []string
+	Verification string
 }
 
 // taskColumns is the select list scanTask reads, in order.
 const taskColumns = `id, agent, body, COALESCE(result,''), status, updated_at,
 	COALESCE(cost_usd,0), COALESCE(duration_ms,0), COALESCE(turns,0),
-	COALESCE(session_id,''), COALESCE(models,''), COALESCE(prs,'')`
+	COALESCE(session_id,''), COALESCE(models,''), COALESCE(prs,''), COALESCE(verification,'')`
 
 type rowScanner interface{ Scan(dest ...any) error }
 
@@ -106,7 +108,7 @@ func scanTask(r rowScanner) (Task, error) {
 	var t Task
 	var models, prs string
 	err := r.Scan(&t.ID, &t.Agent, &t.Body, &t.Result, &t.Status, &t.UpdatedAt,
-		&t.CostUSD, &t.DurationMS, &t.Turns, &t.SessionID, &models, &prs)
+		&t.CostUSD, &t.DurationMS, &t.Turns, &t.SessionID, &models, &prs, &t.Verification)
 	t.Models, t.PRs = splitList(models), splitList(prs)
 	return t, err
 }
@@ -194,6 +196,11 @@ func (s *SQLTaskStore) Get(ctx context.Context, id string) (Task, bool, error) {
 	return t, true, nil
 }
 
+// taskInput builds a task's durable workflow input.
+func taskInput(id, agent, body, cwd string, heads map[string]string) workflows.AgentTaskInput {
+	return workflows.AgentTaskInput{ID: id, Agent: agent, Body: body, Cwd: cwd, Heads: heads}
+}
+
 // ErrQueueFull rejects a dispatch while too many tasks are pending or running.
 var ErrQueueFull = errors.New("queue full")
 
@@ -206,6 +213,9 @@ type Dispatcher struct {
 	// through injected instructions) must hit a hard ceiling rather than grow
 	// without bound.
 	MaxActive int
+	// Snapshot records the checkouts of the task's repository at dispatch, the
+	// baseline verification compares against. Nil records none.
+	Snapshot func(ctx context.Context, dir string) map[string]string
 }
 
 // NewDispatcher builds a dispatcher over a go-workflows backend. store may be
@@ -230,7 +240,11 @@ func (d *Dispatcher) Dispatch(ctx context.Context, agent, body, cwd string) (str
 	// held to the same redaction as everything else orch persists.
 	body, _ = redact.Redact(body)
 	id := "task-" + uuid.NewString()
-	in := workflows.AgentTaskInput{ID: id, Agent: agent, Body: body, Cwd: cwd}
+	var heads map[string]string
+	if d.Snapshot != nil && cwd != "" {
+		heads = d.Snapshot(ctx, cwd)
+	}
+	in := taskInput(id, agent, body, cwd, heads)
 	// Record before enqueuing: a row with no workflow is a visible, diagnosable
 	// state, whereas a workflow with no row is invisible to every reader.
 	if d.store != nil {

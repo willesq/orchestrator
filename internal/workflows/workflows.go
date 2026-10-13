@@ -19,6 +19,10 @@ type AgentTaskInput struct {
 	Body  string
 	// Cwd is where the agent session runs; empty runs it in a scratch directory.
 	Cwd string
+	// Heads is the HEAD of each checkout of Cwd's repository at dispatch, kept in
+	// the durable input so a task resumed after a restart still knows what it
+	// started from.
+	Heads map[string]string
 }
 
 // Outcome is how a run ended: a terminal ledger status, the agent's result, and
@@ -32,6 +36,8 @@ type Outcome struct {
 	SessionID  string
 	Models     []string
 	PRs        []string
+	// Verification is how the work was checked before completion.
+	Verification string
 }
 
 // runOptions disables retries. A failed agent run has already had side effects
