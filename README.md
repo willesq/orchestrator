@@ -218,6 +218,14 @@ While it is off, dispatched tasks stay `pending` and run once it is enabled. Oth
 - `queue.max_active`: default 20. Dispatch fails once that many tasks are pending or
   running.
 - `queue.worker.claude_bin`: found on PATH or in the usual install locations when empty.
+- `queue.worker.allowed_tools.<harness>`: permission rules a queued session gets without
+  asking, kept per harness because each spells its rules differently. Only `claude` is
+  used today; its default is a read-only set (`git status`/`diff`/`log`/`show`/`branch`,
+  `ls`, `go test`, `go vet`, `gh pr view`/`checks`/`diff`, `orch search`/`status`). They
+  matter most under `dontAsk`, where anything not allowed is refused. Set a list with
+  `orch config set queue.worker.allowed_tools.claude "Bash(make test:*),Bash(ls:*)"`.
+  Rules containing a comma, or beginning with `-`, are ignored. Your own Claude Code
+  `permissions` still apply on top, and the dispatch tools stay denied whatever is listed.
 
 Behavior to know about:
 

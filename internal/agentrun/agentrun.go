@@ -95,7 +95,12 @@ type Runner struct {
 	Bin string // absolute path to the claude binary
 	// DropEnv names variables withheld from the session, such as the vector
 	// store's API key that orchd itself holds.
-	DropEnv        []string
+	DropEnv []string
+	// AllowedTools are permission rules granted to every run without asking
+	// (queue.worker.allowed_tools.claude). They matter most under dontAsk, where
+	// anything not allowed is refused. The dispatch tools stay denied regardless,
+	// since Claude Code applies deny rules before allow rules.
+	AllowedTools   []string
 	PermissionMode string        // --permission-mode for every run
 	Timeout        time.Duration // per-run cap; zero means none
 	Home           string        // user home, for transcripts and PATH
@@ -141,7 +146,13 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 
 	sid := SessionID(t.ID)
 	args := []string{"-p", "--output-format", "json", "--permission-mode", r.PermissionMode,
-		"--disallowedTools", dispatchTools, "--agent", t.Agent}
+		"--disallowedTools", dispatchTools}
+	if rules := allowedRules(r.AllowedTools); rules != "" {
+		// One token: the CLI's variadic parsing would otherwise read a following
+		// value that begins with "-" as a flag of its own.
+		args = append(args, "--allowedTools="+rules)
+	}
+	args = append(args, "--agent", t.Agent)
 	prompt := taskPrompt(t)
 	if r.transcriptExists(sid) {
 		args = append(args, "--resume", sid)
@@ -310,6 +321,22 @@ func (r *Runner) searchPath() string {
 		}
 	}
 	return strings.Join(out, string(filepath.ListSeparator))
+}
+
+// allowedRules joins the configured rules into one --allowedTools value. It
+// drops blank rules, rules containing a comma (the CLI would split them into two
+// different rules), and rules beginning with "-", which are never permission
+// rules and could otherwise smuggle a flag such as one disabling permission
+// checks.
+func allowedRules(rules []string) string {
+	var kept []string
+	for _, r := range rules {
+		r = strings.TrimSpace(r)
+		if r != "" && !strings.Contains(r, ",") && !strings.HasPrefix(r, "-") {
+			kept = append(kept, r)
+		}
+	}
+	return strings.Join(kept, ",")
 }
 
 // sessionEnv is orchd's environment with PATH replaced and the task marker and
