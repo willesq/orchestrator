@@ -27,6 +27,7 @@ type Settings struct {
 	Sources      SourcesSettings      `mapstructure:"sources"`
 	Docs         DocsSettings         `mapstructure:"docs"`
 	PRBabysitter PRBabysitterSettings `mapstructure:"pr_babysitter"`
+	Queue        QueueSettings        `mapstructure:"queue"`
 }
 
 // DocsSettings controls the GitHub code-docs subsystem (orch docs).
@@ -65,6 +66,28 @@ func (s Settings) QdrantStorageDir() string {
 		return s.RAG.Qdrant.Storage
 	}
 	return filepath.Join(paths.DataDir(), "qdrant")
+}
+
+// QueueSettings controls the durable dispatch queue.
+type QueueSettings struct {
+	Worker QueueWorkerSettings `mapstructure:"worker"`
+	// MaxActive caps tasks pending or in progress; dispatch fails beyond it.
+	MaxActive int `mapstructure:"max_active"`
+}
+
+// QueueWorkerSettings controls the worker that runs dispatched tasks as headless
+// agent sessions. It is opt-in: with it disabled, tasks are recorded and stay
+// pending until a worker is enabled.
+type QueueWorkerSettings struct {
+	Enabled bool `mapstructure:"enabled"`
+	// ClaudeBin is the Claude Code CLI to run; empty resolves it from PATH and the
+	// usual install locations, since orchd runs with launchd's minimal PATH.
+	ClaudeBin string `mapstructure:"claude_bin"`
+	// PermissionMode is passed to --permission-mode. Nobody can answer a prompt
+	// in a headless run, so it must be a mode that decides without asking.
+	PermissionMode string `mapstructure:"permission_mode"`
+	Timeout        string `mapstructure:"timeout"`        // per-task wall-clock cap
+	MaxConcurrent  int    `mapstructure:"max_concurrent"` // tasks run at once
 }
 
 // PRBabysitterSettings controls the PR-polling daemon.
@@ -158,6 +181,13 @@ func setDefaults(v *viper.Viper) {
 	// PR babysitter: poll open PRs via gh and cache their state.
 	v.SetDefault("pr_babysitter.enabled", true)
 	v.SetDefault("pr_babysitter.poll_interval", "10m")
+	// Queue worker: off until explicitly enabled, because it spawns agent sessions.
+	v.SetDefault("queue.max_active", 20)
+	v.SetDefault("queue.worker.enabled", false)
+	v.SetDefault("queue.worker.claude_bin", "")
+	v.SetDefault("queue.worker.permission_mode", "auto")
+	v.SetDefault("queue.worker.timeout", "60m")
+	v.SetDefault("queue.worker.max_concurrent", 1)
 }
 
 // Load builds a Viper with precedence defaults < config file < env (ORCH_*).

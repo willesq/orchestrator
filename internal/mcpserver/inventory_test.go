@@ -132,11 +132,11 @@ func TestQueueList(t *testing.T) {
 		wantAbsent   string
 	}{
 		{
-			name: "lists tasks and warns that nothing executes them",
+			name: "lists tasks",
 			client: &fakeClient{listTasks: &orchdv1.ListTasksResponse{Tasks: []*orchdv1.Task{
 				{Id: "t1", Status: "pending", Agent: "dev", Body: "line one\nline two", UpdatedAt: "now"},
 			}}},
-			wantContains: []string{"t1", "pending", "agent=dev", "line one", "stub"},
+			wantContains: []string{"t1", "pending", "agent=dev", "line one"},
 			wantAbsent:   "line two", // only the first line of a body is shown
 		},
 		{
@@ -182,12 +182,12 @@ func TestQueueRead(t *testing.T) {
 		wantContains []string
 	}{
 		{
-			name: "renders the task and the stub warning",
+			name: "renders the task and the agent's result",
 			args: map[string]any{"id": "t1"},
 			client: &fakeClient{getTask: &orchdv1.GetTaskResponse{Found: true, Task: &orchdv1.Task{
-				Id: "t1", Status: "complete", Agent: "dev", Body: "do it", Result: "processed: do it",
+				Id: "t1", Status: "complete", Agent: "dev", Body: "do it", Result: "opened PR #9",
 			}}},
-			wantContains: []string{"t1", "complete", "do it", "processed: do it", "stub"},
+			wantContains: []string{"t1", "complete", "do it", "opened PR #9"},
 		},
 		{
 			name:         "a task with no result yet says so",

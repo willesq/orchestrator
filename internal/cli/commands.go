@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/check"
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/install"
@@ -524,12 +525,17 @@ func serveMCP(cf clientFactory, build func(orchdv1.OrchdClient) *server.MCPServe
 }
 
 func newDispatchCmd(cf clientFactory) *cobra.Command {
-	var agent string
+	var agent, cwd string
 	cmd := &cobra.Command{
 		Use:   "dispatch <body>",
-		Short: "Dispatch a durable agent task",
+		Short: "Dispatch a durable agent task (runs headless when queue.worker.enabled)",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			// A queued session may reach this from its shell; refusing keeps a task
+			// from queueing more. orchd's cap on active tasks backs this up.
+			if id := os.Getenv(agentrun.TaskIDEnv); id != "" {
+				return fmt.Errorf("queue tasks cannot dispatch further tasks (running as %s)", id)
+			}
 			body := args[0]
 			for _, a := range args[1:] {
 				body += " " + a
@@ -541,15 +547,29 @@ func newDispatchCmd(cf clientFactory) *cobra.Command {
 			defer cleanup()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			resp, err := client.Dispatch(ctx, &orchdv1.DispatchRequest{Agent: agent, Body: body})
+			if cwd == "" {
+				if cwd, err = os.Getwd(); err != nil {
+					return err
+				}
+			}
+			if cwd, err = filepath.Abs(cwd); err != nil {
+				return err
+			}
+			resp, err := client.Dispatch(ctx, &orchdv1.DispatchRequest{Agent: agent, Body: body, Cwd: cwd})
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(c.OutOrStdout(), "dispatched %s\n", resp.GetInstanceId())
+			out := c.OutOrStdout()
+			fmt.Fprintf(out, "dispatched %s (runs in %s)\n", resp.GetInstanceId(), cwd)
+			if !resp.GetWorkerEnabled() {
+				fmt.Fprintln(out, "note: the queue worker is disabled, so this task stays pending until you run\n"+
+					"      `orch config set queue.worker.enabled true` and `orch restart`.")
+			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&agent, "agent", "dev", "target agent")
+	cmd.Flags().StringVar(&cwd, "cwd", "", "directory the agent session runs in (default: current directory)")
 	return cmd
 }
 

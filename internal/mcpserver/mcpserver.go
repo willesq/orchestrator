@@ -9,11 +9,13 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/version"
 )
@@ -137,18 +139,34 @@ func NewRAG(client orchdv1.OrchdClient) *server.MCPServer {
 type queueTools struct{ client orchdv1.OrchdClient }
 
 func (q queueTools) dispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// A queued session runs with this server in its own MCP config. Refusing here
+	// keeps one task from spawning more, which would otherwise fan out unbounded.
+	if id := os.Getenv(agentrun.TaskIDEnv); id != "" {
+		return mcp.NewToolResultError("queue tasks cannot dispatch further tasks (running as " + id + "); " +
+			"do the work in this session or report BLOCKED"), nil
+	}
 	body := req.GetString("body", "")
 	if body == "" {
 		return mcp.NewToolResultError("body is required"), nil
 	}
+	cwd := req.GetString("cwd", "")
+	if cwd == "" {
+		// The harness starts this server in its session's working directory.
+		cwd, _ = os.Getwd()
+	}
 	resp, err := q.client.Dispatch(ctx, &orchdv1.DispatchRequest{
 		Agent: req.GetString("agent", "dev"),
 		Body:  body,
+		Cwd:   cwd,
 	})
 	if err != nil {
 		return mcp.NewToolResultErrorFromErr("dispatch failed", err), nil
 	}
-	return mcp.NewToolResultText("dispatched " + resp.GetInstanceId()), nil
+	msg := "dispatched " + resp.GetInstanceId() + " (runs in " + cwd + ")"
+	if !resp.GetWorkerEnabled() {
+		msg += "\n" + workerDisabledNotice
+	}
+	return mcp.NewToolResultText(msg), nil
 }
 
 func (q queueTools) list(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -169,7 +187,6 @@ func (q queueTools) list(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 		fmt.Fprintf(&b, "%s  [%s] agent=%s  updated=%s\n    %s\n",
 			t.GetId(), t.GetStatus(), t.GetAgent(), t.GetUpdatedAt(), firstLine(t.GetBody()))
 	}
-	b.WriteString(stubNotice)
 	return mcp.NewToolResultText(b.String()), nil
 }
 
@@ -187,20 +204,17 @@ func (q queueTools) read(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 	}
 	t := resp.GetTask()
 	return mcp.NewToolResultText(fmt.Sprintf(
-		"id: %s\nstatus: %s\nagent: %s\nupdated: %s\n\nbody:\n%s\n\nresult:\n%s\n%s",
+		"id: %s\nstatus: %s\nagent: %s\nupdated: %s\n\nbody:\n%s\n\nresult:\n%s\n",
 		t.GetId(), t.GetStatus(), t.GetAgent(), t.GetUpdatedAt(),
-		t.GetBody(), orNone(t.GetResult()), stubNotice)), nil
+		t.GetBody(), orNone(t.GetResult()))), nil
 }
+
+// workerDisabledNotice explains a dispatch that will not run yet.
+const workerDisabledNotice = "NOTE: the queue worker is disabled, so this task stays pending. Enable it with " +
+	"`orch config set queue.worker.enabled true` and `orch restart`; pending tasks then run."
 
 // maxArgInt bounds any caller-supplied count argument.
 const maxArgInt = 10_000
-
-// stubNotice is appended to every task read: the ledger is real, but nothing
-// executes the task, and a caller that does not know that will misreport a
-// placeholder result as the agent's work.
-const stubNotice = "\nNOTE: the queue worker is a stub — dispatched tasks are recorded and " +
-	"transitioned, but no agent runs them. Results read 'processed: <body>'. Real " +
-	"background work goes through the harness's Agent tool.\n"
 
 // NewQueue builds the queue MCP server (tools: queue_dispatch, queue_list,
 // queue_read).
@@ -208,9 +222,8 @@ func NewQueue(client orchdv1.OrchdClient) *server.MCPServer {
 	s := server.NewMCPServer("orch-queue", version.Version)
 	qt := queueTools{client: client}
 	s.AddTool(mcp.NewTool("queue_list",
-		mcp.WithDescription("List dispatched tasks, newest first. Note: the worker is a stub — "+
-			"tasks are recorded but not executed."),
-		mcp.WithString("status", mcp.Description("filter: pending | in_progress | complete | failed")),
+		mcp.WithDescription("List dispatched tasks, newest first"),
+		mcp.WithString("status", mcp.Description("filter: pending | in_progress | complete | failed | blocked")),
 		mcp.WithString("agent", mcp.Description("filter by target agent")),
 		mcp.WithNumber("limit", mcp.Description("max tasks (default 20)")),
 	), qt.list)
@@ -219,9 +232,13 @@ func NewQueue(client orchdv1.OrchdClient) *server.MCPServer {
 		mcp.WithString("id", mcp.Required(), mcp.Description("the task ID returned by queue_dispatch")),
 	), qt.read)
 	s.AddTool(mcp.NewTool("queue_dispatch",
-		mcp.WithDescription("Dispatch a durable agent task to the orchestrator queue"),
-		mcp.WithString("body", mcp.Required(), mcp.Description("task description")),
-		mcp.WithString("agent", mcp.Description("target agent (default dev)")),
+		mcp.WithDescription("Dispatch a durable background task. When the queue worker is enabled, orchd runs it "+
+			"as a headless Claude Code session (claude -p --agent <agent>) in cwd and records the agent's "+
+			"final message as the result; check it with queue_read. The session cannot ask questions, so "+
+			"the body must carry everything the agent needs."),
+		mcp.WithString("body", mcp.Required(), mcp.Description("complete, self-contained task description")),
+		mcp.WithString("agent", mcp.Description("target subagent (default dev)")),
+		mcp.WithString("cwd", mcp.Description("absolute directory to run in (default: this session's working directory)")),
 	), qt.dispatch)
 	return s
 }

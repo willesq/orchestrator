@@ -84,9 +84,9 @@ The parent will parse this, then spawn the specialist itself via `Agent(run_in_b
 
 - ALWAYS pick exactly one specialist. Don't dispatch multiple from a single body.
 - ALWAYS return the JSON block and nothing else. The parent parses it verbatim.
-- NEVER call `queue_create` or `queue_update`; they do not exist. `queue_dispatch`,
-  `queue_list` and `queue_read` do, but the dispatch worker is a stub that runs nothing,
-  so don't dispatch either — the parent's `Agent` spawn is what actually does the work.
+- NEVER call `queue_create` or `queue_update`; they do not exist. Don't call
+  `queue_dispatch` either: the parent decides whether the work runs as an `Agent` spawn or
+  a background queue task, and performs that handoff itself.
 - **NEVER call the `Agent` tool yourself.** You don't have it in your tools list. Spawning is the parent's job.
 - NEVER do the actual work. Your job is dispatch only.
 - NEVER explore the codebase or read project files beyond what `rag_search` returns.

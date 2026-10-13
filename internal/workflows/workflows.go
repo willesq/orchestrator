@@ -1,12 +1,13 @@
 // Package workflows defines the durable go-workflows definitions. Workflow bodies
-// must be deterministic; all non-deterministic work (I/O, persistence) happens in
-// activities. The persistence dependency is injected via SetStore so activities
-// stay testable and the package has no direct database import.
+// must be deterministic; all non-deterministic work (I/O, persistence, running
+// the agent) happens in activities. Dependencies are injected via SetStore,
+// SetRunner and SetNotifier so activities stay testable and the package has no
+// direct database or process import.
 package workflows
 
 import (
 	"context"
-	"time"
+	"errors"
 
 	"github.com/cschleiden/go-workflows/workflow"
 )
@@ -16,40 +17,58 @@ type AgentTaskInput struct {
 	ID    string
 	Agent string
 	Body  string
+	// Cwd is where the agent session runs; empty runs it in a scratch directory.
+	Cwd string
 }
 
-// WorkDelay is a durable pause before processing. It demonstrates that a task
-// in-flight survives an orchd restart: the timer is persisted in workflows.db and
-// resumes after the daemon comes back. Overridable (e.g. shortened in tests).
-var WorkDelay = 3 * time.Second
+// Outcome is how a run ended: a terminal ledger status and the agent's result.
+type Outcome struct {
+	Status string
+	Result string
+}
 
-// AgentTask is the durable workflow for a dispatched task: mark it running,
-// pause, then process.
-//
-// NOTE: ProcessActivity does not execute the task — see its doc comment. The
-// status transitions here are real; the payload is not.
+// runOptions disables retries. A failed agent run has already had side effects
+// (branches, pushes, PRs), so repeating it blindly could duplicate them; failure
+// is recorded and left to a human. A run interrupted by a worker shutdown is not
+// a failure: it is abandoned, handed out again after the restart, and resumes.
+var runOptions = workflow.ActivityOptions{RetryOptions: workflow.RetryOptions{MaxAttempts: 1}}
+
+// AgentTask is the durable workflow for a dispatched task: mark it running, then
+// run it.
 func AgentTask(ctx workflow.Context, in AgentTaskInput) (string, error) {
 	workflow.Logger(ctx).Info("agent task started", "id", in.ID, "agent", in.Agent)
 	if _, err := workflow.ExecuteActivity[string](
 		ctx, workflow.DefaultActivityOptions, StartActivity, in).Get(ctx); err != nil {
 		return "", err
 	}
-	if err := workflow.Sleep(ctx, WorkDelay); err != nil {
-		return "", err
-	}
-	return workflow.ExecuteActivity[string](ctx, workflow.DefaultActivityOptions, ProcessActivity, in).Get(ctx)
+	return workflow.ExecuteActivity[string](ctx, runOptions, RunActivity, in).Get(ctx)
 }
 
 // TaskStore persists task state.
 type TaskStore interface {
-	SaveResult(ctx context.Context, in AgentTaskInput, result string) error
+	SaveResult(ctx context.Context, in AgentTaskInput, status, result string) error
 	SetStatus(ctx context.Context, id, status string) error
 }
 
-var store TaskStore
+// Runner executes a task's agent session.
+type Runner interface {
+	Run(ctx context.Context, in AgentTaskInput) (Outcome, error)
+}
 
-// SetStore injects the persistence used by ProcessActivity.
+var (
+	store  TaskStore
+	runner Runner
+	notify func(in AgentTaskInput, o Outcome)
+)
+
+// SetStore injects the persistence used by the activities.
 func SetStore(s TaskStore) { store = s }
+
+// SetRunner injects the agent runner RunActivity uses.
+func SetRunner(r Runner) { runner = r }
+
+// SetNotifier injects a callback told about every finished task.
+func SetNotifier(fn func(in AgentTaskInput, o Outcome)) { notify = fn }
 
 // StartActivity marks a task in_progress so the ledger reflects that it has
 // been picked up rather than still queued.
@@ -62,18 +81,27 @@ func StartActivity(ctx context.Context, in AgentTaskInput) (string, error) {
 	return in.ID, nil
 }
 
-// ProcessActivity persists the task's terminal result.
-//
-// STUB: this does not run the agent. It records a placeholder so the durable
-// machinery is exercised end to end. Real agent execution happens in the
-// harness via its Agent tool, driven by the parent session — not here. Wiring
-// orchd to spawn agent processes is a separate design decision.
-func ProcessActivity(ctx context.Context, in AgentTaskInput) (string, error) {
-	result := "processed: " + in.Body
+// errNoRunner means the activity ran in a worker built without a runner, which
+// is a wiring bug rather than something the task did.
+var errNoRunner = errors.New("no agent runner configured")
+
+// RunActivity runs the task's agent session and records its terminal status
+// and result.
+func RunActivity(ctx context.Context, in AgentTaskInput) (string, error) {
+	if runner == nil {
+		return "", errNoRunner
+	}
+	out, err := runner.Run(ctx, in)
+	if err != nil {
+		return "", err
+	}
 	if store != nil {
-		if err := store.SaveResult(ctx, in, result); err != nil {
+		if err := store.SaveResult(ctx, in, out.Status, out.Result); err != nil {
 			return "", err
 		}
 	}
-	return result, nil
+	if notify != nil {
+		notify(in, out)
+	}
+	return out.Result, nil
 }

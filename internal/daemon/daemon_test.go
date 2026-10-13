@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
+	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/supervisor"
@@ -50,9 +51,14 @@ func (f fakeRag) Search(context.Context, string, rag.SearchOpts) ([]rag.Hit, err
 type fakeDispatcher struct {
 	id  string
 	err error
+	// got records the last dispatch: agent, body, cwd.
+	got *[3]string
 }
 
-func (f fakeDispatcher) Dispatch(context.Context, string, string) (string, error) {
+func (f fakeDispatcher) Dispatch(_ context.Context, agent, body, cwd string) (string, error) {
+	if f.got != nil {
+		*f.got = [3]string{agent, body, cwd}
+	}
 	return f.id, f.err
 }
 
@@ -130,23 +136,46 @@ func TestServerSearch(t *testing.T) {
 
 func TestServerDispatch(t *testing.T) {
 	tests := []struct {
-		name    string
-		disp    fakeDispatcher
-		wantID  string
-		wantErr bool
+		name       string
+		req        *orchdv1.DispatchRequest
+		disp       fakeDispatcher
+		enabled    bool
+		wantID     string
+		wantCode   codes.Code
+		wantRecord [3]string
 	}{
-		{name: "success", disp: fakeDispatcher{id: "task-1"}, wantID: "task-1"},
-		{name: "error propagates", disp: fakeDispatcher{err: errors.New("boom")}, wantErr: true},
+		{name: "defaults the agent and passes cwd through", req: &orchdv1.DispatchRequest{Body: "x", Cwd: "/src/w"},
+			disp: fakeDispatcher{id: "task-1"}, enabled: true, wantID: "task-1", wantRecord: [3]string{"dev", "x", "/src/w"}},
+		{name: "error propagates", req: &orchdv1.DispatchRequest{Body: "x"},
+			disp: fakeDispatcher{err: errors.New("boom")}, wantCode: codes.Unknown},
+		{name: "agent that could be read as a flag is rejected", req: &orchdv1.DispatchRequest{Agent: "--dangerously-skip-permissions", Body: "x"},
+			wantCode: codes.InvalidArgument},
+		{name: "blank body is rejected", req: &orchdv1.DispatchRequest{Body: "  "}, wantCode: codes.InvalidArgument},
+		{name: "relative cwd is rejected", req: &orchdv1.DispatchRequest{Body: "x", Cwd: "src"}, wantCode: codes.InvalidArgument},
+		{name: "oversized body is rejected", req: &orchdv1.DispatchRequest{Body: strings.Repeat("x", maxTaskBody+1)}, wantCode: codes.InvalidArgument},
+		{name: "full queue is resource exhausted", req: &orchdv1.DispatchRequest{Body: "x"},
+			disp: fakeDispatcher{err: fmt.Errorf("%w: 20 tasks", queue.ErrQueueFull)}, wantCode: codes.ResourceExhausted},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := &server{start: time.Now(), rag: fakeRag{}, disp: tt.disp}
-			resp, err := s.Dispatch(context.Background(), &orchdv1.DispatchRequest{Body: "x"})
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			var got [3]string
+			tt.disp.got = &got
+			s := &server{start: time.Now(), rag: fakeRag{}, disp: tt.disp, workerEnabled: tt.enabled}
+			resp, err := s.Dispatch(context.Background(), tt.req)
+			if tt.wantCode != codes.OK {
+				if grpcstatus.Code(err) != tt.wantCode {
+					t.Fatalf("err = %v, want code %v", err, tt.wantCode)
+				}
+				return
 			}
-			if !tt.wantErr && resp.GetInstanceId() != tt.wantID {
-				t.Errorf("id = %q, want %q", resp.GetInstanceId(), tt.wantID)
+			if err != nil {
+				t.Fatalf("Dispatch: %v", err)
+			}
+			if resp.GetInstanceId() != tt.wantID || resp.GetWorkerEnabled() != tt.enabled {
+				t.Errorf("resp = %v, want id %q worker_enabled %v", resp, tt.wantID, tt.enabled)
+			}
+			if got != tt.wantRecord {
+				t.Errorf("dispatched %v, want %v", got, tt.wantRecord)
 			}
 		})
 	}

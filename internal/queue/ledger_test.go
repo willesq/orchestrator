@@ -2,7 +2,9 @@ package queue
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/cschleiden/go-workflows/backend/sqlite"
@@ -58,7 +60,7 @@ func TestCreateIsIdempotentAndDoesNotResetProgress(t *testing.T) {
 	if err := store.Create(ctx, in); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := store.SaveResult(ctx, in, "done"); err != nil {
+	if err := store.SaveResult(ctx, in, "complete", "done"); err != nil {
 		t.Fatalf("SaveResult: %v", err)
 	}
 	if err := store.Create(ctx, in); err != nil {
@@ -202,7 +204,7 @@ func TestDispatchRecordsAPendingRow(t *testing.T) {
 	t.Cleanup(func() { _ = b.Close() })
 	d := NewDispatcher(b, store)
 
-	id, err := d.Dispatch(context.Background(), "ops", "investigate the thing")
+	id, err := d.Dispatch(context.Background(), "ops", "investigate the thing", "/src/widget")
 	if err != nil {
 		t.Fatalf("Dispatch: %v", err)
 	}
@@ -223,7 +225,7 @@ func TestDispatchWithoutAStoreStillWorks(t *testing.T) {
 	t.Cleanup(func() { _ = b.Close() })
 	d := NewDispatcher(b, nil)
 
-	id, err := d.Dispatch(context.Background(), "dev", "body")
+	id, err := d.Dispatch(context.Background(), "dev", "body", "")
 	if err != nil {
 		t.Fatalf("Dispatch with a nil store: %v", err)
 	}
@@ -283,5 +285,55 @@ func TestListFilterValuesAreBoundNotInterpolated(t *testing.T) {
 	// The table must still be there.
 	if all, err := store.List(ctx, ListFilter{}); err != nil || len(all) != 1 {
 		t.Fatalf("after injection attempts: %d rows, err %v", len(all), err)
+	}
+}
+
+func TestDispatchCapsActiveTasks(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	b := sqlite.NewInMemoryBackend(sqlite.WithApplyMigrations(true))
+	t.Cleanup(func() { _ = b.Close() })
+	d := NewDispatcher(b, store)
+	d.MaxActive = 2
+
+	first, err := d.Dispatch(ctx, "dev", "one", "")
+	if err != nil {
+		t.Fatalf("first dispatch: %v", err)
+	}
+	if _, err := d.Dispatch(ctx, "dev", "two", ""); err != nil {
+		t.Fatalf("second dispatch: %v", err)
+	}
+	if _, err := d.Dispatch(ctx, "dev", "three", ""); !errors.Is(err, ErrQueueFull) {
+		t.Fatalf("third dispatch err = %v, want ErrQueueFull", err)
+	}
+	// Finished tasks free their slot; failed and blocked ones count as finished.
+	if err := store.SaveResult(ctx, task(first, "dev", "one"), "failed", "x"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := store.ActiveCount(ctx); err != nil || n != 1 {
+		t.Fatalf("ActiveCount = %d, %v; want 1", n, err)
+	}
+	if _, err := d.Dispatch(ctx, "dev", "three", ""); err != nil {
+		t.Errorf("dispatch after a slot freed: %v", err)
+	}
+}
+
+func TestDispatchRedactsTheBody(t *testing.T) {
+	store := newTestStore(t)
+	b := sqlite.NewInMemoryBackend(sqlite.WithApplyMigrations(true))
+	t.Cleanup(func() { _ = b.Close() })
+	d := NewDispatcher(b, store)
+	secret := "ghp_" + strings.Repeat("a1B2", 9)
+
+	id, err := d.Dispatch(context.Background(), "dev", "use "+secret+" to push", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := store.Get(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got.Body, secret) || !strings.Contains(got.Body, "[REDACTED:github-token]") {
+		t.Errorf("stored body = %q", got.Body)
 	}
 }

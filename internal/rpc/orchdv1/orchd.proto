@@ -109,10 +109,12 @@ message DeleteSourceResponse {
 message DispatchRequest {
   string agent = 1;
   string body = 2;
+  string cwd = 3; // optional: absolute directory the agent session runs in
 }
 
 message DispatchResponse {
   string instance_id = 1;
+  bool worker_enabled = 2; // false: the task stays pending until a worker is enabled
 }
 
 message ListTasksRequest {

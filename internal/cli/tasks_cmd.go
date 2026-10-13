@@ -12,12 +12,6 @@ import (
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
-// stubNotice warns that the ledger records tasks nobody executes. Printed on
-// every task view: a reader who does not know this would take the placeholder
-// result for an agent's output.
-const stubNotice = "\nnote: the queue worker is a stub — tasks are recorded and transitioned, " +
-	"but no agent runs them.\n      Real background work goes through the coding agent's own Agent tool.\n"
-
 func newTasksCmd(cf clientFactory) *cobra.Command {
 	var (
 		statusFilter string
@@ -58,7 +52,6 @@ func newTasksCmd(cf clientFactory) *cobra.Command {
 					fmt.Fprintf(out, "    %s\n", b)
 				}
 			}
-			fmt.Fprint(out, stubNotice)
 			return nil
 		},
 	}
@@ -94,7 +87,6 @@ func newTaskCmd(cf clientFactory) *cobra.Command {
 			fmt.Fprintf(out, "id:      %s\nstatus:  %s\nagent:   %s\nupdated: %s\n\nbody:\n%s\n\nresult:\n%s\n",
 				t.GetId(), t.GetStatus(), t.GetAgent(), t.GetUpdatedAt(),
 				t.GetBody(), orNotYet(t.GetResult()))
-			fmt.Fprint(out, stubNotice)
 			return nil
 		},
 	}

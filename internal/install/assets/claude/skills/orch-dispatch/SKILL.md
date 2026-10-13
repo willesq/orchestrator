@@ -71,10 +71,8 @@ You do NOT run `gittree` from the parent session. You do NOT need the parent CWD
 Spawn the `dispatcher` subagent (Haiku) to classify the task and enrich it with prior
 RAG context. Wait for its return.
 
-The dispatcher does **not** create a durable queue entry — `queue_dispatch` exists but
-its worker is a stub that sleeps and writes `"processed: <body>"` without running
-anything (`internal/workflows/workflows.go`). Treat the dispatcher purely as a
-classifier and context-gatherer; the real handoff is the Phase 2 prompt.
+The dispatcher does **not** create a queue entry. Treat it purely as a classifier and
+context-gatherer; the real handoff is the Phase 2 prompt.
 
 ```
 Agent({
@@ -113,15 +111,28 @@ Agent({
 
 This survives reliably as a session-level background agent.
 
-**The prompt is the only channel.** There is no queue entry for the specialist to
-read — the queue worker is a stub and a queue entry carries only the body, so a task ID
-alone tells the specialist nothing. Everything it needs to do the work must be
+**The prompt is the only channel.** A spawned specialist has no queue entry to read,
+so a task ID alone tells it nothing. Everything it needs to do the work must be
 inlined here. Don't pass a slug and expect it to go look the task up; it can't.
 
 Likewise, results come back in the agent's **return message**, not via a queue
 update. When the specialist finishes, the `subagent-stop` hook appends a
 `complete` event to `~/.local/share/orch/events/<your session id>.jsonl` with a
 200-character summary — that and the return message are the whole reporting path.
+
+### Alternative: hand off as a durable queue task
+
+When `orch config get queue.worker.enabled` reports `true` and the work should outlive this
+session (long-running, or the user is about to close it), you may hand off with
+`mcp__queue__queue_dispatch` instead of the `Agent` spawn above. Pass the same fully
+inlined prompt as `body`, the specialist as `agent`, and the canonical repo as `cwd`. orchd
+runs it headless (`claude -p --agent <agent>` in the configured permission mode) and
+records the agent's final message as the result.
+
+The queued session cannot ask anyone anything, so everything it needs must be in `body`.
+Tell the user the task ID, and that the result arrives through `queue_read` (or
+`orch task <id>`) and in the next session's digest. If the worker is disabled, the task
+would only sit `pending`: use the `Agent` spawn instead.
 
 ## Phase 3 — Confirm to the user
 

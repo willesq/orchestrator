@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/embed"
@@ -52,7 +53,7 @@ type ragService interface {
 
 // dispatcher enqueues durable agent-task workflows.
 type dispatcher interface {
-	Dispatch(ctx context.Context, agent, body string) (string, error)
+	Dispatch(ctx context.Context, agent, body, cwd string) (string, error)
 }
 
 // taskReader reads the dispatch ledger. Read-only on purpose: task state is
@@ -79,6 +80,9 @@ type server struct {
 	disp  dispatcher
 	sup   supervisorAPI
 	tasks taskReader
+	// workerEnabled reports whether queued tasks will run, so a caller can say
+	// plainly when a dispatch will sit pending instead.
+	workerEnabled bool
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -230,12 +234,35 @@ func taskPB(t queue.Task) *orchdv1.Task {
 	}
 }
 
+// maxTaskBody bounds a dispatched task's prompt. A task is a brief, not a
+// payload; the limit keeps one request from bloating the ledger and every
+// queue_read of it.
+const maxTaskBody = 64 << 10
+
 func (s *server) Dispatch(ctx context.Context, req *orchdv1.DispatchRequest) (*orchdv1.DispatchResponse, error) {
-	id, err := s.disp.Dispatch(ctx, orDefault(req.GetAgent(), "dev"), req.GetBody())
+	agent := orDefault(req.GetAgent(), "dev")
+	// Validated here as well as in the runner so a bad request fails at dispatch,
+	// visibly, rather than becoming a durable task that can only fail later.
+	if !agentrun.ValidAgent(agent) {
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "invalid agent name %q", agent)
+	}
+	if strings.TrimSpace(req.GetBody()) == "" {
+		return nil, grpcstatus.Error(codes.InvalidArgument, "body is required")
+	}
+	if len(req.GetBody()) > maxTaskBody {
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "body is %d bytes; the limit is %d", len(req.GetBody()), maxTaskBody)
+	}
+	if cwd := req.GetCwd(); cwd != "" && !filepath.IsAbs(cwd) {
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "cwd %q must be absolute", cwd)
+	}
+	id, err := s.disp.Dispatch(ctx, agent, req.GetBody(), req.GetCwd())
+	if errors.Is(err, queue.ErrQueueFull) {
+		return nil, grpcstatus.Error(codes.ResourceExhausted, err.Error())
+	}
 	if err != nil {
 		return nil, err
 	}
-	return &orchdv1.DispatchResponse{InstanceId: id}, nil
+	return &orchdv1.DispatchResponse{InstanceId: id, WorkerEnabled: s.workerEnabled}, nil
 }
 
 // Status reports orchd's own liveness plus one entry per supervised subsystem.
@@ -356,7 +383,9 @@ func Run(ctx context.Context) error {
 	defer func() { _ = b.Close() }()
 	tasks := queue.NewSQLTaskStore(store)
 	workflows.SetStore(tasks)
+	workflows.SetNotifier(notifyTaskDone)
 	disp := queue.NewDispatcher(b, tasks)
+	disp.MaxActive = s.Queue.MaxActive
 
 	// Reason: the self-update unit restarts orchd by ending this process, and it
 	// must take the same shutdown path as SIGTERM. Serving therefore hangs off a
@@ -403,6 +432,7 @@ func Run(ctx context.Context) error {
 	gs := grpc.NewServer()
 	orchdv1.RegisterOrchdServer(gs, &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks,
+		workerEnabled: s.Queue.Worker.Enabled,
 	})
 	go func() {
 		<-runCtx.Done()

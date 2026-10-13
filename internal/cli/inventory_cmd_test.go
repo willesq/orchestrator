@@ -116,11 +116,11 @@ func TestTasksCmd(t *testing.T) {
 		wantContains []string
 	}{
 		{
-			name: "lists tasks and warns the worker is a stub",
+			name: "lists tasks",
 			client: &fakeClient{listTasks: &orchdv1.ListTasksResponse{Tasks: []*orchdv1.Task{
 				{Id: "t1", Status: "pending", Agent: "dev", Body: "fix it", UpdatedAt: "2026-09-30"},
 			}}},
-			wantContains: []string{"ID", "t1", "pending", "dev", "fix it", "stub"},
+			wantContains: []string{"ID", "t1", "pending", "dev", "fix it"},
 		},
 		{
 			name:         "empty ledger",
@@ -150,11 +150,11 @@ func TestTaskCmd(t *testing.T) {
 		wantContains []string
 	}{
 		{
-			name: "renders one task with the stub warning",
+			name: "renders one task with the agent's result",
 			client: &fakeClient{getTask: &orchdv1.GetTaskResponse{Found: true, Task: &orchdv1.Task{
-				Id: "t1", Status: "complete", Agent: "dev", Body: "fix it", Result: "processed: fix it",
+				Id: "t1", Status: "complete", Agent: "dev", Body: "fix it", Result: "opened PR #9",
 			}}},
-			wantContains: []string{"id:", "t1", "complete", "fix it", "processed: fix it", "stub"},
+			wantContains: []string{"id:", "t1", "complete", "fix it", "opened PR #9"},
 		},
 		{
 			name:         "no result yet",

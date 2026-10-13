@@ -175,6 +175,56 @@ running an older version than the installed `orch` — which means the self-rest
 happen, typically because `orchd` was started by hand with nothing supervising it. `orch
 restart` is the manual way to close it.
 
+## Background tasks
+
+`orch dispatch "<task>"` (or the `queue_dispatch` MCP tool) records a durable task. With the
+queue worker enabled, orchd runs each task as a headless Claude Code session:
+`claude -p --agent <agent>` (default `dev`) in the dispatching directory, with the task as
+the prompt. The agent's final message becomes the result: `complete`, `failed`, or `blocked`
+when it begins with `BLOCKED:`. Read results with `orch tasks` / `orch task <id>` or
+`queue_list` / `queue_read`; finished tasks also appear in the next session's digest.
+
+The worker is **off by default** because it starts agent sessions unattended:
+
+```sh
+orch config set queue.worker.enabled true
+orch restart                       # the worker starts with orchd
+```
+
+While it is off, dispatched tasks stay `pending` and run once it is enabled. Other knobs:
+
+- `queue.worker.permission_mode`: default `auto`. Only `auto`, `dontAsk`, `acceptEdits` and
+  `plan` are accepted, because each decides without a human. `bypassPermissions` is refused,
+  and so is any other mode; a task run with one fails instead of starting.
+- `queue.worker.timeout`: default `60m` per task.
+- `queue.worker.max_concurrent`: default 1.
+- `queue.max_active`: default 20. Dispatch fails once that many tasks are pending or
+  running.
+- `queue.worker.claude_bin`: found on PATH or in the usual install locations when empty.
+
+Behavior to know about:
+
+- **No automatic retries.** A failed run has already had side effects, such as pushed
+  branches or opened PRs, so it is recorded as `failed` rather than repeated.
+- **Restarts resume.** Stopping orchd or restarting the worker ends in-flight sessions
+  (their whole process group) without waiting them out. Once orchd is back, each
+  interrupted task resumes its own Claude Code session (`--resume`) instead of starting
+  over. Expect a delay of a few minutes while its lease lapses.
+- **Bounded fan-out.** A queued session runs with `ORCH_TASK_ID` set. `queue_dispatch` and
+  `orch dispatch` refuse inside it, and the session is started with both denied through
+  `--disallowedTools`. Those are first lines only, because a determined session could reach
+  orchd another way; the hard bound is `queue.max_active`.
+- **Environment.** orchd runs under launchd's minimal PATH. The session gets the CLI's
+  directory, Homebrew, `~/.local/bin` and `~/go/bin` prepended; the agent's own shell
+  commands load your login profile as usual.
+- **What the session inherits.** It gets orchd's environment minus the vector store's API
+  key.
+- **Redaction and size.** Task bodies (capped at 64 KiB) and results (capped at 64 KiB) are
+  redacted with the same rules as ingested content.
+- **The digest stays clean.** The next session's digest names each finished task and its
+  status but never its result text. That text was written by an unattended agent, possibly
+  steered by an untrusted repository, so it is read deliberately with `queue_read`.
+
 ## Build from source
 
 The ORT embedder is cgo: it links a prebuilt `libtokenizers.a` at build time and loads
