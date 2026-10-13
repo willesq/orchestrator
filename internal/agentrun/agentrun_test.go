@@ -17,13 +17,17 @@ import (
 
 // fakeClaude is a stand-in CLI that records how it was invoked into $FAKE_DIR
 // and replays $FAKE_DIR/stdout, $FAKE_DIR/stderr and $FAKE_EXIT.
+//
+// The background child starts before anything is recorded: tests treat the
+// args file as "the CLI is running" and may cancel the moment it appears, so
+// the child must already exist by then for its fate to be observable.
 const fakeClaude = `#!/bin/bash
 d="$FAKE_DIR"
+if [ -n "$FAKE_CHILD" ]; then sleep 30 & echo $! > "$d/child.pid"; fi
 printf '%s\n' "$@" > "$d/args"
 cat > "$d/stdin"
 pwd -P > "$d/cwd"
 env > "$d/env"
-if [ -n "$FAKE_CHILD" ]; then sleep 30 & echo $! > "$d/child.pid"; fi
 if [ -n "$FAKE_SLEEP" ]; then sleep "$FAKE_SLEEP"; fi
 [ -f "$d/stdout" ] && cat "$d/stdout"
 [ -f "$d/stderr" ] && cat "$d/stderr" >&2
