@@ -231,7 +231,7 @@ func TestStopCancelsContextAndRunsHook(t *testing.T) {
 			}
 			select {
 			case <-ctxDone:
-			case <-time.After(time.Second):
+			case <-time.After(waitLimit):
 				t.Fatal("unit context was not canceled")
 			}
 			// Stopping again must not re-run the hook.

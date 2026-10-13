@@ -421,7 +421,7 @@ func TestExecRun(t *testing.T) {
 			}
 			// Poll until the script records its working directory (avoids a race).
 			var got string
-			for range 50 {
+			for deadline := time.Now().Add(waitLimit); time.Now().Before(deadline); {
 				if b, err := os.ReadFile(cwdFile); err == nil && strings.TrimSpace(string(b)) != "" {
 					got = strings.TrimSpace(string(b))
 					break
@@ -439,3 +439,9 @@ func TestExecRun(t *testing.T) {
 		})
 	}
 }
+
+// waitLimit bounds how long a test waits for something it expects to happen.
+// The waits return as soon as the condition holds, so the limit costs nothing
+// on a healthy run and is deliberately generous: only a real hang reaches it,
+// never a slow or loaded machine.
+const waitLimit = 30 * time.Second

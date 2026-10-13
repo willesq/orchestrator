@@ -107,7 +107,7 @@ func TestORTEmbedAfterReaperUnload(t *testing.T) {
 			if _, err := e.Embed(context.Background(), []string{"first"}); err != nil {
 				t.Fatalf("first embed: %v", err)
 			}
-			deadline := time.Now().Add(2 * time.Second)
+			deadline := time.Now().Add(waitLimit)
 			for time.Now().Before(deadline) {
 				e.mu.Lock()
 				unloaded := e.run == nil

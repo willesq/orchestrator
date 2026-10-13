@@ -32,7 +32,7 @@ func TestRunServesAndShutsDown(t *testing.T) {
 			go func() { errCh <- Run(ctx) }()
 
 			sock := paths.SocketPath()
-			if !waitForFile(sock, 3*time.Second) {
+			if !waitForFile(sock, waitLimit) {
 				cancel()
 				t.Fatalf("socket %s never appeared", sock)
 			}
@@ -56,7 +56,7 @@ func TestRunServesAndShutsDown(t *testing.T) {
 				if err != nil {
 					t.Errorf("Run returned error: %v", err)
 				}
-			case <-time.After(3 * time.Second):
+			case <-time.After(waitLimit):
 				t.Errorf("Run did not shut down after cancel")
 			}
 		})
@@ -96,7 +96,7 @@ func TestRunExitsWhenANewBuildIsInstalled(t *testing.T) {
 			defer cancel()
 			errCh := make(chan error, 1)
 			go func() { errCh <- Run(ctx) }()
-			if !waitForFile(paths.SocketPath(), 5*time.Second) {
+			if !waitForFile(paths.SocketPath(), waitLimit) {
 				t.Fatalf("socket %s never appeared", paths.SocketPath())
 			}
 
@@ -112,7 +112,7 @@ func TestRunExitsWhenANewBuildIsInstalled(t *testing.T) {
 				if err != nil {
 					t.Errorf("Run returned error: %v", err)
 				}
-			case <-time.After(3 * time.Second):
+			case <-time.After(waitLimit):
 				if tt.wantExit {
 					t.Fatal("Run kept serving the old build after a new one was installed")
 				}
@@ -154,13 +154,13 @@ func TestRunSupervisesAndRestartsSubsystems(t *testing.T) {
 				cancel()
 				select {
 				case <-errCh:
-				case <-time.After(3 * time.Second):
+				case <-time.After(waitLimit):
 					t.Errorf("Run did not shut down after cancel")
 				}
 			}()
 
 			sock := paths.SocketPath()
-			if !waitForFile(sock, 5*time.Second) {
+			if !waitForFile(sock, waitLimit) {
 				t.Fatalf("socket %s never appeared", sock)
 			}
 			conn, err := grpc.NewClient("unix://"+sock, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -236,8 +236,15 @@ func seedRunEnv(t *testing.T, sockName string) string {
 	t.Setenv("ORCH_CONFIG_DIR", filepath.Join(dir, "cfg"))
 	t.Setenv("ORCH_RAG_QDRANT_MODE", "external")
 	// Unix socket paths are capped near 104 chars on macOS; t.TempDir() plus the
-	// test name blows past that, so use a short explicit path.
-	t.Setenv("ORCH_SOCKET", filepath.Join(os.TempDir(), sockName))
+	// test name blows past that, so use a short directory of the test's own. A
+	// fixed name in the shared temp dir would let overlapping test runs replace
+	// each other's socket.
+	sockDir, err := os.MkdirTemp("", "orchd")
+	if err != nil {
+		t.Fatalf("socket dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(sockDir) })
+	t.Setenv("ORCH_SOCKET", filepath.Join(sockDir, sockName))
 
 	modelDir := filepath.Join(dir, "data", "models", "minilm")
 	if err := os.MkdirAll(modelDir, 0o755); err != nil {
@@ -295,7 +302,7 @@ func TestRunSocketIsOwnerOnly(t *testing.T) {
 			}()
 
 			sock := paths.SocketPath()
-			if !waitForFile(sock, 5*time.Second) {
+			if !waitForFile(sock, waitLimit) {
 				t.Fatalf("socket %s never appeared", sock)
 			}
 			// File creation precedes chmod during startup. Wait for an actual RPC
@@ -337,3 +344,9 @@ func seedModel(t *testing.T, dataDir string) {
 		}
 	}
 }
+
+// waitLimit bounds how long a test waits for something it expects to happen.
+// The waits return as soon as the condition holds, so the limit costs nothing
+// on a healthy run and is deliberately generous: only a real hang reaches it,
+// never a slow or loaded machine.
+const waitLimit = 30 * time.Second
