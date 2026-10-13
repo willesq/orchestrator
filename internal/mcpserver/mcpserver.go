@@ -17,6 +17,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/agentrun"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/taskfmt"
 	"github.com/willesq/orchestrator/internal/version"
 )
 
@@ -204,8 +205,8 @@ func (q queueTools) read(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 	}
 	t := resp.GetTask()
 	return mcp.NewToolResultText(fmt.Sprintf(
-		"id: %s\nstatus: %s\nagent: %s\nupdated: %s\n\nbody:\n%s\n\nresult:\n%s\n",
-		t.GetId(), t.GetStatus(), t.GetAgent(), t.GetUpdatedAt(),
+		"id: %s\nstatus: %s\nagent: %s\nupdated: %s\n%s\nbody:\n%s\n\nresult:\n%s\n",
+		t.GetId(), t.GetStatus(), t.GetAgent(), t.GetUpdatedAt(), taskfmt.Outcome(t),
 		t.GetBody(), orNone(t.GetResult()))), nil
 }
 

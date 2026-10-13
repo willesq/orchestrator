@@ -231,6 +231,8 @@ func taskPB(t queue.Task) *orchdv1.Task {
 	return &orchdv1.Task{
 		Id: t.ID, Agent: t.Agent, Body: t.Body,
 		Result: t.Result, Status: t.Status, UpdatedAt: t.UpdatedAt,
+		CostUsd: t.CostUSD, DurationMs: t.DurationMS, Turns: int32(t.Turns),
+		SessionId: t.SessionID, Models: t.Models, Prs: t.PRs,
 	}
 }
 

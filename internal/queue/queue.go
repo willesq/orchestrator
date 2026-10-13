@@ -39,14 +39,20 @@ type SQLTaskStore struct {
 // NewSQLTaskStore constructs a task store over an open orch.db handle.
 func NewSQLTaskStore(db *sql.DB) *SQLTaskStore { return &SQLTaskStore{db: db} }
 
-// SaveResult upserts the terminal status and result of a task (idempotent by id).
-func (s *SQLTaskStore) SaveResult(ctx context.Context, in workflows.AgentTaskInput, status, result string) error {
+// SaveResult upserts the terminal status, result and outcome metrics of a task
+// (idempotent by id).
+func (s *SQLTaskStore) SaveResult(ctx context.Context, in workflows.AgentTaskInput, out workflows.Outcome) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO tasks (id, agent, body, result, status, updated_at)
-		 VALUES (?, ?, ?, ?, ?, datetime('now'))
+		`INSERT INTO tasks (id, agent, body, result, status, updated_at,
+		                    cost_usd, duration_ms, turns, session_id, models, prs)
+		 VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
-		   result=excluded.result, status=excluded.status, updated_at=datetime('now')`,
-		in.ID, in.Agent, in.Body, result, status)
+		   result=excluded.result, status=excluded.status, updated_at=datetime('now'),
+		   cost_usd=excluded.cost_usd, duration_ms=excluded.duration_ms, turns=excluded.turns,
+		   session_id=excluded.session_id, models=excluded.models, prs=excluded.prs`,
+		in.ID, in.Agent, in.Body, out.Result, out.Status,
+		out.CostUSD, out.DurationMS, out.Turns, out.SessionID,
+		strings.Join(out.Models, ","), strings.Join(out.PRs, ","))
 	return err
 }
 
@@ -80,6 +86,36 @@ type Task struct {
 	Result    string
 	Status    string
 	UpdatedAt string
+	// Outcome metrics; zero until the task finishes.
+	CostUSD    float64
+	DurationMS int64
+	Turns      int
+	SessionID  string
+	Models     []string
+	PRs        []string
+}
+
+// taskColumns is the select list scanTask reads, in order.
+const taskColumns = `id, agent, body, COALESCE(result,''), status, updated_at,
+	COALESCE(cost_usd,0), COALESCE(duration_ms,0), COALESCE(turns,0),
+	COALESCE(session_id,''), COALESCE(models,''), COALESCE(prs,'')`
+
+type rowScanner interface{ Scan(dest ...any) error }
+
+func scanTask(r rowScanner) (Task, error) {
+	var t Task
+	var models, prs string
+	err := r.Scan(&t.ID, &t.Agent, &t.Body, &t.Result, &t.Status, &t.UpdatedAt,
+		&t.CostUSD, &t.DurationMS, &t.Turns, &t.SessionID, &models, &prs)
+	t.Models, t.PRs = splitList(models), splitList(prs)
+	return t, err
+}
+
+func splitList(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(s, ",")
 }
 
 // maxListLimit caps how many task rows one call may return.
@@ -102,7 +138,7 @@ func (s *SQLTaskStore) List(ctx context.Context, f ListFilter) ([]Task, error) {
 	if f.Limit > maxListLimit {
 		f.Limit = maxListLimit
 	}
-	q := `SELECT id, agent, body, COALESCE(result,''), status, updated_at FROM tasks`
+	q := `SELECT ` + taskColumns + ` FROM tasks`
 	var where []string
 	var args []any
 	if f.Status != "" {
@@ -128,8 +164,8 @@ func (s *SQLTaskStore) List(ctx context.Context, f ListFilter) ([]Task, error) {
 	defer func() { _ = rows.Close() }()
 	var out []Task
 	for rows.Next() {
-		var t Task
-		if err := rows.Scan(&t.ID, &t.Agent, &t.Body, &t.Result, &t.Status, &t.UpdatedAt); err != nil {
+		t, err := scanTask(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -148,10 +184,7 @@ func (s *SQLTaskStore) ActiveCount(ctx context.Context) (int, error) {
 
 // Get returns one task. found is false when no such ID exists.
 func (s *SQLTaskStore) Get(ctx context.Context, id string) (Task, bool, error) {
-	var t Task
-	err := s.db.QueryRowContext(ctx,
-		`SELECT id, agent, body, COALESCE(result,''), status, updated_at FROM tasks WHERE id=?`,
-		id).Scan(&t.ID, &t.Agent, &t.Body, &t.Result, &t.Status, &t.UpdatedAt)
+	t, err := scanTask(s.db.QueryRowContext(ctx, `SELECT `+taskColumns+` FROM tasks WHERE id=?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Task{}, false, nil
 	}

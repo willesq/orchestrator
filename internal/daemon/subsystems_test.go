@@ -17,6 +17,7 @@ import (
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/paths"
+	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/selfupdate"
 	"github.com/willesq/orchestrator/internal/workflows"
 )
@@ -370,5 +371,14 @@ func TestTaskRunnerAdaptsOutcome(t *testing.T) {
 	}
 	if got.Status != agentrun.StatusFailed || !strings.Contains(got.Result, "claude_bin") {
 		t.Errorf("outcome = %+v", got)
+	}
+}
+
+func TestTaskPBCarriesOutcome(t *testing.T) {
+	pb := taskPB(queue.Task{ID: "t", CostUSD: 1.5, DurationMS: 42, Turns: 7, SessionID: "s",
+		Models: []string{"m"}, PRs: []string{"https://github.com/a/b/pull/1"}})
+	if pb.GetCostUsd() != 1.5 || pb.GetDurationMs() != 42 || pb.GetTurns() != 7 || pb.GetSessionId() != "s" ||
+		len(pb.GetModels()) != 1 || len(pb.GetPrs()) != 1 {
+		t.Errorf("taskPB dropped outcome fields: %+v", pb)
 	}
 }

@@ -35,7 +35,7 @@ func TestSQLTaskStoreSaveResult(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			in := workflows.AgentTaskInput{ID: tt.id, Agent: "dev", Body: "a"}
-			if err := store.SaveResult(context.Background(), in, tt.status, tt.result); err != nil {
+			if err := store.SaveResult(context.Background(), in, workflows.Outcome{Status: tt.status, Result: tt.result}); err != nil {
 				t.Fatalf("SaveResult: %v", err)
 			}
 			var result, status string

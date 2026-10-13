@@ -51,6 +51,19 @@ const (
 type Outcome struct {
 	Status string
 	Result string
+	Metrics
+}
+
+// Metrics describe what a run cost and produced. Fields the CLI did not report
+// (a crash before any output, say) stay zero, except the duration, which the
+// runner measures itself.
+type Metrics struct {
+	CostUSD    float64
+	DurationMS int64
+	Turns      int
+	SessionID  string
+	Models     []string // models that did the work, sorted
+	PRs        []string // pull request URLs the result mentions, in order
 }
 
 // TaskIDEnv is set in the session's environment. The queue MCP server refuses
@@ -187,7 +200,9 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM) }
 	cmd.WaitDelay = 10 * time.Second
 
+	started := time.Now()
 	runErr := cmd.Run()
+	elapsed := time.Since(started).Milliseconds()
 	// Tools the session backgrounded can outlive a normal exit, and WaitDelay
 	// escalates only against the CLI itself. The group's ID stays reserved while
 	// any member lives, so this reaches only the session's own leftovers.
@@ -197,17 +212,43 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 	if runErr != nil && r.Stop != nil && r.Stop.Err() != nil {
 		return Outcome{}, fmt.Errorf("task %s interrupted by worker shutdown: %w", t.ID, context.Canceled)
 	}
+	var o Outcome
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		return failed("timed out after %s", r.Timeout), nil
+		o = failed("timed out after %s", r.Timeout)
+	} else {
+		o = interpret(readCapture(stdout), readCapture(stderr), runErr)
 	}
-	return interpret(readCapture(stdout), readCapture(stderr), runErr), nil
+	o.DurationMS = elapsed
+	return o, nil
 }
 
 // cliResult is the subset of `claude -p --output-format json` the ledger uses.
 type cliResult struct {
-	Result  string `json:"result"`
-	IsError bool   `json:"is_error"`
-	Subtype string `json:"subtype"`
+	Result     string                     `json:"result"`
+	IsError    bool                       `json:"is_error"`
+	Subtype    string                     `json:"subtype"`
+	CostUSD    float64                    `json:"total_cost_usd"`
+	NumTurns   int                        `json:"num_turns"`
+	SessionID  string                     `json:"session_id"`
+	ModelUsage map[string]json.RawMessage `json:"modelUsage"`
+}
+
+// prURL matches GitHub pull request links in an agent's final message.
+var prURL = regexp.MustCompile(`https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/pull/[0-9]+`)
+
+// metricsFrom extracts the run's metrics from the CLI result and the final text.
+func metricsFrom(res cliResult, text string) Metrics {
+	m := Metrics{CostUSD: res.CostUSD, Turns: res.NumTurns, SessionID: res.SessionID}
+	for model := range res.ModelUsage {
+		m.Models = append(m.Models, model)
+	}
+	slices.Sort(m.Models)
+	for _, u := range prURL.FindAllString(text, -1) {
+		if !slices.Contains(m.PRs, u) {
+			m.PRs = append(m.PRs, u)
+		}
+	}
+	return m
 }
 
 func interpret(stdout, stderr []byte, runErr error) Outcome {
@@ -223,17 +264,20 @@ func interpret(stdout, stderr []byte, runErr error) Outcome {
 		return failed("unreadable claude output: %s", msg)
 	}
 	text := strings.TrimSpace(res.Result)
+	var o Outcome
 	switch {
 	case res.IsError || runErr != nil:
 		if text == "" {
 			text = strings.TrimSpace(res.Subtype + " " + strings.TrimSpace(string(stderr)))
 		}
-		return outcome(StatusFailed, text)
+		o = outcome(StatusFailed, text)
 	case strings.HasPrefix(text, "BLOCKED:"):
-		return outcome(StatusBlocked, text)
+		o = outcome(StatusBlocked, text)
 	default:
-		return outcome(StatusComplete, text)
+		o = outcome(StatusComplete, text)
 	}
+	o.Metrics = metricsFrom(res, o.Result)
+	return o
 }
 
 // maxCaptureBytes bounds how much CLI output is read back; the JSON result is

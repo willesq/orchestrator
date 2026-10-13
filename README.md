@@ -200,6 +200,10 @@ queue worker enabled, orchd runs each task as a headless Claude Code session:
 the prompt. The agent's final message becomes the result: `complete`, `failed`, or `blocked`
 when it begins with `BLOCKED:`. Read results with `orch tasks` / `orch task <id>` or
 `queue_list` / `queue_read`; finished tasks also appear in the next session's digest.
+Each finished task records its outcome: cost, run time, turns, the models that did the
+work, its Claude Code session ID, and any pull requests its result links to.
+`orch tasks --stats` summarizes those per agent (success rate, average run time, total
+cost) over the most recent 500 tasks.
 
 The worker is **off by default** because it starts agent sessions unattended:
 
