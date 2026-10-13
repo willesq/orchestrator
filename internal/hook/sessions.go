@@ -9,6 +9,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/paths"
+	"github.com/willesq/orchestrator/internal/redact"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/session"
 )
@@ -38,7 +39,7 @@ func sessionEnd(p Payload, cf clientFactory) error {
 	if p.TranscriptPath == "" {
 		return nil
 	}
-	msgs, err := session.ParseTranscript(p.TranscriptPath)
+	msgs, err := parseRedacted(p.TranscriptPath)
 	if err != nil {
 		return nil
 	}
@@ -67,7 +68,9 @@ func subagentStop(p Payload) error {
 	if p.ParentSessionID == "" {
 		return nil
 	}
-	summary := p.FinalResponse
+	// Redact before truncating so a secret cut at the boundary cannot slip past
+	// the patterns; the digest replays this text into later sessions' context.
+	summary, _ := redact.Redact(p.FinalResponse)
 	if len(summary) > 200 {
 		summary = summary[:200] + "…"
 	}
@@ -105,11 +108,27 @@ func recordFromTranscript(p Payload) *session.Record {
 	if p.TranscriptPath == "" {
 		return nil
 	}
-	msgs, err := session.ParseTranscript(p.TranscriptPath)
+	msgs, err := parseRedacted(p.TranscriptPath)
 	if err != nil {
 		return nil
 	}
 	return session.BuildRecord(p.SessionID, p.Cwd, p.TranscriptPath, msgs)
+}
+
+// parseRedacted parses a transcript with secret-shaped substrings replaced.
+// Every session derivative — the on-disk record and checkpoint as well as the RAG
+// ingest — is built from these messages, and user prompts are where pasted
+// tokens and .env contents most often appear. Unlike file ingest, the redaction
+// threshold does not apply: a transcript is never skipped as a keystore.
+func parseRedacted(path string) ([]session.Message, error) {
+	msgs, err := session.ParseTranscript(path)
+	if err != nil {
+		return nil, err
+	}
+	for i := range msgs {
+		msgs[i].Text, _ = redact.Redact(msgs[i].Text)
+	}
+	return msgs, nil
 }
 
 func nowRFC3339() string { return time.Now().UTC().Format(time.RFC3339) }

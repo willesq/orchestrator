@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/willesq/orchestrator/internal/events"
@@ -89,6 +90,85 @@ func TestSessionEnd(t *testing.T) {
 				if _, err := os.Stat(filepath.Join(paths.SessionsDir(), "sid.yaml")); err != nil {
 					t.Errorf("record not written: %v", err)
 				}
+			}
+		})
+	}
+}
+
+func TestSessionDerivativesAreRedacted(t *testing.T) {
+	// Built by concatenation so the fixture itself never looks like a live token.
+	secret := "ghp_" + strings.Repeat("a1B2", 9)
+	transcript := `{"type":"user","message":{"role":"user","content":"use token ` + secret + ` please"}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"echoing ` + secret + `"}]}}
+`
+	tests := []struct {
+		name        string
+		run         func(p Payload, fc *fakeClient) error
+		file        string
+		wantIngests int
+	}{
+		{name: "session end record and ingest", run: func(p Payload, fc *fakeClient) error { return sessionEnd(p, factory(fc, nil)) }, file: "sid.yaml", wantIngests: 2},
+		{name: "stop record", run: func(p Payload, _ *fakeClient) error { return stop(p) }, file: "sid.yaml"},
+		{name: "pre-compact checkpoint", run: func(p Payload, _ *fakeClient) error { return preCompact(p) }, file: "sid.checkpoint.yaml"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+			path := filepath.Join(t.TempDir(), "t.jsonl")
+			if err := os.WriteFile(path, []byte(transcript), 0o644); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+			fc := &fakeClient{}
+			if err := tt.run(Payload{SessionID: "sid", TranscriptPath: path}, fc); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			if len(fc.ingested) != tt.wantIngests {
+				t.Fatalf("ingests = %d, want %d", len(fc.ingested), tt.wantIngests)
+			}
+			for _, req := range fc.ingested {
+				if strings.Contains(req.GetText(), secret) {
+					t.Errorf("%s ingested an unredacted secret", req.GetSourceUri())
+				}
+				if !strings.Contains(req.GetText(), "[REDACTED:github-token]") {
+					t.Errorf("%s missing redaction marker: %q", req.GetSourceUri(), req.GetText())
+				}
+			}
+			raw, err := os.ReadFile(filepath.Join(paths.SessionsDir(), tt.file))
+			if err != nil {
+				t.Fatalf("read record: %v", err)
+			}
+			if strings.Contains(string(raw), secret) {
+				t.Errorf("%s contains an unredacted secret", tt.file)
+			}
+			if !strings.Contains(string(raw), "[REDACTED:github-token]") {
+				t.Errorf("%s missing redaction marker:\n%s", tt.file, raw)
+			}
+		})
+	}
+}
+
+func TestSubagentStopRedactsBeforeTruncating(t *testing.T) {
+	secret := "ghp_" + strings.Repeat("a1B2", 9)
+	tests := []struct {
+		name     string
+		response string
+	}{
+		{name: "short response", response: "done, used " + secret},
+		{name: "secret straddles the 200-byte cut", response: strings.Repeat("x", 189) + " " + secret},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+			p := Payload{ParentSessionID: "parent", SubagentType: "dev", FinalResponse: tt.response}
+			if err := subagentStop(p); err != nil {
+				t.Fatalf("subagentStop: %v", err)
+			}
+			evs, _ := events.Read(paths.EventsDir(), "parent")
+			if len(evs) != 1 {
+				t.Fatalf("events = %d, want 1", len(evs))
+			}
+			if strings.Contains(evs[0].Summary, "ghp_a1B2") {
+				t.Errorf("event summary leaks secret material: %q", evs[0].Summary)
 			}
 		})
 	}
