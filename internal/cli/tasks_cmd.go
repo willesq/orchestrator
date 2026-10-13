@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/taskfmt"
 )
 
 func newTasksCmd(cf clientFactory) *cobra.Command {
@@ -17,6 +18,7 @@ func newTasksCmd(cf clientFactory) *cobra.Command {
 		statusFilter string
 		agentFilter  string
 		limit        int
+		stats        bool
 	)
 	cmd := &cobra.Command{
 		Use:   "tasks",
@@ -30,6 +32,10 @@ func newTasksCmd(cf clientFactory) *cobra.Command {
 			defer cleanup()
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
+			if stats {
+				// Aggregate over as much of the ledger as one read returns.
+				limit = maxStatsTasks
+			}
 			resp, err := client.ListTasks(ctx, &orchdv1.ListTasksRequest{
 				Status: statusFilter,
 				Agent:  agentFilter,
@@ -42,6 +48,13 @@ func newTasksCmd(cf clientFactory) *cobra.Command {
 			tasks := resp.GetTasks()
 			if len(tasks) == 0 {
 				fmt.Fprintln(out, "no tasks recorded")
+				return nil
+			}
+			if stats {
+				fmt.Fprint(out, taskfmt.StatsTable(taskfmt.Stats(tasks)))
+				if len(tasks) == maxStatsTasks {
+					fmt.Fprintf(out, "(based on the %d most recent tasks)\n", maxStatsTasks)
+				}
 				return nil
 			}
 			fmt.Fprintf(out, "%-40s %-12s %-10s %s\n", "ID", "STATUS", "AGENT", "UPDATED")
@@ -58,8 +71,12 @@ func newTasksCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringVar(&statusFilter, "status", "", "filter: pending | in_progress | complete | failed")
 	cmd.Flags().StringVar(&agentFilter, "agent", "", "filter by target agent")
 	cmd.Flags().IntVar(&limit, "limit", 20, "max tasks to show")
+	cmd.Flags().BoolVar(&stats, "stats", false, "summarize outcomes per agent: success rate, run time and cost")
 	return cmd
 }
+
+// maxStatsTasks matches the daemon's cap on one task listing.
+const maxStatsTasks = 500
 
 func newTaskCmd(cf clientFactory) *cobra.Command {
 	return &cobra.Command{
@@ -84,8 +101,8 @@ func newTaskCmd(cf clientFactory) *cobra.Command {
 				return nil
 			}
 			t := resp.GetTask()
-			fmt.Fprintf(out, "id:      %s\nstatus:  %s\nagent:   %s\nupdated: %s\n\nbody:\n%s\n\nresult:\n%s\n",
-				t.GetId(), t.GetStatus(), t.GetAgent(), t.GetUpdatedAt(),
+			fmt.Fprintf(out, "id:      %s\nstatus:  %s\nagent:   %s\nupdated: %s\n%s\nbody:\n%s\n\nresult:\n%s\n",
+				t.GetId(), t.GetStatus(), t.GetAgent(), t.GetUpdatedAt(), taskfmt.Outcome(t),
 				t.GetBody(), orNotYet(t.GetResult()))
 			return nil
 		},

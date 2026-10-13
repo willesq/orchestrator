@@ -102,7 +102,7 @@ func TestRunInvokesClaudeHeadless(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if got != (Outcome{Status: StatusComplete, Result: "opened PR #7"}) {
+	if got.Status != StatusComplete || got.Result != "opened PR #7" {
 		t.Errorf("outcome = %+v", got)
 	}
 	args := strings.Split(strings.TrimSpace(f.recorded(t, "args")), "\n")
@@ -484,5 +484,41 @@ func TestRunPassesAllowedTools(t *testing.T) {
 				t.Errorf("dispatch tools are no longer denied: %q", args)
 			}
 		})
+	}
+}
+
+func TestRunRecordsMetrics(t *testing.T) {
+	f := newFixture(t)
+	f.reply(t, `{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.4213,"num_turns":17,
+		"session_id":"`+SessionID("task-m")+`","modelUsage":{"claude-sonnet-5-5":{},"claude-haiku-4-5":{}},
+		"result":"Opened https://github.com/acme/widget/pull/42 and https://github.com/acme/api/pull/7; see https://github.com/acme/widget/pull/42 again."}`)
+	got, err := f.runner.Run(context.Background(), Task{ID: "task-m", Agent: "dev", Body: "b", Cwd: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CostUSD != 0.4213 || got.Turns != 17 || got.SessionID != SessionID("task-m") {
+		t.Errorf("metrics = %+v", got.Metrics)
+	}
+	if !slices.Equal(got.Models, []string{"claude-haiku-4-5", "claude-sonnet-5-5"}) {
+		t.Errorf("models = %v, want sorted", got.Models)
+	}
+	if !slices.Equal(got.PRs, []string{"https://github.com/acme/widget/pull/42", "https://github.com/acme/api/pull/7"}) {
+		t.Errorf("prs = %v, want each once in order", got.PRs)
+	}
+	if got.DurationMS <= 0 {
+		t.Errorf("duration not measured: %d", got.DurationMS)
+	}
+}
+
+func TestRunMeasuresFailedRuns(t *testing.T) {
+	f := newFixture(t)
+	f.runner.Timeout = 200 * time.Millisecond
+	t.Setenv("FAKE_SLEEP", "30")
+	got, err := f.runner.Run(context.Background(), Task{ID: "t", Agent: "dev", Body: "b", Cwd: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != StatusFailed || got.DurationMS < 200 {
+		t.Errorf("a timed-out run must still record how long it took: %+v", got)
 	}
 }

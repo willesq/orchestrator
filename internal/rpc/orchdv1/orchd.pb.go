@@ -1051,13 +1051,20 @@ func (x *GetTaskResponse) GetFound() bool {
 
 // Task is one dispatched agent task as recorded in orch.db.
 type Task struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Agent         string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
-	Body          string                 `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
-	Result        string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
-	Status        string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
-	UpdatedAt     string                 `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Agent     string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	Body      string                 `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"`
+	Result    string                 `protobuf:"bytes,4,opt,name=result,proto3" json:"result,omitempty"`
+	Status    string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"`
+	UpdatedAt string                 `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	// Outcome metrics, set once the task finishes.
+	CostUsd       float64  `protobuf:"fixed64,7,opt,name=cost_usd,json=costUsd,proto3" json:"cost_usd,omitempty"`
+	DurationMs    int64    `protobuf:"varint,8,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	Turns         int32    `protobuf:"varint,9,opt,name=turns,proto3" json:"turns,omitempty"`
+	SessionId     string   `protobuf:"bytes,10,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Models        []string `protobuf:"bytes,11,rep,name=models,proto3" json:"models,omitempty"`
+	Prs           []string `protobuf:"bytes,12,rep,name=prs,proto3" json:"prs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1132,6 +1139,48 @@ func (x *Task) GetUpdatedAt() string {
 		return x.UpdatedAt
 	}
 	return ""
+}
+
+func (x *Task) GetCostUsd() float64 {
+	if x != nil {
+		return x.CostUsd
+	}
+	return 0
+}
+
+func (x *Task) GetDurationMs() int64 {
+	if x != nil {
+		return x.DurationMs
+	}
+	return 0
+}
+
+func (x *Task) GetTurns() int32 {
+	if x != nil {
+		return x.Turns
+	}
+	return 0
+}
+
+func (x *Task) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *Task) GetModels() []string {
+	if x != nil {
+		return x.Models
+	}
+	return nil
+}
+
+func (x *Task) GetPrs() []string {
+	if x != nil {
+		return x.Prs
+	}
+	return nil
 }
 
 type StatusRequest struct {
@@ -1491,7 +1540,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"K\n" +
 	"\x0fGetTaskResponse\x12\"\n" +
 	"\x04task\x18\x01 \x01(\v2\x0e.orchd.v1.TaskR\x04task\x12\x14\n" +
-	"\x05found\x18\x02 \x01(\bR\x05found\"\x8f\x01\n" +
+	"\x05found\x18\x02 \x01(\bR\x05found\"\xaa\x02\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x12\n" +
@@ -1499,7 +1548,16 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x06result\x18\x04 \x01(\tR\x06result\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\x06 \x01(\tR\tupdatedAt\"\x0f\n" +
+	"updated_at\x18\x06 \x01(\tR\tupdatedAt\x12\x19\n" +
+	"\bcost_usd\x18\a \x01(\x01R\acostUsd\x12\x1f\n" +
+	"\vduration_ms\x18\b \x01(\x03R\n" +
+	"durationMs\x12\x14\n" +
+	"\x05turns\x18\t \x01(\x05R\x05turns\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\n" +
+	" \x01(\tR\tsessionId\x12\x16\n" +
+	"\x06models\x18\v \x03(\tR\x06models\x12\x10\n" +
+	"\x03prs\x18\f \x03(\tR\x03prs\"\x0f\n" +
 	"\rStatusRequest\"\x8c\x01\n" +
 	"\x0eStatusResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12%\n" +

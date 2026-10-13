@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -60,7 +61,7 @@ func TestCreateIsIdempotentAndDoesNotResetProgress(t *testing.T) {
 	if err := store.Create(ctx, in); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := store.SaveResult(ctx, in, "complete", "done"); err != nil {
+	if err := store.SaveResult(ctx, in, workflows.Outcome{Status: "complete", Result: "done"}); err != nil {
 		t.Fatalf("SaveResult: %v", err)
 	}
 	if err := store.Create(ctx, in); err != nil {
@@ -307,7 +308,7 @@ func TestDispatchCapsActiveTasks(t *testing.T) {
 		t.Fatalf("third dispatch err = %v, want ErrQueueFull", err)
 	}
 	// Finished tasks free their slot; failed and blocked ones count as finished.
-	if err := store.SaveResult(ctx, task(first, "dev", "one"), "failed", "x"); err != nil {
+	if err := store.SaveResult(ctx, task(first, "dev", "one"), workflows.Outcome{Status: "failed", Result: "x"}); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := store.ActiveCount(ctx); err != nil || n != 1 {
@@ -335,5 +336,46 @@ func TestDispatchRedactsTheBody(t *testing.T) {
 	}
 	if strings.Contains(got.Body, secret) || !strings.Contains(got.Body, "[REDACTED:github-token]") {
 		t.Errorf("stored body = %q", got.Body)
+	}
+}
+
+func TestOutcomeMetricsRoundTrip(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	if err := store.Create(ctx, task("old", "dev", "pre-metrics task")); err != nil {
+		t.Fatal(err)
+	}
+	out := workflows.Outcome{
+		Status: "complete", Result: "done", CostUSD: 1.25, DurationMS: 90500, Turns: 31,
+		SessionID: "sess-1", Models: []string{"claude-haiku-4-5", "claude-opus-5-5"},
+		PRs: []string{"https://github.com/acme/widget/pull/42"},
+	}
+	if err := store.SaveResult(ctx, task("t1", "dev", "b"), out); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := store.Get(ctx, "t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CostUSD != 1.25 || got.DurationMS != 90500 || got.Turns != 31 || got.SessionID != "sess-1" ||
+		!slices.Equal(got.Models, out.Models) || !slices.Equal(got.PRs, out.PRs) {
+		t.Errorf("Get = %+v", got)
+	}
+	list, err := store.List(ctx, ListFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tk := range list {
+		switch tk.ID {
+		case "t1":
+			if tk.Turns != 31 {
+				t.Errorf("List lost metrics: %+v", tk)
+			}
+		case "old":
+			// A row written before the metrics columns existed reads as zero, not an error.
+			if tk.CostUSD != 0 || tk.Models != nil || tk.PRs != nil {
+				t.Errorf("pre-metrics row = %+v", tk)
+			}
+		}
 	}
 }

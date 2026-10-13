@@ -21,10 +21,17 @@ type AgentTaskInput struct {
 	Cwd string
 }
 
-// Outcome is how a run ended: a terminal ledger status and the agent's result.
+// Outcome is how a run ended: a terminal ledger status, the agent's result, and
+// what the run cost.
 type Outcome struct {
-	Status string
-	Result string
+	Status     string
+	Result     string
+	CostUSD    float64
+	DurationMS int64
+	Turns      int
+	SessionID  string
+	Models     []string
+	PRs        []string
 }
 
 // runOptions disables retries. A failed agent run has already had side effects
@@ -46,7 +53,7 @@ func AgentTask(ctx workflow.Context, in AgentTaskInput) (string, error) {
 
 // TaskStore persists task state.
 type TaskStore interface {
-	SaveResult(ctx context.Context, in AgentTaskInput, status, result string) error
+	SaveResult(ctx context.Context, in AgentTaskInput, out Outcome) error
 	SetStatus(ctx context.Context, id, status string) error
 }
 
@@ -96,7 +103,7 @@ func RunActivity(ctx context.Context, in AgentTaskInput) (string, error) {
 		return "", err
 	}
 	if store != nil {
-		if err := store.SaveResult(ctx, in, out.Status, out.Result); err != nil {
+		if err := store.SaveResult(ctx, in, out); err != nil {
 			return "", err
 		}
 	}

@@ -27,7 +27,8 @@ func (f *fakeStore) SetStatus(_ context.Context, _ string, status string) error 
 	return nil
 }
 
-func (f *fakeStore) SaveResult(_ context.Context, in AgentTaskInput, status, result string) error {
+func (f *fakeStore) SaveResult(_ context.Context, in AgentTaskInput, out Outcome) error {
+	status, result := out.Status, out.Result
 	if f.err != nil {
 		return f.err
 	}

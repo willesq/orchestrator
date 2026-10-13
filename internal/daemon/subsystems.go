@@ -285,7 +285,11 @@ func newTaskRunner(cfg config.QueueWorkerSettings, stop context.Context, dropEnv
 
 func (t taskRunner) Run(ctx context.Context, in workflows.AgentTaskInput) (workflows.Outcome, error) {
 	o, err := t.r.Run(ctx, agentrun.Task{ID: in.ID, Agent: in.Agent, Body: in.Body, Cwd: in.Cwd})
-	return workflows.Outcome{Status: o.Status, Result: o.Result}, err
+	return workflows.Outcome{
+		Status: o.Status, Result: o.Result,
+		CostUSD: o.CostUSD, DurationMS: o.DurationMS, Turns: o.Turns,
+		SessionID: o.SessionID, Models: o.Models, PRs: o.PRs,
+	}, err
 }
 
 // taskEventStream is the event log finished queue tasks are reported to; the
