@@ -333,7 +333,8 @@ func TestNewTaskRunnerDefaults(t *testing.T) {
 	}{
 		{name: "unset values fall back", cfg: config.QueueWorkerSettings{ClaudeBin: "/x/claude"},
 			wantMode: "auto", wantTimeout: time.Hour, wantBin: "/x/claude", wantConc: 1},
-		{name: "configured values win", cfg: config.QueueWorkerSettings{ClaudeBin: "/y/claude", PermissionMode: "dontAsk", Timeout: "5m", MaxConcurrent: 3},
+		{name: "configured values win", cfg: config.QueueWorkerSettings{ClaudeBin: "/y/claude", PermissionMode: "dontAsk", Timeout: "5m", MaxConcurrent: 3,
+			AllowedTools: map[string][]string{"claude": {"Bash(ls:*)"}, "codex": {"shell(ls)"}}},
 			wantMode: "dontAsk", wantTimeout: 5 * time.Minute, wantBin: "/y/claude", wantConc: 3},
 	}
 	for _, tt := range tests {
@@ -344,6 +345,9 @@ func TestNewTaskRunnerDefaults(t *testing.T) {
 			}
 			if !slices.Equal(r.DropEnv, []string{"QDRANT_API_KEY"}) {
 				t.Errorf("DropEnv = %v", r.DropEnv)
+			}
+			if want := tt.cfg.AllowedTools["claude"]; !slices.Equal(r.AllowedTools, want) {
+				t.Errorf("AllowedTools = %v, want only the claude list %v", r.AllowedTools, want)
 			}
 			if r.Stop != stop {
 				t.Errorf("runner is not bound to the unit's stop context")

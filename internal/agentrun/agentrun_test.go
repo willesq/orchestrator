@@ -420,3 +420,45 @@ func TestValidPermissionMode(t *testing.T) {
 		}
 	}
 }
+
+func TestRunPassesAllowedTools(t *testing.T) {
+	tests := []struct {
+		name    string
+		allowed []string
+		want    string // the --allowedTools value; empty means the flag is absent
+	}{
+		{name: "none configured", allowed: nil, want: ""},
+		{name: "rules joined into one value", allowed: []string{"Bash(git status:*)", " Bash(go test:*) "}, want: "Bash(git status:*),Bash(go test:*)"},
+		{name: "blank and comma-bearing rules are dropped", allowed: []string{"", "Bash(a,b)", "Bash(ls:*)"}, want: "Bash(ls:*)"},
+		{name: "a rule shaped like a flag is dropped", allowed: []string{"--dangerously-skip-permissions", "Bash(ls:*)"}, want: "Bash(ls:*)"},
+		{name: "only flag-shaped rules leaves the flag off", allowed: []string{"-x"}, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t)
+			f.reply(t, `{"result":"ok"}`)
+			f.runner.AllowedTools = tt.allowed
+			if _, err := f.runner.Run(context.Background(), Task{ID: "t", Agent: "dev", Body: "b", Cwd: t.TempDir()}); err != nil {
+				t.Fatal(err)
+			}
+			args := strings.Split(strings.TrimSpace(f.recorded(t, "args")), "\n")
+			i := slices.IndexFunc(args, func(a string) bool { return strings.HasPrefix(a, "--allowedTools") })
+			if tt.want == "" {
+				if i >= 0 {
+					t.Errorf("unexpected %q in %q", args[i], args)
+				}
+				return
+			}
+			if i < 0 || args[i] != "--allowedTools="+tt.want {
+				t.Fatalf("args = %q, want --allowedTools=%s as one token", args, tt.want)
+			}
+			// The agent flag still closes the option list, after the rules.
+			if a := slices.Index(args, "--agent"); a < i {
+				t.Errorf("--agent should follow --allowedTools: %q", args)
+			}
+			if d := slices.Index(args, "--disallowedTools"); d < 0 {
+				t.Errorf("dispatch tools are no longer denied: %q", args)
+			}
+		})
+	}
+}

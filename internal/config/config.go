@@ -88,6 +88,10 @@ type QueueWorkerSettings struct {
 	PermissionMode string `mapstructure:"permission_mode"`
 	Timeout        string `mapstructure:"timeout"`        // per-task wall-clock cap
 	MaxConcurrent  int    `mapstructure:"max_concurrent"` // tasks run at once
+	// AllowedTools maps a worker harness ("claude") to the permission rules its
+	// headless sessions get without asking. Each harness spells its rules its own
+	// way, so lists are kept per harness; only "claude" is used today.
+	AllowedTools map[string][]string `mapstructure:"allowed_tools"`
 }
 
 // PRBabysitterSettings controls the PR-polling daemon.
@@ -188,6 +192,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("queue.worker.permission_mode", "auto")
 	v.SetDefault("queue.worker.timeout", "60m")
 	v.SetDefault("queue.worker.max_concurrent", 1)
+	// Read-only commands a queued session needs constantly; granting them up front
+	// keeps a dontAsk run from failing on its first `git status`.
+	v.SetDefault("queue.worker.allowed_tools.claude", []string{
+		"Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)",
+		"Bash(git branch:*)", "Bash(ls:*)", "Bash(go test:*)", "Bash(go vet:*)",
+		"Bash(gh pr view:*)", "Bash(gh pr checks:*)", "Bash(gh pr diff:*)",
+		"Bash(orch search:*)", "Bash(orch status:*)",
+	})
 }
 
 // Load builds a Viper with precedence defaults < config file < env (ORCH_*).

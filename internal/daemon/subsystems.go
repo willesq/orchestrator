@@ -273,6 +273,7 @@ func newTaskRunner(cfg config.QueueWorkerSettings, stop context.Context, dropEnv
 	return taskRunner{r: &agentrun.Runner{
 		Bin:            agentrun.FindClaude(cfg.ClaudeBin, home),
 		DropEnv:        dropEnv,
+		AllowedTools:   cfg.AllowedTools["claude"],
 		PermissionMode: mode,
 		Timeout:        interval(cfg.Timeout, time.Hour),
 		Home:           home,
