@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -109,7 +110,7 @@ func TestRunActivity(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("result = %q, want %q", got, tt.want)
 			}
-			if *tt.runner.got != in {
+			if !reflect.DeepEqual(*tt.runner.got, in) {
 				t.Errorf("runner got %+v, want %+v", *tt.runner.got, in)
 			}
 			if len(tt.store.statuses) != 1 || tt.store.statuses[0] != tt.wantStatus {

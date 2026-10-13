@@ -379,3 +379,44 @@ func TestOutcomeMetricsRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestDispatchRecordsTheCheckoutBaseline(t *testing.T) {
+	b := sqlite.NewInMemoryBackend(sqlite.WithApplyMigrations(true))
+	t.Cleanup(func() { _ = b.Close() })
+	d := NewDispatcher(b, nil)
+	var asked string
+	d.Snapshot = func(_ context.Context, dir string) map[string]string {
+		asked = dir
+		return map[string]string{dir: "abc123"}
+	}
+	if _, err := d.Dispatch(context.Background(), "dev", "b", "/src/w"); err != nil {
+		t.Fatal(err)
+	}
+	if asked != "/src/w" {
+		t.Errorf("snapshot taken of %q, want the task's cwd", asked)
+	}
+	asked = ""
+	if _, err := d.Dispatch(context.Background(), "dev", "b", ""); err != nil {
+		t.Fatal(err)
+	}
+	if asked != "" {
+		t.Errorf("a scratch-dir task has no repository to snapshot, but %q was", asked)
+	}
+	in := taskInput("task-1", "dev", "b", "/src/w", map[string]string{"/src/w": "abc"})
+	if in.Heads["/src/w"] != "abc" || in.Cwd != "/src/w" {
+		t.Errorf("taskInput = %+v", in)
+	}
+}
+
+func TestVerificationIsStored(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	if err := store.SaveResult(ctx, task("t1", "dev", "b"),
+		workflows.Outcome{Status: "complete", Verification: "passed: `make test` in /src"}); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := store.Get(ctx, "t1")
+	if err != nil || got.Verification != "passed: `make test` in /src" {
+		t.Errorf("verification not stored: %+v (err %v)", got, err)
+	}
+}

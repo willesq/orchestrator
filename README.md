@@ -233,6 +233,27 @@ While it is off, dispatched tasks stay `pending` and run once it is enabled. Oth
 
 Behavior to know about:
 
+- **Work is verified before it counts as complete, in repositories you trust.** A check
+  runs the repository's own code outside the agent's permission checks, so it only runs
+  in repositories listed in `queue.worker.verify.repos` (main checkout paths, `~`
+  allowed), for example `orch config set queue.worker.verify.repos "~/code/willesq/orchestrator"`.
+  At dispatch, orchd records the HEAD of every checkout of the task's repository. When the
+  agent finishes, it tests each checkout whose HEAD moved, such as the worktree `gittree`
+  created, using a detected command:
+  - a make `test` target (`GNUmakefile`, `makefile` or `Makefile`, as make reads them)
+  - else `go test ./...` for a Go module
+  - else `cargo test`
+  - else the `package.json` test script
+
+  Python isn't guessed. Checks run with a minimal environment (home, PATH and toolchain
+  caches; no tokens or SSH agent) and at most five per task. If a check fails, the
+  agent's session is resumed once with the output, fenced and labelled as untrusted, to
+  fix it (`queue.worker.verify.retries`, default 1). If it still fails, the task is
+  recorded as `failed` with the output attached. Unlisted repositories, tasks that moved
+  no checkout, and projects with no recognizable test command are recorded as `skipped`
+  and keep their status. The outcome appears as a `verify:` line in `orch task <id>`.
+  `queue.worker.verify.enabled false` turns verification off, and
+  `queue.worker.verify.timeout` (default `15m`) caps each command.
 - **No automatic retries.** A failed run has already had side effects, such as pushed
   branches or opened PRs, so it is recorded as `failed` rather than repeated.
 - **Restarts resume.** Stopping orchd or restarting the worker ends in-flight sessions

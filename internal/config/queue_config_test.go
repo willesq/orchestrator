@@ -54,3 +54,18 @@ func TestQueueWorkerAllowedTools(t *testing.T) {
 		}
 	})
 }
+
+func TestQueueVerifyDefaults(t *testing.T) {
+	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	v, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Unmarshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Queue.Worker.Verify; !got.Enabled || got.Timeout != "15m" || got.Retries != 1 {
+		t.Errorf("verify defaults = %+v", got)
+	}
+}

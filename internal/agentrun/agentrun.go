@@ -38,6 +38,10 @@ type Task struct {
 	// Cwd is the absolute directory the session runs in; empty uses a private
 	// scratch directory for the task.
 	Cwd string
+	// Heads is the HEAD of each checkout of Cwd's repository when the task was
+	// dispatched (see Snapshot). Verification tests only checkouts that moved
+	// since; nil means no baseline, and verification is skipped.
+	Heads map[string]string
 }
 
 // Statuses a finished run records in the task ledger.
@@ -52,6 +56,10 @@ type Outcome struct {
 	Status string
 	Result string
 	Metrics
+	// Verification records the check run against the work: "passed: …",
+	// "failed: …" or "skipped: …". Empty when verification is off or the run did
+	// not complete.
+	Verification string
 }
 
 // Metrics describe what a run cost and produced. Fields the CLI did not report
@@ -113,7 +121,10 @@ type Runner struct {
 	// (queue.worker.allowed_tools.claude). They matter most under dontAsk, where
 	// anything not allowed is refused. The dispatch tools stay denied regardless,
 	// since Claude Code applies deny rules before allow rules.
-	AllowedTools   []string
+	AllowedTools []string
+	// Verify configures the check run against the agent's work before a task
+	// counts as complete.
+	Verify         VerifyOptions
 	PermissionMode string        // --permission-mode for every run
 	Timeout        time.Duration // per-run cap; zero means none
 	Home           string        // user home, for transcripts and PATH
@@ -157,6 +168,21 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 		defer cancel()
 	}
 
+	resume := r.transcriptExists(SessionID(t.ID))
+	prompt := taskPrompt(t)
+	if resume {
+		prompt = resumePrompt(t)
+	}
+	o, err := r.session(ctx, t, dir, prompt, resume)
+	if err != nil || o.Status != StatusComplete || !r.Verify.Enabled {
+		return o, err
+	}
+	return r.verifyAndFix(ctx, t, dir, o)
+}
+
+// session runs one Claude Code invocation for the task: a fresh session, or a
+// resumed one carrying prompt as the next user turn.
+func (r *Runner) session(ctx context.Context, t Task, dir, prompt string, resume bool) (Outcome, error) {
 	sid := SessionID(t.ID)
 	args := []string{"-p", "--output-format", "json", "--permission-mode", r.PermissionMode,
 		"--disallowedTools", dispatchTools}
@@ -166,10 +192,8 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 		args = append(args, "--allowedTools="+rules)
 	}
 	args = append(args, "--agent", t.Agent)
-	prompt := taskPrompt(t)
-	if r.transcriptExists(sid) {
+	if resume {
 		args = append(args, "--resume", sid)
-		prompt = resumePrompt(t)
 	} else {
 		args = append(args, "--session-id", sid)
 	}

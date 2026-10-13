@@ -17,7 +17,8 @@ func TestOutcome(t *testing.T) {
 		{name: "finished task", task: &orchdv1.Task{
 			CostUsd: 0.4213, DurationMs: 61234, Turns: 17, SessionId: "s1",
 			Models: []string{"claude-haiku-4-5", "claude-sonnet-5-5"}, Prs: []string{"https://github.com/acme/w/pull/1"},
-		}, want: []string{"outcome: $0.4213 · 1m1.2s · 17 turn(s)", "models:  claude-haiku-4-5, claude-sonnet-5-5", "session: s1", "prs:     https://github.com/acme/w/pull/1"}},
+			Verification: "passed: `go test ./...` in /src/w",
+		}, want: []string{"outcome: $0.4213 · 1m1.2s · 17 turn(s)", "verify:  passed: `go test ./...` in /src/w", "models:  claude-haiku-4-5, claude-sonnet-5-5", "session: s1", "prs:     https://github.com/acme/w/pull/1"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

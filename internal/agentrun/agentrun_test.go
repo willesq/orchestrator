@@ -29,6 +29,7 @@ cat > "$d/stdin"
 pwd -P > "$d/cwd"
 env > "$d/env"
 if [ -n "$FAKE_SLEEP" ]; then sleep "$FAKE_SLEEP"; fi
+if [ -n "$FAKE_ON_RESUME" ] && printf '%s\n' "$@" | grep -qx -- --resume; then eval "$FAKE_ON_RESUME"; fi
 [ -f "$d/stdout" ] && cat "$d/stdout"
 [ -f "$d/stderr" ] && cat "$d/stderr" >&2
 exit "${FAKE_EXIT:-0}"
@@ -51,7 +52,7 @@ func newFixture(t *testing.T) fixture {
 		t.Fatal(err)
 	}
 	t.Setenv("FAKE_DIR", dir)
-	for _, k := range []string{"FAKE_EXIT", "FAKE_SLEEP", "FAKE_CHILD", TaskIDEnv} {
+	for _, k := range []string{"FAKE_EXIT", "FAKE_SLEEP", "FAKE_CHILD", "FAKE_ON_RESUME", TaskIDEnv} {
 		t.Setenv(k, "")
 	}
 	return fixture{dir: dir, home: home, runner: &Runner{

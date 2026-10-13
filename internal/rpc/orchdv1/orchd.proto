@@ -151,6 +151,7 @@ message Task {
   string session_id = 10;
   repeated string models = 11;
   repeated string prs = 12;
+  string verification = 13; // passed: … | failed: … | skipped: …
 }
 
 message StatusRequest {}
