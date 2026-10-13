@@ -36,6 +36,7 @@ import (
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
+	"github.com/willesq/orchestrator/internal/routing"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/selfupdate"
 	"github.com/willesq/orchestrator/internal/supervisor"
@@ -53,7 +54,7 @@ type ragService interface {
 
 // dispatcher enqueues durable agent-task workflows.
 type dispatcher interface {
-	Dispatch(ctx context.Context, agent, body, cwd string) (string, error)
+	Dispatch(ctx context.Context, agent, body, cwd string, rt workflows.Route) (string, error)
 }
 
 // taskReader reads the dispatch ledger. Read-only on purpose: task state is
@@ -85,6 +86,10 @@ type server struct {
 	workerEnabled bool
 	// summaries receives finished sessions for summarizing; nil when off.
 	summaries *summaryQueue
+	// router resolves dispatch routes and recommendations; nil, with routerErr
+	// saying why, when the routing policy in config is invalid.
+	router    modelRouter
+	routerErr error
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -235,7 +240,15 @@ func taskPB(t queue.Task) *orchdv1.Task {
 		Result: t.Result, Status: t.Status, UpdatedAt: t.UpdatedAt,
 		CostUsd: t.CostUSD, DurationMs: t.DurationMS, Turns: int32(t.Turns),
 		SessionId: t.SessionID, Models: t.Models, Prs: t.PRs, Verification: t.Verification,
+		Route: taskRoutePB(t),
 	}
+}
+
+func taskRoutePB(t queue.Task) *orchdv1.Route {
+	if t.Kind == "" && t.Model == "" {
+		return nil
+	}
+	return &orchdv1.Route{TaskKind: t.Kind, Provider: t.Provider, Model: t.Model, Effort: t.Effort}
 }
 
 // maxTaskBody bounds a dispatched task's prompt. A task is a brief, not a
@@ -259,14 +272,18 @@ func (s *server) Dispatch(ctx context.Context, req *orchdv1.DispatchRequest) (*o
 	if cwd := req.GetCwd(); cwd != "" && !filepath.IsAbs(cwd) {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "cwd %q must be absolute", cwd)
 	}
-	id, err := s.disp.Dispatch(ctx, agent, req.GetBody(), req.GetCwd())
+	rt, routePB, err := s.route(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	id, err := s.disp.Dispatch(ctx, agent, req.GetBody(), req.GetCwd(), rt)
 	if errors.Is(err, queue.ErrQueueFull) {
 		return nil, grpcstatus.Error(codes.ResourceExhausted, err.Error())
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &orchdv1.DispatchResponse{InstanceId: id, WorkerEnabled: s.workerEnabled}, nil
+	return &orchdv1.DispatchResponse{InstanceId: id, WorkerEnabled: s.workerEnabled, Route: routePB}, nil
 }
 
 // Status reports orchd's own liveness plus one entry per supervised subsystem.
@@ -440,11 +457,17 @@ func Run(ctx context.Context) error {
 		return fmt.Errorf("secure socket %s: %w", sock, err)
 	}
 
+	router, routerErr := newRouter(store, routing.PolicyFrom(s.Routing))
+	if routerErr != nil {
+		log.Printf("orchd: model routing is off: %v", routerErr)
+	}
+
 	gs := grpc.NewServer()
 	orchdv1.RegisterOrchdServer(gs, &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks,
 		workerEnabled: s.Queue.Worker.Enabled,
 		summaries:     summaries,
+		router:        router, routerErr: routerErr,
 	})
 	go func() {
 		<-runCtx.Done()

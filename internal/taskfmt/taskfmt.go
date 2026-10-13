@@ -12,13 +12,17 @@ import (
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
-// Outcome renders a finished task's metrics as indented lines, or "" for a task
-// that has not finished (or ran before metrics were recorded).
+// Outcome renders a task's route and, once it has finished, its metrics as
+// aligned lines; "" for an unrouted task with no metrics yet.
 func Outcome(t *orchdv1.Task) string {
-	if t.GetDurationMs() == 0 && t.GetCostUsd() == 0 && t.GetTurns() == 0 {
-		return ""
-	}
 	var b strings.Builder
+	// The route is known from dispatch, so it shows before the task finishes.
+	if r := t.GetRoute(); r != nil {
+		fmt.Fprintf(&b, "route:   %s\n", Route(r))
+	}
+	if t.GetDurationMs() == 0 && t.GetCostUsd() == 0 && t.GetTurns() == 0 {
+		return b.String()
+	}
 	parts := []string{fmt.Sprintf("$%.4f", t.GetCostUsd()), Duration(t.GetDurationMs())}
 	if n := t.GetTurns(); n > 0 {
 		parts = append(parts, fmt.Sprintf("%d turn(s)", n))
@@ -37,6 +41,32 @@ func Outcome(t *orchdv1.Task) string {
 		fmt.Fprintf(&b, "verify:  %s\n", v)
 	}
 	return b.String()
+}
+
+// Route renders a route as "kind → provider/model@effort (rationale)".
+func Route(r *orchdv1.Route) string {
+	target := "agent default"
+	if r.GetModel() != "" {
+		target = r.GetProvider() + "/" + r.GetModel()
+		if e := r.GetEffort(); e != "" {
+			target += "@" + e
+		}
+	}
+	s := target
+	if k := r.GetTaskKind(); k != "" {
+		s = k + " → " + target
+	}
+	var notes []string
+	if c := r.GetConfidence(); c != "" {
+		notes = append(notes, fmt.Sprintf("confidence %s, %d outcome(s)", c, r.GetEvidenceN()))
+	}
+	if why := r.GetRationale(); why != "" {
+		notes = append(notes, why)
+	}
+	if len(notes) > 0 {
+		s += " (" + strings.Join(notes, "; ") + ")"
+	}
+	return s
 }
 
 // Duration renders milliseconds the way a person reads a run's length.

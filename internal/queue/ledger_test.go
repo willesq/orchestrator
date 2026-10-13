@@ -205,7 +205,7 @@ func TestDispatchRecordsAPendingRow(t *testing.T) {
 	t.Cleanup(func() { _ = b.Close() })
 	d := NewDispatcher(b, store)
 
-	id, err := d.Dispatch(context.Background(), "ops", "investigate the thing", "/src/widget")
+	id, err := d.Dispatch(context.Background(), "ops", "investigate the thing", "/src/widget", workflows.Route{})
 	if err != nil {
 		t.Fatalf("Dispatch: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestDispatchWithoutAStoreStillWorks(t *testing.T) {
 	t.Cleanup(func() { _ = b.Close() })
 	d := NewDispatcher(b, nil)
 
-	id, err := d.Dispatch(context.Background(), "dev", "body", "")
+	id, err := d.Dispatch(context.Background(), "dev", "body", "", workflows.Route{})
 	if err != nil {
 		t.Fatalf("Dispatch with a nil store: %v", err)
 	}
@@ -297,14 +297,14 @@ func TestDispatchCapsActiveTasks(t *testing.T) {
 	d := NewDispatcher(b, store)
 	d.MaxActive = 2
 
-	first, err := d.Dispatch(ctx, "dev", "one", "")
+	first, err := d.Dispatch(ctx, "dev", "one", "", workflows.Route{})
 	if err != nil {
 		t.Fatalf("first dispatch: %v", err)
 	}
-	if _, err := d.Dispatch(ctx, "dev", "two", ""); err != nil {
+	if _, err := d.Dispatch(ctx, "dev", "two", "", workflows.Route{}); err != nil {
 		t.Fatalf("second dispatch: %v", err)
 	}
-	if _, err := d.Dispatch(ctx, "dev", "three", ""); !errors.Is(err, ErrQueueFull) {
+	if _, err := d.Dispatch(ctx, "dev", "three", "", workflows.Route{}); !errors.Is(err, ErrQueueFull) {
 		t.Fatalf("third dispatch err = %v, want ErrQueueFull", err)
 	}
 	// Finished tasks free their slot; failed and blocked ones count as finished.
@@ -314,7 +314,7 @@ func TestDispatchCapsActiveTasks(t *testing.T) {
 	if n, err := store.ActiveCount(ctx); err != nil || n != 1 {
 		t.Fatalf("ActiveCount = %d, %v; want 1", n, err)
 	}
-	if _, err := d.Dispatch(ctx, "dev", "three", ""); err != nil {
+	if _, err := d.Dispatch(ctx, "dev", "three", "", workflows.Route{}); err != nil {
 		t.Errorf("dispatch after a slot freed: %v", err)
 	}
 }
@@ -326,7 +326,7 @@ func TestDispatchRedactsTheBody(t *testing.T) {
 	d := NewDispatcher(b, store)
 	secret := "ghp_" + strings.Repeat("a1B2", 9)
 
-	id, err := d.Dispatch(context.Background(), "dev", "use "+secret+" to push", "")
+	id, err := d.Dispatch(context.Background(), "dev", "use "+secret+" to push", "", workflows.Route{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,20 +389,20 @@ func TestDispatchRecordsTheCheckoutBaseline(t *testing.T) {
 		asked = dir
 		return map[string]string{dir: "abc123"}
 	}
-	if _, err := d.Dispatch(context.Background(), "dev", "b", "/src/w"); err != nil {
+	if _, err := d.Dispatch(context.Background(), "dev", "b", "/src/w", workflows.Route{}); err != nil {
 		t.Fatal(err)
 	}
 	if asked != "/src/w" {
 		t.Errorf("snapshot taken of %q, want the task's cwd", asked)
 	}
 	asked = ""
-	if _, err := d.Dispatch(context.Background(), "dev", "b", ""); err != nil {
+	if _, err := d.Dispatch(context.Background(), "dev", "b", "", workflows.Route{}); err != nil {
 		t.Fatal(err)
 	}
 	if asked != "" {
 		t.Errorf("a scratch-dir task has no repository to snapshot, but %q was", asked)
 	}
-	in := taskInput("task-1", "dev", "b", "/src/w", map[string]string{"/src/w": "abc"})
+	in := taskInput("task-1", "dev", "b", "/src/w", map[string]string{"/src/w": "abc"}, workflows.Route{})
 	if in.Heads["/src/w"] != "abc" || in.Cwd != "/src/w" {
 		t.Errorf("taskInput = %+v", in)
 	}

@@ -30,6 +30,7 @@ const (
 	Orchd_Status_FullMethodName           = "/orchd.v1.Orchd/Status"
 	Orchd_Restart_FullMethodName          = "/orchd.v1.Orchd/Restart"
 	Orchd_SummarizeSession_FullMethodName = "/orchd.v1.Orchd/SummarizeSession"
+	Orchd_RecommendModel_FullMethodName   = "/orchd.v1.Orchd/RecommendModel"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -65,6 +66,9 @@ type OrchdClient interface {
 	// SummarizeSession queues a finished session for a model-written summary,
 	// which replaces the excerpt in its session record. It returns at once.
 	SummarizeSession(ctx context.Context, in *SummarizeSessionRequest, opts ...grpc.CallOption) (*SummarizeSessionResponse, error)
+	// RecommendModel answers which model a task of one kind should run on, with
+	// the evidence behind the answer.
+	RecommendModel(ctx context.Context, in *RecommendModelRequest, opts ...grpc.CallOption) (*RecommendModelResponse, error)
 }
 
 type orchdClient struct {
@@ -185,6 +189,16 @@ func (c *orchdClient) SummarizeSession(ctx context.Context, in *SummarizeSession
 	return out, nil
 }
 
+func (c *orchdClient) RecommendModel(ctx context.Context, in *RecommendModelRequest, opts ...grpc.CallOption) (*RecommendModelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecommendModelResponse)
+	err := c.cc.Invoke(ctx, Orchd_RecommendModel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrchdServer is the server API for Orchd service.
 // All implementations must embed UnimplementedOrchdServer
 // for forward compatibility.
@@ -218,6 +232,9 @@ type OrchdServer interface {
 	// SummarizeSession queues a finished session for a model-written summary,
 	// which replaces the excerpt in its session record. It returns at once.
 	SummarizeSession(context.Context, *SummarizeSessionRequest) (*SummarizeSessionResponse, error)
+	// RecommendModel answers which model a task of one kind should run on, with
+	// the evidence behind the answer.
+	RecommendModel(context.Context, *RecommendModelRequest) (*RecommendModelResponse, error)
 	mustEmbedUnimplementedOrchdServer()
 }
 
@@ -260,6 +277,9 @@ func (UnimplementedOrchdServer) Restart(context.Context, *RestartRequest) (*Rest
 }
 func (UnimplementedOrchdServer) SummarizeSession(context.Context, *SummarizeSessionRequest) (*SummarizeSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SummarizeSession not implemented")
+}
+func (UnimplementedOrchdServer) RecommendModel(context.Context, *RecommendModelRequest) (*RecommendModelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecommendModel not implemented")
 }
 func (UnimplementedOrchdServer) mustEmbedUnimplementedOrchdServer() {}
 func (UnimplementedOrchdServer) testEmbeddedByValue()               {}
@@ -480,6 +500,24 @@ func _Orchd_SummarizeSession_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_RecommendModel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecommendModelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).RecommendModel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_RecommendModel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).RecommendModel(ctx, req.(*RecommendModelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Orchd_ServiceDesc is the grpc.ServiceDesc for Orchd service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -530,6 +568,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SummarizeSession",
 			Handler:    _Orchd_SummarizeSession_Handler,
+		},
+		{
+			MethodName: "RecommendModel",
+			Handler:    _Orchd_RecommendModel_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

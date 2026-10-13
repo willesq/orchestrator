@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/models"
 )
 
@@ -28,6 +29,7 @@ func useModelAdapters(t *testing.T, as ...models.Adapter) {
 }
 
 func TestModelRegistryCommands(t *testing.T) {
+	t.Setenv(agentrun.TaskIDEnv, "")
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	useModelAdapters(t,

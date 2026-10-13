@@ -23,6 +23,7 @@ import (
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/qdrant"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/taskfmt"
 	"github.com/willesq/orchestrator/internal/version"
 )
 
@@ -526,7 +527,7 @@ func serveMCP(cf clientFactory, build func(orchdv1.OrchdClient) *server.MCPServe
 }
 
 func newDispatchCmd(cf clientFactory) *cobra.Command {
-	var agent, cwd string
+	var agent, cwd, kind, modelRef string
 	cmd := &cobra.Command{
 		Use:   "dispatch <body>",
 		Short: "Dispatch a durable agent task (runs headless when queue.worker.enabled)",
@@ -556,12 +557,17 @@ func newDispatchCmd(cf clientFactory) *cobra.Command {
 			if cwd, err = filepath.Abs(cwd); err != nil {
 				return err
 			}
-			resp, err := client.Dispatch(ctx, &orchdv1.DispatchRequest{Agent: agent, Body: body, Cwd: cwd})
+			resp, err := client.Dispatch(ctx, &orchdv1.DispatchRequest{
+				Agent: agent, Body: body, Cwd: cwd, TaskKind: kind, Model: modelRef,
+			})
 			if err != nil {
 				return err
 			}
 			out := c.OutOrStdout()
 			fmt.Fprintf(out, "dispatched %s (runs in %s)\n", resp.GetInstanceId(), cwd)
+			if r := resp.GetRoute(); r != nil {
+				fmt.Fprintf(out, "route: %s\n", taskfmt.Route(r))
+			}
 			if !resp.GetWorkerEnabled() {
 				fmt.Fprintln(out, "note: the queue worker is disabled, so this task stays pending until you run\n"+
 					"      `orch config set queue.worker.enabled true` and `orch restart`.")
@@ -571,6 +577,8 @@ func newDispatchCmd(cf clientFactory) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&agent, "agent", "dev", "target agent")
 	cmd.Flags().StringVar(&cwd, "cwd", "", "directory the agent session runs in (default: current directory)")
+	cmd.Flags().StringVar(&kind, "kind", "", "task kind to route by (code, review, docs, research, ops, classify, test, adversarial)")
+	cmd.Flags().StringVar(&modelRef, "model", "", "run on this enabled model (<provider>/<slug>) instead of routing")
 	return cmd
 }
 

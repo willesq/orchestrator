@@ -64,10 +64,10 @@ func (s *SQLTaskStore) SaveResult(ctx context.Context, in workflows.AgentTaskInp
 // whether or not something was in flight.
 func (s *SQLTaskStore) Create(ctx context.Context, in workflows.AgentTaskInput) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO tasks (id, agent, body, result, status, updated_at)
-		 VALUES (?, ?, ?, '', 'pending', datetime('now'))
+		`INSERT INTO tasks (id, agent, body, result, status, updated_at, task_kind, provider, model, effort)
+		 VALUES (?, ?, ?, '', 'pending', datetime('now'), ?, ?, ?, ?)
 		 ON CONFLICT(id) DO NOTHING`,
-		in.ID, in.Agent, in.Body)
+		in.ID, in.Agent, in.Body, in.Route.Kind, in.Route.Provider, in.Route.Model, in.Route.Effort)
 	return err
 }
 
@@ -95,12 +95,15 @@ type Task struct {
 	Models       []string
 	PRs          []string
 	Verification string
+	// The route the task was dispatched with; empty when unrouted.
+	Kind, Provider, Model, Effort string
 }
 
 // taskColumns is the select list scanTask reads, in order.
 const taskColumns = `id, agent, body, COALESCE(result,''), status, updated_at,
 	COALESCE(cost_usd,0), COALESCE(duration_ms,0), COALESCE(turns,0),
-	COALESCE(session_id,''), COALESCE(models,''), COALESCE(prs,''), COALESCE(verification,'')`
+	COALESCE(session_id,''), COALESCE(models,''), COALESCE(prs,''), COALESCE(verification,''),
+	COALESCE(task_kind,''), COALESCE(provider,''), COALESCE(model,''), COALESCE(effort,'')`
 
 type rowScanner interface{ Scan(dest ...any) error }
 
@@ -108,7 +111,8 @@ func scanTask(r rowScanner) (Task, error) {
 	var t Task
 	var models, prs string
 	err := r.Scan(&t.ID, &t.Agent, &t.Body, &t.Result, &t.Status, &t.UpdatedAt,
-		&t.CostUSD, &t.DurationMS, &t.Turns, &t.SessionID, &models, &prs, &t.Verification)
+		&t.CostUSD, &t.DurationMS, &t.Turns, &t.SessionID, &models, &prs, &t.Verification,
+		&t.Kind, &t.Provider, &t.Model, &t.Effort)
 	t.Models, t.PRs = splitList(models), splitList(prs)
 	return t, err
 }
@@ -197,8 +201,8 @@ func (s *SQLTaskStore) Get(ctx context.Context, id string) (Task, bool, error) {
 }
 
 // taskInput builds a task's durable workflow input.
-func taskInput(id, agent, body, cwd string, heads map[string]string) workflows.AgentTaskInput {
-	return workflows.AgentTaskInput{ID: id, Agent: agent, Body: body, Cwd: cwd, Heads: heads}
+func taskInput(id, agent, body, cwd string, heads map[string]string, rt workflows.Route) workflows.AgentTaskInput {
+	return workflows.AgentTaskInput{ID: id, Agent: agent, Body: body, Cwd: cwd, Heads: heads, Route: rt}
 }
 
 // ErrQueueFull rejects a dispatch while too many tasks are pending or running.
@@ -225,8 +229,9 @@ func NewDispatcher(b backend.Backend, store *SQLTaskStore) *Dispatcher {
 }
 
 // Dispatch enqueues an agent task and returns its durable instance ID. cwd is
-// where the agent session will run; empty runs it in a scratch directory.
-func (d *Dispatcher) Dispatch(ctx context.Context, agent, body, cwd string) (string, error) {
+// where the agent session will run; empty runs it in a scratch directory. rt is
+// the model it was routed to, recorded on the task; zero leaves it unrouted.
+func (d *Dispatcher) Dispatch(ctx context.Context, agent, body, cwd string, rt workflows.Route) (string, error) {
 	if d.store != nil && d.MaxActive > 0 {
 		active, err := d.store.ActiveCount(ctx)
 		if err != nil {
@@ -244,7 +249,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, agent, body, cwd string) (str
 	if d.Snapshot != nil && cwd != "" {
 		heads = d.Snapshot(ctx, cwd)
 	}
-	in := taskInput(id, agent, body, cwd, heads)
+	in := taskInput(id, agent, body, cwd, heads, rt)
 	// Record before enqueuing: a row with no workflow is a visible, diagnosable
 	// state, whereas a workflow with no row is invisible to every reader.
 	if d.store != nil {
