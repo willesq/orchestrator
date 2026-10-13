@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/config"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
@@ -21,24 +23,42 @@ import (
 // clear the stricter min_score_statement instead, since an instruction says
 // less about what it needs than a question does. A chunk already injected
 // earlier in the session is not injected again.
+//
+// Before any of that, it reports events that arrived since the last prompt:
+// finished subagents and background tasks, which otherwise surfaced only in the
+// next session's digest. A queued task's own session gets none, since other
+// tasks' statuses are noise there.
 func userPromptSubmit(cfg config.AutoRAGSettings, p Payload, out io.Writer, cf clientFactory) error {
+	st := loadState(p.SessionID)
+	if os.Getenv(agentrun.TaskIDEnv) == "" {
+		if lines := takeUpdates(&st, p.SessionID); len(lines) > 0 {
+			writeUpdates(out, lines)
+		}
+	}
+	enrichPrompt(cfg, p, out, cf, &st)
+	_ = saveState(p.SessionID, st)
+	return nil
+}
+
+// enrichPrompt writes the auto-RAG block for the prompt, recording what it
+// injected in st.
+func enrichPrompt(cfg config.AutoRAGSettings, p Payload, out io.Writer, cf clientFactory, st *sessionState) {
 	if !cfg.Enabled {
-		return nil
+		return
 	}
 	prompt := strings.TrimSpace(p.Prompt)
 	if len(prompt) < cfg.MinPromptChars {
-		return nil
+		return
 	}
 	if !looksLikeQuestion(prompt) {
 		cfg.MinScore = math.Max(cfg.MinScore, cfg.MinScoreStatement)
 	}
 	client, cleanup, err := cf()
 	if err != nil {
-		return nil
+		return
 	}
 	defer cleanup()
 
-	st := loadState(p.SessionID)
 	shown := make(map[string]bool, len(st.Injected))
 	for _, k := range st.Injected {
 		shown[k] = true
@@ -48,14 +68,12 @@ func userPromptSubmit(cfg config.AutoRAGSettings, p Payload, out io.Writer, cf c
 	kept := projectFirstHits(ctx, client, prompt, detectProject(p.Cwd).searchTags(), cfg, shown)
 	text, written := formatInjection(kept, cfg.MaxChars)
 	if len(written) == 0 {
-		return nil
+		return
 	}
 	fmt.Fprint(out, text)
 	for _, h := range written {
 		st.Injected = append(st.Injected, hitKey(h.GetSourceUri(), h.GetText()))
 	}
-	_ = saveState(p.SessionID, st)
-	return nil
 }
 
 // defaultTopK mirrors the daemon's search default for an unset hooks.auto_rag.top_k.
