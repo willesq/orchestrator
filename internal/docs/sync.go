@@ -7,12 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/willesq/orchestrator/internal/mdwalk"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/redact"
 )
@@ -50,6 +50,8 @@ type SyncOpts struct {
 	Git             Git
 	Force           bool         // ignore repo-SHA + file-hash caches
 	Now             func() int64 // injectable clock
+	// ExcludeDirs names directories never walked for markdown (ingest.exclude_dirs).
+	ExcludeDirs []string
 }
 
 // SyncOwner enumerates the owner's repos (one gh call/page), clones only the
@@ -97,31 +99,22 @@ func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o O
 		now = func() int64 { return 0 }
 	}
 	n := 0
-	_ = filepath.WalkDir(repoPath, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		if !strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
-			return nil
-		}
-		if strings.Contains(p, "/.git/") || strings.Contains(p, "/node_modules/") {
-			return nil
-		}
+	mdwalk.Files(repoPath, opts.ExcludeDirs, func(p string) {
 		raw, err := os.ReadFile(p)
 		if err != nil {
-			return nil
+			return
 		}
 		rel, _ := filepath.Rel(repoPath, p)
 		uri := fmt.Sprintf("repo://%s/%s/%s", o.Owner, repo, rel)
 		h := sha256Hex(raw)
 		if !opts.Force {
 			if prev, _ := reg.Hash(ctx, uri); prev == h {
-				return nil // content unchanged → skip embed + upsert
+				return // content unchanged → skip embed + upsert
 			}
 		}
 		content, redactions := redact.Redact(string(raw))
 		if redactions > redact.Threshold {
-			return nil // keystore-like: skip entirely
+			return // keystore-like: skip entirely
 		}
 		tags := append([]string{}, o.Tags...)
 		tags = append(tags, "owner:"+o.Owner, "repo:"+repo)
@@ -134,7 +127,6 @@ func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o O
 			_ = reg.SetHash(ctx, uri, h, now())
 			n++
 		}
-		return nil
 	})
 	return n
 }

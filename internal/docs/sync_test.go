@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/willesq/orchestrator/internal/mdwalk"
 	"github.com/willesq/orchestrator/internal/rag"
 )
 
@@ -67,6 +68,7 @@ func TestSyncOwner(t *testing.T) {
 		includeArch   bool
 		includeForks  bool
 		force         bool
+		exclude       []string
 		wantStatus    string
 		wantIngested  []string
 		wantSyncedNum int // number of git clones expected
@@ -107,6 +109,19 @@ func TestSyncOwner(t *testing.T) {
 			wantSyncedNum: 2,
 		},
 		{
+			name:  "vendored and dependency docs are not ingested",
+			repos: []Repo{{Name: "tui", HeadSHA: "t1"}},
+			layout: map[string]map[string]string{"tui": {
+				"README.md": "ours", "docs/arch.md": "ours",
+				"vendor/github.com/charmbracelet/lipgloss/README.md": "theirs",
+				"web/node_modules/left-pad/README.md":                "theirs",
+			}},
+			exclude:       mdwalk.DefaultExcludeDirs,
+			wantStatus:    "ok",
+			wantIngested:  []string{"repo://acme/tui/README.md", "repo://acme/tui/docs/arch.md"},
+			wantSyncedNum: 1,
+		},
+		{
 			name:          "force re-syncs even an unchanged repo",
 			repos:         []Repo{{Name: "docs", HeadSHA: "s1"}},
 			layout:        map[string]map[string]string{"docs": {"README.md": "hello"}},
@@ -124,6 +139,7 @@ func TestSyncOwner(t *testing.T) {
 			opts.IncludeArchived = tt.includeArch
 			opts.IncludeForks = tt.includeForks
 			opts.Force = tt.force
+			opts.ExcludeDirs = tt.exclude
 			ctx := context.Background()
 			for repo, sha := range tt.preSHA {
 				_ = reg.SetRepoState(ctx, RepoState{Owner: "acme", Repo: repo, HeadSHA: sha})

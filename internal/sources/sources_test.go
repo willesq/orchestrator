@@ -6,9 +6,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/willesq/orchestrator/internal/db"
+	"github.com/willesq/orchestrator/internal/mdwalk"
 	"github.com/willesq/orchestrator/internal/rag"
 )
 
@@ -47,12 +49,14 @@ func TestRegistryMarkDue(t *testing.T) {
 type fakeIngester struct {
 	calls int
 	last  rag.Meta
+	uris  []string
 	err   error
 }
 
 func (f *fakeIngester) IngestText(_ context.Context, _ string, m rag.Meta) (int, error) {
 	f.calls++
 	f.last = m
+	f.uris = append(f.uris, m.SourceURI)
 	return 1, f.err
 }
 
@@ -339,6 +343,41 @@ func TestStripHTML(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := stripHTML(tt.in); got != tt.want {
 				t.Errorf("stripHTML(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRefreshSkipsExcludedDirs(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "willesq", "tui")
+	for _, rel := range []string{"README.md", "docs/arch.md", "vendor/github.com/charmbracelet/lipgloss/README.md", "node_modules/x/README.md"} {
+		p := filepath.Join(repo, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("# doc"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tests := []struct {
+		name string
+		src  Source
+		opts RefreshOpts
+	}{
+		{name: "repo source", src: Source{Kind: KindRepo, URI: repo, Owner: "willesq"}, opts: RefreshOpts{ExcludeDirs: mdwalk.DefaultExcludeDirs}},
+		{name: "owner source", src: Source{Kind: KindOwner, URI: "willesq"}, opts: RefreshOpts{KnownRoots: []string{root}, ExcludeDirs: mdwalk.DefaultExcludeDirs}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ing := &fakeIngester{}
+			if _, err := Refresh(context.Background(), tt.src, ing, tt.opts); err != nil {
+				t.Fatalf("Refresh: %v", err)
+			}
+			slices.Sort(ing.uris)
+			want := []string{"repo://willesq/tui/README.md", "repo://willesq/tui/docs/arch.md"}
+			if !slices.Equal(ing.uris, want) {
+				t.Errorf("ingested %v, want %v", ing.uris, want)
 			}
 		})
 	}

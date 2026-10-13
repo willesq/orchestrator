@@ -16,6 +16,7 @@ import (
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 
+	"github.com/willesq/orchestrator/internal/mdwalk"
 	"github.com/willesq/orchestrator/internal/paths"
 )
 
@@ -27,6 +28,7 @@ type Settings struct {
 	Sources      SourcesSettings      `mapstructure:"sources"`
 	Docs         DocsSettings         `mapstructure:"docs"`
 	PRBabysitter PRBabysitterSettings `mapstructure:"pr_babysitter"`
+	Ingest       IngestSettings       `mapstructure:"ingest"`
 	Queue        QueueSettings        `mapstructure:"queue"`
 }
 
@@ -88,6 +90,14 @@ type QueueWorkerSettings struct {
 	PermissionMode string `mapstructure:"permission_mode"`
 	Timeout        string `mapstructure:"timeout"`        // per-task wall-clock cap
 	MaxConcurrent  int    `mapstructure:"max_concurrent"` // tasks run at once
+}
+
+// IngestSettings controls which files the repo walkers (sources and docs) ingest.
+type IngestSettings struct {
+	// ExcludeDirs names directories never walked for markdown, matched exactly
+	// against each directory name. Setting it replaces the default list; .git is
+	// always skipped.
+	ExcludeDirs []string `mapstructure:"exclude_dirs"`
 }
 
 // PRBabysitterSettings controls the PR-polling daemon.
@@ -170,6 +180,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("hooks.auto_rag.min_prompt_chars", 12)
 	// Source registry + freshness scheduler.
 	v.SetDefault("sources.known_roots", []string{"~/code"})
+	// Third-party and generated trees whose READMEs would crowd out real project docs.
+	v.SetDefault("ingest.exclude_dirs", mdwalk.DefaultExcludeDirs)
 	v.SetDefault("sources.scan_interval", "5m")
 	// docs: the GitHub code-docs subsystem (orch docs). Short scan tick so a
 	// manual `orch docs sync` (which marks an owner due) runs near-immediately.

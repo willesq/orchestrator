@@ -267,6 +267,7 @@ func runDocsSync(c *cobra.Command, cf clientFactory, reg *docs.Registry, owner s
 		GH:              newDocsGitHub(),
 		Git:             newDocsGit(),
 		Now:             func() int64 { return time.Now().Unix() },
+		ExcludeDirs:     s.Ingest.ExcludeDirs,
 	}
 	ing := rpcIngester{client: client}
 
