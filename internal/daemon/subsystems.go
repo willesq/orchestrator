@@ -197,7 +197,7 @@ func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []str
 // sourcesUnit refreshes registered web/repo/owner sources on a cadence.
 func sourcesUnit(s config.Settings, store *sql.DB, ing sources.Ingester) supervisor.Unit {
 	sched := sources.NewScheduler(sources.NewRegistry(store), ing,
-		sources.RefreshOpts{KnownRoots: expandRoots(s.Sources.KnownRoots)})
+		sources.RefreshOpts{KnownRoots: expandRoots(s.Sources.KnownRoots), ExcludeDirs: s.Ingest.ExcludeDirs})
 	return supervisor.Unit{
 		Name:     UnitSources,
 		Detail:   "web/repo/owner source freshness",
@@ -215,6 +215,7 @@ func docsUnit(s config.Settings, store *sql.DB, ing docs.Ingester) supervisor.Un
 		IncludeForks:    s.Docs.IncludeForks,
 		GH:              docs.NewGitHub(),
 		Git:             docs.NewGit(),
+		ExcludeDirs:     s.Ingest.ExcludeDirs,
 	})
 	return supervisor.Unit{
 		Name:     UnitDocs,

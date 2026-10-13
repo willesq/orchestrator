@@ -3,8 +3,10 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
+	"github.com/willesq/orchestrator/internal/mdwalk"
 	"github.com/willesq/orchestrator/internal/paths"
 )
 
@@ -207,6 +209,42 @@ func TestQdrantStorageDir(t *testing.T) {
 			}
 			if got != tt.storage {
 				t.Errorf("QdrantStorageDir() = %q, want %q", got, tt.storage)
+			}
+		})
+	}
+}
+
+func TestIngestExcludeDirs(t *testing.T) {
+	tests := []struct {
+		name string
+		set  any // value as `orch config set` passes it; nil keeps the default
+		want []string
+	}{
+		{name: "defaults to the built-in list", set: nil, want: mdwalk.DefaultExcludeDirs},
+		{name: "comma-separated CLI value replaces the list", set: "vendor,generated", want: []string{"vendor", "generated"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+			v, err := Load()
+			if err != nil {
+				t.Fatalf("Load: %v", err)
+			}
+			if tt.set != nil {
+				if err := Set(v, "ingest.exclude_dirs", tt.set); err != nil {
+					t.Fatalf("Set: %v", err)
+				}
+				// Reload so the value comes back through the config file.
+				if v, err = Load(); err != nil {
+					t.Fatalf("reload: %v", err)
+				}
+			}
+			s, err := Unmarshal(v)
+			if err != nil {
+				t.Fatalf("Unmarshal: %v", err)
+			}
+			if !slices.Equal(s.Ingest.ExcludeDirs, tt.want) {
+				t.Errorf("ExcludeDirs = %v, want %v", s.Ingest.ExcludeDirs, tt.want)
 			}
 		})
 	}

@@ -134,6 +134,14 @@ agent has loaded the latest instructions.
   first, as repo docs, web sources, and native config already were. Redaction is
   pattern-based (private keys, cloud and vendor API keys, GitHub tokens, JWTs); it does
   not catch every secret shape, such as bare `PASSWORD=` lines.
+- **Repository docs.** Registered repos and owners have their markdown ingested as
+  `repo_doc`. Directories named in `ingest.exclude_dirs` are never walked. The default
+  list covers third-party and generated trees whose READMEs would otherwise crowd out the
+  project's own docs: `vendor`, `node_modules`, `third_party`, virtualenvs, `dist`,
+  `build`, `target` and similar. Names match exactly. Setting the list replaces the
+  default, for example `orch config set ingest.exclude_dirs "vendor,node_modules,gen"`,
+  and `.git` is always skipped. Excluding a directory stops new ingests only; docs
+  already indexed from it stay until removed with `orch rag forget <source-uri>`.
 
 ## Status and restart
 

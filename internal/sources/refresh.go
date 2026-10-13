@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/willesq/orchestrator/internal/mdwalk"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/redact"
 )
@@ -23,6 +23,8 @@ type Ingester interface {
 type RefreshOpts struct {
 	KnownRoots []string // dirs that contain owner/repo trees, e.g. ~/code
 	HTTP       *http.Client
+	// ExcludeDirs names directories never walked for markdown (ingest.exclude_dirs).
+	ExcludeDirs []string
 }
 
 // Refresh brings one source up to date and returns its new status
@@ -32,7 +34,7 @@ func Refresh(ctx context.Context, s Source, ing Ingester, opts RefreshOpts) (str
 	case KindWeb:
 		return refreshWeb(ctx, s, ing, opts)
 	case KindRepo:
-		return refreshRepo(ctx, s, s.URI, s.Owner, ing)
+		return refreshRepo(ctx, s, s.URI, s.Owner, ing, opts.ExcludeDirs)
 	case KindOwner:
 		return refreshOwner(ctx, s, ing, opts)
 	default:
@@ -96,7 +98,7 @@ func refreshOwner(ctx context.Context, s Source, ing Ingester, opts RefreshOpts)
 		if !e.IsDir() {
 			continue
 		}
-		if n := ingestRepoMarkdown(ctx, filepath.Join(base, e.Name()), s.URI, s, ing); n > 0 {
+		if n := ingestRepoMarkdown(ctx, filepath.Join(base, e.Name()), s.URI, s, ing, opts.ExcludeDirs); n > 0 {
 			ingested += n
 		}
 	}
@@ -106,38 +108,30 @@ func refreshOwner(ctx context.Context, s Source, ing Ingester, opts RefreshOpts)
 	return "ok", nil
 }
 
-func refreshRepo(ctx context.Context, s Source, repoPath, owner string, ing Ingester) (string, error) {
+func refreshRepo(ctx context.Context, s Source, repoPath, owner string, ing Ingester, exclude []string) (string, error) {
 	if !isDir(repoPath) {
 		return "missing", nil
 	}
-	if ingestRepoMarkdown(ctx, repoPath, owner, s, ing) == 0 {
+	if ingestRepoMarkdown(ctx, repoPath, owner, s, ing, exclude) == 0 {
 		return "missing", nil
 	}
 	return "ok", nil
 }
 
-// ingestRepoMarkdown walks a repo dir for *.md files and ingests each with repo +
-// owner metadata. Returns how many files were ingested.
-func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, ing Ingester) int {
+// ingestRepoMarkdown walks a repo dir for *.md files, outside the excluded
+// directories, and ingests each with repo + owner metadata. Returns how many
+// files were ingested.
+func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, ing Ingester, exclude []string) int {
 	repoName := filepath.Base(repoPath)
 	n := 0
-	_ = filepath.WalkDir(repoPath, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		if !strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
-			return nil
-		}
-		if strings.Contains(p, "/.git/") || strings.Contains(p, "/node_modules/") {
-			return nil
-		}
+	mdwalk.Files(repoPath, exclude, func(p string) {
 		raw, err := os.ReadFile(p)
 		if err != nil {
-			return nil
+			return
 		}
 		content, redactions := redact.Redact(string(raw))
 		if redactions > redact.Threshold {
-			return nil // keystore-like: skip entirely
+			return // keystore-like: skip entirely
 		}
 		rel, _ := filepath.Rel(repoPath, p)
 		ownerLabel := owner
@@ -157,7 +151,6 @@ func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, i
 		}); err == nil {
 			n++
 		}
-		return nil
 	})
 	return n
 }
