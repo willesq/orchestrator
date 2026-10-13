@@ -3,7 +3,9 @@ package session
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func writeTranscript(t *testing.T, lines string) string {
@@ -165,4 +167,56 @@ func indexOf(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+func TestLastTurn(t *testing.T) {
+	tests := []struct {
+		name        string
+		msgs        []Message
+		wantRequest string
+		wantReply   string
+	}{
+		{name: "empty", msgs: nil},
+		{name: "latest of each", msgs: []Message{
+			{Role: "user", Text: "first ask"}, {Role: "assistant", Text: "first answer"},
+			{Role: "user", Text: "second   ask\nwith lines"}, {Role: "assistant", Text: "second answer"},
+		}, wantRequest: "second ask with lines", wantReply: "second answer"},
+		{name: "harness bookkeeping is not a request", msgs: []Message{
+			{Role: "user", Text: "real ask"}, {Role: "assistant", Text: "answer"},
+			{Role: "user", Text: "<command-name>/exit</command-name>"},
+		}, wantRequest: "real ask", wantReply: "answer"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, rep := LastTurn(tt.msgs)
+			if req != tt.wantRequest || rep != tt.wantReply {
+				t.Errorf("LastTurn = %q, %q", req, rep)
+			}
+		})
+	}
+	long := strings.Repeat("é", maxTurnChars)
+	_, rep := LastTurn([]Message{{Role: "assistant", Text: long}})
+	if !utf8.ValidString(rep) || !strings.HasSuffix(rep, "…") || len(rep) > maxTurnChars+len("…") {
+		t.Errorf("long reply not clipped cleanly: %d bytes", len(rep))
+	}
+}
+
+func TestReadCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteCheckpoint(dir, &Record{SessionID: "s", LastRequest: "ask", LastReply: "reply"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadCheckpoint(dir, "s")
+	if err != nil || got.LastRequest != "ask" || got.LastReply != "reply" {
+		t.Errorf("ReadCheckpoint = %+v, %v", got, err)
+	}
+	if _, err := ReadCheckpoint(dir, "missing"); err == nil {
+		t.Errorf("missing checkpoint read without error")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bad.checkpoint.yaml"), []byte(":\n\t- ["), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadCheckpoint(dir, "bad"); err == nil {
+		t.Errorf("corrupt checkpoint read without error")
+	}
 }

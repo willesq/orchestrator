@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
 )
@@ -32,6 +33,11 @@ type Record struct {
 	Summary        string `yaml:"summary"`
 	TranscriptPath string `yaml:"transcript_path,omitempty"`
 	Messages       int    `yaml:"messages"`
+	// LastRequest and LastReply are the final user request and assistant reply,
+	// kept on mid-session checkpoints so a compacted session can be reminded
+	// where it was.
+	LastRequest string `yaml:"last_request,omitempty"`
+	LastReply   string `yaml:"last_reply,omitempty"`
 }
 
 type rawLine struct {
@@ -169,6 +175,48 @@ func WriteCheckpoint(dir string, r *Record) error {
 		return err
 	}
 	return writeYAML(path, r)
+}
+
+// ReadCheckpoint loads a session's mid-session checkpoint.
+func ReadCheckpoint(dir, sessionID string) (*Record, error) {
+	b, err := os.ReadFile(filepath.Join(dir, sessionID+".checkpoint.yaml"))
+	if err != nil {
+		return nil, err
+	}
+	var r Record
+	if err := yaml.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+// maxTurnChars bounds each half of the last turn kept on a checkpoint.
+const maxTurnChars = 600
+
+// LastTurn returns the most recent user request and assistant reply. Harness
+// bookkeeping that arrives as user messages (slash-command echoes, local
+// command output) is not a request and is passed over.
+func LastTurn(msgs []Message) (request, reply string) {
+	for i := len(msgs) - 1; i >= 0 && (request == "" || reply == ""); i-- {
+		text := strings.Join(strings.Fields(msgs[i].Text), " ")
+		switch {
+		case msgs[i].Role == "assistant" && reply == "":
+			reply = clip(text, maxTurnChars)
+		case msgs[i].Role == "user" && request == "" && !strings.HasPrefix(text, "<"):
+			request = clip(text, maxTurnChars)
+		}
+	}
+	return request, reply
+}
+
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n] + "…"
 }
 
 // DeleteCheckpoint removes a session's checkpoint if present.
