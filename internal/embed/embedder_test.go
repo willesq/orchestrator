@@ -174,7 +174,7 @@ func TestReaperUnloadsAfterIdle(t *testing.T) {
 			if _, err := e.Embed(context.Background(), []string{"x"}); err != nil {
 				t.Fatalf("embed: %v", err)
 			}
-			deadline := time.Now().Add(2 * time.Second)
+			deadline := time.Now().Add(waitLimit)
 			for time.Now().Before(deadline) {
 				e.mu.Lock()
 				unloaded := e.run == nil
@@ -234,3 +234,9 @@ func TestCloseIsIdempotent(t *testing.T) {
 		})
 	}
 }
+
+// waitLimit bounds how long a test waits for something it expects to happen.
+// The waits return as soon as the condition holds, so the limit costs nothing
+// on a healthy run and is deliberately generous: only a real hang reaches it,
+// never a slow or loaded machine.
+const waitLimit = 30 * time.Second

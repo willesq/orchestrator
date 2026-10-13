@@ -35,11 +35,11 @@ func TestPeriodicTicksImmediatelyAndBeats(t *testing.T) {
 			}
 			select {
 			case <-ticked:
-			case <-time.After(2 * time.Second):
+			case <-time.After(waitLimit):
 				t.Fatal("periodic unit did not tick immediately")
 			}
 			// The supervisor records the heartbeat itself, per tick.
-			deadline := time.Now().Add(2 * time.Second)
+			deadline := time.Now().Add(waitLimit)
 			for time.Now().Before(deadline) {
 				if st := s.Status()[0]; st.LastBeat.Equal(now) {
 					return
@@ -135,7 +135,7 @@ func TestRestartJoinsTheLoopBeforeStartingAnother(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Restart: %v", err)
 				}
-			case <-time.After(5 * time.Second):
+			case <-time.After(waitLimit):
 				t.Fatal("Restart never completed after the tick finished")
 			}
 
@@ -204,7 +204,7 @@ func TestRootCancelStopsUnitWork(t *testing.T) {
 			cancel()
 			select {
 			case <-done:
-			case <-time.After(time.Second):
+			case <-time.After(waitLimit):
 				t.Fatal("unit context was not canceled with the root")
 			}
 		})
@@ -228,14 +228,28 @@ func TestRootCancelStopsPeriodicLoop(t *testing.T) {
 			if err := s.Start("p"); err != nil {
 				t.Fatalf("Start: %v", err)
 			}
+			s.mu.Lock()
+			done := s.units["p"].done
+			s.mu.Unlock()
 			cancel()
-			// Give the loop a moment to observe cancellation, then confirm it stopped.
-			time.Sleep(50 * time.Millisecond)
+			// Wait for the loop itself to exit rather than for a fixed time, so a
+			// slow machine cannot fail this; then confirm nothing ticks after it.
+			select {
+			case <-done:
+			case <-time.After(waitLimit):
+				t.Fatal("periodic loop kept running after the root was canceled")
+			}
 			settled := ticks.Load()
 			time.Sleep(50 * time.Millisecond)
 			if got := ticks.Load(); got != settled {
-				t.Errorf("ticks advanced from %d to %d after the root was canceled", settled, got)
+				t.Errorf("ticks advanced from %d to %d after the loop exited", settled, got)
 			}
 		})
 	}
 }
+
+// waitLimit bounds how long a test waits for something it expects to happen.
+// The waits return as soon as the condition holds, so the limit costs nothing
+// on a healthy run and is deliberately generous: only a real hang reaches it,
+// never a slow or loaded machine.
+const waitLimit = 30 * time.Second
