@@ -27,6 +27,8 @@ type Payload struct {
 	FinalResponse   string          `json:"final_response"`
 	ToolName        string          `json:"tool_name"`
 	ToolInput       json.RawMessage `json:"tool_input"`
+	// Source says why a SessionStart fired: startup, resume, clear or compact.
+	Source string `json:"source"`
 }
 
 // clientFactory dials orchd; injected so handlers are testable without a daemon.

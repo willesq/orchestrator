@@ -134,6 +134,11 @@ agent has loaded the latest instructions.
   block ahead of any RAG context. The first prompt skips what the SessionStart digest just
   showed, a long absence is summarized past 10 lines, and a queued task's own session gets
   none. PR babysitter changes stay digest-only, since they refresh every few minutes.
+- **Resume brief after compaction.** When Claude Code compacts a long session, the next
+  `session-start` adds a short brief to the context: the working directory, branch,
+  uncommitted files and last three commits, plus the last request and reply verbatim
+  from the checkpoint `pre-compact` saved (redacted like everything else). The harness's
+  own summary keeps the gist; this restores the live state it can't see.
 - **Session capture.** `session-end` writes a record under the data directory and ingests
   the summary and transcript as `session_record` / `session_transcript`, tagged with the
   main checkout's absolute path. Sessions never receive the remote-derived `repo:` tag:

@@ -42,7 +42,7 @@ func newRepo(t *testing.T, name, remote string) string {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runGit(t, dir, "init", "-q")
+	runGit(t, dir, "init", "-q", "-b", "main")
 	runGit(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
 	if remote != "" {
 		runGit(t, dir, "remote", "add", "origin", remote)

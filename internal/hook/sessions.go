@@ -26,10 +26,16 @@ func stop(p Payload) error {
 
 // preCompact writes a mid-session checkpoint sidecar before context compaction.
 func preCompact(p Payload) error {
-	rec := recordFromTranscript(p)
-	if rec == nil {
+	if p.TranscriptPath == "" {
 		return nil
 	}
+	msgs, err := parseRedacted(p.TranscriptPath)
+	if err != nil {
+		return nil
+	}
+	rec := session.BuildRecord(p.SessionID, p.Cwd, p.TranscriptPath, msgs)
+	// Kept for the resume brief SessionStart prints once compaction is done.
+	rec.LastRequest, rec.LastReply = session.LastTurn(msgs)
 	_ = session.WriteCheckpoint(paths.SessionsDir(), rec)
 	return nil
 }
@@ -99,6 +105,9 @@ func sessionStart(p Payload, out io.Writer) error {
 	}
 	if entries, err := os.ReadDir(paths.PendingIngestDir()); err == nil && len(entries) > 0 {
 		lines = append(lines, fmt.Sprintf("- %d pending-ingest source(s) awaiting a decision", len(entries)))
+	}
+	if p.Source == "compact" {
+		writeResumeBrief(out, p)
 	}
 	// Whatever exists now is covered by this digest; later prompts surface only
 	// what arrives after it.
