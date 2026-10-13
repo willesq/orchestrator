@@ -64,6 +64,11 @@ func sessionEnd(p Payload, cf clientFactory) error {
 	_, _ = client.Ingest(ctx, &orchdv1.IngestRequest{
 		Text: session.TranscriptText(msgs), SourceUri: "session://" + p.SessionID + "/transcript", SourceType: "session_transcript", Tags: tags,
 	})
+	// The excerpt above is replaced by a model-written summary once orchd gets to
+	// it; the request returns at once, so ending a session never waits on it.
+	_, _ = client.SummarizeSession(ctx, &orchdv1.SummarizeSessionRequest{
+		SessionId: p.SessionID, TranscriptPath: p.TranscriptPath, Tags: tags,
+	})
 	return nil
 }
 

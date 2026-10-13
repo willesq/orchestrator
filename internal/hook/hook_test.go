@@ -26,6 +26,7 @@ type fakeClient struct {
 	err           error
 	ingestCalls   int
 	ingested      []*orchdv1.IngestRequest
+	summarized    []*orchdv1.SummarizeSessionRequest
 }
 
 func (f *fakeClient) Ping(context.Context, *orchdv1.PingRequest, ...grpc.CallOption) (*orchdv1.PingResponse, error) {
@@ -226,4 +227,9 @@ func (f *fakeClient) ListTasks(context.Context, *orchdv1.ListTasksRequest, ...gr
 
 func (f *fakeClient) GetTask(context.Context, *orchdv1.GetTaskRequest, ...grpc.CallOption) (*orchdv1.GetTaskResponse, error) {
 	return f.getTask, f.err
+}
+
+func (f *fakeClient) SummarizeSession(_ context.Context, req *orchdv1.SummarizeSessionRequest, _ ...grpc.CallOption) (*orchdv1.SummarizeSessionResponse, error) {
+	f.summarized = append(f.summarized, req)
+	return &orchdv1.SummarizeSessionResponse{Accepted: true}, f.err
 }

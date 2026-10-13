@@ -30,6 +30,9 @@ service Orchd {
   // Restart restarts one supervised subsystem in place — no process bounce.
   // An empty name restarts every subsystem.
   rpc Restart(RestartRequest) returns (RestartResponse);
+  // SummarizeSession queues a finished session for a model-written summary,
+  // which replaces the excerpt in its session record. It returns at once.
+  rpc SummarizeSession(SummarizeSessionRequest) returns (SummarizeSessionResponse);
 }
 
 message PingRequest {}
@@ -171,4 +174,14 @@ message RestartRequest {
 
 message RestartResponse {
   repeated string restarted = 1;
+}
+
+message SummarizeSessionRequest {
+  string session_id = 1;
+  string transcript_path = 2; // absolute path to the harness's .jsonl transcript
+  repeated string tags = 3;   // tags for the session record, as the hook ingested it
+}
+
+message SummarizeSessionResponse {
+  bool accepted = 1; // false when summaries are off or the queue is full
 }

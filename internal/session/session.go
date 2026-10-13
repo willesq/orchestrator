@@ -155,6 +155,19 @@ func WriteRecord(dir string, r *Record) error {
 	return writeYAML(filepath.Join(dir, r.SessionID+".yaml"), r)
 }
 
+// ReadRecord loads a session's authoritative record.
+func ReadRecord(dir, sessionID string) (*Record, error) {
+	b, err := os.ReadFile(filepath.Join(dir, sessionID+".yaml"))
+	if err != nil {
+		return nil, err
+	}
+	var r Record
+	if err := yaml.Unmarshal(b, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
 // WriteCheckpoint writes a mid-session checkpoint to <dir>/<id>.checkpoint.yaml.
 func WriteCheckpoint(dir string, r *Record) error {
 	return writeYAML(filepath.Join(dir, r.SessionID+".checkpoint.yaml"), r)

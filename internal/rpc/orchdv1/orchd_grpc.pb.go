@@ -19,16 +19,17 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Orchd_Ping_FullMethodName         = "/orchd.v1.Orchd/Ping"
-	Orchd_Ingest_FullMethodName       = "/orchd.v1.Orchd/Ingest"
-	Orchd_Search_FullMethodName       = "/orchd.v1.Orchd/Search"
-	Orchd_ListSources_FullMethodName  = "/orchd.v1.Orchd/ListSources"
-	Orchd_DeleteSource_FullMethodName = "/orchd.v1.Orchd/DeleteSource"
-	Orchd_Dispatch_FullMethodName     = "/orchd.v1.Orchd/Dispatch"
-	Orchd_ListTasks_FullMethodName    = "/orchd.v1.Orchd/ListTasks"
-	Orchd_GetTask_FullMethodName      = "/orchd.v1.Orchd/GetTask"
-	Orchd_Status_FullMethodName       = "/orchd.v1.Orchd/Status"
-	Orchd_Restart_FullMethodName      = "/orchd.v1.Orchd/Restart"
+	Orchd_Ping_FullMethodName             = "/orchd.v1.Orchd/Ping"
+	Orchd_Ingest_FullMethodName           = "/orchd.v1.Orchd/Ingest"
+	Orchd_Search_FullMethodName           = "/orchd.v1.Orchd/Search"
+	Orchd_ListSources_FullMethodName      = "/orchd.v1.Orchd/ListSources"
+	Orchd_DeleteSource_FullMethodName     = "/orchd.v1.Orchd/DeleteSource"
+	Orchd_Dispatch_FullMethodName         = "/orchd.v1.Orchd/Dispatch"
+	Orchd_ListTasks_FullMethodName        = "/orchd.v1.Orchd/ListTasks"
+	Orchd_GetTask_FullMethodName          = "/orchd.v1.Orchd/GetTask"
+	Orchd_Status_FullMethodName           = "/orchd.v1.Orchd/Status"
+	Orchd_Restart_FullMethodName          = "/orchd.v1.Orchd/Restart"
+	Orchd_SummarizeSession_FullMethodName = "/orchd.v1.Orchd/SummarizeSession"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -61,6 +62,9 @@ type OrchdClient interface {
 	// Restart restarts one supervised subsystem in place — no process bounce.
 	// An empty name restarts every subsystem.
 	Restart(ctx context.Context, in *RestartRequest, opts ...grpc.CallOption) (*RestartResponse, error)
+	// SummarizeSession queues a finished session for a model-written summary,
+	// which replaces the excerpt in its session record. It returns at once.
+	SummarizeSession(ctx context.Context, in *SummarizeSessionRequest, opts ...grpc.CallOption) (*SummarizeSessionResponse, error)
 }
 
 type orchdClient struct {
@@ -171,6 +175,16 @@ func (c *orchdClient) Restart(ctx context.Context, in *RestartRequest, opts ...g
 	return out, nil
 }
 
+func (c *orchdClient) SummarizeSession(ctx context.Context, in *SummarizeSessionRequest, opts ...grpc.CallOption) (*SummarizeSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SummarizeSessionResponse)
+	err := c.cc.Invoke(ctx, Orchd_SummarizeSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrchdServer is the server API for Orchd service.
 // All implementations must embed UnimplementedOrchdServer
 // for forward compatibility.
@@ -201,6 +215,9 @@ type OrchdServer interface {
 	// Restart restarts one supervised subsystem in place — no process bounce.
 	// An empty name restarts every subsystem.
 	Restart(context.Context, *RestartRequest) (*RestartResponse, error)
+	// SummarizeSession queues a finished session for a model-written summary,
+	// which replaces the excerpt in its session record. It returns at once.
+	SummarizeSession(context.Context, *SummarizeSessionRequest) (*SummarizeSessionResponse, error)
 	mustEmbedUnimplementedOrchdServer()
 }
 
@@ -240,6 +257,9 @@ func (UnimplementedOrchdServer) Status(context.Context, *StatusRequest) (*Status
 }
 func (UnimplementedOrchdServer) Restart(context.Context, *RestartRequest) (*RestartResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Restart not implemented")
+}
+func (UnimplementedOrchdServer) SummarizeSession(context.Context, *SummarizeSessionRequest) (*SummarizeSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SummarizeSession not implemented")
 }
 func (UnimplementedOrchdServer) mustEmbedUnimplementedOrchdServer() {}
 func (UnimplementedOrchdServer) testEmbeddedByValue()               {}
@@ -442,6 +462,24 @@ func _Orchd_Restart_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_SummarizeSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SummarizeSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SummarizeSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SummarizeSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SummarizeSession(ctx, req.(*SummarizeSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Orchd_ServiceDesc is the grpc.ServiceDesc for Orchd service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -488,6 +526,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Restart",
 			Handler:    _Orchd_Restart_Handler,
+		},
+		{
+			MethodName: "SummarizeSession",
+			Handler:    _Orchd_SummarizeSession_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

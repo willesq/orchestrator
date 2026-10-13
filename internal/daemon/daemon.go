@@ -83,6 +83,8 @@ type server struct {
 	// workerEnabled reports whether queued tasks will run, so a caller can say
 	// plainly when a dispatch will sit pending instead.
 	workerEnabled bool
+	// summaries receives finished sessions for summarizing; nil when off.
+	summaries *summaryQueue
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -400,10 +402,16 @@ func Run(ctx context.Context) error {
 
 	watcher, supervised := selfUpdateWatch()
 
+	var summaries *summaryQueue
+	if s.Sessions.Summarize.Enabled {
+		summaries = newSummaryQueue()
+	}
+
 	sup := supervisor.New(runCtx)
 	for _, u := range subsystems(deps{
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
+		summaries: summaries,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return err
@@ -433,6 +441,7 @@ func Run(ctx context.Context) error {
 	orchdv1.RegisterOrchdServer(gs, &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks,
 		workerEnabled: s.Queue.Worker.Enabled,
+		summaries:     summaries,
 	})
 	go func() {
 		<-runCtx.Done()

@@ -30,6 +30,7 @@ type Settings struct {
 	PRBabysitter PRBabysitterSettings `mapstructure:"pr_babysitter"`
 	Ingest       IngestSettings       `mapstructure:"ingest"`
 	Queue        QueueSettings        `mapstructure:"queue"`
+	Sessions     SessionsSettings     `mapstructure:"sessions"`
 }
 
 // DocsSettings controls the GitHub code-docs subsystem (orch docs).
@@ -68,6 +69,19 @@ func (s Settings) QdrantStorageDir() string {
 		return s.RAG.Qdrant.Storage
 	}
 	return filepath.Join(paths.DataDir(), "qdrant")
+}
+
+// SessionsSettings controls what orchd does with finished sessions.
+type SessionsSettings struct {
+	Summarize SessionSummarySettings `mapstructure:"summarize"`
+}
+
+// SessionSummarySettings controls the model-written summary of each finished
+// session, which replaces the transcript excerpt as its session record.
+type SessionSummarySettings struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Model   string `mapstructure:"model"`   // passed to claude --model
+	Timeout string `mapstructure:"timeout"` // per summary
 }
 
 // QueueSettings controls the durable dispatch queue.
@@ -201,6 +215,10 @@ func setDefaults(v *viper.Viper) {
 	// PR babysitter: poll open PRs via gh and cache their state.
 	v.SetDefault("pr_babysitter.enabled", true)
 	v.SetDefault("pr_babysitter.poll_interval", "10m")
+	// Session summaries: one small, tool-less model call per finished session.
+	v.SetDefault("sessions.summarize.enabled", true)
+	v.SetDefault("sessions.summarize.model", "haiku")
+	v.SetDefault("sessions.summarize.timeout", "2m")
 	// Queue worker: off until explicitly enabled, because it spawns agent sessions.
 	v.SetDefault("queue.max_active", 20)
 	v.SetDefault("queue.worker.enabled", false)
