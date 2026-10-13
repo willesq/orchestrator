@@ -71,19 +71,6 @@ func (s Settings) QdrantStorageDir() string {
 	return filepath.Join(paths.DataDir(), "qdrant")
 }
 
-// SessionsSettings controls what orchd does with finished sessions.
-type SessionsSettings struct {
-	Summarize SessionSummarySettings `mapstructure:"summarize"`
-}
-
-// SessionSummarySettings controls the model-written summary of each finished
-// session, which replaces the transcript excerpt as its session record.
-type SessionSummarySettings struct {
-	Enabled bool   `mapstructure:"enabled"`
-	Model   string `mapstructure:"model"`   // passed to claude --model
-	Timeout string `mapstructure:"timeout"` // per summary
-}
-
 // QueueSettings controls the durable dispatch queue.
 type QueueSettings struct {
 	Worker QueueWorkerSettings `mapstructure:"worker"`
@@ -145,6 +132,19 @@ type AutoRAGSettings struct {
 	MinScoreStatement float64 `mapstructure:"min_score_statement"`
 	MaxChars          int     `mapstructure:"max_chars"`
 	MinPromptChars    int     `mapstructure:"min_prompt_chars"`
+}
+
+// SessionsSettings controls what orchd does with finished sessions.
+type SessionsSettings struct {
+	Summarize SessionSummarySettings `mapstructure:"summarize"`
+}
+
+// SessionSummarySettings controls the model-written summary of each finished
+// session, which replaces the transcript excerpt as its session record.
+type SessionSummarySettings struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Model   string `mapstructure:"model"`   // passed to claude --model
+	Timeout string `mapstructure:"timeout"` // per summary
 }
 
 // EmbedderSettings controls the in-orchd embedding model lifecycle.
