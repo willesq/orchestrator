@@ -70,8 +70,13 @@ drift, and the next install restores it.
 The shared policy is version-controlled in
 [`internal/install/agent-instructions.md`](internal/install/agent-instructions.md).
 It contains agent-neutral coding expectations for exploration, structure,
-testing, security, credentials, Git/GitHub workflows, reviews, documentation,
-and durable memory. Repository `AGENTS.md` loads that policy and adds this
+testing, security, credentials, Git/GitHub workflows, documentation, and durable
+memory. Guidance that only applies to particular work, such as reviewing a pull
+request or writing Go and Python, lives in
+[`internal/install/policy/`](internal/install/policy/). It installs to
+`~/.config/orch/policy/`, and the shared policy points agents at each file
+before that work, so it isn't loaded into every session. Plain files are used
+instead of skills because every harness reads the shared policy. Repository `AGENTS.md` loads that policy and adds this
 project's conventions; repository `CLAUDE.md` imports `AGENTS.md`.
 It is embedded in the CLI at build time. `orch install` writes that policy to
 `~/.config/orch/AGENTS.md`; it never seeds the policy from a user's global files.
@@ -156,7 +161,10 @@ agent has loaded the latest instructions.
 
 `orch status` is the whole-system sitrep: the `orchd` service, every supervised subsystem
 (with its last tick and restart count), the vector store, the on-disk stores and their
-freshness, harness wiring drift, and the daemon-independent preconditions. It stays useful
+freshness, harness wiring drift, and the daemon-independent preconditions. It also
+reports, per harness, how much instruction text loads into every session: the entry
+file plus everything it imports, in bytes and estimated tokens. That keeps the always-on
+context cost visible as instructions grow. It stays useful
 with `orchd` down — which is when you usually run it — and always exits zero. Use
 `orch check` when you want a pass/fail gate with a non-zero exit, and `--json` when you
 want to script it.

@@ -27,7 +27,8 @@ policies and isolate harness-specific behavior in adapters.
   configuration formats, event payloads, or instruction-loading behavior.
 - Read and follow `internal/install/agent-instructions.md`, the version-controlled
   cross-agent policy embedded in the CLI and installed at
-  `~/.config/orch/AGENTS.md`. Keep policy edits in that source; personal rules stay
+  `~/.config/orch/AGENTS.md`. Its on-demand sections live in
+  `internal/install/policy/` and install to `~/.config/orch/policy/`. Keep policy edits in that source; personal rules stay
   in harness entry files. This file holds repository editing conventions. Use
   native imports or explicit read directives in harness entry files.
 - Preserve local-first operation, durable memory, stable source URIs, and
