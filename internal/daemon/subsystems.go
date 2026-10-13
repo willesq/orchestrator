@@ -46,8 +46,10 @@ type deps struct {
 	settings config.Settings
 	apiKey   string
 	rag      *rag.Service
-	backend  backend.Backend
-	store    *sql.DB
+	// summaries feeds the session-summarizer unit; nil drops the unit.
+	summaries *summaryQueue
+	backend   backend.Backend
+	store     *sql.DB
 	// selfUpdate watches the binary orchd was launched from. Nil — as in tests,
 	// or when the process cannot identify its own executable — drops the unit.
 	selfUpdate *selfupdate.Watcher
@@ -73,6 +75,11 @@ func subsystems(d deps) []supervisor.Unit {
 	out = append(out, sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, d.store, d.rag))
 	if d.settings.PRBabysitter.Enabled {
 		out = append(out, prsUnit(d.settings))
+	}
+	if d.summaries != nil {
+		sum := d.settings.Sessions.Summarize
+		out = append(out, summariesUnit(d.summaries, newSummarizer(sum, secretEnv(d.settings)), d.rag,
+			interval(sum.Timeout, 2*time.Minute)))
 	}
 	if d.selfUpdate != nil && d.restart != nil {
 		out = append(out, selfUpdateUnit(d.selfUpdate, d.restart, d.supervised))

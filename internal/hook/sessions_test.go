@@ -257,3 +257,15 @@ func TestSessionStart(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionEndRequestsASummary(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	fc := &fakeClient{}
+	path := writeSampleTranscript(t)
+	if err := sessionEnd(Payload{SessionID: "sid", TranscriptPath: path}, factory(fc, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if len(fc.summarized) != 1 || fc.summarized[0].GetSessionId() != "sid" || fc.summarized[0].GetTranscriptPath() != path {
+		t.Errorf("summary requests = %v", fc.summarized)
+	}
+}

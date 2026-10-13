@@ -1121,3 +1121,7 @@ func TestSearchCommand(t *testing.T) {
 		})
 	}
 }
+
+func (f *fakeClient) SummarizeSession(context.Context, *orchdv1.SummarizeSessionRequest, ...grpc.CallOption) (*orchdv1.SummarizeSessionResponse, error) {
+	return &orchdv1.SummarizeSessionResponse{}, f.err
+}

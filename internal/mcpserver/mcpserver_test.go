@@ -305,3 +305,7 @@ func (f *fakeClient) ListTasks(context.Context, *orchdv1.ListTasksRequest, ...gr
 func (f *fakeClient) GetTask(context.Context, *orchdv1.GetTaskRequest, ...grpc.CallOption) (*orchdv1.GetTaskResponse, error) {
 	return f.getTask, f.err
 }
+
+func (f *fakeClient) SummarizeSession(context.Context, *orchdv1.SummarizeSessionRequest, ...grpc.CallOption) (*orchdv1.SummarizeSessionResponse, error) {
+	return &orchdv1.SummarizeSessionResponse{}, f.err
+}

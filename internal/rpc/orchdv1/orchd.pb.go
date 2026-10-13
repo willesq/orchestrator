@@ -1468,6 +1468,110 @@ func (x *RestartResponse) GetRestarted() []string {
 	return nil
 }
 
+type SummarizeSessionRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SessionId      string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	TranscriptPath string                 `protobuf:"bytes,2,opt,name=transcript_path,json=transcriptPath,proto3" json:"transcript_path,omitempty"` // absolute path to the harness's .jsonl transcript
+	Tags           []string               `protobuf:"bytes,3,rep,name=tags,proto3" json:"tags,omitempty"`                                           // tags for the session record, as the hook ingested it
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SummarizeSessionRequest) Reset() {
+	*x = SummarizeSessionRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SummarizeSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SummarizeSessionRequest) ProtoMessage() {}
+
+func (x *SummarizeSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SummarizeSessionRequest.ProtoReflect.Descriptor instead.
+func (*SummarizeSessionRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *SummarizeSessionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *SummarizeSessionRequest) GetTranscriptPath() string {
+	if x != nil {
+		return x.TranscriptPath
+	}
+	return ""
+}
+
+func (x *SummarizeSessionRequest) GetTags() []string {
+	if x != nil {
+		return x.Tags
+	}
+	return nil
+}
+
+type SummarizeSessionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"` // false when summaries are off or the queue is full
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SummarizeSessionResponse) Reset() {
+	*x = SummarizeSessionResponse{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SummarizeSessionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SummarizeSessionResponse) ProtoMessage() {}
+
+func (x *SummarizeSessionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SummarizeSessionResponse.ProtoReflect.Descriptor instead.
+func (*SummarizeSessionResponse) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *SummarizeSessionResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
 var File_internal_rpc_orchdv1_orchd_proto protoreflect.FileDescriptor
 
 const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
@@ -1586,7 +1690,14 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x0eRestartRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"/\n" +
 	"\x0fRestartResponse\x12\x1c\n" +
-	"\trestarted\x18\x01 \x03(\tR\trestarted2\x99\x05\n" +
+	"\trestarted\x18\x01 \x03(\tR\trestarted\"u\n" +
+	"\x17SummarizeSessionRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12'\n" +
+	"\x0ftranscript_path\x18\x02 \x01(\tR\x0etranscriptPath\x12\x12\n" +
+	"\x04tags\x18\x03 \x03(\tR\x04tags\"6\n" +
+	"\x18SummarizeSessionResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted2\xf4\x05\n" +
 	"\x05Orchd\x125\n" +
 	"\x04Ping\x12\x15.orchd.v1.PingRequest\x1a\x16.orchd.v1.PingResponse\x12;\n" +
 	"\x06Ingest\x12\x17.orchd.v1.IngestRequest\x1a\x18.orchd.v1.IngestResponse\x12;\n" +
@@ -1597,7 +1708,8 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\tListTasks\x12\x1a.orchd.v1.ListTasksRequest\x1a\x1b.orchd.v1.ListTasksResponse\x12>\n" +
 	"\aGetTask\x12\x18.orchd.v1.GetTaskRequest\x1a\x19.orchd.v1.GetTaskResponse\x12;\n" +
 	"\x06Status\x12\x17.orchd.v1.StatusRequest\x1a\x18.orchd.v1.StatusResponse\x12>\n" +
-	"\aRestart\x12\x18.orchd.v1.RestartRequest\x1a\x19.orchd.v1.RestartResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
+	"\aRestart\x12\x18.orchd.v1.RestartRequest\x1a\x19.orchd.v1.RestartResponse\x12Y\n" +
+	"\x10SummarizeSession\x12!.orchd.v1.SummarizeSessionRequest\x1a\".orchd.v1.SummarizeSessionResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
 
 var (
 	file_internal_rpc_orchdv1_orchd_proto_rawDescOnce sync.Once
@@ -1611,32 +1723,34 @@ func file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP() []byte {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescData
 }
 
-var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
-	(*PingRequest)(nil),          // 0: orchd.v1.PingRequest
-	(*PingResponse)(nil),         // 1: orchd.v1.PingResponse
-	(*IngestRequest)(nil),        // 2: orchd.v1.IngestRequest
-	(*IngestResponse)(nil),       // 3: orchd.v1.IngestResponse
-	(*SearchRequest)(nil),        // 4: orchd.v1.SearchRequest
-	(*SearchResponse)(nil),       // 5: orchd.v1.SearchResponse
-	(*SearchHit)(nil),            // 6: orchd.v1.SearchHit
-	(*ListSourcesRequest)(nil),   // 7: orchd.v1.ListSourcesRequest
-	(*ListSourcesResponse)(nil),  // 8: orchd.v1.ListSourcesResponse
-	(*SourceSummary)(nil),        // 9: orchd.v1.SourceSummary
-	(*DeleteSourceRequest)(nil),  // 10: orchd.v1.DeleteSourceRequest
-	(*DeleteSourceResponse)(nil), // 11: orchd.v1.DeleteSourceResponse
-	(*DispatchRequest)(nil),      // 12: orchd.v1.DispatchRequest
-	(*DispatchResponse)(nil),     // 13: orchd.v1.DispatchResponse
-	(*ListTasksRequest)(nil),     // 14: orchd.v1.ListTasksRequest
-	(*ListTasksResponse)(nil),    // 15: orchd.v1.ListTasksResponse
-	(*GetTaskRequest)(nil),       // 16: orchd.v1.GetTaskRequest
-	(*GetTaskResponse)(nil),      // 17: orchd.v1.GetTaskResponse
-	(*Task)(nil),                 // 18: orchd.v1.Task
-	(*StatusRequest)(nil),        // 19: orchd.v1.StatusRequest
-	(*StatusResponse)(nil),       // 20: orchd.v1.StatusResponse
-	(*SubsystemStatus)(nil),      // 21: orchd.v1.SubsystemStatus
-	(*RestartRequest)(nil),       // 22: orchd.v1.RestartRequest
-	(*RestartResponse)(nil),      // 23: orchd.v1.RestartResponse
+	(*PingRequest)(nil),              // 0: orchd.v1.PingRequest
+	(*PingResponse)(nil),             // 1: orchd.v1.PingResponse
+	(*IngestRequest)(nil),            // 2: orchd.v1.IngestRequest
+	(*IngestResponse)(nil),           // 3: orchd.v1.IngestResponse
+	(*SearchRequest)(nil),            // 4: orchd.v1.SearchRequest
+	(*SearchResponse)(nil),           // 5: orchd.v1.SearchResponse
+	(*SearchHit)(nil),                // 6: orchd.v1.SearchHit
+	(*ListSourcesRequest)(nil),       // 7: orchd.v1.ListSourcesRequest
+	(*ListSourcesResponse)(nil),      // 8: orchd.v1.ListSourcesResponse
+	(*SourceSummary)(nil),            // 9: orchd.v1.SourceSummary
+	(*DeleteSourceRequest)(nil),      // 10: orchd.v1.DeleteSourceRequest
+	(*DeleteSourceResponse)(nil),     // 11: orchd.v1.DeleteSourceResponse
+	(*DispatchRequest)(nil),          // 12: orchd.v1.DispatchRequest
+	(*DispatchResponse)(nil),         // 13: orchd.v1.DispatchResponse
+	(*ListTasksRequest)(nil),         // 14: orchd.v1.ListTasksRequest
+	(*ListTasksResponse)(nil),        // 15: orchd.v1.ListTasksResponse
+	(*GetTaskRequest)(nil),           // 16: orchd.v1.GetTaskRequest
+	(*GetTaskResponse)(nil),          // 17: orchd.v1.GetTaskResponse
+	(*Task)(nil),                     // 18: orchd.v1.Task
+	(*StatusRequest)(nil),            // 19: orchd.v1.StatusRequest
+	(*StatusResponse)(nil),           // 20: orchd.v1.StatusResponse
+	(*SubsystemStatus)(nil),          // 21: orchd.v1.SubsystemStatus
+	(*RestartRequest)(nil),           // 22: orchd.v1.RestartRequest
+	(*RestartResponse)(nil),          // 23: orchd.v1.RestartResponse
+	(*SummarizeSessionRequest)(nil),  // 24: orchd.v1.SummarizeSessionRequest
+	(*SummarizeSessionResponse)(nil), // 25: orchd.v1.SummarizeSessionResponse
 }
 var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	6,  // 0: orchd.v1.SearchResponse.hits:type_name -> orchd.v1.SearchHit
@@ -1654,18 +1768,20 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	16, // 12: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
 	19, // 13: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
 	22, // 14: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
-	1,  // 15: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
-	3,  // 16: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
-	5,  // 17: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
-	8,  // 18: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
-	11, // 19: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
-	13, // 20: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
-	15, // 21: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
-	17, // 22: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
-	20, // 23: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
-	23, // 24: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
-	15, // [15:25] is the sub-list for method output_type
-	5,  // [5:15] is the sub-list for method input_type
+	24, // 15: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
+	1,  // 16: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
+	3,  // 17: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
+	5,  // 18: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
+	8,  // 19: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
+	11, // 20: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
+	13, // 21: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
+	15, // 22: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
+	17, // 23: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
+	20, // 24: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
+	23, // 25: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
+	25, // 26: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
+	16, // [16:27] is the sub-list for method output_type
+	5,  // [5:16] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
 	5,  // [5:5] is the sub-list for extension extendee
 	0,  // [0:5] is the sub-list for field type_name
@@ -1682,7 +1798,7 @@ func file_internal_rpc_orchdv1_orchd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_rpc_orchdv1_orchd_proto_rawDesc), len(file_internal_rpc_orchdv1_orchd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   24,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

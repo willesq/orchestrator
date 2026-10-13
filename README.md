@@ -148,6 +148,15 @@ agent has loaded the latest instructions.
   first, as repo docs, web sources, and native config already were. Redaction is
   pattern-based (private keys, cloud and vendor API keys, GitHub tokens, JWTs); it does
   not catch every secret shape, such as bare `PASSWORD=` lines.
+- **Session summaries.** The record starts as a short excerpt. orchd then replaces it,
+  in the store and on disk, with a model-written summary: outcome, decisions, files and
+  changes, and open items. It runs `claude -p --model haiku` in `--safe-mode` with no
+  tools and its own system prompt, so no `CLAUDE.md`, hooks or MCP servers load. A
+  summary costs a fraction of a cent, and the summarizer's own session can't trigger
+  another summary. Session end never waits for it: requests queue (up to 32) for the
+  `session-summarizer` subsystem, and a failed summary keeps the excerpt. Settings are
+  `sessions.summarize.enabled` (default on), `.model` (default `haiku`) and `.timeout`
+  (default `2m`).
 - **Repository docs.** Registered repos and owners have their markdown ingested as
   `repo_doc`. Directories named in `ingest.exclude_dirs` are never walked. The default
   list covers third-party and generated trees whose READMEs would otherwise crowd out the

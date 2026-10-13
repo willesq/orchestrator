@@ -249,3 +249,18 @@ func TestIngestExcludeDirs(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionSummaryDefaults(t *testing.T) {
+	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	v, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Unmarshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Sessions.Summarize; !got.Enabled || got.Model != "haiku" || got.Timeout != "2m" {
+		t.Errorf("summary defaults = %+v", got)
+	}
+}
