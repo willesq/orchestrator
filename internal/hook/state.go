@@ -16,6 +16,8 @@ type sessionState struct {
 	// Injected holds hit keys already injected this session, oldest first, so a
 	// repeated topic does not re-inject the same chunk turn after turn.
 	Injected []string `json:"injected,omitempty"`
+	// Seen counts, per event stream, the events this session has been shown.
+	Seen map[string]int `json:"seen,omitempty"`
 }
 
 // maxInjected bounds the remembered hits; a very long session forgets its

@@ -129,6 +129,11 @@ agent has loaded the latest instructions.
   checkout) and searches that project's registered docs (`repo:<name>`, named from the
   `origin` remote, else the checkout folder) and its past sessions (`checkout:<path>`)
   before topping up the remaining slots from the whole store.
+- **Updates mid-session.** Each prompt also reports, once, what finished since the last
+  one: this session's subagents and background queue tasks, as an "Orchestrator updates"
+  block ahead of any RAG context. The first prompt skips what the SessionStart digest just
+  showed, a long absence is summarized past 10 lines, and a queued task's own session gets
+  none. PR babysitter changes stay digest-only, since they refresh every few minutes.
 - **Session capture.** `session-end` writes a record under the data directory and ingests
   the summary and transcript as `session_record` / `session_transcript`, tagged with the
   main checkout's absolute path. Sessions never receive the remote-derived `repo:` tag:

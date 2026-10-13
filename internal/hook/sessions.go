@@ -88,7 +88,7 @@ func sessionStart(p Payload, out io.Writer) error {
 	var lines []string
 	// "queue" carries finished background tasks, so their results reach the next
 	// session without anyone polling the ledger.
-	for _, stream := range []string{p.SessionID, "pr-babysitter", "queue"} {
+	for _, stream := range []string{p.SessionID, "pr-babysitter", taskEventStream} {
 		if stream == "" {
 			continue
 		}
@@ -100,6 +100,11 @@ func sessionStart(p Payload, out io.Writer) error {
 	if entries, err := os.ReadDir(paths.PendingIngestDir()); err == nil && len(entries) > 0 {
 		lines = append(lines, fmt.Sprintf("- %d pending-ingest source(s) awaiting a decision", len(entries)))
 	}
+	// Whatever exists now is covered by this digest; later prompts surface only
+	// what arrives after it.
+	st := loadState(p.SessionID)
+	markSeen(&st, p.SessionID)
+	_ = saveState(p.SessionID, st)
 	if len(lines) == 0 {
 		return nil
 	}

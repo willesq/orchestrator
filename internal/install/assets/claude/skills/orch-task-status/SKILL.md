@@ -24,8 +24,9 @@ workflow. When the queue worker is enabled (`queue.worker.enabled`, off by defau
 runs the task as a headless Claude Code session (`claude -p --agent <agent>`) in the
 dispatch's working directory. The task moves to `in_progress`, then ends `complete`,
 `failed`, or `blocked` (the agent's final message began with `BLOCKED:`), and its result is
-the agent's final message. Every finished task is also written to the `queue` event stream,
-which the SessionStart digest shows.
+the agent's final message. Every finished task is also written to the `queue` event stream.
+A running session sees new entries as an "Orchestrator updates" block on its next prompt,
+and a new session sees the latest in its SessionStart digest.
 
 When the worker is disabled, tasks stay `pending` indefinitely. Say so plainly instead of
 implying they are running; check with `orch config get queue.worker.enabled` (`orch status`
@@ -40,7 +41,7 @@ completions are in the per-session event log below.
 | User intent | How to answer |
 |---|---|
 | "Anything new?" / "What finished?" / "Did the subagent come back?" | Read `~/.local/share/orch/events/<parent_session_id>.jsonl` — one JSON object per line. This is the real record of completed subagents. |
-| "What finished in the background queue?" | `~/.local/share/orch/events/queue.jsonl` (the SessionStart digest shows the latest), or `queue_list` with `status`. |
+| "What finished in the background queue?" | `~/.local/share/orch/events/queue.jsonl` (new entries appear on the next prompt; the SessionStart digest shows the latest), or `queue_list` with `status`. |
 | "What's the queue look like?" / "Any tasks?" | `mcp__queue__queue_list` (filters: `status`, `agent`, `limit`), or `orch tasks` from a shell. |
 | "Status of a specific task" | `mcp__queue__queue_read` with the task ID, or `orch task <id>`. |
 | "How many tasks overall?" | `orch status` — the **data** section's `tasks` line gives per-status counts. |
