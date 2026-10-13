@@ -8,8 +8,11 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -152,21 +155,51 @@ func BuildRecord(sessionID, cwd, transcriptPath string, msgs []Message) *Record 
 
 // WriteRecord writes the authoritative record to <dir>/<id>.yaml.
 func WriteRecord(dir string, r *Record) error {
-	return writeYAML(filepath.Join(dir, r.SessionID+".yaml"), r)
+	path, err := sessionFile(dir, r.SessionID, ".yaml")
+	if err != nil {
+		return err
+	}
+	return writeYAML(path, r)
 }
 
 // WriteCheckpoint writes a mid-session checkpoint to <dir>/<id>.checkpoint.yaml.
 func WriteCheckpoint(dir string, r *Record) error {
-	return writeYAML(filepath.Join(dir, r.SessionID+".checkpoint.yaml"), r)
+	path, err := sessionFile(dir, r.SessionID, ".checkpoint.yaml")
+	if err != nil {
+		return err
+	}
+	return writeYAML(path, r)
 }
 
 // DeleteCheckpoint removes a session's checkpoint if present.
 func DeleteCheckpoint(dir, sessionID string) error {
-	err := os.Remove(filepath.Join(dir, sessionID+".checkpoint.yaml"))
+	path, err := sessionFile(dir, sessionID, ".checkpoint.yaml")
+	if err != nil {
+		return err
+	}
+	err = os.Remove(path)
 	if os.IsNotExist(err) {
 		return nil
 	}
 	return err
+}
+
+// ErrInvalidSessionID rejects a session ID that cannot safely name a file.
+var ErrInvalidSessionID = errors.New("invalid session id")
+
+// idPattern is the shape of a harness session ID. IDs arrive in hook payloads,
+// so they are checked before naming a file rather than trusted with a path.
+var idPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+
+// ValidID reports whether id can name a session file.
+func ValidID(id string) bool { return idPattern.MatchString(id) }
+
+// sessionFile is <dir>/<id><suffix>, for a valid id only.
+func sessionFile(dir, id, suffix string) (string, error) {
+	if !ValidID(id) {
+		return "", fmt.Errorf("%w: %q", ErrInvalidSessionID, id)
+	}
+	return filepath.Join(dir, id+suffix), nil
 }
 
 func writeYAML(path string, v any) error {
