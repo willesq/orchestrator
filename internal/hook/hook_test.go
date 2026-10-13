@@ -19,9 +19,13 @@ type fakeClient struct {
 	listTasks    *orchdv1.ListTasksResponse
 	getTask      *orchdv1.GetTaskResponse
 	search       *orchdv1.SearchResponse
-	err          error
-	ingestCalls  int
-	ingested     []*orchdv1.IngestRequest
+	// projectSearch answers tag-filtered searches when set; projectErr fails them.
+	projectSearch *orchdv1.SearchResponse
+	projectErr    error
+	searchReqs    []*orchdv1.SearchRequest
+	err           error
+	ingestCalls   int
+	ingested      []*orchdv1.IngestRequest
 }
 
 func (f *fakeClient) Ping(context.Context, *orchdv1.PingRequest, ...grpc.CallOption) (*orchdv1.PingResponse, error) {
@@ -34,7 +38,16 @@ func (f *fakeClient) Ingest(_ context.Context, req *orchdv1.IngestRequest, _ ...
 	return &orchdv1.IngestResponse{}, f.err
 }
 
-func (f *fakeClient) Search(context.Context, *orchdv1.SearchRequest, ...grpc.CallOption) (*orchdv1.SearchResponse, error) {
+func (f *fakeClient) Search(_ context.Context, req *orchdv1.SearchRequest, _ ...grpc.CallOption) (*orchdv1.SearchResponse, error) {
+	f.searchReqs = append(f.searchReqs, req)
+	if len(req.GetTags()) > 0 {
+		if f.projectErr != nil {
+			return nil, f.projectErr
+		}
+		if f.projectSearch != nil {
+			return f.projectSearch, f.err
+		}
+	}
 	return f.search, f.err
 }
 
