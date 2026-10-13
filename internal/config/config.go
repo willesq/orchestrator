@@ -119,11 +119,14 @@ type HooksSettings struct {
 
 // AutoRAGSettings controls UserPromptSubmit auto-injection of RAG context.
 type AutoRAGSettings struct {
-	Enabled        bool    `mapstructure:"enabled"`
-	TopK           int     `mapstructure:"top_k"`
-	MinScore       float64 `mapstructure:"min_score"` // Cosine similarity floor (higher = stricter)
-	MaxChars       int     `mapstructure:"max_chars"`
-	MinPromptChars int     `mapstructure:"min_prompt_chars"`
+	Enabled  bool    `mapstructure:"enabled"`
+	TopK     int     `mapstructure:"top_k"`
+	MinScore float64 `mapstructure:"min_score"` // Cosine similarity floor (higher = stricter)
+	// MinScoreStatement is the floor for prompts that aren't question-shaped;
+	// the stricter of it and MinScore applies.
+	MinScoreStatement float64 `mapstructure:"min_score_statement"`
+	MaxChars          int     `mapstructure:"max_chars"`
+	MinPromptChars    int     `mapstructure:"min_prompt_chars"`
 }
 
 // EmbedderSettings controls the in-orchd embedding model lifecycle.
@@ -176,6 +179,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("hooks.auto_rag.enabled", true)
 	v.SetDefault("hooks.auto_rag.top_k", 3)
 	v.SetDefault("hooks.auto_rag.min_score", 0.25)
+	v.SetDefault("hooks.auto_rag.min_score_statement", 0.45)
 	v.SetDefault("hooks.auto_rag.max_chars", 2000)
 	v.SetDefault("hooks.auto_rag.min_prompt_chars", 12)
 	// Source registry + freshness scheduler.

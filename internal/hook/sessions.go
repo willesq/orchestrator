@@ -46,6 +46,7 @@ func sessionEnd(p Payload, cf clientFactory) error {
 	rec := session.BuildRecord(p.SessionID, p.Cwd, p.TranscriptPath, msgs)
 	_ = session.WriteRecord(paths.SessionsDir(), rec)
 	_ = session.DeleteCheckpoint(paths.SessionsDir(), p.SessionID)
+	deleteState(p.SessionID)
 
 	client, cleanup, err := cf()
 	if err != nil {

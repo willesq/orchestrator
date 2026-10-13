@@ -231,7 +231,7 @@ func TestProjectFirstHits(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := defaultAutoRAG()
 			cfg.TopK = tt.topK
-			got := projectFirstHits(context.Background(), tt.client, "q", tt.tags, cfg)
+			got := projectFirstHits(context.Background(), tt.client, "q", tt.tags, cfg, nil)
 			if !slices.Equal(uris(got), tt.want) {
 				t.Errorf("hits = %v, want %v", uris(got), tt.want)
 			}
