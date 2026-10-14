@@ -248,7 +248,10 @@ type QdrantSettings struct {
 	Mode       string `mapstructure:"mode"` // docker | binary | external
 	URL        string `mapstructure:"url"`
 	Collection string `mapstructure:"collection"`
-	APIKeyEnv  string `mapstructure:"api_key_env"`
+	// BackupCollection is the collection a hybrid migration replaced, kept so
+	// `orch rag migrate-hybrid --rollback` can switch back to it.
+	BackupCollection string `mapstructure:"backup_collection"`
+	APIKeyEnv        string `mapstructure:"api_key_env"`
 	// binary mode: the native engine.
 	Version  string `mapstructure:"version"`   // pinned qdrant release, e.g. v1.17.1
 	Storage  string `mapstructure:"storage"`   // storage dir (empty → <data>/qdrant)
@@ -269,6 +272,7 @@ func setDefaults(v *viper.Viper) {
 	// The canonical collection served by orchd's native engine (cutover complete;
 	// the earlier "orchestrator_go" parallel-dev name is retired).
 	v.SetDefault("rag.qdrant.collection", "orchestrator")
+	v.SetDefault("rag.qdrant.backup_collection", "")
 	v.SetDefault("rag.qdrant.api_key_env", "QDRANT_API_KEY")
 	// Pinned to match the Python system's engine for storage compatibility at cutover.
 	v.SetDefault("rag.qdrant.version", "v1.17.1")
@@ -382,7 +386,18 @@ func Set(v *viper.Viper, key string, value any) error {
 	return WriteCanonical(v)
 }
 
-// WriteCanonical marshals all resolved settings to YAML and writes config.yaml.
+// SetMany assigns several keys and persists them in one write, so settings
+// that only make sense together never land half-changed.
+func SetMany(v *viper.Viper, kv map[string]any) error {
+	for k, val := range kv {
+		v.Set(k, val)
+	}
+	return WriteCanonical(v)
+}
+
+// WriteCanonical marshals all resolved settings to YAML and writes config.yaml,
+// atomically: a reader, or a crash mid-write, sees the old file or the new one,
+// never a truncated mix.
 func WriteCanonical(v *viper.Viper) error {
 	if err := paths.Ensure(); err != nil {
 		return err
@@ -391,5 +406,25 @@ func WriteCanonical(v *viper.Viper) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(paths.ConfigFile(), out, 0o644)
+	path := paths.ConfigFile()
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*.yaml")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(out); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }

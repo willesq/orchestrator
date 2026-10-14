@@ -26,3 +26,12 @@ var fakeRate = func(*orchdv1.RateTaskRequest) (*orchdv1.RateTaskResponse, error)
 func (f *fakeClient) RateTask(_ context.Context, req *orchdv1.RateTaskRequest, _ ...grpc.CallOption) (*orchdv1.RateTaskResponse, error) {
 	return fakeRate(req)
 }
+
+// fakeMigrate answers MigrateHybrid for every fakeClient.
+var fakeMigrate = func(*orchdv1.MigrateHybridRequest) (*orchdv1.MigrateHybridResponse, error) {
+	return &orchdv1.MigrateHybridResponse{}, nil
+}
+
+func (f *fakeClient) MigrateHybrid(_ context.Context, req *orchdv1.MigrateHybridRequest, _ ...grpc.CallOption) (*orchdv1.MigrateHybridResponse, error) {
+	return fakeMigrate(req)
+}

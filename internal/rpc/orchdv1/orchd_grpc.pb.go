@@ -32,6 +32,7 @@ const (
 	Orchd_SummarizeSession_FullMethodName = "/orchd.v1.Orchd/SummarizeSession"
 	Orchd_RecommendModel_FullMethodName   = "/orchd.v1.Orchd/RecommendModel"
 	Orchd_RateTask_FullMethodName         = "/orchd.v1.Orchd/RateTask"
+	Orchd_MigrateHybrid_FullMethodName    = "/orchd.v1.Orchd/MigrateHybrid"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -72,6 +73,10 @@ type OrchdClient interface {
 	RecommendModel(ctx context.Context, in *RecommendModelRequest, opts ...grpc.CallOption) (*RecommendModelResponse, error)
 	// RateTask records the user's verdict on a finished task, evidence for routing.
 	RateTask(ctx context.Context, in *RateTaskRequest, opts ...grpc.CallOption) (*RateTaskResponse, error)
+	// MigrateHybrid copies the RAG collection into a new hybrid one (dense plus
+	// BM25 keyword vectors), re-chunking and re-embedding its text, and switches
+	// to it. Without apply it only plans. The old collection is kept.
+	MigrateHybrid(ctx context.Context, in *MigrateHybridRequest, opts ...grpc.CallOption) (*MigrateHybridResponse, error)
 }
 
 type orchdClient struct {
@@ -212,6 +217,16 @@ func (c *orchdClient) RateTask(ctx context.Context, in *RateTaskRequest, opts ..
 	return out, nil
 }
 
+func (c *orchdClient) MigrateHybrid(ctx context.Context, in *MigrateHybridRequest, opts ...grpc.CallOption) (*MigrateHybridResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MigrateHybridResponse)
+	err := c.cc.Invoke(ctx, Orchd_MigrateHybrid_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrchdServer is the server API for Orchd service.
 // All implementations must embed UnimplementedOrchdServer
 // for forward compatibility.
@@ -250,6 +265,10 @@ type OrchdServer interface {
 	RecommendModel(context.Context, *RecommendModelRequest) (*RecommendModelResponse, error)
 	// RateTask records the user's verdict on a finished task, evidence for routing.
 	RateTask(context.Context, *RateTaskRequest) (*RateTaskResponse, error)
+	// MigrateHybrid copies the RAG collection into a new hybrid one (dense plus
+	// BM25 keyword vectors), re-chunking and re-embedding its text, and switches
+	// to it. Without apply it only plans. The old collection is kept.
+	MigrateHybrid(context.Context, *MigrateHybridRequest) (*MigrateHybridResponse, error)
 	mustEmbedUnimplementedOrchdServer()
 }
 
@@ -298,6 +317,9 @@ func (UnimplementedOrchdServer) RecommendModel(context.Context, *RecommendModelR
 }
 func (UnimplementedOrchdServer) RateTask(context.Context, *RateTaskRequest) (*RateTaskResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RateTask not implemented")
+}
+func (UnimplementedOrchdServer) MigrateHybrid(context.Context, *MigrateHybridRequest) (*MigrateHybridResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MigrateHybrid not implemented")
 }
 func (UnimplementedOrchdServer) mustEmbedUnimplementedOrchdServer() {}
 func (UnimplementedOrchdServer) testEmbeddedByValue()               {}
@@ -554,6 +576,24 @@ func _Orchd_RateTask_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_MigrateHybrid_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MigrateHybridRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).MigrateHybrid(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_MigrateHybrid_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).MigrateHybrid(ctx, req.(*MigrateHybridRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Orchd_ServiceDesc is the grpc.ServiceDesc for Orchd service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -612,6 +652,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RateTask",
 			Handler:    _Orchd_RateTask_Handler,
+		},
+		{
+			MethodName: "MigrateHybrid",
+			Handler:    _Orchd_MigrateHybrid_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

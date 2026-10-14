@@ -26,7 +26,11 @@ func TestEnsureCollection(t *testing.T) {
 					w.WriteHeader(http.StatusOK)
 					return
 				}
-				w.WriteHeader(tt.getStatus)
+				if tt.getStatus == http.StatusOK {
+					collectionJSON(w, LayoutDense)
+					return
+				}
+				collectionJSON(w, LayoutUnknown)
 			}))
 			defer srv.Close()
 
@@ -57,7 +61,11 @@ func TestUpsert(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var called bool
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet {
+					collectionJSON(w, LayoutDense)
+					return
+				}
 				called = true
 				w.WriteHeader(http.StatusOK)
 			}))
@@ -89,6 +97,10 @@ func TestSearch(t *testing.T) {
 			var gotKey string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				gotKey = r.Header.Get("api-key")
+				if r.Method == http.MethodGet {
+					collectionJSON(w, LayoutDense)
+					return
+				}
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"result": []map[string]any{
 						{"score": tt.wantScore, "payload": map[string]any{"text": "hi"}},
@@ -133,5 +145,22 @@ func TestQdrantErrorStatus(t *testing.T) {
 				t.Errorf("expected error on %d response", tt.status)
 			}
 		})
+	}
+}
+
+// collectionJSON answers a collection lookup the way Qdrant does: the
+// collection's config, or a 404 that says it does not exist.
+func collectionJSON(w http.ResponseWriter, l Layout) {
+	switch l {
+	case LayoutDense:
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": map[string]any{"config": map[string]any{"params": map[string]any{
+			"vectors": map[string]any{"size": 2, "distance": "Cosine"}}}}})
+	case LayoutHybrid:
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": map[string]any{"config": map[string]any{"params": map[string]any{
+			"vectors":        map[string]any{"dense": map[string]any{"size": 2, "distance": "Cosine"}},
+			"sparse_vectors": map[string]any{"bm25": map[string]any{"modifier": "idf"}}}}}})
+	default:
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"status":{"error":"Not found: Collection doesn't exist!"}}`))
 	}
 }

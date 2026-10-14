@@ -45,7 +45,7 @@ func qdrantStub(t *testing.T, searchResult []map[string]any) (*QdrantStore, *int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			w.WriteHeader(http.StatusOK) // collection exists
+			collectionJSON(w, LayoutDense)
 		case http.MethodPut:
 			var body struct {
 				Points []Point `json:"points"`

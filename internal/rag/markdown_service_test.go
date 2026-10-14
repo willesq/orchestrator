@@ -16,6 +16,9 @@ func payloadStub(t *testing.T) (*QdrantStore, func() []map[string]any) {
 	var got []map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
+		case r.Method == http.MethodGet:
+			collectionJSON(w, LayoutDense)
+			return
 		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/points"):
 			var body struct {
 				Points []struct {
