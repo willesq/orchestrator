@@ -9,3 +9,6 @@ import "errors"
 func defaultLoader(_ Config) (runner, int, error) {
 	return nil, 0, errors.New("embedder unavailable: built without -tags ORT")
 }
+
+// loadTokenCounter has no tokenizer without the ORT build; callers estimate.
+func loadTokenCounter(string) tokenCounter { return nil }

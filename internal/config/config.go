@@ -223,13 +223,17 @@ type SessionSummarySettings struct {
 
 // EmbedderSettings controls the in-orchd embedding model lifecycle.
 type EmbedderSettings struct {
-	ModelDir     string `mapstructure:"model_dir"`
-	OnnxLibDir   string `mapstructure:"onnx_library_dir"`
-	IdleUnload   string `mapstructure:"idle_unload"`
-	ChunkSize    int    `mapstructure:"chunk_size"`
-	ChunkOverlap int    `mapstructure:"chunk_overlap"`
+	ModelDir   string `mapstructure:"model_dir"`
+	OnnxLibDir string `mapstructure:"onnx_library_dir"`
+	IdleUnload string `mapstructure:"idle_unload"`
+	// ChunkTokens sizes chunks in model tokens. The model embeds only the first
+	// 128 tokens of its input (126 after its special tokens), so larger values
+	// are capped there; a chunk sized in words ran far past it.
+	ChunkTokens int `mapstructure:"chunk_tokens"`
+	// ChunkOverlapTokens is how many tokens neighbouring windows share.
+	ChunkOverlapTokens int `mapstructure:"chunk_overlap_tokens"`
 	// MarkdownSections chunks markdown by heading section, keeping its structure,
-	// instead of by word window.
+	// instead of by token window.
 	MarkdownSections bool `mapstructure:"markdown_sections"`
 }
 
@@ -256,8 +260,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("embedder.model_dir", "")        // resolved to <data>/models/minilm if empty
 	v.SetDefault("embedder.onnx_library_dir", "") // resolved via brew if empty
 	v.SetDefault("embedder.idle_unload", "10m")
-	v.SetDefault("embedder.chunk_size", 400)
-	v.SetDefault("embedder.chunk_overlap", 60)
+	v.SetDefault("embedder.chunk_tokens", 110)
+	v.SetDefault("embedder.chunk_overlap_tokens", 16)
 	v.SetDefault("embedder.markdown_sections", true)
 	// Docker-free by default: orchd runs the native qdrant release binary.
 	v.SetDefault("rag.qdrant.mode", "binary")

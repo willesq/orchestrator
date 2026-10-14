@@ -28,28 +28,51 @@ type Meta struct {
 
 // Service ties the embedder and vector store together.
 type Service struct {
-	emb       Embedder
-	store     *QdrantStore
-	chunkSize int
-	overlap   int
+	emb   Embedder
+	store *QdrantStore
+	// chunkTokens and overlap size chunks in model tokens.
+	chunkTokens int
+	overlap     int
 	// MarkdownSections chunks markdown by heading section instead of by word
 	// window (embedder.markdown_sections).
 	MarkdownSections bool
 }
 
-// NewService constructs a RAG service.
-func NewService(emb Embedder, store *QdrantStore, chunkSize, overlap int) *Service {
-	return &Service{emb: emb, store: store, chunkSize: chunkSize, overlap: overlap, MarkdownSections: true}
+// NewService constructs a RAG service. chunkTokens and overlap are in model
+// tokens; chunkTokens is capped at what the model embeds.
+func NewService(emb Embedder, store *QdrantStore, chunkTokens, overlap int) *Service {
+	return &Service{emb: emb, store: store, chunkTokens: chunkTokens, overlap: overlap, MarkdownSections: true}
 }
 
-// split chunks text for ingestion.
+// split chunks text for ingestion, counting with the embedder's own tokenizer
+// when it has one.
 func (s *Service) split(text string) []chunk {
+	tc, _ := s.emb.(TokenCounter)
+	m := newMeasure(tc)
+	text = cleanText(text)
+	var pieces []chunk
 	if s.MarkdownSections && isMarkdown(text) {
-		return markdownChunks(text, s.chunkSize, s.overlap)
+		pieces = markdownChunks(text, s.chunkTokens, s.overlap, m)
+	} else {
+		for _, c := range chunkText(text, s.chunkTokens, s.overlap, m) {
+			pieces = append(pieces, chunk{text: c})
+		}
+	}
+	// Whatever the chunkers did, nothing leaves here larger than the model
+	// embeds: an oversized chunk is re-split into plain windows.
+	limit := s.chunkTokens
+	if limit <= 0 || limit > maxChunkTokens {
+		limit = maxChunkTokens
 	}
 	var out []chunk
-	for _, c := range chunkText(text, s.chunkSize, s.overlap) {
-		out = append(out, chunk{text: c})
+	for _, c := range pieces {
+		if tokens(m, c.text) <= limit {
+			out = append(out, c)
+			continue
+		}
+		for _, w := range chunkText(c.text, limit, 0, m) {
+			out = append(out, chunk{text: w, heading: c.heading})
+		}
 	}
 	return out
 }

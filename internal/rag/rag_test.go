@@ -20,9 +20,9 @@ func TestChunkText(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := chunkText(tt.text, tt.size, tt.overlap)
+			got := chunkText(tt.text, tt.size, tt.overlap, perWord)
 			if len(got) != tt.wantCount {
-				t.Errorf("chunkText(%q, %d, %d) = %d chunks, want %d",
+				t.Errorf("chunkText(%q, %d, %d, perWord) = %d chunks, want %d",
 					tt.text, tt.size, tt.overlap, len(got), tt.wantCount)
 			}
 		})
@@ -85,3 +85,6 @@ func TestBuildFilter(t *testing.T) {
 		})
 	}
 }
+
+// perWord counts each word as one token, so tests can reason in words.
+func perWord(string) int { return 1 }

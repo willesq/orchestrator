@@ -53,6 +53,37 @@ type Embedder struct {
 
 	stop chan struct{}
 	once sync.Once
+
+	// tok counts tokens for chunking. It is loaded on first use and kept: it
+	// is small, and unlike the model it is needed on every ingest. A failed
+	// load is retried after tokRetry, so one bad read does not leave chunking
+	// on the estimate until restart.
+	tokMu    sync.Mutex
+	tok      tokenCounter
+	tokTried time.Time
+}
+
+// tokRetry spaces out attempts to load a tokenizer that failed to load.
+const tokRetry = time.Minute
+
+// tokenCounter counts a text's tokens, excluding special tokens.
+type tokenCounter func(text string) int
+
+// CountTokens counts text's model tokens, excluding the special tokens added
+// around every input. ok is false when no tokenizer is available (a build
+// without -tags ORT, or no tokenizer.json), and callers then estimate.
+func (e *Embedder) CountTokens(text string) (n int, ok bool) {
+	e.tokMu.Lock()
+	if e.tok == nil && (e.tokTried.IsZero() || time.Since(e.tokTried) >= tokRetry) {
+		e.tokTried = time.Now()
+		e.tok = loadTokenCounter(e.cfg.ModelDir)
+	}
+	tok := e.tok
+	e.tokMu.Unlock()
+	if tok == nil {
+		return 0, false
+	}
+	return tok(text), true
 }
 
 // New constructs an Embedder. It does not load the model until the first Embed.

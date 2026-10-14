@@ -524,7 +524,7 @@ func buildRAG(s config.Settings, qdrantURL, apiKey string) (*rag.Service, *embed
 	})
 
 	qs := rag.NewQdrantStore(qdrantURL, s.RAG.Qdrant.Collection, apiKey)
-	svc := rag.NewService(emb, qs, s.Embedder.ChunkSize, s.Embedder.ChunkOverlap)
+	svc := rag.NewService(emb, qs, s.Embedder.ChunkTokens, s.Embedder.ChunkOverlapTokens)
 	svc.MarkdownSections = s.Embedder.MarkdownSections
 	return svc, emb
 }

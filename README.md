@@ -391,68 +391,30 @@ orch dispatch --model claude-code/opus "<task>"
   tool's `model`.
 ## How text is chunked
 
-Ingested text is split into chunks of about `embedder.chunk_size` words (default 400) before
-it is embedded.
+Ingested text is split into chunks of at most `embedder.chunk_tokens` model tokens (default
+110) before it is embedded, counted with the model's own tokenizer.
 
+- **Chunks fit what the model reads.** The embedding model reads only the first 128 tokens
+  of its input, 126 after its special tokens. Larger `chunk_tokens` values are capped there,
+  so nothing in a chunk goes unseen by search.
+  - Earlier versions sized chunks at 400 *words*. Across typical repositories that was about
+    900 tokens, so search saw under a quarter of each chunk.
+  - The old `embedder.chunk_size` and `embedder.chunk_overlap` keys are no longer read.
 - **Markdown follows its sections.** A document with `#` headings outside code fences is
   split at headings. Its line breaks, lists and fenced code blocks are kept.
-- **Sections pack within a subtree.** Small sections in the same subtree share a chunk. A
-  section too large for one splits at paragraph breaks, and never inside a fenced block
-  unless the block alone is too large.
+  - Small sections in the same subtree share a chunk. A section too large for one splits at
+    paragraph breaks, and never inside a fenced block unless the block alone is too large.
+  - `embedder.markdown_sections: false` turns this off.
 - **Each chunk carries its context.** A chunk starts with its ancestor headings, for example
-  `[section: Install › Homebrew]`. Its stored `heading` field names the deepest path all its
-  sections share.
+  `[section: Install › Homebrew]`, counted against its size and capped at half of it. Its
+  stored `heading` field names the deepest path all its sections share.
+- **Plain text uses overlapping windows.** It is split into token windows sharing
+  `embedder.chunk_overlap_tokens` (default 16) with their neighbours.
+- **Long words are split.** A single "word" too large for a chunk (a long rule, a table
+  separator, a URL) is split into pieces.
 - **Titles are bounded.** Headings are capped at 120 characters and cleaned of control
   characters, so a hostile page cannot multiply its size by repeating a huge title.
-- **Turning it off.** `embedder.markdown_sections: false` returns markdown to plain word
-  windows (`embedder.chunk_overlap` words shared between neighbours), which plain text
-  always uses.
-- **Existing content.** It keeps its old chunks until it is ingested again.
-
-### Codex runs
-
-With `queue.worker.codex.enabled: true` (and the `codex` provider and a Codex model enabled
-in the registry), dispatch can route tasks to Codex, and the worker runs them as
-`codex exec --json -s <sandbox> -C <dir> -m <model> -c model_reasoning_effort=<effort> -`.
-The prompt goes on stdin.
-
-- **Sandboxed, with the risky settings pinned.**
-  - `queue.worker.codex.sandbox` is `workspace-write` (default) or `read-only`. Full access
-    and the bypass flags are refused.
-  - Approval prompts are off, so a command the sandbox refuses fails instead of waiting.
-  - Project rules are ignored, and notify hooks, writable roots and the secret-variable
-    filter are pinned, so neither your config nor a repository's can loosen a queued run.
-- **Network is off by default.** The sandbox can read any file you can, so with network a
-  steered session could send any of them out. `queue.worker.codex.network: true` allows
-  `git push` and `gh pr create`; only enable it if you accept that.
-- **Commits work in worktrees only.** For a linked worktree whose layout checks out (it
-  cannot be redirected to another repository), the shared object store, refs and logs and
-  the worktree's own git directory are writable. The repository's hooks and config never
-  are. In a plain clone Codex keeps `.git` read-only, so the session cannot commit there.
-- **Git state outside the worktree is checked after the run.** Before each run the worker
-  records the worktree's git pointers (`commondir`, `gitdir`, `config.worktree`) and every
-  ref except the task's own branch. Afterwards it restores anything that changed and fails
-  the task, naming what changed. New branches are allowed; moved branches, new tags and
-  remote refs are not.
-- **Repository config is refused.** A task whose checkout carries its own `.codex` directory
-  is refused, because project config can redirect the model provider.
-  `queue.worker.codex.allow_project_config: true` allows it for repositories you trust.
-- **MCP servers are allowlisted.** They run outside the sandbox, so every server configured
-  for Codex except `queue.worker.codex.mcp_allow` (default `orch_rag`) is turned off for the
-  run. An allowed name stays on only if it runs the orch binary installed beside orchd. If the server list cannot be read, the task fails instead of running with them on.
-  This also covers `orch_queue`, which would not see `ORCH_TASK_ID` because Codex starts MCP
-  servers without it. The variable is set explicitly for the session's shell commands.
-- **Same handling as Claude runs.** Each session runs in its own process group with orchd's
-  secrets removed from its environment. Verification and redaction apply. Scratch files sit
-  outside every writable root, so the session cannot rewrite its own result.
-- **Restarts resume.** The Codex thread id is kept per task until the task finishes, so an
-  interrupted task continues with `codex exec resume <thread>`.
-- **Effort is checked per model** against the levels its cache declares. Codex reports
-  tokens, not cost, so a Codex task's cost reads `$0`.
-- **Disabling Codex wins.** A pending task routed to Codex runs on Claude Code (with the
-  agent's own model) if Codex is switched off before it starts.
-- `queue.worker.codex.bin` overrides where the CLI is found (default: PATH, Homebrew,
-  `~/.local/bin`).
+- **Existing content** keeps its old chunks until it is ingested again.
 
 ## Build from source
 
