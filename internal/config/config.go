@@ -240,6 +240,20 @@ type EmbedderSettings struct {
 // RAGSettings controls the vector store.
 type RAGSettings struct {
 	Qdrant QdrantSettings `mapstructure:"qdrant"`
+	Search SearchSettings `mapstructure:"search"`
+}
+
+// SearchSettings controls how RAG search ranks results.
+type SearchSettings struct {
+	// Mode is "hybrid" (keyword and semantic, fused) or "dense" (semantic
+	// only). Hybrid needs a hybrid collection; on an older one search is dense.
+	Mode string `mapstructure:"mode"`
+	// RRFK is reciprocal rank fusion's constant: larger values flatten the
+	// advantage of the top ranks of each list.
+	RRFK int `mapstructure:"rrf_k"`
+	// KeywordWeight scales the keyword list's share of the fusion: below 1
+	// favors meaning, above 1 favors exact words.
+	KeywordWeight float64 `mapstructure:"keyword_weight"`
 }
 
 // QdrantSettings selects how the Qdrant vector store is provided and, for
@@ -273,6 +287,9 @@ func setDefaults(v *viper.Viper) {
 	// the earlier "orchestrator_go" parallel-dev name is retired).
 	v.SetDefault("rag.qdrant.collection", "orchestrator")
 	v.SetDefault("rag.qdrant.backup_collection", "")
+	v.SetDefault("rag.search.mode", "hybrid")
+	v.SetDefault("rag.search.rrf_k", 60)
+	v.SetDefault("rag.search.keyword_weight", 1.0)
 	v.SetDefault("rag.qdrant.api_key_env", "QDRANT_API_KEY")
 	// Pinned to match the Python system's engine for storage compatibility at cutover.
 	v.SetDefault("rag.qdrant.version", "v1.17.1")

@@ -238,8 +238,46 @@ func (q *QdrantStore) forgetIfMissing(err error) {
 
 // SearchHit is a single search result.
 type SearchHit struct {
+	ID      any            `json:"id"`
 	Score   float32        `json:"score"`
 	Payload map[string]any `json:"payload"`
+	// Vector is set by KeywordSearch: the hit's named vectors, so a caller can
+	// score a keyword-only hit by meaning too.
+	Vector map[string]json.RawMessage `json:"vector,omitempty"`
+}
+
+// PointID is the hit's id as a string.
+func (h SearchHit) PointID() string { return fmt.Sprint(h.ID) }
+
+type queryResponse struct {
+	Result struct {
+		Points []SearchHit `json:"points"`
+	} `json:"result"`
+}
+
+// KeywordSearch ranks a hybrid collection by BM25: the query's terms against
+// each chunk's sparse vector, with Qdrant applying IDF. Hits carry their dense
+// vector. An empty query vector matches nothing.
+func (q *QdrantStore) KeywordSearch(ctx context.Context, query bm25.Vector, topK int, must map[string]string, anyTags []string) ([]SearchHit, error) {
+	if query.IsEmpty() {
+		return nil, nil
+	}
+	body := map[string]any{
+		"query":        query,
+		"using":        sparseName,
+		"limit":        topK,
+		"with_payload": true,
+		"with_vector":  []string{denseName},
+	}
+	if filter := buildFilter(must, anyTags); filter != nil {
+		body["filter"] = filter
+	}
+	var resp queryResponse
+	if err := q.do(ctx, http.MethodPost, q.path("/points/query"), body, &resp); err != nil {
+		q.forgetIfMissing(err)
+		return nil, err
+	}
+	return resp.Result.Points, nil
 }
 
 type searchResponse struct {

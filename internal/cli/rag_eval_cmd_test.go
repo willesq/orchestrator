@@ -119,3 +119,36 @@ func TestRAGEvalEscapesHitText(t *testing.T) {
 		t.Fatalf("escape reached the terminal: %q", out)
 	}
 }
+
+func TestRAGEvalPassesMode(t *testing.T) {
+	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	ec := &evalClient{fakeClient: &fakeClient{}, byQuery: map[string][]string{"q": {"u://a"}}}
+	cf := func() (orchdv1.OrchdClient, func(), error) { return ec, func() {}, nil }
+	if _, err := run(cf, "", "rag", "eval", "add", "q", "u://a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(cf, "", "rag", "eval", "--mode", "dense"); err != nil {
+		t.Fatal(err)
+	}
+	if got := ec.reqs[len(ec.reqs)-1].GetMode(); got != "dense" {
+		t.Fatalf("mode = %q", got)
+	}
+}
+
+func TestSearchShowsMatchKind(t *testing.T) {
+	client := &fakeClient{search: &orchdv1.SearchResponse{Hits: []*orchdv1.SearchHit{
+		{SourceUri: "u://exact", Score: 0.2, Exact: true, KeywordScore: 4},
+		{SourceUri: "u://kw", Score: 0.3, KeywordScore: 2},
+		{SourceUri: "u://dense", Score: 0.6},
+	}}}
+	out, err := run(factory(client, nil), "", "search", "--mode", "hybrid", "q")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"[0.200 exact] u://exact", "[0.300 keyword] u://kw", "[0.600] u://dense"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("missing %q:\n%s", want, out)
+		}
+	}
+}

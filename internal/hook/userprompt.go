@@ -79,6 +79,9 @@ func enrichPrompt(cfg config.AutoRAGSettings, p Payload, out io.Writer, cf clien
 // defaultTopK mirrors the daemon's search default for an unset hooks.auto_rag.top_k.
 const defaultTopK = 5
 
+// maxAutoRAGTopK mirrors the daemon's largest accepted search size.
+const maxAutoRAGTopK = 100
+
 // projectFirstHits fills up to top_k slots with hits above min_score, taking the
 // current project's own hits first and topping up from the whole store. An
 // unscoped search ranks every repo and vendored README by similarity alone, so
@@ -91,8 +94,11 @@ func projectFirstHits(ctx context.Context, client orchdv1.OrchdClient, prompt st
 	if limit <= 0 {
 		limit = defaultTopK
 	}
+	// The daemon rejects larger requests, which would silently inject nothing.
+	limit = min(limit, maxAutoRAGTopK)
 	var kept []*orchdv1.SearchHit
 	seen := map[string]bool{}
+	exactOnly := 0
 	take := func(req *orchdv1.SearchRequest) {
 		resp, err := client.Search(ctx, req)
 		if err != nil {
@@ -100,8 +106,17 @@ func projectFirstHits(ctx context.Context, client orchdv1.OrchdClient, prompt st
 		}
 		for _, h := range resp.GetHits() {
 			key := h.GetSourceUri() + "\x00" + h.GetText()
-			if len(kept) >= limit || float64(h.GetScore()) < cfg.MinScore || seen[key] || skip[hitKey(h.GetSourceUri(), h.GetText())] {
+			if len(kept) >= limit || seen[key] || skip[hitKey(h.GetSourceUri(), h.GetText())] {
 				continue
+			}
+			switch relevance(h, cfg.MinScore) {
+			case notRelevant:
+				continue
+			case byIdentifier:
+				if exactOnly >= maxExactOnly {
+					continue
+				}
+				exactOnly++
 			}
 			seen[key] = true
 			kept = append(kept, h)
@@ -160,4 +175,31 @@ func formatInjection(hits []*orchdv1.SearchHit, maxChars int) (string, []*orchdv
 		return "", nil
 	}
 	return b.String(), written
+}
+
+// How a hit qualifies for injection.
+const (
+	notRelevant = iota
+	byMeaning
+	byIdentifier
+)
+
+// maxExactOnly caps the hits per prompt admitted by identifier alone, so text
+// that merely repeats a prompt's identifiers cannot fill the context.
+const maxExactOnly = 1
+
+// relevance gates a hit for injection: its meaning must clear the floor, or it
+// must contain, as a whole token, a code identifier the prompt names and still
+// clear half the floor. Hybrid search finds such exact matches even when their
+// wording scores low by meaning, and a prompt naming queue.worker.verify.repos
+// wants the chunk that says it; the lower floor keeps unrelated text out.
+func relevance(h *orchdv1.SearchHit, floor float64) int {
+	score := float64(h.GetScore())
+	switch {
+	case score >= floor:
+		return byMeaning
+	case h.GetExact() && score >= floor/2:
+		return byIdentifier
+	}
+	return notRelevant
 }

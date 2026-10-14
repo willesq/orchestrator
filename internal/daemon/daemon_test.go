@@ -45,8 +45,8 @@ func (f fakeRag) IngestText(context.Context, string, rag.Meta) (int, error) {
 	return f.chunks, f.err
 }
 
-func (f fakeRag) Search(context.Context, string, rag.SearchOpts) ([]rag.Hit, error) {
-	return f.hits, f.err
+func (f fakeRag) Search(context.Context, string, rag.SearchOpts) ([]rag.Hit, string, error) {
+	return f.hits, "", f.err
 }
 
 type fakeDispatcher struct {
