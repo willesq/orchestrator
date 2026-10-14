@@ -19,7 +19,7 @@ import (
 
 func newRAGCmd(cf clientFactory) *cobra.Command {
 	cmd := &cobra.Command{Use: "rag", Short: "Inspect and prune the RAG store's contents"}
-	cmd.AddCommand(newRAGSourcesCmd(cf), newRAGForgetCmd(cf))
+	cmd.AddCommand(newRAGSourcesCmd(cf), newRAGForgetCmd(cf), newRAGEvalCmd(cf))
 	return cmd
 }
 
@@ -63,12 +63,12 @@ func newRAGSourcesCmd(cf clientFactory) *cobra.Command {
 			}
 			fmt.Fprintf(out, "\n\n%6s  %-20s %s\n", "CHUNKS", "TYPE", "SOURCE URI")
 			for _, s := range srcs {
-				fmt.Fprintf(out, "%6d  %-20s %s", s.GetChunks(), s.GetSourceType(), s.GetSourceUri())
+				fmt.Fprintf(out, "%6d  %-20s %s", s.GetChunks(), termSafe(s.GetSourceType()), termSafe(s.GetSourceUri()))
 				if s.GetScope() != "" {
-					fmt.Fprintf(out, "  scope=%s", s.GetScope())
+					fmt.Fprintf(out, "  scope=%s", termSafe(s.GetScope()))
 				}
 				if len(s.GetTags()) > 0 {
-					fmt.Fprintf(out, "  tags=%s", strings.Join(s.GetTags(), ","))
+					fmt.Fprintf(out, "  tags=%s", termSafe(strings.Join(s.GetTags(), ",")))
 				}
 				fmt.Fprintln(out)
 			}
