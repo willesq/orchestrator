@@ -207,7 +207,14 @@ var (
 	effortRe = regexp.MustCompile(`^[a-z]{1,16}$`)
 )
 
-func validSlug(s string) bool   { return slugRe.MatchString(s) }
+func validSlug(s string) bool { return slugRe.MatchString(s) }
+
+// ValidSlug reports whether s is safe to pass as a model argument. Callers that
+// build a command line re-check it, since a row may predate this validation.
+func ValidSlug(s string) bool { return validSlug(s) }
+
+// ValidEffort reports whether s is a well-formed effort level.
+func ValidEffort(s string) bool { return validEffort(s) }
 func validEffort(s string) bool { return effortRe.MatchString(s) }
 
 // clean strips control and format characters (C0, C1, bidi overrides,

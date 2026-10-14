@@ -43,6 +43,19 @@ Pick exactly one downstream agent. Use this rubric (deterministic — don't loop
 
 If genuinely ambiguous, default to `dev`.
 
+Then pick the **task kind**, which decides the model. It is finer than the agent: a `dev`
+task writing docs is `docs`, not `code`.
+
+`code` · `review` · `docs` · `research` · `ops` · `classify` · `test` · `adversarial`
+
+Ask for the model once:
+
+```
+mcp__queue__model_recommend(task_kind="<kind>")
+```
+
+If the tool is unavailable or errors, set `"model": null` and carry on.
+
 ### Step 2 — Slug
 
 Generate a kebab-case slug ID (≤60 chars, `[a-z0-9][a-z0-9_-]*`) from the task body.
@@ -72,6 +85,8 @@ Your final assistant message must be ONLY this JSON block (no commentary, no mar
 {
   "slug": "<chosen-slug>",
   "agent": "<dev|ops|research|reviewer>",
+  "task_kind": "<code|review|docs|research|ops|classify|test|adversarial>",
+  "model": {"provider": "<provider>", "model": "<model>", "effort": "<effort or empty>", "confidence": "<low|medium|high>"},
   "context_block": "<the full context_block string from the enricher>",
   "source_uris": ["<uri1>", "<uri2>", ...],
   "summary": "<8-12 word summary of the task for the parent's spawn description>"

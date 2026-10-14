@@ -88,7 +88,7 @@ func TestDispatch(t *testing.T) {
 			t.Cleanup(func() { _ = b.Close() })
 			d := NewDispatcher(b, nil)
 
-			id, err := d.Dispatch(context.Background(), tt.agent, tt.body, "")
+			id, err := d.Dispatch(context.Background(), tt.agent, tt.body, "", workflows.Route{})
 			if err != nil {
 				t.Fatalf("Dispatch: %v", err)
 			}

@@ -27,6 +27,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/willesq/orchestrator/internal/models"
 	"github.com/willesq/orchestrator/internal/redact"
 )
 
@@ -42,6 +43,8 @@ type Task struct {
 	// dispatched (see Snapshot). Verification tests only checkouts that moved
 	// since; nil means no baseline, and verification is skipped.
 	Heads map[string]string
+	// Model is passed as --model; empty leaves the agent's own model setting.
+	Model string
 }
 
 // Statuses a finished run records in the task ledger.
@@ -144,6 +147,11 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 	if !ValidAgent(t.Agent) {
 		return failed("invalid agent name %q", t.Agent), nil
 	}
+	// Re-checked here because the value becomes an argument, and the durable
+	// input may predate the registry's validation.
+	if t.Model != "" && !models.ValidSlug(t.Model) {
+		return failed("invalid model %q", t.Model), nil
+	}
 	if r.Bin == "" {
 		return failed("no Claude Code CLI found; set queue.worker.claude_bin"), nil
 	}
@@ -192,6 +200,9 @@ func (r *Runner) session(ctx context.Context, t Task, dir, prompt string, resume
 		args = append(args, "--allowedTools="+rules)
 	}
 	args = append(args, "--agent", t.Agent)
+	if t.Model != "" {
+		args = append(args, "--model", t.Model)
+	}
 	if resume {
 		args = append(args, "--resume", sid)
 	} else {

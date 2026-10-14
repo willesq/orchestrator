@@ -15,6 +15,7 @@ import (
 	"github.com/willesq/orchestrator/internal/rag"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/supervisor"
+	"github.com/willesq/orchestrator/internal/workflows"
 )
 
 type fakeRag struct {
@@ -53,11 +54,16 @@ type fakeDispatcher struct {
 	err error
 	// got records the last dispatch: agent, body, cwd.
 	got *[3]string
+	// route records the last dispatch's route.
+	route *workflows.Route
 }
 
-func (f fakeDispatcher) Dispatch(_ context.Context, agent, body, cwd string) (string, error) {
+func (f fakeDispatcher) Dispatch(_ context.Context, agent, body, cwd string, rt workflows.Route) (string, error) {
 	if f.got != nil {
 		*f.got = [3]string{agent, body, cwd}
+	}
+	if f.route != nil {
+		*f.route = rt
 	}
 	return f.id, f.err
 }

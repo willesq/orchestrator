@@ -23,6 +23,18 @@ type AgentTaskInput struct {
 	// the durable input so a task resumed after a restart still knows what it
 	// started from.
 	Heads map[string]string
+	// Route is the model the task was routed to at dispatch. It is fixed then,
+	// so a task resumed after a restart keeps running on the same model.
+	Route Route
+}
+
+// Route names the model a task runs on. Empty fields leave the choice to the
+// agent's own configuration.
+type Route struct {
+	Kind     string // task kind the route was chosen for
+	Provider string
+	Model    string
+	Effort   string
 }
 
 // Outcome is how a run ended: a terminal ledger status, the agent's result, and

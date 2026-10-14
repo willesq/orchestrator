@@ -38,8 +38,8 @@ func openModelRegistry() (*models.Registry, func(), error) {
 func registryModelCmds() []*cobra.Command {
 	return []*cobra.Command{
 		newModelRefreshCmd(), newModelListCmd(),
-		newModelStateCmd("enable", models.StateEnabled), newModelStateCmd("disable", models.StateDisabled),
-		newModelTierCmd(),
+		operatorOnly(newModelStateCmd("enable", models.StateEnabled)), operatorOnly(newModelStateCmd("disable", models.StateDisabled)),
+		operatorOnly(newModelTierCmd()),
 	}
 }
 
@@ -205,7 +205,8 @@ func newProviderCmd() *cobra.Command {
 			return w.Flush()
 		},
 	}
-	cmd.AddCommand(list, newProviderStateCmd("enable", models.StateEnabled), newProviderStateCmd("disable", models.StateDisabled))
+	cmd.AddCommand(list, operatorOnly(newProviderStateCmd("enable", models.StateEnabled)),
+		operatorOnly(newProviderStateCmd("disable", models.StateDisabled)))
 	return cmd
 }
 

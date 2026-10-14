@@ -20,6 +20,7 @@ import (
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/events"
+	"github.com/willesq/orchestrator/internal/models"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/prs"
 	"github.com/willesq/orchestrator/internal/qdrant"
@@ -70,7 +71,11 @@ func subsystems(d deps) []supervisor.Unit {
 		out = append(out, u)
 	}
 	if d.settings.Queue.Worker.Enabled {
-		out = append(out, workerUnit(d.backend, d.settings.Queue.Worker, secretEnv(d.settings)))
+		var reg *models.Registry
+		if d.store != nil {
+			reg = models.NewRegistry(d.store)
+		}
+		out = append(out, workerUnit(d.backend, d.settings.Queue.Worker, secretEnv(d.settings), reg))
 	}
 	out = append(out, sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, d.store, d.rag))
 	if d.settings.PRBabysitter.Enabled {
@@ -159,7 +164,7 @@ func qdrantUnit(s config.Settings, apiKey string) (supervisor.Unit, bool) {
 // agent session. A restart builds a fresh worker over the same backend: a session
 // cut short by the restart is abandoned, handed out again once its lease lapses,
 // and resumed rather than started over (see agentrun).
-func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []string) supervisor.Unit {
+func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []string, reg *models.Registry) supervisor.Unit {
 	// Held across Run/Stop so the unit can join the worker it started: without
 	// that, a restart would leave the previous worker draining the same backend.
 	var current *worker.Worker
@@ -169,7 +174,9 @@ func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []str
 		Run: func(ctx context.Context, beat func()) error {
 			// The unit context is the runner's stop signal: canceling it on stop or
 			// restart ends in-flight sessions instead of waiting them out.
-			workflows.SetRunner(newTaskRunner(cfg, ctx, dropEnv))
+			tr := newTaskRunner(cfg, ctx, dropEnv)
+			tr.models = reg
+			workflows.SetRunner(tr)
 			opts := worker.DefaultOptions
 			opts.MaxParallelActivityTasks = maxConcurrent(cfg)
 			w := worker.New(b, &opts)
@@ -260,7 +267,11 @@ func maxConcurrent(cfg config.QueueWorkerSettings) int {
 }
 
 // taskRunner adapts agentrun to the workflows package's Runner.
-type taskRunner struct{ r *agentrun.Runner }
+type taskRunner struct {
+	r *agentrun.Runner
+	// models re-checks a task's routed model when it runs; nil skips the check.
+	models *models.Registry
+}
 
 // secretEnv names the variables carrying credentials orchd holds, which queued
 // sessions must not inherit.
@@ -297,7 +308,7 @@ func newTaskRunner(cfg config.QueueWorkerSettings, stop context.Context, dropEnv
 }
 
 func (t taskRunner) Run(ctx context.Context, in workflows.AgentTaskInput) (workflows.Outcome, error) {
-	o, err := t.r.Run(ctx, agentTask(in))
+	o, err := t.r.Run(ctx, t.task(ctx, in))
 	return workflows.Outcome{
 		Status: o.Status, Result: o.Result,
 		CostUSD: o.CostUSD, DurationMS: o.DurationMS, Turns: o.Turns,
@@ -305,9 +316,32 @@ func (t taskRunner) Run(ctx context.Context, in workflows.AgentTaskInput) (workf
 	}, err
 }
 
-// agentTask converts a durable task input for the runner.
+// task converts in for the runner, re-checking its routed model. A task can wait
+// pending long after dispatch; if its model has since been disabled or hidden,
+// the user's later choice wins and the agent's own model runs.
+func (t taskRunner) task(ctx context.Context, in workflows.AgentTaskInput) agentrun.Task {
+	task := agentTask(in)
+	if task.Model == "" || t.models == nil {
+		return task
+	}
+	m, err := t.models.Get(ctx, in.Route.Provider, task.Model)
+	if err != nil || !m.Routable() {
+		log.Printf("orchd: task %s: routed model %s/%s is no longer routable; running the agent's own model",
+			in.ID, in.Route.Provider, task.Model)
+		task.Model = ""
+	}
+	return task
+}
+
+// agentTask converts a durable task input for the runner. The runner executes
+// Claude Code only, so a route to another provider never reaches it as a model
+// (dispatch routes only to providers the worker can run).
 func agentTask(in workflows.AgentTaskInput) agentrun.Task {
-	return agentrun.Task{ID: in.ID, Agent: in.Agent, Body: in.Body, Cwd: in.Cwd, Heads: in.Heads}
+	t := agentrun.Task{ID: in.ID, Agent: in.Agent, Body: in.Body, Cwd: in.Cwd, Heads: in.Heads}
+	if in.Route.Provider == models.ProviderClaude {
+		t.Model = in.Route.Model
+	}
+	return t
 }
 
 // taskEventStream is the event log finished queue tasks are reported to; the

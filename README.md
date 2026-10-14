@@ -299,8 +299,8 @@ Behavior to know about:
 
 ## Model registry
 
-orch keeps a registry of the models each coding-agent CLI on this machine can run. It is
-the groundwork for routing queued work to a model by task kind.
+orch keeps a registry of the models each coding-agent CLI on this machine can run.
+[Routing](#routing) picks from it per task kind.
 
 ```sh
 orch model refresh                       # discover from each CLI's local cache
@@ -324,6 +324,45 @@ orch provider list | enable codex | disable codex
   `codex` starts disabled. A provider whose CLI is not on PATH reads `unavailable` until it
   is found again, and then returns to the state it had before. A model you enabled that its
   vendor later hides stays enabled but is not routed to while hidden.
+
+### Routing
+
+Each dispatched task can name a **task kind** (`code`, `review`, `docs`, `research`, `ops`,
+`classify`, `test`, `adversarial`). The routing table ranks, per kind, the enabled models
+that kind runs on.
+
+```sh
+orch routing evaluate [--explain code]    # propose a table from the policy; writes nothing
+orch routing apply                        # write it; the replaced table is kept
+orch routing rollback                     # restore the table before the last change
+orch routing show
+orch routing set docs claude-code/sonnet  # pin a kind by hand; apply leaves it alone
+orch routing clear docs                   # drop a kind's routes and pin
+
+orch dispatch --kind code "<task>"        # run on the model ranked first for code
+orch dispatch --model claude-code/opus "<task>"
+```
+
+- **The policy is config.** `routing.kinds.<kind>` sets the tier each kind prefers (defaults:
+  frontier for code, review and adversarial; balanced for research, docs, ops and test; fast
+  for classify). `routing.providers` orders the providers that may be proposed. A provider
+  that is not listed is never proposed. `routing.efforts.<kind>` asks models that declare
+  effort levels for one. `routing.ranks` (default 3) sets how many fallbacks each kind keeps.
+- **Ranking is declared capability only, for now.** Models rank by distance from the wanted
+  tier, then provider order, then alias over pinned ID. Every route reports `evidence_n: 0`
+  and `confidence: low` until outcomes are recorded.
+- **Routes are fixed at dispatch.** orchd resolves the model when the task is queued and
+  records it on the task (`orch task <id>` shows it), so a resumed task keeps its model. The
+  worker runs Claude Code only. A route to another provider falls to the next rank. A kind
+  with no routable model runs on the agent's own model.
+- **Only you change it.** Inside a queued task, `orch routing apply|set|clear|rollback`,
+  `orch model enable|disable|tier` and `orch provider enable|disable` refuse, so a session
+  steered by an untrusted repository cannot redirect later work. A pending task whose model
+  you disable or hide before it starts runs on the agent's own model instead.
+- **Sessions can ask.** The `model_recommend` MCP tool returns the model for a kind with its
+  rationale and evidence count. `queue_dispatch` takes `task_kind` and `model`. The
+  dispatcher agent picks a kind, and `orch-dispatch` passes a Claude alias to the `Agent`
+  tool's `model`.
 
 ## Build from source
 
@@ -349,4 +388,4 @@ the multi-harness install adapters, and the packaging story.
 ## Command surface
 
 `orch check | config | daemon | dispatch | ingest | install | mcp | model | ping | provider | prs |
-qdrant | repo | restart | search | source | status | version`
+qdrant | repo | restart | routing | search | source | status | version`

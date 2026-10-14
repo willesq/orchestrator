@@ -16,6 +16,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
+	"github.com/willesq/orchestrator/internal/routing"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/taskfmt"
 	"github.com/willesq/orchestrator/internal/version"
@@ -156,18 +157,47 @@ func (q queueTools) dispatch(ctx context.Context, req mcp.CallToolRequest) (*mcp
 		cwd, _ = os.Getwd()
 	}
 	resp, err := q.client.Dispatch(ctx, &orchdv1.DispatchRequest{
-		Agent: req.GetString("agent", "dev"),
-		Body:  body,
-		Cwd:   cwd,
+		Agent:    req.GetString("agent", "dev"),
+		Body:     body,
+		Cwd:      cwd,
+		TaskKind: req.GetString("task_kind", ""),
+		Model:    req.GetString("model", ""),
 	})
 	if err != nil {
 		return mcp.NewToolResultErrorFromErr("dispatch failed", err), nil
 	}
 	msg := "dispatched " + resp.GetInstanceId() + " (runs in " + cwd + ")"
+	if r := resp.GetRoute(); r != nil {
+		msg += "\nroute: " + taskfmt.Route(r)
+	}
 	if !resp.GetWorkerEnabled() {
 		msg += "\n" + workerDisabledNotice
 	}
 	return mcp.NewToolResultText(msg), nil
+}
+
+func (q queueTools) recommend(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	kind := req.GetString("task_kind", "")
+	if kind == "" {
+		return mcp.NewToolResultError("task_kind is required"), nil
+	}
+	resp, err := q.client.RecommendModel(ctx, &orchdv1.RecommendModelRequest{TaskKind: kind})
+	if err != nil {
+		return mcp.NewToolResultErrorFromErr("recommend failed", err), nil
+	}
+	r := resp.GetRoute()
+	source := "routing table"
+	if !resp.GetFromTable() {
+		source = "live proposal (no table entry)"
+	}
+	effort := r.GetEffort()
+	if effort == "" {
+		effort = "model default"
+	}
+	return mcp.NewToolResultText(fmt.Sprintf(
+		"task_kind: %s\nprovider: %s\nmodel: %s\neffort: %s\nconfidence: %s\nevidence_n: %d\nsource: %s\nrationale: %s\n",
+		r.GetTaskKind(), r.GetProvider(), r.GetModel(), effort, r.GetConfidence(),
+		r.GetEvidenceN(), source, r.GetRationale())), nil
 }
 
 func (q queueTools) list(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -218,7 +248,7 @@ const workerDisabledNotice = "NOTE: the queue worker is disabled, so this task s
 const maxArgInt = 10_000
 
 // NewQueue builds the queue MCP server (tools: queue_dispatch, queue_list,
-// queue_read).
+// queue_read, model_recommend).
 func NewQueue(client orchdv1.OrchdClient) *server.MCPServer {
 	s := server.NewMCPServer("orch-queue", version.Version)
 	qt := queueTools{client: client}
@@ -240,7 +270,16 @@ func NewQueue(client orchdv1.OrchdClient) *server.MCPServer {
 		mcp.WithString("body", mcp.Required(), mcp.Description("complete, self-contained task description")),
 		mcp.WithString("agent", mcp.Description("target subagent (default dev)")),
 		mcp.WithString("cwd", mcp.Description("absolute directory to run in (default: this session's working directory)")),
+		mcp.WithString("task_kind", mcp.Description("route to the model ranked for this kind: "+strings.Join(routing.Kinds, " | "))),
+		mcp.WithString("model", mcp.Description("run on this enabled model instead (<provider>/<slug>, e.g. claude-code/opus)")),
 	), qt.dispatch)
+	s.AddTool(mcp.NewTool("model_recommend",
+		mcp.WithDescription("Recommend the model for a kind of task, from the routing table orch keeps. Returns the "+
+			"provider, model, optional effort, a rationale, and how many observed outcomes back it (evidence_n); "+
+			"confidence is low until outcomes accumulate. A claude-code alias (opus, sonnet, haiku, fable) can be "+
+			"passed as the Agent tool's model."),
+		mcp.WithString("task_kind", mcp.Required(), mcp.Description(strings.Join(routing.Kinds, " | "))),
+	), qt.recommend)
 	return s
 }
 

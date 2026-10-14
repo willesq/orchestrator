@@ -738,10 +738,14 @@ func (x *DeleteSourceResponse) GetDeleted() int32 {
 }
 
 type DispatchRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Agent         string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
-	Body          string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
-	Cwd           string                 `protobuf:"bytes,3,opt,name=cwd,proto3" json:"cwd,omitempty"` // optional: absolute directory the agent session runs in
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Agent string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	Body  string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
+	Cwd   string                 `protobuf:"bytes,3,opt,name=cwd,proto3" json:"cwd,omitempty"` // optional: absolute directory the agent session runs in
+	// Optional routing. model ("provider/slug") pins the model; otherwise
+	// task_kind picks one from the routing table. Neither runs the agent's own.
+	TaskKind      string `protobuf:"bytes,4,opt,name=task_kind,json=taskKind,proto3" json:"task_kind,omitempty"`
+	Model         string `protobuf:"bytes,5,opt,name=model,proto3" json:"model,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -797,10 +801,25 @@ func (x *DispatchRequest) GetCwd() string {
 	return ""
 }
 
+func (x *DispatchRequest) GetTaskKind() string {
+	if x != nil {
+		return x.TaskKind
+	}
+	return ""
+}
+
+func (x *DispatchRequest) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
 type DispatchResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	InstanceId    string                 `protobuf:"bytes,1,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
 	WorkerEnabled bool                   `protobuf:"varint,2,opt,name=worker_enabled,json=workerEnabled,proto3" json:"worker_enabled,omitempty"` // false: the task stays pending until a worker is enabled
+	Route         *Route                 `protobuf:"bytes,3,opt,name=route,proto3" json:"route,omitempty"`                                       // the model chosen; unset when the dispatch was unrouted
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -847,6 +866,13 @@ func (x *DispatchResponse) GetWorkerEnabled() bool {
 		return x.WorkerEnabled
 	}
 	return false
+}
+
+func (x *DispatchResponse) GetRoute() *Route {
+	if x != nil {
+		return x.Route
+	}
+	return nil
 }
 
 type ListTasksRequest struct {
@@ -1066,6 +1092,7 @@ type Task struct {
 	Models        []string `protobuf:"bytes,11,rep,name=models,proto3" json:"models,omitempty"`
 	Prs           []string `protobuf:"bytes,12,rep,name=prs,proto3" json:"prs,omitempty"`
 	Verification  string   `protobuf:"bytes,13,opt,name=verification,proto3" json:"verification,omitempty"` // passed: … | failed: … | skipped: …
+	Route         *Route   `protobuf:"bytes,14,opt,name=route,proto3" json:"route,omitempty"`               // the model the task was dispatched to, if routed
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1189,6 +1216,13 @@ func (x *Task) GetVerification() string {
 		return x.Verification
 	}
 	return ""
+}
+
+func (x *Task) GetRoute() *Route {
+	if x != nil {
+		return x.Route
+	}
+	return nil
 }
 
 type StatusRequest struct {
@@ -1572,6 +1606,197 @@ func (x *SummarizeSessionResponse) GetAccepted() bool {
 	return false
 }
 
+// Route is one model choice for a task kind.
+type Route struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskKind      string                 `protobuf:"bytes,1,opt,name=task_kind,json=taskKind,proto3" json:"task_kind,omitempty"`
+	Provider      string                 `protobuf:"bytes,2,opt,name=provider,proto3" json:"provider,omitempty"`
+	Model         string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	Effort        string                 `protobuf:"bytes,4,opt,name=effort,proto3" json:"effort,omitempty"` // empty: the model's default
+	Rationale     string                 `protobuf:"bytes,5,opt,name=rationale,proto3" json:"rationale,omitempty"`
+	EvidenceN     int32                  `protobuf:"varint,6,opt,name=evidence_n,json=evidenceN,proto3" json:"evidence_n,omitempty"` // observed outcomes behind the choice
+	Confidence    string                 `protobuf:"bytes,7,opt,name=confidence,proto3" json:"confidence,omitempty"`                 // low | medium | high
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Route) Reset() {
+	*x = Route{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Route) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Route) ProtoMessage() {}
+
+func (x *Route) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Route.ProtoReflect.Descriptor instead.
+func (*Route) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *Route) GetTaskKind() string {
+	if x != nil {
+		return x.TaskKind
+	}
+	return ""
+}
+
+func (x *Route) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *Route) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *Route) GetEffort() string {
+	if x != nil {
+		return x.Effort
+	}
+	return ""
+}
+
+func (x *Route) GetRationale() string {
+	if x != nil {
+		return x.Rationale
+	}
+	return ""
+}
+
+func (x *Route) GetEvidenceN() int32 {
+	if x != nil {
+		return x.EvidenceN
+	}
+	return 0
+}
+
+func (x *Route) GetConfidence() string {
+	if x != nil {
+		return x.Confidence
+	}
+	return ""
+}
+
+type RecommendModelRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskKind      string                 `protobuf:"bytes,1,opt,name=task_kind,json=taskKind,proto3" json:"task_kind,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecommendModelRequest) Reset() {
+	*x = RecommendModelRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecommendModelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecommendModelRequest) ProtoMessage() {}
+
+func (x *RecommendModelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecommendModelRequest.ProtoReflect.Descriptor instead.
+func (*RecommendModelRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *RecommendModelRequest) GetTaskKind() string {
+	if x != nil {
+		return x.TaskKind
+	}
+	return ""
+}
+
+type RecommendModelResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Route *Route                 `protobuf:"bytes,1,opt,name=route,proto3" json:"route,omitempty"`
+	// false when the routing table had no usable route and the answer is a live
+	// proposal from the declared-capability policy.
+	FromTable     bool `protobuf:"varint,2,opt,name=from_table,json=fromTable,proto3" json:"from_table,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RecommendModelResponse) Reset() {
+	*x = RecommendModelResponse{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RecommendModelResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RecommendModelResponse) ProtoMessage() {}
+
+func (x *RecommendModelResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RecommendModelResponse.ProtoReflect.Descriptor instead.
+func (*RecommendModelResponse) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *RecommendModelResponse) GetRoute() *Route {
+	if x != nil {
+		return x.Route
+	}
+	return nil
+}
+
+func (x *RecommendModelResponse) GetFromTable() bool {
+	if x != nil {
+		return x.FromTable
+	}
+	return false
+}
+
 var File_internal_rpc_orchdv1_orchd_proto protoreflect.FileDescriptor
 
 const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
@@ -1633,15 +1858,18 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"source_uri\x18\x01 \x01(\tR\tsourceUri\x12\x18\n" +
 	"\aconfirm\x18\x02 \x01(\bR\aconfirm\"0\n" +
 	"\x14DeleteSourceResponse\x12\x18\n" +
-	"\adeleted\x18\x01 \x01(\x05R\adeleted\"M\n" +
+	"\adeleted\x18\x01 \x01(\x05R\adeleted\"\x80\x01\n" +
 	"\x0fDispatchRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x12\n" +
 	"\x04body\x18\x02 \x01(\tR\x04body\x12\x10\n" +
-	"\x03cwd\x18\x03 \x01(\tR\x03cwd\"Z\n" +
+	"\x03cwd\x18\x03 \x01(\tR\x03cwd\x12\x1b\n" +
+	"\ttask_kind\x18\x04 \x01(\tR\btaskKind\x12\x14\n" +
+	"\x05model\x18\x05 \x01(\tR\x05model\"\x81\x01\n" +
 	"\x10DispatchResponse\x12\x1f\n" +
 	"\vinstance_id\x18\x01 \x01(\tR\n" +
 	"instanceId\x12%\n" +
-	"\x0eworker_enabled\x18\x02 \x01(\bR\rworkerEnabled\"V\n" +
+	"\x0eworker_enabled\x18\x02 \x01(\bR\rworkerEnabled\x12%\n" +
+	"\x05route\x18\x03 \x01(\v2\x0f.orchd.v1.RouteR\x05route\"V\n" +
 	"\x10ListTasksRequest\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x14\n" +
@@ -1652,7 +1880,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"K\n" +
 	"\x0fGetTaskResponse\x12\"\n" +
 	"\x04task\x18\x01 \x01(\v2\x0e.orchd.v1.TaskR\x04task\x12\x14\n" +
-	"\x05found\x18\x02 \x01(\bR\x05found\"\xce\x02\n" +
+	"\x05found\x18\x02 \x01(\bR\x05found\"\xf5\x02\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x12\n" +
@@ -1670,7 +1898,8 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	" \x01(\tR\tsessionId\x12\x16\n" +
 	"\x06models\x18\v \x03(\tR\x06models\x12\x10\n" +
 	"\x03prs\x18\f \x03(\tR\x03prs\x12\"\n" +
-	"\fverification\x18\r \x01(\tR\fverification\"\x0f\n" +
+	"\fverification\x18\r \x01(\tR\fverification\x12%\n" +
+	"\x05route\x18\x0e \x01(\v2\x0f.orchd.v1.RouteR\x05route\"\x0f\n" +
 	"\rStatusRequest\"\x8c\x01\n" +
 	"\x0eStatusResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12%\n" +
@@ -1697,7 +1926,24 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x0ftranscript_path\x18\x02 \x01(\tR\x0etranscriptPath\x12\x12\n" +
 	"\x04tags\x18\x03 \x03(\tR\x04tags\"6\n" +
 	"\x18SummarizeSessionResponse\x12\x1a\n" +
-	"\baccepted\x18\x01 \x01(\bR\baccepted2\xf4\x05\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\"\xcb\x01\n" +
+	"\x05Route\x12\x1b\n" +
+	"\ttask_kind\x18\x01 \x01(\tR\btaskKind\x12\x1a\n" +
+	"\bprovider\x18\x02 \x01(\tR\bprovider\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12\x16\n" +
+	"\x06effort\x18\x04 \x01(\tR\x06effort\x12\x1c\n" +
+	"\trationale\x18\x05 \x01(\tR\trationale\x12\x1d\n" +
+	"\n" +
+	"evidence_n\x18\x06 \x01(\x05R\tevidenceN\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\a \x01(\tR\n" +
+	"confidence\"4\n" +
+	"\x15RecommendModelRequest\x12\x1b\n" +
+	"\ttask_kind\x18\x01 \x01(\tR\btaskKind\"^\n" +
+	"\x16RecommendModelResponse\x12%\n" +
+	"\x05route\x18\x01 \x01(\v2\x0f.orchd.v1.RouteR\x05route\x12\x1d\n" +
+	"\n" +
+	"from_table\x18\x02 \x01(\bR\tfromTable2\xc9\x06\n" +
 	"\x05Orchd\x125\n" +
 	"\x04Ping\x12\x15.orchd.v1.PingRequest\x1a\x16.orchd.v1.PingResponse\x12;\n" +
 	"\x06Ingest\x12\x17.orchd.v1.IngestRequest\x1a\x18.orchd.v1.IngestResponse\x12;\n" +
@@ -1709,7 +1955,8 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\aGetTask\x12\x18.orchd.v1.GetTaskRequest\x1a\x19.orchd.v1.GetTaskResponse\x12;\n" +
 	"\x06Status\x12\x17.orchd.v1.StatusRequest\x1a\x18.orchd.v1.StatusResponse\x12>\n" +
 	"\aRestart\x12\x18.orchd.v1.RestartRequest\x1a\x19.orchd.v1.RestartResponse\x12Y\n" +
-	"\x10SummarizeSession\x12!.orchd.v1.SummarizeSessionRequest\x1a\".orchd.v1.SummarizeSessionResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
+	"\x10SummarizeSession\x12!.orchd.v1.SummarizeSessionRequest\x1a\".orchd.v1.SummarizeSessionResponse\x12S\n" +
+	"\x0eRecommendModel\x12\x1f.orchd.v1.RecommendModelRequest\x1a .orchd.v1.RecommendModelResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
 
 var (
 	file_internal_rpc_orchdv1_orchd_proto_rawDescOnce sync.Once
@@ -1723,7 +1970,7 @@ func file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP() []byte {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescData
 }
 
-var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*PingRequest)(nil),              // 0: orchd.v1.PingRequest
 	(*PingResponse)(nil),             // 1: orchd.v1.PingResponse
@@ -1751,40 +1998,48 @@ var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*RestartResponse)(nil),          // 23: orchd.v1.RestartResponse
 	(*SummarizeSessionRequest)(nil),  // 24: orchd.v1.SummarizeSessionRequest
 	(*SummarizeSessionResponse)(nil), // 25: orchd.v1.SummarizeSessionResponse
+	(*Route)(nil),                    // 26: orchd.v1.Route
+	(*RecommendModelRequest)(nil),    // 27: orchd.v1.RecommendModelRequest
+	(*RecommendModelResponse)(nil),   // 28: orchd.v1.RecommendModelResponse
 }
 var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	6,  // 0: orchd.v1.SearchResponse.hits:type_name -> orchd.v1.SearchHit
 	9,  // 1: orchd.v1.ListSourcesResponse.sources:type_name -> orchd.v1.SourceSummary
-	18, // 2: orchd.v1.ListTasksResponse.tasks:type_name -> orchd.v1.Task
-	18, // 3: orchd.v1.GetTaskResponse.task:type_name -> orchd.v1.Task
-	21, // 4: orchd.v1.StatusResponse.subsystems:type_name -> orchd.v1.SubsystemStatus
-	0,  // 5: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
-	2,  // 6: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
-	4,  // 7: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
-	7,  // 8: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
-	10, // 9: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
-	12, // 10: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
-	14, // 11: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
-	16, // 12: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
-	19, // 13: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
-	22, // 14: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
-	24, // 15: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
-	1,  // 16: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
-	3,  // 17: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
-	5,  // 18: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
-	8,  // 19: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
-	11, // 20: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
-	13, // 21: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
-	15, // 22: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
-	17, // 23: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
-	20, // 24: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
-	23, // 25: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
-	25, // 26: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
-	16, // [16:27] is the sub-list for method output_type
-	5,  // [5:16] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	26, // 2: orchd.v1.DispatchResponse.route:type_name -> orchd.v1.Route
+	18, // 3: orchd.v1.ListTasksResponse.tasks:type_name -> orchd.v1.Task
+	18, // 4: orchd.v1.GetTaskResponse.task:type_name -> orchd.v1.Task
+	26, // 5: orchd.v1.Task.route:type_name -> orchd.v1.Route
+	21, // 6: orchd.v1.StatusResponse.subsystems:type_name -> orchd.v1.SubsystemStatus
+	26, // 7: orchd.v1.RecommendModelResponse.route:type_name -> orchd.v1.Route
+	0,  // 8: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
+	2,  // 9: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
+	4,  // 10: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
+	7,  // 11: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
+	10, // 12: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
+	12, // 13: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
+	14, // 14: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
+	16, // 15: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
+	19, // 16: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
+	22, // 17: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
+	24, // 18: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
+	27, // 19: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
+	1,  // 20: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
+	3,  // 21: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
+	5,  // 22: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
+	8,  // 23: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
+	11, // 24: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
+	13, // 25: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
+	15, // 26: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
+	17, // 27: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
+	20, // 28: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
+	23, // 29: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
+	25, // 30: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
+	28, // 31: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
+	20, // [20:32] is the sub-list for method output_type
+	8,  // [8:20] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_internal_rpc_orchdv1_orchd_proto_init() }
@@ -1798,7 +2053,7 @@ func file_internal_rpc_orchdv1_orchd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_rpc_orchdv1_orchd_proto_rawDesc), len(file_internal_rpc_orchdv1_orchd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

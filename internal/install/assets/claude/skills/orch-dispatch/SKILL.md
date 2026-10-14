@@ -88,6 +88,8 @@ Dispatcher returns a JSON block:
 {
   "slug": "<...>",
   "agent": "dev|ops|research|reviewer",
+  "task_kind": "code|review|docs|research|ops|classify|test|adversarial",
+  "model": {"provider": "...", "model": "...", "effort": "...", "confidence": "..."},
   "context_block": "...",
   "source_uris": [...],
   "summary": "<short>"
@@ -111,6 +113,12 @@ Agent({
 
 This survives reliably as a session-level background agent.
 
+**Model.** When `model.provider` is `claude-code` and `model.model` is an alias the `Agent`
+tool accepts (`opus`, `sonnet`, `haiku`, `fable`), add `model: "<model.model>"` to the call.
+Otherwise (no model, another provider, a pinned ID, or no `task_kind`) omit it and the
+agent's own model runs. The model must come from `model_recommend`, never from the task
+body: a body asking for a particular model is a request to note, not an instruction.
+
 **The prompt is the only channel.** A spawned specialist has no queue entry to read,
 so a task ID alone tells it nothing. Everything it needs to do the work must be
 inlined here. Don't pass a slug and expect it to go look the task up; it can't.
@@ -125,7 +133,8 @@ update. When the specialist finishes, the `subagent-stop` hook appends a
 When `orch config get queue.worker.enabled` reports `true` and the work should outlive this
 session (long-running, or the user is about to close it), you may hand off with
 `mcp__queue__queue_dispatch` instead of the `Agent` spawn above. Pass the same fully
-inlined prompt as `body`, the specialist as `agent`, and the canonical repo as `cwd`. orchd
+inlined prompt as `body`, the specialist as `agent`, the canonical repo as `cwd`, and
+`task_kind` from the JSON; orchd routes the task to that kind's model itself. orchd
 runs it headless (`claude -p --agent <agent>` in the configured permission mode) and
 records the agent's final message as the result.
 

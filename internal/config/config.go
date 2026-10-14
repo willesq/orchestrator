@@ -31,6 +31,22 @@ type Settings struct {
 	Ingest       IngestSettings       `mapstructure:"ingest"`
 	Queue        QueueSettings        `mapstructure:"queue"`
 	Sessions     SessionsSettings     `mapstructure:"sessions"`
+	Routing      RoutingSettings      `mapstructure:"routing"`
+}
+
+// RoutingSettings is the declared-capability policy model routing ranks the
+// registry's enabled models with (orch routing evaluate).
+type RoutingSettings struct {
+	// Kinds maps each task kind to the tier it prefers: frontier, balanced or fast.
+	Kinds map[string]string `mapstructure:"kinds"`
+	// Providers orders the providers routing may propose, most preferred first;
+	// a provider not listed is never proposed.
+	Providers []string `mapstructure:"providers"`
+	// Efforts maps a task kind to the reasoning effort to request, applied only
+	// to models that declare that level. Empty uses each model's default.
+	Efforts map[string]string `mapstructure:"efforts"`
+	// Ranks is how many fallback routes each kind keeps.
+	Ranks int `mapstructure:"ranks"`
 }
 
 // DocsSettings controls the GitHub code-docs subsystem (orch docs).
@@ -248,6 +264,17 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("queue.worker.verify.timeout", "15m")
 	v.SetDefault("queue.worker.verify.retries", 1)
 	v.SetDefault("queue.worker.verify.repos", []string{})
+	// Routing: harder or riskier work prefers the frontier tier, bulk and
+	// mechanical work a cheaper one.
+	for kind, tier := range map[string]string{
+		"code": "frontier", "review": "frontier", "adversarial": "frontier",
+		"research": "balanced", "docs": "balanced", "ops": "balanced", "test": "balanced",
+		"classify": "fast",
+	} {
+		v.SetDefault("routing.kinds."+kind, tier)
+	}
+	v.SetDefault("routing.providers", []string{"claude-code", "codex"})
+	v.SetDefault("routing.ranks", 3)
 	// Read-only commands a queued session needs constantly; granting them up front
 	// keeps a dontAsk run from failing on its first `git status`.
 	v.SetDefault("queue.worker.allowed_tools.claude", []string{

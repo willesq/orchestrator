@@ -33,6 +33,9 @@ service Orchd {
   // SummarizeSession queues a finished session for a model-written summary,
   // which replaces the excerpt in its session record. It returns at once.
   rpc SummarizeSession(SummarizeSessionRequest) returns (SummarizeSessionResponse);
+  // RecommendModel answers which model a task of one kind should run on, with
+  // the evidence behind the answer.
+  rpc RecommendModel(RecommendModelRequest) returns (RecommendModelResponse);
 }
 
 message PingRequest {}
@@ -113,11 +116,16 @@ message DispatchRequest {
   string agent = 1;
   string body = 2;
   string cwd = 3; // optional: absolute directory the agent session runs in
+  // Optional routing. model ("provider/slug") pins the model; otherwise
+  // task_kind picks one from the routing table. Neither runs the agent's own.
+  string task_kind = 4;
+  string model = 5;
 }
 
 message DispatchResponse {
   string instance_id = 1;
   bool worker_enabled = 2; // false: the task stays pending until a worker is enabled
+  Route route = 3;           // the model chosen; unset when the dispatch was unrouted
 }
 
 message ListTasksRequest {
@@ -155,6 +163,7 @@ message Task {
   repeated string models = 11;
   repeated string prs = 12;
   string verification = 13; // passed: … | failed: … | skipped: …
+  Route route = 14;          // the model the task was dispatched to, if routed
 }
 
 message StatusRequest {}
@@ -192,4 +201,26 @@ message SummarizeSessionRequest {
 
 message SummarizeSessionResponse {
   bool accepted = 1; // false when summaries are off or the queue is full
+}
+
+// Route is one model choice for a task kind.
+message Route {
+  string task_kind = 1;
+  string provider = 2;
+  string model = 3;
+  string effort = 4;     // empty: the model's default
+  string rationale = 5;
+  int32 evidence_n = 6;  // observed outcomes behind the choice
+  string confidence = 7; // low | medium | high
+}
+
+message RecommendModelRequest {
+  string task_kind = 1;
+}
+
+message RecommendModelResponse {
+  Route route = 1;
+  // false when the routing table had no usable route and the answer is a live
+  // proposal from the declared-capability policy.
+  bool from_table = 2;
 }
