@@ -1,5 +1,7 @@
-# Branch checks: pure-Go tests + per-file coverage gate, plus a real cgo (-tags
-# ORT) build to validate the release recipe on a GitHub macOS runner. No release.
+# Branch checks. The pure-Go tests and coverage gate run on Linux, the cheapest
+# runner. Only the cgo (-tags ORT) build needs macOS: it links a darwin static
+# library, which Linux has no linker for. It runs after the tests pass, so a
+# failing branch never spends macOS minutes. No release.
 # Push only: every branch is pushed here, and a PR shows its head commit's push
 # run, so a pull_request trigger would run the same suite twice.
 name: ci
@@ -15,8 +17,8 @@ env:
   TOKENIZERS_VERSION: v1.27.0
 
 jobs:
-  test-and-build:
-    runs-on: macos-14 # Apple Silicon (arm64)
+  test:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -27,8 +29,23 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test + per-file coverage gate (pure Go)
+      # Separate from the coverage gate, which discards a failing package's
+      # output and would let a failed test through as long as coverage held.
+      - name: Test (pure Go)
+        run: go test ./...
+
+      - name: Per-file coverage gate
         run: make cover
+
+  build:
+    needs: test
+    runs-on: macos-14 # Apple Silicon (arm64), the platform the release ships for
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
 
       - name: Fetch libtokenizers static lib (darwin-arm64)
         env:
