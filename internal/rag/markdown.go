@@ -150,8 +150,6 @@ func sections(text string) []section {
 	return out
 }
 
-func words(s string) int { return len(strings.Fields(s)) }
-
 // tidy trims trailing spaces and collapses runs of blank lines, leaving fenced
 // code exactly as written.
 func tidy(lines []string) string {
@@ -221,48 +219,51 @@ func blocks(lines []string) [][]string {
 	return out
 }
 
-// markdownChunks packs sections into chunks of about size words. Sections
+// markdownChunks packs sections into chunks of at most size tokens. Sections
 // that fit together share a chunk when they sit in one subtree; a section too
 // large for one is split at paragraph boundaries, and a single paragraph too
-// large for one falls back to overlapping word windows. A chunk starts with the
+// large for one falls back to overlapping token windows. A chunk starts with the
 // path of headings above its first section, counted against size, and records
 // the deepest path all of its sections share.
-func markdownChunks(text string, size, overlap int) []chunk {
-	if size <= 0 {
-		size = 400
+func markdownChunks(text string, size, overlap int, m measure) []chunk {
+	if size <= 0 || size > maxChunkTokens {
+		size = maxChunkTokens
 	}
 	var out []chunk
 	var buf []string
 	var first []string // full path of the chunk's first section
 	var shared []string
-	bufWords := 0
+	bufTokens := 0
 	inBuf := false
 	flush := func() {
 		body := tidy(buf)
 		if strings.TrimSpace(body) != "" {
-			out = append(out, chunk{text: withContext(parent(first), body), heading: strings.Join(shared, pathSep)})
+			out = append(out, chunk{text: withContext(fitContext(parent(first), size, m), body), heading: strings.Join(shared, pathSep)})
 		}
-		buf, bufWords, inBuf = nil, 0, false
+		buf, bufTokens, inBuf = nil, 0, false
 	}
 	for _, sec := range sections(text) {
 		full := sec.full()
-		n := words(strings.Join(sec.lines, " "))
-		if inBuf && !joins(first, sec) || inBuf && bufWords+n > budget(size, first) {
+		n := tokens(m, strings.Join(sec.lines, " "))
+		// Joining the chunk being built is measured against that chunk's own
+		// context line, the one it will carry.
+		if inBuf {
+			if joins(first, sec) && bufTokens+n <= budget(size, first, m) {
+				shared = commonPrefix(shared, full)
+				buf = append(append(buf, sec.lines...), "")
+				bufTokens += n
+				continue
+			}
 			flush()
 		}
-		if n <= budget(size, full) {
-			if !inBuf {
-				first, shared, inBuf = full, full, true
-			} else {
-				shared = commonPrefix(shared, full)
-			}
+		if n <= budget(size, full, m) {
+			first, shared, inBuf = full, full, true
 			buf = append(append(buf, sec.lines...), "")
-			bufWords += n
+			bufTokens += n
 			continue
 		}
-		flush()
-		for _, piece := range splitSection(sec.lines, budget(size, full), overlap) {
-			out = append(out, chunk{text: withContext(parent(full), piece), heading: strings.Join(full, pathSep)})
+		for _, piece := range splitSection(sec.lines, budget(size, full, m), overlap, m) {
+			out = append(out, chunk{text: withContext(fitContext(parent(full), size, m), piece), heading: strings.Join(full, pathSep)})
 		}
 	}
 	flush()
@@ -283,9 +284,9 @@ func joins(first []string, sec section) bool {
 	return hasPrefix(sec.path, parent(first))
 }
 
-// budget is the words a chunk body may use once its context line is counted.
-func budget(size int, full []string) int {
-	b := size - words(strings.Join(parent(full), " "))
+// budget is the tokens a chunk body may use once its context line is counted.
+func budget(size int, full []string, m measure) int {
+	b := size - tokens(m, fitContext(parent(full), size, m))
 	return max(b, size/2, 1)
 }
 
@@ -319,20 +320,60 @@ func commonPrefix(a, b []string) []string {
 
 // withContext prefixes body with the headings above it, marked so it cannot be
 // mistaken for the document's own text.
-func withContext(path []string, body string) string {
-	if len(path) == 0 {
+func withContext(line, body string) string {
+	if line == "" {
 		return body
 	}
-	return "[section: " + strings.Join(path, pathSep) + "]\n\n" + body
+	return line + "\n\n" + body
+}
+
+// fitContext renders the context line for path in at most half of size
+// tokens, so a chunk's own text always has the other half: it drops the
+// outermost headings first, then cuts the line short.
+func fitContext(path []string, size int, m measure) string {
+	limit := max(size/2, 1)
+	line := contextLine(path)
+	for tokens(m, line) > limit && len(path) > 1 {
+		path = path[1:]
+		line = "[section: …" + pathSep + strings.Join(path, pathSep) + "]"
+	}
+	if tokens(m, line) <= limit {
+		return line
+	}
+	if limit < tokens(m, "…]") {
+		return ""
+	}
+	rs := []rune(line)
+	lo, hi := 0, len(rs)
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if tokens(m, string(rs[:mid])+"…]") <= limit {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	return string(rs[:lo]) + "…]"
+}
+
+func contextLine(path []string) string {
+	if len(path) == 0 {
+		return ""
+	}
+	return "[section: " + strings.Join(path, pathSep) + "]"
 }
 
 // splitSection splits an oversized section at paragraph boundaries. The
 // heading line repeats on every piece so each stays self-describing.
-func splitSection(lines []string, size, overlap int) []string {
+func splitSection(lines []string, size, overlap int, m measure) []string {
 	heading := ""
 	body := lines
 	if len(lines) > 0 && atxHeading.MatchString(lines[0]) {
-		heading, body = lines[0], lines[1:]
+		// The heading repeats on every piece, so it is held to a quarter of the
+		// budget: a long one would otherwise leave each piece almost no body
+		// and multiply the chunk count.
+		heading, body = fitHeading(lines[0], size/4, m), lines[1:]
+		size = max(size-tokens(m, heading), size/2, 1)
 	}
 	var out []string
 	var cur []string
@@ -349,10 +390,10 @@ func splitSection(lines []string, size, overlap int) []string {
 		cur, curWords = nil, 0
 	}
 	for _, b := range blocks(body) {
-		n := words(strings.Join(b, " "))
+		n := tokens(m, strings.Join(b, " "))
 		if n > size {
 			emit()
-			for _, w := range chunkText(strings.Join(b, "\n"), size, overlap) {
+			for _, w := range chunkText(strings.Join(b, "\n"), size, overlap, m) {
 				cur = []string{w}
 				emit()
 			}
@@ -367,7 +408,28 @@ func splitSection(lines []string, size, overlap int) []string {
 	emit()
 	if len(out) == 0 {
 		// Nothing but a heading too long for one chunk: keep its words.
-		return chunkText(strings.Join(lines, "\n"), size, overlap)
+		return chunkText(strings.Join(lines, "\n"), size, overlap, m)
 	}
 	return out
+}
+
+// fitHeading cuts a heading line to at most limit tokens.
+func fitHeading(line string, limit int, m measure) string {
+	if tokens(m, line) <= limit {
+		return line
+	}
+	rs := []rune(line)
+	lo, hi := 0, len(rs)
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if tokens(m, string(rs[:mid])+"…") <= limit {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	if lo == 0 {
+		return ""
+	}
+	return strings.TrimSpace(string(rs[:lo])) + "…"
 }

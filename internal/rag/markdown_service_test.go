@@ -40,36 +40,47 @@ func payloadStub(t *testing.T) (*QdrantStore, func() []map[string]any) {
 
 func TestIngestMarkdownBySection(t *testing.T) {
 	doc := "# Guide\n\nintro\n\n## Setup\n\n" + strings.Repeat("step ", 12) + "\n\n## Use\n\n" + strings.Repeat("run ", 12)
+	const size = 40
 	tests := []struct {
-		name       string
-		sections   bool
-		wantHeads  []string
-		wantNewlns bool
+		name      string
+		sections  bool
+		wantHeads []string
 	}{
-		{name: "sections", sections: true, wantHeads: []string{"Guide", "Guide › Setup", "Guide › Use"}, wantNewlns: true},
-		{name: "word windows when off", sections: false, wantHeads: []string{"", "", ""}},
+		// Guide's intro and Setup fit one chunk; Use needs its own.
+		{name: "sections", sections: true, wantHeads: []string{"Guide", "Guide › Use"}},
+		{name: "token windows when off", sections: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store, payloads := payloadStub(t)
-			svc := NewService(fakeEmbedder{dim: 2, vec: []float32{1, 0}}, store, 16, 2)
+			svc := NewService(fakeEmbedder{dim: 2, vec: []float32{1, 0}}, store, size, 2)
 			svc.MarkdownSections = tt.sections
 			n, err := svc.IngestText(context.Background(), doc, Meta{SourceURI: "file://guide.md", SourceType: "docs"})
 			if err != nil {
 				t.Fatal(err)
 			}
 			got := payloads()
-			if n != len(tt.wantHeads) || len(got) != n {
-				t.Fatalf("chunks = %d (payloads %d), want %d", n, len(got), len(tt.wantHeads))
+			if n == 0 || len(got) != n {
+				t.Fatalf("chunks = %d, payloads = %d", n, len(got))
 			}
+			m := newMeasure(nil) // the fake embedder has no tokenizer, so the service estimated
+			var heads []string
 			for i, p := range got {
+				text, _ := p["text"].(string)
+				if c := tokens(m, text); c > size {
+					t.Errorf("chunk %d is %d tokens, over %d: %q", i, c, size, text)
+				}
 				h, _ := p["heading"].(string)
-				if h != tt.wantHeads[i] {
-					t.Errorf("chunk %d heading = %q, want %q", i, h, tt.wantHeads[i])
+				heads = append(heads, h)
+				if strings.Contains(text, "\n") != tt.sections {
+					t.Errorf("chunk %d newlines kept = %v: %q", i, !tt.sections, text)
 				}
-				if text, _ := p["text"].(string); strings.Contains(text, "\n") != tt.wantNewlns {
-					t.Errorf("chunk %d newlines kept = %v: %q", i, !tt.wantNewlns, text)
-				}
+			}
+			if tt.sections && strings.Join(heads, "|") != strings.Join(tt.wantHeads, "|") {
+				t.Fatalf("headings = %q, want %q", heads, tt.wantHeads)
+			}
+			if !tt.sections && strings.Join(heads, "") != "" {
+				t.Fatalf("token windows carry headings: %q", heads)
 			}
 		})
 	}
