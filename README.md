@@ -416,6 +416,27 @@ Ingested text is split into chunks of at most `embedder.chunk_tokens` model toke
   characters, so a hostile page cannot multiply its size by repeating a huge title.
 - **Existing content** keeps its old chunks until it is ingested again.
 
+## Measuring retrieval
+
+`orch rag eval` scores search against a golden set: queries you actually ask, each paired
+with the sources that should answer it. Use it to judge a change to chunking, ranking or the
+embedding model by number.
+
+```sh
+orch rag eval add "how do I install orch with homebrew" repo://willesq/orchestrator/README.md
+orch rag eval add "routing evidence" "repo://willesq/orchestrator/docs/*" --tag repo:orchestrator
+orch rag eval --save before        # run every query, keep the result
+# ...re-ingest, change chunking or the model...
+orch rag eval --compare before     # deltas, plus which queries got better or worse
+```
+
+- **The set** is YAML in the orch config dir (`rag-eval.yaml`; `--set` picks another). A
+  trailing `*` on an expected URI matches a prefix.
+- **Scoring:** each query goes through orchd's normal search. Hits are counted by distinct
+  source, so several chunks of one document count once. The report gives hit@1, recall@k
+  (`--top-k`, default 10) and MRR. `--json` prints the report for scripts.
+- **Saved runs** live in the data dir under `eval/`.
+
 ## Build from source
 
 The ORT embedder is cgo: it links a prebuilt `libtokenizers.a` at build time and loads
