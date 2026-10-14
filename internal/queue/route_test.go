@@ -36,6 +36,10 @@ func TestDispatchRecordsTheRoute(t *testing.T) {
 	if got.Kind != "code" || got.Provider != "codex" || got.Model != "gpt-sol" || got.Effort != "high" {
 		t.Fatalf("task = %+v", got)
 	}
+	var created int64
+	if err := conn.QueryRow(`SELECT COALESCE(created_at,0) FROM tasks WHERE id = ?`, id).Scan(&created); err != nil || created == 0 {
+		t.Fatalf("created_at = %d, %v", created, err)
+	}
 	unrouted, err := d.Dispatch(ctx, "dev", "b", "", workflows.Route{})
 	if err != nil {
 		t.Fatal(err)
@@ -46,5 +50,22 @@ func TestDispatchRecordsTheRoute(t *testing.T) {
 	}
 	if in := taskInput("t", "dev", "b", "", nil, rt); in.Route != rt {
 		t.Fatalf("taskInput dropped the route: %+v", in)
+	}
+}
+
+func TestTaskReadsVerdicts(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	if _, err := conn.Exec(`INSERT INTO tasks (id, agent, body, result, status, updated_at, rating, pr_outcome)
+		VALUES ('t', 'dev', 'b', '', 'complete', datetime('now'), 'good', 'rework')`); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := NewSQLTaskStore(conn).Get(context.Background(), "t")
+	if err != nil || got.Rating != "good" || got.PROutcome != "rework" {
+		t.Fatalf("task = %+v, %v", got, err)
 	}
 }

@@ -36,6 +36,8 @@ service Orchd {
   // RecommendModel answers which model a task of one kind should run on, with
   // the evidence behind the answer.
   rpc RecommendModel(RecommendModelRequest) returns (RecommendModelResponse);
+  // RateTask records the user's verdict on a finished task, evidence for routing.
+  rpc RateTask(RateTaskRequest) returns (RateTaskResponse);
 }
 
 message PingRequest {}
@@ -164,6 +166,8 @@ message Task {
   repeated string prs = 12;
   string verification = 13; // passed: … | failed: … | skipped: …
   Route route = 14;          // the model the task was dispatched to, if routed
+  string rating = 15;        // good | rework | bad, set by the user
+  string pr_outcome = 16;    // good | rework | bad, from the fate of the task's PRs
 }
 
 message StatusRequest {}
@@ -224,3 +228,10 @@ message RecommendModelResponse {
   // proposal from the declared-capability policy.
   bool from_table = 2;
 }
+
+message RateTaskRequest {
+  string id = 1;
+  string rating = 2; // good | rework | bad
+}
+
+message RateTaskResponse {}

@@ -20,6 +20,7 @@ import (
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/events"
+	"github.com/willesq/orchestrator/internal/evidence"
 	"github.com/willesq/orchestrator/internal/models"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/prs"
@@ -79,7 +80,7 @@ func subsystems(d deps) []supervisor.Unit {
 	}
 	out = append(out, sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, d.store, d.rag))
 	if d.settings.PRBabysitter.Enabled {
-		out = append(out, prsUnit(d.settings))
+		out = append(out, prsUnit(d.settings, d.store))
 	}
 	if d.summaries != nil {
 		sum := d.settings.Sessions.Summarize
@@ -241,12 +242,23 @@ func docsUnit(s config.Settings, store *sql.DB, ing docs.Ingester) supervisor.Un
 
 // prsUnit polls open PRs via gh and caches state + events on transitions. gh
 // failures (e.g. not authenticated) are non-fatal: the cache stays as-is.
-func prsUnit(s config.Settings) supervisor.Unit {
+func prsUnit(s config.Settings, store *sql.DB) supervisor.Unit {
 	bb := prs.New(paths.PRStateFile(), paths.EventsDir())
+	var attr *evidence.Attributor
+	if store != nil {
+		attr = evidence.NewAttributor(store)
+	}
 	return supervisor.Unit{
-		Name:     UnitPRs,
-		Detail:   "open-PR polling via gh",
-		Tick:     func(ctx context.Context) { _ = bb.Sweep(ctx) },
+		Name:   UnitPRs,
+		Detail: "open-PR polling via gh; labels routed tasks by the fate of their PRs",
+		Tick: func(ctx context.Context) {
+			_ = bb.Sweep(ctx)
+			if attr != nil {
+				if err := attr.Sweep(ctx); err != nil {
+					log.Printf("orchd: pr outcomes: %v", err)
+				}
+			}
+		},
 		Interval: interval(s.PRBabysitter.PollInterval, 10*time.Minute),
 	}
 }

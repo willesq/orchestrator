@@ -30,6 +30,9 @@ type Policy struct {
 	Providers []string          // preference order; unlisted providers are never proposed
 	Efforts   map[string]string // kind → effort, applied only where the model supports it
 	Ranks     int               // routes kept per kind
+	// MinEvidence is how many observed outcomes a model needs on a kind before
+	// they move its rank; below it the declared tier alone decides.
+	MinEvidence int
 }
 
 // Validate rejects a policy that names unknown kinds or tiers.
@@ -52,6 +55,9 @@ func (p Policy) Validate() error {
 	}
 	if p.Ranks < 1 {
 		return fmt.Errorf("routing.ranks must be at least 1")
+	}
+	if p.MinEvidence < 1 {
+		return fmt.Errorf("routing.min_evidence must be at least 1")
 	}
 	return nil
 }
@@ -103,28 +109,47 @@ func (r Route) Ref() string {
 	return s
 }
 
-// Propose ranks candidates for every kind under the policy. candidates must
-// already be routable models of enabled providers.
-func Propose(p Policy, candidates []models.Model, now int64) []Route {
+// Propose ranks candidates for every kind under the policy and the observed
+// evidence. candidates must already be routable models of enabled providers.
+func Propose(p Policy, candidates []models.Model, ev Evidence, now int64) []Route {
 	var out []Route
 	for _, k := range Kinds {
-		out = append(out, proposeKind(p, k, candidates, now)...)
+		out = append(out, proposeKind(p, k, candidates, ev, now)...)
 	}
 	return out
 }
 
-func proposeKind(p Policy, kind string, candidates []models.Model, now int64) []Route {
+// prior is the declared-capability score in [0, 1]: 1 at the wanted tier,
+// falling with each tier away, 0 for an untiered model.
+func prior(want, have string) float64 { return 1 - float64(tierDistance(want, have))/3 }
+
+// score blends the prior with the observed success rate once the model has
+// enough outcomes on the kind. The observed weight grows with the count, so a
+// handful of outcomes nudges a rank and many outcomes decide it.
+func score(p Policy, want string, m models.Model, t Tally) float64 {
+	pr := prior(want, m.Tier)
+	n := t.N()
+	if n < p.MinEvidence {
+		return pr
+	}
+	w := float64(n) / float64(n+p.MinEvidence)
+	return w*t.Score() + (1-w)*pr
+}
+
+func proposeKind(p Policy, kind string, candidates []models.Model, ev Evidence, now int64) []Route {
 	want := p.Tiers[kind]
 	var pool []models.Model
+	scores := map[string]float64{}
 	for _, m := range candidates {
 		if slices.Contains(p.Providers, m.Provider) && m.Routable() {
 			pool = append(pool, m)
+			scores[m.Ref()] = score(p, want, m, ev.For(kind, m.Provider, m.Slug))
 		}
 	}
 	sort.SliceStable(pool, func(i, j int) bool {
 		a, b := pool[i], pool[j]
-		if da, db := tierDistance(want, a.Tier), tierDistance(want, b.Tier); da != db {
-			return da < db
+		if sa, sb := scores[a.Ref()], scores[b.Ref()]; sa != sb {
+			return sa > sb
 		}
 		if pa, pb := slices.Index(p.Providers, a.Provider), slices.Index(p.Providers, b.Provider); pa != pb {
 			return pa < pb
@@ -144,23 +169,31 @@ func proposeKind(p Policy, kind string, candidates []models.Model, now int64) []
 		if len(m.SupportedEfforts) == 0 || !m.SupportsEffort(effort) {
 			effort = ""
 		}
+		t := ev.For(kind, m.Provider, m.Slug)
 		routes = append(routes, Route{
 			Kind: kind, Rank: i + 1, Provider: m.Provider, Model: m.Slug, Effort: effort,
-			Rationale: rationale(kind, want, m), DecidedAt: now,
+			Rationale: rationale(p, kind, want, m, t), EvidenceN: t.N(), DecidedAt: now,
 		})
 	}
 	return routes
 }
 
-func rationale(kind, want string, m models.Model) string {
+func rationale(p Policy, kind, want string, m models.Model, t Tally) string {
 	have := m.Tier
 	if have == "" {
 		have = "untiered"
 	}
+	declared := fmt.Sprintf("declared %s for %s (policy wants %s)", have, kind, want)
 	if want == "" {
-		return fmt.Sprintf("declared %s; no tier policy for %s; no outcome evidence yet", have, kind)
+		declared = fmt.Sprintf("declared %s; no tier policy for %s", have, kind)
 	}
-	return fmt.Sprintf("declared %s for %s (policy wants %s); no outcome evidence yet", have, kind, want)
+	switch n := t.N(); {
+	case n == 0:
+		return declared + "; no outcome evidence yet"
+	case n < p.MinEvidence:
+		return fmt.Sprintf("%s; %s so far, below the %d needed to count", declared, t, p.MinEvidence)
+	}
+	return fmt.Sprintf("observed %s (%.0f%% success) weighed against %s", t, 100*t.Score(), declared)
 }
 
 // Change is one rank whose route differs between two tables.
@@ -206,5 +239,5 @@ func Diff(current, proposed []Route) []Change {
 
 // PolicyFrom builds a Policy from the config's routing section.
 func PolicyFrom(s config.RoutingSettings) Policy {
-	return Policy{Tiers: s.Kinds, Providers: s.Providers, Efforts: s.Efforts, Ranks: s.Ranks}
+	return Policy{Tiers: s.Kinds, Providers: s.Providers, Efforts: s.Efforts, Ranks: s.Ranks, MinEvidence: s.MinEvidence}
 }

@@ -40,6 +40,16 @@ func Outcome(t *orchdv1.Task) string {
 	if v := t.GetVerification(); v != "" {
 		fmt.Fprintf(&b, "verify:  %s\n", v)
 	}
+	if r, p := t.GetRating(), t.GetPrOutcome(); r != "" || p != "" {
+		var parts []string
+		if r != "" {
+			parts = append(parts, "rated "+r)
+		}
+		if p != "" {
+			parts = append(parts, "PRs "+p)
+		}
+		fmt.Fprintf(&b, "verdict: %s\n", strings.Join(parts, " · "))
+	}
 	return b.String()
 }
 

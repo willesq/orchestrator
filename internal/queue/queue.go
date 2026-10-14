@@ -64,8 +64,8 @@ func (s *SQLTaskStore) SaveResult(ctx context.Context, in workflows.AgentTaskInp
 // whether or not something was in flight.
 func (s *SQLTaskStore) Create(ctx context.Context, in workflows.AgentTaskInput) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO tasks (id, agent, body, result, status, updated_at, task_kind, provider, model, effort)
-		 VALUES (?, ?, ?, '', 'pending', datetime('now'), ?, ?, ?, ?)
+		`INSERT INTO tasks (id, agent, body, result, status, updated_at, task_kind, provider, model, effort, created_at)
+		 VALUES (?, ?, ?, '', 'pending', datetime('now'), ?, ?, ?, ?, unixepoch('now'))
 		 ON CONFLICT(id) DO NOTHING`,
 		in.ID, in.Agent, in.Body, in.Route.Kind, in.Route.Provider, in.Route.Model, in.Route.Effort)
 	return err
@@ -97,13 +97,16 @@ type Task struct {
 	Verification string
 	// The route the task was dispatched with; empty when unrouted.
 	Kind, Provider, Model, Effort string
+	// Outcome labels routing learns from; empty until known.
+	Rating, PROutcome string
 }
 
 // taskColumns is the select list scanTask reads, in order.
 const taskColumns = `id, agent, body, COALESCE(result,''), status, updated_at,
 	COALESCE(cost_usd,0), COALESCE(duration_ms,0), COALESCE(turns,0),
 	COALESCE(session_id,''), COALESCE(models,''), COALESCE(prs,''), COALESCE(verification,''),
-	COALESCE(task_kind,''), COALESCE(provider,''), COALESCE(model,''), COALESCE(effort,'')`
+	COALESCE(task_kind,''), COALESCE(provider,''), COALESCE(model,''), COALESCE(effort,''),
+	COALESCE(rating,''), COALESCE(pr_outcome,'')`
 
 type rowScanner interface{ Scan(dest ...any) error }
 
@@ -112,7 +115,7 @@ func scanTask(r rowScanner) (Task, error) {
 	var models, prs string
 	err := r.Scan(&t.ID, &t.Agent, &t.Body, &t.Result, &t.Status, &t.UpdatedAt,
 		&t.CostUSD, &t.DurationMS, &t.Turns, &t.SessionID, &models, &prs, &t.Verification,
-		&t.Kind, &t.Provider, &t.Model, &t.Effort)
+		&t.Kind, &t.Provider, &t.Model, &t.Effort, &t.Rating, &t.PROutcome)
 	t.Models, t.PRs = splitList(models), splitList(prs)
 	return t, err
 }

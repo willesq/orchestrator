@@ -141,7 +141,7 @@ func TestNewRouter(t *testing.T) {
 	if _, err := newRouter(nil, routing.Policy{Ranks: 0}); err == nil {
 		t.Fatal("invalid policy accepted")
 	}
-	r, err := newRouter(nil, routing.Policy{Ranks: 1})
+	r, err := newRouter(nil, routing.Policy{Ranks: 1, MinEvidence: 1})
 	if err != nil || r == nil {
 		t.Fatalf("router = %v, %v", r, err)
 	}

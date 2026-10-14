@@ -112,7 +112,11 @@ func proposal(c *cobra.Command, r *routing.Router) ([]routing.Route, []routing.R
 	if err != nil {
 		return nil, nil, err
 	}
-	return current, routing.Propose(r.Policy, cands, time.Now().Unix()), nil
+	ev, err := r.Store.Evidence(c.Context())
+	if err != nil {
+		return nil, nil, err
+	}
+	return current, routing.Propose(r.Policy, cands, ev, time.Now().Unix()), nil
 }
 
 func printChanges(out io.Writer, changes []routing.Change) {
