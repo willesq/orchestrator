@@ -236,6 +236,7 @@ type SearchRequest struct {
 	Scope         string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`                             // optional exact-match filter
 	SourceType    string                 `protobuf:"bytes,4,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"` // optional exact-match filter
 	Tags          []string               `protobuf:"bytes,5,rep,name=tags,proto3" json:"tags,omitempty"`                               // optional: payload.tags contains any
+	Mode          string                 `protobuf:"bytes,6,opt,name=mode,proto3" json:"mode,omitempty"`                               // optional: "hybrid" or "dense"; empty uses rag.search.mode
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -305,9 +306,19 @@ func (x *SearchRequest) GetTags() []string {
 	return nil
 }
 
+func (x *SearchRequest) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
 type SearchResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Hits          []*SearchHit           `protobuf:"bytes,1,rep,name=hits,proto3" json:"hits,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Hits  []*SearchHit           `protobuf:"bytes,1,rep,name=hits,proto3" json:"hits,omitempty"`
+	// fallback says why a configured hybrid search answered by meaning only;
+	// empty when the search ran as asked.
+	Fallback      string `protobuf:"bytes,2,opt,name=fallback,proto3" json:"fallback,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -349,6 +360,13 @@ func (x *SearchResponse) GetHits() []*SearchHit {
 	return nil
 }
 
+func (x *SearchResponse) GetFallback() string {
+	if x != nil {
+		return x.Fallback
+	}
+	return ""
+}
+
 type SearchHit struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
@@ -357,6 +375,8 @@ type SearchHit struct {
 	Score         float32                `protobuf:"fixed32,4,opt,name=score,proto3" json:"score,omitempty"`
 	Scope         string                 `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`
 	Tags          []string               `protobuf:"bytes,6,rep,name=tags,proto3" json:"tags,omitempty"`
+	KeywordScore  float32                `protobuf:"fixed32,7,opt,name=keyword_score,json=keywordScore,proto3" json:"keyword_score,omitempty"` // BM25 score; 0 when keyword search did not find it
+	Exact         bool                   `protobuf:"varint,8,opt,name=exact,proto3" json:"exact,omitempty"`                                    // contains, verbatim, a code identifier from the query
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -431,6 +451,20 @@ func (x *SearchHit) GetTags() []string {
 		return x.Tags
 	}
 	return nil
+}
+
+func (x *SearchHit) GetKeywordScore() float32 {
+	if x != nil {
+		return x.KeywordScore
+	}
+	return 0
+}
+
+func (x *SearchHit) GetExact() bool {
+	if x != nil {
+		return x.Exact
+	}
+	return false
 }
 
 type ListSourcesRequest struct {
@@ -2111,16 +2145,18 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x05scope\x18\x04 \x01(\tR\x05scope\x12\x12\n" +
 	"\x04tags\x18\x05 \x03(\tR\x04tags\"(\n" +
 	"\x0eIngestResponse\x12\x16\n" +
-	"\x06chunks\x18\x01 \x01(\x05R\x06chunks\"\x85\x01\n" +
+	"\x06chunks\x18\x01 \x01(\x05R\x06chunks\"\x99\x01\n" +
 	"\rSearchRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12\x13\n" +
 	"\x05top_k\x18\x02 \x01(\x05R\x04topK\x12\x14\n" +
 	"\x05scope\x18\x03 \x01(\tR\x05scope\x12\x1f\n" +
 	"\vsource_type\x18\x04 \x01(\tR\n" +
 	"sourceType\x12\x12\n" +
-	"\x04tags\x18\x05 \x03(\tR\x04tags\"9\n" +
+	"\x04tags\x18\x05 \x03(\tR\x04tags\x12\x12\n" +
+	"\x04mode\x18\x06 \x01(\tR\x04mode\"U\n" +
 	"\x0eSearchResponse\x12'\n" +
-	"\x04hits\x18\x01 \x03(\v2\x13.orchd.v1.SearchHitR\x04hits\"\x9f\x01\n" +
+	"\x04hits\x18\x01 \x03(\v2\x13.orchd.v1.SearchHitR\x04hits\x12\x1a\n" +
+	"\bfallback\x18\x02 \x01(\tR\bfallback\"\xda\x01\n" +
 	"\tSearchHit\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x1d\n" +
 	"\n" +
@@ -2129,7 +2165,9 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"sourceType\x12\x14\n" +
 	"\x05score\x18\x04 \x01(\x02R\x05score\x12\x14\n" +
 	"\x05scope\x18\x05 \x01(\tR\x05scope\x12\x12\n" +
-	"\x04tags\x18\x06 \x03(\tR\x04tags\"\x80\x01\n" +
+	"\x04tags\x18\x06 \x03(\tR\x04tags\x12#\n" +
+	"\rkeyword_score\x18\a \x01(\x02R\fkeywordScore\x12\x14\n" +
+	"\x05exact\x18\b \x01(\bR\x05exact\"\x80\x01\n" +
 	"\x12ListSourcesRequest\x12\x1f\n" +
 	"\vsource_type\x18\x01 \x01(\tR\n" +
 	"sourceType\x12\x14\n" +

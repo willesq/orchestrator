@@ -57,6 +57,15 @@ type Service struct {
 	StateDir string
 	// BM25 weights the sparse vectors a hybrid collection stores.
 	BM25 bm25.Params
+	// SearchMode is ModeHybrid or ModeDense (rag.search.mode).
+	SearchMode string
+	// RRFK is reciprocal rank fusion's constant (rag.search.rrf_k).
+	RRFK int
+	// KeywordWeight scales the keyword list's share of the fusion
+	// (rag.search.keyword_weight); 1 weighs both lists alike.
+	KeywordWeight float64
+
+	fallbackLog rateLog
 	// chunkTokens and overlap size chunks in model tokens.
 	chunkTokens int
 	overlap     int
@@ -69,7 +78,7 @@ type Service struct {
 // tokens; chunkTokens is capped at what the model embeds.
 func NewService(emb Embedder, store *QdrantStore, chunkTokens, overlap int) *Service {
 	return &Service{emb: emb, store: store, chunkTokens: chunkTokens, overlap: overlap, MarkdownSections: true,
-		BM25: bm25.DefaultParams}
+		BM25: bm25.DefaultParams, SearchMode: ModeHybrid, RRFK: 60, KeywordWeight: 1}
 }
 
 // active returns the store reads go to.
@@ -401,61 +410,6 @@ func (s *Service) DeleteSource(ctx context.Context, uri string) (int, error) {
 		s.shadowResult(uri, err)
 	}
 	return n, nil
-}
-
-// Hit is a search result surfaced to callers.
-type Hit struct {
-	Text       string
-	SourceURI  string
-	SourceType string
-	Scope      string
-	Tags       []string
-	Score      float32
-}
-
-// SearchOpts filters a search.
-type SearchOpts struct {
-	TopK       int
-	Scope      string
-	SourceType string
-	Tags       []string
-}
-
-// Search embeds the query and returns the top matching chunks.
-func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]Hit, error) {
-	if opts.TopK <= 0 {
-		opts.TopK = 5
-	}
-	vecs, err := s.emb.Embed(ctx, []string{query})
-	if err != nil {
-		return nil, err
-	}
-	if len(vecs) == 0 {
-		return nil, nil
-	}
-	must := map[string]string{}
-	if opts.Scope != "" {
-		must["scope"] = opts.Scope
-	}
-	if opts.SourceType != "" {
-		must["source_type"] = opts.SourceType
-	}
-	raw, err := s.active().Search(ctx, vecs[0], opts.TopK, must, opts.Tags)
-	if err != nil {
-		return nil, err
-	}
-	hits := make([]Hit, 0, len(raw))
-	for _, r := range raw {
-		hits = append(hits, Hit{
-			Text:       str(r.Payload["text"]),
-			SourceURI:  str(r.Payload["source_uri"]),
-			SourceType: str(r.Payload["source_type"]),
-			Scope:      str(r.Payload["scope"]),
-			Tags:       strSlice(r.Payload["tags"]),
-			Score:      r.Score,
-		})
-	}
-	return hits, nil
 }
 
 // pointID is a deterministic UUIDv5 so re-ingesting a source overwrites prior chunks.

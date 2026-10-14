@@ -588,6 +588,7 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 		scope      string
 		sourceType string
 		tags       []string
+		mode       string
 	)
 	cmd := &cobra.Command{
 		Use:   "search <query>",
@@ -611,9 +612,13 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 				Scope:      scope,
 				SourceType: sourceType,
 				Tags:       tags,
+				Mode:       mode,
 			})
 			if err != nil {
 				return err
+			}
+			if f := resp.GetFallback(); f != "" {
+				fmt.Fprintf(c.ErrOrStderr(), "note: %s\n", f)
 			}
 			hits := resp.GetHits()
 			if len(hits) == 0 {
@@ -625,8 +630,15 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 				if len(text) > 200 {
 					text = text[:200] + "…"
 				}
-				fmt.Fprintf(c.OutOrStdout(), "%d. [%.3f] %s (%s)\n   %s\n",
-					i+1, h.GetScore(), h.GetSourceUri(), h.GetSourceType(), text)
+				match := ""
+				switch {
+				case h.GetExact():
+					match = " exact"
+				case h.GetKeywordScore() > 0:
+					match = " keyword"
+				}
+				fmt.Fprintf(c.OutOrStdout(), "%d. [%.3f%s] %s (%s)\n   %s\n",
+					i+1, h.GetScore(), match, h.GetSourceUri(), h.GetSourceType(), text)
 			}
 			return nil
 		},
@@ -635,5 +647,6 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringVar(&scope, "scope", "", "filter by scope")
 	cmd.Flags().StringVar(&sourceType, "type", "", "filter by source type")
 	cmd.Flags().StringSliceVar(&tags, "tag", nil, "filter: any of these tags")
+	cmd.Flags().StringVar(&mode, "mode", "", "hybrid (keyword + semantic) or dense; default rag.search.mode")
 	return cmd
 }

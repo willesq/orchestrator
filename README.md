@@ -474,7 +474,41 @@ orch rag migrate-hybrid --rollback      # switch back to the backup; then `orch 
   - Text is rebuilt from what was stored. Overlaps and repeated headings are removed and
     formatting is kept, but re-ingesting from the original source is always the most
     faithful.
-  - Searching still uses the dense vectors alone; hybrid ranking comes next.
+
+### Hybrid search
+
+On a hybrid collection, search runs a semantic search and a BM25 keyword search side by side
+and merges them with **reciprocal rank fusion**: each list adds `1/(k + rank)` for every chunk
+it holds. A chunk both searches find rises to the top, and one only exact words find still
+places.
+
+```sh
+orch search "where is sync_meta kept"            # hybrid; hits marked "exact" or "keyword"
+orch search --mode dense "where is sync_meta kept"
+orch rag eval --mode dense --save dense          # A/B on your golden set
+orch rag eval --mode hybrid --compare dense
+```
+
+- **Settings:** `rag.search.mode` is `hybrid` (default) or `dense`. `rag.search.rrf_k`
+  (default 60) is the fusion constant; larger values flatten the advantage of each list's top
+  ranks. `rag.search.keyword_weight` (default 1) scales the keyword list's share: below 1
+  favors meaning, above 1 favors exact words.
+- **No source floods the keyword results.** Each source offers at most two chunks to the
+  keyword list before fusion, so a document repeating a rare term cannot crowd out the rest.
+- **Scores keep their meaning.** Every hit reports its cosine similarity, computed from its
+  stored vector when only keyword search found it, so the auto-RAG floors
+  (`hooks.auto_rag.min_score`, `min_score_statement`) mean the same in both modes.
+- **Exact identifiers lower the floor, not remove it.** Auto-RAG also injects one hit per
+  prompt that clears half the floor when it contains, as a whole token, a code identifier the
+  prompt names: camelCase, snake_case, a dotted name such as `queue.worker.verify.repos`, or a
+  path such as `internal/testsupport`. Hyphenated words, times, numbers, versions,
+  abbreviations (`e.g`), word pairs (`and/or`), domains (`github.com`) and bare file names
+  (`config.yaml`) do not count. A keyword match alone
+  does not pass.
+- **Fallback is visible.** When `rag.search.mode` is hybrid but the collection has no keyword
+  index yet, or keyword search fails, search answers by meaning alone and says so (`orch
+  search` prints a note; `orch rag eval` stops rather than score the wrong mode). An explicit
+  `--mode hybrid` fails instead of falling back.
 
 ## Build from source
 

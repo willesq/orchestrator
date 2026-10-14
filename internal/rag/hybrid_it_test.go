@@ -104,6 +104,22 @@ func TestIntegrationHybridMigration(t *testing.T) {
 		t.Fatalf("keyword search = %+v", out.Result.Points)
 	}
 	fmt.Printf("keyword top hit %s score %.3f of %d\n", out.Result.Points[0].Payload["source_uri"], out.Result.Points[0].Score, len(out.Result.Points))
+	// Through the service: every text embeds the same, so meaning cannot tell
+	// the documents apart, and the identifier must be found by keyword.
+	hits, note, err := svc.Search(ctx, "where is sync_meta kept", SearchOpts{TopK: 3})
+	if err != nil {
+		t.Fatalf("hybrid search: %v", err)
+	}
+	if note != "" {
+		t.Fatalf("hybrid search fell back: %s", note)
+	}
+	if len(hits) == 0 || hits[0].SourceURI != "repo://w/SYNC.md" || !hits[0].Exact || hits[0].Keyword <= 0 {
+		t.Fatalf("hybrid hits = %+v", hits)
+	}
+	if dense, _, err := svc.Search(ctx, "where is sync_meta kept", SearchOpts{TopK: 3, Mode: ModeDense}); err != nil || len(dense) != 3 {
+		t.Fatalf("dense hits = %+v, %v", dense, err)
+	}
+	fmt.Printf("hybrid top hit %s (cosine %.3f, keyword %.3f, exact %v)\n", hits[0].SourceURI, hits[0].Score, hits[0].Keyword, hits[0].Exact)
 	// The backup is untouched.
 	if n, _ := NewQdrantStore(base, "orchestrator", "").Count(ctx, nil); n != 3 {
 		t.Fatalf("backup holds %d", n)

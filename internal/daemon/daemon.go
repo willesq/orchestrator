@@ -47,7 +47,7 @@ import (
 // ragService is the subset of *rag.Service the gRPC handlers depend on.
 type ragService interface {
 	IngestText(ctx context.Context, text string, m rag.Meta) (int, error)
-	Search(ctx context.Context, query string, opts rag.SearchOpts) ([]rag.Hit, error)
+	Search(ctx context.Context, query string, opts rag.SearchOpts) ([]rag.Hit, string, error)
 	ListSources(ctx context.Context, opts rag.ListSourcesOpts) ([]rag.SourceSummary, int, int, error)
 	DeleteSource(ctx context.Context, uri string) (int, error)
 }
@@ -118,25 +118,40 @@ func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchd
 	return &orchdv1.IngestResponse{Chunks: count32(n)}, nil
 }
 
+// maxSearchTopK bounds how many hits one search may ask for.
+const maxSearchTopK = 100
+
 func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchdv1.SearchResponse, error) {
-	hits, err := s.rag.Search(ctx, req.GetQuery(), rag.SearchOpts{
+	if m := req.GetMode(); m != "" && m != rag.ModeHybrid && m != rag.ModeDense {
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "search mode %q must be hybrid or dense", m)
+	}
+	if k := req.GetTopK(); k < 0 || k > maxSearchTopK {
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "top_k %d must be between 0 and %d", k, maxSearchTopK)
+	}
+	hits, fallback, err := s.rag.Search(ctx, req.GetQuery(), rag.SearchOpts{
 		TopK:       int(req.GetTopK()),
 		Scope:      req.GetScope(),
 		SourceType: req.GetSourceType(),
 		Tags:       req.GetTags(),
+		Mode:       req.GetMode(),
 	})
+	if errors.Is(err, rag.ErrHybridUnavailable) {
+		return nil, grpcstatus.Error(codes.FailedPrecondition, err.Error())
+	}
 	if err != nil {
 		return nil, err
 	}
-	out := &orchdv1.SearchResponse{Hits: make([]*orchdv1.SearchHit, 0, len(hits))}
+	out := &orchdv1.SearchResponse{Hits: make([]*orchdv1.SearchHit, 0, len(hits)), Fallback: fallback}
 	for _, h := range hits {
 		out.Hits = append(out.Hits, &orchdv1.SearchHit{
-			Text:       h.Text,
-			SourceUri:  h.SourceURI,
-			SourceType: h.SourceType,
-			Score:      h.Score,
-			Scope:      h.Scope,
-			Tags:       h.Tags,
+			Text:         h.Text,
+			SourceUri:    h.SourceURI,
+			SourceType:   h.SourceType,
+			Score:        h.Score,
+			Scope:        h.Scope,
+			Tags:         h.Tags,
+			KeywordScore: h.Keyword,
+			Exact:        h.Exact,
 		})
 	}
 	return out, nil
@@ -530,6 +545,17 @@ func buildRAG(s config.Settings, qdrantURL, apiKey string) (*rag.Service, *embed
 	svc := rag.NewService(emb, qs, s.Embedder.ChunkTokens, s.Embedder.ChunkOverlapTokens)
 	svc.MarkdownSections = s.Embedder.MarkdownSections
 	svc.StateDir = filepath.Join(paths.DataDir(), "migrations")
+	if m := s.RAG.Search.Mode; m == rag.ModeHybrid || m == rag.ModeDense {
+		svc.SearchMode = m
+	} else if m != "" {
+		log.Printf("orchd: rag.search.mode %q is not hybrid or dense; using hybrid", m)
+	}
+	if s.RAG.Search.RRFK > 0 {
+		svc.RRFK = s.RAG.Search.RRFK
+	}
+	if w := s.RAG.Search.KeywordWeight; w > 0 {
+		svc.KeywordWeight = w
+	}
 	return svc, emb
 }
 

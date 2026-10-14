@@ -23,9 +23,9 @@ func evalRunsDir() string    { return filepath.Join(paths.DataDir(), "eval") }
 
 func newRAGEvalCmd(cf clientFactory) *cobra.Command {
 	var (
-		set, save, compare string
-		topK               int
-		asJSON             bool
+		set, save, compare, mode string
+		topK                     int
+		asJSON                   bool
 	)
 	cmd := &cobra.Command{
 		Use:   "eval",
@@ -63,10 +63,14 @@ func newRAGEvalCmd(cf clientFactory) *cobra.Command {
 				ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 				defer cancel()
 				resp, err := client.Search(ctx, &orchdv1.SearchRequest{
-					Query: cs.Query, TopK: int32(k), Scope: cs.Scope, SourceType: cs.SourceType, Tags: cs.Tags,
+					Query: cs.Query, TopK: int32(k), Scope: cs.Scope, SourceType: cs.SourceType, Tags: cs.Tags, Mode: mode,
 				})
 				if err != nil {
 					return nil, err
+				}
+				// A score for the configured mode must not quietly measure another.
+				if f := resp.GetFallback(); f != "" {
+					return nil, fmt.Errorf("search fell back: %s", f)
 				}
 				hits := make([]rageval.Hit, 0, len(resp.GetHits()))
 				for _, h := range resp.GetHits() {
@@ -98,6 +102,7 @@ func newRAGEvalCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringVar(&save, "save", "", "save this run under a name, for a later --compare")
 	cmd.Flags().StringVar(&compare, "compare", "", "compare against a saved run")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "print the report as JSON")
+	cmd.Flags().StringVar(&mode, "mode", "", "search mode to score: hybrid or dense (default rag.search.mode)")
 	cmd.AddCommand(newRAGEvalAddCmd())
 	return cmd
 }

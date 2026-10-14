@@ -147,7 +147,7 @@ func TestServiceSearch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			store, _ := qdrantStub(t, tt.result)
 			svc := NewService(tt.emb, store, 400, 60)
-			hits, err := svc.Search(context.Background(), "q", SearchOpts{Scope: "work", SourceType: "manual", Tags: []string{"go"}})
+			hits, _, err := svc.Search(context.Background(), "q", SearchOpts{Scope: "work", SourceType: "manual", Tags: []string{"go"}})
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
