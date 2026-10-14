@@ -228,6 +228,9 @@ type EmbedderSettings struct {
 	IdleUnload   string `mapstructure:"idle_unload"`
 	ChunkSize    int    `mapstructure:"chunk_size"`
 	ChunkOverlap int    `mapstructure:"chunk_overlap"`
+	// MarkdownSections chunks markdown by heading section, keeping its structure,
+	// instead of by word window.
+	MarkdownSections bool `mapstructure:"markdown_sections"`
 }
 
 // RAGSettings controls the vector store.
@@ -255,6 +258,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("embedder.idle_unload", "10m")
 	v.SetDefault("embedder.chunk_size", 400)
 	v.SetDefault("embedder.chunk_overlap", 60)
+	v.SetDefault("embedder.markdown_sections", true)
 	// Docker-free by default: orchd runs the native qdrant release binary.
 	v.SetDefault("rag.qdrant.mode", "binary")
 	v.SetDefault("rag.qdrant.url", "http://127.0.0.1:6333")

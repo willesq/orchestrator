@@ -32,11 +32,26 @@ type Service struct {
 	store     *QdrantStore
 	chunkSize int
 	overlap   int
+	// MarkdownSections chunks markdown by heading section instead of by word
+	// window (embedder.markdown_sections).
+	MarkdownSections bool
 }
 
 // NewService constructs a RAG service.
 func NewService(emb Embedder, store *QdrantStore, chunkSize, overlap int) *Service {
-	return &Service{emb: emb, store: store, chunkSize: chunkSize, overlap: overlap}
+	return &Service{emb: emb, store: store, chunkSize: chunkSize, overlap: overlap, MarkdownSections: true}
+}
+
+// split chunks text for ingestion.
+func (s *Service) split(text string) []chunk {
+	if s.MarkdownSections && isMarkdown(text) {
+		return markdownChunks(text, s.chunkSize, s.overlap)
+	}
+	var out []chunk
+	for _, c := range chunkText(text, s.chunkSize, s.overlap) {
+		out = append(out, chunk{text: c})
+	}
+	return out
 }
 
 // IngestText chunks, embeds, and upserts text. Chunks for the same source_uri
@@ -48,9 +63,13 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 	if m.SourceURI == "" {
 		return 0, fmt.Errorf("source_uri is required")
 	}
-	chunks := chunkText(text, s.chunkSize, s.overlap)
-	if len(chunks) == 0 {
+	pieces := s.split(text)
+	if len(pieces) == 0 {
 		return 0, nil
+	}
+	chunks := make([]string, len(pieces))
+	for i, p := range pieces {
+		chunks[i] = p.text
 	}
 	vecs, err := s.emb.Embed(ctx, chunks)
 	if err != nil {
@@ -65,19 +84,19 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 	}
 	points := make([]Point, len(chunks))
 	for i, c := range chunks {
-		points[i] = Point{
-			ID:     pointID(m.SourceURI, i),
-			Vector: vecs[i],
-			Payload: map[string]any{
-				"text":        c,
-				"source_uri":  m.SourceURI,
-				"source_type": m.SourceType,
-				"scope":       m.Scope,
-				"tags":        m.Tags,
-				"chunk_index": i,
-				"chunk_total": len(chunks),
-			},
+		payload := map[string]any{
+			"text":        c,
+			"source_uri":  m.SourceURI,
+			"source_type": m.SourceType,
+			"scope":       m.Scope,
+			"tags":        m.Tags,
+			"chunk_index": i,
+			"chunk_total": len(chunks),
 		}
+		if h := pieces[i].heading; h != "" {
+			payload["heading"] = h
+		}
+		points[i] = Point{ID: pointID(m.SourceURI, i), Vector: vecs[i], Payload: payload}
 	}
 	if err := s.store.Upsert(ctx, points); err != nil {
 		return 0, err

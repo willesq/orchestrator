@@ -524,7 +524,9 @@ func buildRAG(s config.Settings, qdrantURL, apiKey string) (*rag.Service, *embed
 	})
 
 	qs := rag.NewQdrantStore(qdrantURL, s.RAG.Qdrant.Collection, apiKey)
-	return rag.NewService(emb, qs, s.Embedder.ChunkSize, s.Embedder.ChunkOverlap), emb
+	svc := rag.NewService(emb, qs, s.Embedder.ChunkSize, s.Embedder.ChunkOverlap)
+	svc.MarkdownSections = s.Embedder.MarkdownSections
+	return svc, emb
 }
 
 // resolveModelDir is the embedding model directory (config override or default).
