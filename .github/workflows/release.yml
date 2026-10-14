@@ -1,5 +1,7 @@
-# Build the three cgo binaries on a native macOS arm64 runner, attach a tarball to
-# a GitHub Release, and bump the Homebrew tap formula to point at it.
+# Test on Linux (the cheapest runner), then build the three cgo binaries on a
+# native macOS arm64 runner, attach a tarball to a GitHub Release, and bump the
+# Homebrew tap formula to point at it. The build needs macOS because it links a
+# darwin static library; the tests do not.
 #
 # Triggered by pushing a version tag (e.g. `git tag v0.1.0 && git push origin v0.1.0`).
 #
@@ -18,7 +20,23 @@ env:
   TOKENIZERS_VERSION: v1.27.0
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test (pure Go, no ORT tag)
+        run: go test ./...
+
   release:
+    needs: test
     runs-on: macos-14 # Apple Silicon (arm64)
     steps:
       - uses: actions/checkout@v4
@@ -35,9 +53,6 @@ jobs:
           gh release download "$TOKENIZERS_VERSION" --repo daulet/tokenizers \
             --pattern 'libtokenizers.darwin-arm64.tar.gz' --dir /tmp
           tar xzf /tmp/libtokenizers.darwin-arm64.tar.gz -C build/lib/darwin-arm64
-
-      - name: Test (pure Go, no ORT tag)
-        run: go test ./...
 
       - name: Build binaries (cgo, -tags ORT)
         run: |
