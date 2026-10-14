@@ -236,6 +236,7 @@ func TestSessionStart(t *testing.T) {
 	}{
 		{name: "digest emitted when events present", seedEvent: true, stream: "sid", wantOut: true},
 		{name: "finished queue tasks reach new sessions", seedEvent: true, stream: "queue", wantOut: true},
+		{name: "routing proposals reach new sessions", seedEvent: true, stream: "routing", wantOut: true},
 		{name: "silent when nothing to report", seedEvent: false, wantOut: false},
 	}
 	for _, tt := range tests {

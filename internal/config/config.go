@@ -50,6 +50,18 @@ type RoutingSettings struct {
 	// MinEvidence is how many observed outcomes (ratings, PR fates, failures) a
 	// model needs on a kind before they move its rank.
 	MinEvidence int `mapstructure:"min_evidence"`
+	// Evaluate controls the routing-evaluator subsystem, which re-runs discovery
+	// and evaluation on a cadence and reports to the session digest.
+	Evaluate RoutingEvaluateSettings `mapstructure:"evaluate"`
+	// AutoApply lets the evaluator apply its proposals unattended. Off, it only
+	// proposes; pinned kinds are kept either way.
+	AutoApply bool `mapstructure:"auto_apply"`
+}
+
+// RoutingEvaluateSettings controls the routing-evaluator subsystem.
+type RoutingEvaluateSettings struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	Interval string `mapstructure:"interval"`
 }
 
 // DocsSettings controls the GitHub code-docs subsystem (orch docs).
@@ -279,6 +291,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("routing.providers", []string{"claude-code", "codex"})
 	v.SetDefault("routing.ranks", 3)
 	v.SetDefault("routing.min_evidence", 5)
+	v.SetDefault("routing.evaluate.enabled", true)
+	v.SetDefault("routing.evaluate.interval", "168h")
+	v.SetDefault("routing.auto_apply", false)
 	// Read-only commands a queued session needs constantly; granting them up front
 	// keeps a dontAsk run from failing on its first `git status`.
 	v.SetDefault("queue.worker.allowed_tools.claude", []string{

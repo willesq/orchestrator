@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/models"
@@ -22,7 +23,10 @@ var modelAdapters = func() []models.Adapter {
 			bin = s.Queue.Worker.ClaudeBin
 		}
 	}
-	return models.Adapters(bin)
+	// Resolved as the worker resolves it, so the CLI and orchd agree on whether
+	// Claude Code is available.
+	home, _ := os.UserHomeDir()
+	return models.Adapters(agentrun.FindClaude(bin, home))
 }
 
 func openModelRegistry() (*models.Registry, func(), error) {

@@ -99,13 +99,13 @@ func sessionStart(p Payload, out io.Writer) error {
 	var lines []string
 	// "queue" carries finished background tasks, so their results reach the next
 	// session without anyone polling the ledger.
-	for _, stream := range []string{p.SessionID, "pr-babysitter", taskEventStream} {
+	for _, stream := range []string{p.SessionID, "pr-babysitter", "routing", taskEventStream} {
 		if stream == "" {
 			continue
 		}
 		evs, _ := events.Read(paths.EventsDir(), stream)
 		for i := max(0, len(evs)-5); i < len(evs); i++ {
-			lines = append(lines, fmt.Sprintf("- [%s] %s: %s", evs[i].Kind, evs[i].Source, evs[i].Summary))
+			lines = append(lines, eventLine(evs[i]))
 		}
 	}
 	if entries, err := os.ReadDir(paths.PendingIngestDir()); err == nil && len(entries) > 0 {

@@ -196,7 +196,8 @@ orch restart subsystems          # every subsystem, in place (no process bounce)
 ```
 
 Subsystems are `qdrant` (binary mode only), `workflow-worker`, `sources-scheduler`,
-`docs-scheduler`, `pr-babysitter`, and `self-update`. Every restart is idempotent: a
+`docs-scheduler`, `pr-babysitter`, `routing-evaluator`, `session-summarizer`, and
+`self-update`. Every restart is idempotent: a
 component that is already stopped is simply started.
 
 ### Picking up a new build
@@ -366,6 +367,13 @@ orch dispatch --model claude-code/opus "<task>"
   on a kind, its success rate is blended with the tier prior, weighted by how many there are.
   `orch routing evaluate` then proposes the change. Evidence reaches dispatch only through a
   table you apply; with no table route, dispatch ranks by declared capability alone.
+- **A weekly evaluator proposes.** The `routing-evaluator` subsystem runs model discovery and
+  evaluation every `routing.evaluate.interval` (default `168h`; `routing.evaluate.enabled`
+  turns it off). It reports new models and pending changes in the next session's digest,
+  once per distinct proposal, naming each change. It applies nothing unless
+  `routing.auto_apply` is `true`. Even then it holds back any run whose discovery failed and
+  any change that drops a route, keeps pinned kinds, always reports what it applied, and
+  `orch routing rollback` undoes it. Discovery still never enables a model.
 - **Routes are fixed at dispatch.** orchd resolves the model when the task is queued and
   records it on the task (`orch task <id>` shows it), so a resumed task keeps its model. The
   worker runs Claude Code only. A route to another provider falls to the next rank. A kind

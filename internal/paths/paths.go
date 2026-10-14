@@ -57,6 +57,11 @@ func PendingIngestDir() string { return filepath.Join(DataDir(), "pending_ingest
 // PRStateFile is the PR-babysitter's cached state.
 func PRStateFile() string { return filepath.Join(DataDir(), "pr_babysitter_state.json") }
 
+// RoutingEvaluatorStateFile records the routing evaluator's last run and report.
+func RoutingEvaluatorStateFile() string {
+	return filepath.Join(DataDir(), "routing_evaluator_state.json")
+}
+
 // SocketPath is the absolute path to the orchd Unix-domain socket.
 func SocketPath() string {
 	if s := os.Getenv("ORCH_SOCKET"); s != "" {

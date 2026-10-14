@@ -138,7 +138,7 @@ func TestRunSupervisesAndRestartsSubsystems(t *testing.T) {
 			// self-update is always present: Run watches whatever binary the
 			// process was launched from, which under `go test` is the test binary.
 			name:     "live orchd reports and restarts its subsystems",
-			wantUnit: []string{UnitWorker, UnitSources, UnitDocs, UnitSummaries, UnitSelfUpdate},
+			wantUnit: []string{UnitWorker, UnitSources, UnitDocs, UnitRoutingEvaluator, UnitSummaries, UnitSelfUpdate},
 		},
 	}
 	for _, tt := range tests {
@@ -234,6 +234,9 @@ func seedRunEnv(t *testing.T, sockName string) string {
 	dir := t.TempDir()
 	t.Setenv("ORCH_DATA_DIR", filepath.Join(dir, "data"))
 	t.Setenv("ORCH_CONFIG_DIR", filepath.Join(dir, "cfg"))
+	// The routing evaluator runs model discovery, which reads harness caches
+	// under HOME; a live daemon in a test must never see the developer's own.
+	t.Setenv("HOME", filepath.Join(dir, "home"))
 	t.Setenv("ORCH_RAG_QDRANT_MODE", "external")
 	// Unix socket paths are capped near 104 chars on macOS; t.TempDir() plus the
 	// test name blows past that, so use a short directory of the test's own. A
@@ -281,6 +284,7 @@ func TestRunSocketIsOwnerOnly(t *testing.T) {
 			dir := t.TempDir()
 			t.Setenv("ORCH_DATA_DIR", filepath.Join(dir, "data"))
 			t.Setenv("ORCH_CONFIG_DIR", filepath.Join(dir, "cfg"))
+			t.Setenv("HOME", filepath.Join(dir, "home")) // discovery must not see the developer's caches
 			t.Setenv("ORCH_RAG_QDRANT_MODE", "external")
 			t.Setenv("ORCH_PR_BABYSITTER_ENABLED", "false")
 			// Keep the path short enough for macOS's Unix socket limit and unique
