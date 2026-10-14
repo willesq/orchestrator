@@ -252,7 +252,8 @@ type SearchSettings struct {
 	// advantage of the top ranks of each list.
 	RRFK int `mapstructure:"rrf_k"`
 	// KeywordWeight scales the keyword list's share of the fusion: below 1
-	// favors meaning, above 1 favors exact words.
+	// favors meaning, above 1 favors exact words. The default, 0.5, kept the
+	// identifier wins without costing prose recall on the golden-set eval.
 	KeywordWeight float64 `mapstructure:"keyword_weight"`
 }
 
@@ -289,7 +290,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("rag.qdrant.backup_collection", "")
 	v.SetDefault("rag.search.mode", "hybrid")
 	v.SetDefault("rag.search.rrf_k", 60)
-	v.SetDefault("rag.search.keyword_weight", 1.0)
+	v.SetDefault("rag.search.keyword_weight", 0.5)
 	v.SetDefault("rag.qdrant.api_key_env", "QDRANT_API_KEY")
 	// Pinned to match the Python system's engine for storage compatibility at cutover.
 	v.SetDefault("rag.qdrant.version", "v1.17.1")

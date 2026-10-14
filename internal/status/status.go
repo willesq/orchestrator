@@ -113,7 +113,7 @@ func Collect(ctx context.Context, d Deps) Report {
 	r.Sections = []Section{
 		serviceSection(d, resp, orchdErr),
 		subsystemSection(d, resp, orchdErr),
-		vectorSection(ctx, d),
+		vectorSection(ctx, d, resp),
 		dataSection(ctx, d),
 		harnessSection(d),
 		preconditionSection(d),
@@ -294,7 +294,7 @@ func subsystemSection(d Deps, resp *orchdv1.StatusResponse, err error) Section {
 	return sec
 }
 
-func vectorSection(ctx context.Context, d Deps) Section {
+func vectorSection(ctx context.Context, d Deps, resp *orchdv1.StatusResponse) Section {
 	q := d.Settings.RAG.Qdrant
 	sec := Section{Title: "vector store"}
 
@@ -319,6 +319,13 @@ func vectorSection(ctx context.Context, d Deps) Section {
 		sec.Lines = append(sec.Lines, Line{
 			Name: "storage", Value: humanBytes(d.DirSize(dir)), Detail: dir,
 		})
+	}
+	if m := resp.GetMigration(); m != nil {
+		detail := fmt.Sprintf("%d/%d sources, %d chunks", m.GetSourcesDone(), m.GetSourcesTotal(), m.GetChunks())
+		if at := m.GetStartedAt(); at > 0 {
+			detail += ", started " + humanAgo(d.Now(), time.Unix(at, 0))
+		}
+		sec.Lines = append(sec.Lines, Line{Name: "migration", Value: "copying to " + m.GetTarget(), Level: LevelOK, Detail: detail})
 	}
 	return sec
 }

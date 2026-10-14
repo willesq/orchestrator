@@ -12,16 +12,22 @@ type fakeRunner struct {
 	embedErr  error
 	destroyed bool
 	calls     int
+	sizes     []int
+	short     bool // return one vector too few
 }
 
 func (f *fakeRunner) embed(texts []string) ([][]float32, error) {
 	f.calls++
+	f.sizes = append(f.sizes, len(texts))
 	if f.embedErr != nil {
 		return nil, f.embedErr
 	}
 	out := make([][]float32, len(texts))
 	for i := range texts {
 		out[i] = f.vec
+	}
+	if f.short {
+		out = out[1:]
 	}
 	return out, nil
 }
@@ -240,3 +246,50 @@ func TestCloseIsIdempotent(t *testing.T) {
 // on a healthy run and is deliberately generous: only a real hang reaches it,
 // never a slow or loaded machine.
 const waitLimit = 30 * time.Second
+
+func TestEmbedBatches(t *testing.T) {
+	r := &fakeRunner{vec: []float32{1, 0}}
+	e := newWithLoader(Config{Dimension: 2}, loaderReturning(r, 2, nil))
+	defer e.Close()
+	texts := make([]string, 2*maxBatch+5)
+	vecs, err := e.Embed(context.Background(), texts)
+	if err != nil || len(vecs) != len(texts) {
+		t.Fatalf("got %d vectors, err %v", len(vecs), err)
+	}
+	if len(r.sizes) != 3 || r.sizes[0] != maxBatch || r.sizes[1] != maxBatch || r.sizes[2] != 5 {
+		t.Fatalf("batch sizes = %v", r.sizes)
+	}
+}
+
+func TestEmbedStopsWhenCanceled(t *testing.T) {
+	r := &fakeRunner{vec: []float32{1, 0}}
+	e := newWithLoader(Config{Dimension: 2}, loaderReturning(r, 2, nil))
+	defer e.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// The first batch always runs; a canceled caller stops before the next.
+	if _, err := e.Embed(ctx, make([]string, maxBatch+1)); !errors.Is(err, context.Canceled) || r.calls != 1 {
+		t.Fatalf("err = %v after %d calls", err, r.calls)
+	}
+}
+
+func TestEmbedRejectsShortResults(t *testing.T) {
+	r := &fakeRunner{vec: []float32{1, 0}, short: true}
+	e := newWithLoader(Config{Dimension: 2}, loaderReturning(r, 2, nil))
+	defer e.Close()
+	if _, err := e.Embed(context.Background(), []string{"a", "b"}); err == nil {
+		t.Fatal("a short result was accepted")
+	}
+}
+
+func TestEmbedAfterCloseDoesNotReload(t *testing.T) {
+	loads := 0
+	e := newWithLoader(Config{Dimension: 2}, func(Config) (runner, int, error) {
+		loads++
+		return &fakeRunner{vec: []float32{1, 0}}, 2, nil
+	})
+	e.Close()
+	if _, err := e.Embed(context.Background(), []string{"a"}); !errors.Is(err, ErrClosed) || loads != 0 {
+		t.Fatalf("err = %v after %d loads", err, loads)
+	}
+}

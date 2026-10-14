@@ -33,6 +33,7 @@ const (
 	Orchd_RecommendModel_FullMethodName   = "/orchd.v1.Orchd/RecommendModel"
 	Orchd_RateTask_FullMethodName         = "/orchd.v1.Orchd/RateTask"
 	Orchd_MigrateHybrid_FullMethodName    = "/orchd.v1.Orchd/MigrateHybrid"
+	Orchd_DropBackup_FullMethodName       = "/orchd.v1.Orchd/DropBackup"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -77,6 +78,8 @@ type OrchdClient interface {
 	// BM25 keyword vectors), re-chunking and re-embedding its text, and switches
 	// to it. Without apply it only plans. The old collection is kept.
 	MigrateHybrid(ctx context.Context, in *MigrateHybridRequest, opts ...grpc.CallOption) (*MigrateHybridResponse, error)
+	// DropBackup deletes the backup collection a migration kept; plans unless apply.
+	DropBackup(ctx context.Context, in *DropBackupRequest, opts ...grpc.CallOption) (*DropBackupResponse, error)
 }
 
 type orchdClient struct {
@@ -227,6 +230,16 @@ func (c *orchdClient) MigrateHybrid(ctx context.Context, in *MigrateHybridReques
 	return out, nil
 }
 
+func (c *orchdClient) DropBackup(ctx context.Context, in *DropBackupRequest, opts ...grpc.CallOption) (*DropBackupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DropBackupResponse)
+	err := c.cc.Invoke(ctx, Orchd_DropBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrchdServer is the server API for Orchd service.
 // All implementations must embed UnimplementedOrchdServer
 // for forward compatibility.
@@ -269,6 +282,8 @@ type OrchdServer interface {
 	// BM25 keyword vectors), re-chunking and re-embedding its text, and switches
 	// to it. Without apply it only plans. The old collection is kept.
 	MigrateHybrid(context.Context, *MigrateHybridRequest) (*MigrateHybridResponse, error)
+	// DropBackup deletes the backup collection a migration kept; plans unless apply.
+	DropBackup(context.Context, *DropBackupRequest) (*DropBackupResponse, error)
 	mustEmbedUnimplementedOrchdServer()
 }
 
@@ -320,6 +335,9 @@ func (UnimplementedOrchdServer) RateTask(context.Context, *RateTaskRequest) (*Ra
 }
 func (UnimplementedOrchdServer) MigrateHybrid(context.Context, *MigrateHybridRequest) (*MigrateHybridResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MigrateHybrid not implemented")
+}
+func (UnimplementedOrchdServer) DropBackup(context.Context, *DropBackupRequest) (*DropBackupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DropBackup not implemented")
 }
 func (UnimplementedOrchdServer) mustEmbedUnimplementedOrchdServer() {}
 func (UnimplementedOrchdServer) testEmbeddedByValue()               {}
@@ -594,6 +612,24 @@ func _Orchd_MigrateHybrid_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_DropBackup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DropBackupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).DropBackup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_DropBackup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).DropBackup(ctx, req.(*DropBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Orchd_ServiceDesc is the grpc.ServiceDesc for Orchd service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -656,6 +692,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MigrateHybrid",
 			Handler:    _Orchd_MigrateHybrid_Handler,
+		},
+		{
+			MethodName: "DropBackup",
+			Handler:    _Orchd_DropBackup_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

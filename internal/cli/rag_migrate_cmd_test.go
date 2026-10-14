@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -114,5 +115,40 @@ func TestRollbackWithoutBackup(t *testing.T) {
 	if _, err := run(factory(&fakeClient{}, nil), "", "rag", "migrate-hybrid", "--rollback"); err == nil ||
 		!strings.Contains(err.Error(), "no backup") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestRAGMigrateDropBackup(t *testing.T) {
+	t.Setenv(agentrun.TaskIDEnv, "")
+	orig := fakeDropBackup
+	t.Cleanup(func() { fakeDropBackup = orig })
+	var got []bool
+	fakeDropBackup = func(req *orchdv1.DropBackupRequest) (*orchdv1.DropBackupResponse, error) {
+		got = append(got, req.GetApply())
+		return &orchdv1.DropBackupResponse{Collection: "orchestrator", Points: 6675, Dropped: req.GetApply()}, nil
+	}
+	cf := factory(&fakeClient{}, nil)
+	out, err := run(cf, "", "rag", "migrate-hybrid", "--drop-backup")
+	if err != nil || !strings.Contains(out, "would drop the backup collection orchestrator (6675 points)") || !strings.Contains(out, "plan only") {
+		t.Fatalf("plan: %q, %v", out, err)
+	}
+	out, err = run(cf, "", "rag", "migrate-hybrid", "--drop-backup", "--apply")
+	if err != nil || !strings.Contains(out, "dropped the backup collection orchestrator") {
+		t.Fatalf("apply: %q, %v", out, err)
+	}
+	if len(got) != 2 || got[0] || !got[1] {
+		t.Fatalf("requests = %v", got)
+	}
+	if _, err := run(cf, "", "rag", "migrate-hybrid", "--drop-backup", "--target", "x"); err == nil {
+		t.Fatal("--drop-backup took --target")
+	}
+	fakeDropBackup = func(*orchdv1.DropBackupRequest) (*orchdv1.DropBackupResponse, error) {
+		return nil, errors.New("orchd is using it")
+	}
+	if _, err := run(cf, "", "rag", "migrate-hybrid", "--drop-backup", "--apply"); err == nil || !strings.Contains(err.Error(), "using") {
+		t.Fatalf("refused err = %v", err)
+	}
+	if _, err := run(factory(nil, errors.New("no daemon")), "", "rag", "migrate-hybrid", "--drop-backup"); err == nil {
+		t.Fatal("no daemon gave no error")
 	}
 }

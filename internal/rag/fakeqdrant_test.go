@@ -18,6 +18,10 @@ type fakeQdrant struct {
 	collections map[string]*fakeCollection
 	// failUpserts makes the next n upserts into a collection fail.
 	failUpserts map[string]int
+	// upserts counts write requests per collection.
+	upserts map[string]int
+	// failUpsertNo fails the write request with this number (1-based).
+	failUpsertNo map[string]int
 }
 
 type fakeCollection struct {
@@ -33,7 +37,7 @@ type fakePoint struct {
 
 func newFakeQdrant(t *testing.T) (*fakeQdrant, string) {
 	t.Helper()
-	f := &fakeQdrant{collections: map[string]*fakeCollection{}, failUpserts: map[string]int{}}
+	f := &fakeQdrant{collections: map[string]*fakeCollection{}, failUpserts: map[string]int{}, upserts: map[string]int{}, failUpsertNo: map[string]int{}}
 	srv := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(srv.Close)
 	return f, srv.URL
@@ -85,11 +89,19 @@ func (f *fakeQdrant) serve(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"result": true})
 	case c == nil:
 		collectionJSON(w, LayoutUnknown)
+	case action == "" && r.Method == http.MethodDelete:
+		delete(f.collections, name)
+		writeJSON(w, map[string]any{"result": true})
 	case action == "index" && r.Method == http.MethodPut:
 		writeJSON(w, map[string]any{"result": map[string]any{"status": "acknowledged"}})
 	case action == "points" && r.Method == http.MethodPut:
 		if f.failUpserts[name] > 0 {
 			f.failUpserts[name]--
+			http.Error(w, "injected failure", http.StatusInternalServerError)
+			return
+		}
+		f.upserts[name]++
+		if f.failUpsertNo[name] == f.upserts[name] {
 			http.Error(w, "injected failure", http.StatusInternalServerError)
 			return
 		}
