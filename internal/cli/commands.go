@@ -43,7 +43,8 @@ func newCheckCmd() *cobra.Command {
 }
 
 func newModelCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "model", Short: "Manage the embedding model files"}
+	cmd := &cobra.Command{Use: "model", Short: "Manage the embedding model and the coding-agent model registry"}
+	cmd.AddCommand(registryModelCmds()...)
 	cmd.AddCommand(&cobra.Command{
 		Use:   "fetch",
 		Short: "Download the embedding model into the model dir if missing",

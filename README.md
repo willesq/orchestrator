@@ -297,6 +297,34 @@ Behavior to know about:
   status but never its result text. That text was written by an unattended agent, possibly
   steered by an untrusted repository, so it is read deliberately with `queue_read`.
 
+## Model registry
+
+orch keeps a registry of the models each coding-agent CLI on this machine can run. It is
+the groundwork for routing queued work to a model by task kind.
+
+```sh
+orch model refresh                       # discover from each CLI's local cache
+orch model list [--provider codex] [--state enabled]
+orch model enable codex/gpt-6.1-sol      # the only way a discovered model becomes routable
+orch model disable claude-code/fable
+orch model tier codex/gpt-6.1-sol fast   # frontier | balanced | fast; refresh keeps it
+orch provider list | enable codex | disable codex
+```
+
+- **Discovery is local and credential-free.** Claude Code contributes its built-in aliases
+  (`opus`, `sonnet`, `haiku`, `fable`, which follow each family's latest release) plus any
+  extra models it lists in `~/.claude.json` under `additionalModelOptionsCache`. Codex
+  contributes `~/.codex/models_cache.json`, including each model's reasoning-effort levels.
+  Only those model fields are read; the account data beside them never is.
+- **Discovery never enables.** A discovered model is `discovered` and inert until you enable
+  it, so a vendor shipping a model cannot redirect your work. The compiled-in Claude aliases
+  start enabled. A model its vendor marks hidden is listed but cannot be enabled.
+- **Your choices stand.** Refresh updates names, descriptions and effort levels but keeps the
+  state and tier you set. `claude-code` starts enabled because the worker already runs it;
+  `codex` starts disabled. A provider whose CLI is not on PATH reads `unavailable` until it
+  is found again, and then returns to the state it had before. A model you enabled that its
+  vendor later hides stays enabled but is not routed to while hidden.
+
 ## Build from source
 
 The ORT embedder is cgo: it links a prebuilt `libtokenizers.a` at build time and loads
@@ -320,5 +348,5 @@ the multi-harness install adapters, and the packaging story.
 
 ## Command surface
 
-`orch check | config | daemon | dispatch | ingest | install | mcp | model | ping | prs |
+`orch check | config | daemon | dispatch | ingest | install | mcp | model | ping | provider | prs |
 qdrant | repo | restart | search | source | status | version`
