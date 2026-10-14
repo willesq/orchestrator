@@ -38,6 +38,10 @@ service Orchd {
   rpc RecommendModel(RecommendModelRequest) returns (RecommendModelResponse);
   // RateTask records the user's verdict on a finished task, evidence for routing.
   rpc RateTask(RateTaskRequest) returns (RateTaskResponse);
+  // MigrateHybrid copies the RAG collection into a new hybrid one (dense plus
+  // BM25 keyword vectors), re-chunking and re-embedding its text, and switches
+  // to it. Without apply it only plans. The old collection is kept.
+  rpc MigrateHybrid(MigrateHybridRequest) returns (MigrateHybridResponse);
 }
 
 message PingRequest {}
@@ -235,3 +239,24 @@ message RateTaskRequest {
 }
 
 message RateTaskResponse {}
+
+message MigrateHybridRequest {
+  string target = 1; // empty: <active collection>-hybrid
+  bool apply = 2;    // false plans only
+}
+
+message MigrateHybridResponse {
+  string from = 1;
+  string to = 2;
+  int32 sources = 3;
+  int32 old_chunks = 4;
+  int32 new_chunks = 5;
+  int32 skipped = 6;
+  bool applied = 7;
+  int32 malformed = 8;  // sources whose chunk order could not be trusted; kept in stored order
+  int32 orphans = 9;    // chunks with no source URI, which cannot be migrated
+  int32 removed = 10;   // sources the target held that no longer exist
+  int32 oversize = 11;  // sources too large to migrate; an applied run will not switch while any remain
+  repeated string problems = 12; // some affected sources, and why
+  string error = 13;             // set when the run failed or refused to switch; the counts are still reported
+}

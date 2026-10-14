@@ -437,6 +437,45 @@ orch rag eval --compare before     # deltas, plus which queries got better or wo
   (`--top-k`, default 10) and MRR. `--json` prints the report for scripts.
 - **Saved runs** live in the data dir under `eval/`.
 
+## Hybrid (keyword + semantic) storage
+
+New installs create a **hybrid** collection. Each chunk is stored with its dense embedding
+and a BM25 keyword vector, and Qdrant applies inverse document frequency at query time.
+Keywords are tokenized for code: `queue.worker.codex.enabled` or `ProcessActivity` match
+themselves and their parts. An existing store keeps working as it is until you migrate it:
+
+```sh
+orch rag migrate-hybrid                 # plan: sources, chunks now, chunks after re-chunking
+orch rag eval --save before             # optional: a baseline to compare against
+orch rag migrate-hybrid --apply         # copy into <collection>-hybrid and switch to it
+orch rag migrate-hybrid --rollback      # switch back to the backup; then `orch restart`
+```
+
+- **Copy and switch.** The migration copies every source into a new collection,
+  re-chunked to token size and re-embedded. orchd records the switch in config
+  (`rag.qdrant.collection`, and the backup's name in `rag.qdrant.backup_collection`) before
+  it switches, in one atomic write. If that write fails, searches stay where they were. This is the one place orchd itself writes `config.yaml`; avoid running `orch config set` at the same moment.
+- **Nothing is lost mid-migration.**
+  - New ingests and deletions reach both collections while the copy runs.
+  - Each source is copied as it is at that moment, under the same per-source lock live
+    writes take.
+  - A source a live write already put in the new collection is left as it is.
+- **Re-running.** An interrupted run can be run again. It overwrites rather than duplicates,
+  and removes sources forgotten since. A collection that already finished a migration is
+  refused as a target, because re-copying into it would revert writes made since.
+- **The old collection is never modified.** Writes made after the switch exist only in the
+  new collection, so a rollback loses those.
+- **The plan reports problems:**
+  - sources whose stored chunk order can't be trusted, kept in stored order;
+  - chunks with no source, which can't be migrated;
+  - sources too large to migrate. These block the switch until they are forgotten or
+    re-ingested.
+- **Limitations:**
+  - Text is rebuilt from what was stored. Overlaps and repeated headings are removed and
+    formatting is kept, but re-ingesting from the original source is always the most
+    faithful.
+  - Searching still uses the dense vectors alone; hybrid ranking comes next.
+
 ## Build from source
 
 The ORT embedder is cgo: it links a prebuilt `libtokenizers.a` at build time and loads

@@ -6,10 +6,15 @@ package rag
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"log"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
+
+	"github.com/willesq/orchestrator/internal/bm25"
 )
 
 // Embedder embeds texts into vectors (implemented by internal/embed.Embedder).
@@ -28,8 +33,30 @@ type Meta struct {
 
 // Service ties the embedder and vector store together.
 type Service struct {
-	emb   Embedder
-	store *QdrantStore
+	emb Embedder
+	// gate is held shared by every write for its whole duration. A migration
+	// takes it exclusively, briefly, to add or remove its shadow store, so no
+	// write is ever half on one side of that change.
+	gate sync.RWMutex
+	// stripes serialize writes to one source: a live write and the migration's
+	// copy of the same source never interleave, while other sources proceed.
+	stripes [64]sync.Mutex
+	// mu guards the fields below: a migration adds a shadow that writes also
+	// reach, then swaps it in as the active store.
+	mu     sync.RWMutex
+	store  *QdrantStore
+	shadow *QdrantStore
+	// touched records sources a live write has fully written to the shadow
+	// during a migration; the copy leaves those alone.
+	touched map[string]bool
+	// dirty records sources a write left inconsistent between the two stores
+	// during a migration; the migration copies them again before it switches.
+	dirty map[string]bool
+	// StateDir holds migration markers, so an interrupted migration can be
+	// told apart from a finished one.
+	StateDir string
+	// BM25 weights the sparse vectors a hybrid collection stores.
+	BM25 bm25.Params
 	// chunkTokens and overlap size chunks in model tokens.
 	chunkTokens int
 	overlap     int
@@ -41,8 +68,93 @@ type Service struct {
 // NewService constructs a RAG service. chunkTokens and overlap are in model
 // tokens; chunkTokens is capped at what the model embeds.
 func NewService(emb Embedder, store *QdrantStore, chunkTokens, overlap int) *Service {
-	return &Service{emb: emb, store: store, chunkTokens: chunkTokens, overlap: overlap, MarkdownSections: true}
+	return &Service{emb: emb, store: store, chunkTokens: chunkTokens, overlap: overlap, MarkdownSections: true,
+		BM25: bm25.DefaultParams}
 }
+
+// active returns the store reads go to.
+func (s *Service) active() *QdrantStore {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.store
+}
+
+// stores returns the active store and, during a migration, its shadow.
+func (s *Service) stores() (active, shadow *QdrantStore) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.store, s.shadow
+}
+
+func (s *Service) stripe(uri string) *sync.Mutex {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(uri))
+	return &s.stripes[h.Sum32()%uint32(len(s.stripes))]
+}
+
+// lockSource takes the write gate (shared) and the source's stripe; the
+// returned function releases both.
+func (s *Service) lockSource(uri string) func() {
+	s.gate.RLock()
+	mu := s.stripe(uri)
+	mu.Lock()
+	return func() { mu.Unlock(); s.gate.RUnlock() }
+}
+
+// shadowResult records how a write fared against the shadow: only a source
+// fully written there is left alone by the copy, and one that is not is marked
+// dirty, so the migration copies it again from the active store before it
+// switches.
+func (s *Service) shadowResult(uri string, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.touched == nil {
+		return
+	}
+	if err != nil {
+		delete(s.touched, uri)
+		s.dirty[uri] = true
+		log.Printf("rag: %s reached the active store but not the migration target (%v); it is copied again before the switch", uri, err)
+		return
+	}
+	s.touched[uri] = true
+	delete(s.dirty, uri)
+}
+
+// markDirty records that a write left a source possibly inconsistent between
+// the stores (it failed part-way on the active one) during a migration.
+func (s *Service) markDirty(uri string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.dirty != nil {
+		delete(s.touched, uri)
+		s.dirty[uri] = true
+	}
+}
+
+// takeDirty returns and clears the sources needing another copy.
+func (s *Service) takeDirty() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, 0, len(s.dirty))
+	for u := range s.dirty {
+		out = append(out, u)
+	}
+	for _, u := range out {
+		delete(s.dirty, u)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (s *Service) dirtyCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.dirty)
+}
+
+// ActiveCollection names the collection searches use.
+func (s *Service) ActiveCollection() string { return s.active().Collection() }
 
 // split chunks text for ingestion, counting with the embedder's own tokenizer
 // when it has one.
@@ -80,15 +192,35 @@ func (s *Service) split(text string) []chunk {
 // IngestText chunks, embeds, and upserts text. Chunks for the same source_uri
 // are replaced via deterministic point IDs (uri#index).
 func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, error) {
+	points, dim, err := s.prepare(ctx, text, m)
+	if err != nil || len(points) == 0 {
+		return 0, err
+	}
+	defer s.lockSource(m.SourceURI)()
+	active, shadow := s.stores()
+	if err := writePoints(ctx, active, dim, m.SourceURI, points); err != nil {
+		if shadow != nil {
+			s.markDirty(m.SourceURI)
+		}
+		return 0, err
+	}
+	if shadow != nil {
+		s.shadowResult(m.SourceURI, writePoints(ctx, shadow, dim, m.SourceURI, points))
+	}
+	return len(points), nil
+}
+
+// prepare chunks, embeds and weights text into points, without writing them.
+func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, int, error) {
 	// Required here, not just in the callers: the prune below deletes by
 	// source_uri, so an empty one would match every URI-less point in the store
 	// and destroy it. The layer that performs a delete validates its own input.
 	if m.SourceURI == "" {
-		return 0, fmt.Errorf("source_uri is required")
+		return nil, 0, fmt.Errorf("source_uri is required")
 	}
 	pieces := s.split(text)
 	if len(pieces) == 0 {
-		return 0, nil
+		return nil, 0, nil
 	}
 	chunks := make([]string, len(pieces))
 	for i, p := range pieces {
@@ -96,14 +228,11 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 	}
 	vecs, err := s.emb.Embed(ctx, chunks)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 	dim, err := s.emb.Dimension(ctx)
 	if err != nil {
-		return 0, err
-	}
-	if err := s.store.EnsureCollection(ctx, dim); err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 	points := make([]Point, len(chunks))
 	for i, c := range chunks {
@@ -119,31 +248,37 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 		if h := pieces[i].heading; h != "" {
 			payload["heading"] = h
 		}
-		points[i] = Point{ID: pointID(m.SourceURI, i), Vector: vecs[i], Payload: payload}
+		points[i] = Point{ID: pointID(m.SourceURI, i), Vector: vecs[i], Sparse: bm25.Document(c, s.BM25), Payload: payload}
 	}
-	if err := s.store.Upsert(ctx, points); err != nil {
-		return 0, err
+	return points, dim, nil
+}
+
+// writePoints stores one source's chunks in st and prunes what is left of an
+// older, longer version of it.
+func writePoints(ctx context.Context, st *QdrantStore, dim int, uri string, points []Point) error {
+	if err := st.EnsureCollection(ctx, dim); err != nil {
+		return err
+	}
+	if err := st.Upsert(ctx, points); err != nil {
+		return err
 	}
 	// Re-ingesting a source that shrank would otherwise leave the previous
 	// version's surplus chunks behind: point IDs are uri#index, so indices past
 	// the new length are never overwritten and would keep matching searches.
-	if err := s.pruneChunksFrom(ctx, m.SourceURI, len(chunks)); err != nil {
-		return 0, err
-	}
-	return len(chunks), nil
+	return pruneChunksFrom(ctx, st, uri, len(points))
 }
 
 // pruneChunksFrom deletes chunks of a source at index >= from.
-func (s *Service) pruneChunksFrom(ctx context.Context, uri string, from int) error {
+func pruneChunksFrom(ctx context.Context, st *QdrantStore, uri string, from int) error {
 	filter := map[string]any{"must": []any{
 		map[string]any{"key": "source_uri", "match": map[string]any{"value": uri}},
 		map[string]any{"key": "chunk_index", "range": map[string]any{"gte": from}},
 	}}
-	n, err := s.store.Count(ctx, filter)
+	n, err := st.Count(ctx, filter)
 	if err != nil || n == 0 {
 		return err
 	}
-	return s.store.DeleteByFilter(ctx, filter)
+	return st.DeleteByFilter(ctx, filter)
 }
 
 // maxScrollPages bounds a full-collection scan at 10M points (1000 per page).
@@ -196,7 +331,7 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 		if page >= maxScrollPages {
 			return nil, 0, 0, fmt.Errorf("list sources: exceeded %d pages; aborting scan", maxScrollPages)
 		}
-		pts, next, err := s.store.Scroll(ctx, filter, fields, 1000, offset)
+		pts, next, err := s.active().Scroll(ctx, filter, fields, 1000, offset)
 		if err != nil {
 			return nil, 0, 0, err
 		}
@@ -251,16 +386,19 @@ func (s *Service) DeleteSource(ctx context.Context, uri string) (int, error) {
 	if uri == "" {
 		return 0, fmt.Errorf("source_uri is required")
 	}
-	filter := EqFilter("source_uri", uri)
-	n, err := s.store.Count(ctx, filter)
+	defer s.lockSource(uri)()
+	active, shadow := s.stores()
+	n, err := deleteSource(ctx, active, uri)
 	if err != nil {
+		if shadow != nil {
+			s.markDirty(uri)
+		}
 		return 0, err
 	}
-	if n == 0 {
-		return 0, nil
-	}
-	if err := s.store.DeleteByFilter(ctx, filter); err != nil {
-		return 0, err
+	if shadow != nil {
+		// The shadow may hold the source even when the active store does not.
+		_, err := deleteSource(ctx, shadow, uri)
+		s.shadowResult(uri, err)
 	}
 	return n, nil
 }
@@ -302,7 +440,7 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	if opts.SourceType != "" {
 		must["source_type"] = opts.SourceType
 	}
-	raw, err := s.store.Search(ctx, vecs[0], opts.TopK, must, opts.Tags)
+	raw, err := s.active().Search(ctx, vecs[0], opts.TopK, must, opts.Tags)
 	if err != nil {
 		return nil, err
 	}
@@ -342,4 +480,14 @@ func strSlice(v any) []string {
 		}
 	}
 	return out
+}
+
+// deleteSource removes a source's chunks from st, returning how many there were.
+func deleteSource(ctx context.Context, st *QdrantStore, uri string) (int, error) {
+	filter := EqFilter("source_uri", uri)
+	n, err := st.Count(ctx, filter)
+	if err != nil || n == 0 {
+		return 0, err
+	}
+	return n, st.DeleteByFilter(ctx, filter)
 }

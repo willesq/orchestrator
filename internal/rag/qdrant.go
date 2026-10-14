@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/willesq/orchestrator/internal/bm25"
 )
 
 // errCollectionMissing distinguishes "the collection has not been created yet"
@@ -24,6 +27,39 @@ type QdrantStore struct {
 	collection string
 	apiKey     string
 	http       *http.Client
+
+	// layout caches the collection's vector layout once it is known.
+	mu     sync.Mutex
+	layout Layout
+}
+
+// Layout is how a collection stores its vectors.
+type Layout int
+
+const (
+	// LayoutUnknown means the collection has not been inspected (or is missing).
+	LayoutUnknown Layout = iota
+	// LayoutDense is the original layout: one unnamed dense vector.
+	LayoutDense
+	// LayoutHybrid holds a named dense vector and a named BM25 sparse vector,
+	// whose inverse document frequency Qdrant applies at query time.
+	LayoutHybrid
+)
+
+// Vector names in a hybrid collection.
+const (
+	denseName  = "dense"
+	sparseName = "bm25"
+)
+
+func (l Layout) String() string {
+	switch l {
+	case LayoutDense:
+		return "dense"
+	case LayoutHybrid:
+		return "hybrid"
+	}
+	return "unknown"
 }
 
 // NewQdrantStore constructs a store. apiKey may be empty for an unauthenticated
@@ -75,34 +111,129 @@ func (q *QdrantStore) do(ctx context.Context, method, path string, body, out any
 	return nil
 }
 
-// EnsureCollection creates the collection with the given vector size (Cosine
-// distance) if it does not already exist.
+// Collection names the collection the store reads and writes.
+func (q *QdrantStore) Collection() string { return q.collection }
+
+// WithCollection returns a store for another collection on the same server.
+func (q *QdrantStore) WithCollection(name string) *QdrantStore {
+	return &QdrantStore{baseURL: q.baseURL, collection: name, apiKey: q.apiKey, http: q.http}
+}
+
+type collectionInfo struct {
+	Result struct {
+		Config struct {
+			Params struct {
+				Vectors       json.RawMessage            `json:"vectors"`
+				SparseVectors map[string]json.RawMessage `json:"sparse_vectors"`
+			} `json:"params"`
+		} `json:"config"`
+	} `json:"result"`
+}
+
+// Layout reports the collection's vector layout, or LayoutUnknown when it
+// does not exist yet. A known layout is cached: it never changes in place.
+func (q *QdrantStore) Layout(ctx context.Context) (Layout, error) {
+	q.mu.Lock()
+	known := q.layout
+	q.mu.Unlock()
+	if known != LayoutUnknown {
+		return known, nil
+	}
+	var info collectionInfo
+	err := q.do(ctx, http.MethodGet, q.path(""), nil, &info)
+	if errors.Is(err, errCollectionMissing) {
+		return LayoutUnknown, nil
+	}
+	if err != nil {
+		return LayoutUnknown, err
+	}
+	l := LayoutDense
+	var named map[string]json.RawMessage
+	if json.Unmarshal(info.Result.Config.Params.Vectors, &named) == nil {
+		if _, ok := named[denseName]; ok {
+			if _, ok := info.Result.Config.Params.SparseVectors[sparseName]; ok {
+				l = LayoutHybrid
+			}
+		}
+	}
+	q.mu.Lock()
+	q.layout = l
+	q.mu.Unlock()
+	return l, nil
+}
+
+// EnsureCollection creates the collection if it does not already exist. A new
+// collection is hybrid; an existing one is left as it is.
 func (q *QdrantStore) EnsureCollection(ctx context.Context, dim int) error {
-	err := q.do(ctx, http.MethodGet, q.path(""), nil, nil)
-	if err == nil {
-		return nil // exists
+	l, err := q.Layout(ctx)
+	if err != nil || l != LayoutUnknown {
+		return err
 	}
 	body := map[string]any{
-		"vectors": map[string]any{"size": dim, "distance": "Cosine"},
+		"vectors":        map[string]any{denseName: map[string]any{"size": dim, "distance": "Cosine"}},
+		"sparse_vectors": map[string]any{sparseName: map[string]any{"modifier": "idf"}},
 	}
-	return q.do(ctx, http.MethodPut, q.path(""), body, nil)
+	if err := q.do(ctx, http.MethodPut, q.path(""), body, nil); err != nil {
+		return err
+	}
+	// Reads and deletes filter by source, so index it.
+	if err := q.do(ctx, http.MethodPut, q.path("/index")+"?wait=true",
+		map[string]any{"field_name": "source_uri", "field_schema": "keyword"}, nil); err != nil {
+		return err
+	}
+	q.mu.Lock()
+	q.layout = LayoutHybrid
+	q.mu.Unlock()
+	return nil
 }
 
-// Point is a single vector + payload to upsert.
+// Point is a single chunk to upsert: its dense vector, its BM25 sparse vector
+// (used only by a hybrid collection), and its payload.
 type Point struct {
-	ID      string         `json:"id"`
-	Vector  []float32      `json:"vector"`
-	Payload map[string]any `json:"payload"`
+	ID      string
+	Vector  []float32
+	Sparse  bm25.Vector
+	Payload map[string]any
 }
 
-// Upsert writes points to the collection (create-or-replace by id).
+// Upsert writes points to the collection (create-or-replace by id), in the
+// collection's own layout.
 func (q *QdrantStore) Upsert(ctx context.Context, points []Point) error {
 	if len(points) == 0 {
 		return nil
 	}
-	body := map[string]any{"points": points}
-	return q.do(ctx, http.MethodPut,
-		q.path("/points")+"?wait=true", body, nil)
+	l, err := q.Layout(ctx)
+	if err != nil {
+		return err
+	}
+	wire := make([]map[string]any, len(points))
+	for i, p := range points {
+		var vec any = p.Vector
+		if l == LayoutHybrid {
+			named := map[string]any{denseName: p.Vector}
+			// An empty sparse vector is left out: the point is still found by
+			// meaning, just not by keyword.
+			if !p.Sparse.IsEmpty() {
+				named[sparseName] = p.Sparse
+			}
+			vec = named
+		}
+		wire[i] = map[string]any{"id": p.ID, "vector": vec, "payload": p.Payload}
+	}
+	err = q.do(ctx, http.MethodPut,
+		q.path("/points")+"?wait=true", map[string]any{"points": wire}, nil)
+	q.forgetIfMissing(err)
+	return err
+}
+
+// forgetIfMissing drops the cached layout when the collection has gone, so
+// the next write recreates it rather than failing until a restart.
+func (q *QdrantStore) forgetIfMissing(err error) {
+	if errors.Is(err, errCollectionMissing) {
+		q.mu.Lock()
+		q.layout = LayoutUnknown
+		q.mu.Unlock()
+	}
 }
 
 // SearchHit is a single search result.
@@ -119,8 +250,16 @@ type searchResponse struct {
 // in must (all must match) and anyTags (payload.tags contains any).
 func (q *QdrantStore) Search(ctx context.Context, vector []float32, topK int, must map[string]string, anyTags []string) ([]SearchHit, error) {
 	filter := buildFilter(must, anyTags)
+	l, err := q.Layout(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var vec any = vector
+	if l == LayoutHybrid {
+		vec = map[string]any{"name": denseName, "vector": vector}
+	}
 	body := map[string]any{
-		"vector":       vector,
+		"vector":       vec,
 		"limit":        topK,
 		"with_payload": true,
 	}
@@ -130,6 +269,7 @@ func (q *QdrantStore) Search(ctx context.Context, vector []float32, topK int, mu
 	var resp searchResponse
 	if err := q.do(ctx, http.MethodPost,
 		q.path("/points/search"), body, &resp); err != nil {
+		q.forgetIfMissing(err)
 		return nil, err
 	}
 	return resp.Result, nil

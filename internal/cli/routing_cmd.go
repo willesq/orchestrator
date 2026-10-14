@@ -34,9 +34,14 @@ func newRoutingCmd() *cobra.Command {
 // which model every later task runs on, so a session that an untrusted
 // repository may be steering must not change them; reading them is fine.
 func operatorOnly(cmd *cobra.Command) *cobra.Command {
+	return operatorOnlyMsg("queue tasks cannot change model routing", cmd)
+}
+
+// operatorOnlyMsg refuses cmd inside a queued task with the given reason.
+func operatorOnlyMsg(reason string, cmd *cobra.Command) *cobra.Command {
 	cmd.PreRunE = func(*cobra.Command, []string) error {
 		if id := os.Getenv(agentrun.TaskIDEnv); id != "" {
-			return fmt.Errorf("queue tasks cannot change model routing (running as %s)", id)
+			return fmt.Errorf("%s (running as %s)", reason, id)
 		}
 		return nil
 	}

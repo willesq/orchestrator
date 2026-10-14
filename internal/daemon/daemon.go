@@ -92,6 +92,8 @@ type server struct {
 	routerErr error
 	// rater records task verdicts; nil when unavailable.
 	rater taskRater
+	// migrator moves the RAG store to the hybrid layout; nil when unavailable.
+	migrator hybridMigrator
 	// codexEnabled lets dispatch route to Codex, which the worker then runs.
 	codexEnabled bool
 }
@@ -473,6 +475,7 @@ func Run(ctx context.Context) error {
 		summaries:     summaries,
 		router:        router, routerErr: routerErr,
 		rater:        dbRater{db: store},
+		migrator:     svc,
 		codexEnabled: codexRunnable(s.Queue.Worker),
 	})
 	go func() {
@@ -526,6 +529,7 @@ func buildRAG(s config.Settings, qdrantURL, apiKey string) (*rag.Service, *embed
 	qs := rag.NewQdrantStore(qdrantURL, s.RAG.Qdrant.Collection, apiKey)
 	svc := rag.NewService(emb, qs, s.Embedder.ChunkTokens, s.Embedder.ChunkOverlapTokens)
 	svc.MarkdownSections = s.Embedder.MarkdownSections
+	svc.StateDir = filepath.Join(paths.DataDir(), "migrations")
 	return svc, emb
 }
 

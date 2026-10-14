@@ -1901,6 +1901,198 @@ func (*RateTaskResponse) Descriptor() ([]byte, []int) {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{30}
 }
 
+type MigrateHybridRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Target        string                 `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"` // empty: <active collection>-hybrid
+	Apply         bool                   `protobuf:"varint,2,opt,name=apply,proto3" json:"apply,omitempty"`  // false plans only
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MigrateHybridRequest) Reset() {
+	*x = MigrateHybridRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MigrateHybridRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MigrateHybridRequest) ProtoMessage() {}
+
+func (x *MigrateHybridRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MigrateHybridRequest.ProtoReflect.Descriptor instead.
+func (*MigrateHybridRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *MigrateHybridRequest) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *MigrateHybridRequest) GetApply() bool {
+	if x != nil {
+		return x.Apply
+	}
+	return false
+}
+
+type MigrateHybridResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	From          string                 `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
+	To            string                 `protobuf:"bytes,2,opt,name=to,proto3" json:"to,omitempty"`
+	Sources       int32                  `protobuf:"varint,3,opt,name=sources,proto3" json:"sources,omitempty"`
+	OldChunks     int32                  `protobuf:"varint,4,opt,name=old_chunks,json=oldChunks,proto3" json:"old_chunks,omitempty"`
+	NewChunks     int32                  `protobuf:"varint,5,opt,name=new_chunks,json=newChunks,proto3" json:"new_chunks,omitempty"`
+	Skipped       int32                  `protobuf:"varint,6,opt,name=skipped,proto3" json:"skipped,omitempty"`
+	Applied       bool                   `protobuf:"varint,7,opt,name=applied,proto3" json:"applied,omitempty"`
+	Malformed     int32                  `protobuf:"varint,8,opt,name=malformed,proto3" json:"malformed,omitempty"` // sources whose chunk order could not be trusted; kept in stored order
+	Orphans       int32                  `protobuf:"varint,9,opt,name=orphans,proto3" json:"orphans,omitempty"`     // chunks with no source URI, which cannot be migrated
+	Removed       int32                  `protobuf:"varint,10,opt,name=removed,proto3" json:"removed,omitempty"`    // sources the target held that no longer exist
+	Oversize      int32                  `protobuf:"varint,11,opt,name=oversize,proto3" json:"oversize,omitempty"`  // sources too large to migrate; an applied run will not switch while any remain
+	Problems      []string               `protobuf:"bytes,12,rep,name=problems,proto3" json:"problems,omitempty"`   // some affected sources, and why
+	Error         string                 `protobuf:"bytes,13,opt,name=error,proto3" json:"error,omitempty"`         // set when the run failed or refused to switch; the counts are still reported
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MigrateHybridResponse) Reset() {
+	*x = MigrateHybridResponse{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MigrateHybridResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MigrateHybridResponse) ProtoMessage() {}
+
+func (x *MigrateHybridResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MigrateHybridResponse.ProtoReflect.Descriptor instead.
+func (*MigrateHybridResponse) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *MigrateHybridResponse) GetFrom() string {
+	if x != nil {
+		return x.From
+	}
+	return ""
+}
+
+func (x *MigrateHybridResponse) GetTo() string {
+	if x != nil {
+		return x.To
+	}
+	return ""
+}
+
+func (x *MigrateHybridResponse) GetSources() int32 {
+	if x != nil {
+		return x.Sources
+	}
+	return 0
+}
+
+func (x *MigrateHybridResponse) GetOldChunks() int32 {
+	if x != nil {
+		return x.OldChunks
+	}
+	return 0
+}
+
+func (x *MigrateHybridResponse) GetNewChunks() int32 {
+	if x != nil {
+		return x.NewChunks
+	}
+	return 0
+}
+
+func (x *MigrateHybridResponse) GetSkipped() int32 {
+	if x != nil {
+		return x.Skipped
+	}
+	return 0
+}
+
+func (x *MigrateHybridResponse) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+func (x *MigrateHybridResponse) GetMalformed() int32 {
+	if x != nil {
+		return x.Malformed
+	}
+	return 0
+}
+
+func (x *MigrateHybridResponse) GetOrphans() int32 {
+	if x != nil {
+		return x.Orphans
+	}
+	return 0
+}
+
+func (x *MigrateHybridResponse) GetRemoved() int32 {
+	if x != nil {
+		return x.Removed
+	}
+	return 0
+}
+
+func (x *MigrateHybridResponse) GetOversize() int32 {
+	if x != nil {
+		return x.Oversize
+	}
+	return 0
+}
+
+func (x *MigrateHybridResponse) GetProblems() []string {
+	if x != nil {
+		return x.Problems
+	}
+	return nil
+}
+
+func (x *MigrateHybridResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 var File_internal_rpc_orchdv1_orchd_proto protoreflect.FileDescriptor
 
 const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
@@ -2054,7 +2246,27 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x0fRateTaskRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06rating\x18\x02 \x01(\tR\x06rating\"\x12\n" +
-	"\x10RateTaskResponse2\x8c\a\n" +
+	"\x10RateTaskResponse\"D\n" +
+	"\x14MigrateHybridRequest\x12\x16\n" +
+	"\x06target\x18\x01 \x01(\tR\x06target\x12\x14\n" +
+	"\x05apply\x18\x02 \x01(\bR\x05apply\"\xe7\x02\n" +
+	"\x15MigrateHybridResponse\x12\x12\n" +
+	"\x04from\x18\x01 \x01(\tR\x04from\x12\x0e\n" +
+	"\x02to\x18\x02 \x01(\tR\x02to\x12\x18\n" +
+	"\asources\x18\x03 \x01(\x05R\asources\x12\x1d\n" +
+	"\n" +
+	"old_chunks\x18\x04 \x01(\x05R\toldChunks\x12\x1d\n" +
+	"\n" +
+	"new_chunks\x18\x05 \x01(\x05R\tnewChunks\x12\x18\n" +
+	"\askipped\x18\x06 \x01(\x05R\askipped\x12\x18\n" +
+	"\aapplied\x18\a \x01(\bR\aapplied\x12\x1c\n" +
+	"\tmalformed\x18\b \x01(\x05R\tmalformed\x12\x18\n" +
+	"\aorphans\x18\t \x01(\x05R\aorphans\x12\x18\n" +
+	"\aremoved\x18\n" +
+	" \x01(\x05R\aremoved\x12\x1a\n" +
+	"\boversize\x18\v \x01(\x05R\boversize\x12\x1a\n" +
+	"\bproblems\x18\f \x03(\tR\bproblems\x12\x14\n" +
+	"\x05error\x18\r \x01(\tR\x05error2\xde\a\n" +
 	"\x05Orchd\x125\n" +
 	"\x04Ping\x12\x15.orchd.v1.PingRequest\x1a\x16.orchd.v1.PingResponse\x12;\n" +
 	"\x06Ingest\x12\x17.orchd.v1.IngestRequest\x1a\x18.orchd.v1.IngestResponse\x12;\n" +
@@ -2068,7 +2280,8 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\aRestart\x12\x18.orchd.v1.RestartRequest\x1a\x19.orchd.v1.RestartResponse\x12Y\n" +
 	"\x10SummarizeSession\x12!.orchd.v1.SummarizeSessionRequest\x1a\".orchd.v1.SummarizeSessionResponse\x12S\n" +
 	"\x0eRecommendModel\x12\x1f.orchd.v1.RecommendModelRequest\x1a .orchd.v1.RecommendModelResponse\x12A\n" +
-	"\bRateTask\x12\x19.orchd.v1.RateTaskRequest\x1a\x1a.orchd.v1.RateTaskResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
+	"\bRateTask\x12\x19.orchd.v1.RateTaskRequest\x1a\x1a.orchd.v1.RateTaskResponse\x12P\n" +
+	"\rMigrateHybrid\x12\x1e.orchd.v1.MigrateHybridRequest\x1a\x1f.orchd.v1.MigrateHybridResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
 
 var (
 	file_internal_rpc_orchdv1_orchd_proto_rawDescOnce sync.Once
@@ -2082,7 +2295,7 @@ func file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP() []byte {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescData
 }
 
-var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*PingRequest)(nil),              // 0: orchd.v1.PingRequest
 	(*PingResponse)(nil),             // 1: orchd.v1.PingResponse
@@ -2115,6 +2328,8 @@ var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*RecommendModelResponse)(nil),   // 28: orchd.v1.RecommendModelResponse
 	(*RateTaskRequest)(nil),          // 29: orchd.v1.RateTaskRequest
 	(*RateTaskResponse)(nil),         // 30: orchd.v1.RateTaskResponse
+	(*MigrateHybridRequest)(nil),     // 31: orchd.v1.MigrateHybridRequest
+	(*MigrateHybridResponse)(nil),    // 32: orchd.v1.MigrateHybridResponse
 }
 var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	6,  // 0: orchd.v1.SearchResponse.hits:type_name -> orchd.v1.SearchHit
@@ -2138,21 +2353,23 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	24, // 18: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
 	27, // 19: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
 	29, // 20: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
-	1,  // 21: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
-	3,  // 22: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
-	5,  // 23: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
-	8,  // 24: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
-	11, // 25: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
-	13, // 26: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
-	15, // 27: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
-	17, // 28: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
-	20, // 29: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
-	23, // 30: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
-	25, // 31: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
-	28, // 32: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
-	30, // 33: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
-	21, // [21:34] is the sub-list for method output_type
-	8,  // [8:21] is the sub-list for method input_type
+	31, // 21: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
+	1,  // 22: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
+	3,  // 23: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
+	5,  // 24: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
+	8,  // 25: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
+	11, // 26: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
+	13, // 27: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
+	15, // 28: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
+	17, // 29: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
+	20, // 30: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
+	23, // 31: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
+	25, // 32: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
+	28, // 33: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
+	30, // 34: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
+	32, // 35: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
+	22, // [22:36] is the sub-list for method output_type
+	8,  // [8:22] is the sub-list for method input_type
 	8,  // [8:8] is the sub-list for extension type_name
 	8,  // [8:8] is the sub-list for extension extendee
 	0,  // [0:8] is the sub-list for field type_name
@@ -2169,7 +2386,7 @@ func file_internal_rpc_orchdv1_orchd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_rpc_orchdv1_orchd_proto_rawDesc), len(file_internal_rpc_orchdv1_orchd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   31,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
