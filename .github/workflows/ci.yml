@@ -1,11 +1,12 @@
-# PR/branch checks: pure-Go tests + per-file coverage gate, plus a real cgo (-tags
+# Branch checks: pure-Go tests + per-file coverage gate, plus a real cgo (-tags
 # ORT) build to validate the release recipe on a GitHub macOS runner. No release.
+# Push only: every branch is pushed here, and a PR shows its head commit's push
+# run, so a pull_request trigger would run the same suite twice.
 name: ci
 
 on:
   push:
     branches: ["**"]
-  pull_request:
 
 permissions:
   contents: read
