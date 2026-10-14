@@ -172,6 +172,8 @@ func (s *Service) MigrateHybrid(ctx context.Context, target string, apply bool, 
 		return rep, err
 	}
 	live := make(map[string]bool, len(uris))
+	progress := s.trackProgress(target, len(uris))
+	defer progress.finish()
 	for _, uri := range uris {
 		live[uri] = true
 		if err := ctx.Err(); err != nil {
@@ -180,6 +182,7 @@ func (s *Service) MigrateHybrid(ctx context.Context, target string, apply bool, 
 		if err := s.copySource(ctx, src, dst, dim, uri, &rep); err != nil {
 			return rep, fmt.Errorf("%s: %w", uri, err)
 		}
+		progress.step(rep.NewChunks)
 	}
 	if err := s.removeStale(ctx, src, dst, live, &rep); err != nil {
 		return rep, err

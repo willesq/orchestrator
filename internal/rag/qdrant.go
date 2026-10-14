@@ -196,8 +196,27 @@ type Point struct {
 	Payload map[string]any
 }
 
+// upsertBatch is how many points one write request carries. A large source in
+// a single request could pass Qdrant's 32 MiB request-body limit.
+const upsertBatch = 256
+
+// PartialWriteError reports an upsert that failed after some of its batches
+// were written: the collection holds the first Written points of the new
+// version alongside whatever the rest replaced.
+type PartialWriteError struct {
+	Written, Total int
+	Err            error
+}
+
+func (e *PartialWriteError) Error() string {
+	return fmt.Sprintf("wrote %d of %d points before failing: %v", e.Written, e.Total, e.Err)
+}
+
+func (e *PartialWriteError) Unwrap() error { return e.Err }
+
 // Upsert writes points to the collection (create-or-replace by id), in the
-// collection's own layout.
+// collection's own layout, upsertBatch points per request. A failure after
+// the first batch is a *PartialWriteError.
 func (q *QdrantStore) Upsert(ctx context.Context, points []Point) error {
 	if len(points) == 0 {
 		return nil
@@ -206,6 +225,18 @@ func (q *QdrantStore) Upsert(ctx context.Context, points []Point) error {
 	if err != nil {
 		return err
 	}
+	for start := 0; start < len(points); start += upsertBatch {
+		if err := q.upsertLayout(ctx, l, points[start:min(start+upsertBatch, len(points))]); err != nil {
+			if start > 0 {
+				return &PartialWriteError{Written: start, Total: len(points), Err: err}
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+func (q *QdrantStore) upsertLayout(ctx context.Context, l Layout, points []Point) error {
 	wire := make([]map[string]any, len(points))
 	for i, p := range points {
 		var vec any = p.Vector
@@ -220,7 +251,7 @@ func (q *QdrantStore) Upsert(ctx context.Context, points []Point) error {
 		}
 		wire[i] = map[string]any{"id": p.ID, "vector": vec, "payload": p.Payload}
 	}
-	err = q.do(ctx, http.MethodPut,
+	err := q.do(ctx, http.MethodPut,
 		q.path("/points")+"?wait=true", map[string]any{"points": wire}, nil)
 	q.forgetIfMissing(err)
 	return err
@@ -378,6 +409,15 @@ func (q *QdrantStore) Count(ctx context.Context, filter map[string]any) (int, er
 		return 0, err
 	}
 	return resp.Result.Count, nil
+}
+
+// DeleteCollection removes the whole collection and every point in it.
+func (q *QdrantStore) DeleteCollection(ctx context.Context) error {
+	err := q.do(ctx, http.MethodDelete, q.path(""), nil, nil)
+	q.mu.Lock()
+	q.layout = LayoutUnknown
+	q.mu.Unlock()
+	return err
 }
 
 // DeleteByFilter removes every point matching the filter.

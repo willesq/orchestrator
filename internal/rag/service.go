@@ -5,12 +5,14 @@ package rag
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 
@@ -62,10 +64,13 @@ type Service struct {
 	// RRFK is reciprocal rank fusion's constant (rag.search.rrf_k).
 	RRFK int
 	// KeywordWeight scales the keyword list's share of the fusion
-	// (rag.search.keyword_weight); 1 weighs both lists alike.
+	// (rag.search.keyword_weight); 1 weighs both lists alike, the default 0.5
+	// gives meaning the larger share.
 	KeywordWeight float64
 
 	fallbackLog rateLog
+	// progress is set while a migration copies sources.
+	progress atomic.Pointer[MigrationProgress]
 	// chunkTokens and overlap size chunks in model tokens.
 	chunkTokens int
 	overlap     int
@@ -78,7 +83,7 @@ type Service struct {
 // tokens; chunkTokens is capped at what the model embeds.
 func NewService(emb Embedder, store *QdrantStore, chunkTokens, overlap int) *Service {
 	return &Service{emb: emb, store: store, chunkTokens: chunkTokens, overlap: overlap, MarkdownSections: true,
-		BM25: bm25.DefaultParams, SearchMode: ModeHybrid, RRFK: 60, KeywordWeight: 1}
+		BM25: bm25.DefaultParams, SearchMode: ModeHybrid, RRFK: 60, KeywordWeight: 0.5}
 }
 
 // active returns the store reads go to.
@@ -269,6 +274,14 @@ func writePoints(ctx context.Context, st *QdrantStore, dim int, uri string, poin
 		return err
 	}
 	if err := st.Upsert(ctx, points); err != nil {
+		// A source too large for one request can fail between batches, leaving
+		// it part new, part old. Say so where it will be seen: hooks discard
+		// ingest errors, so the log is the only trace.
+		var partial *PartialWriteError
+		if errors.As(err, &partial) {
+			log.Printf("rag: %s in %s is part old, part new (%v); re-ingest it", uri, st.Collection(), partial)
+			return fmt.Errorf("%s was only partly rewritten; re-ingest it: %w", uri, err)
+		}
 		return err
 	}
 	// Re-ingesting a source that shrank would otherwise leave the previous

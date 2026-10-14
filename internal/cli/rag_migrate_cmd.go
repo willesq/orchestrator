@@ -18,8 +18,8 @@ const migrateTimeout = 2 * time.Hour
 
 func newRAGMigrateCmd(cf clientFactory) *cobra.Command {
 	var (
-		target          string
-		apply, rollback bool
+		target                      string
+		apply, rollback, dropBackup bool
 	)
 	cmd := operatorOnlyMsg("queue tasks cannot migrate the RAG store", &cobra.Command{
 		Use:   "migrate-hybrid",
@@ -28,8 +28,11 @@ func newRAGMigrateCmd(cf clientFactory) *cobra.Command {
 			"dense ones. Each source's stored text is re-chunked with today's token-sized chunker and\n" +
 			"re-embedded. orchd keeps writing new ingests to both collections while the copy runs, then\n" +
 			"switches to the new one. The old collection is kept untouched as a backup.\n\n" +
-			"Without --apply it only reports what it would do. An interrupted run can be run again.\n" +
-			"--rollback switches back to the backup (writes made after the switch stay only in the new one).",
+			"Without --apply it only reports what it would do. An interrupted run can be run again, and\n" +
+			"`orch status` shows how far a running one has got.\n" +
+			"--rollback switches back to the backup (writes made after the switch stay only in the new one).\n" +
+			"--drop-backup deletes the backup once you are sure of the new collection, to free its disk;\n" +
+			"after it, there is nothing to roll back to. It too only plans unless --apply.",
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			if rollback {
@@ -37,6 +40,12 @@ func newRAGMigrateCmd(cf clientFactory) *cobra.Command {
 					return errors.New("--rollback takes no other flags")
 				}
 				return rollbackHybrid(c)
+			}
+			if dropBackup {
+				if target != "" {
+					return errors.New("--drop-backup takes only --apply")
+				}
+				return dropHybridBackup(c, cf, apply)
 			}
 			client, cleanup, err := cf()
 			if err != nil {
@@ -84,6 +93,7 @@ func newRAGMigrateCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringVar(&target, "target", "", "name of the new collection (default <active>-hybrid)")
 	cmd.Flags().BoolVar(&apply, "apply", false, "migrate (without it, only plan)")
 	cmd.Flags().BoolVar(&rollback, "rollback", false, "switch back to the backup collection")
+	cmd.Flags().BoolVar(&dropBackup, "drop-backup", false, "delete the backup collection (with --apply)")
 	return cmd
 }
 
@@ -110,5 +120,29 @@ func rollbackHybrid(c *cobra.Command) error {
 		return err
 	}
 	fmt.Fprintf(c.OutOrStdout(), "rag.qdrant.collection is %s again (%s kept); run `orch restart` for orchd to use it\n", backup, current)
+	return nil
+}
+
+// dropHybridBackup asks orchd to delete the backup collection recorded in
+// config. orchd picks the collection and checks it is not in use.
+func dropHybridBackup(c *cobra.Command, cf clientFactory, apply bool) error {
+	client, cleanup, err := cf()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(c.Context(), 5*time.Minute)
+	defer cancel()
+	resp, err := client.DropBackup(ctx, &orchdv1.DropBackupRequest{Apply: apply})
+	if err != nil {
+		return err
+	}
+	out := c.OutOrStdout()
+	if !resp.GetDropped() {
+		fmt.Fprintf(out, "would drop the backup collection %s (%d points); --rollback could no longer return to it\n"+
+			"plan only; run with --drop-backup --apply to delete it\n", resp.GetCollection(), resp.GetPoints())
+		return nil
+	}
+	fmt.Fprintf(out, "dropped the backup collection %s (%d points); no backup is recorded now\n", resp.GetCollection(), resp.GetPoints())
 	return nil
 }

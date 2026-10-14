@@ -3,6 +3,7 @@ package rag
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -93,5 +94,46 @@ func TestLayoutErrors(t *testing.T) {
 	}
 	if _, err := q.Search(context.Background(), nil, 1, nil, nil); err == nil {
 		t.Fatal("search without a layout succeeded")
+	}
+}
+
+func TestUpsertBatchesLargeWrites(t *testing.T) {
+	f, base := newFakeQdrant(t)
+	f.seed("c")
+	q := NewQdrantStore(base, "c", "")
+	pts := make([]Point, upsertBatch*2+1)
+	for i := range pts {
+		pts[i] = Point{ID: pointID("u", i), Vector: []float32{1, 0}, Payload: map[string]any{"source_uri": "u"}}
+	}
+	if err := q.Upsert(context.Background(), pts); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.upserts["c"]; got != 3 {
+		t.Fatalf("%d write requests, want 3", got)
+	}
+	if got := len(f.collection("c").points); got != len(pts) {
+		t.Fatalf("stored %d points, want %d", got, len(pts))
+	}
+}
+
+func TestPartialUpsertIsReported(t *testing.T) {
+	f, base := newFakeQdrant(t)
+	f.seed("c")
+	f.failUpsertNo["c"] = 2
+	q := NewQdrantStore(base, "c", "")
+	pts := make([]Point, upsertBatch+1)
+	for i := range pts {
+		pts[i] = Point{ID: pointID("u", i), Vector: []float32{1, 0}, Payload: map[string]any{"source_uri": "u", "chunk_index": i}}
+	}
+	err := writePoints(context.Background(), q, 2, "u", pts)
+	var partial *PartialWriteError
+	if !errors.As(err, &partial) || partial.Written != upsertBatch || partial.Total != len(pts) ||
+		!strings.Contains(err.Error(), "re-ingest") {
+		t.Fatalf("err = %v", err)
+	}
+	// A failure on the first batch writes nothing and is not partial.
+	f.upserts["c"], f.failUpsertNo["c"] = 0, 1
+	if err := q.Upsert(context.Background(), pts[:1]); err == nil || errors.As(err, &partial) {
+		t.Fatalf("first-batch err = %v", err)
 	}
 }

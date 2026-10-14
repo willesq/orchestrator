@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -127,5 +128,35 @@ func TestORTEmbedAfterReaperUnload(t *testing.T) {
 				t.Errorf("embed after unload: %v", err)
 			}
 		})
+	}
+}
+
+// TestORTBatchesMatchSingleEmbeds checks that splitting a large input into
+// batches, where each batch pads to its own longest text, gives the vectors
+// each text gets alone.
+func TestORTBatchesMatchSingleEmbeds(t *testing.T) {
+	cfg := ortTestConfig(t)
+	e := New(cfg)
+	defer e.Close()
+	texts := make([]string, maxBatch+7)
+	for i := range texts {
+		texts[i] = "chunk " + strings.Repeat("word ", i%13+1) + "about sync_meta and the outbox"
+	}
+	batched, err := e.Embed(context.Background(), texts)
+	if err != nil || len(batched) != len(texts) {
+		t.Fatalf("batched: %d vectors, %v", len(batched), err)
+	}
+	for i, text := range texts {
+		single, err := e.Embed(context.Background(), []string{text})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var dot float64
+		for j := range single[0] {
+			dot += float64(single[0][j]) * float64(batched[i][j])
+		}
+		if dot < 0.9999 {
+			t.Fatalf("text %d: batched and single vectors differ (cosine %.6f)", i, dot)
+		}
 	}
 }

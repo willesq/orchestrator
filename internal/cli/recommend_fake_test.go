@@ -35,3 +35,12 @@ var fakeMigrate = func(*orchdv1.MigrateHybridRequest) (*orchdv1.MigrateHybridRes
 func (f *fakeClient) MigrateHybrid(_ context.Context, req *orchdv1.MigrateHybridRequest, _ ...grpc.CallOption) (*orchdv1.MigrateHybridResponse, error) {
 	return fakeMigrate(req)
 }
+
+// fakeDropBackup answers DropBackup for every fakeClient.
+var fakeDropBackup = func(*orchdv1.DropBackupRequest) (*orchdv1.DropBackupResponse, error) {
+	return &orchdv1.DropBackupResponse{}, nil
+}
+
+func (f *fakeClient) DropBackup(_ context.Context, req *orchdv1.DropBackupRequest, _ ...grpc.CallOption) (*orchdv1.DropBackupResponse, error) {
+	return fakeDropBackup(req)
+}

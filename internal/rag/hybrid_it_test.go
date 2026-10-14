@@ -124,4 +124,20 @@ func TestIntegrationHybridMigration(t *testing.T) {
 	if n, _ := NewQdrantStore(base, "orchestrator", "").Count(ctx, nil); n != 3 {
 		t.Fatalf("backup holds %d", n)
 	}
+	// Dropping it plans first, then deletes only the backup.
+	if rep, err := svc.DropCollection(ctx, "orchestrator", false); err != nil || rep.Points != 3 || rep.Dropped {
+		t.Fatalf("drop plan = %+v, %v", rep, err)
+	}
+	if _, err := svc.DropCollection(ctx, "orchestrator-hybrid", true); err == nil {
+		t.Fatal("dropped the active collection")
+	}
+	if rep, err := svc.DropCollection(ctx, "orchestrator", true); err != nil || !rep.Dropped {
+		t.Fatalf("drop = %+v, %v", rep, err)
+	}
+	if l, err := NewQdrantStore(base, "orchestrator", "").Layout(ctx); err != nil || l != LayoutUnknown {
+		t.Fatalf("backup after drop: layout %v, %v", l, err)
+	}
+	if hits, _, err := svc.Search(ctx, "where is sync_meta kept", SearchOpts{TopK: 3}); err != nil || len(hits) == 0 {
+		t.Fatalf("search after drop = %+v, %v", hits, err)
+	}
 }

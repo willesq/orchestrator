@@ -285,3 +285,23 @@ func TestInstructionLoadSection(t *testing.T) {
 		}
 	}
 }
+
+func TestVectorSectionShowsMigration(t *testing.T) {
+	d := healthyDeps(t)
+	d.Orchd = func(context.Context) (*orchdv1.StatusResponse, error) {
+		return &orchdv1.StatusResponse{Version: "test", Migration: &orchdv1.MigrationProgress{
+			Target: "orchestrator-hybrid", SourcesDone: 120, SourcesTotal: 664, Chunks: 5012,
+			StartedAt: testNow.Add(-3 * time.Minute).Unix()}}, nil
+	}
+	l := line(t, section(t, Collect(context.Background(), d), "vector store"), "migration")
+	if l.Value != "copying to orchestrator-hybrid" || l.Level != LevelOK ||
+		!strings.Contains(l.Detail, "120/664 sources, 5012 chunks, started 3m ago") {
+		t.Fatalf("migration line = %+v", l)
+	}
+	idle := section(t, Collect(context.Background(), healthyDeps(t)), "vector store")
+	for _, l := range idle.Lines {
+		if l.Name == "migration" {
+			t.Fatalf("idle store shows %+v", l)
+		}
+	}
+}

@@ -312,6 +312,7 @@ func (s *server) Status(_ context.Context, _ *orchdv1.StatusRequest) (*orchdv1.S
 	resp := &orchdv1.StatusResponse{
 		Version:       version.Version,
 		UptimeSeconds: int64(time.Since(s.start).Seconds()),
+		Migration:     s.migrationProgress(),
 	}
 	if s.sup == nil {
 		return resp, nil

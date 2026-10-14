@@ -42,6 +42,8 @@ service Orchd {
   // BM25 keyword vectors), re-chunking and re-embedding its text, and switches
   // to it. Without apply it only plans. The old collection is kept.
   rpc MigrateHybrid(MigrateHybridRequest) returns (MigrateHybridResponse);
+  // DropBackup deletes the backup collection a migration kept; plans unless apply.
+  rpc DropBackup(DropBackupRequest) returns (DropBackupResponse);
 }
 
 message PingRequest {}
@@ -186,6 +188,17 @@ message StatusResponse {
   string version = 1;
   int64 uptime_seconds = 2;
   repeated SubsystemStatus subsystems = 3;
+  // migration is set while a hybrid migration runs.
+  MigrationProgress migration = 4;
+}
+
+// MigrationProgress is how far a running hybrid migration has got.
+message MigrationProgress {
+  string target = 1;
+  int32 sources_done = 2;
+  int32 sources_total = 3;
+  int32 chunks = 4;      // chunks written to the target so far
+  int64 started_at = 5;  // unix seconds
 }
 
 // SubsystemStatus is one supervised unit's liveness, as `orch status` prints it.
@@ -265,4 +278,16 @@ message MigrateHybridResponse {
   int32 oversize = 11;  // sources too large to migrate; an applied run will not switch while any remain
   repeated string problems = 12; // some affected sources, and why
   string error = 13;             // set when the run failed or refused to switch; the counts are still reported
+}
+
+// DropBackupRequest names no collection: orchd only ever drops the backup
+// recorded in config.
+message DropBackupRequest {
+  bool apply = 1;
+}
+
+message DropBackupResponse {
+  string collection = 1;
+  int64 points = 2;
+  bool dropped = 3;
 }

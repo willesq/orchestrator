@@ -17,6 +17,7 @@ package embed
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -49,6 +50,7 @@ type Embedder struct {
 	mu       sync.Mutex
 	run      runner
 	lastUsed time.Time
+	closed   bool
 	dim      int
 
 	stop chan struct{}
@@ -115,22 +117,55 @@ func (e *Embedder) Dimension(_ context.Context) (int, error) {
 	return e.dim, nil
 }
 
-// Embed returns one L2-normalized vector per input text. The caller's ctx gates
-// waiting for the lock, but the ONNX session and inference use the model's own
-// lifetime — a per-request context that gets canceled must never poison the
-// long-lived session.
-func (e *Embedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
+// ErrClosed means the embedder was closed.
+var ErrClosed = errors.New("embedder closed")
+
+// maxBatch is how many texts one inference call takes. A whole large source
+// in one call held every chunk's activations at once (over 10 GB for a few
+// thousand chunks); batches keep memory flat and let searches run between them.
+const maxBatch = 32
+
+// Embed returns one L2-normalized vector per input text, in batches of at most
+// maxBatch. The caller's ctx is checked between batches, but the ONNX session
+// and inference use the model's own lifetime — a per-request context that
+// gets canceled must never poison the long-lived session.
+func (e *Embedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, nil
 	}
+	out := make([][]float32, 0, len(texts))
+	for start := 0; start < len(texts); start += maxBatch {
+		if start > 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+		}
+		vecs, err := e.embedBatch(texts[start:min(start+maxBatch, len(texts))])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, vecs...)
+	}
+	return out, nil
+}
+
+func (e *Embedder) embedBatch(texts []string) ([][]float32, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	// A long Embed can span Close; reloading then would leave a model the
+	// stopped reaper never unloads.
+	if e.closed {
+		return nil, ErrClosed
+	}
 	if err := e.ensureLoadedLocked(); err != nil {
 		return nil, err
 	}
 	vecs, err := e.run.embed(texts)
 	if err != nil {
 		return nil, fmt.Errorf("embed: %w", err)
+	}
+	if len(vecs) != len(texts) {
+		return nil, fmt.Errorf("embed: got %d vectors for %d texts", len(vecs), len(texts))
 	}
 	e.lastUsed = time.Now()
 	return vecs, nil
@@ -181,5 +216,6 @@ func (e *Embedder) Close() {
 	e.once.Do(func() { close(e.stop) })
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	e.closed = true
 	e.unloadLocked()
 }

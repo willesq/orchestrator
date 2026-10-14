@@ -162,7 +162,7 @@ func (s *Service) hybridSearch(ctx context.Context, st *QdrantStore, query strin
 	}
 	kw := s.KeywordWeight
 	if kw <= 0 || math.IsNaN(kw) || math.IsInf(kw, 0) {
-		kw = 1
+		kw = 0.5
 	}
 	type fused struct {
 		hit     SearchHit

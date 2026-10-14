@@ -449,6 +449,8 @@ orch rag migrate-hybrid                 # plan: sources, chunks now, chunks afte
 orch rag eval --save before             # optional: a baseline to compare against
 orch rag migrate-hybrid --apply         # copy into <collection>-hybrid and switch to it
 orch rag migrate-hybrid --rollback      # switch back to the backup; then `orch restart`
+orch rag migrate-hybrid --drop-backup   # plan: which backup would go, and its size
+orch rag migrate-hybrid --drop-backup --apply  # delete the backup to free its disk
 ```
 
 - **Copy and switch.** The migration copies every source into a new collection,
@@ -465,6 +467,15 @@ orch rag migrate-hybrid --rollback      # switch back to the backup; then `orch 
   refused as a target, because re-copying into it would revert writes made since.
 - **The old collection is never modified.** Writes made after the switch exist only in the
   new collection, so a rollback loses those.
+- **Progress.** `orch status` shows a running migration's sources done out of the total and
+  the chunks written, and orchd logs the same every 30 seconds. Sources are embedded and
+  written in batches, so a very large one keeps memory flat.
+- **Dropping the backup.** Once you trust the new collection, `--drop-backup --apply`
+  deletes the backup recorded in `rag.qdrant.backup_collection` and clears that setting.
+  orchd picks the collection itself, and refuses one it is still using (after a
+  `--rollback`, restart orchd first) or one a migration has not finished. If a drop deleted
+  the collection but could not clear the setting, running it again finishes the job. After a
+  drop, `--rollback` has nothing to return to.
 - **The plan reports problems:**
   - sources whose stored chunk order can't be trusted, kept in stored order;
   - chunks with no source, which can't be migrated;
@@ -491,8 +502,9 @@ orch rag eval --mode hybrid --compare dense
 
 - **Settings:** `rag.search.mode` is `hybrid` (default) or `dense`. `rag.search.rrf_k`
   (default 60) is the fusion constant; larger values flatten the advantage of each list's top
-  ranks. `rag.search.keyword_weight` (default 1) scales the keyword list's share: below 1
-  favors meaning, above 1 favors exact words.
+  ranks. `rag.search.keyword_weight` (default 0.5) scales the keyword list's share: below 1
+  favors meaning, above 1 favors exact words. On the golden-set eval, 0.5 kept the identifier
+  wins while matching dense-only recall; 1 cost two prose queries their place in the top 10.
 - **No source floods the keyword results.** Each source offers at most two chunks to the
   keyword list before fusion, so a document repeating a rare term cannot crowd out the rest.
 - **Scores keep their meaning.** Every hit reports its cosine similarity, computed from its
