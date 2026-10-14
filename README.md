@@ -388,6 +388,25 @@ orch dispatch --model claude-code/opus "<task>"
   rationale and evidence count. `queue_dispatch` takes `task_kind` and `model`. The
   dispatcher agent picks a kind, and `orch-dispatch` passes a Claude alias to the `Agent`
   tool's `model`.
+## How text is chunked
+
+Ingested text is split into chunks of about `embedder.chunk_size` words (default 400) before
+it is embedded.
+
+- **Markdown follows its sections.** A document with `#` headings outside code fences is
+  split at headings. Its line breaks, lists and fenced code blocks are kept.
+- **Sections pack within a subtree.** Small sections in the same subtree share a chunk. A
+  section too large for one splits at paragraph breaks, and never inside a fenced block
+  unless the block alone is too large.
+- **Each chunk carries its context.** A chunk starts with its ancestor headings, for example
+  `[section: Install › Homebrew]`. Its stored `heading` field names the deepest path all its
+  sections share.
+- **Titles are bounded.** Headings are capped at 120 characters and cleaned of control
+  characters, so a hostile page cannot multiply its size by repeating a huge title.
+- **Turning it off.** `embedder.markdown_sections: false` returns markdown to plain word
+  windows (`embedder.chunk_overlap` words shared between neighbours), which plain text
+  always uses.
+- **Existing content.** It keeps its old chunks until it is ingested again.
 
 ## Build from source
 
