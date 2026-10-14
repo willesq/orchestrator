@@ -144,6 +144,31 @@ type QueueWorkerSettings struct {
 	AllowedTools map[string][]string `mapstructure:"allowed_tools"`
 	// Verify checks the agent's work before a task counts as complete.
 	Verify QueueVerifySettings `mapstructure:"verify"`
+	// Codex lets the worker run tasks routed to Codex models.
+	Codex QueueCodexSettings `mapstructure:"codex"`
+}
+
+// QueueCodexSettings controls the worker's Codex runs. Off by default: with it
+// off, dispatch never routes to Codex.
+type QueueCodexSettings struct {
+	Enabled bool   `mapstructure:"enabled"`
+	Bin     string `mapstructure:"bin"` // empty resolves codex from PATH and the usual locations
+	// Sandbox is Codex's sandbox for the session's commands: workspace-write
+	// (the default) or read-only. Full access is refused.
+	Sandbox string `mapstructure:"sandbox"`
+	// Network lets sandboxed commands reach the network, which pushing a
+	// branch and opening a PR need. Off by default: the sandbox can read every
+	// file the user can, so with network a steered session could send any of
+	// them out.
+	Network bool `mapstructure:"network"`
+	// MCPAllow names the MCP servers a Codex task keeps; every other server
+	// configured for Codex is turned off for the run, since MCP servers run
+	// outside the sandbox.
+	MCPAllow []string `mapstructure:"mcp_allow"`
+	// AllowProjectConfig runs Codex tasks in checkouts that carry a .codex
+	// directory. Off by default: project config can redirect the model
+	// provider, which the worker cannot pin.
+	AllowProjectConfig bool `mapstructure:"allow_project_config"`
 }
 
 // IngestSettings controls which files the repo walkers (sources and docs) ingest.
@@ -279,6 +304,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("queue.worker.verify.timeout", "15m")
 	v.SetDefault("queue.worker.verify.retries", 1)
 	v.SetDefault("queue.worker.verify.repos", []string{})
+	v.SetDefault("queue.worker.codex.enabled", false)
+	v.SetDefault("queue.worker.codex.bin", "")
+	v.SetDefault("queue.worker.codex.sandbox", "workspace-write")
+	v.SetDefault("queue.worker.codex.network", false)
+	v.SetDefault("queue.worker.codex.mcp_allow", []string{"orch_rag"})
+	v.SetDefault("queue.worker.codex.allow_project_config", false)
 	// Routing: harder or riskier work prefers the frontier tier, bulk and
 	// mechanical work a cheaper one.
 	for kind, tier := range map[string]string{

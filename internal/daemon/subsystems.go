@@ -319,7 +319,42 @@ func newTaskRunner(cfg config.QueueWorkerSettings, stop context.Context, dropEnv
 		Home:           home,
 		ScratchDir:     filepath.Join(paths.DataDir(), "tasks"),
 		Stop:           stop,
+		Codex:          codexOptions(cfg.Codex, home),
 	}}
+}
+
+// orchBin is the orch CLI installed beside this daemon, or "".
+func orchBin() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	bin := filepath.Join(filepath.Dir(exe), "orch")
+	if info, err := os.Stat(bin); err != nil || info.IsDir() {
+		return ""
+	}
+	return bin
+}
+
+// codexOptions configures Codex runs; with Codex off, Bin stays empty and the
+// worker treats Codex routes as not runnable.
+func codexOptions(c config.QueueCodexSettings, home string) agentrun.CodexOptions {
+	o := agentrun.CodexOptions{
+		Sandbox:  c.Sandbox,
+		Network:  c.Network,
+		StateDir: filepath.Join(paths.DataDir(), "codex"),
+		MCPAllow: c.MCPAllow,
+		OrchBin:  orchBin(),
+
+		AllowProjectConfig: c.AllowProjectConfig,
+	}
+	if o.Sandbox == "" {
+		o.Sandbox = "workspace-write"
+	}
+	if c.Enabled {
+		o.Bin = agentrun.FindCodex(c.Bin, home)
+	}
+	return o
 }
 
 func (t taskRunner) Run(ctx context.Context, in workflows.AgentTaskInput) (workflows.Outcome, error) {
@@ -336,6 +371,13 @@ func (t taskRunner) Run(ctx context.Context, in workflows.AgentTaskInput) (workf
 // the user's later choice wins and the agent's own model runs.
 func (t taskRunner) task(ctx context.Context, in workflows.AgentTaskInput) agentrun.Task {
 	task := agentTask(in)
+	// Codex switched off after the task was routed to it: run on Claude Code
+	// with the agent's own model rather than fail.
+	if task.Provider == agentrun.ProviderCodex && (t.r == nil || t.r.Codex.Bin == "") {
+		log.Printf("orchd: task %s: routed to codex, which the worker no longer runs; running on Claude Code", in.ID)
+		task.Provider, task.Model, task.Effort = "", "", ""
+		return task
+	}
 	if task.Model == "" || t.models == nil {
 		return task
 	}
@@ -343,18 +385,24 @@ func (t taskRunner) task(ctx context.Context, in workflows.AgentTaskInput) agent
 	if err != nil || !m.Routable() {
 		log.Printf("orchd: task %s: routed model %s/%s is no longer routable; running the agent's own model",
 			in.ID, in.Route.Provider, task.Model)
-		task.Model = ""
+		task.Model, task.Effort = "", ""
+		return task
+	}
+	if !m.SupportsEffort(task.Effort) {
+		task.Effort = ""
 	}
 	return task
 }
 
-// agentTask converts a durable task input for the runner. The runner executes
-// Claude Code only, so a route to another provider never reaches it as a model
-// (dispatch routes only to providers the worker can run).
+// agentTask converts a durable task input for the runner. Only providers the
+// worker runs carry their model through; any other route runs unrouted.
 func agentTask(in workflows.AgentTaskInput) agentrun.Task {
 	t := agentrun.Task{ID: in.ID, Agent: in.Agent, Body: in.Body, Cwd: in.Cwd, Heads: in.Heads}
-	if in.Route.Provider == models.ProviderClaude {
+	switch in.Route.Provider {
+	case models.ProviderClaude:
 		t.Model = in.Route.Model
+	case models.ProviderCodex:
+		t.Provider, t.Model, t.Effort = agentrun.ProviderCodex, in.Route.Model, in.Route.Effort
 	}
 	return t
 }
