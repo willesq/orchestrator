@@ -43,8 +43,12 @@ type Task struct {
 	// dispatched (see Snapshot). Verification tests only checkouts that moved
 	// since; nil means no baseline, and verification is skipped.
 	Heads map[string]string
-	// Model is passed as --model; empty leaves the agent's own model setting.
+	// Provider picks the CLI: "codex" runs Codex, anything else Claude Code.
+	Provider string
+	// Model is passed as the CLI's model flag; empty leaves its own setting.
 	Model string
+	// Effort is the reasoning effort, for providers that take one (Codex).
+	Effort string
 }
 
 // Statuses a finished run records in the task ledger.
@@ -136,6 +140,8 @@ type Runner struct {
 	// background context so a stopping worker waits for them; without this an
 	// orchd shutdown would block for as long as the longest task.
 	Stop context.Context
+	// Codex configures Codex runs; with no Bin, tasks routed to Codex fail.
+	Codex CodexOptions
 }
 
 // Run executes t and reports its outcome. A run the agent itself fails, or that
@@ -152,12 +158,18 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 	if t.Model != "" && !models.ValidSlug(t.Model) {
 		return failed("invalid model %q", t.Model), nil
 	}
-	if r.Bin == "" {
-		return failed("no Claude Code CLI found; set queue.worker.claude_bin"), nil
-	}
-	if !ValidPermissionMode(r.PermissionMode) {
-		return failed("permission mode %q is not allowed for headless runs (use one of %s)",
-			r.PermissionMode, strings.Join(allowedModes, ", ")), nil
+	if t.Provider == ProviderCodex {
+		if err := r.Codex.check(t); err != nil {
+			return failed("%v", err), nil
+		}
+	} else {
+		if r.Bin == "" {
+			return failed("no Claude Code CLI found; set queue.worker.claude_bin"), nil
+		}
+		if !ValidPermissionMode(r.PermissionMode) {
+			return failed("permission mode %q is not allowed for headless runs (use one of %s)",
+				r.PermissionMode, strings.Join(allowedModes, ", ")), nil
+		}
 	}
 	dir, err := r.workDir(t)
 	if err != nil {
@@ -176,21 +188,42 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 		defer cancel()
 	}
 
-	resume := r.transcriptExists(SessionID(t.ID))
+	resume := r.canResume(t)
 	prompt := taskPrompt(t)
 	if resume {
 		prompt = resumePrompt(t)
 	}
 	o, err := r.session(ctx, t, dir, prompt, resume)
-	if err != nil || o.Status != StatusComplete || !r.Verify.Enabled {
-		return o, err
+	if err == nil && o.Status == StatusComplete && r.Verify.Enabled {
+		o, err = r.verifyAndFix(ctx, t, dir, o)
 	}
-	return r.verifyAndFix(ctx, t, dir, o)
+	// A finished Codex task has nothing left to resume; an interrupted one
+	// (err set) keeps its thread for the next run.
+	if err == nil && t.Provider == ProviderCodex {
+		r.forgetCodexThread(t.ID)
+	}
+	return o, err
 }
 
-// session runs one Claude Code invocation for the task: a fresh session, or a
-// resumed one carrying prompt as the next user turn.
+// session runs one agent invocation for the task, on the CLI its provider
+// names: a fresh session, or a resumed one carrying prompt as the next turn.
 func (r *Runner) session(ctx context.Context, t Task, dir, prompt string, resume bool) (Outcome, error) {
+	if t.Provider == ProviderCodex {
+		return r.codexSession(ctx, t, dir, prompt, resume)
+	}
+	return r.claudeSession(ctx, t, dir, prompt, resume)
+}
+
+// canResume reports whether an earlier run of t left a session to continue.
+func (r *Runner) canResume(t Task) bool {
+	if t.Provider == ProviderCodex {
+		return r.codexThread(t.ID) != ""
+	}
+	return r.transcriptExists(SessionID(t.ID))
+}
+
+// claudeSession runs one Claude Code invocation for the task.
+func (r *Runner) claudeSession(ctx context.Context, t Task, dir, prompt string, resume bool) (Outcome, error) {
 	sid := SessionID(t.ID)
 	args := []string{"-p", "--output-format", "json", "--permission-mode", r.PermissionMode,
 		"--disallowedTools", dispatchTools}
@@ -209,9 +242,46 @@ func (r *Runner) session(ctx context.Context, t Task, dir, prompt string, resume
 		args = append(args, "--session-id", sid)
 	}
 
-	cmd := exec.CommandContext(ctx, r.Bin, args...)
+	env := append(sessionEnv(os.Environ(), r.searchPath(), r.DropEnv), TaskIDEnv+"="+t.ID)
+	run, err := r.runCLI(ctx, r.Bin, args, dir, prompt, env)
+	if err != nil {
+		return failed("%v", err), nil
+	}
+	if run.interrupted(r) {
+		return Outcome{}, interruptedErr(t)
+	}
+	var o Outcome
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		o = failed("timed out after %s", r.Timeout)
+	} else {
+		o = interpret(run.stdout, run.stderr, run.err)
+	}
+	o.DurationMS = run.elapsedMS
+	return o, nil
+}
+
+// cliRun is what one CLI invocation left behind.
+type cliRun struct {
+	stdout, stderr []byte
+	err            error
+	elapsedMS      int64
+}
+
+// interrupted reports whether the run ended because the worker is stopping.
+func (c cliRun) interrupted(r *Runner) bool {
+	return c.err != nil && r.Stop != nil && r.Stop.Err() != nil
+}
+
+func interruptedErr(t Task) error {
+	return fmt.Errorf("task %s interrupted by worker shutdown: %w", t.ID, context.Canceled)
+}
+
+// runCLI runs one agent CLI invocation in its own process group and captures its
+// output. The error is set only when the run could not be set up.
+func (r *Runner) runCLI(ctx context.Context, bin string, args []string, dir, prompt string, env []string) (cliRun, error) {
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = dir
-	cmd.Env = append(sessionEnv(os.Environ(), r.searchPath(), r.DropEnv), TaskIDEnv+"="+t.ID)
+	cmd.Env = env
 	// The prompt goes over stdin, never argv, so a body starting with "-" cannot
 	// be read as a flag.
 	cmd.Stdin = strings.NewReader(prompt)
@@ -220,12 +290,12 @@ func (r *Runner) session(ctx context.Context, t Task, dir, prompt string, resume
 	// that tool exited and then report a successful run as failed.
 	stdout, err := captureFile()
 	if err != nil {
-		return failed("capture output: %v", err), nil
+		return cliRun{}, fmt.Errorf("capture output: %w", err)
 	}
 	defer stdout.Close()
 	stderr, err := captureFile()
 	if err != nil {
-		return failed("capture output: %v", err), nil
+		return cliRun{}, fmt.Errorf("capture output: %w", err)
 	}
 	defer stderr.Close()
 	cmd.Stdout, cmd.Stderr = stdout, stderr
@@ -244,17 +314,7 @@ func (r *Runner) session(ctx context.Context, t Task, dir, prompt string, resume
 	if cmd.Process != nil {
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
-	if runErr != nil && r.Stop != nil && r.Stop.Err() != nil {
-		return Outcome{}, fmt.Errorf("task %s interrupted by worker shutdown: %w", t.ID, context.Canceled)
-	}
-	var o Outcome
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		o = failed("timed out after %s", r.Timeout)
-	} else {
-		o = interpret(readCapture(stdout), readCapture(stderr), runErr)
-	}
-	o.DurationMS = elapsed
-	return o, nil
+	return cliRun{stdout: readCapture(stdout), stderr: readCapture(stderr), err: runErr, elapsedMS: elapsed}, nil
 }
 
 // cliResult is the subset of `claude -p --output-format json` the ledger uses.
@@ -386,7 +446,15 @@ func (r *Runner) transcriptExists(sid string) bool {
 // commands load the login profile, but the CLI and anything it execs directly
 // resolve through this.
 func (r *Runner) searchPath() string {
-	dirs := []string{filepath.Dir(r.Bin), "/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"}
+	var dirs []string
+	// Only real binaries: filepath.Dir("") is ".", which would put the
+	// session's working directory, an untrusted checkout, on its PATH.
+	for _, bin := range []string{r.Bin, r.Codex.Bin} {
+		if filepath.IsAbs(bin) {
+			dirs = append(dirs, filepath.Dir(bin))
+		}
+	}
+	dirs = append(dirs, "/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin")
 	if r.Home != "" {
 		dirs = append(dirs, filepath.Join(r.Home, ".local", "bin"), filepath.Join(r.Home, "go", "bin"))
 	}
@@ -435,17 +503,30 @@ func sessionEnv(env []string, path string, drop []string) []string {
 // FindClaude resolves the CLI: the configured path, else PATH, else the
 // locations the installers use.
 func FindClaude(configured, home string) string {
+	return findCLI("claude", configured, home, []string{".local/bin/claude", ".claude/local/claude"})
+}
+
+// FindCodex resolves the Codex CLI the same way FindClaude resolves Claude Code.
+func FindCodex(configured, home string) string {
+	return findCLI("codex", configured, home, []string{".local/bin/codex"})
+}
+
+// findCLI resolves a CLI: the configured path, then PATH, then the usual
+// install locations, inHome relative to the user's home.
+func findCLI(name, configured, home string, inHome []string) string {
 	if configured != "" {
 		return configured
 	}
-	if p, err := exec.LookPath("claude"); err == nil {
+	if p, err := exec.LookPath(name); err == nil {
 		if abs, err := filepath.Abs(p); err == nil {
 			return abs
 		}
 	}
-	candidates := []string{"/opt/homebrew/bin/claude", "/usr/local/bin/claude"}
+	candidates := []string{"/opt/homebrew/bin/" + name, "/usr/local/bin/" + name}
 	if home != "" {
-		candidates = append(candidates, filepath.Join(home, ".local", "bin", "claude"), filepath.Join(home, ".claude", "local", "claude"))
+		for _, rel := range inHome {
+			candidates = append(candidates, filepath.Join(home, rel))
+		}
 	}
 	for _, c := range candidates {
 		if info, err := os.Stat(c); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {

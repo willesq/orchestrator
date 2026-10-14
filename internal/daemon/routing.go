@@ -21,8 +21,13 @@ type modelRouter interface {
 }
 
 // workerRunnable reports whether the queue worker can execute a provider's
-// models. It runs Claude Code only, so routes elsewhere fall to the next rank.
-func workerRunnable(provider string) bool { return provider == models.ProviderClaude }
+// models: Claude Code always, Codex once queue.worker.codex.enabled is set.
+// Routes elsewhere fall to the next rank.
+func workerRunnable(codex bool) func(string) bool {
+	return func(provider string) bool {
+		return provider == models.ProviderClaude || (codex && provider == models.ProviderCodex)
+	}
+}
 
 // route resolves a dispatch's model. An explicit model wins over a kind; with
 // neither the task is unrouted and runs on the agent's own model. A kind with
@@ -42,12 +47,12 @@ func (s *server) route(ctx context.Context, req *orchdv1.DispatchRequest) (workf
 	var rec routing.Recommendation
 	var err error
 	if ref != "" {
-		rec, err = s.router.Pin(ctx, ref, workerRunnable)
+		rec, err = s.router.Pin(ctx, ref, workerRunnable(s.codexEnabled))
 		if err != nil {
 			return workflows.Route{}, nil, grpcstatus.Error(codes.InvalidArgument, err.Error())
 		}
 	} else {
-		rec, err = s.router.Recommend(ctx, kind, workerRunnable)
+		rec, err = s.router.Recommend(ctx, kind, workerRunnable(s.codexEnabled))
 		if errors.Is(err, routing.ErrNoRoute) {
 			return workflows.Route{Kind: kind}, &orchdv1.Route{TaskKind: kind,
 				Rationale: "no routable model for this kind; the agent's own model runs"}, nil

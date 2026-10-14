@@ -376,8 +376,9 @@ orch dispatch --model claude-code/opus "<task>"
   `orch routing rollback` undoes it. Discovery still never enables a model.
 - **Routes are fixed at dispatch.** orchd resolves the model when the task is queued and
   records it on the task (`orch task <id>` shows it), so a resumed task keeps its model. The
-  worker runs Claude Code only. A route to another provider falls to the next rank. A kind
-  with no routable model runs on the agent's own model.
+  worker runs Claude Code, and Codex once [Codex runs](#codex-runs) are enabled. A route to
+  any other provider falls to the next rank. A kind with no routable model runs on the
+  agent's own model.
 - **Only you change it.** Inside a queued task, `orch routing apply|set|clear|rollback`,
   `orch model enable|disable|tier`, `orch provider enable|disable` and `orch task --rate`
   refuse. This stops a session that an untrusted repository is steering from casually
@@ -388,6 +389,51 @@ orch dispatch --model claude-code/opus "<task>"
   rationale and evidence count. `queue_dispatch` takes `task_kind` and `model`. The
   dispatcher agent picks a kind, and `orch-dispatch` passes a Claude alias to the `Agent`
   tool's `model`.
+
+### Codex runs
+
+With `queue.worker.codex.enabled: true` (and the `codex` provider and a Codex model enabled
+in the registry), dispatch can route tasks to Codex, and the worker runs them as
+`codex exec --json -s <sandbox> -C <dir> -m <model> -c model_reasoning_effort=<effort> -`.
+The prompt goes on stdin.
+
+- **Sandboxed, with the risky settings pinned.**
+  - `queue.worker.codex.sandbox` is `workspace-write` (default) or `read-only`. Full access
+    and the bypass flags are refused.
+  - Approval prompts are off, so a command the sandbox refuses fails instead of waiting.
+  - Project rules are ignored, and notify hooks, writable roots and the secret-variable
+    filter are pinned, so neither your config nor a repository's can loosen a queued run.
+- **Network is off by default.** The sandbox can read any file you can, so with network a
+  steered session could send any of them out. `queue.worker.codex.network: true` allows
+  `git push` and `gh pr create`; only enable it if you accept that.
+- **Commits work in worktrees only.** For a linked worktree whose layout checks out (it
+  cannot be redirected to another repository), the shared object store, refs and logs and
+  the worktree's own git directory are writable. The repository's hooks and config never
+  are. In a plain clone Codex keeps `.git` read-only, so the session cannot commit there.
+- **Git state outside the worktree is checked after the run.** Before each run the worker
+  records the worktree's git pointers (`commondir`, `gitdir`, `config.worktree`) and every
+  ref except the task's own branch. Afterwards it restores anything that changed and fails
+  the task, naming what changed. New branches are allowed; moved branches, new tags and
+  remote refs are not.
+- **Repository config is refused.** A task whose checkout carries its own `.codex` directory
+  is refused, because project config can redirect the model provider.
+  `queue.worker.codex.allow_project_config: true` allows it for repositories you trust.
+- **MCP servers are allowlisted.** They run outside the sandbox, so every server configured
+  for Codex except `queue.worker.codex.mcp_allow` (default `orch_rag`) is turned off for the
+  run. An allowed name stays on only if it runs the orch binary installed beside orchd. If the server list cannot be read, the task fails instead of running with them on.
+  This also covers `orch_queue`, which would not see `ORCH_TASK_ID` because Codex starts MCP
+  servers without it. The variable is set explicitly for the session's shell commands.
+- **Same handling as Claude runs.** Each session runs in its own process group with orchd's
+  secrets removed from its environment. Verification and redaction apply. Scratch files sit
+  outside every writable root, so the session cannot rewrite its own result.
+- **Restarts resume.** The Codex thread id is kept per task until the task finishes, so an
+  interrupted task continues with `codex exec resume <thread>`.
+- **Effort is checked per model** against the levels its cache declares. Codex reports
+  tokens, not cost, so a Codex task's cost reads `$0`.
+- **Disabling Codex wins.** A pending task routed to Codex runs on Claude Code (with the
+  agent's own model) if Codex is switched off before it starts.
+- `queue.worker.codex.bin` overrides where the CLI is found (default: PATH, Homebrew,
+  `~/.local/bin`).
 
 ## Build from source
 

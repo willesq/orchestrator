@@ -147,18 +147,20 @@ func TestNewRouter(t *testing.T) {
 	}
 }
 
-func TestAgentTaskRoutesOnlyClaudeModels(t *testing.T) {
+func TestAgentTaskCarriesRunnableRoutes(t *testing.T) {
 	tests := []struct {
-		route workflows.Route
-		want  string
+		route                       workflows.Route
+		provider, model, wantEffort string
 	}{
-		{workflows.Route{Kind: "code", Provider: "claude-code", Model: "opus"}, "opus"},
-		{workflows.Route{Kind: "code", Provider: "codex", Model: "gpt-sol"}, ""},
-		{workflows.Route{Kind: "code"}, ""},
+		{workflows.Route{Kind: "code", Provider: "claude-code", Model: "opus", Effort: "high"}, "", "opus", ""},
+		{workflows.Route{Kind: "code", Provider: "codex", Model: "gpt-sol", Effort: "high"}, "codex", "gpt-sol", "high"},
+		{workflows.Route{Kind: "code", Provider: "gemini", Model: "g"}, "", "", ""},
+		{workflows.Route{Kind: "code"}, "", "", ""},
 	}
 	for _, tt := range tests {
-		if got := agentTask(workflows.AgentTaskInput{ID: "t", Agent: "dev", Route: tt.route}).Model; got != tt.want {
-			t.Errorf("route %+v → model %q, want %q", tt.route, got, tt.want)
+		got := agentTask(workflows.AgentTaskInput{ID: "t", Agent: "dev", Route: tt.route})
+		if got.Provider != tt.provider || got.Model != tt.model || got.Effort != tt.wantEffort {
+			t.Errorf("route %+v → %+v", tt.route, got)
 		}
 	}
 }

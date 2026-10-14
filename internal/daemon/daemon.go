@@ -92,6 +92,8 @@ type server struct {
 	routerErr error
 	// rater records task verdicts; nil when unavailable.
 	rater taskRater
+	// codexEnabled lets dispatch route to Codex, which the worker then runs.
+	codexEnabled bool
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -470,7 +472,8 @@ func Run(ctx context.Context) error {
 		workerEnabled: s.Queue.Worker.Enabled,
 		summaries:     summaries,
 		router:        router, routerErr: routerErr,
-		rater: dbRater{db: store},
+		rater:        dbRater{db: store},
+		codexEnabled: codexRunnable(s.Queue.Worker),
 	})
 	go func() {
 		<-runCtx.Done()
@@ -604,4 +607,14 @@ func expandRoots(roots []string) []string {
 		out = append(out, r)
 	}
 	return out
+}
+
+// codexRunnable reports whether the worker will run Codex tasks: it must be on,
+// Codex enabled for it, and the CLI findable.
+func codexRunnable(w config.QueueWorkerSettings) bool {
+	if !w.Enabled || !w.Codex.Enabled {
+		return false
+	}
+	home, _ := os.UserHomeDir()
+	return agentrun.FindCodex(w.Codex.Bin, home) != ""
 }
