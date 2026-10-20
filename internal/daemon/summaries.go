@@ -94,7 +94,9 @@ func summariesUnit(q *summaryQueue, s sessionSummarizer, ing summaryIngester, ti
 // summarizeOne replaces a session's excerpt with its summary, in the vector
 // store and in the session record on disk. Any failure leaves the excerpt.
 func summarizeOne(ctx context.Context, s sessionSummarizer, ing summaryIngester, j summaryJob, timeout time.Duration) {
-	msgs, err := session.ParseTranscript(j.TranscriptPath)
+	// Redacted like everything else that reaches the store: the summary is
+	// stored, and the model writing it sees only what it needs.
+	msgs, err := session.ParseRedacted(j.TranscriptPath)
 	if err != nil || len(msgs) == 0 {
 		return
 	}
@@ -105,15 +107,17 @@ func summarizeOne(ctx context.Context, s sessionSummarizer, ing summaryIngester,
 		log.Printf("session %s: summary skipped: %v", j.SessionID, err)
 		return
 	}
+	// On disk first, under the session's lock: a hand-off storing the record
+	// reads it from there, so it can never store the excerpt over this.
+	defer lockSession(j.SessionID)()
+	if rec, err := session.ReadRecord(paths.SessionsDir(), j.SessionID); err == nil {
+		rec.Summary = summary
+		_ = session.WriteRecord(paths.SessionsDir(), rec)
+	}
 	if _, err := ing.IngestText(jobCtx, summary, rag.Meta{
 		SourceURI: "session://" + j.SessionID + "/record", SourceType: "session_record", Tags: j.Tags,
 	}); err != nil {
 		log.Printf("session %s: store summary: %v", j.SessionID, err)
-		return
-	}
-	if rec, err := session.ReadRecord(paths.SessionsDir(), j.SessionID); err == nil {
-		rec.Summary = summary
-		_ = session.WriteRecord(paths.SessionsDir(), rec)
 	}
 }
 

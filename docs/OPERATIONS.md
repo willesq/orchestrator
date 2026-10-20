@@ -18,7 +18,7 @@ orch restart subsystems          # every subsystem, in place
 
 An in-place restart keeps the socket, the loaded embedder and the other subsystems running.
 Subsystems: `qdrant` (binary mode), `workflow-worker`, `sources-scheduler`, `docs-scheduler`,
-`pr-babysitter`, `routing-evaluator`, `session-summarizer`, `self-update`.
+`pr-babysitter`, `routing-evaluator`, `handoff`, `session-summarizer`, `self-update`.
 
 ## Upgrades
 

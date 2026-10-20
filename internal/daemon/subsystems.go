@@ -21,6 +21,7 @@ import (
 	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/evidence"
+	"github.com/willesq/orchestrator/internal/handoff"
 	"github.com/willesq/orchestrator/internal/models"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/prs"
@@ -84,6 +85,9 @@ func subsystems(d deps) []supervisor.Unit {
 	}
 	if u, ok := routingEvaluatorUnit(d.settings, d.store); ok {
 		out = append(out, u)
+	}
+	if d.rag != nil {
+		out = append(out, handoffUnit(d.rag, d.summaries, handoff.Dir()))
 	}
 	if d.summaries != nil {
 		sum := d.settings.Sessions.Summarize
@@ -251,10 +255,18 @@ func prsUnit(s config.Settings, store *sql.DB) supervisor.Unit {
 	if store != nil {
 		attr = evidence.NewAttributor(store)
 	}
+	poll := interval(s.PRBabysitter.PollInterval, 10*time.Minute)
+	var last time.Time
 	return supervisor.Unit{
 		Name:   UnitPRs,
 		Detail: "open-PR polling via gh; labels routed tasks by the fate of their PRs",
+		// Ticks often but sweeps only every poll, or as soon as a hook asks
+		// after a gh pr mutation.
 		Tick: func(ctx context.Context) {
+			if !prSweepDue(handoff.Dir(), last, poll) {
+				return
+			}
+			last = time.Now()
 			_ = bb.Sweep(ctx)
 			if attr != nil {
 				if err := attr.Sweep(ctx); err != nil {
@@ -262,9 +274,19 @@ func prsUnit(s config.Settings, store *sql.DB) supervisor.Unit {
 				}
 			}
 		},
-		Interval: interval(s.PRBabysitter.PollInterval, 10*time.Minute),
+		Interval: min(prRequestCheck, poll),
 	}
 }
+
+// prSweepDue reports whether the PR babysitter should sweep now: on its first
+// tick, once poll has passed since the last sweep, or when a hook asked.
+func prSweepDue(dir string, last time.Time, poll time.Duration) bool {
+	requested := handoff.TakePRSweep(dir)
+	return requested || last.IsZero() || time.Since(last) >= poll
+}
+
+// prRequestCheck is how often the PR babysitter looks for a refresh request.
+const prRequestCheck = 15 * time.Second
 
 // interval parses a configured cadence, falling back when it is unset or unparseable.
 func interval(spec string, fallback time.Duration) time.Duration {

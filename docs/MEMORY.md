@@ -4,7 +4,7 @@
 
 | Source | How it arrives | Stored as |
 |---|---|---|
-| Your sessions | `session-end` hook: a redacted record and transcript, tagged with the checkout path | `session_record`, `session_transcript` |
+| Your sessions | At session end; `orchd` stores the redacted transcript in the background, tagged with the checkout path | `session_record`, `session_transcript` |
 | Registered repos and GitHub owners | Markdown ingested on a schedule (`orch repo add`, `orch source add owner <name>`) | `repo_doc` |
 | Web pages | Fetched on a schedule (`orch source add web <url>`) | `web` |
 | Anything else | `orch ingest`, or the `rag_ingest_text` MCP tool | your choice |

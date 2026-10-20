@@ -66,7 +66,7 @@ func dispatch(event string, p Payload, out io.Writer, cf clientFactory) error {
 	case "subagent-stop":
 		return subagentStop(p)
 	case "post-tool-use":
-		return postToolUse(p, cf)
+		return postToolUse(p)
 	default:
 		return nil
 	}
