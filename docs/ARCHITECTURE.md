@@ -42,11 +42,11 @@ flowchart LR
 |---|---|
 | `orchd` | Daemon. Serves gRPC on a Unix socket and runs every long-lived subsystem. |
 | `orch` | CLI: search, ingest, dispatch, install, status, config. Also runs the MCP servers (`orch mcp`). |
-| `orch-hook` | Called by the harness on lifecycle events; never blocks the agent. |
+| `orch-hook` | Called by the harness on lifecycle events. Does only local work and hands anything slow (storing transcripts and edited docs, refreshing PRs) to `orchd`. |
 
 `orchd` supervises these subsystems, each restartable on its own (`orch restart <name>`):
 `qdrant`, `workflow-worker`, `sources-scheduler`, `docs-scheduler`, `pr-babysitter`,
-`routing-evaluator`, `session-summarizer`, `self-update`.
+`routing-evaluator`, `handoff`, `session-summarizer`, `self-update`.
 
 ## How data flows
 
@@ -59,8 +59,9 @@ Every write goes through one code path (`rag.Service.IngestText`).
 reciprocal rank fusion. Each hit keeps its cosine score so relevance floors stay meaningful.
 
 **Sessions.** On each prompt, `orch-hook` searches memory (current project first) and adds the
-best hits to the prompt. At session end it stores a redacted record and transcript; `orchd` later
-replaces the record with a model-written summary.
+best hits to the prompt. At session end it writes the session record and hands the transcript
+to `orchd`, which stores it redacted in the background and later replaces the record with a
+model-written summary.
 
 **Tasks.** `orch dispatch` or the `queue_dispatch` tool records a durable workflow. The worker
 runs it as a headless agent session, optionally verifies the result by running the repo's tests,
@@ -77,6 +78,7 @@ and records the outcome. Routing picks the model per task kind from the models y
 | `~/.local/share/orch/qdrant/` | Vector store (Qdrant runs natively, no Docker) |
 | `~/.local/share/orch/models/` | Embedding model (MiniLM, ONNX) |
 | `~/.local/share/orch/sessions/`, `events/` | Session records and per-stream event logs |
+| `~/.local/share/orch/handoff/` | Work hooks left for `orchd`; kept until done |
 | `~/.local/share/orch/orchd.sock` | The daemon's socket |
 
 `ORCH_CONFIG_DIR` and `ORCH_DATA_DIR` override these locations.
@@ -89,7 +91,7 @@ Entry points are in `cmd/`; everything else is under `internal/`.
 |---|---|
 | Daemon and RPC | `daemon`, `rpc/orchdv1` (generated from `orchd.proto`), `orchdclient`, `supervisor`, `selfupdate` |
 | Memory | `rag` (chunk, embed, store, search, migrate), `embed`, `bm25`, `qdrant`, `redact`, `rageval` |
-| Sources | `sources` (registry and freshness), `docs` (GitHub repos), `mdwalk`, `session`, `summarize` |
+| Sources | `sources` (registry and freshness), `docs` (GitHub repos), `mdwalk`, `session`, `summarize`, `handoff` |
 | Tasks and routing | `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `taskfmt` |
 | Harness integration | `install` (adapters, shipped agents, skills and policy), `hook`, `mcpserver` |
 | CLI and status | `cli`, `status`, `check` |

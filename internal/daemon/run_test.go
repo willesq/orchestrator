@@ -138,7 +138,7 @@ func TestRunSupervisesAndRestartsSubsystems(t *testing.T) {
 			// self-update is always present: Run watches whatever binary the
 			// process was launched from, which under `go test` is the test binary.
 			name:     "live orchd reports and restarts its subsystems",
-			wantUnit: []string{UnitWorker, UnitSources, UnitDocs, UnitRoutingEvaluator, UnitSummaries, UnitSelfUpdate},
+			wantUnit: []string{UnitWorker, UnitSources, UnitDocs, UnitRoutingEvaluator, UnitHandoff, UnitSummaries, UnitSelfUpdate},
 		},
 	}
 	for _, tt := range tests {

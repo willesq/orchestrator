@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/willesq/orchestrator/internal/events"
+	"github.com/willesq/orchestrator/internal/handoff"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/redact"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
@@ -40,7 +41,9 @@ func preCompact(p Payload) error {
 	return nil
 }
 
-// sessionEnd writes the authoritative record and ingests the transcript into RAG.
+// sessionEnd writes the authoritative record and leaves the transcript for orchd
+// to store. Embedding a long transcript takes seconds, longer than harnesses let
+// an exit hook run, so the hook only records what is pending and returns.
 func sessionEnd(p Payload, cf clientFactory) error {
 	if p.TranscriptPath == "" {
 		return nil
@@ -54,29 +57,48 @@ func sessionEnd(p Payload, cf clientFactory) error {
 	_ = session.DeleteCheckpoint(paths.SessionsDir(), p.SessionID)
 	deleteState(p.SessionID)
 
+	// Tagged with the checkout so a later prompt in the same project ranks this
+	// session's work alongside the project's documentation.
+	tags := detectProject(p.Cwd).sessionTags()
+	// Until orchd confirms them, orchd is asked to store the record and queue
+	// the summary itself when it takes the transcript.
+	pending := handoff.Session{ID: p.SessionID, TranscriptPath: p.TranscriptPath, Tags: tags, Record: true, Summarize: true}
+	if err := handoff.PutSession(handoff.Dir(), pending); err != nil {
+		return nil
+	}
+
 	client, cleanup, err := cf()
 	if err != nil {
 		return nil
 	}
 	defer cleanup()
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// The record is small, so it is stored now when orchd answers quickly;
+	// otherwise orchd stores it with the transcript.
+	ctx, cancel := context.WithTimeout(context.Background(), hookRPCTimeout)
 	defer cancel()
-	// Tagged with the checkout so a later prompt in the same project ranks this
-	// session's work alongside the project's documentation.
-	tags := detectProject(p.Cwd).sessionTags()
-	_, _ = client.Ingest(ctx, &orchdv1.IngestRequest{
+	if _, err := client.Ingest(ctx, &orchdv1.IngestRequest{
 		Text: rec.Summary, SourceUri: "session://" + p.SessionID + "/record", SourceType: "session_record", Tags: tags,
-	})
-	_, _ = client.Ingest(ctx, &orchdv1.IngestRequest{
-		Text: session.TranscriptText(msgs), SourceUri: "session://" + p.SessionID + "/transcript", SourceType: "session_transcript", Tags: tags,
-	})
-	// The excerpt above is replaced by a model-written summary once orchd gets to
-	// it; the request returns at once, so ending a session never waits on it.
-	_, _ = client.SummarizeSession(ctx, &orchdv1.SummarizeSessionRequest{
+	}); err == nil {
+		pending.Record = false
+	}
+	// The excerpt is replaced by a model-written summary once orchd gets to it;
+	// the request only queues it.
+	sctx, scancel := context.WithTimeout(context.Background(), hookRPCTimeout)
+	defer scancel()
+	if resp, err := client.SummarizeSession(sctx, &orchdv1.SummarizeSessionRequest{
 		SessionId: p.SessionID, TranscriptPath: p.TranscriptPath, Tags: tags,
-	})
+	}); err == nil && resp.GetAccepted() {
+		pending.Summarize = false
+	}
+	if !pending.Record || !pending.Summarize {
+		_ = handoff.PutSession(handoff.Dir(), pending)
+	}
 	return nil
 }
+
+// hookRPCTimeout bounds each call the session-end hook makes, well inside the
+// time harnesses give exit hooks, so the hook finishes on its own.
+const hookRPCTimeout = 500 * time.Millisecond
 
 // subagentStop appends a completion event to the parent session's event log.
 func subagentStop(p Payload) error {
@@ -145,15 +167,6 @@ func recordFromTranscript(p Payload) *session.Record {
 // ingest — is built from these messages, and user prompts are where pasted
 // tokens and .env contents most often appear. Unlike file ingest, the redaction
 // threshold does not apply: a transcript is never skipped as a keystore.
-func parseRedacted(path string) ([]session.Message, error) {
-	msgs, err := session.ParseTranscript(path)
-	if err != nil {
-		return nil, err
-	}
-	for i := range msgs {
-		msgs[i].Text, _ = redact.Redact(msgs[i].Text)
-	}
-	return msgs, nil
-}
+func parseRedacted(path string) ([]session.Message, error) { return session.ParseRedacted(path) }
 
 func nowRFC3339() string { return time.Now().UTC().Format(time.RFC3339) }

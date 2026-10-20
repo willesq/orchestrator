@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/willesq/orchestrator/internal/events"
+	"github.com/willesq/orchestrator/internal/handoff"
 	"github.com/willesq/orchestrator/internal/paths"
 )
 
@@ -69,27 +71,34 @@ func TestSessionEnd(t *testing.T) {
 	tests := []struct {
 		name        string
 		dialErr     error
+		ingestErr   error
 		wantIngests int
-		wantRecord  bool
+		// wantOrchdRecord: orchd must store the record, because the hook could not.
+		wantOrchdRecord bool
 	}{
-		{name: "ingests transcript + summary", dialErr: nil, wantIngests: 2, wantRecord: true},
-		{name: "dial error still writes record", dialErr: errors.New("dial failed"), wantIngests: 0, wantRecord: true},
+		{name: "stores the record, hands off the transcript", wantIngests: 1},
+		{name: "orchd down: everything is handed off", dialErr: errors.New("dial failed"), wantOrchdRecord: true},
+		{name: "record not stored: handed off too", ingestErr: errors.New("slow"), wantIngests: 1, wantOrchdRecord: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
-			fc := &fakeClient{}
-			p := Payload{SessionID: "sid", TranscriptPath: writeSampleTranscript(t)}
-			if err := sessionEnd(p, factory(fc, tt.dialErr)); err != nil {
+			fc := &fakeClient{err: tt.ingestErr}
+			path := writeSampleTranscript(t)
+			if err := sessionEnd(Payload{SessionID: "sid", TranscriptPath: path}, factory(fc, tt.dialErr)); err != nil {
 				t.Fatalf("sessionEnd: %v", err)
 			}
 			if fc.ingestCalls != tt.wantIngests {
 				t.Errorf("ingest calls = %d, want %d", fc.ingestCalls, tt.wantIngests)
 			}
-			if tt.wantRecord {
-				if _, err := os.Stat(filepath.Join(paths.SessionsDir(), "sid.yaml")); err != nil {
-					t.Errorf("record not written: %v", err)
-				}
+			if _, err := os.Stat(filepath.Join(paths.SessionsDir(), "sid.yaml")); err != nil {
+				t.Errorf("record not written: %v", err)
+			}
+			pending, _ := handoff.Sessions(handoff.Dir(), time.Now().Add(time.Minute))
+			// The fake fails summary requests whenever it fails ingests.
+			if len(pending) != 1 || pending[0].ID != "sid" || pending[0].TranscriptPath != path ||
+				pending[0].Record != tt.wantOrchdRecord || pending[0].Summarize != tt.wantOrchdRecord {
+				t.Errorf("handed off %+v", pending)
 			}
 		})
 	}
@@ -107,7 +116,7 @@ func TestSessionDerivativesAreRedacted(t *testing.T) {
 		file        string
 		wantIngests int
 	}{
-		{name: "session end record and ingest", run: func(p Payload, fc *fakeClient) error { return sessionEnd(p, factory(fc, nil)) }, file: "sid.yaml", wantIngests: 2},
+		{name: "session end record and ingest", run: func(p Payload, fc *fakeClient) error { return sessionEnd(p, factory(fc, nil)) }, file: "sid.yaml", wantIngests: 1},
 		{name: "stop record", run: func(p Payload, _ *fakeClient) error { return stop(p) }, file: "sid.yaml"},
 		{name: "pre-compact checkpoint", run: func(p Payload, _ *fakeClient) error { return preCompact(p) }, file: "sid.checkpoint.yaml"},
 	}

@@ -9,7 +9,9 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
+	"github.com/willesq/orchestrator/internal/handoff"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
@@ -289,13 +291,18 @@ func TestSessionEndTagsCheckoutOnly(t *testing.T) {
 			if err := sessionEnd(p, factory(fc, nil)); err != nil {
 				t.Fatalf("sessionEnd: %v", err)
 			}
-			if len(fc.ingested) != 2 {
-				t.Fatalf("ingests = %d, want 2", len(fc.ingested))
+			if len(fc.ingested) != 1 {
+				t.Fatalf("ingests = %d, want 1", len(fc.ingested))
 			}
 			for _, req := range fc.ingested {
 				if !slices.Equal(req.GetTags(), wantTags) {
 					t.Errorf("%s tags = %v, want %v", req.GetSourceUri(), req.GetTags(), wantTags)
 				}
+			}
+			// The transcript orchd stores later carries the same tags.
+			pending, _ := handoff.Sessions(handoff.Dir(), time.Now().Add(time.Minute))
+			if len(pending) != 1 || !slices.Equal(pending[0].Tags, wantTags) {
+				t.Errorf("handed-off tags = %+v, want %v", pending, wantTags)
 			}
 		})
 	}
