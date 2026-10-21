@@ -59,6 +59,11 @@ message IngestRequest {
   string source_type = 3;
   string scope = 4;
   repeated string tags = 5;
+  // started_at and ended_at date the whole text (Unix seconds; 0 = unknown).
+  int64 started_at = 6;
+  int64 ended_at = 7;
+  // timeline dates each chunk by the time markers in its own text instead.
+  bool timeline = 8;
 }
 
 message IngestResponse {
@@ -72,6 +77,9 @@ message SearchRequest {
   string source_type = 4;  // optional exact-match filter
   repeated string tags = 5; // optional: payload.tags contains any
   string mode = 6;          // optional: "hybrid" or "dense"; empty uses rag.search.mode
+  // optional: only content dated within [since, until] (Unix seconds; 0 = open)
+  int64 since = 7;
+  int64 until = 8;
 }
 
 message SearchResponse {
@@ -90,6 +98,11 @@ message SearchHit {
   repeated string tags = 6;
   float keyword_score = 7; // BM25 score; 0 when keyword search did not find it
   bool exact = 8;          // contains, verbatim, a code identifier from the query
+  // when what the hit describes happened, and when it was stored
+  // (Unix seconds; 0 = unknown)
+  int64 started_at = 9;
+  int64 ended_at = 10;
+  int64 ingested_at = 11;
 }
 
 message ListSourcesRequest {
@@ -97,6 +110,10 @@ message ListSourcesRequest {
   string scope = 2;       // optional exact-match filter
   string uri_prefix = 3;  // optional prefix filter, e.g. "session://"
   int32 limit = 4;        // 0 means no cap
+  // optional: only sources with content dated within [since, until]
+  // (Unix seconds; 0 = open)
+  int64 since = 5;
+  int64 until = 6;
 }
 
 message ListSourcesResponse {
@@ -112,6 +129,11 @@ message SourceSummary {
   string scope = 3;
   int32 chunks = 4;
   repeated string tags = 5;
+  // span of the source's dated content, and its latest store
+  // (Unix seconds; 0 = unknown)
+  int64 started_at = 6;
+  int64 ended_at = 7;
+  int64 ingested_at = 8;
 }
 
 message DeleteSourceRequest {

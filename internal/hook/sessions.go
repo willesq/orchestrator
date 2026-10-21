@@ -76,8 +76,10 @@ func sessionEnd(p Payload, cf clientFactory) error {
 	// otherwise orchd stores it with the transcript.
 	ctx, cancel := context.WithTimeout(context.Background(), hookRPCTimeout)
 	defer cancel()
+	start, end := rec.Span()
 	if _, err := client.Ingest(ctx, &orchdv1.IngestRequest{
-		Text: rec.Summary, SourceUri: "session://" + p.SessionID + "/record", SourceType: "session_record", Tags: tags,
+		Text: rec.Text(), SourceUri: "session://" + p.SessionID + "/record", SourceType: "session_record", Tags: tags,
+		StartedAt: unixOrZero(start), EndedAt: unixOrZero(end),
 	}); err == nil {
 		pending.Record = false
 	}
@@ -170,3 +172,11 @@ func recordFromTranscript(p Payload) *session.Record {
 func parseRedacted(path string) ([]session.Message, error) { return session.ParseRedacted(path) }
 
 func nowRFC3339() string { return time.Now().UTC().Format(time.RFC3339) }
+
+// unixOrZero is t in Unix seconds, or 0 when t is unknown.
+func unixOrZero(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
+}

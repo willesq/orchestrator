@@ -24,6 +24,7 @@ import (
 	"github.com/willesq/orchestrator/internal/qdrant"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/taskfmt"
+	"github.com/willesq/orchestrator/internal/timeline"
 	"github.com/willesq/orchestrator/internal/version"
 )
 
@@ -589,6 +590,8 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 		sourceType string
 		tags       []string
 		mode       string
+		since      string
+		until      string
 	)
 	cmd := &cobra.Command{
 		Use:   "search <query>",
@@ -598,6 +601,10 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 			query := args[0]
 			for _, a := range args[1:] {
 				query += " " + a
+			}
+			from, to, err := parseBounds(since, until)
+			if err != nil {
+				return err
 			}
 			client, cleanup, err := cf()
 			if err != nil {
@@ -613,6 +620,8 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 				SourceType: sourceType,
 				Tags:       tags,
 				Mode:       mode,
+				Since:      from,
+				Until:      to,
 			})
 			if err != nil {
 				return err
@@ -637,8 +646,12 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 				case h.GetKeywordScore() > 0:
 					match = " keyword"
 				}
-				fmt.Fprintf(c.OutOrStdout(), "%d. [%.3f%s] %s (%s)\n   %s\n",
-					i+1, h.GetScore(), match, h.GetSourceUri(), h.GetSourceType(), text)
+				when := timeline.Describe(h.GetStartedAt(), h.GetEndedAt(), h.GetSourceType())
+				if when != "" {
+					when = " · " + when
+				}
+				fmt.Fprintf(c.OutOrStdout(), "%d. [%.3f%s] %s (%s)%s\n   %s\n",
+					i+1, h.GetScore(), match, h.GetSourceUri(), h.GetSourceType(), when, text)
 			}
 			return nil
 		},
@@ -648,5 +661,6 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringVar(&sourceType, "type", "", "filter by source type")
 	cmd.Flags().StringSliceVar(&tags, "tag", nil, "filter: any of these tags")
 	cmd.Flags().StringVar(&mode, "mode", "", "hybrid (keyword + semantic) or dense; default rag.search.mode")
+	addBoundFlags(cmd, &since, &until)
 	return cmd
 }

@@ -20,6 +20,9 @@ import (
 // so read paths report it as such instead of surfacing a raw 404.
 var errCollectionMissing = errors.New("qdrant: collection does not exist")
 
+// errCollectionExists is a create that lost a race with another writer.
+var errCollectionExists = errors.New("qdrant collection already exists")
+
 // QdrantStore is a minimal HTTP client for the Qdrant REST API — enough for the
 // orchestrator's ingest/search needs without pulling the full gRPC client.
 type QdrantStore struct {
@@ -103,6 +106,9 @@ func (q *QdrantStore) do(ctx context.Context, method, path string, body, out any
 		if resp.StatusCode == http.StatusNotFound && strings.Contains(buf.String(), "doesn't exist") {
 			return errCollectionMissing
 		}
+		if resp.StatusCode == http.StatusConflict && strings.Contains(buf.String(), "already exists") {
+			return fmt.Errorf("%w: qdrant %s %s: %s", errCollectionExists, method, path, buf.String())
+		}
 		return fmt.Errorf("qdrant %s %s: %s: %s", method, path, resp.Status, buf.String())
 	}
 	if out != nil {
@@ -174,6 +180,11 @@ func (q *QdrantStore) EnsureCollection(ctx context.Context, dim int) error {
 		"sparse_vectors": map[string]any{sparseName: map[string]any{"modifier": "idf"}},
 	}
 	if err := q.do(ctx, http.MethodPut, q.path(""), body, nil); err != nil {
+		if errors.Is(err, errCollectionExists) {
+			// Another writer created it first, such as two first ingests into a
+			// new store at once; use the collection it made.
+			_, err = q.Layout(ctx)
+		}
 		return err
 	}
 	// Reads and deletes filter by source, so index it.
@@ -289,7 +300,7 @@ type queryResponse struct {
 // KeywordSearch ranks a hybrid collection by BM25: the query's terms against
 // each chunk's sparse vector, with Qdrant applying IDF. Hits carry their dense
 // vector. An empty query vector matches nothing.
-func (q *QdrantStore) KeywordSearch(ctx context.Context, query bm25.Vector, topK int, must map[string]string, anyTags []string) ([]SearchHit, error) {
+func (q *QdrantStore) KeywordSearch(ctx context.Context, query bm25.Vector, topK int, must map[string]string, anyTags []string, tr TimeRange) ([]SearchHit, error) {
 	if query.IsEmpty() {
 		return nil, nil
 	}
@@ -300,7 +311,7 @@ func (q *QdrantStore) KeywordSearch(ctx context.Context, query bm25.Vector, topK
 		"with_payload": true,
 		"with_vector":  []string{denseName},
 	}
-	if filter := buildFilter(must, anyTags); filter != nil {
+	if filter := buildFilter(must, anyTags, tr); filter != nil {
 		body["filter"] = filter
 	}
 	var resp queryResponse
@@ -316,9 +327,9 @@ type searchResponse struct {
 }
 
 // Search runs a vector query, optionally filtered by exact-match payload fields
-// in must (all must match) and anyTags (payload.tags contains any).
-func (q *QdrantStore) Search(ctx context.Context, vector []float32, topK int, must map[string]string, anyTags []string) ([]SearchHit, error) {
-	filter := buildFilter(must, anyTags)
+// in must (all must match), anyTags (payload.tags contains any) and tr.
+func (q *QdrantStore) Search(ctx context.Context, vector []float32, topK int, must map[string]string, anyTags []string, tr TimeRange) ([]SearchHit, error) {
+	filter := buildFilter(must, anyTags, tr)
 	l, err := q.Layout(ctx)
 	if err != nil {
 		return nil, err
@@ -450,7 +461,7 @@ func EqFilter(key, value string) map[string]any {
 	}}
 }
 
-func buildFilter(must map[string]string, anyTags []string) map[string]any {
+func buildFilter(must map[string]string, anyTags []string, tr TimeRange) map[string]any {
 	var conds []any
 	for k, val := range must {
 		if val == "" {
@@ -467,6 +478,7 @@ func buildFilter(must map[string]string, anyTags []string) map[string]any {
 			"match": map[string]any{"any": anyTags},
 		})
 	}
+	conds = append(conds, tr.conditions()...)
 	if len(conds) == 0 {
 		return nil
 	}

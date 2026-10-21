@@ -152,7 +152,7 @@ func TestSummaryAndRecordDoNotRace(t *testing.T) {
 	st := &storeRecorder{}
 	summarizeOne(context.Background(), fakeSummarizer{summary: "the summary"}, st,
 		summaryJob{SessionID: "s1", TranscriptPath: transcript(t)}, time.Second)
-	if err := storeRecord(context.Background(), st, handoff.Session{ID: "s1"}); err != nil {
+	if err := storeRecord(context.Background(), st, handoff.Session{ID: "s1"}, time.Time{}, time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 	if rec, _ := st.stored("session://s1/record"); rec != "the summary" {
@@ -264,5 +264,52 @@ func TestPRSweepDue(t *testing.T) {
 	}
 	if !prSweepDue(dir, time.Now(), poll) || prSweepDue(dir, time.Now(), poll) {
 		t.Fatal("a request sweeps once")
+	}
+}
+
+// metaRecorder keeps the metadata each store was given, by source URI.
+type metaRecorder struct {
+	mu    sync.Mutex
+	metas map[string]rag.Meta
+	texts map[string]string
+}
+
+func (m *metaRecorder) IngestText(_ context.Context, text string, meta rag.Meta) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.metas == nil {
+		m.metas, m.texts = map[string]rag.Meta{}, map[string]string{}
+	}
+	m.metas[meta.SourceURI], m.texts[meta.SourceURI] = meta, text
+	return 1, nil
+}
+
+func TestHandedOffSessionsAreDated(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", t.TempDir())
+	tr := filepath.Join(t.TempDir(), "s.jsonl")
+	body := `{"type":"user","timestamp":"2026-10-20T09:00:00Z","message":{"role":"user","content":"start"}}` + "\n" +
+		`{"type":"user","timestamp":"2026-10-21T16:45:00Z","message":{"role":"user","content":"what did we do yesterday"}}` + "\n"
+	if err := os.WriteFile(tr, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A record written before sessions were dated.
+	if err := session.WriteRecord(paths.SessionsDir(), &session.Record{SessionID: "old", Summary: "the excerpt", TranscriptPath: tr}); err != nil {
+		t.Fatal(err)
+	}
+	m := &metaRecorder{}
+	if err := storeSession(context.Background(), m, handoff.Session{ID: "old", TranscriptPath: tr, Record: true}); err != nil {
+		t.Fatal(err)
+	}
+	if meta := m.metas["session://old/transcript"]; !meta.Timeline || !strings.Contains(m.texts["session://old/transcript"], "[2026-10-21T16:45Z] user") {
+		t.Fatalf("transcript meta = %+v, text %q", meta, m.texts["session://old/transcript"])
+	}
+	rmeta := m.metas["session://old/record"]
+	if rmeta.StartedAt.Format(time.RFC3339) != "2026-10-20T09:00:00Z" || rmeta.EndedAt.Format(time.RFC3339) != "2026-10-21T16:45:00Z" ||
+		!strings.HasPrefix(m.texts["session://old/record"], "Session 2026-10-20 09:00 to 2026-10-21 16:45 UTC") {
+		t.Fatalf("record meta = %+v, text %q", rmeta, m.texts["session://old/record"])
+	}
+	// The record on disk now carries its dates too.
+	if rec, _ := session.ReadRecord(paths.SessionsDir(), "old"); rec.StartedAt != "2026-10-20T09:00:00Z" || rec.Summary != "the excerpt" {
+		t.Fatalf("record on disk = %+v", rec)
 	}
 }

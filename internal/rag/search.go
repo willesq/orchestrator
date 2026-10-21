@@ -32,6 +32,9 @@ type Hit struct {
 	// Exact reports that the hit contains, verbatim, a code identifier from
 	// the query (a name with dots, slashes, underscores or camelCase).
 	Exact bool
+	// StartedAt and EndedAt span what the hit describes, such as the turns of
+	// a transcript chunk; IngestedAt is when it was stored. Zero when unknown.
+	StartedAt, EndedAt, IngestedAt time.Time
 }
 
 // Search modes.
@@ -48,6 +51,8 @@ type SearchOpts struct {
 	Tags       []string
 	// Mode overrides the service's SearchMode for this search ("" keeps it).
 	Mode string
+	// Range keeps only content dated within it.
+	Range TimeRange
 }
 
 // ErrHybridUnavailable means a search asked explicitly for hybrid mode could
@@ -124,7 +129,7 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 			note = "collection has no keyword index; answered by meaning only"
 		}
 	}
-	raw, err := st.Search(ctx, vecs[0], opts.TopK, must, opts.Tags)
+	raw, err := st.Search(ctx, vecs[0], opts.TopK, must, opts.Tags, opts.Range)
 	if err != nil {
 		return nil, "", err
 	}
@@ -144,10 +149,10 @@ func (s *Service) hybridSearch(ctx context.Context, st *QdrantStore, query strin
 	var derr error
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); dense, derr = st.Search(ctx, vec, n, must, opts.Tags) }()
+	go func() { defer wg.Done(); dense, derr = st.Search(ctx, vec, n, must, opts.Tags, opts.Range) }()
 	go func() {
 		defer wg.Done()
-		keyword, kerr = st.KeywordSearch(ctx, bm25.Query(query), min(n*2, maxCandidates), must, opts.Tags)
+		keyword, kerr = st.KeywordSearch(ctx, bm25.Query(query), min(n*2, maxCandidates), must, opts.Tags, opts.Range)
 	}()
 	wg.Wait()
 	if derr != nil {
@@ -258,6 +263,9 @@ func toHit(r SearchHit, cosine, keyword float32, idents []string) Hit {
 		Score:      cosine,
 		Keyword:    keyword,
 		Exact:      containsAny(text, idents),
+		StartedAt:  unixTime(r.Payload[fieldStartedAt]),
+		EndedAt:    unixTime(r.Payload[fieldEndedAt]),
+		IngestedAt: unixTime(r.Payload[fieldIngestedAt]),
 	}
 }
 

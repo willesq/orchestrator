@@ -80,6 +80,8 @@ func (f *fakeQdrant) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		collectionJSON(w, c.layout)
+	case action == "" && r.Method == http.MethodPut && c != nil:
+		http.Error(w, `{"status":{"error":"Wrong input: Collection `+"`"+name+"`"+` already exists!"}}`, http.StatusConflict)
 	case action == "" && r.Method == http.MethodPut:
 		l := LayoutDense
 		if _, ok := body["sparse_vectors"]; ok {
@@ -171,8 +173,12 @@ func (c *fakeCollection) matching(filter any) []string {
 				ok = false
 			}
 			if rng, has := m["range"].(map[string]any); has {
-				v, _ := p[key].(float64)
-				if gte, has := rng["gte"].(float64); has && v < gte {
+				// Like Qdrant, a point without the field never matches a range.
+				v, present := p[key].(float64)
+				if gte, has := rng["gte"].(float64); has && (!present || v < gte) {
+					ok = false
+				}
+				if lte, has := rng["lte"].(float64); has && (!present || v > lte) {
 					ok = false
 				}
 			}

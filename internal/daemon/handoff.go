@@ -141,29 +141,40 @@ func storeSession(ctx context.Context, ing summaryIngester, s handoff.Session) e
 	}
 	ctx, cancel := context.WithTimeout(ctx, handoffTimeout)
 	defer cancel()
-	base := "session://" + s.ID
+	start, end := session.Span(msgs)
 	if s.Record {
-		if err := storeRecord(ctx, ing, s); err != nil {
+		if err := storeRecord(ctx, ing, s, start, end); err != nil {
 			return err
 		}
 	}
+	// Each chunk is dated by the turns it holds, so a session spanning days is
+	// found under the day each part happened.
 	_, err = ing.IngestText(ctx, session.TranscriptText(msgs), rag.Meta{
-		SourceURI: base + "/transcript", SourceType: "session_transcript", Tags: s.Tags,
+		SourceURI: "session://" + s.ID + "/transcript", SourceType: "session_transcript", Tags: s.Tags,
+		Timeline: true, StartedAt: start, EndedAt: end,
 	})
 	return err
 }
 
 // storeRecord stores the session record as it is on disk. The summarizer
 // writes its summary there before storing it, under the same lock, so the
-// record read here is never older than the one stored.
-func storeRecord(ctx context.Context, ing summaryIngester, s handoff.Session) error {
+// record read here is never older than the one stored. A record written
+// before sessions were dated takes start and end from the transcript, and is
+// saved with them.
+func storeRecord(ctx context.Context, ing summaryIngester, s handoff.Session, start, end time.Time) error {
 	defer lockSession(s.ID)()
 	rec, err := session.ReadRecord(paths.SessionsDir(), s.ID)
 	if err != nil {
 		return nil // no record to store
 	}
-	_, err = ing.IngestText(ctx, rec.Summary, rag.Meta{
+	if rec.StartedAt == "" && rec.EndedAt == "" && !(start.IsZero() && end.IsZero()) {
+		rec.SetSpan(start, end)
+		_ = session.WriteRecord(paths.SessionsDir(), rec)
+	}
+	recStart, recEnd := rec.Span()
+	_, err = ing.IngestText(ctx, rec.Text(), rag.Meta{
 		SourceURI: "session://" + s.ID + "/record", SourceType: "session_record", Tags: s.Tags,
+		StartedAt: recStart, EndedAt: recEnd,
 	})
 	return err
 }

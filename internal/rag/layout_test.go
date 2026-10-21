@@ -71,7 +71,7 @@ func TestHybridSearchUsesTheNamedVector(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	q := NewQdrantStore(srv.URL, "c", "")
-	if _, err := q.Search(context.Background(), []float32{1, 0}, 3, nil, nil); err != nil {
+	if _, err := q.Search(context.Background(), []float32{1, 0}, 3, nil, nil, TimeRange{}); err != nil {
 		t.Fatal(err)
 	}
 	vec, _ := body["vector"].(map[string]any)
@@ -92,7 +92,7 @@ func TestLayoutErrors(t *testing.T) {
 	if err := q.Upsert(context.Background(), []Point{{ID: "a"}}); err == nil {
 		t.Fatal("upsert without a layout succeeded")
 	}
-	if _, err := q.Search(context.Background(), nil, 1, nil, nil); err == nil {
+	if _, err := q.Search(context.Background(), nil, 1, nil, nil, TimeRange{}); err == nil {
 		t.Fatal("search without a layout succeeded")
 	}
 }
@@ -135,5 +135,31 @@ func TestPartialUpsertIsReported(t *testing.T) {
 	f.upserts["c"], f.failUpsertNo["c"] = 0, 1
 	if err := q.Upsert(context.Background(), pts[:1]); err == nil || errors.As(err, &partial) {
 		t.Fatalf("first-batch err = %v", err)
+	}
+}
+
+func TestEnsureCollectionLosingARace(t *testing.T) {
+	f, base := newFakeQdrant(t)
+	q := NewQdrantStore(base, "c", "")
+	// The store saw no collection, then another writer created it.
+	if l, _ := q.Layout(context.Background()); l != LayoutUnknown {
+		t.Fatalf("layout = %v", l)
+	}
+	f.seed("c")
+	if err := q.EnsureCollection(context.Background(), 2); err != nil {
+		t.Fatalf("losing the create race: %v", err)
+	}
+	if l, _ := q.Layout(context.Background()); l != LayoutDense {
+		t.Fatalf("layout after = %v", l)
+	}
+}
+
+func TestConflictKeepsQdrantsDetail(t *testing.T) {
+	f, base := newFakeQdrant(t)
+	f.seed("c")
+	q := NewQdrantStore(base, "c", "")
+	err := q.do(context.Background(), http.MethodPut, q.path(""), map[string]any{}, nil)
+	if !errors.Is(err, errCollectionExists) || !strings.Contains(err.Error(), "already exists") || !strings.Contains(err.Error(), "PUT") {
+		t.Fatalf("err = %v", err)
 	}
 }

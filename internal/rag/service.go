@@ -13,10 +13,12 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/willesq/orchestrator/internal/bm25"
+	"github.com/willesq/orchestrator/internal/timeline"
 )
 
 // Embedder embeds texts into vectors (implemented by internal/embed.Embedder).
@@ -31,6 +33,12 @@ type Meta struct {
 	SourceType string
 	Scope      string
 	Tags       []string
+	// StartedAt and EndedAt date the whole source, such as a session record.
+	StartedAt, EndedAt time.Time
+	// Timeline dates each chunk by the timeline markers in its own text, as a
+	// transcript carries them. StartedAt and EndedAt, when set, then bound
+	// those times, so no chunk is dated outside its session.
+	Timeline bool
 }
 
 // Service ties the embedder and vector store together.
@@ -249,6 +257,10 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 		return nil, 0, err
 	}
 	points := make([]Point, len(chunks))
+	ingested := time.Now()
+	// A transcript chunk cut from the middle of a long turn has no marker of its
+	// own; it belongs to the last turn dated before it.
+	var carried time.Time
 	for i, c := range chunks {
 		payload := map[string]any{
 			"text":        c,
@@ -262,6 +274,14 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 		if h := pieces[i].heading; h != "" {
 			payload["heading"] = h
 		}
+		start, end := m.StartedAt, m.EndedAt
+		if m.Timeline {
+			start, end = chunkSpan(c, &carried)
+			start, end = clamp(start, end, m.StartedAt, m.EndedAt)
+		}
+		setTime(payload, fieldStartedAt, start)
+		setTime(payload, fieldEndedAt, end)
+		setTime(payload, fieldIngestedAt, ingested)
 		points[i] = Point{ID: pointID(m.SourceURI, i), Vector: vecs[i], Sparse: bm25.Document(c, s.BM25), Payload: payload}
 	}
 	return points, dim, nil
@@ -315,6 +335,9 @@ type SourceSummary struct {
 	Scope      string
 	Tags       []string
 	Chunks     int
+	// StartedAt and EndedAt span the source's dated chunks; IngestedAt is the
+	// latest store of any of them. Zero when unknown.
+	StartedAt, EndedAt, IngestedAt time.Time
 }
 
 // ListSourcesOpts filters the inventory.
@@ -323,6 +346,8 @@ type ListSourcesOpts struct {
 	Scope      string
 	URIPrefix  string
 	Limit      int
+	// Range keeps only sources with content dated within it.
+	Range TimeRange
 }
 
 // ListSources enumerates distinct sources in the store with their chunk counts.
@@ -341,8 +366,8 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 	if opts.SourceType != "" {
 		must["source_type"] = opts.SourceType
 	}
-	filter := buildFilter(must, nil)
-	fields := []string{"source_uri", "source_type", "scope", "tags"}
+	filter := buildFilter(must, nil, opts.Range)
+	fields := []string{"source_uri", "source_type", "scope", "tags", fieldStartedAt, fieldEndedAt, fieldIngestedAt}
 
 	agg := map[string]*SourceSummary{}
 	total := 0
@@ -374,6 +399,15 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 				agg[uri] = cur
 			}
 			cur.Chunks++
+			if t := unixTime(p.Payload[fieldStartedAt]); !t.IsZero() && (cur.StartedAt.IsZero() || t.Before(cur.StartedAt)) {
+				cur.StartedAt = t
+			}
+			if t := unixTime(p.Payload[fieldEndedAt]); t.After(cur.EndedAt) {
+				cur.EndedAt = t
+			}
+			if t := unixTime(p.Payload[fieldIngestedAt]); t.After(cur.IngestedAt) {
+				cur.IngestedAt = t
+			}
 		}
 		if next == nil {
 			break
@@ -457,4 +491,44 @@ func deleteSource(ctx context.Context, st *QdrantStore, uri string) (int, error)
 		return 0, err
 	}
 	return n, st.DeleteByFilter(ctx, filter)
+}
+
+// chunkSpan dates a chunk by the timeline markers in it. A chunk with none
+// takes the time carried from the chunk before; the latest time seen is
+// carried on.
+func chunkSpan(text string, carried *time.Time) (start, end time.Time) {
+	first, last, ok := timeline.Span(text)
+	if !ok {
+		return *carried, *carried
+	}
+	if !carried.IsZero() && first.After(*carried) && !strings.HasPrefix(strings.TrimLeft(text, " \n"), timeline.Marker(first)) {
+		// The chunk opens mid-turn: that turn began at the carried time.
+		first = *carried
+	}
+	*carried = last
+	return first, last
+}
+
+// clamp bounds a chunk's span to [lo, hi]; a zero bound leaves that side open.
+func clamp(start, end, lo, hi time.Time) (time.Time, time.Time) {
+	limit := func(t time.Time) time.Time {
+		if t.IsZero() {
+			return t
+		}
+		if !lo.IsZero() && t.Before(lo) {
+			return lo
+		}
+		if !hi.IsZero() && t.After(hi) {
+			return hi
+		}
+		return t
+	}
+	return limit(start), limit(end)
+}
+
+// setTime stores t in payload as Unix seconds, leaving unknown times out.
+func setTime(payload map[string]any, key string, t time.Time) {
+	if !t.IsZero() {
+		payload[key] = t.Unix()
+	}
 }

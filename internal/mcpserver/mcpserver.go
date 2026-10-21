@@ -11,14 +11,17 @@ import (
 	"math"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
+	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/routing"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/taskfmt"
+	"github.com/willesq/orchestrator/internal/timeline"
 	"github.com/willesq/orchestrator/internal/version"
 )
 
@@ -30,11 +33,17 @@ func (r ragTools) search(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 	if query == "" {
 		return mcp.NewToolResultError("query is required"), nil
 	}
+	since, until, err := bounds(req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	resp, err := r.client.Search(ctx, &orchdv1.SearchRequest{
 		Query:      query,
 		TopK:       getInt(req, "top_k", 5),
 		Scope:      req.GetString("scope", ""),
 		SourceType: req.GetString("source_type", ""),
+		Since:      since,
+		Until:      until,
 	})
 	if err != nil {
 		return mcp.NewToolResultErrorFromErr("search failed", err), nil
@@ -61,11 +70,17 @@ func (r ragTools) ingest(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 }
 
 func (r ragTools) listSources(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	since, until, err := bounds(req)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	resp, err := r.client.ListSources(ctx, &orchdv1.ListSourcesRequest{
 		SourceType: req.GetString("source_type", ""),
 		Scope:      req.GetString("scope", ""),
 		UriPrefix:  req.GetString("uri_prefix", ""),
 		Limit:      getInt(req, "limit", 50),
+		Since:      since,
+		Until:      until,
 	})
 	if err != nil {
 		return mcp.NewToolResultErrorFromErr("list sources failed", err), nil
@@ -111,6 +126,8 @@ func NewRAG(client orchdv1.OrchdClient) *server.MCPServer {
 		mcp.WithString("scope", mcp.Description("filter by scope")),
 		mcp.WithString("uri_prefix", mcp.Description("filter to URIs with this prefix, e.g. session://")),
 		mcp.WithNumber("limit", mcp.Description("max sources to return (default 50, 0 for all)")),
+		mcp.WithString("since", mcp.Description(sinceHelp)),
+		mcp.WithString("until", mcp.Description(untilHelp)),
 	), rt.listSources)
 	s.AddTool(mcp.NewTool("rag_delete_source",
 		mcp.WithDescription("Permanently delete every chunk belonging to one source URI. "+
@@ -121,11 +138,14 @@ func NewRAG(client orchdv1.OrchdClient) *server.MCPServer {
 			mcp.Description("must be true; set it only after the user has asked for this exact URI to be deleted")),
 	), rt.deleteSource)
 	s.AddTool(mcp.NewTool("rag_search",
-		mcp.WithDescription("Search the orchestrator RAG knowledge store"),
+		mcp.WithDescription("Search the orchestrator RAG knowledge store. Results show when dated content "+
+			"happened, in UTC. For questions about a period (yesterday, this week), pass since/until."),
 		mcp.WithString("query", mcp.Required(), mcp.Description("natural-language query")),
 		mcp.WithNumber("top_k", mcp.Description("max results (default 5)")),
 		mcp.WithString("scope", mcp.Description("filter by scope, e.g. work|personal|project:x")),
 		mcp.WithString("source_type", mcp.Description("filter by source type")),
+		mcp.WithString("since", mcp.Description(sinceHelp)),
+		mcp.WithString("until", mcp.Description(untilHelp)),
 	), rt.search)
 	s.AddTool(mcp.NewTool("rag_ingest_text",
 		mcp.WithDescription("Ingest text into the orchestrator RAG store. Ingesting again with the same source_uri "+
@@ -287,6 +307,32 @@ func NewQueue(client orchdv1.OrchdClient) *server.MCPServer {
 }
 
 // Serve runs an MCP server over stdio until the client disconnects.
+const (
+	sinceHelp = "only content dated at or after this: 2026-10-21, an RFC 3339 time, today, yesterday, " +
+		"or an age like 7d or 12h (UTC). Undated content is left out."
+	untilHelp = "only content dated at or before this; a date means the end of that day (UTC)"
+)
+
+// bounds reads the since and until arguments as Unix seconds (0 = open).
+func bounds(req mcp.CallToolRequest) (since, until int64, err error) {
+	now := time.Now()
+	s, err := rag.ParseBound(req.GetString("since", ""), now, false)
+	if err != nil {
+		return 0, 0, fmt.Errorf("since: %w", err)
+	}
+	u, err := rag.ParseBound(req.GetString("until", ""), now, true)
+	if err != nil {
+		return 0, 0, fmt.Errorf("until: %w", err)
+	}
+	if !s.IsZero() {
+		since = s.Unix()
+	}
+	if !u.IsZero() {
+		until = u.Unix()
+	}
+	return since, until, nil
+}
+
 func Serve(s *server.MCPServer) error {
 	return server.ServeStdio(s)
 }
@@ -297,8 +343,11 @@ func formatHits(hits []*orchdv1.SearchHit) string {
 	}
 	var b strings.Builder
 	for i, h := range hits {
-		fmt.Fprintf(&b, "%d. [%.3f] %s (%s)\n   %s\n",
-			i+1, h.GetScore(), h.GetSourceUri(), h.GetSourceType(), h.GetText())
+		fmt.Fprintf(&b, "%d. [%.3f] %s (%s)", i+1, h.GetScore(), h.GetSourceUri(), h.GetSourceType())
+		if when := timeline.Describe(h.GetStartedAt(), h.GetEndedAt(), h.GetSourceType()); when != "" {
+			fmt.Fprintf(&b, " · %s", when)
+		}
+		fmt.Fprintf(&b, "\n   %s\n", h.GetText())
 	}
 	return b.String()
 }
@@ -322,6 +371,9 @@ func formatSources(resp *orchdv1.ListSourcesResponse) string {
 		}
 		if len(s.GetTags()) > 0 {
 			fmt.Fprintf(&b, "  tags=%s", strings.Join(s.GetTags(), ","))
+		}
+		if when := timeline.Describe(s.GetStartedAt(), s.GetEndedAt(), s.GetSourceType()); when != "" {
+			fmt.Fprintf(&b, "  when=%s", when)
 		}
 		b.WriteByte('\n')
 	}
