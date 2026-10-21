@@ -9,6 +9,15 @@
 | Web pages | Fetched on a schedule (`orch source add web <url>`) | `web` |
 | Anything else | `orch ingest`, or the `rag_ingest_text` MCP tool | your choice |
 
+Every stored chunk records when it was stored. Session transcripts mark each turn with its UTC
+time, such as `[2026-10-21T14:02Z] user: …`, and each chunk is dated by the turns it holds, so a
+session spanning days is found under the day each part happened. Session records carry the
+session's start and end. Search and source listings show these dates, and `--since`/`--until`
+(or `since`/`until` on the MCP tools) keep only content dated in that range: a date
+(`2026-10-21`), an RFC 3339 time, `today`, `yesterday`, or an age like `7d`. Undated content is
+left out of ranged results. `orch rag backfill-sessions --apply` dates sessions stored before
+this, from their transcripts still on disk.
+
 Session records start as an excerpt; `orchd` then replaces them with a summary written by a small
 model (`sessions.summarize.*`, default `haiku`). Directories in `ingest.exclude_dirs` (vendor,
 node_modules, build output and similar) are never walked. Redaction is pattern-based and does

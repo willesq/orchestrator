@@ -14,21 +14,30 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/willesq/orchestrator/internal/timeline"
 )
 
 // Message is one extracted turn.
 type Message struct {
 	Role string
 	Text string
+	// Time is when the harness logged the turn; zero when the transcript does
+	// not say.
+	Time time.Time
 }
 
 // Record is the compact, human-inspectable per-session record.
 type Record struct {
-	SessionID      string `yaml:"session_id"`
-	Cwd            string `yaml:"cwd,omitempty"`
+	SessionID string `yaml:"session_id"`
+	Cwd       string `yaml:"cwd,omitempty"`
+	// StartedAt and EndedAt are the session's first and last turns, RFC 3339
+	// in UTC; empty when the transcript carries no times.
+	StartedAt      string `yaml:"started_at,omitempty"`
 	EndedAt        string `yaml:"ended_at,omitempty"`
 	Summary        string `yaml:"summary"`
 	TranscriptPath string `yaml:"transcript_path,omitempty"`
@@ -41,8 +50,9 @@ type Record struct {
 }
 
 type rawLine struct {
-	Type    string          `json:"type"`
-	Message json.RawMessage `json:"message"`
+	Type      string          `json:"type"`
+	Message   json.RawMessage `json:"message"`
+	Timestamp string          `json:"timestamp"`
 }
 
 type rawMessage struct {
@@ -87,7 +97,9 @@ func ParseTranscript(path string) ([]Message, error) {
 		if role == "" {
 			role = rl.Type
 		}
-		msgs = append(msgs, Message{Role: role, Text: text})
+		// A missing or malformed time leaves the turn undated, not dropped.
+		ts, _ := time.Parse(time.RFC3339Nano, rl.Timestamp)
+		msgs = append(msgs, Message{Role: role, Text: text, Time: ts.UTC()})
 	}
 	return msgs, sc.Err()
 }
@@ -118,9 +130,16 @@ func extractText(content json.RawMessage) string {
 func TranscriptText(msgs []Message) string {
 	var b strings.Builder
 	for _, m := range msgs {
+		// Each turn carries its own time, so a session spanning days says which
+		// day each request was made, and each stored chunk can be dated.
+		if !m.Time.IsZero() {
+			b.WriteString(timeline.Marker(m.Time))
+			b.WriteString(" ")
+		}
 		b.WriteString(m.Role)
 		b.WriteString(": ")
-		b.WriteString(m.Text)
+		// A message quoting a marker must not date the chunk it lands in.
+		b.WriteString(timeline.Neutralize(m.Text))
 		b.WriteString("\n\n")
 	}
 	return b.String()
@@ -150,13 +169,58 @@ func Summarize(msgs []Message, maxChars int) string {
 
 // BuildRecord assembles a Record from parsed messages.
 func BuildRecord(sessionID, cwd, transcriptPath string, msgs []Message) *Record {
-	return &Record{
+	r := &Record{
 		SessionID:      sessionID,
 		Cwd:            cwd,
 		Summary:        Summarize(msgs, 280),
 		TranscriptPath: transcriptPath,
 		Messages:       len(msgs),
 	}
+	r.SetSpan(Span(msgs))
+	return r
+}
+
+// Span returns the times of the first and last dated turns; zero when none is.
+func Span(msgs []Message) (start, end time.Time) {
+	for _, m := range msgs {
+		if m.Time.IsZero() {
+			continue
+		}
+		if start.IsZero() || m.Time.Before(start) {
+			start = m.Time
+		}
+		if m.Time.After(end) {
+			end = m.Time
+		}
+	}
+	return start, end
+}
+
+// SetSpan records when the session ran; zero times leave the fields empty.
+func (r *Record) SetSpan(start, end time.Time) {
+	if !start.IsZero() {
+		r.StartedAt = start.UTC().Format(time.RFC3339)
+	}
+	if !end.IsZero() {
+		r.EndedAt = end.UTC().Format(time.RFC3339)
+	}
+}
+
+// Span returns when the session ran; zero for a time the record lacks.
+func (r *Record) Span() (start, end time.Time) {
+	start, _ = time.Parse(time.RFC3339, r.StartedAt)
+	end, _ = time.Parse(time.RFC3339, r.EndedAt)
+	return start, end
+}
+
+// Text is the record as stored: its summary, led by when the session ran so
+// the stored text dates itself.
+func (r *Record) Text() string {
+	start, end := r.Span()
+	if start.IsZero() && end.IsZero() {
+		return r.Summary
+	}
+	return "Session " + timeline.Range(start, end) + "\n\n" + r.Summary
 }
 
 // WriteRecord writes the authoritative record to <dir>/<id>.yaml.

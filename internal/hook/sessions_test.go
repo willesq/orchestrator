@@ -279,3 +279,25 @@ func TestSessionEndRequestsASummary(t *testing.T) {
 		t.Errorf("summary requests = %v", fc.summarized)
 	}
 }
+
+func TestSessionEndDatesTheRecord(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	body := `{"type":"user","timestamp":"2026-10-21T14:02:00Z","message":{"role":"user","content":"add retries"}}` + "\n" +
+		`{"type":"assistant","timestamp":"2026-10-21T15:40:00Z","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}` + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fc := &fakeClient{}
+	if err := sessionEnd(Payload{SessionID: "sid", TranscriptPath: path}, factory(fc, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if len(fc.ingested) != 1 {
+		t.Fatalf("ingests = %d", len(fc.ingested))
+	}
+	req := fc.ingested[0]
+	if req.GetStartedAt() != 1792591320 || req.GetEndedAt() != 1792597200 ||
+		!strings.HasPrefix(req.GetText(), "Session 2026-10-21 14:02 to 15:40 UTC") {
+		t.Fatalf("record ingest = %+v", req)
+	}
+}

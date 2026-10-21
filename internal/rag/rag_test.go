@@ -1,6 +1,9 @@
 package rag
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestChunkText(t *testing.T) {
 	tests := []struct {
@@ -60,15 +63,18 @@ func TestBuildFilter(t *testing.T) {
 		tags      []string
 		wantNil   bool
 		wantConds int
+		tr        TimeRange
 	}{
 		{name: "empty is nil", must: nil, tags: nil, wantNil: true},
 		{name: "skips empty values", must: map[string]string{"scope": "work", "source_type": ""}, tags: nil, wantConds: 1},
 		{name: "scope plus tags", must: map[string]string{"scope": "work"}, tags: []string{"go"}, wantConds: 2},
 		{name: "tags only", must: nil, tags: []string{"a", "b"}, wantConds: 1},
+		{name: "a date range adds both ends", tr: TimeRange{Since: time.Unix(100, 0), Until: time.Unix(200, 0)}, wantConds: 2},
+		{name: "an open-ended range adds one", tr: TimeRange{Since: time.Unix(100, 0)}, wantConds: 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := buildFilter(tt.must, tt.tags)
+			f := buildFilter(tt.must, tt.tags, tt.tr)
 			if tt.wantNil {
 				if f != nil {
 					t.Errorf("expected nil filter, got %v", f)

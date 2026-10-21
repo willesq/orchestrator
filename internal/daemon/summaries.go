@@ -110,12 +110,21 @@ func summarizeOne(ctx context.Context, s sessionSummarizer, ing summaryIngester,
 	// On disk first, under the session's lock: a hand-off storing the record
 	// reads it from there, so it can never store the excerpt over this.
 	defer lockSession(j.SessionID)()
-	if rec, err := session.ReadRecord(paths.SessionsDir(), j.SessionID); err == nil {
-		rec.Summary = summary
+	rec, err := session.ReadRecord(paths.SessionsDir(), j.SessionID)
+	if err != nil {
+		rec = &session.Record{SessionID: j.SessionID}
+	}
+	rec.Summary = summary
+	if rec.StartedAt == "" && rec.EndedAt == "" {
+		rec.SetSpan(session.Span(msgs))
+	}
+	if err == nil {
 		_ = session.WriteRecord(paths.SessionsDir(), rec)
 	}
-	if _, err := ing.IngestText(jobCtx, summary, rag.Meta{
+	start, end := rec.Span()
+	if _, err := ing.IngestText(jobCtx, rec.Text(), rag.Meta{
 		SourceURI: "session://" + j.SessionID + "/record", SourceType: "session_record", Tags: j.Tags,
+		StartedAt: start, EndedAt: end,
 	}); err != nil {
 		log.Printf("session %s: store summary: %v", j.SessionID, err)
 	}

@@ -695,6 +695,8 @@ func TestModelFetchAlreadyPresent(t *testing.T) {
 
 // fakeClient implements orchdv1.OrchdClient with canned responses.
 type fakeClient struct {
+	searchReq    *orchdv1.SearchRequest
+	listReq      *orchdv1.ListSourcesRequest
 	ping         *orchdv1.PingResponse
 	ingest       *orchdv1.IngestResponse
 	search       *orchdv1.SearchResponse
@@ -722,7 +724,8 @@ func (f *fakeClient) Ingest(context.Context, *orchdv1.IngestRequest, ...grpc.Cal
 	return f.ingest, f.err
 }
 
-func (f *fakeClient) Search(context.Context, *orchdv1.SearchRequest, ...grpc.CallOption) (*orchdv1.SearchResponse, error) {
+func (f *fakeClient) Search(_ context.Context, req *orchdv1.SearchRequest, _ ...grpc.CallOption) (*orchdv1.SearchResponse, error) {
+	f.searchReq = req
 	return f.search, f.err
 }
 
@@ -731,7 +734,8 @@ func (f *fakeClient) Dispatch(_ context.Context, req *orchdv1.DispatchRequest, _
 	return f.dispatch, f.err
 }
 
-func (f *fakeClient) ListSources(context.Context, *orchdv1.ListSourcesRequest, ...grpc.CallOption) (*orchdv1.ListSourcesResponse, error) {
+func (f *fakeClient) ListSources(_ context.Context, req *orchdv1.ListSourcesRequest, _ ...grpc.CallOption) (*orchdv1.ListSourcesResponse, error) {
+	f.listReq = req
 	return f.listSources, f.err
 }
 

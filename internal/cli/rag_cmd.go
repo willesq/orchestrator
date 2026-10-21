@@ -14,12 +14,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/willesq/orchestrator/internal/rag"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/timeline"
 )
 
 func newRAGCmd(cf clientFactory) *cobra.Command {
 	cmd := &cobra.Command{Use: "rag", Short: "Inspect and prune the RAG store's contents"}
-	cmd.AddCommand(newRAGSourcesCmd(cf), newRAGForgetCmd(cf), newRAGEvalCmd(cf), newRAGMigrateCmd(cf))
+	cmd.AddCommand(newRAGSourcesCmd(cf), newRAGForgetCmd(cf), newRAGEvalCmd(cf), newRAGMigrateCmd(cf), newRAGBackfillCmd(cf))
 	return cmd
 }
 
@@ -29,12 +31,18 @@ func newRAGSourcesCmd(cf clientFactory) *cobra.Command {
 		scope      string
 		prefix     string
 		limit      int
+		since      string
+		until      string
 	)
 	cmd := &cobra.Command{
 		Use:   "sources",
 		Short: "List the distinct sources held in the vector store, with chunk counts",
 		Args:  cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
+			from, to, err := parseBounds(since, until)
+			if err != nil {
+				return err
+			}
 			client, cleanup, err := cf()
 			if err != nil {
 				return err
@@ -47,6 +55,8 @@ func newRAGSourcesCmd(cf clientFactory) *cobra.Command {
 				Scope:      scope,
 				UriPrefix:  prefix,
 				Limit:      clampInt32(limit),
+				Since:      from,
+				Until:      to,
 			})
 			if err != nil {
 				return err
@@ -70,6 +80,9 @@ func newRAGSourcesCmd(cf clientFactory) *cobra.Command {
 				if len(s.GetTags()) > 0 {
 					fmt.Fprintf(out, "  tags=%s", termSafe(strings.Join(s.GetTags(), ",")))
 				}
+				if when := timeline.Describe(s.GetStartedAt(), s.GetEndedAt(), s.GetSourceType()); when != "" {
+					fmt.Fprintf(out, "  when=%s", when)
+				}
 				fmt.Fprintln(out)
 			}
 			return nil
@@ -79,7 +92,35 @@ func newRAGSourcesCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringVar(&scope, "scope", "", "filter by scope")
 	cmd.Flags().StringVar(&prefix, "prefix", "", "filter to URIs with this prefix, e.g. session://")
 	cmd.Flags().IntVar(&limit, "limit", 50, "max sources to show (0 for all)")
+	addBoundFlags(cmd, &since, &until)
 	return cmd
+}
+
+// addBoundFlags adds --since and --until, which limit results to dated content.
+func addBoundFlags(cmd *cobra.Command, since, until *string) {
+	cmd.Flags().StringVar(since, "since", "", "only content dated from: 2026-10-21, an RFC 3339 time, today, yesterday, or an age like 7d (UTC)")
+	cmd.Flags().StringVar(until, "until", "", "only content dated to: as --since; a date means the end of that day")
+}
+
+// parseBounds reads --since and --until as Unix seconds (0 = open).
+func parseBounds(since, until string) (int64, int64, error) {
+	now := time.Now()
+	s, err := rag.ParseBound(since, now, false)
+	if err != nil {
+		return 0, 0, fmt.Errorf("--since: %w", err)
+	}
+	u, err := rag.ParseBound(until, now, true)
+	if err != nil {
+		return 0, 0, fmt.Errorf("--until: %w", err)
+	}
+	var from, to int64
+	if !s.IsZero() {
+		from = s.Unix()
+	}
+	if !u.IsZero() {
+		to = u.Unix()
+	}
+	return from, to, nil
 }
 
 func newRAGForgetCmd(cf clientFactory) *cobra.Command {

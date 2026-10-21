@@ -111,7 +111,7 @@ func TestSearch(t *testing.T) {
 
 			q := NewQdrantStore(srv.URL, "c", tt.apiKey)
 			hits, err := q.Search(context.Background(), []float32{0.1}, 5,
-				map[string]string{"scope": "work"}, []string{"go"})
+				map[string]string{"scope": "work"}, []string{"go"}, TimeRange{})
 			if err != nil {
 				t.Fatalf("Search: %v", err)
 			}
@@ -141,7 +141,7 @@ func TestQdrantErrorStatus(t *testing.T) {
 			defer srv.Close()
 
 			q := NewQdrantStore(srv.URL, "c", "")
-			if _, err := q.Search(context.Background(), []float32{0.1}, 1, nil, nil); err == nil {
+			if _, err := q.Search(context.Background(), []float32{0.1}, 1, nil, nil, TimeRange{}); err == nil {
 				t.Errorf("expected error on %d response", tt.status)
 			}
 		})

@@ -110,12 +110,17 @@ func (x *PingResponse) GetUptimeSeconds() int64 {
 }
 
 type IngestRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
-	SourceUri     string                 `protobuf:"bytes,2,opt,name=source_uri,json=sourceUri,proto3" json:"source_uri,omitempty"`
-	SourceType    string                 `protobuf:"bytes,3,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"`
-	Scope         string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
-	Tags          []string               `protobuf:"bytes,5,rep,name=tags,proto3" json:"tags,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Text       string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	SourceUri  string                 `protobuf:"bytes,2,opt,name=source_uri,json=sourceUri,proto3" json:"source_uri,omitempty"`
+	SourceType string                 `protobuf:"bytes,3,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"`
+	Scope      string                 `protobuf:"bytes,4,opt,name=scope,proto3" json:"scope,omitempty"`
+	Tags       []string               `protobuf:"bytes,5,rep,name=tags,proto3" json:"tags,omitempty"`
+	// started_at and ended_at date the whole text (Unix seconds; 0 = unknown).
+	StartedAt int64 `protobuf:"varint,6,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	EndedAt   int64 `protobuf:"varint,7,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`
+	// timeline dates each chunk by the time markers in its own text instead.
+	Timeline      bool `protobuf:"varint,8,opt,name=timeline,proto3" json:"timeline,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -185,6 +190,27 @@ func (x *IngestRequest) GetTags() []string {
 	return nil
 }
 
+func (x *IngestRequest) GetStartedAt() int64 {
+	if x != nil {
+		return x.StartedAt
+	}
+	return 0
+}
+
+func (x *IngestRequest) GetEndedAt() int64 {
+	if x != nil {
+		return x.EndedAt
+	}
+	return 0
+}
+
+func (x *IngestRequest) GetTimeline() bool {
+	if x != nil {
+		return x.Timeline
+	}
+	return false
+}
+
 type IngestResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Chunks        int32                  `protobuf:"varint,1,opt,name=chunks,proto3" json:"chunks,omitempty"`
@@ -230,13 +256,16 @@ func (x *IngestResponse) GetChunks() int32 {
 }
 
 type SearchRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Query         string                 `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	TopK          int32                  `protobuf:"varint,2,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
-	Scope         string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`                             // optional exact-match filter
-	SourceType    string                 `protobuf:"bytes,4,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"` // optional exact-match filter
-	Tags          []string               `protobuf:"bytes,5,rep,name=tags,proto3" json:"tags,omitempty"`                               // optional: payload.tags contains any
-	Mode          string                 `protobuf:"bytes,6,opt,name=mode,proto3" json:"mode,omitempty"`                               // optional: "hybrid" or "dense"; empty uses rag.search.mode
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Query      string                 `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	TopK       int32                  `protobuf:"varint,2,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
+	Scope      string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`                             // optional exact-match filter
+	SourceType string                 `protobuf:"bytes,4,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"` // optional exact-match filter
+	Tags       []string               `protobuf:"bytes,5,rep,name=tags,proto3" json:"tags,omitempty"`                               // optional: payload.tags contains any
+	Mode       string                 `protobuf:"bytes,6,opt,name=mode,proto3" json:"mode,omitempty"`                               // optional: "hybrid" or "dense"; empty uses rag.search.mode
+	// optional: only content dated within [since, until] (Unix seconds; 0 = open)
+	Since         int64 `protobuf:"varint,7,opt,name=since,proto3" json:"since,omitempty"`
+	Until         int64 `protobuf:"varint,8,opt,name=until,proto3" json:"until,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -313,6 +342,20 @@ func (x *SearchRequest) GetMode() string {
 	return ""
 }
 
+func (x *SearchRequest) GetSince() int64 {
+	if x != nil {
+		return x.Since
+	}
+	return 0
+}
+
+func (x *SearchRequest) GetUntil() int64 {
+	if x != nil {
+		return x.Until
+	}
+	return 0
+}
+
 type SearchResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Hits  []*SearchHit           `protobuf:"bytes,1,rep,name=hits,proto3" json:"hits,omitempty"`
@@ -368,15 +411,20 @@ func (x *SearchResponse) GetFallback() string {
 }
 
 type SearchHit struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
-	SourceUri     string                 `protobuf:"bytes,2,opt,name=source_uri,json=sourceUri,proto3" json:"source_uri,omitempty"`
-	SourceType    string                 `protobuf:"bytes,3,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"`
-	Score         float32                `protobuf:"fixed32,4,opt,name=score,proto3" json:"score,omitempty"`
-	Scope         string                 `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`
-	Tags          []string               `protobuf:"bytes,6,rep,name=tags,proto3" json:"tags,omitempty"`
-	KeywordScore  float32                `protobuf:"fixed32,7,opt,name=keyword_score,json=keywordScore,proto3" json:"keyword_score,omitempty"` // BM25 score; 0 when keyword search did not find it
-	Exact         bool                   `protobuf:"varint,8,opt,name=exact,proto3" json:"exact,omitempty"`                                    // contains, verbatim, a code identifier from the query
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Text         string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	SourceUri    string                 `protobuf:"bytes,2,opt,name=source_uri,json=sourceUri,proto3" json:"source_uri,omitempty"`
+	SourceType   string                 `protobuf:"bytes,3,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"`
+	Score        float32                `protobuf:"fixed32,4,opt,name=score,proto3" json:"score,omitempty"`
+	Scope        string                 `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`
+	Tags         []string               `protobuf:"bytes,6,rep,name=tags,proto3" json:"tags,omitempty"`
+	KeywordScore float32                `protobuf:"fixed32,7,opt,name=keyword_score,json=keywordScore,proto3" json:"keyword_score,omitempty"` // BM25 score; 0 when keyword search did not find it
+	Exact        bool                   `protobuf:"varint,8,opt,name=exact,proto3" json:"exact,omitempty"`                                    // contains, verbatim, a code identifier from the query
+	// when what the hit describes happened, and when it was stored
+	// (Unix seconds; 0 = unknown)
+	StartedAt     int64 `protobuf:"varint,9,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	EndedAt       int64 `protobuf:"varint,10,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`
+	IngestedAt    int64 `protobuf:"varint,11,opt,name=ingested_at,json=ingestedAt,proto3" json:"ingested_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -467,12 +515,37 @@ func (x *SearchHit) GetExact() bool {
 	return false
 }
 
+func (x *SearchHit) GetStartedAt() int64 {
+	if x != nil {
+		return x.StartedAt
+	}
+	return 0
+}
+
+func (x *SearchHit) GetEndedAt() int64 {
+	if x != nil {
+		return x.EndedAt
+	}
+	return 0
+}
+
+func (x *SearchHit) GetIngestedAt() int64 {
+	if x != nil {
+		return x.IngestedAt
+	}
+	return 0
+}
+
 type ListSourcesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SourceType    string                 `protobuf:"bytes,1,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"` // optional exact-match filter
-	Scope         string                 `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`                             // optional exact-match filter
-	UriPrefix     string                 `protobuf:"bytes,3,opt,name=uri_prefix,json=uriPrefix,proto3" json:"uri_prefix,omitempty"`    // optional prefix filter, e.g. "session://"
-	Limit         int32                  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`                            // 0 means no cap
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	SourceType string                 `protobuf:"bytes,1,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"` // optional exact-match filter
+	Scope      string                 `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`                             // optional exact-match filter
+	UriPrefix  string                 `protobuf:"bytes,3,opt,name=uri_prefix,json=uriPrefix,proto3" json:"uri_prefix,omitempty"`    // optional prefix filter, e.g. "session://"
+	Limit      int32                  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`                            // 0 means no cap
+	// optional: only sources with content dated within [since, until]
+	// (Unix seconds; 0 = open)
+	Since         int64 `protobuf:"varint,5,opt,name=since,proto3" json:"since,omitempty"`
+	Until         int64 `protobuf:"varint,6,opt,name=until,proto3" json:"until,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -531,6 +604,20 @@ func (x *ListSourcesRequest) GetUriPrefix() string {
 func (x *ListSourcesRequest) GetLimit() int32 {
 	if x != nil {
 		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListSourcesRequest) GetSince() int64 {
+	if x != nil {
+		return x.Since
+	}
+	return 0
+}
+
+func (x *ListSourcesRequest) GetUntil() int64 {
+	if x != nil {
+		return x.Until
 	}
 	return 0
 }
@@ -597,12 +684,17 @@ func (x *ListSourcesResponse) GetTotalChunks() int32 {
 
 // SourceSummary is one distinct source_uri and what the store holds for it.
 type SourceSummary struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SourceUri     string                 `protobuf:"bytes,1,opt,name=source_uri,json=sourceUri,proto3" json:"source_uri,omitempty"`
-	SourceType    string                 `protobuf:"bytes,2,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"`
-	Scope         string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
-	Chunks        int32                  `protobuf:"varint,4,opt,name=chunks,proto3" json:"chunks,omitempty"`
-	Tags          []string               `protobuf:"bytes,5,rep,name=tags,proto3" json:"tags,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	SourceUri  string                 `protobuf:"bytes,1,opt,name=source_uri,json=sourceUri,proto3" json:"source_uri,omitempty"`
+	SourceType string                 `protobuf:"bytes,2,opt,name=source_type,json=sourceType,proto3" json:"source_type,omitempty"`
+	Scope      string                 `protobuf:"bytes,3,opt,name=scope,proto3" json:"scope,omitempty"`
+	Chunks     int32                  `protobuf:"varint,4,opt,name=chunks,proto3" json:"chunks,omitempty"`
+	Tags       []string               `protobuf:"bytes,5,rep,name=tags,proto3" json:"tags,omitempty"`
+	// span of the source's dated content, and its latest store
+	// (Unix seconds; 0 = unknown)
+	StartedAt     int64 `protobuf:"varint,6,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	EndedAt       int64 `protobuf:"varint,7,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`
+	IngestedAt    int64 `protobuf:"varint,8,opt,name=ingested_at,json=ingestedAt,proto3" json:"ingested_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -670,6 +762,27 @@ func (x *SourceSummary) GetTags() []string {
 		return x.Tags
 	}
 	return nil
+}
+
+func (x *SourceSummary) GetStartedAt() int64 {
+	if x != nil {
+		return x.StartedAt
+	}
+	return 0
+}
+
+func (x *SourceSummary) GetEndedAt() int64 {
+	if x != nil {
+		return x.EndedAt
+	}
+	return 0
+}
+
+func (x *SourceSummary) GetIngestedAt() int64 {
+	if x != nil {
+		return x.IngestedAt
+	}
+	return 0
 }
 
 type DeleteSourceRequest struct {
@@ -2327,7 +2440,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\vPingRequest\"O\n" +
 	"\fPingResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12%\n" +
-	"\x0euptime_seconds\x18\x02 \x01(\x03R\ruptimeSeconds\"\x8d\x01\n" +
+	"\x0euptime_seconds\x18\x02 \x01(\x03R\ruptimeSeconds\"\xe3\x01\n" +
 	"\rIngestRequest\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x1d\n" +
 	"\n" +
@@ -2335,9 +2448,13 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\vsource_type\x18\x03 \x01(\tR\n" +
 	"sourceType\x12\x14\n" +
 	"\x05scope\x18\x04 \x01(\tR\x05scope\x12\x12\n" +
-	"\x04tags\x18\x05 \x03(\tR\x04tags\"(\n" +
+	"\x04tags\x18\x05 \x03(\tR\x04tags\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\x06 \x01(\x03R\tstartedAt\x12\x19\n" +
+	"\bended_at\x18\a \x01(\x03R\aendedAt\x12\x1a\n" +
+	"\btimeline\x18\b \x01(\bR\btimeline\"(\n" +
 	"\x0eIngestResponse\x12\x16\n" +
-	"\x06chunks\x18\x01 \x01(\x05R\x06chunks\"\x99\x01\n" +
+	"\x06chunks\x18\x01 \x01(\x05R\x06chunks\"\xc5\x01\n" +
 	"\rSearchRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12\x13\n" +
 	"\x05top_k\x18\x02 \x01(\x05R\x04topK\x12\x14\n" +
@@ -2345,10 +2462,12 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\vsource_type\x18\x04 \x01(\tR\n" +
 	"sourceType\x12\x12\n" +
 	"\x04tags\x18\x05 \x03(\tR\x04tags\x12\x12\n" +
-	"\x04mode\x18\x06 \x01(\tR\x04mode\"U\n" +
+	"\x04mode\x18\x06 \x01(\tR\x04mode\x12\x14\n" +
+	"\x05since\x18\a \x01(\x03R\x05since\x12\x14\n" +
+	"\x05until\x18\b \x01(\x03R\x05until\"U\n" +
 	"\x0eSearchResponse\x12'\n" +
 	"\x04hits\x18\x01 \x03(\v2\x13.orchd.v1.SearchHitR\x04hits\x12\x1a\n" +
-	"\bfallback\x18\x02 \x01(\tR\bfallback\"\xda\x01\n" +
+	"\bfallback\x18\x02 \x01(\tR\bfallback\"\xb5\x02\n" +
 	"\tSearchHit\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x1d\n" +
 	"\n" +
@@ -2359,18 +2478,26 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x05scope\x18\x05 \x01(\tR\x05scope\x12\x12\n" +
 	"\x04tags\x18\x06 \x03(\tR\x04tags\x12#\n" +
 	"\rkeyword_score\x18\a \x01(\x02R\fkeywordScore\x12\x14\n" +
-	"\x05exact\x18\b \x01(\bR\x05exact\"\x80\x01\n" +
+	"\x05exact\x18\b \x01(\bR\x05exact\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\t \x01(\x03R\tstartedAt\x12\x19\n" +
+	"\bended_at\x18\n" +
+	" \x01(\x03R\aendedAt\x12\x1f\n" +
+	"\vingested_at\x18\v \x01(\x03R\n" +
+	"ingestedAt\"\xac\x01\n" +
 	"\x12ListSourcesRequest\x12\x1f\n" +
 	"\vsource_type\x18\x01 \x01(\tR\n" +
 	"sourceType\x12\x14\n" +
 	"\x05scope\x18\x02 \x01(\tR\x05scope\x12\x1d\n" +
 	"\n" +
 	"uri_prefix\x18\x03 \x01(\tR\turiPrefix\x12\x14\n" +
-	"\x05limit\x18\x04 \x01(\x05R\x05limit\"\x90\x01\n" +
+	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x14\n" +
+	"\x05since\x18\x05 \x01(\x03R\x05since\x12\x14\n" +
+	"\x05until\x18\x06 \x01(\x03R\x05until\"\x90\x01\n" +
 	"\x13ListSourcesResponse\x121\n" +
 	"\asources\x18\x01 \x03(\v2\x17.orchd.v1.SourceSummaryR\asources\x12#\n" +
 	"\rtotal_sources\x18\x02 \x01(\x05R\ftotalSources\x12!\n" +
-	"\ftotal_chunks\x18\x03 \x01(\x05R\vtotalChunks\"\x91\x01\n" +
+	"\ftotal_chunks\x18\x03 \x01(\x05R\vtotalChunks\"\xec\x01\n" +
 	"\rSourceSummary\x12\x1d\n" +
 	"\n" +
 	"source_uri\x18\x01 \x01(\tR\tsourceUri\x12\x1f\n" +
@@ -2378,7 +2505,12 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"sourceType\x12\x14\n" +
 	"\x05scope\x18\x03 \x01(\tR\x05scope\x12\x16\n" +
 	"\x06chunks\x18\x04 \x01(\x05R\x06chunks\x12\x12\n" +
-	"\x04tags\x18\x05 \x03(\tR\x04tags\"N\n" +
+	"\x04tags\x18\x05 \x03(\tR\x04tags\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\x06 \x01(\x03R\tstartedAt\x12\x19\n" +
+	"\bended_at\x18\a \x01(\x03R\aendedAt\x12\x1f\n" +
+	"\vingested_at\x18\b \x01(\x03R\n" +
+	"ingestedAt\"N\n" +
 	"\x13DeleteSourceRequest\x12\x1d\n" +
 	"\n" +
 	"source_uri\x18\x01 \x01(\tR\tsourceUri\x12\x18\n" +

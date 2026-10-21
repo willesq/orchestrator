@@ -111,6 +111,9 @@ func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchd
 		SourceType: orDefault(req.GetSourceType(), "manual"),
 		Scope:      req.GetScope(),
 		Tags:       req.GetTags(),
+		StartedAt:  fromUnix(req.GetStartedAt()),
+		EndedAt:    fromUnix(req.GetEndedAt()),
+		Timeline:   req.GetTimeline(),
 	})
 	if err != nil {
 		return nil, err
@@ -128,12 +131,17 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 	if k := req.GetTopK(); k < 0 || k > maxSearchTopK {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "top_k %d must be between 0 and %d", k, maxSearchTopK)
 	}
+	tr, err := timeRange(req.GetSince(), req.GetUntil())
+	if err != nil {
+		return nil, err
+	}
 	hits, fallback, err := s.rag.Search(ctx, req.GetQuery(), rag.SearchOpts{
 		TopK:       int(req.GetTopK()),
 		Scope:      req.GetScope(),
 		SourceType: req.GetSourceType(),
 		Tags:       req.GetTags(),
 		Mode:       req.GetMode(),
+		Range:      tr,
 	})
 	if errors.Is(err, rag.ErrHybridUnavailable) {
 		return nil, grpcstatus.Error(codes.FailedPrecondition, err.Error())
@@ -152,17 +160,25 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 			Tags:         h.Tags,
 			KeywordScore: h.Keyword,
 			Exact:        h.Exact,
+			StartedAt:    toUnix(h.StartedAt),
+			EndedAt:      toUnix(h.EndedAt),
+			IngestedAt:   toUnix(h.IngestedAt),
 		})
 	}
 	return out, nil
 }
 
 func (s *server) ListSources(ctx context.Context, req *orchdv1.ListSourcesRequest) (*orchdv1.ListSourcesResponse, error) {
+	tr, err := timeRange(req.GetSince(), req.GetUntil())
+	if err != nil {
+		return nil, err
+	}
 	sources, distinct, chunks, err := s.rag.ListSources(ctx, rag.ListSourcesOpts{
 		SourceType: req.GetSourceType(),
 		Scope:      req.GetScope(),
 		URIPrefix:  req.GetUriPrefix(),
 		Limit:      int(req.GetLimit()),
+		Range:      tr,
 	})
 	if err != nil {
 		return nil, err
@@ -179,9 +195,37 @@ func (s *server) ListSources(ctx context.Context, req *orchdv1.ListSourcesReques
 			Scope:      src.Scope,
 			Chunks:     count32(src.Chunks),
 			Tags:       src.Tags,
+			StartedAt:  toUnix(src.StartedAt),
+			EndedAt:    toUnix(src.EndedAt),
+			IngestedAt: toUnix(src.IngestedAt),
 		})
 	}
 	return out, nil
+}
+
+// timeRange reads a request's since and until (Unix seconds; 0 = open).
+func timeRange(since, until int64) (rag.TimeRange, error) {
+	if since < 0 || until < 0 {
+		return rag.TimeRange{}, grpcstatus.Error(codes.InvalidArgument, "since and until must not be negative")
+	}
+	if since > 0 && until > 0 && since > until {
+		return rag.TimeRange{}, grpcstatus.Errorf(codes.InvalidArgument, "since %d must not be after until %d", since, until)
+	}
+	return rag.TimeRange{Since: fromUnix(since), Until: fromUnix(until)}, nil
+}
+
+func fromUnix(s int64) time.Time {
+	if s <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(s, 0).UTC()
+}
+
+func toUnix(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
 }
 
 // DeleteSource permanently removes a source's chunks.
