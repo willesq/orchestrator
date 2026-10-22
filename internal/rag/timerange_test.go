@@ -181,3 +181,15 @@ func TestTimelineChunksStayInsideTheSession(t *testing.T) {
 		t.Fatal("clamp changed an unknown time or an open bound")
 	}
 }
+
+func TestUnixTimeIgnoresImplausibleValues(t *testing.T) {
+	good := float64(time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC).Unix())
+	if unixTime(good).Unix() != int64(good) {
+		t.Fatal("a plausible time was rejected")
+	}
+	for _, bad := range []any{float64(1), float64(minStored - 1), float64(time.Now().Add(72 * time.Hour).Unix()), 1e300, "1792591320", int64(1792591320), nil} {
+		if !unixTime(bad).IsZero() {
+			t.Errorf("unixTime(%v) accepted", bad)
+		}
+	}
+}

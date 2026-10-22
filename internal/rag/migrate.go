@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -386,7 +387,7 @@ type sourceRead struct {
 // once the text passes maxSourceBytes, so an enormous source is reported
 // rather than held.
 func (s *Service) readSource(ctx context.Context, st *QdrantStore, uri string) (sourceRead, error) {
-	fields := []string{"text", "source_uri", "source_type", "scope", "tags", "chunk_index"}
+	fields := []string{"text", "source_uri", "source_type", "scope", "tags", "chunk_index", fieldStartedAt, fieldEndedAt}
 	sr := sourceRead{meta: Meta{SourceURI: uri}}
 	var chunks []storedChunk
 	var offset any
@@ -399,6 +400,14 @@ func (s *Service) readSource(ctx context.Context, st *QdrantStore, uri string) (
 		for _, p := range pts {
 			if len(chunks) == 0 {
 				sr.meta.SourceType, sr.meta.Scope, sr.meta.Tags = str(p.Payload["source_type"]), str(p.Payload["scope"]), strSlice(p.Payload["tags"])
+			}
+			// The source's dates are the span of its chunks', so re-chunking
+			// keeps it dated. ingested_at is not kept: the copy is a new store.
+			if t := unixTime(p.Payload[fieldStartedAt]); !t.IsZero() && (sr.meta.StartedAt.IsZero() || t.Before(sr.meta.StartedAt)) {
+				sr.meta.StartedAt = t
+			}
+			if t := unixTime(p.Payload[fieldEndedAt]); t.After(sr.meta.EndedAt) {
+				sr.meta.EndedAt = t
 			}
 			c := storedChunk{id: p.ID, index: -1, text: str(p.Payload["text"])}
 			if f, ok := p.Payload["chunk_index"].(float64); ok && f >= 0 && f == float64(int(f)) {
@@ -417,7 +426,13 @@ func (s *Service) readSource(ctx context.Context, st *QdrantStore, uri string) (
 		}
 		offset = next
 	}
+	if !sr.meta.StartedAt.IsZero() && sr.meta.StartedAt.After(sr.meta.EndedAt) {
+		sr.meta.StartedAt, sr.meta.EndedAt = time.Time{}, time.Time{} // inconsistent; bound nothing
+	}
 	sr.text, sr.malformed = rebuild(chunks)
+	// A transcript's turns carry their own times, so its new chunks are dated
+	// by the turns they hold, within the source's span, as at ingest.
+	sr.meta.Timeline = sr.meta.SourceType == "session_transcript"
 	return sr, nil
 }
 
