@@ -10,7 +10,15 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 )
+
+// streamName is what a stream may be called. Streams are named by session IDs
+// from harness payloads, so a name must never be able to reach outside dir.
+var streamName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+
+// ErrInvalidStream rejects a stream name that cannot safely name a file.
+var ErrInvalidStream = errors.New("invalid event stream name")
 
 // Event is one entry in a stream.
 type Event struct {
@@ -23,10 +31,14 @@ type Event struct {
 
 // Append writes one event to <dir>/<stream>.jsonl, creating the dir/file as needed.
 func Append(dir, stream string, e Event) error {
+	path, err := streamPath(dir, stream)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(streamPath(dir, stream), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
@@ -41,7 +53,11 @@ func Append(dir, stream string, e Event) error {
 
 // Read returns all events in a stream (empty if the stream does not exist).
 func Read(dir, stream string) ([]Event, error) {
-	f, err := os.Open(streamPath(dir, stream))
+	path, err := streamPath(dir, stream)
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -67,6 +83,9 @@ func Read(dir, stream string) ([]Event, error) {
 	return out, sc.Err()
 }
 
-func streamPath(dir, stream string) string {
-	return filepath.Join(dir, stream+".jsonl")
+func streamPath(dir, stream string) (string, error) {
+	if !streamName.MatchString(stream) {
+		return "", ErrInvalidStream
+	}
+	return filepath.Join(dir, stream+".jsonl"), nil
 }

@@ -1,8 +1,10 @@
 package events
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -64,5 +66,26 @@ func TestReadSkipsMalformed(t *testing.T) {
 				t.Errorf("read %d events, want %d", len(got), tt.want)
 			}
 		})
+	}
+}
+
+func TestStreamNamesCannotLeaveTheDirectory(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "events")
+	for _, bad := range []string{"../escape", "a/b", "", ".", "..", "x.jsonl/..", strings.Repeat("a", 129), "sid\x00"} {
+		if err := Append(dir, bad, Event{Kind: "info"}); !errors.Is(err, ErrInvalidStream) {
+			t.Errorf("Append(%q) = %v", bad, err)
+		}
+		if _, err := Read(dir, bad); !errors.Is(err, ErrInvalidStream) {
+			t.Errorf("Read(%q) = %v", bad, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "escape.jsonl")); !os.IsNotExist(err) {
+		t.Fatal("an event was written outside the events directory")
+	}
+	for _, good := range []string{"queue", "pr-babysitter", "1d75205a-bab4-4e6a-bf77-8921b8d70d18", "a_b"} {
+		if err := Append(dir, good, Event{Kind: "info"}); err != nil {
+			t.Errorf("Append(%q) = %v", good, err)
+		}
 	}
 }
