@@ -88,10 +88,19 @@ func ParseBound(s string, now time.Time, end bool) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("%q is not a time: use 2026-10-21, an RFC 3339 time, today, yesterday, or an age like 7d or 12h", s)
 }
 
-// unixTime reads a Unix-seconds payload field; zero when absent.
+// Stored times outside [minStored, now+maxAhead] are treated as unknown: a
+// corrupt or hostile payload must not stretch a span to 1970 or 9999 and so
+// defeat the bounds built from it.
+const (
+	minStored = 946684800 // 2000-01-01
+	maxAhead  = 48 * time.Hour
+)
+
+// unixTime reads a Unix-seconds payload field; zero when absent or implausible.
 func unixTime(v any) time.Time {
-	if f, ok := v.(float64); ok && f > 0 {
-		return time.Unix(int64(f), 0).UTC()
+	f, ok := v.(float64)
+	if !ok || f < minStored || f > float64(time.Now().Add(maxAhead).Unix()) {
+		return time.Time{}
 	}
-	return time.Time{}
+	return time.Unix(int64(f), 0).UTC()
 }

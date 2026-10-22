@@ -9,6 +9,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/willesq/orchestrator/internal/timeline"
 )
 
 // hookEmbedder embeds every text as [1,0] and runs onEmbed, once, the first
@@ -451,5 +454,67 @@ func TestSameTitleSectionsAreNotMerged(t *testing.T) {
 	})
 	if strings.Count(got, "## Example") != 2 {
 		t.Fatalf("two sections with one title were merged: %q", got)
+	}
+}
+
+func TestMigrationKeepsDates(t *testing.T) {
+	f, url := newFakeQdrant(t)
+	day1 := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
+	day2 := time.Date(2026, 10, 21, 16, 45, 0, 0, time.UTC)
+	f.seed("orchestrator",
+		map[string]any{"source_uri": "session://s/transcript", "source_type": "session_transcript", "chunk_index": 0,
+			"text": timeline.Marker(day1) + " user: start the migration", "started_at": float64(day1.Unix()), "ended_at": float64(day1.Unix())},
+		map[string]any{"source_uri": "session://s/transcript", "source_type": "session_transcript", "chunk_index": 1,
+			"text": timeline.Marker(day2) + " user: what did we do yesterday", "started_at": float64(day2.Unix()), "ended_at": float64(day2.Unix())},
+		map[string]any{"source_uri": "session://s/record", "source_type": "session_record", "chunk_index": 0,
+			"text": "Session summary", "started_at": float64(day1.Unix()), "ended_at": float64(day2.Unix())},
+		map[string]any{"source_uri": "manual://undated", "source_type": "manual", "chunk_index": 0, "text": "no dates here"},
+	)
+	svc := NewService(&hookEmbedder{}, NewQdrantStore(url, "orchestrator", ""), 40, 4)
+	svc.StateDir = t.TempDir()
+	if _, err := svc.MigrateHybrid(context.Background(), "", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	var sawDay1, sawDay2 bool
+	for _, p := range f.collection("orchestrator-hybrid").points {
+		start, end := unixTime(p.Payload[fieldStartedAt]), unixTime(p.Payload[fieldEndedAt])
+		switch str(p.Payload["source_uri"]) {
+		case "session://s/transcript":
+			if start.Before(day1) || end.After(day2) || start.IsZero() {
+				t.Fatalf("transcript chunk %q dated %v to %v", p.Payload["text"], start, end)
+			}
+			text := str(p.Payload["text"])
+			sawDay1 = sawDay1 || (strings.Contains(text, "start the migration") && start.Equal(day1))
+			sawDay2 = sawDay2 || (strings.Contains(text, "yesterday") && end.Equal(day2))
+		case "session://s/record":
+			if !start.Equal(day1) || !end.Equal(day2) {
+				t.Fatalf("record dated %v to %v", start, end)
+			}
+		case "manual://undated":
+			if !start.IsZero() || !end.IsZero() {
+				t.Fatal("undated content was given a date")
+			}
+		}
+	}
+	if !sawDay1 || !sawDay2 {
+		t.Fatal("transcript turns lost their own dates")
+	}
+}
+
+func TestMigrationDropsAnInvertedSpan(t *testing.T) {
+	f, url := newFakeQdrant(t)
+	late := float64(time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC).Unix())
+	early := float64(time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC).Unix())
+	f.seed("orchestrator", map[string]any{"source_uri": "session://s/record", "source_type": "session_record",
+		"chunk_index": 0, "text": "summary", "started_at": late, "ended_at": early})
+	svc := NewService(&hookEmbedder{}, NewQdrantStore(url, "orchestrator", ""), 40, 4)
+	svc.StateDir = t.TempDir()
+	if _, err := svc.MigrateHybrid(context.Background(), "", true, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range f.collection("orchestrator-hybrid").points {
+		if _, ok := p.Payload[fieldStartedAt]; ok {
+			t.Fatalf("an inverted span was kept: %+v", p.Payload)
+		}
 	}
 }
