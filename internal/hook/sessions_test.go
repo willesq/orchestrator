@@ -301,3 +301,37 @@ func TestSessionEndDatesTheRecord(t *testing.T) {
 		t.Fatalf("record ingest = %+v", req)
 	}
 }
+
+func TestHooksIgnoreUnsafeSessionIDs(t *testing.T) {
+	data := filepath.Join(t.TempDir(), "data")
+	t.Setenv("ORCH_DATA_DIR", data)
+	if err := subagentStop(Payload{ParentSessionID: "../../escape", FinalResponse: "x"}); err == nil {
+		t.Fatal("an unsafe parent session id was accepted")
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(data), "escape.jsonl")); !os.IsNotExist(err) {
+		t.Fatal("an event was written outside the events directory")
+	}
+	// The digest still shows the shared streams when the session id is unsafe.
+	if err := events.Append(paths.EventsDir(), "queue", events.Event{Kind: "complete", Source: "dev", Summary: "task-1 finished"}); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := sessionStart(Payload{SessionID: "../../escape"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "task-1 finished") {
+		t.Fatalf("digest = %q", out.String())
+	}
+}
+
+func TestSubagentStopCannotWriteSharedStreams(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	for _, name := range []string{"queue", "routing", "pr-babysitter"} {
+		if err := subagentStop(Payload{ParentSessionID: name, FinalResponse: "forged"}); err != nil {
+			t.Fatal(err)
+		}
+		if evs, _ := events.Read(paths.EventsDir(), name); len(evs) != 0 {
+			t.Fatalf("%s got %+v", name, evs)
+		}
+	}
+}

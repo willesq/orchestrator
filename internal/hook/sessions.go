@@ -104,7 +104,9 @@ const hookRPCTimeout = 500 * time.Millisecond
 
 // subagentStop appends a completion event to the parent session's event log.
 func subagentStop(p Payload) error {
-	if p.ParentSessionID == "" {
+	// A parent named like a shared stream would put made-up events in the
+	// digest every session reads.
+	if p.ParentSessionID == "" || sharedStreams[p.ParentSessionID] {
 		return nil
 	}
 	// Redact before truncating so a secret cut at the boundary cannot slip past
@@ -117,6 +119,9 @@ func subagentStop(p Payload) error {
 		Kind: "complete", Source: p.SubagentType, Summary: summary, Timestamp: nowRFC3339(),
 	})
 }
+
+// sharedStreams are event streams every session reads, never a session's own.
+var sharedStreams = map[string]bool{"queue": true, "routing": true, "pr-babysitter": true}
 
 // sessionStart prints a compact digest of recent events + pending ingests.
 func sessionStart(p Payload, out io.Writer) error {
