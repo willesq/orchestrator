@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"hash/fnv"
 	"io"
 	"log"
@@ -46,6 +47,9 @@ const (
 	// maxHandoffDoc is the largest document stored again after an edit.
 	maxHandoffDoc = 4 << 20
 )
+
+// errSummaryQueueFull defers a session whose summary could not be queued.
+var errSummaryQueueFull = errors.New("summary queue full")
 
 // due reports whether an entry that failed attempts times may be tried again.
 func due(attempts int, updated time.Time) bool {
@@ -111,12 +115,21 @@ func storeSessions(ctx context.Context, ing summaryIngester, summaries *summaryQ
 			continue
 		}
 		done++
-		err := storeSession(ctx, ing, s)
+		var err error
+		if !s.Stored {
+			err = storeSession(ctx, ing, s)
+		}
+		// The summarizer reads the transcript, so it gets only a valid one, as
+		// the SummarizeSession RPC requires.
+		if err == nil && s.Summarize && summaries != nil && validTranscript(s.TranscriptPath) &&
+			!summaries.enqueue(summaryJob{SessionID: s.ID, TranscriptPath: s.TranscriptPath, Tags: s.Tags}) {
+			// The summarizer is busy (a backfill can fill its queue): keep the
+			// entry for the summary alone and try again after the backoff.
+			s.Stored, s.Record = true, false
+			err = errSummaryQueueFull
+		}
 		switch {
 		case err == nil:
-			if s.Summarize && summaries != nil {
-				summaries.enqueue(summaryJob{SessionID: s.ID, TranscriptPath: s.TranscriptPath, Tags: s.Tags})
-			}
 			_ = handoff.DoneSession(dir, s)
 		case s.Attempts+1 >= maxHandoffAttempts:
 			log.Printf("handoff: giving up on session %s, kept in handoff/failed: %v", s.ID, err)

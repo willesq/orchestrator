@@ -1,8 +1,10 @@
 package handoff
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -233,5 +235,52 @@ func TestPRSweepRequestRefusesSymlink(t *testing.T) {
 	}
 	if _, err := os.Stat(target); !os.IsNotExist(err) {
 		t.Fatal("created the symlink's target")
+	}
+}
+
+func TestRetryKeepsANewerEntry(t *testing.T) {
+	dir := t.TempDir()
+	if err := PutSession(dir, Session{ID: "s1", TranscriptPath: "/t/a.jsonl"}); err != nil {
+		t.Fatal(err)
+	}
+	read, _ := Sessions(dir, later)
+	time.Sleep(10 * time.Millisecond)
+	if err := PutSession(dir, Session{ID: "s1", TranscriptPath: "/t/b.jsonl", Record: true}); err != nil {
+		t.Fatal(err)
+	}
+	stale := read[0]
+	stale.Stored = true
+	if err := RetrySession(dir, stale); err != nil {
+		t.Fatal(err)
+	}
+	if err := FailSession(dir, stale); err != nil {
+		t.Fatal(err)
+	}
+	now, _ := Sessions(dir, later)
+	if len(now) != 1 || now[0].Stored || !now[0].Record || now[0].TranscriptPath != "/t/b.jsonl" {
+		t.Fatalf("newer entry = %+v", now)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "failed", "sessions", "s1.json")); !os.IsNotExist(err) {
+		t.Fatal("a stale fail moved the newer entry aside")
+	}
+}
+
+func TestConcurrentWritersKeepEntriesWhole(t *testing.T) {
+	dir := t.TempDir()
+	var wg sync.WaitGroup
+	for i := range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = PutSession(dir, Session{ID: "s1", TranscriptPath: fmt.Sprintf("/t/%d.jsonl", i)})
+			_ = PutFile(dir, File{Path: "/r/a.md", Attempts: i})
+		}()
+	}
+	wg.Wait()
+	if s, _ := Sessions(dir, later); len(s) != 1 {
+		t.Fatalf("sessions = %+v", s)
+	}
+	if f, _ := Files(dir, later); len(f) != 1 {
+		t.Fatalf("files = %+v", f)
 	}
 }

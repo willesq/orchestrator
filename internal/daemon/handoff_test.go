@@ -313,3 +313,70 @@ func TestHandedOffSessionsAreDated(t *testing.T) {
 		t.Fatalf("record on disk = %+v", rec)
 	}
 }
+
+// countingStore counts stores per source URI.
+type countingStore struct {
+	mu sync.Mutex
+	n  map[string]int
+}
+
+func (c *countingStore) IngestText(_ context.Context, _ string, m rag.Meta) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.n == nil {
+		c.n = map[string]int{}
+	}
+	c.n[m.SourceURI]++
+	return 1, nil
+}
+
+func TestSummaryIsRetriedWhenTheQueueIsFull(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", t.TempDir())
+	dir := handoff.Dir()
+	if err := handoff.PutSession(dir, handoff.Session{ID: "s1", TranscriptPath: transcript(t), Summarize: true}); err != nil {
+		t.Fatal(err)
+	}
+	q := newSummaryQueue()
+	for q.enqueue(summaryJob{SessionID: "filler"}) {
+	}
+	st := &countingStore{}
+	storeSessions(context.Background(), st, q, dir, afterAll)
+	left, _ := handoff.Sessions(dir, afterAll)
+	if len(left) != 1 || !left[0].Stored || left[0].Attempts != 1 || st.n["session://s1/transcript"] != 1 {
+		t.Fatalf("after a full queue: entry %+v, stores %v", left, st.n)
+	}
+
+	// Once the summarizer catches up, the retry queues the summary without
+	// storing the transcript again.
+	for len(q.jobs) > 0 {
+		<-q.jobs
+	}
+	old := time.Now().Add(-24 * time.Hour)
+	_ = os.Chtimes(filepath.Join(dir, "sessions", "s1.json"), old, old)
+	storeSessions(context.Background(), st, q, dir, afterAll)
+	if left, _ := handoff.Sessions(dir, afterAll); len(left) != 0 {
+		t.Fatalf("entry left after the summary was queued: %+v", left)
+	}
+	if st.n["session://s1/transcript"] != 1 {
+		t.Fatalf("transcript stored %d times", st.n["session://s1/transcript"])
+	}
+	if j := <-q.jobs; j.SessionID != "s1" {
+		t.Fatalf("queued %+v", j)
+	}
+}
+
+func TestForgedStoredEntryQueuesNoSummary(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", t.TempDir())
+	dir := handoff.Dir()
+	if err := handoff.PutSession(dir, handoff.Session{ID: "s1", TranscriptPath: "/etc/hosts", Stored: true, Summarize: true}); err != nil {
+		t.Fatal(err)
+	}
+	q := newSummaryQueue()
+	storeSessions(context.Background(), &countingStore{}, q, dir, afterAll)
+	if len(q.jobs) != 0 {
+		t.Fatal("a summary was queued for a non-transcript path")
+	}
+	if left, _ := handoff.Sessions(dir, afterAll); len(left) != 0 {
+		t.Fatalf("entry left: %+v", left)
+	}
+}

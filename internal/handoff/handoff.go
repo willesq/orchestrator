@@ -34,6 +34,9 @@ type Session struct {
 	// Summarize asks orchd to queue the session's summary, because the hook
 	// could not.
 	Summarize bool `json:"summarize,omitempty"`
+	// Stored records that the transcript (and record) are already stored, so
+	// only the summary is left: a retry must not store them again.
+	Stored bool `json:"stored,omitempty"`
 	// Attempts counts failed tries, so work that cannot be done is eventually
 	// given up on.
 	Attempts int `json:"attempts,omitempty"`
@@ -65,7 +68,8 @@ func PutSession(dir string, s Session) error {
 	if !session.ValidID(s.ID) {
 		return session.ErrInvalidSessionID
 	}
-	return put(filepath.Join(dir, "sessions"), s.ID, s)
+	sdir := filepath.Join(dir, "sessions")
+	return locked(sdir, func() error { return put(sdir, s.ID, s) })
 }
 
 // Sessions returns the sessions handed off before cutoff. A newer entry may
@@ -80,17 +84,26 @@ func DoneSession(dir string, s Session) error {
 	if !session.ValidID(s.ID) {
 		return session.ErrInvalidSessionID
 	}
-	return removeIfUnchanged(filepath.Join(dir, "sessions"), s.ID, s.Updated)
+	sdir := filepath.Join(dir, "sessions")
+	return locked(sdir, func() error { return removeIfUnchanged(sdir, s.ID, s.Updated) })
 }
 
 // RetrySession records a failed attempt at s, unless its entry was rewritten
 // since s was read.
 func RetrySession(dir string, s Session) error {
-	if !unchanged(filepath.Join(dir, "sessions", s.ID+".json"), s.Updated) {
-		return nil
+	if !session.ValidID(s.ID) {
+		return session.ErrInvalidSessionID
 	}
-	s.Attempts++
-	return PutSession(dir, s)
+	sdir := filepath.Join(dir, "sessions")
+	// Checked and written under the lock the hook also takes, so a session
+	// that ended again in between keeps its newer entry.
+	return locked(sdir, func() error {
+		if !unchanged(filepath.Join(sdir, s.ID+".json"), s.Updated) {
+			return nil
+		}
+		s.Attempts++
+		return put(sdir, s.ID, s)
+	})
 }
 
 // FailSession moves s's entry aside after its last attempt, kept for inspection.
@@ -98,12 +111,21 @@ func FailSession(dir string, s Session) error {
 	if !session.ValidID(s.ID) {
 		return session.ErrInvalidSessionID
 	}
-	return moveToFailed(dir, "sessions", s.ID)
+	sdir := filepath.Join(dir, "sessions")
+	return locked(sdir, func() error {
+		if !unchanged(filepath.Join(sdir, s.ID+".json"), s.Updated) {
+			return nil
+		}
+		return moveToFailed(dir, "sessions", s.ID)
+	})
 }
 
 // PutFile saves an edited document for orchd to store, replacing an earlier
 // entry for the same path, so a burst of edits is stored once.
-func PutFile(dir string, f File) error { return put(filepath.Join(dir, "files"), fileKey(f.Path), f) }
+func PutFile(dir string, f File) error {
+	fdir := filepath.Join(dir, "files")
+	return locked(fdir, func() error { return put(fdir, fileKey(f.Path), f) })
+}
 
 // Files returns the documents handed off before cutoff.
 func Files(dir string, cutoff time.Time) ([]File, error) {
@@ -112,20 +134,33 @@ func Files(dir string, cutoff time.Time) ([]File, error) {
 
 // DoneFile removes f's entry, unless the document was edited again since.
 func DoneFile(dir string, f File) error {
-	return removeIfUnchanged(filepath.Join(dir, "files"), fileKey(f.Path), f.Updated)
+	fdir := filepath.Join(dir, "files")
+	return locked(fdir, func() error { return removeIfUnchanged(fdir, fileKey(f.Path), f.Updated) })
 }
 
 // RetryFile records a failed attempt at f, unless it was edited again since.
 func RetryFile(dir string, f File) error {
-	if !unchanged(filepath.Join(dir, "files", fileKey(f.Path)+".json"), f.Updated) {
-		return nil
-	}
-	f.Attempts++
-	return PutFile(dir, f)
+	fdir := filepath.Join(dir, "files")
+	return locked(fdir, func() error {
+		if !unchanged(filepath.Join(fdir, fileKey(f.Path)+".json"), f.Updated) {
+			return nil
+		}
+		f.Attempts++
+		return put(fdir, fileKey(f.Path), f)
+	})
 }
 
-// FailFile moves f's entry aside after its last attempt.
-func FailFile(dir string, f File) error { return moveToFailed(dir, "files", fileKey(f.Path)) }
+// FailFile moves f's entry aside after its last attempt, unless it was edited
+// again since.
+func FailFile(dir string, f File) error {
+	fdir := filepath.Join(dir, "files")
+	return locked(fdir, func() error {
+		if !unchanged(filepath.Join(fdir, fileKey(f.Path)+".json"), f.Updated) {
+			return nil
+		}
+		return moveToFailed(dir, "files", fileKey(f.Path))
+	})
+}
 
 func fileKey(path string) string {
 	sum := sha256.Sum256([]byte(path))
@@ -243,6 +278,25 @@ func list[T any, P interface {
 func unchanged(path string, updated time.Time) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.ModTime().Equal(updated)
+}
+
+// locked runs fn holding an exclusive lock on dir, shared by every process that
+// writes entries there (hooks and orchd), so checking an entry and writing it
+// is one step.
+func locked(dir string, fn func() error) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filepath.Join(dir, ".lock"), os.O_RDWR|os.O_CREATE|syscall.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer func() { _ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) }()
+	return fn()
 }
 
 func removeIfUnchanged(dir, key string, updated time.Time) error {
