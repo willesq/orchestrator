@@ -20,8 +20,9 @@ policies and isolate harness-specific behavior in adapters.
 - The three entry points are `orch` (CLI), `orchd` (daemon), and `orch-hook`
   (harness hooks). Keep clients thin and long-lived services owned by the daemon.
 - Follow existing package boundaries under `internal/`. Read
-  `docs/ARCHITECTURE.md` for the structure and the guides it links for current
-  commands; verify design notes against the implementation.
+  `docs/ARCHITECTURE.md` for the structure, `docs/internals/` for the area you
+  change, and the guides it links for current commands; verify design notes
+  against the implementation and update `docs/internals/` with the behavior.
 - Keep CLI behavior, MCP tools, hooks, and documentation consistent when changing
   a shared capability. Check each affected harness rather than assuming identical
   configuration formats, event payloads, or instruction-loading behavior.

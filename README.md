@@ -41,6 +41,7 @@ Then use your coding agent as usual. `orch search "<query>"` searches memory dir
 | [MEMORY.md](docs/MEMORY.md) | Session memory, chunking, hybrid search, retrieval evals |
 | [TASKS.md](docs/TASKS.md) | Background tasks, model registry, routing |
 | [OPERATIONS.md](docs/OPERATIONS.md) | Status, restarts, upgrades |
+| [internals/](docs/internals/README.md) | Implementation reference: APIs, formats, algorithms, building your own |
 
 ## Contributing
 
