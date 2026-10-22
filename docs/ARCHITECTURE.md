@@ -97,6 +97,12 @@ Entry points are in `cmd/`; everything else is under `internal/`.
 | CLI and status | `cli`, `status`, `check` |
 | Infrastructure | `config`, `paths`, `db`, `events`, `prs`, `model`, `version` |
 
+## Internals
+
+[internals/](internals/README.md) documents each part in implementation depth: the RPC API,
+storage layout and payload schema, chunking and ranking algorithms, hook protocol, adapters,
+configuration, and a build order for a re-implementation.
+
 ## Design history
 
 Plans that shaped the code, kept for context; the code is the source of truth:
