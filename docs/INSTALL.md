@@ -70,4 +70,5 @@ make test       # pure-Go tests, no native libraries needed
 make cover      # per-file coverage gate (>= 80%)
 make proto      # regenerate gRPC code (Go and Swift) after editing orchd.proto
 make app        # build/app/Orch.app (needs Xcode 26+); make app-cover for its tests
+make app-install  # build and install ~/Applications/Orch.app, replacing and relaunching it
 ```

@@ -1,9 +1,11 @@
 import OrchKit
+import ServiceManagement
 import SwiftUI
 
 struct TrayMenu: View {
     let monitor: DaemonMonitor
     let prMonitor: PRMonitor
+    let loginItem: LoginItem
     let control: DaemonControl
 
     @State private var busy = false
@@ -25,10 +27,13 @@ struct TrayMenu: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Divider()
+            LoginItemRow(item: loginItem)
             actions
         }
         .padding(12)
         .frame(width: 320)
+        // macOS can change login items from System Settings while we run.
+        .onAppear { loginItem.refresh() }
     }
 
     private var header: some View {
@@ -114,5 +119,34 @@ private struct SubsystemList: View {
     private func color(for unit: Subsystem) -> Color {
         if unit.isFailed { return .red }
         return unit.state == "running" ? .green : .secondary
+    }
+}
+
+private struct LoginItemRow: View {
+    let item: LoginItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle("Open at login", isOn: Binding(get: { item.isEnabled }, set: { item.setEnabled($0) }))
+                .toggleStyle(.checkbox)
+                .disabled(item.state == .unavailable)
+            switch item.state {
+            case .needsApproval:
+                Button("Allow in System Settings → Login Items") {
+                    SMAppService.openSystemSettingsLoginItems()
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+            case .unavailable:
+                Text("Only available when running Orch.app.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            case .enabled, .disabled:
+                EmptyView()
+            }
+            if let error = item.lastError {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        }
     }
 }
