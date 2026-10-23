@@ -13,7 +13,7 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 subsystems
-                GroupBox("Needs you") {
+                GroupBox {
                     NeedsYouSection(monitor: prMonitor)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(4)

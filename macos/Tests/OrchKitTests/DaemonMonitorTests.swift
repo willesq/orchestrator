@@ -68,6 +68,8 @@ private final class FakeAPI: DaemonAPI, @unchecked Sendable {
 
     @Test(arguments: [
         ("status: deadline exceeded", "timed out"),
+        ("unimplemented: \"unknown method ListPRs for service orchd.v1.Orchd\"",
+         "needs a newer orchd; update orch (brew upgrade orch)"),
         ("short", "short"),
         (String(repeating: "a", count: 100), String(repeating: "a", count: 80) + "…"),
     ])

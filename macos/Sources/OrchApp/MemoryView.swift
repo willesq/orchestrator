@@ -12,21 +12,24 @@ struct MemoryView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("", selection: $tab) {
-                ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(maxWidth: 260)
-            .padding(.vertical, 10)
-            Divider()
+        Group {
             switch tab {
             case .search: SearchPane(model: search)
             case .sources: SourcesPane(model: sources)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .navigationTitle("Memory")
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Picker("View", selection: $tab) {
+                    ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+            }
+        }
     }
 }
 
@@ -60,7 +63,7 @@ private struct SearchPane: View {
                     .font(.caption).foregroundStyle(.orange).padding(.horizontal, 12)
             }
             Divider()
-            results
+            results.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
