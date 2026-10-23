@@ -5,14 +5,16 @@
 #   SIGN_IDENTITY  codesign identity; a Developer ID Application identity gets
 #                  the hardened runtime and a secure timestamp, as notarization
 #                  requires. Default "-" (ad-hoc), for local builds.
-#   OUT_DIR        where Orch.app lands (default <repo>/build/app)
+#   OUT_DIR        where Orch.app lands (default <repo>/build/app.noindex: the
+#                  .noindex suffix keeps Spotlight, and so "open Orch", from
+#                  finding dev builds instead of the installed app)
 set -euo pipefail
 
 pkg="$(cd "$(dirname "$0")/.." && pwd)"
 repo="$(cd "$pkg/.." && pwd)"
 version="${VERSION:-0.0.0}"
 identity="${SIGN_IDENTITY:--}"
-out="${OUT_DIR:-$repo/build/app}"
+out="${OUT_DIR:-$repo/build/app.noindex}"
 
 if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "build-app: VERSION must be X.Y.Z, got '$version'" >&2

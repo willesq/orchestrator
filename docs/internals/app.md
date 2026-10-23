@@ -54,10 +54,30 @@ first, each with its reason (see the PR babysitter in [tasks.md](tasks.md)). Cli
   single "N PRs need you" summary. Clicking a PR's notification opens it. A failed poll keeps the
   last good list, so a briefly unreadable cache cannot make every PR look new. Notifications need the app bundle, so a bare `swift run` binary skips them.
 
+## Launching
+
+Orch.app lives in the menu bar (`LSUIElement`). Without help, opening it would show nothing, and on
+a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this:
+
+- **When the user opens it** (Finder, Spotlight, `open`), the main window appears. A launch at login
+  (the launch Apple event's `keyAELaunchedAsLogInItem`) shows only the tray icon.
+- **Opening it again** while it runs brings the window back.
+- **One copy only:** the earliest-launched live copy stays, with the lowest PID breaking a tie
+  (`LaunchPolicy.shouldHandOff`), so copies started together leave exactly one. Any later copy posts
+  the `com.willesq.orch.show-main-window` distributed notification, which makes the running copy
+  show its window, and quits without opening a connection to orchd.
+- **The notification:** it carries nothing, so whoever posts it can only bring the window forward.
+  The running copy honours at most one request a second.
+- **Plain AppKit window:** the main window is an `NSWindow` hosting the SwiftUI `MainWindow`. It
+  remembers its frame, and the selected pane is kept in user defaults. A SwiftUI `Window` scene can
+  only be opened from a live view, and the menu bar label is rendered as an image, so it cannot do
+  that for AppKit.
+- **Dev builds:** `make app` writes to `build/app.noindex/`. The `.noindex` suffix keeps Spotlight,
+  and so "open Orch", from launching a dev build in place of the installed app.
+
 ## Main window
 
-"Open Orchestrator…" in the menu opens a window with a sidebar. The window never opens by itself at
-launch.
+"Open Orchestrator…" in the menu, or opening the app, shows a window with a sidebar.
 
 - **Dashboard:** orchd's health, every subsystem with its detail or last error and restart count,
   a **Restart** button for each unit, **Restart all** (the `Restart` RPC, one at a time), and the
@@ -113,7 +133,7 @@ from an argument array, never through a shell.
 
 ## Build, sign, release
 
-- **`make app`:** assembles `build/app/Orch.app`, ad-hoc signed by default. Set
+- **`make app`:** assembles `build/app.noindex/Orch.app`, ad-hoc signed by default. Set
   `SIGN_IDENTITY` to a Developer ID Application identity to sign with the hardened runtime and a
   secure timestamp, which notarization requires.
 - **`make app-install`:** builds the app and installs it as `~/Applications/Orch.app` (or

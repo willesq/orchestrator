@@ -82,7 +82,7 @@ proto-swift:
 	  --grpc-swift-2_opt=Visibility=Public,Server=false,Client=true \
 	  $(PROTO)
 
-# The macOS app: Orch.app assembled under build/app (ad-hoc signed unless
+# The macOS app: Orch.app assembled under build/app.noindex (ad-hoc signed unless
 # SIGN_IDENTITY names a Developer ID certificate).
 app:
 	bash $(SWIFT_PKG)/scripts/build-app.sh

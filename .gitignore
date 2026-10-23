@@ -96,3 +96,4 @@ build/lib/
 /macos/.build/
 /macos/.swiftpm/
 /dist-app/
+*.profraw
