@@ -35,6 +35,13 @@ for bundle in "$bin"/*.bundle; do
   [ -e "$bundle" ] && cp -R "$bundle" "$app/Contents/Resources/"
 done
 sed "s/__VERSION__/$version/g" "$pkg/Resources/Info.plist" > "$app/Contents/Info.plist"
+
+# The icon and menu bar glyph come from the SVGs in Resources/Brand.
+iconset="$(mktemp -d)/AppIcon.iconset"
+trap 'rm -rf "$(dirname "$iconset")"' EXIT
+swift "$pkg/scripts/render-icon.swift" "$pkg/Resources/Brand/icon.svg" "$iconset"
+iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
+cp "$pkg/Resources/Brand/glyph.svg" "$app/Contents/Resources/MenuBarGlyph.svg"
 plutil -lint "$app/Contents/Info.plist" >/dev/null
 
 if [ "$identity" = "-" ]; then

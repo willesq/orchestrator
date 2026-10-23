@@ -1,3 +1,5 @@
+<img src="macos/Resources/Brand/icon.svg" alt="Orch logo: three rings overlapping on a shared core" width="96">
+
 # orch
 
 Local-first memory and task orchestration for coding agents (Claude Code, Codex, Gemini).

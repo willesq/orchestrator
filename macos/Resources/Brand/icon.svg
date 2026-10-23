@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Orch app icon: three rings, one per coding agent, overlapping on the
+       memory they share. The art fills Apple's 824 pt icon grid inside the
+       1024 canvas. -->
+  <defs>
+    <linearGradient id="orch-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1A6B60"/>
+      <stop offset="1" stop-color="#0A332E"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#orch-bg)"/>
+  <g fill="none" stroke="#E6F2EC" stroke-width="42">
+    <circle cx="512" cy="418" r="168"/>
+    <circle cx="616" cy="598" r="168"/>
+    <circle cx="408" cy="598" r="168"/>
+  </g>
+  <circle cx="512" cy="538" r="54" fill="#E9B44C"/>
+</svg>

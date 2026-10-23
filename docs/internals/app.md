@@ -131,6 +131,24 @@ services and launchd. An app launched from Finder gets launchd's minimal `PATH`,
 `orch` in `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` and `~/go/bin`. The command runs
 from an argument array, never through a shell.
 
+## Brand
+
+The logo is two SVG files in `macos/Resources/Brand/`:
+
+- **`icon.svg`:** the app icon. Three rings, one per coding agent (Claude Code, Codex, Gemini),
+  overlap on the memory they share. The art fills Apple's 824 pt icon grid inside a 1024 canvas.
+- **`glyph.svg`:** the 18 pt menu bar glyph. The rings sit further apart than in the icon so they
+  stay distinct at that size.
+
+`build-app.sh` renders `icon.svg` with AppKit's own SVG support (`scripts/render-icon.swift`) into
+every size `iconutil` needs. It packs them into `Contents/Resources/AppIcon.icns` (named by
+`CFBundleIconFile`) and copies the glyph in as `MenuBarGlyph.svg`. No extra tools are needed.
+
+The menu bar shows the glyph as a template image, so macOS tints it, while orchd is healthy, with
+the needs-you count beside it. Degraded, down and unknown keep their warning symbols, because those
+states must stand out. The README uses `icon.svg` directly. To change the logo, edit the SVGs and
+rebuild.
+
 ## Build, sign, release
 
 - **`make app`:** assembles `build/app.noindex/Orch.app`, ad-hoc signed by default. Set

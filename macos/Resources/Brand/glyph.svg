@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 18">
+  <!-- Menu bar glyph (18 pt template image; macOS tints it). The rings sit
+       further apart than in the icon so they stay distinct at this size. -->
+  <g fill="none" stroke="#000" stroke-width="1.4">
+    <circle cx="9" cy="5.6" r="3.9"/>
+    <circle cx="12.6" cy="11.4" r="3.9"/>
+    <circle cx="5.4" cy="11.4" r="3.9"/>
+  </g>
+  <circle cx="9" cy="9.4" r="1.4" fill="#000"/>
+</svg>

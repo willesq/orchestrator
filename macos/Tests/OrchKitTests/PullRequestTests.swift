@@ -65,27 +65,26 @@ private func pr(_ n: Int, _ attention: Attention?) -> PullRequest {
 @Suite struct TrayIconTests {
     private let status = DaemonStatus(version: "1", uptimeSeconds: 1, subsystems: [])
 
-    @Test func healthyAndQuietShowsHealth() {
-        #expect(TrayIcon(health: .healthy(status), needsYou: 0) == TrayIcon(health: .healthy(status), needsYou: 0))
+    @Test func healthyAndQuietShowsTheBrandMark() {
         let icon = TrayIcon(health: .healthy(status), needsYou: 0)
-        #expect(icon.symbolName == Health.healthy(status).symbolName && icon.count == nil)
+        #expect(icon.mark == .brand && icon.count == nil)
     }
 
-    @Test func healthyWithPRsShowsBellAndCount() {
+    @Test func healthyWithPRsShowsTheMarkAndCount() {
         let icon = TrayIcon(health: .healthy(status), needsYou: 3)
-        #expect(icon.symbolName == "bell.badge" && icon.count == 3)
+        #expect(icon.mark == .brand && icon.count == 3)
     }
 
     @Test func degradedKeepsWarningButStillCounts() {
         let degraded = Health.degraded(status, failed: ["qdrant"])
         let icon = TrayIcon(health: degraded, needsYou: 2)
-        #expect(icon.symbolName == degraded.symbolName && icon.count == 2)
+        #expect(icon.mark == .symbol(degraded.symbolName) && icon.count == 2)
     }
 
     @Test(arguments: [Health.down(reason: "unavailable"), Health.unknown])
     func downOrUnknownHidesStaleCount(health: Health) {
         let icon = TrayIcon(health: health, needsYou: 5)
-        #expect(icon.symbolName == health.symbolName && icon.count == nil)
+        #expect(icon.mark == .symbol(health.symbolName) && icon.count == nil)
     }
 }
 
