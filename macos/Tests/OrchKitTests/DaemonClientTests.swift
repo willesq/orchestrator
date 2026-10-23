@@ -33,6 +33,20 @@ struct LiveDaemonTests {
         #expect(!status.version.isEmpty)
         #expect(status.subsystems.contains { $0.name == "pr-babysitter" })
     }
+
+    @Test func searchAndSourcesFromRunningDaemon() async throws {
+        let socket = ProcessInfo.processInfo.environment["ORCH_LIVE_SOCKET"]!
+        let client = try DaemonClient(socketPath: socket)
+        let runner = Task { try? await client.run() }
+        defer {
+            client.close()
+            runner.cancel()
+        }
+        let result = try await client.search(SearchQuery(text: "orchestrator daemon", limit: 3))
+        #expect(!result.hits.isEmpty && result.hits.count <= 3)
+        let sources = try await client.listSources(type: "", limit: 5)
+        #expect(sources.sources.count <= 5 && sources.totalSources >= sources.sources.count)
+    }
 }
 
 @Suite struct DaemonClientRoundTripTests {
@@ -115,6 +129,85 @@ struct LiveDaemonTests {
                 runner.cancel()
             }
             #expect(try await client.listPRs() == PRList(prs: [], updatedAt: nil))
+        }
+    }
+}
+
+@Suite struct MemoryRoundTripTests {
+    private func withClient(_ service: FakeOrchdService, _ body: (DaemonClient) async throws -> Void) async throws {
+        try await withFakeOrchd(service) { socket in
+            let client = try DaemonClient(socketPath: socket)
+            let runner = Task { try? await client.run() }
+            defer {
+                client.close()
+                runner.cancel()
+            }
+            try await body(client)
+        }
+    }
+
+    @Test func searchSendsNormalizedQueryAndMapsHits() async throws {
+        var hit = Orchd_V1_SearchHit()
+        hit.text = "chunk"
+        hit.sourceUri = "repo://o/r/README.md"
+        hit.sourceType = "repo_doc"
+        hit.scope = "o/r"
+        hit.score = 0.5
+        hit.keywordScore = 3
+        hit.exact = true
+        hit.tags = ["repo:r"]
+        hit.startedAt = 1_700_000_000
+        var service = FakeOrchdService()
+        service.search.hits = [hit]
+        service.search.fallback = "keyword index missing"
+        try await withClient(service) { client in
+            let result = try await client.search(SearchQuery(text: " q ", limit: 0, sourceType: "repo_doc", mode: .hybrid))
+            #expect(result.fallback == "keyword index missing")
+            #expect(result.hits == [SearchHit(
+                text: "chunk", sourceURI: "repo://o/r/README.md", sourceType: "repo_doc", scope: "o/r", score: 0.5,
+                keywordScore: 3, exact: true, tags: ["repo:r"], startedAt: Date(timeIntervalSince1970: 1_700_000_000)
+            )])
+            let sent = try #require(service.recorder.last(Orchd_V1_SearchRequest.self))
+            #expect(sent.query == "q" && sent.topK == 1 && sent.sourceType == "repo_doc" && sent.mode == "hybrid")
+        }
+    }
+
+    @Test func searchWithoutFallbackHasNone() async throws {
+        try await withClient(FakeOrchdService()) { client in
+            let result = try await client.search(SearchQuery(text: "q"))
+            #expect(result.fallback == nil)
+        }
+    }
+
+    @Test func listSourcesMapsTotals() async throws {
+        var source = Orchd_V1_SourceSummary()
+        source.sourceUri = "session://1"
+        source.sourceType = "session"
+        source.chunks = 3
+        source.ingestedAt = 1_700_000_000
+        var service = FakeOrchdService()
+        service.sources.sources = [source]
+        service.sources.totalSources = 7
+        service.sources.totalChunks = 40
+        try await withClient(service) { client in
+            let list = try await client.listSources(type: "session", limit: 5)
+            #expect(list == SourceList(
+                sources: [SourceSummary(uri: "session://1", sourceType: "session", chunks: 3,
+                                        ingestedAt: Date(timeIntervalSince1970: 1_700_000_000))],
+                totalSources: 7, totalChunks: 40
+            ))
+            let sent = try #require(service.recorder.last(Orchd_V1_ListSourcesRequest.self))
+            #expect(sent.sourceType == "session" && sent.limit == 5)
+        }
+    }
+
+    @Test func restartOneAllAndUnknown() async throws {
+        try await withClient(FakeOrchdService()) { client in
+            let one = try await client.restart("qdrant")
+            let all = try await client.restart(nil)
+            #expect(one == ["qdrant"])
+            #expect(all == ["qdrant", "handoff"])
+            await #expect(throws: (any Error).self) { try await client.restart("nope") }
         }
     }
 }

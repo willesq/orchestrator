@@ -8,9 +8,12 @@ struct OrchApp: App {
     private let notifier = Notifier()
     private let loginItem = LoginItem()
     private let control = DaemonControl()
+    private let restart: RestartModel
+    private let search: SearchModel
+    private let sources: SourcesModel
 
     init() {
-        let api: any DaemonAPI
+        let api: any DaemonAPI & MemoryAPI & ControlAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -19,6 +22,9 @@ struct OrchApp: App {
             api = UnreachableDaemon(reason: error.localizedDescription)
         }
         monitor = DaemonMonitor(api: api)
+        search = SearchModel(api: api)
+        sources = SourcesModel(api: api)
+        restart = RestartModel(api: api) { [monitor] in await monitor.refresh() }
         monitor.start()
         prMonitor = PRMonitor(api: api)
         prMonitor.onNewlyNeedingYou = { [notifier] prs in notifier.post(prs) }
@@ -26,6 +32,11 @@ struct OrchApp: App {
     }
 
     var body: some Scene {
+        Window("Orchestrator", id: MainWindowID.value) {
+            MainWindow(monitor: monitor, prMonitor: prMonitor, restart: restart, search: search, sources: sources)
+        }
+        .defaultLaunchBehavior(.suppressed)
+
         MenuBarExtra {
             TrayMenu(monitor: monitor, prMonitor: prMonitor, loginItem: loginItem, control: control)
         } label: {
@@ -42,8 +53,18 @@ struct OrchApp: App {
 
 /// Stands in when the gRPC transport cannot even be built, so the tray still
 /// shows the daemon as down instead of the app failing to launch.
-private struct UnreachableDaemon: DaemonAPI {
+enum MainWindowID {
+    static let value = "main"
+}
+
+private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI {
     let reason: String
+
+    private var failure: DaemonControl.ControlError { .failed(status: -1, output: reason) }
+
+    func search(_ query: SearchQuery) async throws -> SearchResult { throw failure }
+    func listSources(type: String, limit: Int) async throws -> SourceList { throw failure }
+    func restart(_ name: String?) async throws -> [String] { throw failure }
     func status() async throws -> DaemonStatus {
         throw DaemonControl.ControlError.failed(status: -1, output: reason)
     }
