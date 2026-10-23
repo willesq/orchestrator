@@ -52,6 +52,7 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `RateTask` | id, rating (`good`/`rework`/`bad`) → — | sets the task's rating; with the PR-outcome sweep, the only ledger writes outside the queue |
 | `MigrateHybrid` | target, apply → report, error | one at a time (`Aborted` if busy); see [memory.md](memory.md) |
 | `DropBackup` | apply → collection, points, dropped | collection name only from config, never the caller; shares the migration lock |
+| `ListPRs` | needs_me → PRs (with reasons and attention), updated_at | reads the PR babysitter's cache only, never `gh`; most urgent first, then repo and title; `updated_at` is the cache file's mtime, 0 before the first sweep; an unparseable cache → `Unavailable` |
 
 Dispatch inserts the ledger row before creating the workflow (a row without a workflow is
 diagnosable; the reverse is invisible), redacts the body, assigns `task-<uuid>`, and snapshots git

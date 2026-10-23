@@ -130,8 +130,29 @@ with more than 10 PR URLs stays undecided.
 ## PR babysitter
 
 Every poll (10 min), on first start, or on request (`handoff/pr-sweep`, written after `gh pr`
-mutations): `gh search prs --author=@me --state=open`, then `gh pr view` each for checks, review
-decision and mergeability. CI rolls up to `none`, `failure`, `pending` or `success`. State is cached
-in `<data>/pr_babysitter_state.json`; new PRs and changes append `pr-babysitter` events (`blocked`
-for CI failure or changes requested, `complete` for green and approved, else `info`). `orch prs`
-reads the cache only.
+mutations): two open-PR searches, `gh search prs --author=@me` and `--review-requested=@me` (which
+includes requests to the user's teams), merged by URL. Each PR records the searches that found it
+in `reasons` (`authored`, `review_requested`). Then `gh pr view` runs for each PR to get checks,
+review decision and mergeability. Both searches sort by most recently updated. If either fails, the sweep fails and the cache is
+kept.
+
+CI rolls up to `none`, `failure`, `pending` or `success`. State is cached in
+`<data>/pr_babysitter_state.json`, written atomically (temp file, then rename) and owner-only.
+
+New PRs and changes to the user's own PRs, including a new reason, append `pr-babysitter` events:
+`blocked` for CI failure or changes requested, `complete` for green and approved, else `info`.
+PRs that only await the user's review get no events. Their titles are written by other people, and
+events reach every agent session through the SessionStart digest.
+
+`orch prs` and the `ListPRs` RPC read the cache only. `ListPRs` answers `Unavailable` when the
+file exists but cannot be parsed, rather than an empty list.
+
+**Attention** (`prs.Attention`) says why a PR needs the user. It picks the most urgent reason that
+applies, in this order:
+
+1. `ci_failed`, `changes_requested` or `conflicts` on the user's own PR.
+2. `review_requested` on someone else's PR.
+3. `ready_to_merge` on the user's own PR: green, approved, not a draft.
+
+Drafts never need attention. Cache entries written before reasons existed count as the user's
+own. `orch prs --needs-me`, `ListPRs` and the menu bar app all use this classification.

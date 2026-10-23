@@ -6,6 +6,8 @@ import GRPCNIOTransportHTTP2
 /// monitor can be tested without a daemon.
 public protocol DaemonAPI: Sendable {
     func status() async throws -> DaemonStatus
+    /// Every cached PR, most urgent first.
+    func listPRs() async throws -> PRList
 }
 
 /// Talks to orchd over its Unix socket. One long-lived HTTP/2 connection is
@@ -37,9 +39,7 @@ public final class DaemonClient: DaemonAPI, Sendable {
     }
 
     public func status() async throws -> DaemonStatus {
-        var options = CallOptions.defaults
-        options.timeout = callTimeout
-        let response = try await orchd.status(Orchd_V1_StatusRequest(), options: options)
+        let response = try await orchd.status(Orchd_V1_StatusRequest(), options: callOptions)
         return DaemonStatus(
             version: response.version,
             uptimeSeconds: response.uptimeSeconds,
@@ -47,5 +47,25 @@ public final class DaemonClient: DaemonAPI, Sendable {
                 Subsystem(name: $0.name, state: $0.state, detail: $0.detail, error: $0.error, restarts: Int($0.restarts))
             }
         )
+    }
+
+    public func listPRs() async throws -> PRList {
+        let response = try await orchd.listPRs(Orchd_V1_ListPRsRequest(), options: callOptions)
+        return PRList(
+            prs: response.prs.map {
+                PullRequest(
+                    url: $0.url, title: $0.title, repo: $0.repo, ciState: $0.ciState,
+                    reviewDecision: $0.reviewDecision, mergeable: $0.mergeable, isDraft: $0.isDraft,
+                    reasons: $0.reasons, attention: Attention(rawValue: $0.attention)
+                )
+            },
+            updatedAt: response.updatedAt > 0 ? Date(timeIntervalSince1970: TimeInterval(response.updatedAt)) : nil
+        )
+    }
+
+    private var callOptions: CallOptions {
+        var options = CallOptions.defaults
+        options.timeout = callTimeout
+        return options
     }
 }

@@ -4,6 +4,8 @@ import SwiftUI
 @main
 struct OrchApp: App {
     private let monitor: DaemonMonitor
+    private let prMonitor: PRMonitor
+    private let notifier = Notifier()
     private let control = DaemonControl()
 
     init() {
@@ -17,14 +19,21 @@ struct OrchApp: App {
         }
         monitor = DaemonMonitor(api: api)
         monitor.start()
+        prMonitor = PRMonitor(api: api)
+        prMonitor.onNewlyNeedingYou = { [notifier] prs in notifier.post(prs) }
+        prMonitor.start()
     }
 
     var body: some Scene {
         MenuBarExtra {
-            TrayMenu(monitor: monitor, control: control)
+            TrayMenu(monitor: monitor, prMonitor: prMonitor, control: control)
         } label: {
-            Image(systemName: monitor.health.symbolName)
-                .accessibilityLabel(monitor.health.summary)
+            let icon = TrayIcon(health: monitor.health, needsYou: prMonitor.needsYou.count)
+            HStack(spacing: 2) {
+                Image(systemName: icon.symbolName)
+                if let count = icon.count { Text("\(count)") }
+            }
+            .accessibilityLabel(monitor.health.summary)
         }
         .menuBarExtraStyle(.window)
     }
@@ -35,6 +44,10 @@ struct OrchApp: App {
 private struct UnreachableDaemon: DaemonAPI {
     let reason: String
     func status() async throws -> DaemonStatus {
+        throw DaemonControl.ControlError.failed(status: -1, output: reason)
+    }
+
+    func listPRs() async throws -> PRList {
         throw DaemonControl.ControlError.failed(status: -1, output: reason)
     }
 }

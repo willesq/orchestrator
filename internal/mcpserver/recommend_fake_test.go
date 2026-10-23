@@ -44,3 +44,7 @@ var fakeDropBackup = func(*orchdv1.DropBackupRequest) (*orchdv1.DropBackupRespon
 func (f *fakeClient) DropBackup(_ context.Context, req *orchdv1.DropBackupRequest, _ ...grpc.CallOption) (*orchdv1.DropBackupResponse, error) {
 	return fakeDropBackup(req)
 }
+
+func (f *fakeClient) ListPRs(context.Context, *orchdv1.ListPRsRequest, ...grpc.CallOption) (*orchdv1.ListPRsResponse, error) {
+	return &orchdv1.ListPRsResponse{}, nil
+}

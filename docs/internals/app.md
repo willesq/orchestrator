@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra` and its views |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, its views, and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -36,6 +36,23 @@ lives in [`macos/`](../../macos/), a Swift package.
 | healthy | reachable, and no unit is `failed` or carries an error |
 | degraded | reachable, with at least one `failed` unit or one recording an error; `stopped` does not count, because stopping a unit is deliberate |
 | down | the call failed (no socket, refused, or past the deadline) |
+
+## Needs you
+
+`PRMonitor` calls `ListPRs` every 60 s. The babysitter refreshes its cache every 10 minutes, so
+polling the cache costs nothing. The menu shows up to eight PRs that need the user, most urgent
+first, each with its reason (see the PR babysitter in [tasks.md](tasks.md)). Clicking one opens it.
+
+- **Opening PRs:** the app only opens URLs of exactly the form
+  `https://github.com/<owner>/<repo>/pull/<n>`: no port, credentials, query or fragment. It hands
+  them to the system to open, so nothing else should get through.
+- **Badge:** the icon becomes a bell with a count while orchd is healthy and something needs the
+  user. A degraded daemon keeps its warning icon with the count. A down or unknown daemon hides
+  the count, because the list would be stale.
+- **Notifications:** one per PR that newly needs the user, or now needs them for a different
+  reason. Nothing is posted for what is already waiting at launch. More than three at once become a
+  single "N PRs need you" summary. Clicking a PR's notification opens it. A failed poll keeps the
+  last good list, so a briefly unreadable cache cannot make every PR look new. Notifications need the app bundle, so a bare `swift run` binary skips them.
 
 ## Daemon control
 
