@@ -38,6 +38,8 @@ jobs:
   release:
     needs: test
     runs-on: macos-14 # Apple Silicon (arm64)
+    outputs:
+      version: ${{ steps.package.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -130,3 +132,144 @@ jobs:
             -f version="${{ steps.package.outputs.version }}" \
             -f sha256="${{ steps.package.outputs.sha256 }}" \
             -f asset_id="${{ steps.asset.outputs.id }}"
+
+  # Orch.app, attached to the same release. Separate from the binaries because
+  # grpc-swift needs Swift 6.1 (macos-15) while the cgo build stays on macos-14.
+  #
+  # Signing and notarization run only when all the Apple secrets are set:
+  #   APPLE_DEVELOPER_ID_P12           base64 of the Developer ID Application .p12
+  #   APPLE_DEVELOPER_ID_P12_PASSWORD  its export password
+  #   APPLE_NOTARY_API_KEY             base64 of an App Store Connect API key (.p8)
+  #   APPLE_NOTARY_KEY_ID, APPLE_NOTARY_ISSUER_ID
+  # Without them the app is still built (so a broken build fails the release)
+  # but nothing is uploaded and the cask is not bumped: an unsigned app would
+  # be blocked by Gatekeeper on every machine that installs it.
+  app:
+    needs: release
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Apple signing secrets
+        id: signing
+        env:
+          P12: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
+          P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.APPLE_NOTARY_API_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          if [ -n "$P12" ] && [ -n "$P12_PASSWORD" ] && [ -n "$NOTARY_KEY" ] \
+             && [ -n "$NOTARY_KEY_ID" ] && [ -n "$NOTARY_ISSUER_ID" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Apple signing secrets not set; Orch.app is built but not released"
+          fi
+
+      # Built before any signing material exists on the runner, so nothing that
+      # runs during the dependency build can reach the Developer ID key.
+      - name: Build Orch.app (ad-hoc signed)
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          OUT_DIR: dist-app
+        run: make app
+
+      # A throwaway keychain holds the certificate for this job only.
+      - name: Import Developer ID certificate
+        id: cert
+        if: steps.signing.outputs.present == 'true'
+        env:
+          P12: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
+          P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          trap 'rm -f "$RUNNER_TEMP/devid.p12"' EXIT
+          kc="$RUNNER_TEMP/signing.keychain-db"
+          kcpass="$(openssl rand -hex 24)"
+          security create-keychain -p "$kcpass" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$kcpass" "$kc"
+          printf '%s' "$P12" | base64 --decode > "$RUNNER_TEMP/devid.p12"
+          security import "$RUNNER_TEMP/devid.p12" -k "$kc" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$kcpass" "$kc" >/dev/null
+          existing=()
+          while IFS= read -r line; do existing+=("$(printf '%s' "$line" | xargs)"); done \
+            < <(security list-keychains -d user)
+          security list-keychains -d user -s "$kc" "${existing[@]}"
+          identity="$(security find-identity -v -p codesigning "$kc" | awk -F'"' '/Developer ID Application/ {print $2; exit}')"
+          if [ -z "$identity" ]; then
+            echo "::error::no Developer ID Application identity in APPLE_DEVELOPER_ID_P12"
+            exit 1
+          fi
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+
+      # Re-signs the ad-hoc build with the hardened runtime and a secure
+      # timestamp, as notarization requires.
+      - name: Sign with Developer ID
+        if: steps.signing.outputs.present == 'true'
+        env:
+          IDENTITY: ${{ steps.cert.outputs.identity }}
+        run: |
+          codesign --force --options runtime --timestamp --sign "$IDENTITY" dist-app/Orch.app
+          codesign --verify --strict --verbose=2 dist-app/Orch.app
+
+      - name: Notarize and staple
+        if: steps.signing.outputs.present == 'true'
+        env:
+          NOTARY_KEY: ${{ secrets.APPLE_NOTARY_API_KEY }}
+          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          key="$RUNNER_TEMP/notary.p8"
+          trap 'rm -f "$key"' EXIT
+          printf '%s' "$NOTARY_KEY" | base64 --decode > "$key"
+          ditto -c -k --keepParent dist-app/Orch.app "$RUNNER_TEMP/Orch-notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/Orch-notarize.zip" \
+            --key "$key" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
+          xcrun stapler staple dist-app/Orch.app
+          spctl --assess --type execute --verbose dist-app/Orch.app
+
+      - name: Package + upload
+        id: package
+        if: steps.signing.outputs.present == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          zip="Orch_${VERSION}_darwin_arm64.zip"
+          ditto -c -k --keepParent dist-app/Orch.app "$zip"
+          gh release upload "$GITHUB_REF_NAME" "$zip"
+          asset_id=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" \
+            --jq '.assets[] | select(.name=="'"$zip"'") | .id')
+          if [ -z "$asset_id" ]; then
+            echo "::error::could not resolve asset id for $zip"
+            exit 1
+          fi
+          echo "sha256=$(shasum -a 256 "$zip" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "asset_id=$asset_id" >> "$GITHUB_OUTPUT"
+
+      - name: Check for tap token
+        id: taptoken
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -n "$HOMEBREW_TAP_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dispatch tap cask bump
+        if: steps.signing.outputs.present == 'true' && steps.taptoken.outputs.present == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
+          SHA256: ${{ steps.package.outputs.sha256 }}
+          ASSET_ID: ${{ steps.package.outputs.asset_id }}
+        run: |
+          gh workflow run bump-cask.yml --repo willesq/homebrew-tap \
+            -f cask=orch-app -f version="$VERSION" -f sha256="$SHA256" -f asset_id="$ASSET_ID"
+
+      - name: Remove signing keychain
+        if: always() && steps.signing.outputs.present == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true

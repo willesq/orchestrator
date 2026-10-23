@@ -91,3 +91,8 @@ tmp_audit/
 *.test
 # staged tokenizers static lib (downloaded per-build, never committed)
 build/lib/
+
+# macOS app (SwiftPM) build output
+/macos/.build/
+/macos/.swiftpm/
+/dist-app/
