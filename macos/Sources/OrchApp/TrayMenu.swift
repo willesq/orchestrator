@@ -28,7 +28,12 @@ struct TrayMenu: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Divider()
-            Button("Open Orchestrator…", action: openMainWindow)
+            HStack {
+                Button("Open Orchestrator…", action: openMainWindow)
+                Spacer()
+                Button("About Orch") { AboutPanel.show() }
+                    .buttonStyle(.link)
+            }
             LoginItemRow(item: loginItem)
             actions
         }
@@ -40,9 +45,7 @@ struct TrayMenu: View {
 
     private var header: some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: monitor.health.symbolName)
-                .foregroundStyle(tint)
-                .font(.title2)
+            HealthMark(health: monitor.health, size: 30)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Orchestrator").font(.headline)
                 Text(monitor.health.summary)
@@ -71,15 +74,6 @@ struct TrayMenu: View {
             Button("Quit") { NSApplication.shared.terminate(nil) }
         }
         .disabled(busy)
-    }
-
-    private var tint: Color {
-        switch monitor.health {
-        case .healthy: .green
-        case .degraded: .orange
-        case .down: .red
-        case .unknown: .secondary
-        }
     }
 
     private func run(_ action: DaemonControl.Action) {

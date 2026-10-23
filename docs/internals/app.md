@@ -144,8 +144,16 @@ The logo is two SVG files in `macos/Resources/Brand/`:
 every size `iconutil` needs. It packs them into `Contents/Resources/AppIcon.icns` (named by
 `CFBundleIconFile`) and copies the glyph in as `MenuBarGlyph.svg`. No extra tools are needed.
 
-The menu bar shows the glyph as a template image, so macOS tints it, while orchd is healthy, with
-the needs-you count beside it. Degraded, down and unknown keep their warning symbols, because those
+Where the logo appears:
+
+- **Menu bar:** the glyph, as a template image macOS tints, while orchd is healthy, with the
+  needs-you count beside it.
+- **Tray menu and Dashboard headers:** the app icon while orchd is healthy (`HealthMark`).
+- **About Orch:** the menu opens the standard About panel, which takes the icon and version from
+  the bundle. A menu-bar-only app has no app menu to reach it from.
+- **Finder, Login Items and notifications:** macOS shows the bundle's icon.
+
+Degraded, down and unknown replace the logo with their warning symbol in its color, because those
 states must stand out. The README uses `icon.svg` directly. To change the logo, edit the SVGs and
 rebuild.
 
