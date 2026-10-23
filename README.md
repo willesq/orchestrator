@@ -53,5 +53,5 @@ Follow [AGENTS.md](AGENTS.md). Changes to `main` need a pull request and a code-
 make build    # build/bin/{orch,orchd,orch-hook}; needs the native libraries in INSTALL.md
 make test     # pure-Go tests
 make cover    # per-file coverage gate (>= 80%)
-make app      # build/app/Orch.app, the menu bar app (needs Xcode 16.3+)
+make app      # build/app/Orch.app, the menu bar app (needs Xcode 26+)
 ```

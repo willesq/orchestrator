@@ -134,7 +134,8 @@ jobs:
             -f asset_id="${{ steps.asset.outputs.id }}"
 
   # Orch.app, attached to the same release. Separate from the binaries because
-  # grpc-swift needs Swift 6.1 (macos-15) while the cgo build stays on macos-14.
+  # the Swift dependencies need Swift 6.2 (Xcode 26, macos-26) while the cgo
+  # build stays on macos-14.
   #
   # Signing and notarization run only when all the Apple secrets are set:
   #   APPLE_DEVELOPER_ID_P12           base64 of the Developer ID Application .p12
@@ -146,9 +147,21 @@ jobs:
   # be blocked by Gatekeeper on every machine that installs it.
   app:
     needs: release
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+
+      # The Swift dependencies need Swift 6.2 (Xcode 26); pick the newest
+      # Xcode 26 the image has rather than trusting its default.
+      - name: Select Xcode 26
+        run: |
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' | sort -V | tail -1)"
+          if [ -z "$xcode" ]; then
+            echo "::error::no Xcode 26 on this runner"
+            exit 1
+          fi
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          swift --version
 
       - name: Check for Apple signing secrets
         id: signing
@@ -239,14 +252,7 @@ jobs:
           zip="Orch_${VERSION}_darwin_arm64.zip"
           ditto -c -k --keepParent dist-app/Orch.app "$zip"
           gh release upload "$GITHUB_REF_NAME" "$zip"
-          asset_id=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" \
-            --jq '.assets[] | select(.name=="'"$zip"'") | .id')
-          if [ -z "$asset_id" ]; then
-            echo "::error::could not resolve asset id for $zip"
-            exit 1
-          fi
           echo "sha256=$(shasum -a 256 "$zip" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-          echo "asset_id=$asset_id" >> "$GITHUB_OUTPUT"
 
       - name: Check for tap token
         id: taptoken
@@ -265,10 +271,9 @@ jobs:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ needs.release.outputs.version }}
           SHA256: ${{ steps.package.outputs.sha256 }}
-          ASSET_ID: ${{ steps.package.outputs.asset_id }}
         run: |
           gh workflow run bump-cask.yml --repo willesq/homebrew-tap \
-            -f cask=orch-app -f version="$VERSION" -f sha256="$SHA256" -f asset_id="$ASSET_ID"
+            -f cask=orch-app -f version="$VERSION" -f sha256="$SHA256"
 
       - name: Remove signing keychain
         if: always() && steps.signing.outputs.present == 'true'

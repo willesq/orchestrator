@@ -63,4 +63,5 @@ from an argument array, never through a shell.
   block an unsigned app. Builds use only the dependency versions in `Package.resolved`.
 - **Installing:** the `orch-app` cask in `willesq/tap` depends on the `orch` formula, which
   stays the owner of the binaries and of `brew services`.
-- **Runners:** grpc-swift needs Swift 6.1, so the app jobs run on `macos-15`.
+- **Runners:** the Swift dependencies (swift-crypto, swift-log, swift-service-lifecycle) need
+  Swift 6.2, so the app jobs run on `macos-26` and select its newest Xcode 26.
