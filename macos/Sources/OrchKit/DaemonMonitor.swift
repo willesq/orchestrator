@@ -49,6 +49,10 @@ public final class DaemonMonitor {
         let text = String(describing: error)
         if text.localizedCaseInsensitiveContains("unavailable") { return "unavailable" }
         if text.localizedCaseInsensitiveContains("deadline") { return "timed out" }
+        // An orchd older than this app lacks the RPC.
+        if text.localizedCaseInsensitiveContains("unimplemented") {
+            return "needs a newer orchd; update orch (brew upgrade orch)"
+        }
         return text.count > 80 ? String(text.prefix(80)) + "…" : text
     }
 }

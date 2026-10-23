@@ -69,7 +69,10 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
 - **The notification:** it carries nothing, so whoever posts it can only bring the window forward.
   The running copy honours at most one request a second.
 - **Plain AppKit window:** the main window is an `NSWindow` hosting the SwiftUI `MainWindow`. It
-  remembers its frame, and the selected pane is kept in user defaults. A SwiftUI `Window` scene can
+  remembers its frame, and the selected pane is kept in user defaults. The hosting controller's
+  `sizingOptions` is empty, so the window keeps the size the user gives it instead of following each
+  pane's ideal size. Every pane has toolbar content, so the toolbar band never comes and goes, which
+  would otherwise change the window's height on a pane switch. A SwiftUI `Window` scene can
   only be opened from a live view, and the menu bar label is rendered as an image, so it cannot do
   that for AppKit.
 - **Dev builds:** `make app` writes to `build/app.noindex/`. The `.noindex` suffix keeps Spotlight,
@@ -82,6 +85,7 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
 - **Dashboard:** orchd's health, every subsystem with its detail or last error and restart count,
   a **Restart** button for each unit, **Restart all** (the `Restart` RPC, one at a time), and the
   Needs you list.
+- **Memory:** a Search/Sources switch in the toolbar.
 - **Memory → Search:** the `Search` RPC with mode (default, hybrid, meaning only), a source-type
   filter and a result count of 1–100. Each hit shows its score, source, type and date.
   - Indexed text is untrusted, so it is shown verbatim and never rendered as Markdown.

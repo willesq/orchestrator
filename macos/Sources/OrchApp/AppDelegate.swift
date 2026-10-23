@@ -52,9 +52,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 monitor: model.monitor, prMonitor: model.prMonitor, restart: model.restart,
                 search: model.search, sources: model.sources, tasks: model.tasks, dispatch: model.dispatch
             )
-            let window = NSWindow(contentViewController: NSHostingController(rootView: root))
+            let hosting = NSHostingController(rootView: root)
+            // The window keeps the size the user gives it. By default the
+            // hosting controller resizes the window to each pane's ideal size,
+            // so switching panes made it jump.
+            hosting.sizingOptions = []
+            let window = NSWindow(contentViewController: hosting)
             window.title = "Orchestrator"
             window.styleMask.insert([.resizable, .miniaturizable, .closable, .titled])
+            window.contentMinSize = NSSize(width: 760, height: 480)
             window.isReleasedWhenClosed = false
             window.setContentSize(NSSize(width: 980, height: 640))
             if !window.setFrameUsingName("OrchMainWindow") { window.center() }
