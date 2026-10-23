@@ -10,9 +10,42 @@ import GRPCProtobuf
 struct FakeOrchdService: RegistrableRPCService {
     var status = Orchd_V1_StatusResponse()
     var prs = Orchd_V1_ListPRsResponse()
+    var search = Orchd_V1_SearchResponse()
+    var sources = Orchd_V1_ListSourcesResponse()
+    /// Records requests the fake received, for assertions.
+    var recorder = Recorder()
 
     func registerMethods<Transport: ServerTransport>(with router: inout RPCRouter<Transport>) {
-        let status = self.status, prs = self.prs
+        let status = self.status, prs = self.prs, search = self.search, sources = self.sources
+        let recorder = self.recorder
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.Search.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_SearchRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_SearchResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: search))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListSources.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListSourcesRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListSourcesResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: sources))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.Restart.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_RestartRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_RestartResponse>()
+        ) { request, _ in
+            var name = ""
+            for try await message in request.messages { name = message.name }
+            guard name != "nope" else { throw RPCError(code: .notFound, message: "no subsystem nope") }
+            var response = Orchd_V1_RestartResponse()
+            response.restarted = name.isEmpty ? ["qdrant", "handoff"] : [name]
+            return StreamingServerResponse(single: ServerResponse(message: response))
+        }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.Status.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_StatusRequest>(),
@@ -56,4 +89,14 @@ func withFakeOrchd(
         }
         try await body(socket)
     }
+}
+
+/// Collects the requests a fake service handled.
+final class Recorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var messages: [any Sendable] = []
+
+    func record(_ message: any Sendable) { lock.withLock { messages.append(message) } }
+
+    func last<T>(_: T.Type) -> T? { lock.withLock { messages.last { $0 is T } as? T } }
 }

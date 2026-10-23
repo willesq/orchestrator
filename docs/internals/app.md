@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, its views, and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `MemoryView`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -53,6 +53,26 @@ first, each with its reason (see the PR babysitter in [tasks.md](tasks.md)). Cli
   reason. Nothing is posted for what is already waiting at launch. More than three at once become a
   single "N PRs need you" summary. Clicking a PR's notification opens it. A failed poll keeps the
   last good list, so a briefly unreadable cache cannot make every PR look new. Notifications need the app bundle, so a bare `swift run` binary skips them.
+
+## Main window
+
+"Open Orchestrator…" in the menu opens a window with a sidebar. The window never opens by itself at
+launch.
+
+- **Dashboard:** orchd's health, every subsystem with its detail or last error and restart count,
+  a **Restart** button for each unit, **Restart all** (the `Restart` RPC, one at a time), and the
+  Needs you list.
+- **Memory → Search:** the `Search` RPC with mode (default, hybrid, meaning only), a source-type
+  filter and a result count of 1–100. Each hit shows its score, source, type and date.
+  - Indexed text is untrusted, so it is shown verbatim and never rendered as Markdown.
+  - A newer search cancels an older one, and a cancelled search that finishes late cannot replace
+    newer results.
+  - Searches get a 15 s deadline instead of 3 s, because the first search after a restart loads
+    the embedding model.
+- **Memory → Sources:** `ListSources`, up to 200 at a time with totals, filtered by type.
+
+`SearchModel`, `SourcesModel` and `RestartModel` in OrchKit hold this logic, behind small
+`MemoryAPI` and `ControlAPI` protocols so views and tests depend only on what they use.
 
 ## Open at login
 

@@ -8,6 +8,7 @@ struct TrayMenu: View {
     let loginItem: LoginItem
     let control: DaemonControl
 
+    @Environment(\.openWindow) private var openWindow
     @State private var busy = false
     @State private var controlError: String?
 
@@ -27,6 +28,10 @@ struct TrayMenu: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Divider()
+            Button("Open Orchestrator…") {
+                openWindow(id: MainWindowID.value)
+                NSApp.activate()
+            }
             LoginItemRow(item: loginItem)
             actions
         }
@@ -105,9 +110,9 @@ private struct SubsystemList: View {
                     Circle()
                         .fill(color(for: unit))
                         .frame(width: 7, height: 7)
-                    Text(unit.name).font(.callout)
+                    Text(verbatim: unit.name).font(.callout)
                     Spacer()
-                    Text(unit.isFailed ? "failed" : unit.state)
+                    Text(verbatim: unit.isFailed ? "failed" : unit.state)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
