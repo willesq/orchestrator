@@ -17,7 +17,7 @@ CGO_LDFLAGS := -L$(TOK_LIB_DIR)
 
 export CGO_ENABLED = 1
 
-.PHONY: build orch orchd orch-hook test cover vet fmt clean tools proto proto-go proto-swift app app-test app-cover
+.PHONY: build orch orchd orch-hook test cover vet fmt clean tools proto proto-go proto-swift app app-install app-test app-cover
 
 # Pinned to the versions stamped in the committed *.pb.go headers so regenerating
 # produces a diff of the schema change only.
@@ -86,6 +86,11 @@ proto-swift:
 # SIGN_IDENTITY names a Developer ID certificate).
 app:
 	bash $(SWIFT_PKG)/scripts/build-app.sh
+
+# Builds Orch.app and installs it in ~/Applications (INSTALL_DIR overrides),
+# replacing and relaunching an earlier copy.
+app-install:
+	bash $(SWIFT_PKG)/scripts/install-app.sh
 
 app-test:
 	swift test --package-path $(SWIFT_PKG)

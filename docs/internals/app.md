@@ -54,6 +54,13 @@ first, each with its reason (see the PR babysitter in [tasks.md](tasks.md)). Cli
   single "N PRs need you" summary. Clicking a PR's notification opens it. A failed poll keeps the
   last good list, so a briefly unreadable cache cannot make every PR look new. Notifications need the app bundle, so a bare `swift run` binary skips them.
 
+## Open at login
+
+`LoginItem` wraps `SMAppService.mainApp`, and the menu's "Open at login" checkbox turns it on or
+off. If macOS registers the app but wants the user's approval, the menu links to System Settings →
+Login Items. The state is re-read every time the menu opens, because it can also change in System
+Settings. A binary running outside an app bundle cannot register, so the checkbox is disabled there.
+
 ## Daemon control
 
 **Start** and **Restart** run `orch daemon start|restart`, which already chooses between brew
@@ -66,6 +73,10 @@ from an argument array, never through a shell.
 - **`make app`:** assembles `build/app/Orch.app`, ad-hoc signed by default. Set
   `SIGN_IDENTITY` to a Developer ID Application identity to sign with the hardened runtime and a
   secure timestamp, which notarization requires.
+- **`make app-install`:** builds the app and installs it as `~/Applications/Orch.app` (or
+  `$INSTALL_DIR/Orch.app`). It first asks a running copy to quit, then replaces the bundle and
+  launches the new one; `NO_LAUNCH=1` skips the launch. This is the way to run the app from source
+  until the cask ships.
 - **Bundle settings:** `LSUIElement` keeps the app out of the Dock, and `LSMinimumSystemVersion`
   is 15.2.
 - **Tests:** `make app-test` runs the tests, and `make app-cover` applies the 80%-per-file gate

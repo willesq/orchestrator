@@ -6,6 +6,7 @@ struct OrchApp: App {
     private let monitor: DaemonMonitor
     private let prMonitor: PRMonitor
     private let notifier = Notifier()
+    private let loginItem = LoginItem()
     private let control = DaemonControl()
 
     init() {
@@ -26,7 +27,7 @@ struct OrchApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            TrayMenu(monitor: monitor, prMonitor: prMonitor, control: control)
+            TrayMenu(monitor: monitor, prMonitor: prMonitor, loginItem: loginItem, control: control)
         } label: {
             let icon = TrayIcon(health: monitor.health, needsYou: prMonitor.needsYou.count)
             HStack(spacing: 2) {
