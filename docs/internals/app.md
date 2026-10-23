@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `MemoryView`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `MemoryView`, `TasksView`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -70,9 +70,32 @@ launch.
   - Searches get a 15 s deadline instead of 3 s, because the first search after a restart loads
     the embedding model.
 - **Memory → Sources:** `ListSources`, up to 200 at a time with totals, filtered by type.
+- **Tasks:** `ListTasks`, up to 100 at a time, filtered by status.
+  - **Detail:** the selected task's model, run models, duration, turns, cost, verification and PR
+    outcome, plus its body and result, shown verbatim.
+  - **PR links:** opened only through the same `github.com/<owner>/<repo>/pull/<n>` check.
+  - **Rating:** a finished task can be rated good, needed rework or bad (`RateTask`), which feeds
+    model routing.
+- **Dispatch:** a sheet that sends `Dispatch` with an agent, an optional task kind (showing what
+  `RecommendModel` would route it to), an optional pinned model, an optional working directory
+  (chosen with a folder picker) and the task body.
+  - **Validation:** it checks orchd's own rules before sending: the agent name pattern, a non-empty
+    body up to 64 KiB, and an absolute `cwd`. orchd still validates on its side.
+  - **Sending:** ⌘↩, not plain Return, so pressing Return in a text field never starts an agent.
+  - **After sending:** the form clears the body, so a second click cannot queue the task twice.
+    It shows the route orchd actually chose, and warns when no worker is enabled, because the
+    task then waits.
+  - **Lost answers:** dispatch gets a 30 s deadline, because routing may build a live proposal
+    first. If the answer is lost (deadline, dropped connection), the task may already be queued,
+    so the form says so, keeps the body, and refreshes the task list instead of inviting a blind
+    retry.
+  - **Late results:** a send that finishes after the form closes is dropped, so it can't bring
+    back a stale result.
+  - **Task kinds:** the form's list copies `routing.Kinds`, and a Go test fails if they drift.
 
-`SearchModel`, `SourcesModel` and `RestartModel` in OrchKit hold this logic, behind small
-`MemoryAPI` and `ControlAPI` protocols so views and tests depend only on what they use.
+`SearchModel`, `SourcesModel`, `RestartModel`, `TasksModel` and `DispatchModel` in OrchKit hold this
+logic, behind small `MemoryAPI`, `ControlAPI` and `TasksAPI` protocols so views and tests depend only
+on what they use.
 
 ## Open at login
 

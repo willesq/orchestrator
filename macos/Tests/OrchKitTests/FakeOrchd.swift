@@ -12,12 +12,62 @@ struct FakeOrchdService: RegistrableRPCService {
     var prs = Orchd_V1_ListPRsResponse()
     var search = Orchd_V1_SearchResponse()
     var sources = Orchd_V1_ListSourcesResponse()
+    var tasks = Orchd_V1_ListTasksResponse()
+    var dispatch = Orchd_V1_DispatchResponse()
+    var recommend = Orchd_V1_RecommendModelResponse()
     /// Records requests the fake received, for assertions.
     var recorder = Recorder()
 
     func registerMethods<Transport: ServerTransport>(with router: inout RPCRouter<Transport>) {
         let status = self.status, prs = self.prs, search = self.search, sources = self.sources
         let recorder = self.recorder
+        let tasks = self.tasks, dispatch = self.dispatch, recommend = self.recommend
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListTasks.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListTasksRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListTasksResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: tasks))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.GetTask.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_GetTaskRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_GetTaskResponse>()
+        ) { request, _ in
+            var id = ""
+            for try await message in request.messages { id = message.id }
+            var response = Orchd_V1_GetTaskResponse()
+            if let task = tasks.tasks.first(where: { $0.id == id }) {
+                response.task = task
+                response.found = true
+            }
+            return StreamingServerResponse(single: ServerResponse(message: response))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.RateTask.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_RateTaskRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_RateTaskResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: Orchd_V1_RateTaskResponse()))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.Dispatch.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_DispatchRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_DispatchResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: dispatch))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.RecommendModel.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_RecommendModelRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_RecommendModelResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: recommend))
+        }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.Search.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_SearchRequest>(),
