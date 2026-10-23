@@ -162,10 +162,14 @@ rebuild.
 - **`make app`:** assembles `build/app.noindex/Orch.app`, ad-hoc signed by default. Set
   `SIGN_IDENTITY` to a Developer ID Application identity to sign with the hardened runtime and a
   secure timestamp, which notarization requires.
-- **`make app-install`:** builds the app and installs it as `~/Applications/Orch.app` (or
-  `$INSTALL_DIR/Orch.app`). It first asks a running copy to quit, then replaces the bundle and
-  launches the new one; `NO_LAUNCH=1` skips the launch. This is the way to run the app from source
-  until the cask ships.
+- **`make app-install`:** builds the app and installs it as `/Applications/Orch.app`, where Finder,
+  Launchpad and the cask put apps. It uses `~/Applications` when `/Applications` is not writable,
+  and `INSTALL_DIR` overrides both.
+  - It first asks a running copy to quit, then replaces the bundle and launches the new one;
+    `NO_LAUNCH=1` skips the launch.
+  - It removes a copy an earlier install left in the other folder, but only one whose bundle id is
+    `com.willesq.orch`, so Spotlight and Login Items see a single Orch.
+  - This is the way to run the app from source until the cask ships.
 - **Bundle settings:** `LSUIElement` keeps the app out of the Dock, and `LSMinimumSystemVersion`
   is 15.2.
 - **Tests:** `make app-test` runs the tests, and `make app-cover` applies the 80%-per-file gate

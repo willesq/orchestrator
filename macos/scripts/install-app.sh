@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
-# Builds Orch.app and installs it for this user, replacing an earlier copy:
-# quits a running Orch, swaps the bundle, and launches the new one.
+# Builds Orch.app and installs it, replacing an earlier copy: quits a running
+# Orch, swaps the bundle, and launches the new one.
 #
-#   INSTALL_DIR  where Orch.app goes (default ~/Applications); use a folder
-#                only you can write to, since the script launches what it finds there
+#   INSTALL_DIR  where Orch.app goes. Default /Applications, where Finder,
+#                Launchpad and the Homebrew cask put apps; ~/Applications when
+#                /Applications is not writable. The script launches what it
+#                finds there, so use a folder other users cannot write to.
 #   VERSION, SIGN_IDENTITY  passed through to build-app.sh
 set -euo pipefail
 
 pkg="$(cd "$(dirname "$0")/.." && pwd)"
-dest_dir="${INSTALL_DIR:-$HOME/Applications}"
+if [ -n "${INSTALL_DIR:-}" ]; then
+  dest_dir="$INSTALL_DIR"
+elif [ -w /Applications ]; then
+  dest_dir=/Applications
+else
+  dest_dir="$HOME/Applications"
+fi
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 
@@ -35,6 +43,19 @@ ditto "$staging/Orch.app" "$next"
 rm -rf "$dest_dir/Orch.app"
 mv "$next" "$dest_dir/Orch.app"
 echo "installed $dest_dir/Orch.app"
+
+# Remove a copy an earlier install left in the other standard folder, so
+# Spotlight and Login Items see one Orch. Only a bundle that is this app
+# (by bundle id) is removed.
+for other in /Applications/Orch.app "$HOME/Applications/Orch.app"; do
+  [ "$other" -ef "$dest_dir/Orch.app" ] && continue
+  [ -d "$other" ] || continue
+  id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$other/Contents/Info.plist" 2>/dev/null || true)"
+  if [ "$id" = "com.willesq.orch" ]; then
+    rm -rf "$other"
+    echo "removed the earlier copy at $other"
+  fi
+done
 if [ "${NO_LAUNCH:-}" != "1" ]; then
   open "$dest_dir/Orch.app"
 fi
