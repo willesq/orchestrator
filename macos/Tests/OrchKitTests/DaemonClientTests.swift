@@ -47,6 +47,19 @@ struct LiveDaemonTests {
         let sources = try await client.listSources(type: "", limit: 5)
         #expect(sources.sources.count <= 5 && sources.totalSources >= sources.sources.count)
     }
+
+    @Test func tasksAndRoutingFromRunningDaemon() async throws {
+        let socket = ProcessInfo.processInfo.environment["ORCH_LIVE_SOCKET"]!
+        let client = try DaemonClient(socketPath: socket)
+        let runner = Task { try? await client.run() }
+        defer {
+            client.close()
+            runner.cancel()
+        }
+        let tasks = try await client.listTasks(status: .all, limit: 5)
+        #expect(tasks.count <= 5)
+        _ = try await client.recommend(taskKind: "code")
+    }
 }
 
 @Suite struct DaemonClientRoundTripTests {
@@ -208,6 +221,103 @@ struct LiveDaemonTests {
             #expect(one == ["qdrant"])
             #expect(all == ["qdrant", "handoff"])
             await #expect(throws: (any Error).self) { try await client.restart("nope") }
+        }
+    }
+}
+
+@Suite struct TasksRoundTripTests {
+    private func withClient(_ service: FakeOrchdService, _ body: (DaemonClient) async throws -> Void) async throws {
+        try await withFakeOrchd(service) { socket in
+            let client = try DaemonClient(socketPath: socket)
+            let runner = Task { try? await client.run() }
+            defer {
+                client.close()
+                runner.cancel()
+            }
+            try await body(client)
+        }
+    }
+
+    private func pbTask() -> Orchd_V1_Task {
+        var route = Orchd_V1_Route()
+        route.taskKind = "code"
+        route.provider = "claude-code"
+        route.model = "opus"
+        route.evidenceN = 4
+        route.confidence = "medium"
+        var t = Orchd_V1_Task()
+        t.id = "task-1"
+        t.agent = "dev"
+        t.body = "fix"
+        t.result = "done"
+        t.status = "complete"
+        t.updatedAt = "2026-10-23T10:00:00Z"
+        t.costUsd = 1.25
+        t.durationMs = 90_000
+        t.turns = 7
+        t.sessionID = "s1"
+        t.models = ["opus"]
+        t.prs = ["https://github.com/o/r/pull/1"]
+        t.verification = "passed: go test"
+        t.route = route
+        t.rating = "good"
+        t.prOutcome = "good"
+        return t
+    }
+
+    @Test func listAndGetMapEveryField() async throws {
+        var service = FakeOrchdService()
+        service.tasks.tasks = [pbTask()]
+        try await withClient(service) { client in
+            let list = try await client.listTasks(status: .complete, limit: 20)
+            let expected = TaskRecord(
+                id: "task-1", agent: "dev", body: "fix", result: "done", status: "complete",
+                updatedAt: "2026-10-23T10:00:00Z", costUSD: 1.25, durationMS: 90_000, turns: 7, sessionID: "s1",
+                models: ["opus"], prs: ["https://github.com/o/r/pull/1"], verification: "passed: go test",
+                route: RouteInfo(taskKind: "code", provider: "claude-code", model: "opus", evidenceCount: 4, confidence: "medium"),
+                rating: .good, prOutcome: "good"
+            )
+            #expect(list == [expected])
+            let sent = try #require(service.recorder.last(Orchd_V1_ListTasksRequest.self))
+            #expect(sent.status == "complete" && sent.limit == 20)
+            let found = try await client.task(id: "task-1")
+            let missing = try await client.task(id: "nope")
+            #expect(found == expected && missing == nil)
+        }
+    }
+
+    @Test func unroutedTaskHasNoRoute() async throws {
+        var service = FakeOrchdService()
+        var t = Orchd_V1_Task()
+        t.id = "x"
+        t.rating = ""
+        service.tasks.tasks = [t]
+        try await withClient(service) { client in
+            let list = try await client.listTasks(status: .all, limit: 1)
+            #expect(list.first?.route == nil && list.first?.rating == nil)
+        }
+    }
+
+    @Test func rateDispatchAndRecommend() async throws {
+        var service = FakeOrchdService()
+        service.dispatch.instanceID = "task-9"
+        service.dispatch.workerEnabled = true
+        var route = Orchd_V1_Route()
+        route.model = "sonnet"
+        service.recommend.route = route
+        service.recommend.fromTable = false
+        try await withClient(service) { client in
+            try await client.rate(id: "task-1", .rework)
+            let rated = try #require(service.recorder.last(Orchd_V1_RateTaskRequest.self))
+            #expect(rated.id == "task-1" && rated.rating == "rework")
+
+            let outcome = try await client.dispatch(DispatchDraft(agent: "dev", body: "b", cwd: "/r", taskKind: "code", model: "m"))
+            #expect(outcome == DispatchOutcome(id: "task-9", workerEnabled: true, route: nil))
+            let sent = try #require(service.recorder.last(Orchd_V1_DispatchRequest.self))
+            #expect(sent.agent == "dev" && sent.body == "b" && sent.cwd == "/r" && sent.taskKind == "code" && sent.model == "m")
+
+            let rec = try await client.recommend(taskKind: "review")
+            #expect(rec.route == RouteInfo(model: "sonnet") && rec.fromTable == false)
         }
     }
 }

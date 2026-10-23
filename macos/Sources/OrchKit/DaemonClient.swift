@@ -13,7 +13,7 @@ public protocol DaemonAPI: Sendable {
 /// Talks to orchd over its Unix socket. One long-lived HTTP/2 connection is
 /// shared by every call; the transport reconnects on its own when orchd
 /// restarts and recreates the socket.
-public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, Sendable {
+public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Sendable {
     private let client: GRPCClient<HTTP2ClientTransport.Posix>
     private let orchd: Orchd_V1_Orchd.Client<HTTP2ClientTransport.Posix>
     private let callTimeout: Duration
@@ -117,6 +117,65 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, Sendable {
         var options = CallOptions.defaults
         options.timeout = .seconds(40)
         return try await orchd.restart(request, options: options).restarted
+    }
+
+    public func listTasks(status: TaskStatusFilter, limit: Int) async throws -> [TaskRecord] {
+        var request = Orchd_V1_ListTasksRequest()
+        request.status = status.rawValue
+        request.limit = Int32(clamping: max(limit, 0))
+        return try await orchd.listTasks(request, options: callOptions).tasks.map(Self.task)
+    }
+
+    public func task(id: String) async throws -> TaskRecord? {
+        var request = Orchd_V1_GetTaskRequest()
+        request.id = id
+        let response = try await orchd.getTask(request, options: callOptions)
+        return response.found ? Self.task(response.task) : nil
+    }
+
+    public func rate(id: String, _ rating: TaskRating) async throws {
+        var request = Orchd_V1_RateTaskRequest()
+        request.id = id
+        request.rating = rating.rawValue
+        _ = try await orchd.rateTask(request, options: callOptions)
+    }
+
+    public func dispatch(_ draft: DispatchDraft) async throws -> DispatchOutcome {
+        var request = Orchd_V1_DispatchRequest()
+        request.agent = draft.agent
+        request.body = draft.body
+        request.cwd = draft.cwd
+        request.taskKind = draft.taskKind
+        request.model = draft.model
+        // Routing may build a live proposal first, which can take a while.
+        var options = CallOptions.defaults
+        options.timeout = .seconds(30)
+        let response = try await orchd.dispatch(request, options: options)
+        return DispatchOutcome(
+            id: response.instanceID, workerEnabled: response.workerEnabled,
+            route: response.hasRoute ? Self.route(response.route) : nil
+        )
+    }
+
+    public func recommend(taskKind: String) async throws -> (route: RouteInfo?, fromTable: Bool) {
+        var request = Orchd_V1_RecommendModelRequest()
+        request.taskKind = taskKind
+        let response = try await orchd.recommendModel(request, options: callOptions)
+        return (response.hasRoute ? Self.route(response.route) : nil, response.fromTable)
+    }
+
+    static func task(_ t: Orchd_V1_Task) -> TaskRecord {
+        TaskRecord(
+            id: t.id, agent: t.agent, body: t.body, result: t.result, status: t.status, updatedAt: t.updatedAt,
+            costUSD: t.costUsd, durationMS: t.durationMs, turns: Int(t.turns), sessionID: t.sessionID,
+            models: t.models, prs: t.prs, verification: t.verification,
+            route: t.hasRoute ? route(t.route) : nil, rating: TaskRating(rawValue: t.rating), prOutcome: t.prOutcome
+        )
+    }
+
+    static func route(_ r: Orchd_V1_Route) -> RouteInfo {
+        RouteInfo(taskKind: r.taskKind, provider: r.provider, model: r.model, effort: r.effort,
+                  rationale: r.rationale, evidenceCount: Int(r.evidenceN), confidence: r.confidence)
     }
 
     private var callOptions: CallOptions {
