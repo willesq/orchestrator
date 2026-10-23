@@ -137,14 +137,16 @@ jobs:
   # the Swift dependencies need Swift 6.2 (Xcode 26, macos-26) while the cgo
   # build stays on macos-14.
   #
-  # Signing and notarization run only when all the Apple secrets are set:
+  # The release always carries Orch_<version>_darwin_arm64.zip. It is
+  # Developer ID signed and notarized when all the Apple secrets are set:
   #   APPLE_DEVELOPER_ID_P12           base64 of the Developer ID Application .p12
   #   APPLE_DEVELOPER_ID_P12_PASSWORD  its export password
   #   APPLE_NOTARY_API_KEY             base64 of an App Store Connect API key (.p8)
   #   APPLE_NOTARY_KEY_ID, APPLE_NOTARY_ISSUER_ID
-  # Without them the app is still built (so a broken build fails the release)
-  # but nothing is uploaded and the cask is not bumped: an unsigned app would
-  # be blocked by Gatekeeper on every machine that installs it.
+  # Without them the zip is ad-hoc signed. The tap's cask is bumped for a
+  # notarized build, or for an ad-hoc one only when the repository variable
+  # ORCH_APP_CASK_ADHOC is "true": Gatekeeper blocks an ad-hoc app that
+  # Homebrew downloaded until the user allows it, so that is an opt-in.
   app:
     needs: release
     runs-on: macos-26
@@ -177,7 +179,7 @@ jobs:
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Apple signing secrets not set; Orch.app is built but not released"
+            echo "::warning::Apple signing secrets not set; Orch.app is released ad-hoc signed"
           fi
 
       # Built before any signing material exists on the runner, so nothing that
@@ -244,7 +246,6 @@ jobs:
 
       - name: Package + upload
         id: package
-        if: steps.signing.outputs.present == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.release.outputs.version }}
@@ -266,7 +267,9 @@ jobs:
           fi
 
       - name: Dispatch tap cask bump
-        if: steps.signing.outputs.present == 'true' && steps.taptoken.outputs.present == 'true'
+        if: >-
+          steps.taptoken.outputs.present == 'true'
+          && (steps.signing.outputs.present == 'true' || vars.ORCH_APP_CASK_ADHOC == 'true')
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ needs.release.outputs.version }}

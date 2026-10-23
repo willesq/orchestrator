@@ -178,14 +178,18 @@ rebuild.
   is 15.2.
 - **Tests:** `make app-test` runs the tests, and `make app-cover` applies the 80%-per-file gate
   to `OrchKit` (generated code excluded).
-- **CI:** the `app` job in `ci.yml` checks codegen drift, runs the coverage gate and assembles the
-  app.
-- **Release:** the `app` job in `release.yml` runs after the binaries are released. It builds
-  the app before any signing material is on the runner, then imports the Developer ID
-  certificate into a throwaway keychain, re-signs, notarizes with an App Store Connect API key,
-  staples, uploads `Orch_<version>_darwin_arm64.zip`, and dispatches the tap's `bump-cask.yml`.
-  Without the Apple secrets it still builds the app but uploads nothing, because Gatekeeper would
-  block an unsigned app. Builds use only the dependency versions in `Package.resolved`.
+- **CI:** the `app` job in `ci.yml` checks codegen drift, runs the coverage gate, assembles the
+  app, and uploads it as the `Orch-app-<sha>` workflow artifact (kept 14 days). Every push therefore
+  has an installable, ad-hoc signed build.
+- **Release:** the `app` job in `release.yml` runs after the binaries are released and always
+  attaches `Orch_<version>_darwin_arm64.zip` to the release. The build happens before any signing
+  material is on the runner, and only versions pinned in `Package.resolved` are used.
+  - **With the Apple secrets:** it imports the Developer ID certificate into a throwaway keychain,
+    re-signs, notarizes with an App Store Connect API key and staples. It then dispatches the tap's
+    `bump-cask.yml` with the version and sha256 (the cask URL carries the version).
+  - **Without them:** the zip is ad-hoc signed, and the cask is bumped only when the repository
+    variable `ORCH_APP_CASK_ADHOC` is `true`, because Gatekeeper blocks an ad-hoc app that Homebrew
+    downloaded until the user allows it.
 - **Installing:** the `orch-app` cask in `willesq/tap` depends on the `orch` formula, which
   stays the owner of the binaries and of `brew services`.
 - **Runners:** the Swift dependencies (swift-crypto, swift-log, swift-service-lifecycle) need

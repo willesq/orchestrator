@@ -96,3 +96,16 @@ jobs:
 
       - name: Assemble Orch.app (ad-hoc signed)
         run: make app
+
+      # Every push gets an installable build: Actions → this run → Artifacts.
+      # Ad-hoc signed, so macOS asks once before opening a downloaded copy.
+      - name: Package Orch.app
+        run: ditto -c -k --keepParent build/app.noindex/Orch.app "Orch-${GITHUB_SHA::12}.zip"
+
+      - name: Upload Orch.app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orch-app-${{ github.sha }}
+          path: Orch-*.zip
+          if-no-files-found: error
+          retention-days: 14
