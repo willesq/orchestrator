@@ -7,8 +7,8 @@ struct TrayMenu: View {
     let prMonitor: PRMonitor
     let loginItem: LoginItem
     let control: DaemonControl
+    let openMainWindow: () -> Void
 
-    @Environment(\.openWindow) private var openWindow
     @State private var busy = false
     @State private var controlError: String?
 
@@ -28,10 +28,7 @@ struct TrayMenu: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Divider()
-            Button("Open Orchestrator…") {
-                openWindow(id: MainWindowID.value)
-                NSApp.activate()
-            }
+            Button("Open Orchestrator…", action: openMainWindow)
             LoginItemRow(item: loginItem)
             actions
         }

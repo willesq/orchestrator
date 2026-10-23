@@ -32,7 +32,7 @@ struct MainWindow: View {
     let tasks: TasksModel
     let dispatch: DispatchModel
 
-    @SceneStorage("pane") private var pane: Pane = .dashboard
+    @AppStorage("pane") private var pane: Pane = .dashboard
 
     var body: some View {
         NavigationSplitView {
