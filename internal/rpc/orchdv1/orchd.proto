@@ -44,6 +44,9 @@ service Orchd {
   rpc MigrateHybrid(MigrateHybridRequest) returns (MigrateHybridResponse);
   // DropBackup deletes the backup collection a migration kept; plans unless apply.
   rpc DropBackup(DropBackupRequest) returns (DropBackupResponse);
+  // ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
+  // awaiting their review, each with why it needs attention. Never calls gh.
+  rpc ListPRs(ListPRsRequest) returns (ListPRsResponse);
 }
 
 message PingRequest {}
@@ -312,4 +315,30 @@ message DropBackupResponse {
   string collection = 1;
   int64 points = 2;
   bool dropped = 3;
+}
+
+message ListPRsRequest {
+  bool needs_me = 1; // only PRs that need attention
+}
+
+// ListPRsResponse lists PRs most urgent first (attention order, then repo and
+// title).
+message ListPRsResponse {
+  repeated PullRequest prs = 1;
+  int64 updated_at = 2; // unix seconds the cache was last written; 0 = never
+}
+
+message PullRequest {
+  string url = 1;
+  string title = 2;
+  string repo = 3;             // owner/name
+  string ci_state = 4;         // success | failure | pending | none
+  string review_decision = 5;  // APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | empty
+  string mergeable = 6;        // MERGEABLE | CONFLICTING | UNKNOWN
+  bool is_draft = 7;
+  repeated string reasons = 8; // authored | review_requested
+  // why it needs the user, most urgent reason only: ci_failed |
+  // changes_requested | conflicts | review_requested | ready_to_merge; empty
+  // when it does not
+  string attention = 9;
 }

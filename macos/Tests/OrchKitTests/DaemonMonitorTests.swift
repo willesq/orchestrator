@@ -20,6 +20,8 @@ private final class FakeAPI: DaemonAPI, @unchecked Sendable {
         }
         return try next.get()
     }
+
+    func listPRs() async throws -> PRList { PRList(prs: [], updatedAt: nil) }
 }
 
 @MainActor

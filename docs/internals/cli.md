@@ -27,7 +27,7 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | `model fetch\|refresh\|list\|enable\|disable\|tier`, `provider list\|enable\|disable` | embedding model and model registry (changes *operator-only*) |
 | `routing show\|evaluate\|apply\|rollback\|set\|clear` | routing table (changes *operator-only*) |
 | `qdrant status\|cutover\|migrate` | vector store engine |
-| `prs [--blocked] [--ready] [--json]` | cached PR status (never calls `gh`) |
+| `prs [--blocked\|--ready\|--needs-me] [--json]` | cached PR status, including PRs awaiting your review (never calls `gh`); `--needs-me` lists what needs you, most urgent first |
 
 ## MCP tools
 

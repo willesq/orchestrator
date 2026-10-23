@@ -3,6 +3,7 @@ import SwiftUI
 
 struct TrayMenu: View {
     let monitor: DaemonMonitor
+    let prMonitor: PRMonitor
     let control: DaemonControl
 
     @State private var busy = false
@@ -11,6 +12,8 @@ struct TrayMenu: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
+            Divider()
+            NeedsYouSection(monitor: prMonitor)
             if let status = monitor.health.status {
                 Divider()
                 SubsystemList(subsystems: status.subsystems)
@@ -50,7 +53,12 @@ struct TrayMenu: View {
             } else {
                 Button("Restart orchd") { run(.restart) }
             }
-            Button("Refresh") { Task { await monitor.refresh() } }
+            Button("Refresh") {
+                Task {
+                    await monitor.refresh()
+                    await prMonitor.refresh()
+                }
+            }
             Spacer()
             if busy { ProgressView().controlSize(.small) }
             Button("Quit") { NSApplication.shared.terminate(nil) }

@@ -48,7 +48,7 @@ struct LiveDaemonTests {
         unit.restarts = 2
         response.subsystems = [unit]
 
-        try await withFakeOrchd(response) { socket in
+        try await withFakeOrchd(FakeOrchdService(status: response)) { socket in
             let client = try DaemonClient(socketPath: socket)
             let runner = Task { try? await client.run() }
             defer {
@@ -61,6 +61,60 @@ struct LiveDaemonTests {
                           error: "gh: not logged in", restarts: 2),
             ]))
             #expect(Health(status: status) == .degraded(status, failed: ["pr-babysitter"]))
+        }
+    }
+}
+
+@Suite struct ListPRsRoundTripTests {
+    @Test func mapsPullRequestsAndCacheTime() async throws {
+        var failing = Orchd_V1_PullRequest()
+        failing.url = "https://github.com/o/r/pull/1"
+        failing.title = "fix"
+        failing.repo = "o/r"
+        failing.ciState = "failure"
+        failing.reviewDecision = "APPROVED"
+        failing.mergeable = "MERGEABLE"
+        failing.reasons = ["authored"]
+        failing.attention = "ci_failed"
+        var quiet = Orchd_V1_PullRequest()
+        quiet.url = "https://github.com/o/r/pull/2"
+        quiet.isDraft = true
+        quiet.attention = ""
+        var future = Orchd_V1_PullRequest()
+        future.url = "https://github.com/o/r/pull/3"
+        future.attention = "some_new_reason"
+        var response = Orchd_V1_ListPRsResponse()
+        response.prs = [failing, quiet, future]
+        response.updatedAt = 1_800_000_000
+
+        try await withFakeOrchd(FakeOrchdService(prs: response)) { socket in
+            let client = try DaemonClient(socketPath: socket)
+            let runner = Task { try? await client.run() }
+            defer {
+                client.close()
+                runner.cancel()
+            }
+            let list = try await client.listPRs()
+            #expect(list.updatedAt == Date(timeIntervalSince1970: 1_800_000_000))
+            #expect(list.prs.first == PullRequest(
+                url: "https://github.com/o/r/pull/1", title: "fix", repo: "o/r", ciState: "failure",
+                reviewDecision: "APPROVED", mergeable: "MERGEABLE", reasons: ["authored"], attention: .ciFailed
+            ))
+            #expect(list.prs[1].isDraft && list.prs[1].attention == nil)
+            #expect(list.prs[2].attention == nil, "an unknown reason must not crash or be guessed")
+            #expect(list.needsYou.map(\.url) == ["https://github.com/o/r/pull/1"])
+        }
+    }
+
+    @Test func neverWrittenCacheHasNoTime() async throws {
+        try await withFakeOrchd(FakeOrchdService()) { socket in
+            let client = try DaemonClient(socketPath: socket)
+            let runner = Task { try? await client.run() }
+            defer {
+                client.close()
+                runner.cancel()
+            }
+            #expect(try await client.listPRs() == PRList(prs: [], updatedAt: nil))
         }
     }
 }

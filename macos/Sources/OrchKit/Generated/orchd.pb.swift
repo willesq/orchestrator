@@ -815,6 +815,72 @@ public nonisolated struct Orchd_V1_DropBackupResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Orchd_V1_ListPRsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// only PRs that need attention
+  public var needsMe: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// ListPRsResponse lists PRs most urgent first (attention order, then repo and
+/// title).
+public nonisolated struct Orchd_V1_ListPRsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var prs: [Orchd_V1_PullRequest] = []
+
+  /// unix seconds the cache was last written; 0 = never
+  public var updatedAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_PullRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var url: String = String()
+
+  public var title: String = String()
+
+  /// owner/name
+  public var repo: String = String()
+
+  /// success | failure | pending | none
+  public var ciState: String = String()
+
+  /// APPROVED | CHANGES_REQUESTED | REVIEW_REQUIRED | empty
+  public var reviewDecision: String = String()
+
+  /// MERGEABLE | CONFLICTING | UNKNOWN
+  public var mergeable: String = String()
+
+  public var isDraft: Bool = false
+
+  /// authored | review_requested
+  public var reasons: [String] = []
+
+  /// why it needs the user, most urgent reason only: ci_failed |
+  /// changes_requested | conflicts | review_requested | ready_to_merge; empty
+  /// when it does not
+  public var attention: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "orchd.v1"
@@ -2462,6 +2528,141 @@ nonisolated extension Orchd_V1_DropBackupResponse: SwiftProtobuf.Message, SwiftP
     if lhs.collection != rhs.collection {return false}
     if lhs.points != rhs.points {return false}
     if lhs.dropped != rhs.dropped {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListPRsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListPRsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}needs_me\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.needsMe) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.needsMe != false {
+      try visitor.visitSingularBoolField(value: self.needsMe, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListPRsRequest, rhs: Orchd_V1_ListPRsRequest) -> Bool {
+    if lhs.needsMe != rhs.needsMe {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListPRsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListPRsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}prs\0\u{3}updated_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.prs) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.updatedAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.prs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.prs, fieldNumber: 1)
+    }
+    if self.updatedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.updatedAt, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListPRsResponse, rhs: Orchd_V1_ListPRsResponse) -> Bool {
+    if lhs.prs != rhs.prs {return false}
+    if lhs.updatedAt != rhs.updatedAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_PullRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PullRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}title\0\u{1}repo\0\u{3}ci_state\0\u{3}review_decision\0\u{1}mergeable\0\u{3}is_draft\0\u{1}reasons\0\u{1}attention\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.url) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.repo) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.ciState) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.reviewDecision) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.mergeable) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.isDraft) }()
+      case 8: try { try decoder.decodeRepeatedStringField(value: &self.reasons) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.attention) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.url.isEmpty {
+      try visitor.visitSingularStringField(value: self.url, fieldNumber: 1)
+    }
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 2)
+    }
+    if !self.repo.isEmpty {
+      try visitor.visitSingularStringField(value: self.repo, fieldNumber: 3)
+    }
+    if !self.ciState.isEmpty {
+      try visitor.visitSingularStringField(value: self.ciState, fieldNumber: 4)
+    }
+    if !self.reviewDecision.isEmpty {
+      try visitor.visitSingularStringField(value: self.reviewDecision, fieldNumber: 5)
+    }
+    if !self.mergeable.isEmpty {
+      try visitor.visitSingularStringField(value: self.mergeable, fieldNumber: 6)
+    }
+    if self.isDraft != false {
+      try visitor.visitSingularBoolField(value: self.isDraft, fieldNumber: 7)
+    }
+    if !self.reasons.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.reasons, fieldNumber: 8)
+    }
+    if !self.attention.isEmpty {
+      try visitor.visitSingularStringField(value: self.attention, fieldNumber: 9)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_PullRequest, rhs: Orchd_V1_PullRequest) -> Bool {
+    if lhs.url != rhs.url {return false}
+    if lhs.title != rhs.title {return false}
+    if lhs.repo != rhs.repo {return false}
+    if lhs.ciState != rhs.ciState {return false}
+    if lhs.reviewDecision != rhs.reviewDecision {return false}
+    if lhs.mergeable != rhs.mergeable {return false}
+    if lhs.isDraft != rhs.isDraft {return false}
+    if lhs.reasons != rhs.reasons {return false}
+    if lhs.attention != rhs.attention {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

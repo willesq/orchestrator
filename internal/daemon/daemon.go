@@ -96,6 +96,8 @@ type server struct {
 	migrator hybridMigrator
 	// codexEnabled lets dispatch route to Codex, which the worker then runs.
 	codexEnabled bool
+	// prStateFile is the PR babysitter's cache, served by ListPRs.
+	prStateFile string
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -537,6 +539,7 @@ func Run(ctx context.Context) error {
 		rater:        dbRater{db: store},
 		migrator:     svc,
 		codexEnabled: codexRunnable(s.Queue.Worker),
+		prStateFile:  paths.PRStateFile(),
 	})
 	go func() {
 		<-runCtx.Done()
