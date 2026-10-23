@@ -8,6 +8,8 @@
 	<string>Orchestrator</string>
 	<key>CFBundleExecutable</key>
 	<string>Orch</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.willesq.orch</string>
 	<key>CFBundleInfoDictionaryVersion</key>

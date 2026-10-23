@@ -105,10 +105,17 @@ public func newlyNeedingYou(previous: [PullRequest]?, current: [PullRequest]) ->
     }
 }
 
-/// What the menu bar shows: an unhealthy daemon outranks PRs, because the PR
-/// list is stale while orchd is down or degraded.
+/// What the menu bar shows: the Orch mark while orchd is healthy, with a count
+/// when PRs need the user; otherwise the health warning, which outranks PRs
+/// because the PR list is stale while orchd is down or degraded.
 public struct TrayIcon: Equatable, Sendable {
-    public let symbolName: String
+    public enum Mark: Equatable, Sendable {
+        /// The Orch glyph (Resources/Brand/glyph.svg).
+        case brand
+        case symbol(String)
+    }
+
+    public let mark: Mark
     /// The badge, or nil for none.
     public let count: Int?
 
@@ -116,13 +123,13 @@ public struct TrayIcon: Equatable, Sendable {
         let badge = needsYou > 0 ? needsYou : nil
         switch health {
         case .healthy:
-            symbolName = badge == nil ? health.symbolName : "bell.badge"
+            mark = .brand
             count = badge
         case .degraded:
-            symbolName = health.symbolName
+            mark = .symbol(health.symbolName)
             count = badge
         case .unknown, .down:
-            symbolName = health.symbolName
+            mark = .symbol(health.symbolName)
             count = nil
         }
     }

@@ -72,11 +72,33 @@ private struct TrayLabel: View {
     var body: some View {
         let icon = TrayIcon(health: monitor.health, needsYou: prMonitor.needsYou.count)
         HStack(spacing: 2) {
-            Image(systemName: icon.symbolName)
+            switch icon.mark {
+            case .brand:
+                if let glyph = BrandGlyph.image {
+                    Image(nsImage: glyph)
+                } else {
+                    Image(systemName: "brain")
+                }
+            case .symbol(let name):
+                Image(systemName: name)
+            }
             if let count = icon.count { Text(verbatim: "\(count)") }
         }
         .accessibilityLabel(monitor.health.summary)
     }
+}
+
+/// The menu bar glyph shipped in the bundle (from Resources/Brand/glyph.svg),
+/// as a template image so macOS tints it for light and dark menu bars. nil
+/// when running outside Orch.app, where the bundle has no resources.
+enum BrandGlyph {
+    static let image: NSImage? = {
+        guard let url = Bundle.main.url(forResource: "MenuBarGlyph", withExtension: "svg"),
+              let image = NSImage(contentsOf: url) else { return nil }
+        image.size = NSSize(width: 18, height: 18)
+        image.isTemplate = true
+        return image
+    }()
 }
 
 /// Stands in when the gRPC transport cannot even be built, so the tray still
