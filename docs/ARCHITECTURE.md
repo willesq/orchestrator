@@ -25,13 +25,14 @@ flowchart LR
     CLI[orch CLI]
     Hook[orch-hook]
     MCP[MCP servers: rag, queue]
+    App[Orch.app menu bar]
   end
   subgraph orchd
     RAG[RAG service + embedder]
     Q[Task queue + worker]
     S[Supervised subsystems]
   end
-  CLI & Hook & MCP -- gRPC over Unix socket --> orchd
+  CLI & Hook & MCP & App -- gRPC over Unix socket --> orchd
   RAG --> Qdrant[(Qdrant)]
   Q --> WF[(workflows.db)]
   orchd --> DB[(orch.db)]
@@ -42,6 +43,7 @@ flowchart LR
 |---|---|
 | `orchd` | Daemon. Serves gRPC on a Unix socket and runs every long-lived subsystem. |
 | `orch` | CLI: search, ingest, dispatch, install, status, config. Also runs the MCP servers (`orch mcp`). |
+| `Orch.app` | macOS menu bar app (Swift, in `macos/`): daemon health and control. A client like `orch`; it never opens the databases. See [internals/app.md](internals/app.md). |
 | `orch-hook` | Called by the harness on lifecycle events. Does only local work and hands anything slow (storing transcripts and edited docs, refreshing PRs) to `orchd`. |
 
 `orchd` supervises these subsystems, each restartable on its own (`orch restart <name>`):
@@ -85,7 +87,8 @@ and records the outcome. Routing picks the model per task kind from the models y
 
 ## Package map
 
-Entry points are in `cmd/`; everything else is under `internal/`.
+Entry points are in `cmd/`; everything else is under `internal/`. The macOS app is a separate
+Swift package in `macos/`.
 
 | Area | Packages |
 |---|---|

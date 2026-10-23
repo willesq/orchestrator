@@ -13,7 +13,12 @@ orch model fetch                  # embedding model, ~90 MB
 orch install                      # preview; then orch install --apply
 brew services start orch          # start orchd
 orch check                        # verify preconditions
+brew install --cask willesq/tap/orch-app   # optional: the menu bar app
 ```
+
+The cask needs macOS 15.2 or later, and installs `Orch.app`, a menu bar app showing orchd's
+health with start and restart controls. It depends on the `orch` formula, which stays the owner
+of the daemon.
 
 ## What `orch install` does
 
@@ -63,5 +68,6 @@ brew install onnxruntime
 make build      # build/bin/{orch,orchd,orch-hook}
 make test       # pure-Go tests, no native libraries needed
 make cover      # per-file coverage gate (>= 80%)
-make proto      # regenerate gRPC code after editing orchd.proto
+make proto      # regenerate gRPC code (Go and Swift) after editing orchd.proto
+make app        # build/app/Orch.app (needs Xcode 26+); make app-cover for its tests
 ```

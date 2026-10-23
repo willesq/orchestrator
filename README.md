@@ -12,6 +12,8 @@ runs background agent tasks that survive restarts.
   store, a durable task queue, and schedulers that keep indexed sources fresh.
 - **`orch`** (the CLI) and **`orch-hook`** (harness hooks) are thin clients of `orchd`, over a
   Unix socket. MCP servers expose search and the task queue to agents.
+- **`Orch.app`**, a macOS menu bar app, shows orchd's health and starts or restarts it. Like
+  the CLI, it talks to `orchd` and never opens the databases directly.
 - **`orch install`** wires the hooks, MCP servers and a shared agent policy into each harness.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full picture.
@@ -51,4 +53,5 @@ Follow [AGENTS.md](AGENTS.md). Changes to `main` need a pull request and a code-
 make build    # build/bin/{orch,orchd,orch-hook}; needs the native libraries in INSTALL.md
 make test     # pure-Go tests
 make cover    # per-file coverage gate (>= 80%)
+make app      # build/app/Orch.app, the menu bar app (needs Xcode 26+)
 ```

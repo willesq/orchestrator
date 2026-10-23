@@ -13,6 +13,7 @@ use it. The code is the source of truth; these pages say what it does and why.
 | [install.md](install.md) | harness adapters, files written, shared policy, drift |
 | [config.md](config.md) | every setting and its default |
 | [cli.md](cli.md) | command tree and MCP tools |
+| [app.md](app.md) | macOS menu bar app: connection, health, daemon control, signing and release |
 
 ## Building your own
 

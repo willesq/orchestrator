@@ -64,3 +64,35 @@ jobs:
             go build -tags ORT -o "build/bin/$b" "./cmd/$b"
           done
           build/bin/orch version
+
+  # The macOS app. Independent of the Go jobs: it only shares orchd.proto, and
+  # the drift check below catches a proto change without regenerated Swift.
+  # macos-26 because the Swift dependencies need Swift 6.2 (Xcode 26).
+  app:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Swift dependencies need Swift 6.2 (Xcode 26); pick the newest
+      # Xcode 26 the image has rather than trusting its default.
+      - name: Select Xcode 26
+        run: |
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' | sort -V | tail -1)"
+          if [ -z "$xcode" ]; then
+            echo "::error::no Xcode 26 on this runner"
+            exit 1
+          fi
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          swift --version
+
+      - name: Generated Swift matches orchd.proto
+        run: |
+          brew list protobuf >/dev/null 2>&1 || brew install protobuf
+          make proto-swift
+          git diff --exit-code -- macos/Sources/OrchKit/Generated
+
+      - name: Per-file coverage gate (tests included)
+        run: make app-cover
+
+      - name: Assemble Orch.app (ad-hoc signed)
+        run: make app
