@@ -87,8 +87,8 @@ proto-swift:
 app:
 	bash $(SWIFT_PKG)/scripts/build-app.sh
 
-# Builds Orch.app and installs it in ~/Applications (INSTALL_DIR overrides),
-# replacing and relaunching an earlier copy.
+# Builds Orch.app and installs it in /Applications (~/Applications when that is
+# not writable; INSTALL_DIR overrides), replacing and relaunching an earlier copy.
 app-install:
 	bash $(SWIFT_PKG)/scripts/install-app.sh
 
