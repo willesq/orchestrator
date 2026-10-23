@@ -36,7 +36,7 @@ struct DashboardView: View {
 
     private var header: some View {
         HStack(spacing: 12) {
-            Image(systemName: monitor.health.symbolName).font(.largeTitle)
+            HealthMark(health: monitor.health, size: 44)
             VStack(alignment: .leading) {
                 Text("orchd").font(.title2.bold())
                 Text(monitor.health.summary).foregroundStyle(.secondary)
