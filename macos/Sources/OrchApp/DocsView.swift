@@ -168,6 +168,13 @@ private struct DocDetail: View {
 private struct DocumentText: View {
     let model: DocsModel
 
+    enum Mode: String, CaseIterable, Identifiable {
+        case rendered = "Rendered", source = "Source"
+        var id: String { rawValue }
+    }
+
+    @AppStorage("docsReaderMode") private var mode: Mode = .rendered
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -176,34 +183,92 @@ private struct DocumentText: View {
                     Text("\(doc.chunks) chunk\(doc.chunks == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                if model.document?.isMarkdown == true, model.document?.oversize == false {
+                    Picker("Show", selection: $mode) {
+                        ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    .controlSize(.small)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .help("Pieced back together from the chunks agents retrieve: close to the original, not exact.")
             if model.isLoadingDocument {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = model.documentError {
                 Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).padding(12)
                 Spacer()
             } else if let doc = model.document {
-                if doc.malformed {
-                    Label("Some chunks were out of order; this is a best effort.", systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 12)
-                }
+                RebuildCallout(malformed: doc.malformed)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
                 if doc.oversize {
                     Text("This doc is too large to show here. Open it on GitHub instead.")
                         .foregroundStyle(.secondary)
                         .padding(12)
                     Spacer()
                 } else {
-                    // Indexed content: shown verbatim, never rendered.
-                    PlainTextView(text: doc.text)
+                    DocumentBody(doc: doc, rendered: doc.isMarkdown && mode == .rendered)
                 }
             }
         }
     }
+}
+
+/// The note that a rebuilt doc is close to, but not exactly, the original.
+private struct RebuildCallout: View {
+    let malformed: Bool
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: malformed ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                .foregroundStyle(malformed ? Color.orange : Color.accentColor)
+            Text(malformed
+                ? "Rebuilt from memory, but some chunks were out of order, so this is a best effort. Open it on GitHub for the original."
+                : "Rebuilt from the chunks agents retrieve. It is close to the original but not exact: a table or code block split across chunks may look slightly off.")
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background((malformed ? Color.orange : Color.accentColor).opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+/// The doc's text, rendered as markdown or shown as its source. Rendering
+/// runs off the main thread, so a long doc does not stall the window.
+private struct DocumentBody: View {
+    let doc: RebuiltDocument
+    let rendered: Bool
+
+    @State private var text: NSAttributedString?
+
+    var body: some View {
+        Group {
+            if let text {
+                RichTextView(text: text)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .task(id: "\(doc.sourceURI)|\(rendered)") {
+            text = nil
+            // Markdown too deeply nested to render safely is shown as its source.
+            let made = rendered ? await MarkdownRenderer(baseURL: gitHubBlobURL(doc.webURL)).renderInBackground(doc.text) : nil
+            guard !Task.isCancelled else { return }
+            text = made?.text ?? plainSource(doc.text)
+        }
+    }
+}
+
+/// A doc's text as its source: plain monospaced, nothing interpreted.
+private func plainSource(_ text: String) -> NSAttributedString {
+    NSAttributedString(string: text, attributes: [
+        .font: NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular),
+        .foregroundColor: NSColor.labelColor,
+    ])
 }
 
 /// A search narrowed to one doc or one repo, with its results.
@@ -264,29 +329,52 @@ enum NoScope: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-/// Read-only, selectable plain text in an NSTextView, which lays out only what
-/// is visible: a multi-megabyte document in a SwiftUI Text would block the
-/// main thread while every line is laid out.
-struct PlainTextView: NSViewRepresentable {
-    let text: String
+/// Read-only, selectable text in an NSTextView, which lays out only what is
+/// visible: a multi-megabyte doc in a SwiftUI Text would block the main thread
+/// while every line is laid out. Link clicks are checked again before anything
+/// opens.
+struct RichTextView: NSViewRepresentable {
+    let text: NSAttributedString
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
 
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSTextView.scrollableTextView()
         if let view = scroll.documentView as? NSTextView {
             view.isEditable = false
             view.isSelectable = true
-            view.isRichText = false
             view.usesFindBar = true
-            view.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
-            view.textContainerInset = NSSize(width: 8, height: 8)
+            view.drawsBackground = true
+            view.backgroundColor = .textBackgroundColor
+            view.textContainerInset = NSSize(width: 12, height: 10)
             view.layoutManager?.allowsNonContiguousLayout = true
+            view.delegate = context.coordinator
+            view.linkTextAttributes = [.foregroundColor: NSColor.linkColor, .underlineStyle: NSUnderlineStyle.single.rawValue,
+                                       .cursor: NSCursor.pointingHand]
         }
         return scroll
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        guard let view = scroll.documentView as? NSTextView, view.string != text else { return }
-        view.string = text
+        // Identity, not equality: comparing a large doc on every update would
+        // cost the main thread for nothing.
+        guard let view = scroll.documentView as? NSTextView, context.coordinator.shown !== text else { return }
+        context.coordinator.shown = text
+        view.textStorage?.setAttributedString(text)
         view.scrollToBeginningOfDocument(nil)
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var shown: NSAttributedString?
+
+        func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+            let raw = (link as? URL)?.absoluteString ?? (link as? String) ?? ""
+            if let url = MarkdownRenderer.linkURL(raw, base: nil) {
+                NSWorkspace.shared.open(url)
+            }
+            // Handled either way: a link that fails the check opens nothing.
+            return true
+        }
     }
 }
