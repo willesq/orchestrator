@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `SystemView`, `LogsView`, `MemoryView`, `TasksView`, `GitHubView`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -104,7 +104,25 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
       many.
     - **Restarts:** when orchd restarts, its numbering starts over, so the view starts over too.
     - **Text:** log text is shown verbatim and never rendered.
-- **Memory:** a Search/Sources switch in the toolbar.
+- **Docs:** what `orch docs` keeps in memory: the synced owners' docs as the store holds them, by
+  repo, with a filter and each doc's chunk count (`ListDocs`).
+  - **Reading:** choosing a doc rebuilds it from its chunks (`GetDocument`). The text is shown
+    verbatim and labelled as a rebuild, because it is close to the original but not exact.
+  - **Open on GitHub:** opens the file at the commit that was indexed, and only an exact
+    `https://github.com/<owner>/<repo>/blob/<ref>/<path>` URL.
+  - **Search:** within this doc (`source_uri`) or this repo (`all_tags` `owner:` and `repo:`). A hit
+    in another doc of the repo opens that doc.
+- **Sources:** the sources registered for refresh on a cadence: web pages, local repos and local
+  owner folders.
+  - **List:** each source's status, refresh interval and last fetch.
+  - **Add and edit:** a sheet that checks orchd's rules before sending (`SaveSource`); an edit
+    that changes the address replaces the entry.
+  - **Refresh now:** for one source or all (`RefreshSource`).
+  - **Remove:** a confirmation that offers to keep or delete what the source indexed
+    (`RemoveSource`, with `purge` and `confirm` only after that choice).
+  - **Open:** a web source's page, only for plain `http`/`https` URLs.
+  - **Search:** within the selected source, using the filter orchd returns for it.
+- **Memory:** a Search/Indexed switch in the toolbar.
 - **Memory → Search:** the `Search` RPC with mode (default, hybrid, meaning only), a source-type
   filter and a result count of 1–100. Each hit shows its score, source, type and date.
   - Indexed text is untrusted, so it is shown verbatim and never rendered as Markdown.
@@ -112,7 +130,8 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     newer results.
   - Searches get a 15 s deadline instead of 3 s, because the first search after a restart loads
     the embedding model.
-- **Memory → Sources:** `ListSources`, up to 200 at a time with totals, filtered by type.
+- **Memory → Indexed:** `ListSources`, every source in memory, up to 200 at a time with totals,
+  filtered by type.
 - **Tasks:** `ListTasks`, up to 100 at a time, filtered by status.
   - **Detail:** the selected task's model, run models, duration, turns, cost, verification and PR
     outcome, plus its body and result, shown verbatim.

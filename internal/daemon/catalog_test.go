@@ -69,7 +69,7 @@ func (r *recordingRag) ListSources(_ context.Context, opts rag.ListSourcesOpts) 
 	}
 	var out []rag.SourceSummary
 	for _, d := range r.indexed {
-		if strings.HasPrefix(d.uri, opts.URIPrefix) {
+		if strings.HasPrefix(d.uri, opts.URIPrefix) && (opts.SourceType == "" || opts.SourceType == d.sourceType) {
 			out = append(out, rag.SourceSummary{SourceURI: d.uri, SourceType: d.sourceType, Tags: d.tags, Chunks: 2})
 		}
 	}
@@ -94,7 +94,16 @@ func (f fakeDocuments) Document(context.Context, string) (rag.Document, error) {
 func code(err error) codes.Code { return grpcstatus.Code(err) }
 
 func TestListDocs(t *testing.T) {
-	s, _, _ := catalogServer(t)
+	s, r, _ := catalogServer(t)
+	r.indexed = []indexedDoc{
+		{uri: "repo://willesq/orchestrator/README.md", sourceType: "repo_doc"},
+		{uri: "repo://willesq/orchestrator/docs/a b.md", sourceType: "repo_doc"},
+		// In the store but not in the registry: listed, without a commit link.
+		{uri: "repo://willesq/scratch/NOTES.md", sourceType: "repo_doc"},
+		// Not a synced owner's, or not a doc: left out.
+		{uri: "repo://local/app/README.md", sourceType: "repo_doc"},
+		{uri: "repo://willesq/orchestrator/x.md", sourceType: "manual"},
+	}
 	resp, err := s.ListDocs(context.Background(), &orchdv1.ListDocsRequest{})
 	if err != nil {
 		t.Fatal(err)
@@ -107,12 +116,22 @@ func TestListDocs(t *testing.T) {
 		t.Errorf("repo = %v", repo)
 	}
 	files := resp.GetFiles()
-	if len(files) != 2 {
-		t.Fatalf("files = %v, want the two well-formed docs", files)
+	// The registry also recorded repo://bad, which the store does not hold.
+	if len(files) != 3 {
+		t.Fatalf("files = %v, want the synced owner's three stored docs", files)
 	}
 	got := map[string]string{}
 	for _, f := range files {
 		got[f.GetPath()] = f.GetWebUrl()
+		if f.GetChunks() != 2 {
+			t.Errorf("%s chunks = %d, want the store's count", f.GetPath(), f.GetChunks())
+		}
+	}
+	if u, ok := got["NOTES.md"]; !ok || u != "" {
+		t.Errorf("untracked repo doc url = %q (listed %v), want listed without a link", u, ok)
+	}
+	if files[0].GetUpdatedAt() != 200 {
+		t.Errorf("updated_at = %d, want the registry's change time", files[0].GetUpdatedAt())
 	}
 	if got["README.md"] != "https://github.com/willesq/orchestrator/blob/"+sha+"/README.md" {
 		t.Errorf("README url = %q", got["README.md"])
@@ -122,6 +141,14 @@ func TestListDocs(t *testing.T) {
 	}
 	if _, err := (&server{}).ListDocs(context.Background(), nil); code(err) != codes.Unavailable {
 		t.Errorf("no registry err = %v", err)
+	}
+	r.listErr = errors.New("scroll failed")
+	if _, err := s.ListDocs(context.Background(), nil); err == nil {
+		t.Error("a failed store listing should fail ListDocs")
+	}
+	s.rag = nil
+	if _, err := s.ListDocs(context.Background(), nil); code(err) != codes.Unavailable {
+		t.Errorf("no store err = %v", err)
 	}
 }
 
@@ -369,11 +396,9 @@ func TestPurgeRefusesAnInvalidRow(t *testing.T) {
 
 func TestListDocsIsBounded(t *testing.T) {
 	ctx := context.Background()
-	s, _, _ := catalogServer(t)
+	s, r, _ := catalogServer(t)
 	for i := range maxDocFiles + 5 {
-		if err := s.docsReg.SetHash(ctx, fmt.Sprintf("repo://willesq/orchestrator/f%05d.md", i), "h", 1); err != nil {
-			t.Fatal(err)
-		}
+		r.indexed = append(r.indexed, indexedDoc{uri: fmt.Sprintf("repo://willesq/orchestrator/f%05d.md", i), sourceType: "repo_doc"})
 	}
 	resp, err := s.ListDocs(ctx, &orchdv1.ListDocsRequest{})
 	if err != nil || len(resp.GetFiles()) != maxDocFiles || !resp.GetTruncated() {

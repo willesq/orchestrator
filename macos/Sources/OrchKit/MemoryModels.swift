@@ -58,6 +58,16 @@ public final class SearchModel {
         current = task
         await task.value
     }
+
+    /// Drops the results and any search in flight, keeping the query.
+    public func clear() {
+        current?.cancel()
+        generation += 1
+        result = nil
+        answered = nil
+        lastError = nil
+        isSearching = false
+    }
 }
 
 /// Drives the Memory sources list.

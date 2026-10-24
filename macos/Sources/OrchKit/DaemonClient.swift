@@ -13,7 +13,7 @@ public protocol DaemonAPI: Sendable {
 /// Talks to orchd over its Unix socket. One long-lived HTTP/2 connection is
 /// shared by every call; the transport reconnects on its own when orchd
 /// restarts and recreates the socket.
-public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI, Sendable {
+public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI, CatalogAPI, Sendable {
     private let client: GRPCClient<HTTP2ClientTransport.Posix>
     private let orchd: Orchd_V1_Orchd.Client<HTTP2ClientTransport.Posix>
     private let callTimeout: Duration
@@ -79,6 +79,8 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
         request.sourceType = q.sourceType
         request.scope = q.scope
         request.mode = q.mode.rawValue
+        request.sourceUri = q.sourceURI
+        request.allTags = q.allTags
         var options = CallOptions.defaults
         options.timeout = searchTimeout
         let response = try await orchd.search(request, options: options)
@@ -264,6 +266,80 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
             data: r.data.map { DataUsage(name: $0.name, path: $0.path, bytes: $0.bytes) },
             tasks: r.tasks.mapValues { Int($0) }
         )
+    }
+
+    public func listDocs() async throws -> DocCatalog {
+        let r = try await orchd.listDocs(Orchd_V1_ListDocsRequest(), options: callOptions)
+        return DocCatalog(
+            owners: r.owners.map { o in
+                DocOwner(owner: o.owner, refreshSeconds: o.refreshSecs, lastSynced: date(fromUnix: o.lastSynced), status: o.status,
+                         repos: o.repos.map {
+                             DocRepo(repo: $0.repo, headSHA: $0.headSha, lastSynced: date(fromUnix: $0.lastSynced),
+                                     files: Int($0.files), status: $0.status, webURL: $0.webURL)
+                         })
+            },
+            files: r.files.map {
+                DocFile(sourceURI: $0.sourceUri, owner: $0.owner, repo: $0.repo, path: $0.path,
+                        updatedAt: date(fromUnix: $0.updatedAt), webURL: $0.webURL, chunks: Int($0.chunks))
+            },
+            truncated: r.truncated
+        )
+    }
+
+    public func document(uri: String) async throws -> RebuiltDocument {
+        var request = Orchd_V1_GetDocumentRequest()
+        request.sourceUri = uri
+        // A long doc can take a while to read back and rebuild.
+        var options = CallOptions.defaults
+        options.timeout = searchTimeout
+        let d = try await orchd.getDocument(request, options: options)
+        return RebuiltDocument(sourceURI: d.sourceUri, sourceType: d.sourceType, text: d.text, chunks: Int(d.chunks),
+                               malformed: d.malformed, oversize: d.oversize, webURL: d.webURL)
+    }
+
+    public func registeredSources() async throws -> [RegisteredSource] {
+        try await orchd.listRegisteredSources(Orchd_V1_ListRegisteredSourcesRequest(), options: callOptions).sources.map(Self.source)
+    }
+
+    public func saveSource(_ draft: SourceDraft, replacing: String?) async throws -> RegisteredSource {
+        var pb = Orchd_V1_RegisteredSource()
+        pb.kind = draft.kind.rawValue
+        pb.uri = draft.trimmedURI
+        pb.scope = draft.scope.trimmingCharacters(in: .whitespaces)
+        pb.tags = draft.tagList
+        pb.refreshSecs = draft.refreshSeconds
+        var request = Orchd_V1_SaveSourceRequest()
+        request.source = pb
+        request.replaceID = replacing ?? ""
+        return Self.source(try await orchd.saveSource(request, options: callOptions))
+    }
+
+    public func removeSource(id: String, purge: Bool) async throws -> PurgeResult {
+        var request = Orchd_V1_RemoveSourceRequest()
+        request.id = id
+        request.purge = purge
+        // The user confirmed in the app before this is sent.
+        request.confirm = purge
+        // Purging lists the whole store, then deletes source by source.
+        var options = CallOptions.defaults
+        options.timeout = .seconds(60)
+        let r = try await orchd.removeSource(request, options: options)
+        return PurgeResult(sources: Int(r.purgedSources), chunks: Int(r.purgedChunks))
+    }
+
+    public func refreshSource(id: String?) async throws {
+        var request = Orchd_V1_RefreshSourceRequest()
+        request.id = id ?? ""
+        // Restarting the scheduler can wait out a refresh in progress.
+        var options = CallOptions.defaults
+        options.timeout = .seconds(40)
+        _ = try await orchd.refreshSource(request, options: options)
+    }
+
+    static func source(_ s: Orchd_V1_RegisteredSource) -> RegisteredSource {
+        RegisteredSource(id: s.id, kind: SourceKind(rawValue: s.kind), uri: s.uri, scope: s.scope, tags: s.tags,
+                         refreshSeconds: s.refreshSecs, lastFetched: date(fromUnix: s.lastFetched), status: s.status,
+                         webURL: s.webURL, searchSourceURI: s.searchSourceUri, searchAllTags: s.searchAllTags)
     }
 
     static func scope(_ s: Orchd_V1_GitHubScope) -> GitHubScope {

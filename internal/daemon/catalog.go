@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -70,20 +71,46 @@ func (s *server) ListDocs(ctx context.Context, _ *orchdv1.ListDocsRequest) (*orc
 		}
 		out.Owners = append(out.Owners, pb)
 	}
-	list, err := s.docsReg.ListDocs(ctx)
+	if s.rag == nil {
+		return nil, grpcstatus.Error(codes.Unavailable, "rag store unavailable")
+	}
+	// The catalog is what the store holds, not what the registry recorded:
+	// a doc whose ingest failed, or whose content was deleted, is not listed.
+	stored, _, _, err := s.rag.ListSources(ctx, rag.ListSourcesOpts{SourceType: "repo_doc", URIPrefix: "repo://"})
 	if err != nil {
 		return nil, err
 	}
-	for _, d := range list {
+	recorded, err := s.docsReg.ListDocs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	changed := make(map[string]int64, len(recorded))
+	for _, d := range recorded {
+		changed[d.URI] = d.UpdatedAt
+	}
+	synced := map[string]bool{}
+	for _, o := range owners {
+		synced[o.Owner] = true
+	}
+	sort.Slice(stored, func(i, j int) bool { return stored[i].SourceURI < stored[j].SourceURI })
+	for _, src := range stored {
+		owner, repo, path, ok := splitRepoURI(src.SourceURI)
+		// Only the owners `orch docs` syncs; local repo and owner sources are
+		// the Sources tab's.
+		if !ok || !synced[owner] {
+			continue
+		}
 		if len(out.Files) == maxDocFiles {
 			out.Truncated = true
 			break
 		}
-		owner, repo, path, ok := splitRepoURI(d.URI)
-		if !ok {
-			continue
+		f := &orchdv1.DocFile{
+			SourceUri: src.SourceURI, Owner: owner, Repo: repo, Path: path,
+			Chunks: clampInt32(src.Chunks), IngestedAt: toUnix(src.IngestedAt), UpdatedAt: changed[src.SourceURI],
 		}
-		f := &orchdv1.DocFile{SourceUri: d.URI, Owner: owner, Repo: repo, Path: path, UpdatedAt: d.UpdatedAt}
+		if f.UpdatedAt == 0 {
+			f.UpdatedAt = f.IngestedAt
+		}
 		if sha, tracked := heads[owner+"/"+repo]; tracked {
 			f.WebUrl = gitHubFileURL(owner, repo, sha, path)
 		}

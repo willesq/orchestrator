@@ -27,13 +27,20 @@ public struct SearchQuery: Sendable, Equatable {
     public var sourceType: String
     public var scope: String
     public var mode: SearchMode
+    /// Only this source's content, when set.
+    public var sourceURI: String
+    /// Only content carrying every one of these tags, e.g. one repo's docs.
+    public var allTags: [String]
 
-    public init(text: String, limit: Int = 10, sourceType: String = "", scope: String = "", mode: SearchMode = .configured) {
+    public init(text: String, limit: Int = 10, sourceType: String = "", scope: String = "", mode: SearchMode = .configured,
+                sourceURI: String = "", allTags: [String] = []) {
         self.text = text
         self.limit = limit
         self.sourceType = sourceType
         self.scope = scope
         self.mode = mode
+        self.sourceURI = sourceURI
+        self.allTags = allTags
     }
 
     /// The query as sent: trimmed text, trimmed filters, a limit in 1...maxResults.
@@ -43,7 +50,9 @@ public struct SearchQuery: Sendable, Equatable {
             limit: min(max(limit, 1), Self.maxResults),
             sourceType: sourceType.trimmingCharacters(in: .whitespaces),
             scope: scope.trimmingCharacters(in: .whitespaces),
-            mode: mode
+            mode: mode,
+            sourceURI: sourceURI,
+            allTags: allTags.filter { !$0.isEmpty }
         )
     }
 }

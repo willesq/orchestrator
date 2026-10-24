@@ -1302,7 +1302,7 @@ public nonisolated struct Orchd_V1_ListDocsResponse: Sendable {
 
   public var owners: [Orchd_V1_DocOwner] = []
 
-  /// ordered by source_uri
+  /// What the store holds for the synced owners, ordered by source_uri.
   public var files: [Orchd_V1_DocFile] = []
 
   /// more files than one reply carries
@@ -1381,6 +1381,12 @@ public nonisolated struct Orchd_V1_DocFile: Sendable {
 
   /// the file on GitHub at the indexed commit
   public var webURL: String = String()
+
+  /// chunks held in the store
+  public var chunks: Int32 = 0
+
+  /// unix seconds of the latest store of any chunk
+  public var ingestedAt: Int64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -4413,7 +4419,7 @@ nonisolated extension Orchd_V1_DocRepo: SwiftProtobuf.Message, SwiftProtobuf._Me
 
 nonisolated extension Orchd_V1_DocFile: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DocFile"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_uri\0\u{1}owner\0\u{1}repo\0\u{1}path\0\u{3}updated_at\0\u{3}web_url\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_uri\0\u{1}owner\0\u{1}repo\0\u{1}path\0\u{3}updated_at\0\u{3}web_url\0\u{1}chunks\0\u{3}ingested_at\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4427,6 +4433,8 @@ nonisolated extension Orchd_V1_DocFile: SwiftProtobuf.Message, SwiftProtobuf._Me
       case 4: try { try decoder.decodeSingularStringField(value: &self.path) }()
       case 5: try { try decoder.decodeSingularInt64Field(value: &self.updatedAt) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.webURL) }()
+      case 7: try { try decoder.decodeSingularInt32Field(value: &self.chunks) }()
+      case 8: try { try decoder.decodeSingularInt64Field(value: &self.ingestedAt) }()
       default: break
       }
     }
@@ -4451,6 +4459,12 @@ nonisolated extension Orchd_V1_DocFile: SwiftProtobuf.Message, SwiftProtobuf._Me
     if !self.webURL.isEmpty {
       try visitor.visitSingularStringField(value: self.webURL, fieldNumber: 6)
     }
+    if self.chunks != 0 {
+      try visitor.visitSingularInt32Field(value: self.chunks, fieldNumber: 7)
+    }
+    if self.ingestedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.ingestedAt, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -4461,6 +4475,8 @@ nonisolated extension Orchd_V1_DocFile: SwiftProtobuf.Message, SwiftProtobuf._Me
     if lhs.path != rhs.path {return false}
     if lhs.updatedAt != rhs.updatedAt {return false}
     if lhs.webURL != rhs.webURL {return false}
+    if lhs.chunks != rhs.chunks {return false}
+    if lhs.ingestedAt != rhs.ingestedAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

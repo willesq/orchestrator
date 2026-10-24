@@ -181,8 +181,11 @@ Text sent with `orch ingest` or `rag_ingest_text` is stored as given.
 unchanged, `gh repo clone --depth 1` into `<data>/repos`, and store each markdown file whose
 SHA-256 changed (hash saved only after a successful store).
 
-`ListDocs` serves the docs registry: each owner, its repos with the indexed default-branch commit,
-and every indexed file with its GitHub URL, `https://github.com/<owner>/<repo>/blob/<commit>/<path>`.
+`ListDocs` serves the docs catalog: each owner the registry syncs, its repos with the indexed
+default-branch commit, and every `repo_doc` source the store holds under those owners, with its
+chunk count and GitHub URL, `https://github.com/<owner>/<repo>/blob/<commit>/<path>`. The files
+come from the store, not the registry, so a doc whose ingest failed or whose content was deleted is
+not listed.
 The URL is pinned to the indexed commit, so the page shows the version that was indexed; with no
 commit recorded it uses `HEAD`. `GetDocument` rebuilds any indexed source from its chunks (the
 same rebuild the hybrid migration uses). It links the original only for a `web` source or a synced

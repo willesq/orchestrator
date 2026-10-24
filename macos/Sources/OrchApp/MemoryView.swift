@@ -8,7 +8,9 @@ struct MemoryView: View {
     @State private var tab = Tab.search
 
     enum Tab: String, CaseIterable {
-        case search = "Search", sources = "Sources"
+        // "Indexed": every source held in memory, not the registered
+        // sources the Sources tab manages.
+        case search = "Search", sources = "Indexed"
     }
 
     var body: some View {

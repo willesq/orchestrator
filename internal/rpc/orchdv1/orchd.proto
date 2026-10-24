@@ -67,7 +67,7 @@ service Orchd {
   // the size of its data, and task counts.
   rpc GetSystemMetrics(GetSystemMetricsRequest) returns (SystemMetrics);
   // ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
-  // repos, and every indexed doc with its GitHub location.
+  // repos, and every doc of theirs the store holds, with its GitHub location.
   rpc ListDocs(ListDocsRequest) returns (ListDocsResponse);
   // GetDocument rebuilds one indexed source from its stored chunks.
   rpc GetDocument(GetDocumentRequest) returns (Document);
@@ -518,7 +518,8 @@ message ListDocsRequest {}
 
 message ListDocsResponse {
   repeated DocOwner owners = 1;
-  repeated DocFile files = 2; // ordered by source_uri
+  // What the store holds for the synced owners, ordered by source_uri.
+  repeated DocFile files = 2;
   bool truncated = 3;         // more files than one reply carries
 }
 
@@ -548,6 +549,8 @@ message DocFile {
   string path = 4;
   int64 updated_at = 5; // unix seconds of the last ingest that changed it
   string web_url = 6;   // the file on GitHub at the indexed commit
+  int32 chunks = 7;     // chunks held in the store
+  int64 ingested_at = 8; // unix seconds of the latest store of any chunk
 }
 
 message GetDocumentRequest {
