@@ -11,7 +11,7 @@ import SwiftUI
 /// `Window` scene can only be opened from a live view, and the menu bar label
 /// is rendered as an image, so it cannot do it on AppKit's behalf.
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Built on first use, so a copy that hands off never opens a connection.
     private(set) lazy var model = AppModel()
     private var window: NSWindow?
@@ -50,7 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if window == nil {
             let root = MainWindow(
                 monitor: model.monitor, prMonitor: model.prMonitor, restart: model.restart,
-                search: model.search, sources: model.sources, tasks: model.tasks, dispatch: model.dispatch
+                search: model.search, sources: model.sources, tasks: model.tasks, dispatch: model.dispatch,
+                github: model.github
             )
             let hosting = NSHostingController(rootView: root)
             // The window keeps the size the user gives it. By default the
@@ -65,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.setContentSize(NSSize(width: 980, height: 640))
             if !window.setFrameUsingName("OrchMainWindow") { window.center() }
             window.setFrameAutosaveName("OrchMainWindow")
+            window.delegate = self
             self.window = window
         }
         window?.makeKeyAndOrderFront(nil)
@@ -94,5 +96,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         NSApp.terminate(nil)
         return true
+    }
+
+    /// The GitHub tab polls while open; a closed window (kept, not released)
+    /// must not keep it polling.
+    func windowWillClose(_ notification: Notification) {
+        model.github.stop()
     }
 }

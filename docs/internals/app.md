@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `MemoryView`, `TasksView`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `MemoryView`, `TasksView`, `GitHubView`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -100,6 +100,22 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
   - **PR links:** opened only through the same `github.com/<owner>/<repo>/pull/<n>` check.
   - **Rating:** a finished task can be rated good, needed rework or bad (`RateTask`), which feeds
     model routing.
+- **GitHub:** what orch monitors on GitHub, and what it found.
+  - **Watching:** your account ("You") and each org you belong to ("Org"), each with an on/off
+    switch. An enabled scope also shows:
+    - a picker between "Involving me" and "Everything open";
+    - a summary of what it covers, and **Repos…**, a sheet to choose all repos, only some, or all
+      but some, from the repos you can see.
+
+    Changes go to `SetGitHubScope`. orchd then sweeps within about a minute, and the activity list
+    reloads every 30 s while the tab is open.
+  - **Your teams:** from `GetGitHubIdentity`.
+  - **Activity:** `ListGitHubItems`, filtered by All, PRs or Issues in the toolbar. Items that need
+    you come first, then the newest. Each row shows its title, `repo#number`, author, age, and its
+    reasons as chips. Clicking opens the item, but only exact
+    `https://github.com/<owner>/<repo>/pull|issues/<n>` URLs. Titles and authors are other people's
+    text, shown verbatim.
+  - **Refresh** asks GitHub for your orgs and teams again.
 - **Dispatch:** a sheet that sends `Dispatch` with an agent, an optional task kind (showing what
   `RecommendModel` would route it to), an optional pinned model, an optional working directory
   (chosen with a folder picker) and the task body.

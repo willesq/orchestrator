@@ -13,7 +13,7 @@ public protocol DaemonAPI: Sendable {
 /// Talks to orchd over its Unix socket. One long-lived HTTP/2 connection is
 /// shared by every call; the transport reconnects on its own when orchd
 /// restarts and recreates the socket.
-public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Sendable {
+public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, Sendable {
     private let client: GRPCClient<HTTP2ClientTransport.Posix>
     private let orchd: Orchd_V1_Orchd.Client<HTTP2ClientTransport.Posix>
     private let callTimeout: Duration
@@ -176,6 +176,71 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Sen
     static func route(_ r: Orchd_V1_Route) -> RouteInfo {
         RouteInfo(taskKind: r.taskKind, provider: r.provider, model: r.model, effort: r.effort,
                   rationale: r.rationale, evidenceCount: Int(r.evidenceN), confidence: r.confidence)
+    }
+
+    /// GitHub calls run gh in orchd, so they get longer than daemon-only calls.
+    private var gitHubOptions: CallOptions {
+        var options = CallOptions.defaults
+        options.timeout = .seconds(60)
+        return options
+    }
+
+    public func gitHubIdentity(refresh: Bool) async throws -> GitHubIdentity {
+        var request = Orchd_V1_GetGitHubIdentityRequest()
+        request.refresh = refresh
+        let r = try await orchd.getGitHubIdentity(request, options: gitHubOptions)
+        return GitHubIdentity(login: r.login, orgs: r.orgs,
+                              teams: r.teams.map { GitHubTeam(org: $0.org, slug: $0.slug, name: $0.name) })
+    }
+
+    public func gitHubScopes(refresh: Bool) async throws -> GitHubScopeList {
+        var request = Orchd_V1_ListGitHubScopesRequest()
+        request.refresh = refresh
+        let r = try await orchd.listGitHubScopes(request, options: gitHubOptions)
+        return GitHubScopeList(scopes: r.scopes.map(Self.scope), warning: r.warning.isEmpty ? nil : r.warning)
+    }
+
+    public func setGitHubScope(_ scope: GitHubScope) async throws -> GitHubScope {
+        var pb = Orchd_V1_GitHubScope()
+        pb.owner = scope.owner
+        pb.enabled = scope.enabled
+        pb.items = scope.items.rawValue
+        pb.repoMode = scope.repoMode.rawValue
+        pb.repos = scope.repoMode == .all ? [] : scope.repos
+        var request = Orchd_V1_SetGitHubScopeRequest()
+        request.scope = pb
+        // Enabling a scope can make orchd check the user's memberships through gh.
+        return Self.scope(try await orchd.setGitHubScope(request, options: gitHubOptions).scope)
+    }
+
+    public func gitHubRepos(owner: String) async throws -> [GitHubRepo] {
+        var request = Orchd_V1_ListGitHubReposRequest()
+        request.owner = owner
+        return try await orchd.listGitHubRepos(request, options: gitHubOptions).repos.map {
+            GitHubRepo(name: $0.name, isPrivate: $0.`private`, isArchived: $0.archived)
+        }
+    }
+
+    public func gitHubItems() async throws -> GitHubItemList {
+        let r = try await orchd.listGitHubItems(Orchd_V1_ListGitHubItemsRequest(), options: callOptions)
+        let iso = ISO8601DateFormatter()
+        return GitHubItemList(
+            items: r.items.map {
+                GitHubItem(
+                    url: $0.url, title: $0.title, repo: $0.repo, isPR: $0.kind != "issue", number: Int($0.number),
+                    author: $0.author, updatedAt: iso.date(from: $0.updatedAt), isDraft: $0.isDraft,
+                    ciState: $0.ciState, reasons: $0.reasons.compactMap(GitHubReason.init(rawValue:)),
+                    attention: Attention(rawValue: $0.attention)
+                )
+            },
+            updatedAt: date(fromUnix: r.updatedAt)
+        )
+    }
+
+    static func scope(_ s: Orchd_V1_GitHubScope) -> GitHubScope {
+        GitHubScope(owner: s.owner, isUser: s.kind == "user", enabled: s.enabled,
+                    items: GitHubItemsMode(rawValue: s.items) ?? .involving,
+                    repoMode: GitHubRepoMode(rawValue: s.repoMode) ?? .all, repos: s.repos)
     }
 
     private var callOptions: CallOptions {

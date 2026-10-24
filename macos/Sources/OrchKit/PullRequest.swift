@@ -64,15 +64,8 @@ public struct PullRequest: Sendable, Equatable, Identifiable {
     /// The cache is written from gh output, but the app hands this URL to the
     /// system to open, so it never opens another scheme, host, port or page.
     public var webURL: URL? {
-        guard let components = URLComponents(string: url),
-              components.scheme == "https",
-              components.host == "github.com",
-              components.port == nil,
-              components.user == nil, components.password == nil,
-              components.query == nil, components.fragment == nil,
-              components.path.wholeMatch(of: /\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+\/pull\/[0-9]+/) != nil,
-              let url = components.url
-        else { return nil }
+        // pathComponents is ["/", owner, repo, "pull", number].
+        guard let url = githubItemURL(url), url.pathComponents.count == 5, url.pathComponents[3] == "pull" else { return nil }
         return url
     }
 }

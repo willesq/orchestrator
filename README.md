@@ -15,7 +15,8 @@ runs background agent tasks that survive restarts.
 - **`orch`** (the CLI) and **`orch-hook`** (harness hooks) are thin clients of `orchd`, over a
   Unix socket. MCP servers expose search and the task queue to agents.
 - **`Orch.app`**, a macOS menu bar app, shows orchd's health and the PRs that need you, starts or
-  restarts orchd, and has a window for its subsystems, searching memory, and the task queue. Like
+  restarts orchd, and has a window for its subsystems, searching memory, the task queue, and the
+  GitHub accounts and orgs it watches. Like
   the CLI, it talks to `orchd` and never opens the databases directly.
 - **`orch install`** wires the hooks, MCP servers and a shared agent policy into each harness.
 
