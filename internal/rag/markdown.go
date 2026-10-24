@@ -221,8 +221,9 @@ func blocks(lines []string) [][]string {
 
 // markdownChunks packs sections into chunks of at most size tokens. Sections
 // that fit together share a chunk when they sit in one subtree; a section too
-// large for one is split at paragraph boundaries, and a single paragraph too
-// large for one falls back to overlapping token windows. A chunk starts with the
+// large for one is split at paragraph boundaries, a single block (paragraph,
+// list, code fence) too large for one at line boundaries, and only a single
+// line too large for one falls back to overlapping token windows. A chunk starts with the
 // path of headings above its first section, counted against size, and records
 // the deepest path all of its sections share.
 func markdownChunks(text string, size, overlap int, m measure) []chunk {
@@ -393,8 +394,8 @@ func splitSection(lines []string, size, overlap int, m measure) []string {
 		n := tokens(m, strings.Join(b, " "))
 		if n > size {
 			emit()
-			for _, w := range chunkText(strings.Join(b, "\n"), size, overlap, m) {
-				cur = []string{w}
+			for _, piece := range splitBlock(b, size, overlap, m) {
+				cur = []string{piece}
 				emit()
 			}
 			continue
@@ -432,4 +433,55 @@ func fitHeading(line string, limit int, m measure) string {
 		return ""
 	}
 	return strings.TrimSpace(string(rs[:lo])) + "…"
+}
+
+// splitBlock splits one block too large for a chunk at line boundaries, so a
+// list, a code fence or a wrapped paragraph keeps its lines (and renders as
+// markdown) rather than being flattened into word windows. Consecutive pieces
+// share up to overlap tokens of whole trailing lines. Only a single line too
+// large for one chunk falls back to token windows.
+func splitBlock(lines []string, size, overlap int, m measure) []string {
+	var out, cur []string
+	used := 0
+	// fresh says cur holds a line not already emitted, beyond the carry.
+	fresh := false
+	emit := func() {
+		if !fresh {
+			return
+		}
+		out = append(out, strings.Join(cur, "\n"))
+		var carry []string
+		back := 0
+		// Carry whole trailing lines, but never the entire piece, so the next
+		// one always moves forward.
+		for i := len(cur) - 1; i > 0; i-- {
+			n := tokens(m, cur[i])
+			if back+n > overlap {
+				break
+			}
+			back += n
+			carry = append([]string{cur[i]}, carry...)
+		}
+		cur, used, fresh = carry, back, false
+	}
+	for _, line := range lines {
+		n := tokens(m, line)
+		if n > size {
+			emit()
+			cur, used = nil, 0
+			out = append(out, chunkText(line, size, overlap, m)...)
+			continue
+		}
+		if used+n > size {
+			emit()
+			if used+n > size {
+				cur, used = nil, 0
+			}
+		}
+		cur = append(cur, line)
+		used += n
+		fresh = true
+	}
+	emit()
+	return out
 }

@@ -479,11 +479,12 @@ func rebuild(chunks []storedChunk) (text string, malformed bool) {
 		return chunks[i].id < chunks[j].id
 	})
 	var parts []string
-	var prevWords []string
+	var prevWords, prevLines []string
 	prevHeading, prevContext := "", ""
 	for _, c := range chunks {
 		ctxLine := storedContextLine.FindString(c.text)
 		t := c.text[len(ctxLine):]
+		continued := false
 		if !malformed {
 			// A heading repeated at the top of the next piece of the same
 			// section (same heading, same path above it) is kept once; two
@@ -495,12 +496,22 @@ func rebuild(chunks []storedChunk) (text string, malformed bool) {
 				}
 				prevHeading, prevContext = first, ctxLine
 			}
-			if k := overlap(prevWords, strings.Fields(t)); k >= minOverlap {
+			// A block split at line boundaries repeats the previous piece's
+			// last lines: drop them and continue the block on the next line.
+			if k := lineOverlap(prevLines, strings.Split(t, "\n")); k > 0 {
+				t = strings.Join(strings.Split(t, "\n")[k:], "\n")
+				continued = true
+			} else if k := overlap(prevWords, strings.Fields(t)); k >= minOverlap {
 				t = cutWords(t, k)
 			}
 		}
 		prevWords = strings.Fields(c.text)
-		if strings.TrimSpace(t) != "" {
+		prevLines = strings.Split(strings.TrimRight(c.text, "\n"), "\n")
+		switch {
+		case strings.TrimSpace(t) == "":
+		case continued && len(parts) > 0:
+			parts[len(parts)-1] += "\n" + t
+		default:
 			parts = append(parts, t)
 		}
 	}
@@ -530,6 +541,30 @@ func cutWords(t string, k int) string {
 
 // overlap is the longest run of words that ends prev and starts cur, at most
 // a little past the old chunker's 60.
+// lineOverlap is how many whole lines cur starts with that prev ends with: the
+// overlap splitBlock carries between pieces of one block. It counts only when
+// a shared line has real content, so two blocks that merely both end and start
+// with a fence or a blank line are not merged.
+func lineOverlap(prev, cur []string) int {
+	for k := min(len(prev), len(cur), 50); k > 0; k-- {
+		match, content := true, false
+		for i := 0; i < k; i++ {
+			line := prev[len(prev)-k+i]
+			if line != cur[i] {
+				match = false
+				break
+			}
+			if trimmed := strings.TrimSpace(line); len(trimmed) > 3 && !strings.HasPrefix(trimmed, "```") && !atxLine.MatchString(trimmed) {
+				content = true
+			}
+		}
+		if match && content {
+			return k
+		}
+	}
+	return 0
+}
+
 func overlap(prev, cur []string) int {
 	for k := min(len(prev), len(cur), 100); k > 0; k-- {
 		match := true

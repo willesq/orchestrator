@@ -43,7 +43,10 @@ size/4), always advancing. A word too large for a chunk is split into the larges
 3. Prefix each chunk with its ancestor path, `[section: Install › Homebrew]`, capped at half the
    chunk (dropping outer headings first). Budget = `max(size − prefix, size/2, 1)`.
 4. A section too large for one chunk repeats its heading (capped at size/4) on every piece and
-   splits at blank lines, never inside a fenced block unless the block alone is too large.
+   splits at blank lines, never inside a fenced block unless the block alone is too large. A
+   single block (paragraph, list, fence) too large for one chunk splits at line boundaries, so
+   its lines survive, and consecutive pieces share whole trailing lines up to the overlap; only
+   one line too large for a chunk falls back to word windows.
 5. Blank-line runs collapse to one outside fences; a final pass re-splits anything still too large.
 
 The chunk's `heading` payload is the deepest path all its sections share.
@@ -189,7 +192,10 @@ client stored under a `repo://` URI (only orchd's sync writes the registry), inc
 owner folder that shares a synced owner's name. The reply stops at 10,000 files or 3 MiB.
 The URL is pinned to the indexed commit, so the page shows the version that was indexed; with no
 commit recorded it uses `HEAD`. `GetDocument` rebuilds any indexed source from its chunks (the
-same rebuild the hybrid migration uses). It links the original only for a `web` source or a synced
+same rebuild the hybrid migration uses). Where a piece starts with the previous piece's last whole
+lines (a block split at line boundaries), the rebuild drops them and continues the block on the
+next line; a shared line must have content, so two blocks that only both meet at a fence line are
+not merged. It links the original only for a `web` source or a synced
 GitHub doc, since any client can store text under any URI. A rebuild over 3 MiB is reported as
 oversize with no text, so replies stay under clients' 4 MiB limit; `ListDocs` stops at 10,000
 files and says it was truncated.

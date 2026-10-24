@@ -38,7 +38,8 @@ not catch every secret shape.
 
 Text is split into chunks of at most `embedder.chunk_tokens` (110) model tokens, because the
 embedding model reads only its first 128. Markdown splits at headings and keeps code blocks
-whole where they fit; each chunk starts with its heading path, such as
+whole where they fit; a list, code block or paragraph too large for one chunk splits at line
+boundaries, so its lines survive. Each chunk starts with its heading path, such as
 `[section: Install › Homebrew]`. Plain text uses windows overlapping by
 `embedder.chunk_overlap_tokens` (16).
 
