@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -44,7 +45,7 @@ func githubServer(t *testing.T, down *bool) *server {
 		}
 		return nil, errors.New("unexpected: " + joined)
 	}
-	return &server{github: github.NewService(github.NewStore(conn), gh)}
+	return &server{github: github.NewService(github.NewStore(conn), gh), handoffDir: t.TempDir()}
 }
 
 func TestGitHubRPCsUnavailableWithoutService(t *testing.T) {
@@ -119,6 +120,9 @@ func TestSetGitHubScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := os.Stat(filepath.Join(s.handoffDir, "pr-sweep")); err != nil {
+		t.Errorf("a scope change did not request a sweep: %v", err)
+	}
 	got := resp.GetScope()
 	if got.GetOwner() != "WippData" || got.GetKind() != "org" || !got.GetEnabled() || got.GetItems() != "all" ||
 		got.GetRepoMode() != "include" || !slices.Equal(got.GetRepos(), []string{"api"}) {
@@ -169,5 +173,22 @@ func TestListGitHubRepos(t *testing.T) {
 	down = true
 	if _, err := s.ListGitHubRepos(ctx, &orchdv1.ListGitHubReposRequest{Owner: "WippData"}); grpcstatus.Code(err) != codes.Unavailable {
 		t.Errorf("GitHub down: %v", err)
+	}
+}
+
+func TestWatchFrom(t *testing.T) {
+	ctx := context.Background()
+	if _, err := watchFrom(nil)(ctx); err == nil {
+		t.Error("no service: no error")
+	}
+	down := false
+	s := githubServer(t, &down)
+	w, err := watchFrom(s.github)(ctx)
+	if err != nil || w.Login != "willesq" || len(w.Scopes) != 2 || !w.Scopes[0].Enabled {
+		t.Errorf("watch = %+v, %v", w, err)
+	}
+	downAll := true
+	if _, err := watchFrom(githubServer(t, &downAll).github)(ctx); err == nil {
+		t.Error("GitHub down: no error")
 	}
 }

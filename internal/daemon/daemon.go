@@ -33,6 +33,7 @@ import (
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/embed"
 	"github.com/willesq/orchestrator/internal/github"
+	"github.com/willesq/orchestrator/internal/handoff"
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/queue"
@@ -101,6 +102,8 @@ type server struct {
 	prStateFile string
 	// github holds the GitHub scopes and identity; nil when unavailable.
 	github *github.Service
+	// handoffDir is where SetGitHubScope asks the PR watcher to sweep now.
+	handoffDir string
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -498,11 +501,15 @@ func Run(ctx context.Context) error {
 		summaries = newSummaryQueue()
 	}
 
+	// One GitHub service, so the server and the PR watcher share the identity
+	// cache.
+	ghService := github.NewService(github.NewStore(store), github.GH)
+
 	sup := supervisor.New(runCtx)
 	for _, u := range subsystems(deps{
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
-		summaries: summaries,
+		summaries: summaries, github: ghService,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return err
@@ -543,7 +550,8 @@ func Run(ctx context.Context) error {
 		migrator:     svc,
 		codexEnabled: codexRunnable(s.Queue.Worker),
 		prStateFile:  paths.PRStateFile(),
-		github:       github.NewService(github.NewStore(store), github.GH),
+		github:       ghService,
+		handoffDir:   handoff.Dir(),
 	})
 	go func() {
 		<-runCtx.Done()

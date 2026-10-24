@@ -79,3 +79,7 @@ var fakeGitHub = struct {
 	scopes:   &orchdv1.ListGitHubScopesResponse{},
 	repos:    &orchdv1.ListGitHubReposResponse{},
 }
+
+func (f *fakeClient) ListGitHubItems(context.Context, *orchdv1.ListGitHubItemsRequest, ...grpc.CallOption) (*orchdv1.ListGitHubItemsResponse, error) {
+	return &orchdv1.ListGitHubItemsResponse{}, nil
+}

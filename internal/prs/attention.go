@@ -5,10 +5,13 @@ import (
 	"sort"
 )
 
-// Why a PR is in the cache: which discovery search found it.
+// Why an item is in the cache.
 const (
-	ReasonAuthored        = "authored"
-	ReasonReviewRequested = "review_requested"
+	ReasonAuthored        = "authored"         // the user opened it
+	ReasonAssigned        = "assigned"         // the user is an assignee
+	ReasonInvolved        = "involved"         // the user is mentioned or commented
+	ReasonReviewRequested = "review_requested" // of the user, or a team they are on
+	ReasonAllOpen         = "all_open"         // open in a scope watched for everything
 )
 
 // Why a PR needs the user now, in priority order.
@@ -33,7 +36,7 @@ var attentionRank = map[string]int{
 // then the user's PRs that only need merging. Drafts never need attention:
 // they are still being worked on, so flagging them is noise.
 func Attention(pr PR) string {
-	if pr.IsDraft {
+	if pr.IsDraft || !pr.IsPR() {
 		return ""
 	}
 	authored := pr.Authored()
@@ -53,7 +56,7 @@ func Attention(pr PR) string {
 }
 
 // Authored reports whether the user opened pr. Cache entries written before
-// reasons were recorded came only from the authored search.
+// reasons were recorded came only from the authored-PR search.
 func (pr PR) Authored() bool {
 	return len(pr.Reasons) == 0 || slices.Contains(pr.Reasons, ReasonAuthored)
 }
@@ -95,4 +98,15 @@ func rank(pr PR) int {
 		return r
 	}
 	return len(attentionRank)
+}
+
+// OnlyPRs keeps the pull requests in list, in order.
+func OnlyPRs(list []PR) []PR {
+	var out []PR
+	for _, pr := range list {
+		if pr.IsPR() {
+			out = append(out, pr)
+		}
+	}
+	return out
 }

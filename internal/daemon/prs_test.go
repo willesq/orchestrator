@@ -91,3 +91,63 @@ func TestListPRsRefusesACorruptCache(t *testing.T) {
 		t.Errorf("err = %v, want Unavailable rather than an empty list", err)
 	}
 }
+
+func TestListGitHubItems(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pr_state.json")
+	cache := prs.State{PRs: map[string]prs.PR{
+		"https://x/pr":    {URL: "https://x/pr", Title: "fix", Repo: "WippData/api", Kind: prs.KindPR, Number: 3, Author: "willesq", Reasons: []string{prs.ReasonAuthored}, CIState: "failure"},
+		"https://x/issue": {URL: "https://x/issue", Title: "bug", Repo: "willesq/orch", Kind: prs.KindIssue, Number: 9, Reasons: []string{prs.ReasonAssigned}, UpdatedAt: "2026-10-23T10:00:00Z"},
+		"https://x/old":   {URL: "https://x/old", Title: "legacy", Repo: "willesq/orch"},
+	}}
+	if err := prs.SaveState(path, cache); err != nil {
+		t.Fatal(err)
+	}
+	s := &server{prStateFile: path}
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		req  *orchdv1.ListGitHubItemsRequest
+		want []string
+	}{
+		{"everything, PR needing the user first", &orchdv1.ListGitHubItemsRequest{}, []string{"https://x/pr", "https://x/issue", "https://x/old"}},
+		{"issues only", &orchdv1.ListGitHubItemsRequest{Kind: "issue"}, []string{"https://x/issue"}},
+		{"PRs only, legacy entries count as PRs", &orchdv1.ListGitHubItemsRequest{Kind: "pr"}, []string{"https://x/pr", "https://x/old"}},
+		{"one owner, case-insensitive", &orchdv1.ListGitHubItemsRequest{Owner: "wippdata"}, []string{"https://x/pr"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := s.ListGitHubItems(ctx, tt.req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var urls []string
+			for _, it := range resp.GetItems() {
+				urls = append(urls, it.GetUrl())
+			}
+			if !slices.Equal(urls, tt.want) || resp.GetUpdatedAt() == 0 {
+				t.Errorf("urls = %v (updated_at %d), want %v", urls, resp.GetUpdatedAt(), tt.want)
+			}
+		})
+	}
+	resp, _ := s.ListGitHubItems(ctx, &orchdv1.ListGitHubItemsRequest{})
+	first := resp.GetItems()[0]
+	if first.GetKind() != "pr" || first.GetNumber() != 3 || first.GetAuthor() != "willesq" || first.GetAttention() != prs.AttentionCIFailed {
+		t.Errorf("mapped item = %+v", first)
+	}
+	if issue := resp.GetItems()[1]; issue.GetAttention() != "" || issue.GetUpdatedAt() != "2026-10-23T10:00:00Z" {
+		t.Errorf("issue = %+v", issue)
+	}
+	if _, err := s.ListGitHubItems(ctx, &orchdv1.ListGitHubItemsRequest{Kind: "discussion"}); grpcstatus.Code(err) != codes.InvalidArgument {
+		t.Errorf("bad kind: %v", err)
+	}
+	pr, _ := s.ListPRs(ctx, &orchdv1.ListPRsRequest{})
+	if len(pr.GetPrs()) != 2 {
+		t.Errorf("ListPRs returned %d items, want the 2 PRs", len(pr.GetPrs()))
+	}
+	if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ListGitHubItems(ctx, &orchdv1.ListGitHubItemsRequest{}); grpcstatus.Code(err) != codes.Unavailable {
+		t.Errorf("corrupt cache: %v", err)
+	}
+}

@@ -2,7 +2,9 @@ package daemon
 
 import (
 	"context"
+	"math"
 	"os"
+	"strings"
 
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
@@ -20,7 +22,7 @@ func (s *server) ListPRs(_ context.Context, req *orchdv1.ListPRsRequest) (*orchd
 		// instead of treating every PR as new once the file reads again.
 		return nil, grpcstatus.Errorf(codes.Unavailable, "PR cache unreadable: %v", err)
 	}
-	list := prs.Ordered(state)
+	list := prs.OnlyPRs(prs.Ordered(state))
 	if req.GetNeedsMe() {
 		list = prs.NeedsMe(state)
 	}
@@ -39,6 +41,39 @@ func (s *server) ListPRs(_ context.Context, req *orchdv1.ListPRsRequest) (*orchd
 			IsDraft:        pr.IsDraft,
 			Reasons:        pr.Reasons,
 			Attention:      prs.Attention(pr),
+		})
+	}
+	return out, nil
+}
+
+// ListGitHubItems serves the watcher's cache of PRs and issues, optionally for
+// one kind or owner. Like ListPRs it never calls gh.
+func (s *server) ListGitHubItems(_ context.Context, req *orchdv1.ListGitHubItemsRequest) (*orchdv1.ListGitHubItemsResponse, error) {
+	if k := req.GetKind(); k != "" && k != prs.KindPR && k != prs.KindIssue {
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "kind must be %q or %q", prs.KindPR, prs.KindIssue)
+	}
+	state, err := prs.ReadState(s.prStateFile)
+	if err != nil {
+		return nil, grpcstatus.Errorf(codes.Unavailable, "PR cache unreadable: %v", err)
+	}
+	out := &orchdv1.ListGitHubItemsResponse{}
+	if fi, err := os.Stat(s.prStateFile); err == nil {
+		out.UpdatedAt = fi.ModTime().Unix()
+	}
+	for _, item := range prs.Ordered(state) {
+		kind := item.Kind
+		if kind == "" {
+			kind = prs.KindPR
+		}
+		owner, _, _ := strings.Cut(item.Repo, "/")
+		if req.GetKind() != "" && kind != req.GetKind() || req.GetOwner() != "" && !strings.EqualFold(owner, req.GetOwner()) {
+			continue
+		}
+		out.Items = append(out.Items, &orchdv1.GitHubItem{
+			Url: item.URL, Title: item.Title, Repo: item.Repo, Kind: kind, Number: int32(min(item.Number, math.MaxInt32)),
+			Author: item.Author, UpdatedAt: item.UpdatedAt, IsDraft: item.IsDraft, CiState: item.CIState,
+			ReviewDecision: item.ReviewDecision, Mergeable: item.Mergeable, Reasons: item.Reasons,
+			Attention: prs.Attention(item),
 		})
 	}
 	return out, nil

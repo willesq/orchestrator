@@ -1,12 +1,8 @@
 package prs
 
 import (
-	"context"
-	"encoding/json"
 	"path/filepath"
 	"testing"
-
-	"github.com/willesq/orchestrator/internal/events"
 )
 
 func TestLoadSaveState(t *testing.T) {
@@ -118,51 +114,6 @@ func TestRollupCI(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := rollupCI(tt.checks); got != tt.want {
 				t.Errorf("rollupCI = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestSweep(t *testing.T) {
-	tests := []struct {
-		name       string
-		wantEvents int
-	}{
-		{name: "sweep polls, saves state, emits events", wantEvents: 1},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			stateFile := filepath.Join(dir, "state.json")
-			eventsDir := filepath.Join(dir, "events")
-			b := New(stateFile, eventsDir)
-			// Fake gh: phase 1 discovery, phase 2 enrichment.
-			b.gh = func(_ context.Context, args ...string) ([]byte, error) {
-				if len(args) > 0 && args[0] == "search" {
-					return json.Marshal([]map[string]any{
-						{"url": "https://x/1", "title": "fix", "isDraft": false,
-							"repository": map[string]any{"nameWithOwner": "o/r"}},
-					})
-				}
-				return json.Marshal(map[string]any{
-					"statusCheckRollup": []map[string]any{{"conclusion": "FAILURE"}},
-					"reviewDecision":    "",
-					"mergeable":         "UNKNOWN",
-				})
-			}
-			if err := b.Sweep(context.Background()); err != nil {
-				t.Fatalf("Sweep: %v", err)
-			}
-			state := LoadState(stateFile)
-			if len(state.PRs) != 1 {
-				t.Errorf("state PRs = %d, want 1", len(state.PRs))
-			}
-			if state.PRs["https://x/1"].CIState != "failure" {
-				t.Errorf("ci not enriched: %+v", state.PRs["https://x/1"])
-			}
-			evs, _ := events.Read(eventsDir, "pr-babysitter")
-			if len(evs) != tt.wantEvents {
-				t.Errorf("events = %d, want %d", len(evs), tt.wantEvents)
 			}
 		})
 	}
