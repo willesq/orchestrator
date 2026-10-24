@@ -228,6 +228,58 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "GetGitHubIdentity" metadata.
+        public enum GetGitHubIdentity: Sendable {
+            /// Request type for "GetGitHubIdentity".
+            public typealias Input = Orchd_V1_GetGitHubIdentityRequest
+            /// Response type for "GetGitHubIdentity".
+            public typealias Output = Orchd_V1_GitHubIdentity
+            /// Descriptor for "GetGitHubIdentity".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetGitHubIdentity",
+                type: .unary
+            )
+        }
+        /// Namespace for "ListGitHubScopes" metadata.
+        public enum ListGitHubScopes: Sendable {
+            /// Request type for "ListGitHubScopes".
+            public typealias Input = Orchd_V1_ListGitHubScopesRequest
+            /// Response type for "ListGitHubScopes".
+            public typealias Output = Orchd_V1_ListGitHubScopesResponse
+            /// Descriptor for "ListGitHubScopes".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListGitHubScopes",
+                type: .unary
+            )
+        }
+        /// Namespace for "SetGitHubScope" metadata.
+        public enum SetGitHubScope: Sendable {
+            /// Request type for "SetGitHubScope".
+            public typealias Input = Orchd_V1_SetGitHubScopeRequest
+            /// Response type for "SetGitHubScope".
+            public typealias Output = Orchd_V1_SetGitHubScopeResponse
+            /// Descriptor for "SetGitHubScope".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SetGitHubScope",
+                type: .unary
+            )
+        }
+        /// Namespace for "ListGitHubRepos" metadata.
+        public enum ListGitHubRepos: Sendable {
+            /// Request type for "ListGitHubRepos".
+            public typealias Input = Orchd_V1_ListGitHubReposRequest
+            /// Response type for "ListGitHubRepos".
+            public typealias Output = Orchd_V1_ListGitHubReposResponse
+            /// Descriptor for "ListGitHubRepos".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListGitHubRepos",
+                type: .unary
+            )
+        }
         /// Descriptors for all methods in the "orchd.v1.Orchd" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             Ping.descriptor,
@@ -245,7 +297,11 @@ public enum Orchd_V1_Orchd: Sendable {
             RateTask.descriptor,
             MigrateHybrid.descriptor,
             DropBackup.descriptor,
-            ListPRs.descriptor
+            ListPRs.descriptor,
+            GetGitHubIdentity.descriptor,
+            ListGitHubScopes.descriptor,
+            SetGitHubScope.descriptor,
+            ListGitHubRepos.descriptor
         ]
     }
 }
@@ -644,6 +700,100 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListPRsResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListPRsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetGitHubIdentity" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetGitHubIdentity returns the user's GitHub login, orgs and teams as gh
+        /// > sees them; cached for 10 minutes unless refresh is set.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetGitHubIdentityRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetGitHubIdentityRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_GitHubIdentity` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getGitHubIdentity<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetGitHubIdentityRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetGitHubIdentityRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_GitHubIdentity>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_GitHubIdentity>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListGitHubScopes" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListGitHubScopes returns what the GitHub watcher may monitor: the user's
+        /// > own account (on by default) and each org they belong to (off by default).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListGitHubScopesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListGitHubScopesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListGitHubScopesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listGitHubScopes<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListGitHubScopesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListGitHubScopesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListGitHubScopesResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListGitHubScopesResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetGitHubScope" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetGitHubScope turns a discovered scope on or off and sets what it covers.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetGitHubScopeRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetGitHubScopeRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SetGitHubScopeResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setGitHubScope<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetGitHubScopeRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetGitHubScopeRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SetGitHubScopeResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetGitHubScopeResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListGitHubRepos" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListGitHubRepos lists the repos the user can see under an owner.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListGitHubReposRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListGitHubReposRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListGitHubReposResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listGitHubRepos<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListGitHubReposRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListGitHubReposRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListGitHubReposResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListGitHubReposResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -1219,6 +1369,144 @@ extension Orchd_V1_Orchd {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "GetGitHubIdentity" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetGitHubIdentity returns the user's GitHub login, orgs and teams as gh
+        /// > sees them; cached for 10 minutes unless refresh is set.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetGitHubIdentityRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetGitHubIdentityRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_GitHubIdentity` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getGitHubIdentity<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetGitHubIdentityRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetGitHubIdentityRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_GitHubIdentity>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_GitHubIdentity>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetGitHubIdentity.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListGitHubScopes" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListGitHubScopes returns what the GitHub watcher may monitor: the user's
+        /// > own account (on by default) and each org they belong to (off by default).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListGitHubScopesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListGitHubScopesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListGitHubScopesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listGitHubScopes<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListGitHubScopesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListGitHubScopesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListGitHubScopesResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListGitHubScopesResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListGitHubScopes.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SetGitHubScope" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetGitHubScope turns a discovered scope on or off and sets what it covers.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetGitHubScopeRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetGitHubScopeRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SetGitHubScopeResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setGitHubScope<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetGitHubScopeRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetGitHubScopeRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SetGitHubScopeResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetGitHubScopeResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SetGitHubScope.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListGitHubRepos" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListGitHubRepos lists the repos the user can see under an owner.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListGitHubReposRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListGitHubReposRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListGitHubReposResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listGitHubRepos<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListGitHubReposRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListGitHubReposRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListGitHubReposResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListGitHubReposResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListGitHubRepos.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -1692,6 +1980,124 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListPRsRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListPRsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetGitHubIdentity" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetGitHubIdentity returns the user's GitHub login, orgs and teams as gh
+    /// > sees them; cached for 10 minutes unless refresh is set.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetGitHubIdentityRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getGitHubIdentity<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetGitHubIdentityRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_GitHubIdentity>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getGitHubIdentity(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetGitHubIdentityRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_GitHubIdentity>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListGitHubScopes" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListGitHubScopes returns what the GitHub watcher may monitor: the user's
+    /// > own account (on by default) and each org they belong to (off by default).
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListGitHubScopesRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listGitHubScopes<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListGitHubScopesRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListGitHubScopesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listGitHubScopes(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListGitHubScopesRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListGitHubScopesResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetGitHubScope" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetGitHubScope turns a discovered scope on or off and sets what it covers.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SetGitHubScopeRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setGitHubScope<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SetGitHubScopeRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetGitHubScopeResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setGitHubScope(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetGitHubScopeRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SetGitHubScopeResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListGitHubRepos" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListGitHubRepos lists the repos the user can see under an owner.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListGitHubReposRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listGitHubRepos<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListGitHubReposRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListGitHubReposResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listGitHubRepos(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListGitHubReposRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListGitHubReposResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -2231,6 +2637,140 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.listPRs(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetGitHubIdentity" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetGitHubIdentity returns the user's GitHub login, orgs and teams as gh
+    /// > sees them; cached for 10 minutes unless refresh is set.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getGitHubIdentity<Result>(
+        _ message: Orchd_V1_GetGitHubIdentityRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_GitHubIdentity>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetGitHubIdentityRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getGitHubIdentity(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListGitHubScopes" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListGitHubScopes returns what the GitHub watcher may monitor: the user's
+    /// > own account (on by default) and each org they belong to (off by default).
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listGitHubScopes<Result>(
+        _ message: Orchd_V1_ListGitHubScopesRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListGitHubScopesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListGitHubScopesRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listGitHubScopes(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetGitHubScope" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetGitHubScope turns a discovered scope on or off and sets what it covers.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setGitHubScope<Result>(
+        _ message: Orchd_V1_SetGitHubScopeRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetGitHubScopeResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SetGitHubScopeRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setGitHubScope(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListGitHubRepos" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListGitHubRepos lists the repos the user can see under an owner.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listGitHubRepos<Result>(
+        _ message: Orchd_V1_ListGitHubReposRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListGitHubReposResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListGitHubReposRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listGitHubRepos(
             request: request,
             options: options,
             onResponse: handleResponse

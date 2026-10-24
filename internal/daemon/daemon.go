@@ -32,6 +32,7 @@ import (
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/embed"
+	"github.com/willesq/orchestrator/internal/github"
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/queue"
@@ -98,6 +99,8 @@ type server struct {
 	codexEnabled bool
 	// prStateFile is the PR babysitter's cache, served by ListPRs.
 	prStateFile string
+	// github holds the GitHub scopes and identity; nil when unavailable.
+	github *github.Service
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -540,6 +543,7 @@ func Run(ctx context.Context) error {
 		migrator:     svc,
 		codexEnabled: codexRunnable(s.Queue.Worker),
 		prStateFile:  paths.PRStateFile(),
+		github:       github.NewService(github.NewStore(store), github.GH),
 	})
 	go func() {
 		<-runCtx.Done()
