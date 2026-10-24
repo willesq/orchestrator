@@ -48,3 +48,34 @@ func (f *fakeClient) DropBackup(_ context.Context, req *orchdv1.DropBackupReques
 func (f *fakeClient) ListPRs(context.Context, *orchdv1.ListPRsRequest, ...grpc.CallOption) (*orchdv1.ListPRsResponse, error) {
 	return &orchdv1.ListPRsResponse{}, nil
 }
+
+func (f *fakeClient) GetGitHubIdentity(context.Context, *orchdv1.GetGitHubIdentityRequest, ...grpc.CallOption) (*orchdv1.GitHubIdentity, error) {
+	return fakeGitHub.identity, fakeGitHub.err
+}
+
+func (f *fakeClient) ListGitHubScopes(context.Context, *orchdv1.ListGitHubScopesRequest, ...grpc.CallOption) (*orchdv1.ListGitHubScopesResponse, error) {
+	return fakeGitHub.scopes, fakeGitHub.err
+}
+
+func (f *fakeClient) SetGitHubScope(_ context.Context, req *orchdv1.SetGitHubScopeRequest, _ ...grpc.CallOption) (*orchdv1.SetGitHubScopeResponse, error) {
+	fakeGitHub.set = append(fakeGitHub.set, req.GetScope())
+	return &orchdv1.SetGitHubScopeResponse{Scope: req.GetScope()}, fakeGitHub.err
+}
+
+func (f *fakeClient) ListGitHubRepos(context.Context, *orchdv1.ListGitHubReposRequest, ...grpc.CallOption) (*orchdv1.ListGitHubReposResponse, error) {
+	return fakeGitHub.repos, fakeGitHub.err
+}
+
+// fakeGitHub answers the GitHub RPCs for every fakeClient; tests that use it
+// replace it and restore it.
+var fakeGitHub = struct {
+	identity *orchdv1.GitHubIdentity
+	scopes   *orchdv1.ListGitHubScopesResponse
+	repos    *orchdv1.ListGitHubReposResponse
+	set      []*orchdv1.GitHubScope
+	err      error
+}{
+	identity: &orchdv1.GitHubIdentity{},
+	scopes:   &orchdv1.ListGitHubScopesResponse{},
+	repos:    &orchdv1.ListGitHubReposResponse{},
+}

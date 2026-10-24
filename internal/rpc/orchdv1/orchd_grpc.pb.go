@@ -19,22 +19,26 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Orchd_Ping_FullMethodName             = "/orchd.v1.Orchd/Ping"
-	Orchd_Ingest_FullMethodName           = "/orchd.v1.Orchd/Ingest"
-	Orchd_Search_FullMethodName           = "/orchd.v1.Orchd/Search"
-	Orchd_ListSources_FullMethodName      = "/orchd.v1.Orchd/ListSources"
-	Orchd_DeleteSource_FullMethodName     = "/orchd.v1.Orchd/DeleteSource"
-	Orchd_Dispatch_FullMethodName         = "/orchd.v1.Orchd/Dispatch"
-	Orchd_ListTasks_FullMethodName        = "/orchd.v1.Orchd/ListTasks"
-	Orchd_GetTask_FullMethodName          = "/orchd.v1.Orchd/GetTask"
-	Orchd_Status_FullMethodName           = "/orchd.v1.Orchd/Status"
-	Orchd_Restart_FullMethodName          = "/orchd.v1.Orchd/Restart"
-	Orchd_SummarizeSession_FullMethodName = "/orchd.v1.Orchd/SummarizeSession"
-	Orchd_RecommendModel_FullMethodName   = "/orchd.v1.Orchd/RecommendModel"
-	Orchd_RateTask_FullMethodName         = "/orchd.v1.Orchd/RateTask"
-	Orchd_MigrateHybrid_FullMethodName    = "/orchd.v1.Orchd/MigrateHybrid"
-	Orchd_DropBackup_FullMethodName       = "/orchd.v1.Orchd/DropBackup"
-	Orchd_ListPRs_FullMethodName          = "/orchd.v1.Orchd/ListPRs"
+	Orchd_Ping_FullMethodName              = "/orchd.v1.Orchd/Ping"
+	Orchd_Ingest_FullMethodName            = "/orchd.v1.Orchd/Ingest"
+	Orchd_Search_FullMethodName            = "/orchd.v1.Orchd/Search"
+	Orchd_ListSources_FullMethodName       = "/orchd.v1.Orchd/ListSources"
+	Orchd_DeleteSource_FullMethodName      = "/orchd.v1.Orchd/DeleteSource"
+	Orchd_Dispatch_FullMethodName          = "/orchd.v1.Orchd/Dispatch"
+	Orchd_ListTasks_FullMethodName         = "/orchd.v1.Orchd/ListTasks"
+	Orchd_GetTask_FullMethodName           = "/orchd.v1.Orchd/GetTask"
+	Orchd_Status_FullMethodName            = "/orchd.v1.Orchd/Status"
+	Orchd_Restart_FullMethodName           = "/orchd.v1.Orchd/Restart"
+	Orchd_SummarizeSession_FullMethodName  = "/orchd.v1.Orchd/SummarizeSession"
+	Orchd_RecommendModel_FullMethodName    = "/orchd.v1.Orchd/RecommendModel"
+	Orchd_RateTask_FullMethodName          = "/orchd.v1.Orchd/RateTask"
+	Orchd_MigrateHybrid_FullMethodName     = "/orchd.v1.Orchd/MigrateHybrid"
+	Orchd_DropBackup_FullMethodName        = "/orchd.v1.Orchd/DropBackup"
+	Orchd_ListPRs_FullMethodName           = "/orchd.v1.Orchd/ListPRs"
+	Orchd_GetGitHubIdentity_FullMethodName = "/orchd.v1.Orchd/GetGitHubIdentity"
+	Orchd_ListGitHubScopes_FullMethodName  = "/orchd.v1.Orchd/ListGitHubScopes"
+	Orchd_SetGitHubScope_FullMethodName    = "/orchd.v1.Orchd/SetGitHubScope"
+	Orchd_ListGitHubRepos_FullMethodName   = "/orchd.v1.Orchd/ListGitHubRepos"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -84,6 +88,16 @@ type OrchdClient interface {
 	// ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
 	// awaiting their review, each with why it needs attention. Never calls gh.
 	ListPRs(ctx context.Context, in *ListPRsRequest, opts ...grpc.CallOption) (*ListPRsResponse, error)
+	// GetGitHubIdentity returns the user's GitHub login, orgs and teams as gh
+	// sees them; cached for 10 minutes unless refresh is set.
+	GetGitHubIdentity(ctx context.Context, in *GetGitHubIdentityRequest, opts ...grpc.CallOption) (*GitHubIdentity, error)
+	// ListGitHubScopes returns what the GitHub watcher may monitor: the user's
+	// own account (on by default) and each org they belong to (off by default).
+	ListGitHubScopes(ctx context.Context, in *ListGitHubScopesRequest, opts ...grpc.CallOption) (*ListGitHubScopesResponse, error)
+	// SetGitHubScope turns a discovered scope on or off and sets what it covers.
+	SetGitHubScope(ctx context.Context, in *SetGitHubScopeRequest, opts ...grpc.CallOption) (*SetGitHubScopeResponse, error)
+	// ListGitHubRepos lists the repos the user can see under an owner.
+	ListGitHubRepos(ctx context.Context, in *ListGitHubReposRequest, opts ...grpc.CallOption) (*ListGitHubReposResponse, error)
 }
 
 type orchdClient struct {
@@ -254,6 +268,46 @@ func (c *orchdClient) ListPRs(ctx context.Context, in *ListPRsRequest, opts ...g
 	return out, nil
 }
 
+func (c *orchdClient) GetGitHubIdentity(ctx context.Context, in *GetGitHubIdentityRequest, opts ...grpc.CallOption) (*GitHubIdentity, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GitHubIdentity)
+	err := c.cc.Invoke(ctx, Orchd_GetGitHubIdentity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ListGitHubScopes(ctx context.Context, in *ListGitHubScopesRequest, opts ...grpc.CallOption) (*ListGitHubScopesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListGitHubScopesResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListGitHubScopes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) SetGitHubScope(ctx context.Context, in *SetGitHubScopeRequest, opts ...grpc.CallOption) (*SetGitHubScopeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetGitHubScopeResponse)
+	err := c.cc.Invoke(ctx, Orchd_SetGitHubScope_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ListGitHubRepos(ctx context.Context, in *ListGitHubReposRequest, opts ...grpc.CallOption) (*ListGitHubReposResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListGitHubReposResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListGitHubRepos_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrchdServer is the server API for Orchd service.
 // All implementations must embed UnimplementedOrchdServer
 // for forward compatibility.
@@ -301,6 +355,16 @@ type OrchdServer interface {
 	// ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
 	// awaiting their review, each with why it needs attention. Never calls gh.
 	ListPRs(context.Context, *ListPRsRequest) (*ListPRsResponse, error)
+	// GetGitHubIdentity returns the user's GitHub login, orgs and teams as gh
+	// sees them; cached for 10 minutes unless refresh is set.
+	GetGitHubIdentity(context.Context, *GetGitHubIdentityRequest) (*GitHubIdentity, error)
+	// ListGitHubScopes returns what the GitHub watcher may monitor: the user's
+	// own account (on by default) and each org they belong to (off by default).
+	ListGitHubScopes(context.Context, *ListGitHubScopesRequest) (*ListGitHubScopesResponse, error)
+	// SetGitHubScope turns a discovered scope on or off and sets what it covers.
+	SetGitHubScope(context.Context, *SetGitHubScopeRequest) (*SetGitHubScopeResponse, error)
+	// ListGitHubRepos lists the repos the user can see under an owner.
+	ListGitHubRepos(context.Context, *ListGitHubReposRequest) (*ListGitHubReposResponse, error)
 	mustEmbedUnimplementedOrchdServer()
 }
 
@@ -358,6 +422,18 @@ func (UnimplementedOrchdServer) DropBackup(context.Context, *DropBackupRequest) 
 }
 func (UnimplementedOrchdServer) ListPRs(context.Context, *ListPRsRequest) (*ListPRsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPRs not implemented")
+}
+func (UnimplementedOrchdServer) GetGitHubIdentity(context.Context, *GetGitHubIdentityRequest) (*GitHubIdentity, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetGitHubIdentity not implemented")
+}
+func (UnimplementedOrchdServer) ListGitHubScopes(context.Context, *ListGitHubScopesRequest) (*ListGitHubScopesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListGitHubScopes not implemented")
+}
+func (UnimplementedOrchdServer) SetGitHubScope(context.Context, *SetGitHubScopeRequest) (*SetGitHubScopeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetGitHubScope not implemented")
+}
+func (UnimplementedOrchdServer) ListGitHubRepos(context.Context, *ListGitHubReposRequest) (*ListGitHubReposResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListGitHubRepos not implemented")
 }
 func (UnimplementedOrchdServer) mustEmbedUnimplementedOrchdServer() {}
 func (UnimplementedOrchdServer) testEmbeddedByValue()               {}
@@ -668,6 +744,78 @@ func _Orchd_ListPRs_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_GetGitHubIdentity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGitHubIdentityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetGitHubIdentity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetGitHubIdentity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetGitHubIdentity(ctx, req.(*GetGitHubIdentityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ListGitHubScopes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListGitHubScopesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListGitHubScopes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListGitHubScopes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListGitHubScopes(ctx, req.(*ListGitHubScopesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_SetGitHubScope_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetGitHubScopeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SetGitHubScope(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SetGitHubScope_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SetGitHubScope(ctx, req.(*SetGitHubScopeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ListGitHubRepos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListGitHubReposRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListGitHubRepos(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListGitHubRepos_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListGitHubRepos(ctx, req.(*ListGitHubReposRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Orchd_ServiceDesc is the grpc.ServiceDesc for Orchd service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -738,6 +886,22 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPRs",
 			Handler:    _Orchd_ListPRs_Handler,
+		},
+		{
+			MethodName: "GetGitHubIdentity",
+			Handler:    _Orchd_GetGitHubIdentity_Handler,
+		},
+		{
+			MethodName: "ListGitHubScopes",
+			Handler:    _Orchd_ListGitHubScopes_Handler,
+		},
+		{
+			MethodName: "SetGitHubScope",
+			Handler:    _Orchd_SetGitHubScope_Handler,
+		},
+		{
+			MethodName: "ListGitHubRepos",
+			Handler:    _Orchd_ListGitHubRepos_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

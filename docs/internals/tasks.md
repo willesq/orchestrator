@@ -127,6 +127,33 @@ dispatched. Merged as left → `good`; merged after further commits (other than 
 → `rework`; closed → `bad`; any still open → undecided. A task takes its worst PR's outcome; a task
 with more than 10 PR URLs stays undecided.
 
+## GitHub scopes
+
+`github_scopes` in `orch.db` (`internal/github`) records what orch monitors on GitHub:
+
+- **Defaults:** the user's own account, enabled by default, and each org they belong to, disabled by
+  default.
+- **Discovery:** it runs through `gh` (`gh api user`, `user/orgs`, `user/teams`) and is cached for
+  10 minutes. It adds rows only for accounts that have none, so the user's choices survive
+  rediscovery.
+- **Each scope has:**
+  - an `items` mode: `involving` (authored, assigned, mentioned, or review requested of the user or
+    their team) or `all` (every open PR and issue);
+  - a repo mode: `all` (every repo the user can see), `include` (only the listed repos) or
+    `exclude` (all but the listed repos).
+- **Who can change them:** clients change scopes only through `SetGitHubScope`, which accepts only
+  discovered accounts. `orch github` and the menu bar app's GitHub tab both use these RPCs.
+- **Guards:**
+  - Logins are case-insensitive and at most 39 characters. Repo names exclude `.` and `..`.
+  - An org the user has left keeps its row but cannot be turned on.
+  - `ListGitHubRepos` serves only the user's account and their orgs, so a client cannot spend the
+    user's rate limit on other owners.
+  - A forced refresh is honoured at most every 30 s.
+  - gh's error text is cut to 512 bytes, with control characters removed.
+- **Accepted risk:** `orch github enable|disable` refuses to run inside a queued task, but like
+  every RPC on the 0600 socket, `SetGitHubScope` itself has no caller check. An agent running as the
+  user could call it directly.
+
 ## PR babysitter
 
 Every poll (10 min), on first start, or on request (`handoff/pr-sweep`, written after `gh pr`

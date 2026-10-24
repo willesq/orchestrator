@@ -47,6 +47,16 @@ service Orchd {
   // ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
   // awaiting their review, each with why it needs attention. Never calls gh.
   rpc ListPRs(ListPRsRequest) returns (ListPRsResponse);
+  // GetGitHubIdentity returns the user's GitHub login, orgs and teams as gh
+  // sees them; cached for 10 minutes unless refresh is set.
+  rpc GetGitHubIdentity(GetGitHubIdentityRequest) returns (GitHubIdentity);
+  // ListGitHubScopes returns what the GitHub watcher may monitor: the user's
+  // own account (on by default) and each org they belong to (off by default).
+  rpc ListGitHubScopes(ListGitHubScopesRequest) returns (ListGitHubScopesResponse);
+  // SetGitHubScope turns a discovered scope on or off and sets what it covers.
+  rpc SetGitHubScope(SetGitHubScopeRequest) returns (SetGitHubScopeResponse);
+  // ListGitHubRepos lists the repos the user can see under an owner.
+  rpc ListGitHubRepos(ListGitHubReposRequest) returns (ListGitHubReposResponse);
 }
 
 message PingRequest {}
@@ -341,4 +351,63 @@ message PullRequest {
   // changes_requested | conflicts | review_requested | ready_to_merge; empty
   // when it does not
   string attention = 9;
+}
+
+message GetGitHubIdentityRequest {
+  bool refresh = 1; // bypass the 10-minute cache
+}
+
+message GitHubIdentity {
+  string login = 1;
+  repeated string orgs = 2;
+  repeated GitHubTeam teams = 3;
+}
+
+message GitHubTeam {
+  string org = 1;
+  string slug = 2;
+  string name = 3;
+}
+
+message ListGitHubScopesRequest {
+  bool refresh = 1; // rediscover orgs now rather than from the cache
+}
+
+message ListGitHubScopesResponse {
+  repeated GitHubScope scopes = 1; // the user's account first, then orgs by name
+  // set when GitHub could not be reached; the stored scopes are still listed
+  string warning = 2;
+}
+
+message GitHubScope {
+  string owner = 1;
+  string kind = 2;      // user | org; fixed by discovery
+  bool enabled = 3;
+  string items = 4;     // involving | all
+  string repo_mode = 5; // all | include | exclude
+  repeated string repos = 6; // repo names within owner, for include/exclude
+  int64 updated_at = 7; // unix seconds
+}
+
+message SetGitHubScopeRequest {
+  // owner must be an existing scope; kind is ignored
+  GitHubScope scope = 1;
+}
+
+message SetGitHubScopeResponse {
+  GitHubScope scope = 1;
+}
+
+message ListGitHubReposRequest {
+  string owner = 1;
+}
+
+message ListGitHubReposResponse {
+  repeated GitHubRepo repos = 1; // by name
+}
+
+message GitHubRepo {
+  string name = 1;
+  bool private = 2;
+  bool archived = 3;
 }
