@@ -27,6 +27,10 @@ func NewRootCmd(cf clientFactory) *cobra.Command {
 		Short:         "Claude Orchestrator — local-first agent orchestration",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Reason: an app launched from Finder, and launchd, run orch with
+		// PATH=/usr/bin:/bin:/usr/sbin:/sbin, which hides gh and brew; orchd
+		// widens its PATH the same way at startup.
+		PersistentPreRunE: func(*cobra.Command, []string) error { return paths.EnsureToolPATH() },
 	}
 	root.AddCommand(
 		newVersionCmd(),

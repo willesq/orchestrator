@@ -168,7 +168,9 @@ Settings. A binary running outside an app bundle cannot register, so the checkbo
 **Start** and **Restart** run `orch daemon start|restart`, which already chooses between brew
 services and launchd. An app launched from Finder gets launchd's minimal `PATH`, so it looks for
 `orch` in `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` and `~/go/bin`. The command runs
-from an argument array, never through a shell.
+from an argument array, never through a shell. `orch` itself adds the same Homebrew and `~/.local/bin` directories to its
+`PATH` at startup, as orchd does, so the `gh` and `brew` it runs are found even with launchd's
+minimal `PATH`.
 
 ## Brand
 
