@@ -49,6 +49,10 @@ private struct ScopesColumn: View {
                     }
                     .foregroundStyle(.secondary)
                 }
+                if let error = model.scopesError {
+                    Text(verbatim: "Could not load your accounts: \(error). Retrying.")
+                        .font(.caption).foregroundStyle(.red)
+                }
                 if let warning = model.warning {
                     Text(verbatim: warning).font(.caption).foregroundStyle(.orange)
                 }
@@ -57,7 +61,7 @@ private struct ScopesColumn: View {
                 }
             }
             Section("Watching") {
-                if model.scopes.isEmpty && model.lastError == nil {
+                if model.scopes.isEmpty && model.scopesError == nil {
                     Text("No accounts yet. Check that gh is signed in, then refresh.")
                         .font(.callout).foregroundStyle(.secondary)
                 }
