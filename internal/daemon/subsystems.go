@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/cschleiden/go-workflows/backend"
@@ -21,6 +22,7 @@ import (
 	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/evidence"
+	"github.com/willesq/orchestrator/internal/github"
 	"github.com/willesq/orchestrator/internal/handoff"
 	"github.com/willesq/orchestrator/internal/models"
 	"github.com/willesq/orchestrator/internal/paths"
@@ -53,6 +55,8 @@ type deps struct {
 	summaries *summaryQueue
 	backend   backend.Backend
 	store     *sql.DB
+	// github supplies the scopes the PR watcher covers; nil fails its sweeps.
+	github *github.Service
 	// selfUpdate watches the binary orchd was launched from. Nil — as in tests,
 	// or when the process cannot identify its own executable — drops the unit.
 	selfUpdate *selfupdate.Watcher
@@ -81,7 +85,7 @@ func subsystems(d deps) []supervisor.Unit {
 	}
 	out = append(out, sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, d.store, d.rag))
 	if d.settings.PRBabysitter.Enabled {
-		out = append(out, prsUnit(d.settings, d.store))
+		out = append(out, prsUnit(d.settings, d.store, d.github))
 	}
 	if u, ok := routingEvaluatorUnit(d.settings, d.store); ok {
 		out = append(out, u)
@@ -247,27 +251,31 @@ func docsUnit(s config.Settings, store *sql.DB, ing docs.Ingester) supervisor.Un
 	}
 }
 
-// prsUnit polls open PRs via gh and caches state + events on transitions. gh
-// failures (e.g. not authenticated) are non-fatal: the cache stays as-is.
-func prsUnit(s config.Settings, store *sql.DB) supervisor.Unit {
-	bb := prs.New(paths.PRStateFile(), paths.EventsDir())
+// prsUnit polls open PRs and issues in the user's enabled GitHub scopes via gh
+// and caches state + events on transitions. gh failures (e.g. not
+// authenticated) are non-fatal: the cache stays as-is.
+func prsUnit(s config.Settings, store *sql.DB, gh *github.Service) supervisor.Unit {
+	bb := prs.New(paths.PRStateFile(), paths.EventsDir(), watchFrom(gh))
 	var attr *evidence.Attributor
 	if store != nil {
 		attr = evidence.NewAttributor(store)
 	}
 	poll := interval(s.PRBabysitter.PollInterval, 10*time.Minute)
-	var last time.Time
+	var last, backoffUntil time.Time
 	return supervisor.Unit{
 		Name:   UnitPRs,
-		Detail: "open-PR polling via gh; labels routed tasks by the fate of their PRs",
+		Detail: "PRs and issues in your enabled GitHub scopes via gh; labels routed tasks by the fate of their PRs",
 		// Ticks often but sweeps only every poll, or as soon as a hook asks
 		// after a gh pr mutation.
 		Tick: func(ctx context.Context) {
-			if !prSweepDue(handoff.Dir(), last, poll) {
+			if time.Now().Before(backoffUntil) || !prSweepDue(handoff.Dir(), last, poll) {
 				return
 			}
 			last = time.Now()
-			_ = bb.Sweep(ctx)
+			if err := bb.Sweep(ctx); rateLimited(err) {
+				backoffUntil = time.Now().Add(rateLimitBackoff)
+				log.Printf("orchd: GitHub rate limit; PR sweeps paused for %s: %v", rateLimitBackoff, err)
+			}
 			if attr != nil {
 				if err := attr.Sweep(ctx); err != nil {
 					log.Printf("orchd: pr outcomes: %v", err)
@@ -279,10 +287,31 @@ func prsUnit(s config.Settings, store *sql.DB) supervisor.Unit {
 }
 
 // prSweepDue reports whether the PR babysitter should sweep now: on its first
-// tick, once poll has passed since the last sweep, or when a hook asked.
+// tick, once poll has passed since the last sweep, or when a hook or a scope
+// change asked and minRequestGap has passed. A request that comes sooner is
+// left in place, so it runs when the gap is up rather than being lost.
 func prSweepDue(dir string, last time.Time, poll time.Duration) bool {
-	requested := handoff.TakePRSweep(dir)
-	return requested || last.IsZero() || time.Since(last) >= poll
+	since := time.Since(last)
+	if last.IsZero() || since >= poll {
+		handoff.TakePRSweep(dir)
+		return true
+	}
+	if since < minRequestGap {
+		return false
+	}
+	return handoff.TakePRSweep(dir)
+}
+
+// minRequestGap spaces requested sweeps, so repeated requests (gh pr
+// mutations, scope toggles) cannot spend the user's search rate limit.
+const minRequestGap = time.Minute
+
+// rateLimitBackoff pauses sweeps after GitHub reports a rate limit.
+const rateLimitBackoff = 10 * time.Minute
+
+// rateLimited reports whether err is GitHub refusing for rate limiting.
+func rateLimited(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "rate limit")
 }
 
 // prRequestCheck is how often the PR babysitter looks for a refresh request.

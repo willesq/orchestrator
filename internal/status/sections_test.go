@@ -431,18 +431,18 @@ func TestPRSLine(t *testing.T) {
 	}{
 		{
 			name:      "no cache file yet",
-			wantValue: "0 PRs", wantDetail: []string{"no cache file yet"},
+			wantValue: "0 PRs, 0 issues", wantDetail: []string{"no cache file yet"},
 		},
 		{
 			name: "counts blocked and ready PRs",
 			state: `{"prs":{"a":{"url":"u1","ci":"FAILURE","review":"APPROVED"},` +
-				`"b":{"url":"u2","ci":"SUCCESS","review":"APPROVED"}}}`,
-			wantValue: "2 PRs", wantDetail: []string{"updated "},
+				`"b":{"url":"u2","ci":"SUCCESS","review":"APPROVED"},"c":{"url":"u3","kind":"issue"}}}`,
+			wantValue: "2 PRs, 1 issues", wantDetail: []string{"updated "},
 		},
 		{
 			name:      "corrupt cache reads as empty",
 			state:     `not json`,
-			wantValue: "0 PRs", wantDetail: []string{"updated "},
+			wantValue: "0 PRs, 0 issues", wantDetail: []string{"updated "},
 		},
 	}
 	for _, tt := range tests {

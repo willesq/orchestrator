@@ -1,8 +1,8 @@
-// Package prs polls the user's open PRs, and PRs awaiting the user's review,
-// via the gh CLI, caches their state, and
-// emits events on CI/review/mergeable transitions. `orch prs` reads the cache and
-// never shells out — the babysitter (run inside orchd on a cadence) is the only
-// thing that calls gh.
+// Package prs watches the user's GitHub scopes (their account and the orgs
+// they opted in to) for open PRs and issues via the gh CLI, caches them, and
+// emits events on CI/review/mergeable transitions of the user's own PRs.
+// `orch prs` reads the cache and never shells out — the babysitter (run inside
+// orchd on a cadence) is the only thing that calls gh.
 package prs
 
 import (
@@ -12,25 +12,48 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 
 	"github.com/willesq/orchestrator/internal/events"
+	"github.com/willesq/orchestrator/internal/github"
 )
 
-// PR is the cached state of one pull request.
+// Kinds of cached item.
+const (
+	KindPR    = "pr"
+	KindIssue = "issue"
+)
+
+// PR is the cached state of one pull request or issue (Kind).
 type PR struct {
-	URL            string `json:"url"`
-	Title          string `json:"title"`
-	Repo           string `json:"repo"`
-	CIState        string `json:"ci_state"`        // success | failure | pending | none
-	ReviewDecision string `json:"review_decision"` // APPROVED | CHANGES_REQUESTED | ...
+	URL   string `json:"url"`
+	Title string `json:"title"`
+	Repo  string `json:"repo"`
+	// Kind is KindPR or KindIssue; empty in caches written before issues
+	// were tracked, which held only PRs.
+	Kind           string `json:"kind,omitempty"`
+	Number         int    `json:"number,omitempty"`
+	Author         string `json:"author,omitempty"`
+	UpdatedAt      string `json:"updated_at,omitempty"` // RFC 3339, from GitHub
+	CIState        string `json:"ci_state"`             // success | failure | pending | none
+	ReviewDecision string `json:"review_decision"`      // APPROVED | CHANGES_REQUESTED | ...
 	Mergeable      string `json:"mergeable"`
 	IsDraft        bool   `json:"is_draft"`
-	// Reasons lists which searches found the PR (ReasonAuthored,
-	// ReasonReviewRequested).
+	// Reasons says why the item is watched (ReasonAuthored, ReasonAssigned,
+	// ReasonInvolved, ReasonReviewRequested, ReasonAllOpen).
 	Reasons []string `json:"reasons,omitempty"`
+}
+
+// IsPR reports whether the item is a pull request.
+func (pr PR) IsPR() bool { return pr.Kind == "" || pr.Kind == KindPR }
+
+// Trusted reports whether pr belongs in agent-facing output (orch prs, its
+// JSON): a PR the user opened, or one whose review they were asked for. Other
+// cached items (mentions, everything in a scope) carry titles anyone who can
+// open a PR wrote, so only the app shows them.
+func Trusted(pr PR) bool {
+	return pr.IsPR() && (pr.Authored() || slices.Contains(pr.Reasons, ReasonReviewRequested))
 }
 
 // State is the persisted per-PR snapshot.
@@ -100,7 +123,7 @@ func SaveState(path string, s State) error {
 func Diff(old, next State) []events.Event {
 	var evs []events.Event
 	for url, pr := range next.PRs {
-		if !pr.Authored() {
+		if !pr.IsPR() || !pr.Authored() {
 			continue
 		}
 		prev, existed := old.PRs[url]
@@ -143,6 +166,9 @@ func orNone(s string) string {
 func Filter(s State, blocked, ready bool) []PR {
 	var out []PR
 	for _, pr := range s.PRs {
+		if !Trusted(pr) {
+			continue
+		}
 		switch {
 		case blocked && !isBlocked(pr):
 			continue
@@ -165,23 +191,28 @@ func isReady(pr PR) bool {
 // ghRunner runs the gh CLI; injectable for tests.
 type ghRunner func(ctx context.Context, args ...string) ([]byte, error)
 
+// realGH is github.GH, whose errors carry gh's (sanitized) message, so a
+// rate-limit failure can be recognized.
 func realGH(ctx context.Context, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, "gh", args...).Output()
+	return github.GH(ctx, args...)
 }
 
-// Babysitter polls PRs and maintains the cache + event log.
+// Babysitter polls the watched scopes and maintains the cache + event log.
 type Babysitter struct {
 	stateFile string
 	eventsDir string
 	gh        ghRunner
+	watch     WatchSource
 }
 
-// New builds a babysitter writing to stateFile and eventsDir.
-func New(stateFile, eventsDir string) *Babysitter {
-	return &Babysitter{stateFile: stateFile, eventsDir: eventsDir, gh: realGH}
+// New builds a babysitter writing to stateFile and eventsDir, watching what
+// watch reports.
+func New(stateFile, eventsDir string, watch WatchSource) *Babysitter {
+	return &Babysitter{stateFile: stateFile, eventsDir: eventsDir, gh: realGH, watch: watch}
 }
 
-// Sweep polls PRs, appends events for transitions, and saves the new state.
+// Sweep polls the watched scopes, appends events for transitions, and saves
+// the new state.
 func (b *Babysitter) Sweep(ctx context.Context) error {
 	prsList, err := b.poll(ctx)
 	if err != nil {
@@ -196,69 +227,6 @@ func (b *Babysitter) Sweep(ctx context.Context) error {
 		_ = events.Append(b.eventsDir, "pr-babysitter", e)
 	}
 	return SaveState(b.stateFile, next)
-}
-
-// discovery is one search the babysitter runs; Reason tags what it finds.
-var discovery = []struct {
-	Reason string
-	Flag   string
-}{
-	{ReasonAuthored, "--author=@me"},
-	// Includes requests made to a team the user is on.
-	{ReasonReviewRequested, "--review-requested=@me"},
-}
-
-// poll runs the 2-phase gh query: discovery (one search per reason, merged by
-// URL) + per-PR enrichment.
-func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
-	byURL := map[string]*PR{}
-	var order []string
-	for _, d := range discovery {
-		found, err := b.search(ctx, d.Flag)
-		if err != nil {
-			return nil, err
-		}
-		for _, f := range found {
-			pr, seen := byURL[f.URL]
-			if !seen {
-				pr = &PR{URL: f.URL, Title: f.Title, Repo: f.Repository.NameWithOwner, IsDraft: f.IsDraft}
-				byURL[f.URL] = pr
-				order = append(order, f.URL)
-			}
-			pr.Reasons = append(pr.Reasons, d.Reason)
-		}
-	}
-	prsOut := make([]PR, 0, len(order))
-	for _, url := range order {
-		pr := byURL[url]
-		enrich(ctx, b.gh, pr)
-		prsOut = append(prsOut, *pr)
-	}
-	return prsOut, nil
-}
-
-type searchHit struct {
-	URL        string `json:"url"`
-	Title      string `json:"title"`
-	IsDraft    bool   `json:"isDraft"`
-	Repository struct {
-		NameWithOwner string `json:"nameWithOwner"`
-	} `json:"repository"`
-}
-
-func (b *Babysitter) search(ctx context.Context, flag string) ([]searchHit, error) {
-	// Newest first, so a burst of stale PRs cannot push recent ones past the
-	// limit.
-	out, err := b.gh(ctx, "search", "prs", flag, "--state=open", "--sort=updated",
-		"--json", "url,title,repository,isDraft", "--limit", "50")
-	if err != nil {
-		return nil, err
-	}
-	var found []searchHit
-	if err := json.Unmarshal(out, &found); err != nil {
-		return nil, err
-	}
-	return found, nil
 }
 
 func enrich(ctx context.Context, gh ghRunner, pr *PR) {

@@ -262,8 +262,32 @@ func TestPRSweepDue(t *testing.T) {
 	if err := handoff.RequestPRSweep(dir); err != nil {
 		t.Fatal(err)
 	}
-	if !prSweepDue(dir, time.Now(), poll) || prSweepDue(dir, time.Now(), poll) {
-		t.Fatal("a request sweeps once")
+	if prSweepDue(dir, time.Now(), 10*time.Minute) {
+		t.Fatal("a request within minRequestGap of the last sweep ran")
+	}
+	sinceGap := time.Now().Add(-minRequestGap)
+	if !prSweepDue(dir, sinceGap, 10*time.Minute) || prSweepDue(dir, sinceGap, 10*time.Minute) {
+		t.Fatal("a request kept for later did not sweep exactly once after the gap")
+	}
+	// A poll sweep consumes a pending request, so it does not sweep twice.
+	if err := handoff.RequestPRSweep(dir); err != nil {
+		t.Fatal(err)
+	}
+	if !prSweepDue(dir, time.Time{}, poll) || prSweepDue(dir, sinceGap, 10*time.Minute) {
+		t.Fatal("a pending request outlived the poll sweep")
+	}
+}
+
+func TestRateLimited(t *testing.T) {
+	for err, want := range map[error]bool{
+		nil: false,
+		errors.New("gh search prs: API rate limit exceeded"):   true,
+		errors.New("You have exceeded a secondary RATE LIMIT"): true,
+		errors.New("gh: not logged in"):                        false,
+	} {
+		if got := rateLimited(err); got != want {
+			t.Errorf("rateLimited(%v) = %v, want %v", err, got, want)
+		}
 	}
 }
 

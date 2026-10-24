@@ -3231,6 +3231,253 @@ func (x *GitHubRepo) GetArchived() bool {
 	return false
 }
 
+type ListGitHubItemsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`   // optional: pr | issue
+	Owner         string                 `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"` // optional: one account or org
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGitHubItemsRequest) Reset() {
+	*x = ListGitHubItemsRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGitHubItemsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGitHubItemsRequest) ProtoMessage() {}
+
+func (x *ListGitHubItemsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGitHubItemsRequest.ProtoReflect.Descriptor instead.
+func (*ListGitHubItemsRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *ListGitHubItemsRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *ListGitHubItemsRequest) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+// ListGitHubItemsResponse lists items most urgent first (PRs needing the
+// user, by attention), then by repo and title.
+type ListGitHubItemsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Items         []*GitHubItem          `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,2,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // unix seconds the cache was last written; 0 = never
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGitHubItemsResponse) Reset() {
+	*x = ListGitHubItemsResponse{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGitHubItemsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGitHubItemsResponse) ProtoMessage() {}
+
+func (x *ListGitHubItemsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGitHubItemsResponse.ProtoReflect.Descriptor instead.
+func (*ListGitHubItemsResponse) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *ListGitHubItemsResponse) GetItems() []*GitHubItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+func (x *ListGitHubItemsResponse) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+type GitHubItem struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Url            string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Title          string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Repo           string                 `protobuf:"bytes,3,opt,name=repo,proto3" json:"repo,omitempty"` // owner/name
+	Kind           string                 `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"` // pr | issue
+	Number         int32                  `protobuf:"varint,5,opt,name=number,proto3" json:"number,omitempty"`
+	Author         string                 `protobuf:"bytes,6,opt,name=author,proto3" json:"author,omitempty"`
+	UpdatedAt      string                 `protobuf:"bytes,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // RFC 3339
+	IsDraft        bool                   `protobuf:"varint,8,opt,name=is_draft,json=isDraft,proto3" json:"is_draft,omitempty"`
+	CiState        string                 `protobuf:"bytes,9,opt,name=ci_state,json=ciState,proto3" json:"ci_state,omitempty"` // PRs the user authored or was asked to review
+	ReviewDecision string                 `protobuf:"bytes,10,opt,name=review_decision,json=reviewDecision,proto3" json:"review_decision,omitempty"`
+	Mergeable      string                 `protobuf:"bytes,11,opt,name=mergeable,proto3" json:"mergeable,omitempty"`
+	// authored | assigned | review_requested | involved | all_open
+	Reasons       []string `protobuf:"bytes,12,rep,name=reasons,proto3" json:"reasons,omitempty"`
+	Attention     string   `protobuf:"bytes,13,opt,name=attention,proto3" json:"attention,omitempty"` // as on PullRequest; empty for issues
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GitHubItem) Reset() {
+	*x = GitHubItem{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GitHubItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GitHubItem) ProtoMessage() {}
+
+func (x *GitHubItem) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GitHubItem.ProtoReflect.Descriptor instead.
+func (*GitHubItem) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *GitHubItem) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *GitHubItem) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *GitHubItem) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *GitHubItem) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *GitHubItem) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *GitHubItem) GetAuthor() string {
+	if x != nil {
+		return x.Author
+	}
+	return ""
+}
+
+func (x *GitHubItem) GetUpdatedAt() string {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *GitHubItem) GetIsDraft() bool {
+	if x != nil {
+		return x.IsDraft
+	}
+	return false
+}
+
+func (x *GitHubItem) GetCiState() string {
+	if x != nil {
+		return x.CiState
+	}
+	return ""
+}
+
+func (x *GitHubItem) GetReviewDecision() string {
+	if x != nil {
+		return x.ReviewDecision
+	}
+	return ""
+}
+
+func (x *GitHubItem) GetMergeable() string {
+	if x != nil {
+		return x.Mergeable
+	}
+	return ""
+}
+
+func (x *GitHubItem) GetReasons() []string {
+	if x != nil {
+		return x.Reasons
+	}
+	return nil
+}
+
+func (x *GitHubItem) GetAttention() string {
+	if x != nil {
+		return x.Attention
+	}
+	return ""
+}
+
 var File_internal_rpc_orchdv1_orchd_proto protoreflect.FileDescriptor
 
 const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
@@ -3497,7 +3744,31 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"GitHubRepo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aprivate\x18\x02 \x01(\bR\aprivate\x12\x1a\n" +
-	"\barchived\x18\x03 \x01(\bR\barchived2\xc2\v\n" +
+	"\barchived\x18\x03 \x01(\bR\barchived\"B\n" +
+	"\x16ListGitHubItemsRequest\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
+	"\x05owner\x18\x02 \x01(\tR\x05owner\"d\n" +
+	"\x17ListGitHubItemsResponse\x12*\n" +
+	"\x05items\x18\x01 \x03(\v2\x14.orchd.v1.GitHubItemR\x05items\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x02 \x01(\x03R\tupdatedAt\"\xe0\x02\n" +
+	"\n" +
+	"GitHubItem\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x12\n" +
+	"\x04repo\x18\x03 \x01(\tR\x04repo\x12\x12\n" +
+	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x16\n" +
+	"\x06number\x18\x05 \x01(\x05R\x06number\x12\x16\n" +
+	"\x06author\x18\x06 \x01(\tR\x06author\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\a \x01(\tR\tupdatedAt\x12\x19\n" +
+	"\bis_draft\x18\b \x01(\bR\aisDraft\x12\x19\n" +
+	"\bci_state\x18\t \x01(\tR\aciState\x12'\n" +
+	"\x0freview_decision\x18\n" +
+	" \x01(\tR\x0ereviewDecision\x12\x1c\n" +
+	"\tmergeable\x18\v \x01(\tR\tmergeable\x12\x18\n" +
+	"\areasons\x18\f \x03(\tR\areasons\x12\x1c\n" +
+	"\tattention\x18\r \x01(\tR\tattention2\x9a\f\n" +
 	"\x05Orchd\x125\n" +
 	"\x04Ping\x12\x15.orchd.v1.PingRequest\x1a\x16.orchd.v1.PingResponse\x12;\n" +
 	"\x06Ingest\x12\x17.orchd.v1.IngestRequest\x1a\x18.orchd.v1.IngestResponse\x12;\n" +
@@ -3519,7 +3790,8 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x11GetGitHubIdentity\x12\".orchd.v1.GetGitHubIdentityRequest\x1a\x18.orchd.v1.GitHubIdentity\x12Y\n" +
 	"\x10ListGitHubScopes\x12!.orchd.v1.ListGitHubScopesRequest\x1a\".orchd.v1.ListGitHubScopesResponse\x12S\n" +
 	"\x0eSetGitHubScope\x12\x1f.orchd.v1.SetGitHubScopeRequest\x1a .orchd.v1.SetGitHubScopeResponse\x12V\n" +
-	"\x0fListGitHubRepos\x12 .orchd.v1.ListGitHubReposRequest\x1a!.orchd.v1.ListGitHubReposResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
+	"\x0fListGitHubRepos\x12 .orchd.v1.ListGitHubReposRequest\x1a!.orchd.v1.ListGitHubReposResponse\x12V\n" +
+	"\x0fListGitHubItems\x12 .orchd.v1.ListGitHubItemsRequest\x1a!.orchd.v1.ListGitHubItemsResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
 
 var (
 	file_internal_rpc_orchdv1_orchd_proto_rawDescOnce sync.Once
@@ -3533,7 +3805,7 @@ func file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP() []byte {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescData
 }
 
-var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
+var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
 var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*PingRequest)(nil),              // 0: orchd.v1.PingRequest
 	(*PingResponse)(nil),             // 1: orchd.v1.PingResponse
@@ -3585,6 +3857,9 @@ var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*ListGitHubReposRequest)(nil),   // 47: orchd.v1.ListGitHubReposRequest
 	(*ListGitHubReposResponse)(nil),  // 48: orchd.v1.ListGitHubReposResponse
 	(*GitHubRepo)(nil),               // 49: orchd.v1.GitHubRepo
+	(*ListGitHubItemsRequest)(nil),   // 50: orchd.v1.ListGitHubItemsRequest
+	(*ListGitHubItemsResponse)(nil),  // 51: orchd.v1.ListGitHubItemsResponse
+	(*GitHubItem)(nil),               // 52: orchd.v1.GitHubItem
 }
 var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	6,  // 0: orchd.v1.SearchResponse.hits:type_name -> orchd.v1.SearchHit
@@ -3602,51 +3877,54 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	44, // 12: orchd.v1.SetGitHubScopeRequest.scope:type_name -> orchd.v1.GitHubScope
 	44, // 13: orchd.v1.SetGitHubScopeResponse.scope:type_name -> orchd.v1.GitHubScope
 	49, // 14: orchd.v1.ListGitHubReposResponse.repos:type_name -> orchd.v1.GitHubRepo
-	0,  // 15: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
-	2,  // 16: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
-	4,  // 17: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
-	7,  // 18: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
-	10, // 19: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
-	12, // 20: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
-	14, // 21: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
-	16, // 22: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
-	19, // 23: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
-	23, // 24: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
-	25, // 25: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
-	28, // 26: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
-	30, // 27: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
-	32, // 28: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
-	34, // 29: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
-	36, // 30: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
-	39, // 31: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
-	42, // 32: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
-	45, // 33: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
-	47, // 34: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
-	1,  // 35: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
-	3,  // 36: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
-	5,  // 37: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
-	8,  // 38: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
-	11, // 39: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
-	13, // 40: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
-	15, // 41: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
-	17, // 42: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
-	20, // 43: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
-	24, // 44: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
-	26, // 45: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
-	29, // 46: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
-	31, // 47: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
-	33, // 48: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
-	35, // 49: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
-	37, // 50: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
-	40, // 51: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
-	43, // 52: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
-	46, // 53: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
-	48, // 54: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
-	35, // [35:55] is the sub-list for method output_type
-	15, // [15:35] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	52, // 15: orchd.v1.ListGitHubItemsResponse.items:type_name -> orchd.v1.GitHubItem
+	0,  // 16: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
+	2,  // 17: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
+	4,  // 18: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
+	7,  // 19: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
+	10, // 20: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
+	12, // 21: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
+	14, // 22: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
+	16, // 23: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
+	19, // 24: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
+	23, // 25: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
+	25, // 26: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
+	28, // 27: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
+	30, // 28: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
+	32, // 29: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
+	34, // 30: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
+	36, // 31: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
+	39, // 32: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
+	42, // 33: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
+	45, // 34: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
+	47, // 35: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
+	50, // 36: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
+	1,  // 37: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
+	3,  // 38: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
+	5,  // 39: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
+	8,  // 40: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
+	11, // 41: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
+	13, // 42: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
+	15, // 43: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
+	17, // 44: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
+	20, // 45: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
+	24, // 46: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
+	26, // 47: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
+	29, // 48: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
+	31, // 49: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
+	33, // 50: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
+	35, // 51: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
+	37, // 52: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
+	40, // 53: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
+	43, // 54: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
+	46, // 55: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
+	48, // 56: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
+	51, // 57: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
+	37, // [37:58] is the sub-list for method output_type
+	16, // [16:37] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_internal_rpc_orchdv1_orchd_proto_init() }
@@ -3660,7 +3938,7 @@ func file_internal_rpc_orchdv1_orchd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_rpc_orchdv1_orchd_proto_rawDesc), len(file_internal_rpc_orchdv1_orchd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   50,
+			NumMessages:   53,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -156,25 +156,59 @@ with more than 10 PR URLs stays undecided.
 
 ## PR babysitter
 
-Every poll (10 min), on first start, or on request (`handoff/pr-sweep`, written after `gh pr`
-mutations): two open-PR searches, `gh search prs --author=@me` and `--review-requested=@me` (which
-includes requests to the user's teams), merged by URL. Each PR records the searches that found it
-in `reasons` (`authored`, `review_requested`). Then `gh pr view` runs for each PR to get checks,
-review decision and mergeability. Both searches sort by most recently updated. If either fails, the sweep fails and the cache is
-kept.
+The `pr-babysitter` unit watches the user's enabled GitHub scopes for open PRs and issues.
+
+**When it sweeps:**
+- Every poll (10 min), and on first start.
+- On request: the `handoff/pr-sweep` file, written after `gh pr` mutations and by `SetGitHubScope`.
+  A requested sweep runs at most a minute after the previous sweep. An earlier request waits, rather
+  than being dropped, so a scope change shows within about a minute.
+- After GitHub reports a rate limit, sweeps pause for 10 minutes.
+
+**Searches:**
+- Three cover everything involving the user, whatever the number of scopes:
+  - `gh search prs --involves=@me`
+  - `gh search prs --review-requested=@me`, which includes the user's teams
+  - `gh search issues --involves=@me`
+- A scope watched for everything adds `--owner=<scope>` searches for its PRs and issues. At most 5
+  such scopes are searched (alphabetically); further ones are watched only for items involving the
+  user.
+- Every search asks for open items, newest first, at most 100 each. That keeps the number of
+  searches nearly fixed against GitHub's limit of 30 a minute.
+- Hits outside the enabled scopes, or excluded by a scope's repo picks, are dropped. So the tray and
+  `orch prs` cover only what the user opted in to.
+- Only `https://github.com/` item URLs are kept, and scope logins are checked again when read.
+
+**Each item records:**
+- its kind (`pr` or `issue`), number, author and update time;
+- its reasons:
+  - `authored`: the user is the author;
+  - `assigned`: the user is an assignee;
+  - `review_requested`: from that search;
+  - `involved`: mentioned or commented, otherwise;
+  - `all_open`: from an everything search.
+
+CI, review decision and mergeability are fetched with `gh pr view` only for PRs the user authored
+or was asked to review, because only those can need the user. If the scopes can't be read or any
+search fails, the sweep fails and the cache is kept.
 
 CI rolls up to `none`, `failure`, `pending` or `success`. State is cached in
 `<data>/pr_babysitter_state.json`, written atomically (temp file, then rename) and owner-only.
 
-New PRs and changes to the user's own PRs, including a new reason, append `pr-babysitter` events:
-`blocked` for CI failure or changes requested, `complete` for green and approved, else `info`.
-PRs that only await the user's review get no events. Their titles are written by other people, and
-events reach every agent session through the SessionStart digest.
+**Events:** new items and changes to the user's own PRs, including a new reason, append
+`pr-babysitter` events: `blocked` for CI failure or changes requested, `complete` for green and
+approved, else `info`. Other people's PRs and all issues get no events. Their titles are written by
+other people, and events reach every agent session through the SessionStart digest.
 
-`orch prs` and the `ListPRs` RPC read the cache only. `ListPRs` answers `Unavailable` when the
-file exists but cannot be parsed, rather than an empty list.
+**Who sees what:**
+- `ListPRs` serves the cached PRs; `ListGitHubItems` serves PRs and issues, for the app.
+- `orch prs`, which agents read, shows only PRs the user opened or was asked to review
+  (`prs.Trusted`). The rest of the cache has titles anyone who can open a PR wrote, so only the app
+  shows it. `orch prs` also strips control and bidi characters from titles.
+- None of them call gh. Both RPCs answer `Unavailable` when the file exists but cannot be parsed, rather than
+an empty list.
 
-**Attention** (`prs.Attention`) says why a PR needs the user. It picks the most urgent reason that
+**Attention** (`prs.Attention`) says why a PR needs the user (issues never do). It picks the most urgent reason that
 applies, in this order:
 
 1. `ci_failed`, `changes_requested` or `conflicts` on the user's own PR.

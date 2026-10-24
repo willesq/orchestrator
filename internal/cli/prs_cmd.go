@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/willesq/orchestrator/internal/github"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/prs"
 )
@@ -35,8 +36,10 @@ func newPRsCmd() *cobra.Command {
 				return nil
 			}
 			for _, pr := range list {
+				// Titles are other people's text: no control or bidi characters.
 				fmt.Fprintf(c.OutOrStdout(), "%-45s ci=%-8s review=%-16s draft=%v\n  %s\n",
-					pr.Repo+": "+pr.Title, pr.CIState, orNone(pr.ReviewDecision), pr.IsDraft, pr.URL)
+					github.Printable(pr.Repo+": "+pr.Title, 300), pr.CIState, orNone(pr.ReviewDecision), pr.IsDraft,
+					github.Printable(pr.URL, 300))
 				if needsMe {
 					fmt.Fprintf(c.OutOrStdout(), "  needs you: %s\n", prs.Attention(pr))
 				}

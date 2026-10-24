@@ -1068,6 +1068,81 @@ public nonisolated struct Orchd_V1_GitHubRepo: Sendable {
   public init() {}
 }
 
+public nonisolated struct Orchd_V1_ListGitHubItemsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// optional: pr | issue
+  public var kind: String = String()
+
+  /// optional: one account or org
+  public var owner: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// ListGitHubItemsResponse lists items most urgent first (PRs needing the
+/// user, by attention), then by repo and title.
+public nonisolated struct Orchd_V1_ListGitHubItemsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var items: [Orchd_V1_GitHubItem] = []
+
+  /// unix seconds the cache was last written; 0 = never
+  public var updatedAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_GitHubItem: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var url: String = String()
+
+  public var title: String = String()
+
+  /// owner/name
+  public var repo: String = String()
+
+  /// pr | issue
+  public var kind: String = String()
+
+  public var number: Int32 = 0
+
+  public var author: String = String()
+
+  /// RFC 3339
+  public var updatedAt: String = String()
+
+  public var isDraft: Bool = false
+
+  /// PRs the user authored or was asked to review
+  public var ciState: String = String()
+
+  public var reviewDecision: String = String()
+
+  public var mergeable: String = String()
+
+  /// authored | assigned | review_requested | involved | all_open
+  public var reasons: [String] = []
+
+  /// as on PullRequest; empty for issues
+  public var attention: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "orchd.v1"
@@ -3253,6 +3328,166 @@ nonisolated extension Orchd_V1_GitHubRepo: SwiftProtobuf.Message, SwiftProtobuf.
     if lhs.name != rhs.name {return false}
     if lhs.`private` != rhs.`private` {return false}
     if lhs.archived != rhs.archived {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListGitHubItemsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListGitHubItemsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}owner\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListGitHubItemsRequest, rhs: Orchd_V1_ListGitHubItemsRequest) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.owner != rhs.owner {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListGitHubItemsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListGitHubItemsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}items\0\u{3}updated_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.items) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.updatedAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.items.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.items, fieldNumber: 1)
+    }
+    if self.updatedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.updatedAt, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListGitHubItemsResponse, rhs: Orchd_V1_ListGitHubItemsResponse) -> Bool {
+    if lhs.items != rhs.items {return false}
+    if lhs.updatedAt != rhs.updatedAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_GitHubItem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GitHubItem"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}title\0\u{1}repo\0\u{1}kind\0\u{1}number\0\u{1}author\0\u{3}updated_at\0\u{3}is_draft\0\u{3}ci_state\0\u{3}review_decision\0\u{1}mergeable\0\u{1}reasons\0\u{1}attention\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.url) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.repo) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 5: try { try decoder.decodeSingularInt32Field(value: &self.number) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.author) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.updatedAt) }()
+      case 8: try { try decoder.decodeSingularBoolField(value: &self.isDraft) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.ciState) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.reviewDecision) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.mergeable) }()
+      case 12: try { try decoder.decodeRepeatedStringField(value: &self.reasons) }()
+      case 13: try { try decoder.decodeSingularStringField(value: &self.attention) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.url.isEmpty {
+      try visitor.visitSingularStringField(value: self.url, fieldNumber: 1)
+    }
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 2)
+    }
+    if !self.repo.isEmpty {
+      try visitor.visitSingularStringField(value: self.repo, fieldNumber: 3)
+    }
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 4)
+    }
+    if self.number != 0 {
+      try visitor.visitSingularInt32Field(value: self.number, fieldNumber: 5)
+    }
+    if !self.author.isEmpty {
+      try visitor.visitSingularStringField(value: self.author, fieldNumber: 6)
+    }
+    if !self.updatedAt.isEmpty {
+      try visitor.visitSingularStringField(value: self.updatedAt, fieldNumber: 7)
+    }
+    if self.isDraft != false {
+      try visitor.visitSingularBoolField(value: self.isDraft, fieldNumber: 8)
+    }
+    if !self.ciState.isEmpty {
+      try visitor.visitSingularStringField(value: self.ciState, fieldNumber: 9)
+    }
+    if !self.reviewDecision.isEmpty {
+      try visitor.visitSingularStringField(value: self.reviewDecision, fieldNumber: 10)
+    }
+    if !self.mergeable.isEmpty {
+      try visitor.visitSingularStringField(value: self.mergeable, fieldNumber: 11)
+    }
+    if !self.reasons.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.reasons, fieldNumber: 12)
+    }
+    if !self.attention.isEmpty {
+      try visitor.visitSingularStringField(value: self.attention, fieldNumber: 13)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_GitHubItem, rhs: Orchd_V1_GitHubItem) -> Bool {
+    if lhs.url != rhs.url {return false}
+    if lhs.title != rhs.title {return false}
+    if lhs.repo != rhs.repo {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.number != rhs.number {return false}
+    if lhs.author != rhs.author {return false}
+    if lhs.updatedAt != rhs.updatedAt {return false}
+    if lhs.isDraft != rhs.isDraft {return false}
+    if lhs.ciState != rhs.ciState {return false}
+    if lhs.reviewDecision != rhs.reviewDecision {return false}
+    if lhs.mergeable != rhs.mergeable {return false}
+    if lhs.reasons != rhs.reasons {return false}
+    if lhs.attention != rhs.attention {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

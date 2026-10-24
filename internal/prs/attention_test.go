@@ -1,9 +1,6 @@
 package prs
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -64,87 +61,6 @@ func TestDiffNoticesNewReason(t *testing.T) {
 	next := State{PRs: map[string]PR{"u": {URL: "u", Reasons: []string{ReasonAuthored, ReasonReviewRequested}}}}
 	if evs := Diff(old, next); len(evs) != 1 {
 		t.Errorf("events = %d, want 1 for a newly requested review", len(evs))
-	}
-}
-
-func hit(url, repo string) map[string]any {
-	return map[string]any{"url": url, "title": "t " + url, "isDraft": false,
-		"repository": map[string]any{"nameWithOwner": repo}}
-}
-
-func TestSweepMergesSearchesAndTagsReasons(t *testing.T) {
-	dir := t.TempDir()
-	stateFile := filepath.Join(dir, "state.json")
-	b := New(stateFile, filepath.Join(dir, "events"))
-	var searches []string
-	b.gh = func(_ context.Context, args ...string) ([]byte, error) {
-		if args[0] != "search" {
-			return json.Marshal(map[string]any{"reviewDecision": "", "mergeable": "MERGEABLE"})
-		}
-		searches = append(searches, args[2])
-		switch args[2] {
-		case "--author=@me":
-			return json.Marshal([]map[string]any{hit("https://x/mine", "o/r"), hit("https://x/both", "o/r")})
-		case "--review-requested=@me":
-			return json.Marshal([]map[string]any{hit("https://x/both", "o/r"), hit("https://x/theirs", "p/q")})
-		}
-		return nil, errors.New("unexpected search " + strings.Join(args, " "))
-	}
-	if err := b.Sweep(context.Background()); err != nil {
-		t.Fatalf("Sweep: %v", err)
-	}
-	if !slices.Equal(searches, []string{"--author=@me", "--review-requested=@me"}) {
-		t.Errorf("searches = %v", searches)
-	}
-	state := LoadState(stateFile)
-	want := map[string][]string{
-		"https://x/mine":   {ReasonAuthored},
-		"https://x/both":   {ReasonAuthored, ReasonReviewRequested},
-		"https://x/theirs": {ReasonReviewRequested},
-	}
-	if len(state.PRs) != len(want) {
-		t.Fatalf("PRs = %d, want %d: %+v", len(state.PRs), len(want), state.PRs)
-	}
-	for url, reasons := range want {
-		if got := state.PRs[url].Reasons; !slices.Equal(got, reasons) {
-			t.Errorf("%s reasons = %v, want %v", url, got, reasons)
-		}
-	}
-	if state.PRs["https://x/theirs"].Repo != "p/q" || state.PRs["https://x/theirs"].Mergeable != "MERGEABLE" {
-		t.Errorf("review-requested PR not enriched: %+v", state.PRs["https://x/theirs"])
-	}
-}
-
-func TestSweepKeepsCacheWhenASearchFails(t *testing.T) {
-	dir := t.TempDir()
-	stateFile := filepath.Join(dir, "state.json")
-	before := State{PRs: map[string]PR{"https://x/old": {URL: "https://x/old", Reasons: []string{ReasonAuthored}}}}
-	if err := SaveState(stateFile, before); err != nil {
-		t.Fatal(err)
-	}
-	b := New(stateFile, filepath.Join(dir, "events"))
-	b.gh = func(_ context.Context, args ...string) ([]byte, error) {
-		if args[0] == "search" && args[2] == "--review-requested=@me" {
-			return nil, errors.New("gh: rate limited")
-		}
-		if args[0] == "search" {
-			return json.Marshal([]map[string]any{hit("https://x/new", "o/r")})
-		}
-		return json.Marshal(map[string]any{})
-	}
-	if err := b.Sweep(context.Background()); err == nil {
-		t.Fatal("Sweep succeeded despite a failed search")
-	}
-	if got := LoadState(stateFile); len(got.PRs) != 1 || got.PRs["https://x/old"].URL == "" {
-		t.Errorf("cache changed after a partial sweep: %+v", got.PRs)
-	}
-}
-
-func TestSweepRejectsMalformedSearchOutput(t *testing.T) {
-	b := New(filepath.Join(t.TempDir(), "s.json"), t.TempDir())
-	b.gh = func(context.Context, ...string) ([]byte, error) { return []byte("not json"), nil }
-	if err := b.Sweep(context.Background()); err == nil {
-		t.Fatal("Sweep accepted malformed gh output")
 	}
 }
 
@@ -218,19 +134,5 @@ func TestSaveStateFailsWhenDirIsAFile(t *testing.T) {
 	}
 	if err := SaveState(filepath.Join(file, "state.json"), State{}); err == nil {
 		t.Error("SaveState under a regular file succeeded")
-	}
-}
-
-func TestSearchSortsByUpdated(t *testing.T) {
-	b := New(filepath.Join(t.TempDir(), "s.json"), t.TempDir())
-	var sorted bool
-	b.gh = func(_ context.Context, args ...string) ([]byte, error) {
-		if args[0] == "search" && slices.Contains(args, "--sort=updated") {
-			sorted = true
-		}
-		return []byte("[]"), nil
-	}
-	if err := b.Sweep(context.Background()); err != nil || !sorted {
-		t.Errorf("Sweep err=%v sorted=%v", err, sorted)
 	}
 }

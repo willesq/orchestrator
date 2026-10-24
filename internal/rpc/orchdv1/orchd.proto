@@ -57,6 +57,9 @@ service Orchd {
   rpc SetGitHubScope(SetGitHubScopeRequest) returns (SetGitHubScopeResponse);
   // ListGitHubRepos lists the repos the user can see under an owner.
   rpc ListGitHubRepos(ListGitHubReposRequest) returns (ListGitHubReposResponse);
+  // ListGitHubItems serves the watcher's cache: open PRs and issues in the
+  // enabled scopes, each with why it is watched. Never calls gh.
+  rpc ListGitHubItems(ListGitHubItemsRequest) returns (ListGitHubItemsResponse);
 }
 
 message PingRequest {}
@@ -410,4 +413,33 @@ message GitHubRepo {
   string name = 1;
   bool private = 2;
   bool archived = 3;
+}
+
+message ListGitHubItemsRequest {
+  string kind = 1;  // optional: pr | issue
+  string owner = 2; // optional: one account or org
+}
+
+// ListGitHubItemsResponse lists items most urgent first (PRs needing the
+// user, by attention), then by repo and title.
+message ListGitHubItemsResponse {
+  repeated GitHubItem items = 1;
+  int64 updated_at = 2; // unix seconds the cache was last written; 0 = never
+}
+
+message GitHubItem {
+  string url = 1;
+  string title = 2;
+  string repo = 3;        // owner/name
+  string kind = 4;        // pr | issue
+  int32 number = 5;
+  string author = 6;
+  string updated_at = 7;  // RFC 3339
+  bool is_draft = 8;
+  string ci_state = 9;    // PRs the user authored or was asked to review
+  string review_decision = 10;
+  string mergeable = 11;
+  // authored | assigned | review_requested | involved | all_open
+  repeated string reasons = 12;
+  string attention = 13;  // as on PullRequest; empty for issues
 }

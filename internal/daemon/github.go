@@ -8,6 +8,8 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/willesq/orchestrator/internal/github"
+	"github.com/willesq/orchestrator/internal/handoff"
+	"github.com/willesq/orchestrator/internal/prs"
 	"github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
@@ -87,6 +89,9 @@ func (s *server) SetGitHubScope(ctx context.Context, req *orchdv1.SetGitHubScope
 	if err != nil {
 		return nil, grpcstatus.Error(codes.InvalidArgument, err.Error())
 	}
+	// Sweep now rather than at the next poll, so the change shows within
+	// seconds; a failure only means waiting for the regular poll.
+	_ = handoff.RequestPRSweep(s.handoffDir)
 	return &orchdv1.SetGitHubScopeResponse{Scope: scopePB(stored)}, nil
 }
 
@@ -116,5 +121,28 @@ func scopePB(s github.Scope) *orchdv1.GitHubScope {
 	return &orchdv1.GitHubScope{
 		Owner: s.Owner, Kind: s.Kind, Enabled: s.Enabled, Items: s.Items,
 		RepoMode: s.RepoMode, Repos: s.Repos, UpdatedAt: s.UpdatedAt,
+	}
+}
+
+// watchFrom reports the user's login and scopes to the PR watcher. Without
+// GitHub the scopes cannot be checked against the user's memberships, so the
+// sweep fails and the cache is kept.
+func watchFrom(svc *github.Service) prs.WatchSource {
+	return func(ctx context.Context) (prs.Watch, error) {
+		if svc == nil {
+			return prs.Watch{}, errors.New("GitHub scopes unavailable")
+		}
+		scopes, ghErr, err := svc.Scopes(ctx, false)
+		if err != nil {
+			return prs.Watch{}, err
+		}
+		if ghErr != nil {
+			return prs.Watch{}, ghErr
+		}
+		id, err := svc.Identity(ctx, false)
+		if err != nil {
+			return prs.Watch{}, err
+		}
+		return prs.Watch{Login: id.Login, Scopes: scopes}, nil
 	}
 }

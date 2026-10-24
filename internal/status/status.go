@@ -445,7 +445,13 @@ func docsLine(ctx context.Context, conn *sql.DB, now time.Time) Line {
 func prsLine(now time.Time) Line {
 	path := paths.PRStateFile()
 	st := prs.LoadState(path)
-	l := Line{Name: "pr cache", Value: fmt.Sprintf("%d PRs", len(st.PRs))}
+	var prCount int
+	for _, item := range st.PRs {
+		if item.IsPR() {
+			prCount++
+		}
+	}
+	l := Line{Name: "pr cache", Value: fmt.Sprintf("%d PRs, %d issues", prCount, len(st.PRs)-prCount)}
 	var parts []string
 	if n := len(prs.Filter(st, true, false)); n > 0 {
 		parts = append(parts, fmt.Sprintf("%d blocked", n))
