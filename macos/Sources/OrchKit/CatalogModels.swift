@@ -71,10 +71,16 @@ public final class DocsModel {
         }
     }
 
-    public var fileCount: Int { groups.reduce(0) { $0 + $1.files.count } }
+    public var fileCount: Int { Self.fileCount(groups) }
 
     /// Chunks the shown docs hold in the store.
-    public var chunkCount: Int { groups.reduce(0) { $0 + $1.files.reduce(0) { $0 + $1.chunks } } }
+    public var chunkCount: Int { Self.chunkCount(groups) }
+
+    public static func fileCount(_ groups: [RepoGroup]) -> Int { groups.reduce(0) { $0 + $1.files.count } }
+
+    public static func chunkCount(_ groups: [RepoGroup]) -> Int {
+        groups.reduce(0) { $0 + $1.files.reduce(0) { $0 + $1.chunks } }
+    }
 
     /// Shows one doc: rebuilds it from memory and narrows searches to it.
     public func select(_ file: DocFile?) async {
@@ -136,6 +142,8 @@ public final class RegisteredSourcesModel {
     public let search: SearchModel
 
     private let api: any CatalogAPI
+    /// Bumped per load, so an older reply cannot replace a newer one.
+    private var generation = 0
 
     public init(api: any CatalogAPI & MemoryAPI) {
         self.api = api
@@ -145,8 +153,12 @@ public final class RegisteredSourcesModel {
     public var selected: RegisteredSource? { sources.first { $0.id == selectedID } }
 
     public func load() async {
+        generation += 1
+        let mine = generation
         do {
-            sources = try await api.registeredSources()
+            let fresh = try await api.registeredSources()
+            guard mine == generation else { return }
+            sources = fresh
             loaded = true
             lastError = nil
             if let id = selectedID, !sources.contains(where: { $0.id == id }) { select(nil) }

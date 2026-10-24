@@ -182,10 +182,11 @@ unchanged, `gh repo clone --depth 1` into `<data>/repos`, and store each markdow
 SHA-256 changed (hash saved only after a successful store).
 
 `ListDocs` serves the docs catalog: each owner the registry syncs, its repos with the indexed
-default-branch commit, and every `repo_doc` source the store holds under those owners, with its
-chunk count and GitHub URL, `https://github.com/<owner>/<repo>/blob/<commit>/<path>`. The files
-come from the store, not the registry, so a doc whose ingest failed or whose content was deleted is
-not listed.
+default-branch commit, and every doc that both the store holds and the registry recorded, with its
+chunk count and GitHub URL, `https://github.com/<owner>/<repo>/blob/<commit>/<path>`. Requiring
+both leaves out a doc whose ingest failed or whose content was deleted, and anything another
+client stored under a `repo://` URI (only orchd's sync writes the registry), including a local
+owner folder that shares a synced owner's name. The reply stops at 10,000 files or 3 MiB.
 The URL is pinned to the indexed commit, so the page shows the version that was indexed; with no
 commit recorded it uses `HEAD`. `GetDocument` rebuilds any indexed source from its chunks (the
 same rebuild the hybrid migration uses). It links the original only for a `web` source or a synced

@@ -11,6 +11,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/docs"
@@ -98,7 +99,8 @@ func TestListDocs(t *testing.T) {
 	r.indexed = []indexedDoc{
 		{uri: "repo://willesq/orchestrator/README.md", sourceType: "repo_doc"},
 		{uri: "repo://willesq/orchestrator/docs/a b.md", sourceType: "repo_doc"},
-		// In the store but not in the registry: listed, without a commit link.
+		// In the store but not recorded by the docs sync (a forged memory, or a
+		// local owner folder of the same name): left out.
 		{uri: "repo://willesq/scratch/NOTES.md", sourceType: "repo_doc"},
 		// Not a synced owner's, or not a doc: left out.
 		{uri: "repo://local/app/README.md", sourceType: "repo_doc"},
@@ -117,8 +119,8 @@ func TestListDocs(t *testing.T) {
 	}
 	files := resp.GetFiles()
 	// The registry also recorded repo://bad, which the store does not hold.
-	if len(files) != 3 {
-		t.Fatalf("files = %v, want the synced owner's three stored docs", files)
+	if len(files) != 2 {
+		t.Fatalf("files = %v, want the two docs both stored and recorded", files)
 	}
 	got := map[string]string{}
 	for _, f := range files {
@@ -127,8 +129,8 @@ func TestListDocs(t *testing.T) {
 			t.Errorf("%s chunks = %d, want the store's count", f.GetPath(), f.GetChunks())
 		}
 	}
-	if u, ok := got["NOTES.md"]; !ok || u != "" {
-		t.Errorf("untracked repo doc url = %q (listed %v), want listed without a link", u, ok)
+	if _, ok := got["NOTES.md"]; ok {
+		t.Error("a doc the sync never recorded was listed")
 	}
 	if files[0].GetUpdatedAt() != 200 {
 		t.Errorf("updated_at = %d, want the registry's change time", files[0].GetUpdatedAt())
@@ -398,11 +400,35 @@ func TestListDocsIsBounded(t *testing.T) {
 	ctx := context.Background()
 	s, r, _ := catalogServer(t)
 	for i := range maxDocFiles + 5 {
-		r.indexed = append(r.indexed, indexedDoc{uri: fmt.Sprintf("repo://willesq/orchestrator/f%05d.md", i), sourceType: "repo_doc"})
+		uri := fmt.Sprintf("repo://willesq/orchestrator/f%05d.md", i)
+		r.indexed = append(r.indexed, indexedDoc{uri: uri, sourceType: "repo_doc"})
+		if err := s.docsReg.SetHash(ctx, uri, "h", 1); err != nil {
+			t.Fatal(err)
+		}
 	}
 	resp, err := s.ListDocs(ctx, &orchdv1.ListDocsRequest{})
 	if err != nil || len(resp.GetFiles()) != maxDocFiles || !resp.GetTruncated() {
 		t.Errorf("files = %d, truncated %v, err %v", len(resp.GetFiles()), resp.GetTruncated(), err)
+	}
+}
+
+func TestListDocsFitsTheMessageLimit(t *testing.T) {
+	ctx := context.Background()
+	s, r, _ := catalogServer(t)
+	long := strings.Repeat("deeply/nested/", 30)
+	for i := range 6000 {
+		uri := fmt.Sprintf("repo://willesq/orchestrator/%s%05d.md", long, i)
+		r.indexed = append(r.indexed, indexedDoc{uri: uri, sourceType: "repo_doc"})
+		if err := s.docsReg.SetHash(ctx, uri, "h", 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resp, err := s.ListDocs(ctx, &orchdv1.ListDocsRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size := proto.Size(resp); size > 4<<20 || !resp.GetTruncated() {
+		t.Errorf("reply is %d bytes with %d files (truncated %v); want under 4 MiB and truncated", size, len(resp.GetFiles()), resp.GetTruncated())
 	}
 }
 

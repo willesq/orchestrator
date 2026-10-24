@@ -212,6 +212,18 @@ private func file(_ owner: String, _ repo: String, _ path: String) -> DocFile {
         #expect(model.selected == nil && model.search.query.allTags.isEmpty)
     }
 
+    @Test func aStaleLoadCannotReplaceANewerOne() async throws {
+        let api = SlowSources()
+        let model = RegisteredSourcesModel(api: api)
+        api.reply = ([RegisteredSource(id: "old", kind: .web, uri: "old")], .milliseconds(200))
+        let first = Task { await model.load() }
+        try await Task.sleep(for: .milliseconds(20))
+        api.reply = ([], .zero)
+        await model.load()
+        await first.value
+        #expect(model.sources.isEmpty, "the older, slower reply must not win")
+    }
+
     @Test func reportsFailures() async {
         let api = FakeCatalog()
         api.fail = true
@@ -264,6 +276,16 @@ private func file(_ owner: String, _ repo: String, _ path: String) -> DocFile {
         #expect(Set(SourceKind.allCases.map(\.label)).count == 3)
         #expect(SourceKind.allCases.allSatisfy { !$0.placeholder.isEmpty })
         #expect(file("o", "r", "p").repoTags == ["owner:o", "repo:r"])
+    }
+}
+
+@Suite struct DisplaySafeTests {
+    @Test func escapesControlAndBidi() {
+        #expect(displaySafe("docs/README.md") == "docs/README.md")
+        #expect(displaySafe("evil\u{202E}dm.exe") == "evil\\u{202E}dm.exe")
+        #expect(displaySafe("a\nb\u{1B}") == "a\\u{000A}b\\u{001B}")
+        #expect(isPlain("repo://o/r/a b.md"))
+        #expect(!isPlain("repo://o/r/a\nrm -rf"))
     }
 }
 
@@ -377,4 +399,23 @@ private func file(_ owner: String, _ repo: String, _ path: String) -> DocFile {
             #expect(search?.sourceUri == "u" && search?.allTags == ["owner:o"])
         }
     }
+}
+
+/// Answers registeredSources after a delay chosen per call.
+private final class SlowSources: CatalogAPI, MemoryAPI, @unchecked Sendable {
+    var reply: ([RegisteredSource], Duration) = ([], .zero)
+
+    func registeredSources() async throws -> [RegisteredSource] {
+        let (sources, delay) = reply
+        try await Task.sleep(for: delay)
+        return sources
+    }
+
+    func listDocs() async throws -> DocCatalog { DocCatalog(owners: [], files: []) }
+    func document(uri: String) async throws -> RebuiltDocument { RebuiltDocument(sourceURI: uri, text: "") }
+    func saveSource(_ draft: SourceDraft, replacing: String?) async throws -> RegisteredSource { throw Down() }
+    func removeSource(id: String, purge: Bool) async throws -> PurgeResult { throw Down() }
+    func refreshSource(id: String?) async throws {}
+    func search(_ query: SearchQuery) async throws -> SearchResult { SearchResult(hits: [], fallback: nil) }
+    func listSources(type: String, limit: Int) async throws -> SourceList { SourceList(sources: [], totalSources: 0, totalChunks: 0) }
 }

@@ -45,7 +45,7 @@ private struct SourceTable: View {
         VStack(spacing: 0) {
             Table(model.sources, selection: Binding(get: { model.selectedID }, set: { model.select($0) })) {
                 TableColumn("Source") { s in
-                    Label { Text(verbatim: s.uri).lineLimit(1).truncationMode(.middle).help(s.uri) } icon: {
+                    Label { Text(verbatim: displaySafe(s.uri)).lineLimit(1).truncationMode(.middle).help(displaySafe(s.uri)) } icon: {
                         Image(systemName: symbol(s.kind))
                     }
                 }
@@ -98,7 +98,7 @@ private struct SourceDetail: View {
         if let source = model.selected {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(verbatim: source.uri).font(.title3.weight(.semibold)).textSelection(.enabled).lineLimit(3)
+                    Text(verbatim: displaySafe(source.uri)).font(.title3.weight(.semibold)).textSelection(.enabled).lineLimit(3)
                     Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
                         row("Kind", source.kind?.label ?? "unknown")
                         row("Status", source.status)
@@ -110,6 +110,7 @@ private struct SourceDetail: View {
                     HStack {
                         if let url = webSourceURL(source.webURL) {
                             Link(destination: url) { Label("Open", systemImage: "arrow.up.right.square") }
+                                .help(url.absoluteString)
                         }
                         Button("Edit…") { onEdit(source) }
                         Button("Refresh now") { Task { await model.refresh(source) } }

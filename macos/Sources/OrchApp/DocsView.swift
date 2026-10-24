@@ -29,6 +29,8 @@ private struct DocList: View {
     @Bindable var model: DocsModel
 
     var body: some View {
+        // Grouped once per update rather than once per use.
+        let groups = model.groups
         VStack(spacing: 0) {
             TextField("Filter by path or repo", text: $model.filter)
                 .textFieldStyle(.roundedBorder)
@@ -40,11 +42,11 @@ private struct DocList: View {
                     .padding(.horizontal, 8)
             }
             List(selection: Binding(get: { model.selected }, set: { file in Task { await model.select(file) } })) {
-                ForEach(model.groups) { group in
+                ForEach(groups) { group in
                     Section {
                         ForEach(group.files) { file in
                             HStack {
-                                Text(verbatim: file.path)
+                                Text(verbatim: displaySafe(file.path))
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                                 Spacer()
@@ -52,7 +54,7 @@ private struct DocList: View {
                                     .font(.caption.monospacedDigit())
                                     .foregroundStyle(.tertiary)
                             }
-                            .help("\(file.path): \(file.chunks) chunk\(file.chunks == 1 ? "" : "s") in memory")
+                            .help("\(displaySafe(file.path)): \(file.chunks) chunk\(file.chunks == 1 ? "" : "s") in memory")
                             .tag(file)
                         }
                     } header: {
@@ -61,7 +63,7 @@ private struct DocList: View {
                 }
             }
             .overlay {
-                if model.catalog != nil && model.groups.isEmpty {
+                if model.catalog != nil && groups.isEmpty {
                     Text(model.filter.isEmpty ? "No synced docs are in memory. Add an owner with: orch docs add <owner>" : "No docs match.")
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
@@ -70,7 +72,7 @@ private struct DocList: View {
             }
             Divider()
             HStack {
-                Text("\(model.fileCount) docs · \(model.chunkCount) chunks in memory")
+                Text("\(DocsModel.fileCount(groups)) docs · \(DocsModel.chunkCount(groups)) chunks in memory")
                 if model.catalog?.truncated == true {
                     Text("(first \(model.catalog?.files.count ?? 0) shown)")
                 }
@@ -88,7 +90,7 @@ private struct RepoHeader: View {
 
     var body: some View {
         HStack {
-            Text(verbatim: "\(group.owner)/\(group.repo)").font(.subheadline.weight(.semibold))
+            Text(verbatim: displaySafe("\(group.owner)/\(group.repo)")).font(.subheadline.weight(.semibold))
             Spacer()
             if let info = group.info, let synced = info.lastSynced {
                 Text("synced \(synced, format: .relative(presentation: .named))")
@@ -127,9 +129,9 @@ private struct DocDetail: View {
 
     private func header(_ file: DocFile) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: file.path).font(.title3.weight(.semibold)).textSelection(.enabled)
+            Text(verbatim: displaySafe(file.path)).font(.title3.weight(.semibold)).textSelection(.enabled)
             HStack(spacing: 6) {
-                Text(verbatim: "\(file.owner)/\(file.repo)")
+                Text(verbatim: displaySafe("\(file.owner)/\(file.repo)"))
                 if let updated = file.updatedAt {
                     Text("· indexed \(updated, format: .relative(presentation: .named))")
                 }
@@ -147,7 +149,10 @@ private struct DocDetail: View {
                 } label: {
                     Label("Copy memory address", systemImage: "doc.on.doc")
                 }
-                .help(file.sourceURI)
+                // An address with control characters could run as more than one
+                // command when pasted into a terminal.
+                .disabled(!isPlain(file.sourceURI))
+                .help(displaySafe(file.sourceURI))
             }
             .controlSize(.small)
         }
@@ -193,15 +198,8 @@ private struct DocumentText: View {
                         .padding(12)
                     Spacer()
                 } else {
-                    ScrollView {
-                        // Indexed content: shown verbatim, never rendered.
-                        Text(verbatim: doc.text)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
-                    }
-                    .background(Color(nsColor: .textBackgroundColor))
+                    // Indexed content: shown verbatim, never rendered.
+                    PlainTextView(text: doc.text)
                 }
             }
         }
@@ -246,7 +244,7 @@ struct ScopedSearch<Scope: Hashable & Identifiable & RawRepresentable>: View whe
                         HStack {
                             Text(String(format: "%.3f", hit.score)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                             Button { onOpen(hit.sourceURI) } label: {
-                                Text(verbatim: hit.sourceURI).font(.caption).lineLimit(1).truncationMode(.middle)
+                                Text(verbatim: displaySafe(hit.sourceURI)).font(.caption).lineLimit(1).truncationMode(.middle)
                             }
                             .buttonStyle(.link)
                         }
@@ -264,4 +262,31 @@ struct ScopedSearch<Scope: Hashable & Identifiable & RawRepresentable>: View whe
 enum NoScope: String, CaseIterable, Identifiable {
     case only = ""
     var id: String { rawValue }
+}
+
+/// Read-only, selectable plain text in an NSTextView, which lays out only what
+/// is visible: a multi-megabyte document in a SwiftUI Text would block the
+/// main thread while every line is laid out.
+struct PlainTextView: NSViewRepresentable {
+    let text: String
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scroll = NSTextView.scrollableTextView()
+        if let view = scroll.documentView as? NSTextView {
+            view.isEditable = false
+            view.isSelectable = true
+            view.isRichText = false
+            view.usesFindBar = true
+            view.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+            view.textContainerInset = NSSize(width: 8, height: 8)
+            view.layoutManager?.allowsNonContiguousLayout = true
+        }
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSScrollView, context: Context) {
+        guard let view = scroll.documentView as? NSTextView, view.string != text else { return }
+        view.string = text
+        view.scrollToBeginningOfDocument(nil)
+    }
 }

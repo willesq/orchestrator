@@ -273,3 +273,22 @@ public func webSourceURL(_ raw: String) -> URL? {
     else { return nil }
     return url
 }
+
+/// A name from indexed or third-party content (a path, a URI) made safe to
+/// show: control, format and bidi characters become visible escapes, so a
+/// name cannot pose as another or hide a line break.
+public func displaySafe(_ s: String) -> String {
+    var out = ""
+    for scalar in s.unicodeScalars {
+        if scalar.properties.generalCategory == .control || scalar.properties.generalCategory == .format {
+            out += String(format: "\\u{%04X}", scalar.value)
+        } else {
+            out.unicodeScalars.append(scalar)
+        }
+    }
+    return out
+}
+
+/// Whether a string is free of control and format characters, so it can be
+/// copied for pasting into a terminal as is.
+public func isPlain(_ s: String) -> Bool { displaySafe(s) == s }

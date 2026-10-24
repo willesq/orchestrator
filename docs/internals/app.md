@@ -105,9 +105,12 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     - **Restarts:** when orchd restarts, its numbering starts over, so the view starts over too.
     - **Text:** log text is shown verbatim and never rendered.
 - **Docs:** what `orch docs` keeps in memory: the synced owners' docs as the store holds them, by
-  repo, with a filter and each doc's chunk count (`ListDocs`).
+  repo, with a filter and each doc's chunk count (`ListDocs`). Paths and addresses show control
+  and bidi characters as escapes, and an address containing them cannot be copied.
   - **Reading:** choosing a doc rebuilds it from its chunks (`GetDocument`). The text is shown
-    verbatim and labelled as a rebuild, because it is close to the original but not exact.
+    verbatim and labelled as a rebuild, because it is close to the original but not exact. It is
+    shown in a read-only text view that lays out only what is visible, so a large doc does not
+    block the window.
   - **Open on GitHub:** opens the file at the commit that was indexed, and only an exact
     `https://github.com/<owner>/<repo>/blob/<ref>/<path>` URL.
   - **Search:** within this doc (`source_uri`) or this repo (`all_tags` `owner:` and `repo:`). A hit
