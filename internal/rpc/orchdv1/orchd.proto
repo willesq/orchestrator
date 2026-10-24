@@ -60,6 +60,12 @@ service Orchd {
   // ListGitHubItems serves the watcher's cache: open PRs and issues in the
   // enabled scopes, each with why it is watched. Never calls gh.
   rpc ListGitHubItems(ListGitHubItemsRequest) returns (ListGitHubItemsResponse);
+  // TailLogs returns orchd's recent log lines, kept in memory, after a
+  // sequence number, so a caller can poll for new lines.
+  rpc TailLogs(TailLogsRequest) returns (TailLogsResponse);
+  // GetSystemMetrics reports resource use of orchd and the processes it runs,
+  // the size of its data, and task counts.
+  rpc GetSystemMetrics(GetSystemMetricsRequest) returns (SystemMetrics);
 }
 
 message PingRequest {}
@@ -442,4 +448,52 @@ message GitHubItem {
   // authored | assigned | review_requested | involved | all_open
   repeated string reasons = 12;
   string attention = 13;  // as on PullRequest; empty for issues
+}
+
+message TailLogsRequest {
+  uint64 after_seq = 1; // only lines newer than this; 0 = from the oldest kept
+  string source = 2;    // optional: one source, such as orchd or qdrant
+  int32 limit = 3;      // most lines to return, newest kept; 0 = 500
+}
+
+message TailLogsResponse {
+  repeated LogEntry entries = 1; // oldest first
+  uint64 last_seq = 2;   // newest sequence logged; pass back as after_seq
+  uint64 oldest_seq = 3; // oldest still kept; a gap means lines were dropped
+  repeated string sources = 4; // every source seen so far, sorted
+}
+
+message LogEntry {
+  uint64 seq = 1;
+  int64 at_unix_ms = 2;
+  string source = 3;
+  string message = 4;
+}
+
+message GetSystemMetricsRequest {}
+
+message SystemMetrics {
+  int64 at_unix_ms = 1;
+  repeated ProcessMetrics processes = 2;
+  int32 goroutines = 3;
+  uint64 heap_bytes = 4;     // orchd's live Go heap
+  repeated DataSize data = 5;
+  map<string, int32> tasks = 6; // task count by status
+}
+
+// ProcessMetrics describes one OS process orchd runs or depends on.
+message ProcessMetrics {
+  string name = 1;  // orchd | qdrant
+  int32 pid = 2;    // 0 when not running
+  uint64 rss_bytes = 3;
+  double cpu_percent = 4; // of one core, since the previous call (or start)
+  int64 uptime_seconds = 5;
+  bool running = 6;
+}
+
+// DataSize is the on-disk size of one of orchd's stores.
+message DataSize {
+  string name = 1;
+  string path = 2;
+  uint64 bytes = 3;
 }

@@ -104,7 +104,7 @@ func summarizeOne(ctx context.Context, s sessionSummarizer, ing summaryIngester,
 	defer cancel()
 	summary, err := s.Summarize(jobCtx, msgs)
 	if err != nil {
-		log.Printf("session %s: summary skipped: %v", j.SessionID, err)
+		log.Printf("session-summarizer: session %s: summary skipped: %v", j.SessionID, err)
 		return
 	}
 	// On disk first, under the session's lock: a hand-off storing the record
@@ -126,7 +126,7 @@ func summarizeOne(ctx context.Context, s sessionSummarizer, ing summaryIngester,
 		SourceURI: "session://" + j.SessionID + "/record", SourceType: "session_record", Tags: j.Tags,
 		StartedAt: start, EndedAt: end,
 	}); err != nil {
-		log.Printf("session %s: store summary: %v", j.SessionID, err)
+		log.Printf("session-summarizer: session %s: store summary: %v", j.SessionID, err)
 	}
 }
 

@@ -293,6 +293,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "TailLogs" metadata.
+        public enum TailLogs: Sendable {
+            /// Request type for "TailLogs".
+            public typealias Input = Orchd_V1_TailLogsRequest
+            /// Response type for "TailLogs".
+            public typealias Output = Orchd_V1_TailLogsResponse
+            /// Descriptor for "TailLogs".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "TailLogs",
+                type: .unary
+            )
+        }
+        /// Namespace for "GetSystemMetrics" metadata.
+        public enum GetSystemMetrics: Sendable {
+            /// Request type for "GetSystemMetrics".
+            public typealias Input = Orchd_V1_GetSystemMetricsRequest
+            /// Response type for "GetSystemMetrics".
+            public typealias Output = Orchd_V1_SystemMetrics
+            /// Descriptor for "GetSystemMetrics".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetSystemMetrics",
+                type: .unary
+            )
+        }
         /// Descriptors for all methods in the "orchd.v1.Orchd" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             Ping.descriptor,
@@ -315,7 +341,9 @@ public enum Orchd_V1_Orchd: Sendable {
             ListGitHubScopes.descriptor,
             SetGitHubScope.descriptor,
             ListGitHubRepos.descriptor,
-            ListGitHubItems.descriptor
+            ListGitHubItems.descriptor,
+            TailLogs.descriptor,
+            GetSystemMetrics.descriptor
         ]
     }
 }
@@ -832,6 +860,54 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListGitHubItemsResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListGitHubItemsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "TailLogs" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > TailLogs returns orchd's recent log lines, kept in memory, after a
+        /// > sequence number, so a caller can poll for new lines.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_TailLogsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_TailLogsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_TailLogsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func tailLogs<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_TailLogsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_TailLogsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_TailLogsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_TailLogsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetSystemMetrics" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetSystemMetrics reports resource use of orchd and the processes it runs,
+        /// > the size of its data, and task counts.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetSystemMetricsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetSystemMetricsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SystemMetrics` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getSystemMetrics<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetSystemMetricsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetSystemMetricsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SystemMetrics>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SystemMetrics>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -1580,6 +1656,76 @@ extension Orchd_V1_Orchd {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "TailLogs" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > TailLogs returns orchd's recent log lines, kept in memory, after a
+        /// > sequence number, so a caller can poll for new lines.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_TailLogsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_TailLogsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_TailLogsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func tailLogs<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_TailLogsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_TailLogsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_TailLogsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_TailLogsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.TailLogs.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetSystemMetrics" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetSystemMetrics reports resource use of orchd and the processes it runs,
+        /// > the size of its data, and task counts.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetSystemMetricsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetSystemMetricsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SystemMetrics` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getSystemMetrics<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetSystemMetricsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetSystemMetricsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SystemMetrics>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SystemMetrics>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetSystemMetrics.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -2201,6 +2347,66 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListGitHubItemsRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListGitHubItemsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "TailLogs" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > TailLogs returns orchd's recent log lines, kept in memory, after a
+    /// > sequence number, so a caller can poll for new lines.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_TailLogsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func tailLogs<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_TailLogsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_TailLogsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.tailLogs(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_TailLogsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_TailLogsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetSystemMetrics" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetSystemMetrics reports resource use of orchd and the processes it runs,
+    /// > the size of its data, and task counts.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetSystemMetricsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getSystemMetrics<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetSystemMetricsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SystemMetrics>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getSystemMetrics(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetSystemMetricsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SystemMetrics>(),
             options: options,
             onResponse: handleResponse
         )
@@ -2908,6 +3114,74 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.listGitHubItems(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "TailLogs" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > TailLogs returns orchd's recent log lines, kept in memory, after a
+    /// > sequence number, so a caller can poll for new lines.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func tailLogs<Result>(
+        _ message: Orchd_V1_TailLogsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_TailLogsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_TailLogsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.tailLogs(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetSystemMetrics" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetSystemMetrics reports resource use of orchd and the processes it runs,
+    /// > the size of its data, and task counts.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getSystemMetrics<Result>(
+        _ message: Orchd_V1_GetSystemMetricsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SystemMetrics>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetSystemMetricsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getSystemMetrics(
             request: request,
             options: options,
             onResponse: handleResponse

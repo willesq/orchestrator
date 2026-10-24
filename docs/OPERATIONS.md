@@ -7,6 +7,19 @@ vector store, on-disk stores and their freshness, harness wiring drift, precondi
 much instruction text each harness loads per session. It works with `orchd` down and always
 exits zero; `orch check` is the pass/fail version. Both take `--json`.
 
+## Logs
+
+```sh
+orch logs                        # the last 100 lines from every source
+orch logs -s qdrant -n 50        # one source
+orch logs -f                     # keep printing new lines
+```
+
+`orchd` keeps its most recent 5000 log lines in memory, tagged by source: `orchd` itself, each
+subsystem, `qdrant` (the engine's own output, in binary mode), `rag` and `database`. The
+service log file (`brew services` writes `$(brew --prefix)/var/log/orch/orchd.log`) keeps
+everything `orchd` logs; the engine's output goes only to memory.
+
 ## Restart
 
 ```sh

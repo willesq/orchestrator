@@ -22,13 +22,15 @@ import (
 	"github.com/willesq/orchestrator/internal/workflows"
 )
 
+// BackendFile is the go-workflows SQLite database.
+func BackendFile() string { return filepath.Join(paths.DataDir(), "workflows.db") }
+
 // NewBackend opens the go-workflows SQLite backend at <data>/workflows.db.
 func NewBackend() (backend.Backend, error) {
 	if err := paths.Ensure(); err != nil {
 		return nil, err
 	}
-	path := filepath.Join(paths.DataDir(), "workflows.db")
-	return sqlite.NewSqliteBackend(path, sqlite.WithApplyMigrations(true)), nil
+	return sqlite.NewSqliteBackend(BackendFile(), sqlite.WithApplyMigrations(true)), nil
 }
 
 // SQLTaskStore persists task results into orch.db (satisfies workflows.TaskStore).
@@ -77,6 +79,25 @@ func (s *SQLTaskStore) SetStatus(ctx context.Context, id, status string) error {
 		`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`,
 		status, id)
 	return err
+}
+
+// CountByStatus counts the tasks in each status.
+func (s *SQLTaskStore) CountByStatus(ctx context.Context) (map[string]int, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT status, COUNT(*) FROM tasks GROUP BY status`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]int{}
+	for rows.Next() {
+		var status string
+		var n int
+		if err := rows.Scan(&status, &n); err != nil {
+			return nil, err
+		}
+		out[status] = n
+	}
+	return out, rows.Err()
 }
 
 // Task is one row of the dispatch ledger.

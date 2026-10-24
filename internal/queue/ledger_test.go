@@ -420,3 +420,34 @@ func TestVerificationIsStored(t *testing.T) {
 		t.Errorf("verification not stored: %+v (err %v)", got, err)
 	}
 }
+
+func TestCountByStatus(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	got, err := store.CountByStatus(ctx)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("empty ledger = %v, %v; want no counts", got, err)
+	}
+	for _, id := range []string{"a", "b", "c"} {
+		if err := store.Create(ctx, task(id, "dev", "x")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SetStatus(ctx, "c", "running"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = store.CountByStatus(ctx)
+	if err != nil {
+		t.Fatalf("CountByStatus: %v", err)
+	}
+	if len(got) != 2 || got["pending"] != 2 || got["running"] != 1 {
+		t.Errorf("counts = %v, want pending 2, running 1", got)
+	}
+
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := store.CountByStatus(cancelled); err == nil {
+		t.Error("CountByStatus on a cancelled context succeeded")
+	}
+}

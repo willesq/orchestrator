@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"github.com/willesq/orchestrator/internal/logs"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -52,12 +53,19 @@ func TestQdrantUnit(t *testing.T) {
 			s.RAG.Qdrant.HTTPPort = port
 			s.RAG.Qdrant.Version = "v1.17.1"
 
-			u, ok := qdrantUnit(s, "")
+			sys := newSystemProbe(logs.NewRing(10))
+			u, ok := qdrantUnit(s, "", sys)
 			if ok != tt.wantOK {
 				t.Fatalf("qdrantUnit ok = %v, want %v", ok, tt.wantOK)
 			}
 			if !ok {
+				if sys.qdrantPID != nil {
+					t.Error("qdrantPID set without a qdrant unit")
+				}
 				return
+			}
+			if sys.qdrantPID == nil {
+				t.Error("qdrantUnit did not hand the probe qdrant's PID")
 			}
 			if u.Name != UnitQdrant || !strings.Contains(u.Detail, portStr) {
 				t.Errorf("unit = %+v, want name %q and the port in Detail", u, UnitQdrant)
@@ -90,7 +98,7 @@ func TestQdrantUnitRunError(t *testing.T) {
 			s.RAG.Qdrant.HTTPPort = 1 // nothing serves here, and the download is bogus
 			s.RAG.Qdrant.Version = "v0.0.0-does-not-exist"
 
-			u, ok := qdrantUnit(s, "")
+			u, ok := qdrantUnit(s, "", nil)
 			if !ok {
 				t.Fatal("expected a unit in binary mode")
 			}

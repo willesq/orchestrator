@@ -2,10 +2,12 @@ package qdrant
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -415,7 +418,8 @@ func TestExecRun(t *testing.T) {
 			if err := os.WriteFile(script, []byte("#!/bin/sh\npwd -P > \""+cwdFile+"\"\nsleep 30\n"), 0o755); err != nil {
 				t.Fatalf("write script: %v", err)
 			}
-			stop, err := execRun(script, dir, os.Environ())
+			var pid atomic.Int64
+			stop, err := execRun(script, dir, os.Environ(), nil, &pid)
 			if err != nil {
 				t.Fatalf("execRun: %v", err)
 			}
@@ -445,3 +449,76 @@ func TestExecRun(t *testing.T) {
 // on a healthy run and is deliberately generous: only a real hang reaches it,
 // never a slow or loaded machine.
 const waitLimit = 30 * time.Second
+
+func TestExecRunCapturesOutputAndPID(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "talk.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho started\necho oops >&2\nsleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var out syncBuffer
+	var pid atomic.Int64
+	stop, err := execRun(script, dir, os.Environ(), &out, &pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pid.Load() == 0 {
+		t.Error("pid not recorded")
+	}
+	for deadline := time.Now().Add(waitLimit); time.Now().Before(deadline) && !strings.Contains(out.String(), "oops"); {
+		time.Sleep(20 * time.Millisecond)
+	}
+	_ = stop()
+	if got := out.String(); !strings.Contains(got, "started") || !strings.Contains(got, "oops") {
+		t.Errorf("output = %q, want stdout and stderr", got)
+	}
+	if pid.Load() != 0 {
+		t.Error("pid kept after stop")
+	}
+}
+
+func TestProvisionerPIDStartsZero(t *testing.T) {
+	if New(Config{}).PID() != 0 {
+		t.Error("a new provisioner reports a pid")
+	}
+}
+
+// syncBuffer is a bytes.Buffer safe for the child's concurrent writes.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func TestExecRunClearsPIDWhenTheProcessDies(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "crash.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nexit 3\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var pid atomic.Int64
+	stop, err := execRun(script, dir, os.Environ(), io.Discard, &pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(waitLimit); time.Now().Before(deadline) && pid.Load() != 0; {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if pid.Load() != 0 {
+		t.Error("a crashed process's pid kept until stop")
+	}
+	if err := stop(); err != nil {
+		t.Errorf("stop after a crash: %v", err)
+	}
+}
