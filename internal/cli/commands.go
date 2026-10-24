@@ -589,6 +589,8 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 		scope      string
 		sourceType string
 		tags       []string
+		allTags    []string
+		uri        string
 		mode       string
 		since      string
 		until      string
@@ -619,6 +621,8 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 				Scope:      scope,
 				SourceType: sourceType,
 				Tags:       tags,
+				AllTags:    allTags,
+				SourceUri:  uri,
 				Mode:       mode,
 				Since:      from,
 				Until:      to,
@@ -660,6 +664,8 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringVar(&scope, "scope", "", "filter by scope")
 	cmd.Flags().StringVar(&sourceType, "type", "", "filter by source type")
 	cmd.Flags().StringSliceVar(&tags, "tag", nil, "filter: any of these tags")
+	cmd.Flags().StringSliceVar(&allTags, "require-tag", nil, "filter: every one of these tags (e.g. owner:willesq,repo:orchestrator)")
+	cmd.Flags().StringVar(&uri, "uri", "", "filter: only this source (exact source URI)")
 	cmd.Flags().StringVar(&mode, "mode", "", "hybrid (keyword + semantic) or dense; default rag.search.mode")
 	addBoundFlags(cmd, &since, &until)
 	return cmd

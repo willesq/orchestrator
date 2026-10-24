@@ -66,6 +66,20 @@ service Orchd {
   // GetSystemMetrics reports resource use of orchd and the processes it runs,
   // the size of its data, and task counts.
   rpc GetSystemMetrics(GetSystemMetricsRequest) returns (SystemMetrics);
+  // ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
+  // repos, and every indexed doc with its GitHub location.
+  rpc ListDocs(ListDocsRequest) returns (ListDocsResponse);
+  // GetDocument rebuilds one indexed source from its stored chunks.
+  rpc GetDocument(GetDocumentRequest) returns (Document);
+  // ListRegisteredSources lists the sources registered for refresh on a
+  // cadence (web URLs, local repos, local owner directories).
+  rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
+  // SaveSource adds or updates a registered source.
+  rpc SaveSource(SaveSourceRequest) returns (RegisteredSource);
+  // RemoveSource unregisters a source, optionally deleting what it indexed.
+  rpc RemoveSource(RemoveSourceRequest) returns (RemoveSourceResponse);
+  // RefreshSource refreshes one registered source, or all, now.
+  rpc RefreshSource(RefreshSourceRequest) returns (RefreshSourceResponse);
 }
 
 message PingRequest {}
@@ -102,6 +116,8 @@ message SearchRequest {
   // optional: only content dated within [since, until] (Unix seconds; 0 = open)
   int64 since = 7;
   int64 until = 8;
+  string source_uri = 9;        // optional: only this source's content
+  repeated string all_tags = 10; // optional: payload.tags contains every one
 }
 
 message SearchResponse {
@@ -496,4 +512,106 @@ message DataSize {
   string name = 1;
   string path = 2;
   uint64 bytes = 3;
+}
+
+message ListDocsRequest {}
+
+message ListDocsResponse {
+  repeated DocOwner owners = 1;
+  repeated DocFile files = 2; // ordered by source_uri
+  bool truncated = 3;         // more files than one reply carries
+}
+
+message DocOwner {
+  string owner = 1;
+  int64 refresh_secs = 2;
+  string scope = 3;
+  repeated string tags = 4;
+  int64 last_synced = 5; // unix seconds; 0 = never
+  string status = 6;
+  repeated DocRepo repos = 7;
+}
+
+message DocRepo {
+  string repo = 1;
+  string head_sha = 2; // the default-branch commit last indexed
+  int64 last_synced = 3;
+  int32 files = 4;
+  string status = 5;
+  string web_url = 6; // https://github.com/<owner>/<repo>
+}
+
+message DocFile {
+  string source_uri = 1; // repo://<owner>/<repo>/<path>
+  string owner = 2;
+  string repo = 3;
+  string path = 4;
+  int64 updated_at = 5; // unix seconds of the last ingest that changed it
+  string web_url = 6;   // the file on GitHub at the indexed commit
+}
+
+message GetDocumentRequest {
+  string source_uri = 1;
+}
+
+// Document is a source rebuilt from its chunks: what retrieval sees, close to
+// but not exactly the original.
+message Document {
+  string source_uri = 1;
+  string source_type = 2;
+  string scope = 3;
+  repeated string tags = 4;
+  string text = 5;
+  int32 chunks = 6;
+  bool malformed = 7; // chunk order was incomplete; text is best effort
+  bool oversize = 8;  // too large to return (over 3 MiB); text is empty
+  string web_url = 9; // where the original lives, when known
+}
+
+message ListRegisteredSourcesRequest {}
+
+message ListRegisteredSourcesResponse {
+  repeated RegisteredSource sources = 1;
+}
+
+message RegisteredSource {
+  string id = 1;   // <kind>|<uri>; set by orchd
+  string kind = 2; // web | repo | owner
+  string uri = 3;  // a URL, an absolute local path, or a directory name
+  string scope = 4;
+  repeated string tags = 5;
+  int64 refresh_secs = 6;
+  int64 last_fetched = 7; // unix seconds; 0 = due now
+  string status = 8;      // new | ok | missing | error
+  string web_url = 9;     // for web sources
+  // What a search within this source passes: source_uri for one URL,
+  // all_tags for a repo or owner's docs.
+  string search_source_uri = 10;
+  repeated string search_all_tags = 11;
+}
+
+message SaveSourceRequest {
+  RegisteredSource source = 1; // kind, uri, scope, tags, refresh_secs
+  // replace_id names the entry being edited when the kind or uri changed;
+  // it is removed once the new one is stored. Its indexed content is kept.
+  string replace_id = 2;
+}
+
+message RemoveSourceRequest {
+  string id = 1;
+  bool purge = 2;   // also delete everything the source indexed
+  bool confirm = 3; // required with purge: deletion is permanent
+}
+
+message RemoveSourceResponse {
+  int32 purged_sources = 1; // indexed sources deleted
+  int32 purged_chunks = 2;
+}
+
+message RefreshSourceRequest {
+  string id = 1; // empty = every source
+}
+
+message RefreshSourceResponse {
+  int32 marked = 1;
 }

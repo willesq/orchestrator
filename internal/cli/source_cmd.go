@@ -38,28 +38,23 @@ func newSourceAddCmd() *cobra.Command {
 		Short: "Register a source (e.g. 'add owner willesq --refresh 24h')",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error {
-			kind := args[0]
-			if kind != sources.KindWeb && kind != sources.KindRepo && kind != sources.KindOwner {
-				return fmt.Errorf("kind must be web, repo, or owner")
-			}
 			d, err := time.ParseDuration(refresh)
 			if err != nil {
 				return fmt.Errorf("invalid --refresh: %w", err)
+			}
+			s := sources.Source{Kind: args[0], URI: args[1], Scope: scope, Tags: tags, RefreshSecs: int64(d.Seconds())}
+			if err := sources.Validate(&s); err != nil {
+				return err
 			}
 			reg, closeFn, err := openRegistry()
 			if err != nil {
 				return err
 			}
 			defer closeFn()
-			owner := ""
-			if kind == sources.KindOwner {
-				owner = args[1]
-			}
-			s := sources.Source{Kind: kind, URI: args[1], Scope: scope, Tags: tags, Owner: owner, RefreshSecs: int64(d.Seconds())}
 			if err := reg.Add(c.Context(), s); err != nil {
 				return err
 			}
-			fmt.Fprintf(c.OutOrStdout(), "added %s source %s (refresh %s)\n", kind, args[1], refresh)
+			fmt.Fprintf(c.OutOrStdout(), "added %s source %s (refresh %s)\n", s.Kind, s.URI, refresh)
 			return nil
 		},
 	}

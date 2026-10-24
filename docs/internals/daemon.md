@@ -65,6 +65,13 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `ListGitHubItems` | kind, owner → items (PRs and issues with kind, number, author, reasons, attention), updated_at | the watcher's cache only, never `gh`; kind `pr`/`issue` or empty (anything else → `InvalidArgument`); owner matched case-insensitively |
 | `TailLogs` | after_seq, source, limit → entries (seq, time, source, message), last_seq, oldest_seq, sources | in-memory lines only; limit default 500, max 5000, and at most 3 MiB, newest kept when more match; `oldest_seq` past the caller's `after_seq` means lines rolled out |
 | `GetSystemMetrics` | → processes (orchd, qdrant: pid, RSS, CPU %, uptime), goroutines, heap, data sizes, task counts by status | read natively through `internal/procstat`, never a command; CPU since the previous call; data sizes cached 30 s; a failed task count leaves `tasks` empty |
+| `Search` filters | source_uri, all_tags | `source_uri` keeps one source; `all_tags` requires every tag (e.g. `owner:o`, `repo:r` for one repo's docs), alongside `tags` (any); each tag list at most 32 tags of 256 bytes |
+| `ListDocs` | → owners (repos, indexed commit), files (URI, path, GitHub URL), truncated | docs registry only; GitHub URLs pinned to the indexed commit; owner and repo names validated before a URL is built; at most 10,000 files |
+| `GetDocument` | source_uri → text, chunks, malformed, oversize, web_url | rebuilt from chunks (see [memory.md](memory.md)); over 3 MiB → `oversize`, no text; nothing indexed → `NotFound`; URI ≤ 4096 bytes |
+| `ListRegisteredSources` | → sources (with how to search within each) | the `sources` registry |
+| `SaveSource` | source, replace_id → source | `sources.Validate` (`InvalidArgument`); upsert by kind and URI; `replace_id` (an edit that changed kind or URI) is removed after the new entry is stored, and must exist (`NotFound`) |
+| `RemoveSource` | id, purge, confirm → purged counts | unknown → `NotFound`; `purge` needs `confirm` (`FailedPrecondition`); content is purged before the source is unregistered, and docs the docs registry owns are kept |
+| `RefreshSource` | id (empty = all) → marked | marks due, then restarts `sources-scheduler`, which refreshes on start; at most one restart per 10 s, so repeated calls cannot keep cutting a refresh short |
 | `ListPRs` | needs_me → PRs (with reasons and attention), updated_at | reads the PR babysitter's cache only, never `gh`; most urgent first, then repo and title; `updated_at` is the cache file's mtime, 0 before the first sweep; an unparseable cache → `Unavailable` |
 
 Dispatch inserts the ledger row before creating the workflow (a row without a workflow is

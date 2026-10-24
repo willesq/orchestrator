@@ -110,6 +110,12 @@ public nonisolated struct Orchd_V1_SearchRequest: Sendable {
 
   public var until: Int64 = 0
 
+  /// optional: only this source's content
+  public var sourceUri: String = String()
+
+  /// optional: payload.tags contains every one
+  public var allTags: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1279,6 +1285,299 @@ public nonisolated struct Orchd_V1_DataSize: Sendable {
   public init() {}
 }
 
+public nonisolated struct Orchd_V1_ListDocsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListDocsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var owners: [Orchd_V1_DocOwner] = []
+
+  /// ordered by source_uri
+  public var files: [Orchd_V1_DocFile] = []
+
+  /// more files than one reply carries
+  public var truncated: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_DocOwner: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var owner: String = String()
+
+  public var refreshSecs: Int64 = 0
+
+  public var scope: String = String()
+
+  public var tags: [String] = []
+
+  /// unix seconds; 0 = never
+  public var lastSynced: Int64 = 0
+
+  public var status: String = String()
+
+  public var repos: [Orchd_V1_DocRepo] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_DocRepo: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var repo: String = String()
+
+  /// the default-branch commit last indexed
+  public var headSha: String = String()
+
+  public var lastSynced: Int64 = 0
+
+  public var files: Int32 = 0
+
+  public var status: String = String()
+
+  /// https://github.com/<owner>/<repo>
+  public var webURL: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_DocFile: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// repo://<owner>/<repo>/<path>
+  public var sourceUri: String = String()
+
+  public var owner: String = String()
+
+  public var repo: String = String()
+
+  public var path: String = String()
+
+  /// unix seconds of the last ingest that changed it
+  public var updatedAt: Int64 = 0
+
+  /// the file on GitHub at the indexed commit
+  public var webURL: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_GetDocumentRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sourceUri: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Document is a source rebuilt from its chunks: what retrieval sees, close to
+/// but not exactly the original.
+public nonisolated struct Orchd_V1_Document: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sourceUri: String = String()
+
+  public var sourceType: String = String()
+
+  public var scope: String = String()
+
+  public var tags: [String] = []
+
+  public var text: String = String()
+
+  public var chunks: Int32 = 0
+
+  /// chunk order was incomplete; text is best effort
+  public var malformed: Bool = false
+
+  /// too large to return (over 3 MiB); text is empty
+  public var oversize: Bool = false
+
+  /// where the original lives, when known
+  public var webURL: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListRegisteredSourcesRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListRegisteredSourcesResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sources: [Orchd_V1_RegisteredSource] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_RegisteredSource: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// <kind>|<uri>; set by orchd
+  public var id: String = String()
+
+  /// web | repo | owner
+  public var kind: String = String()
+
+  /// a URL, an absolute local path, or a directory name
+  public var uri: String = String()
+
+  public var scope: String = String()
+
+  public var tags: [String] = []
+
+  public var refreshSecs: Int64 = 0
+
+  /// unix seconds; 0 = due now
+  public var lastFetched: Int64 = 0
+
+  /// new | ok | missing | error
+  public var status: String = String()
+
+  /// for web sources
+  public var webURL: String = String()
+
+  /// What a search within this source passes: source_uri for one URL,
+  /// all_tags for a repo or owner's docs.
+  public var searchSourceUri: String = String()
+
+  public var searchAllTags: [String] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SaveSourceRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// kind, uri, scope, tags, refresh_secs
+  public var source: Orchd_V1_RegisteredSource {
+    get {_source ?? Orchd_V1_RegisteredSource()}
+    set {_source = newValue}
+  }
+  /// Returns true if `source` has been explicitly set.
+  public var hasSource: Bool {self._source != nil}
+  /// Clears the value of `source`. Subsequent reads from it will return its default value.
+  public mutating func clearSource() {self._source = nil}
+
+  /// replace_id names the entry being edited when the kind or uri changed;
+  /// it is removed once the new one is stored. Its indexed content is kept.
+  public var replaceID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _source: Orchd_V1_RegisteredSource? = nil
+}
+
+public nonisolated struct Orchd_V1_RemoveSourceRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  /// also delete everything the source indexed
+  public var purge: Bool = false
+
+  /// required with purge: deletion is permanent
+  public var confirm: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_RemoveSourceResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// indexed sources deleted
+  public var purgedSources: Int32 = 0
+
+  public var purgedChunks: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_RefreshSourceRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// empty = every source
+  public var id: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_RefreshSourceResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var marked: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "orchd.v1"
@@ -1434,7 +1733,7 @@ nonisolated extension Orchd_V1_IngestResponse: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Orchd_V1_SearchRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}query\0\u{3}top_k\0\u{1}scope\0\u{3}source_type\0\u{1}tags\0\u{1}mode\0\u{1}since\0\u{1}until\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}query\0\u{3}top_k\0\u{1}scope\0\u{3}source_type\0\u{1}tags\0\u{1}mode\0\u{1}since\0\u{1}until\0\u{3}source_uri\0\u{3}all_tags\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1450,6 +1749,8 @@ nonisolated extension Orchd_V1_SearchRequest: SwiftProtobuf.Message, SwiftProtob
       case 6: try { try decoder.decodeSingularStringField(value: &self.mode) }()
       case 7: try { try decoder.decodeSingularInt64Field(value: &self.since) }()
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.until) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.sourceUri) }()
+      case 10: try { try decoder.decodeRepeatedStringField(value: &self.allTags) }()
       default: break
       }
     }
@@ -1480,6 +1781,12 @@ nonisolated extension Orchd_V1_SearchRequest: SwiftProtobuf.Message, SwiftProtob
     if self.until != 0 {
       try visitor.visitSingularInt64Field(value: self.until, fieldNumber: 8)
     }
+    if !self.sourceUri.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceUri, fieldNumber: 9)
+    }
+    if !self.allTags.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.allTags, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1492,6 +1799,8 @@ nonisolated extension Orchd_V1_SearchRequest: SwiftProtobuf.Message, SwiftProtob
     if lhs.mode != rhs.mode {return false}
     if lhs.since != rhs.since {return false}
     if lhs.until != rhs.until {return false}
+    if lhs.sourceUri != rhs.sourceUri {return false}
+    if lhs.allTags != rhs.allTags {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3923,6 +4232,638 @@ nonisolated extension Orchd_V1_DataSize: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.name != rhs.name {return false}
     if lhs.path != rhs.path {return false}
     if lhs.bytes != rhs.bytes {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListDocsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListDocsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListDocsRequest, rhs: Orchd_V1_ListDocsRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListDocsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListDocsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owners\0\u{1}files\0\u{1}truncated\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.owners) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.files) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.truncated) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owners.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.owners, fieldNumber: 1)
+    }
+    if !self.files.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.files, fieldNumber: 2)
+    }
+    if self.truncated != false {
+      try visitor.visitSingularBoolField(value: self.truncated, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListDocsResponse, rhs: Orchd_V1_ListDocsResponse) -> Bool {
+    if lhs.owners != rhs.owners {return false}
+    if lhs.files != rhs.files {return false}
+    if lhs.truncated != rhs.truncated {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_DocOwner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DocOwner"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{3}refresh_secs\0\u{1}scope\0\u{1}tags\0\u{3}last_synced\0\u{1}status\0\u{1}repos\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.refreshSecs) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.scope) }()
+      case 4: try { try decoder.decodeRepeatedStringField(value: &self.tags) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.lastSynced) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.repos) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    if self.refreshSecs != 0 {
+      try visitor.visitSingularInt64Field(value: self.refreshSecs, fieldNumber: 2)
+    }
+    if !self.scope.isEmpty {
+      try visitor.visitSingularStringField(value: self.scope, fieldNumber: 3)
+    }
+    if !self.tags.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.tags, fieldNumber: 4)
+    }
+    if self.lastSynced != 0 {
+      try visitor.visitSingularInt64Field(value: self.lastSynced, fieldNumber: 5)
+    }
+    if !self.status.isEmpty {
+      try visitor.visitSingularStringField(value: self.status, fieldNumber: 6)
+    }
+    if !self.repos.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.repos, fieldNumber: 7)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_DocOwner, rhs: Orchd_V1_DocOwner) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.refreshSecs != rhs.refreshSecs {return false}
+    if lhs.scope != rhs.scope {return false}
+    if lhs.tags != rhs.tags {return false}
+    if lhs.lastSynced != rhs.lastSynced {return false}
+    if lhs.status != rhs.status {return false}
+    if lhs.repos != rhs.repos {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_DocRepo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DocRepo"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}repo\0\u{3}head_sha\0\u{3}last_synced\0\u{1}files\0\u{1}status\0\u{3}web_url\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.repo) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.headSha) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.lastSynced) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.files) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.webURL) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.repo.isEmpty {
+      try visitor.visitSingularStringField(value: self.repo, fieldNumber: 1)
+    }
+    if !self.headSha.isEmpty {
+      try visitor.visitSingularStringField(value: self.headSha, fieldNumber: 2)
+    }
+    if self.lastSynced != 0 {
+      try visitor.visitSingularInt64Field(value: self.lastSynced, fieldNumber: 3)
+    }
+    if self.files != 0 {
+      try visitor.visitSingularInt32Field(value: self.files, fieldNumber: 4)
+    }
+    if !self.status.isEmpty {
+      try visitor.visitSingularStringField(value: self.status, fieldNumber: 5)
+    }
+    if !self.webURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.webURL, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_DocRepo, rhs: Orchd_V1_DocRepo) -> Bool {
+    if lhs.repo != rhs.repo {return false}
+    if lhs.headSha != rhs.headSha {return false}
+    if lhs.lastSynced != rhs.lastSynced {return false}
+    if lhs.files != rhs.files {return false}
+    if lhs.status != rhs.status {return false}
+    if lhs.webURL != rhs.webURL {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_DocFile: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DocFile"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_uri\0\u{1}owner\0\u{1}repo\0\u{1}path\0\u{3}updated_at\0\u{3}web_url\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sourceUri) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.repo) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.path) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.updatedAt) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.webURL) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sourceUri.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceUri, fieldNumber: 1)
+    }
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 2)
+    }
+    if !self.repo.isEmpty {
+      try visitor.visitSingularStringField(value: self.repo, fieldNumber: 3)
+    }
+    if !self.path.isEmpty {
+      try visitor.visitSingularStringField(value: self.path, fieldNumber: 4)
+    }
+    if self.updatedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.updatedAt, fieldNumber: 5)
+    }
+    if !self.webURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.webURL, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_DocFile, rhs: Orchd_V1_DocFile) -> Bool {
+    if lhs.sourceUri != rhs.sourceUri {return false}
+    if lhs.owner != rhs.owner {return false}
+    if lhs.repo != rhs.repo {return false}
+    if lhs.path != rhs.path {return false}
+    if lhs.updatedAt != rhs.updatedAt {return false}
+    if lhs.webURL != rhs.webURL {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_GetDocumentRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetDocumentRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_uri\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sourceUri) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sourceUri.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceUri, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_GetDocumentRequest, rhs: Orchd_V1_GetDocumentRequest) -> Bool {
+    if lhs.sourceUri != rhs.sourceUri {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_Document: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Document"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_uri\0\u{3}source_type\0\u{1}scope\0\u{1}tags\0\u{1}text\0\u{1}chunks\0\u{1}malformed\0\u{1}oversize\0\u{3}web_url\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sourceUri) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.sourceType) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.scope) }()
+      case 4: try { try decoder.decodeRepeatedStringField(value: &self.tags) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.text) }()
+      case 6: try { try decoder.decodeSingularInt32Field(value: &self.chunks) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.malformed) }()
+      case 8: try { try decoder.decodeSingularBoolField(value: &self.oversize) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.webURL) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sourceUri.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceUri, fieldNumber: 1)
+    }
+    if !self.sourceType.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceType, fieldNumber: 2)
+    }
+    if !self.scope.isEmpty {
+      try visitor.visitSingularStringField(value: self.scope, fieldNumber: 3)
+    }
+    if !self.tags.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.tags, fieldNumber: 4)
+    }
+    if !self.text.isEmpty {
+      try visitor.visitSingularStringField(value: self.text, fieldNumber: 5)
+    }
+    if self.chunks != 0 {
+      try visitor.visitSingularInt32Field(value: self.chunks, fieldNumber: 6)
+    }
+    if self.malformed != false {
+      try visitor.visitSingularBoolField(value: self.malformed, fieldNumber: 7)
+    }
+    if self.oversize != false {
+      try visitor.visitSingularBoolField(value: self.oversize, fieldNumber: 8)
+    }
+    if !self.webURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.webURL, fieldNumber: 9)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_Document, rhs: Orchd_V1_Document) -> Bool {
+    if lhs.sourceUri != rhs.sourceUri {return false}
+    if lhs.sourceType != rhs.sourceType {return false}
+    if lhs.scope != rhs.scope {return false}
+    if lhs.tags != rhs.tags {return false}
+    if lhs.text != rhs.text {return false}
+    if lhs.chunks != rhs.chunks {return false}
+    if lhs.malformed != rhs.malformed {return false}
+    if lhs.oversize != rhs.oversize {return false}
+    if lhs.webURL != rhs.webURL {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListRegisteredSourcesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListRegisteredSourcesRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListRegisteredSourcesRequest, rhs: Orchd_V1_ListRegisteredSourcesRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListRegisteredSourcesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListRegisteredSourcesResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sources\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.sources) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sources.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.sources, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListRegisteredSourcesResponse, rhs: Orchd_V1_ListRegisteredSourcesResponse) -> Bool {
+    if lhs.sources != rhs.sources {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RegisteredSource: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RegisteredSource"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}kind\0\u{1}uri\0\u{1}scope\0\u{1}tags\0\u{3}refresh_secs\0\u{3}last_fetched\0\u{1}status\0\u{3}web_url\0\u{3}search_source_uri\0\u{3}search_all_tags\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.uri) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.scope) }()
+      case 5: try { try decoder.decodeRepeatedStringField(value: &self.tags) }()
+      case 6: try { try decoder.decodeSingularInt64Field(value: &self.refreshSecs) }()
+      case 7: try { try decoder.decodeSingularInt64Field(value: &self.lastFetched) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.webURL) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.searchSourceUri) }()
+      case 11: try { try decoder.decodeRepeatedStringField(value: &self.searchAllTags) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 2)
+    }
+    if !self.uri.isEmpty {
+      try visitor.visitSingularStringField(value: self.uri, fieldNumber: 3)
+    }
+    if !self.scope.isEmpty {
+      try visitor.visitSingularStringField(value: self.scope, fieldNumber: 4)
+    }
+    if !self.tags.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.tags, fieldNumber: 5)
+    }
+    if self.refreshSecs != 0 {
+      try visitor.visitSingularInt64Field(value: self.refreshSecs, fieldNumber: 6)
+    }
+    if self.lastFetched != 0 {
+      try visitor.visitSingularInt64Field(value: self.lastFetched, fieldNumber: 7)
+    }
+    if !self.status.isEmpty {
+      try visitor.visitSingularStringField(value: self.status, fieldNumber: 8)
+    }
+    if !self.webURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.webURL, fieldNumber: 9)
+    }
+    if !self.searchSourceUri.isEmpty {
+      try visitor.visitSingularStringField(value: self.searchSourceUri, fieldNumber: 10)
+    }
+    if !self.searchAllTags.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.searchAllTags, fieldNumber: 11)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RegisteredSource, rhs: Orchd_V1_RegisteredSource) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.uri != rhs.uri {return false}
+    if lhs.scope != rhs.scope {return false}
+    if lhs.tags != rhs.tags {return false}
+    if lhs.refreshSecs != rhs.refreshSecs {return false}
+    if lhs.lastFetched != rhs.lastFetched {return false}
+    if lhs.status != rhs.status {return false}
+    if lhs.webURL != rhs.webURL {return false}
+    if lhs.searchSourceUri != rhs.searchSourceUri {return false}
+    if lhs.searchAllTags != rhs.searchAllTags {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SaveSourceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SaveSourceRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}source\0\u{3}replace_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._source) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.replaceID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._source {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.replaceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.replaceID, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SaveSourceRequest, rhs: Orchd_V1_SaveSourceRequest) -> Bool {
+    if lhs._source != rhs._source {return false}
+    if lhs.replaceID != rhs.replaceID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RemoveSourceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RemoveSourceRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}purge\0\u{1}confirm\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.purge) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.confirm) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if self.purge != false {
+      try visitor.visitSingularBoolField(value: self.purge, fieldNumber: 2)
+    }
+    if self.confirm != false {
+      try visitor.visitSingularBoolField(value: self.confirm, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RemoveSourceRequest, rhs: Orchd_V1_RemoveSourceRequest) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.purge != rhs.purge {return false}
+    if lhs.confirm != rhs.confirm {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RemoveSourceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RemoveSourceResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}purged_sources\0\u{3}purged_chunks\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.purgedSources) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.purgedChunks) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.purgedSources != 0 {
+      try visitor.visitSingularInt32Field(value: self.purgedSources, fieldNumber: 1)
+    }
+    if self.purgedChunks != 0 {
+      try visitor.visitSingularInt32Field(value: self.purgedChunks, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RemoveSourceResponse, rhs: Orchd_V1_RemoveSourceResponse) -> Bool {
+    if lhs.purgedSources != rhs.purgedSources {return false}
+    if lhs.purgedChunks != rhs.purgedChunks {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RefreshSourceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RefreshSourceRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RefreshSourceRequest, rhs: Orchd_V1_RefreshSourceRequest) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RefreshSourceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RefreshSourceResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}marked\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.marked) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.marked != 0 {
+      try visitor.visitSingularInt32Field(value: self.marked, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RefreshSourceResponse, rhs: Orchd_V1_RefreshSourceResponse) -> Bool {
+    if lhs.marked != rhs.marked {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

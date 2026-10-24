@@ -599,6 +599,8 @@ func TestSourceCommand(t *testing.T) {
 		{name: "add owner", args: []string{"source", "add", "owner", "willesq", "--refresh", "24h"}, wantSub: "added owner"},
 		{name: "add web", args: []string{"source", "add", "web", "https://x", "--refresh", "6h"}, wantSub: "added web"},
 		{name: "invalid kind errors", args: []string{"source", "add", "bogus", "x"}, wantErr: true},
+		{name: "owner outside the roots errors", args: []string{"source", "add", "owner", "../../etc"}, wantErr: true},
+		{name: "relative repo path errors", args: []string{"source", "add", "repo", "code/app"}, wantErr: true},
 		{name: "invalid refresh errors", args: []string{"source", "add", "web", "https://x", "--refresh", "nope"}, wantErr: true},
 		{name: "list empty", args: []string{"source", "list"}, wantSub: "no sources"},
 	}
@@ -718,6 +720,9 @@ type fakeClient struct {
 	tails    []*orchdv1.TailLogsResponse
 	tailReqs []*orchdv1.TailLogsRequest
 	tailErr  error
+	// document answers GetDocument; docReq records the request.
+	document *orchdv1.Document
+	docReq   *orchdv1.GetDocumentRequest
 	err      error
 }
 
@@ -1128,6 +1133,17 @@ func TestSearchCommand(t *testing.T) {
 				t.Errorf("output %q missing %q", out, tt.wantOut)
 			}
 		})
+	}
+}
+
+func TestSearchNarrowsToOneSource(t *testing.T) {
+	fc := &fakeClient{search: &orchdv1.SearchResponse{}}
+	if _, err := run(factory(fc, nil), "", "search", "install", "--uri", "repo://o/r/README.md",
+		"--require-tag", "owner:o", "--require-tag", "repo:r"); err != nil {
+		t.Fatal(err)
+	}
+	if fc.searchReq.GetSourceUri() != "repo://o/r/README.md" || strings.Join(fc.searchReq.GetAllTags(), ",") != "owner:o,repo:r" {
+		t.Errorf("request = %v", fc.searchReq)
 	}
 }
 

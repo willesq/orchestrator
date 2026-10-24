@@ -319,6 +319,84 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ListDocs" metadata.
+        public enum ListDocs: Sendable {
+            /// Request type for "ListDocs".
+            public typealias Input = Orchd_V1_ListDocsRequest
+            /// Response type for "ListDocs".
+            public typealias Output = Orchd_V1_ListDocsResponse
+            /// Descriptor for "ListDocs".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListDocs",
+                type: .unary
+            )
+        }
+        /// Namespace for "GetDocument" metadata.
+        public enum GetDocument: Sendable {
+            /// Request type for "GetDocument".
+            public typealias Input = Orchd_V1_GetDocumentRequest
+            /// Response type for "GetDocument".
+            public typealias Output = Orchd_V1_Document
+            /// Descriptor for "GetDocument".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetDocument",
+                type: .unary
+            )
+        }
+        /// Namespace for "ListRegisteredSources" metadata.
+        public enum ListRegisteredSources: Sendable {
+            /// Request type for "ListRegisteredSources".
+            public typealias Input = Orchd_V1_ListRegisteredSourcesRequest
+            /// Response type for "ListRegisteredSources".
+            public typealias Output = Orchd_V1_ListRegisteredSourcesResponse
+            /// Descriptor for "ListRegisteredSources".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListRegisteredSources",
+                type: .unary
+            )
+        }
+        /// Namespace for "SaveSource" metadata.
+        public enum SaveSource: Sendable {
+            /// Request type for "SaveSource".
+            public typealias Input = Orchd_V1_SaveSourceRequest
+            /// Response type for "SaveSource".
+            public typealias Output = Orchd_V1_RegisteredSource
+            /// Descriptor for "SaveSource".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SaveSource",
+                type: .unary
+            )
+        }
+        /// Namespace for "RemoveSource" metadata.
+        public enum RemoveSource: Sendable {
+            /// Request type for "RemoveSource".
+            public typealias Input = Orchd_V1_RemoveSourceRequest
+            /// Response type for "RemoveSource".
+            public typealias Output = Orchd_V1_RemoveSourceResponse
+            /// Descriptor for "RemoveSource".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "RemoveSource",
+                type: .unary
+            )
+        }
+        /// Namespace for "RefreshSource" metadata.
+        public enum RefreshSource: Sendable {
+            /// Request type for "RefreshSource".
+            public typealias Input = Orchd_V1_RefreshSourceRequest
+            /// Response type for "RefreshSource".
+            public typealias Output = Orchd_V1_RefreshSourceResponse
+            /// Descriptor for "RefreshSource".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "RefreshSource",
+                type: .unary
+            )
+        }
         /// Descriptors for all methods in the "orchd.v1.Orchd" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             Ping.descriptor,
@@ -343,7 +421,13 @@ public enum Orchd_V1_Orchd: Sendable {
             ListGitHubRepos.descriptor,
             ListGitHubItems.descriptor,
             TailLogs.descriptor,
-            GetSystemMetrics.descriptor
+            GetSystemMetrics.descriptor,
+            ListDocs.descriptor,
+            GetDocument.descriptor,
+            ListRegisteredSources.descriptor,
+            SaveSource.descriptor,
+            RemoveSource.descriptor,
+            RefreshSource.descriptor
         ]
     }
 }
@@ -908,6 +992,146 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SystemMetrics>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SystemMetrics>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListDocs" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
+        /// > repos, and every indexed doc with its GitHub location.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListDocsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListDocsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListDocsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listDocs<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListDocsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListDocsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListDocsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetDocument" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetDocument rebuilds one indexed source from its stored chunks.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetDocumentRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetDocumentRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_Document` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getDocument<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetDocumentRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetDocumentRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_Document>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_Document>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListRegisteredSources" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListRegisteredSources lists the sources registered for refresh on a
+        /// > cadence (web URLs, local repos, local owner directories).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListRegisteredSourcesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListRegisteredSourcesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListRegisteredSourcesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listRegisteredSources<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListRegisteredSourcesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListRegisteredSourcesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListRegisteredSourcesResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListRegisteredSourcesResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SaveSource" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SaveSource adds or updates a registered source.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SaveSourceRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SaveSourceRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RegisteredSource` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func saveSource<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SaveSourceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SaveSourceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RegisteredSource>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RegisteredSource>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RemoveSource" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveSource unregisters a source, optionally deleting what it indexed.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RemoveSourceRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RemoveSourceRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RemoveSourceResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func removeSource<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RemoveSourceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RemoveSourceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RemoveSourceResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSourceResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RefreshSource" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RefreshSource refreshes one registered source, or all, now.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RefreshSourceRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RefreshSourceRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RefreshSourceResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func refreshSource<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RefreshSourceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RefreshSourceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RefreshSourceResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RefreshSourceResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -1726,6 +1950,212 @@ extension Orchd_V1_Orchd {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "ListDocs" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
+        /// > repos, and every indexed doc with its GitHub location.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListDocsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListDocsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListDocsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listDocs<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListDocsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListDocsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListDocsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListDocs.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetDocument" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetDocument rebuilds one indexed source from its stored chunks.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetDocumentRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetDocumentRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_Document` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getDocument<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetDocumentRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetDocumentRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_Document>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_Document>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetDocument.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListRegisteredSources" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListRegisteredSources lists the sources registered for refresh on a
+        /// > cadence (web URLs, local repos, local owner directories).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListRegisteredSourcesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListRegisteredSourcesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListRegisteredSourcesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listRegisteredSources<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListRegisteredSourcesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListRegisteredSourcesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListRegisteredSourcesResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListRegisteredSourcesResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListRegisteredSources.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SaveSource" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SaveSource adds or updates a registered source.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SaveSourceRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SaveSourceRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RegisteredSource` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func saveSource<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SaveSourceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SaveSourceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RegisteredSource>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RegisteredSource>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SaveSource.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "RemoveSource" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveSource unregisters a source, optionally deleting what it indexed.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RemoveSourceRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RemoveSourceRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RemoveSourceResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func removeSource<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RemoveSourceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RemoveSourceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RemoveSourceResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSourceResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.RemoveSource.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "RefreshSource" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RefreshSource refreshes one registered source, or all, now.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RefreshSourceRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RefreshSourceRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RefreshSourceResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func refreshSource<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RefreshSourceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RefreshSourceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RefreshSourceResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RefreshSourceResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.RefreshSource.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -2407,6 +2837,182 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetSystemMetricsRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SystemMetrics>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListDocs" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
+    /// > repos, and every indexed doc with its GitHub location.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListDocsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listDocs<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListDocsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listDocs(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListDocsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListDocsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetDocument" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetDocument rebuilds one indexed source from its stored chunks.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetDocumentRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getDocument<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetDocumentRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_Document>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getDocument(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetDocumentRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_Document>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListRegisteredSources" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListRegisteredSources lists the sources registered for refresh on a
+    /// > cadence (web URLs, local repos, local owner directories).
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListRegisteredSourcesRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listRegisteredSources<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListRegisteredSourcesRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListRegisteredSourcesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listRegisteredSources(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListRegisteredSourcesRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListRegisteredSourcesResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SaveSource" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SaveSource adds or updates a registered source.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SaveSourceRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func saveSource<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SaveSourceRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RegisteredSource>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.saveSource(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SaveSourceRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RegisteredSource>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RemoveSource" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RemoveSource unregisters a source, optionally deleting what it indexed.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RemoveSourceRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func removeSource<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RemoveSourceRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSourceResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.removeSource(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RemoveSourceRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RemoveSourceResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RefreshSource" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RefreshSource refreshes one registered source, or all, now.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RefreshSourceRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func refreshSource<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RefreshSourceRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RefreshSourceResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.refreshSource(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RefreshSourceRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RefreshSourceResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -3182,6 +3788,206 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.getSystemMetrics(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListDocs" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
+    /// > repos, and every indexed doc with its GitHub location.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listDocs<Result>(
+        _ message: Orchd_V1_ListDocsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListDocsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listDocs(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetDocument" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetDocument rebuilds one indexed source from its stored chunks.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getDocument<Result>(
+        _ message: Orchd_V1_GetDocumentRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_Document>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetDocumentRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getDocument(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListRegisteredSources" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListRegisteredSources lists the sources registered for refresh on a
+    /// > cadence (web URLs, local repos, local owner directories).
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listRegisteredSources<Result>(
+        _ message: Orchd_V1_ListRegisteredSourcesRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListRegisteredSourcesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListRegisteredSourcesRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listRegisteredSources(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SaveSource" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SaveSource adds or updates a registered source.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func saveSource<Result>(
+        _ message: Orchd_V1_SaveSourceRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RegisteredSource>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SaveSourceRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.saveSource(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RemoveSource" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RemoveSource unregisters a source, optionally deleting what it indexed.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func removeSource<Result>(
+        _ message: Orchd_V1_RemoveSourceRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSourceResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RemoveSourceRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.removeSource(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RefreshSource" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RefreshSource refreshes one registered source, or all, now.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func refreshSource<Result>(
+        _ message: Orchd_V1_RefreshSourceRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RefreshSourceResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RefreshSourceRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.refreshSource(
             request: request,
             options: options,
             onResponse: handleResponse

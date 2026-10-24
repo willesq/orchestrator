@@ -91,3 +91,27 @@ func (f *fakeClient) TailLogs(context.Context, *orchdv1.TailLogsRequest, ...grpc
 func (f *fakeClient) GetSystemMetrics(context.Context, *orchdv1.GetSystemMetricsRequest, ...grpc.CallOption) (*orchdv1.SystemMetrics, error) {
 	return &orchdv1.SystemMetrics{}, nil
 }
+
+func (f *fakeClient) ListDocs(context.Context, *orchdv1.ListDocsRequest, ...grpc.CallOption) (*orchdv1.ListDocsResponse, error) {
+	return &orchdv1.ListDocsResponse{}, nil
+}
+
+func (f *fakeClient) GetDocument(context.Context, *orchdv1.GetDocumentRequest, ...grpc.CallOption) (*orchdv1.Document, error) {
+	return &orchdv1.Document{}, nil
+}
+
+func (f *fakeClient) ListRegisteredSources(context.Context, *orchdv1.ListRegisteredSourcesRequest, ...grpc.CallOption) (*orchdv1.ListRegisteredSourcesResponse, error) {
+	return &orchdv1.ListRegisteredSourcesResponse{}, nil
+}
+
+func (f *fakeClient) SaveSource(context.Context, *orchdv1.SaveSourceRequest, ...grpc.CallOption) (*orchdv1.RegisteredSource, error) {
+	return &orchdv1.RegisteredSource{}, nil
+}
+
+func (f *fakeClient) RemoveSource(context.Context, *orchdv1.RemoveSourceRequest, ...grpc.CallOption) (*orchdv1.RemoveSourceResponse, error) {
+	return &orchdv1.RemoveSourceResponse{}, nil
+}
+
+func (f *fakeClient) RefreshSource(context.Context, *orchdv1.RefreshSourceRequest, ...grpc.CallOption) (*orchdv1.RefreshSourceResponse, error) {
+	return &orchdv1.RefreshSourceResponse{}, nil
+}

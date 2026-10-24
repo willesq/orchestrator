@@ -71,7 +71,7 @@ func TestHybridSearchUsesTheNamedVector(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	q := NewQdrantStore(srv.URL, "c", "")
-	if _, err := q.Search(context.Background(), []float32{1, 0}, 3, nil, nil, TimeRange{}); err != nil {
+	if _, err := q.Search(context.Background(), []float32{1, 0}, 3, nil, nil, nil, TimeRange{}); err != nil {
 		t.Fatal(err)
 	}
 	vec, _ := body["vector"].(map[string]any)
@@ -92,7 +92,7 @@ func TestLayoutErrors(t *testing.T) {
 	if err := q.Upsert(context.Background(), []Point{{ID: "a"}}); err == nil {
 		t.Fatal("upsert without a layout succeeded")
 	}
-	if _, err := q.Search(context.Background(), nil, 1, nil, nil, TimeRange{}); err == nil {
+	if _, err := q.Search(context.Background(), nil, 1, nil, nil, nil, TimeRange{}); err == nil {
 		t.Fatal("search without a layout succeeded")
 	}
 }

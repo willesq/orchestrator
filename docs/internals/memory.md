@@ -156,11 +156,39 @@ Text sent with `orch ingest` or `rag_ingest_text` is stored as given.
 - `repo` (absolute path) and `owner` (`<known_root>/<owner>/*`): every `*.md` found by `mdwalk`
   (skipping `.git` and `ingest.exclude_dirs`), stored as `repo://<owner|local>/<repo>/<path>`,
   type `repo_doc`, tagged `repo:<name>` and `owner:<owner>`.
+- **Validation** (`sources.Validate`, used by `orch source add` and the `SaveSource` RPC):
+  - a `web` URI is an `http`/`https` URL with a host and no credentials;
+  - a `repo` URI is an absolute path, cleaned;
+  - an `owner` is one directory name (`[A-Za-z0-9][A-Za-z0-9._-]*`), so it cannot name a path
+    outside the known roots; `local` is reserved, because repo sources are stored under
+    `repo://local/`;
+  - the refresh interval is 1 minute to 365 days;
+  - scope and tags are at most 64 characters with no control characters, tags have no commas
+    (they are stored comma-joined), tags cannot start with `owner:` or `repo:` (refresh adds those),
+    and there are at most 32 tags.
+- **Removal** unregisters the source and keeps what it indexed. `RemoveSource` with `purge` (and
+  `confirm`) also deletes that content, before unregistering so a failed purge can be retried:
+  - `web`: the URL's content.
+  - `repo` and `owner`: `repo_doc` content under the source's `repo://` prefix that carries its
+    `repo:<name>` or `owner:<name>` tag. Content of an owner the docs registry tracks, or with a
+    row in `doc_hashes`, is kept.
+  - It is refused for a repo source that shares its directory name with another (they share
+    content), and for a stored row that fails validation (from before it existed).
+  - A refresh running during the purge can store a source's docs again; purge again to remove them.
 
 **Docs registry** (`orch docs add <owner>`, every 6 h): list the owner's repos with
 `gh api graphql` (skipping archived and forks by default), skip repos whose default-branch HEAD is
 unchanged, `gh repo clone --depth 1` into `<data>/repos`, and store each markdown file whose
 SHA-256 changed (hash saved only after a successful store).
+
+`ListDocs` serves the docs registry: each owner, its repos with the indexed default-branch commit,
+and every indexed file with its GitHub URL, `https://github.com/<owner>/<repo>/blob/<commit>/<path>`.
+The URL is pinned to the indexed commit, so the page shows the version that was indexed; with no
+commit recorded it uses `HEAD`. `GetDocument` rebuilds any indexed source from its chunks (the
+same rebuild the hybrid migration uses). It links the original only for a `web` source or a synced
+GitHub doc, since any client can store text under any URI. A rebuild over 3 MiB is reported as
+oversize with no text, so replies stay under clients' 4 MiB limit; `ListDocs` stops at 10,000
+files and says it was truncated.
 
 ## Migration to the hybrid layout
 

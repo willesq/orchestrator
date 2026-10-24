@@ -19,29 +19,35 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Orchd_Ping_FullMethodName              = "/orchd.v1.Orchd/Ping"
-	Orchd_Ingest_FullMethodName            = "/orchd.v1.Orchd/Ingest"
-	Orchd_Search_FullMethodName            = "/orchd.v1.Orchd/Search"
-	Orchd_ListSources_FullMethodName       = "/orchd.v1.Orchd/ListSources"
-	Orchd_DeleteSource_FullMethodName      = "/orchd.v1.Orchd/DeleteSource"
-	Orchd_Dispatch_FullMethodName          = "/orchd.v1.Orchd/Dispatch"
-	Orchd_ListTasks_FullMethodName         = "/orchd.v1.Orchd/ListTasks"
-	Orchd_GetTask_FullMethodName           = "/orchd.v1.Orchd/GetTask"
-	Orchd_Status_FullMethodName            = "/orchd.v1.Orchd/Status"
-	Orchd_Restart_FullMethodName           = "/orchd.v1.Orchd/Restart"
-	Orchd_SummarizeSession_FullMethodName  = "/orchd.v1.Orchd/SummarizeSession"
-	Orchd_RecommendModel_FullMethodName    = "/orchd.v1.Orchd/RecommendModel"
-	Orchd_RateTask_FullMethodName          = "/orchd.v1.Orchd/RateTask"
-	Orchd_MigrateHybrid_FullMethodName     = "/orchd.v1.Orchd/MigrateHybrid"
-	Orchd_DropBackup_FullMethodName        = "/orchd.v1.Orchd/DropBackup"
-	Orchd_ListPRs_FullMethodName           = "/orchd.v1.Orchd/ListPRs"
-	Orchd_GetGitHubIdentity_FullMethodName = "/orchd.v1.Orchd/GetGitHubIdentity"
-	Orchd_ListGitHubScopes_FullMethodName  = "/orchd.v1.Orchd/ListGitHubScopes"
-	Orchd_SetGitHubScope_FullMethodName    = "/orchd.v1.Orchd/SetGitHubScope"
-	Orchd_ListGitHubRepos_FullMethodName   = "/orchd.v1.Orchd/ListGitHubRepos"
-	Orchd_ListGitHubItems_FullMethodName   = "/orchd.v1.Orchd/ListGitHubItems"
-	Orchd_TailLogs_FullMethodName          = "/orchd.v1.Orchd/TailLogs"
-	Orchd_GetSystemMetrics_FullMethodName  = "/orchd.v1.Orchd/GetSystemMetrics"
+	Orchd_Ping_FullMethodName                  = "/orchd.v1.Orchd/Ping"
+	Orchd_Ingest_FullMethodName                = "/orchd.v1.Orchd/Ingest"
+	Orchd_Search_FullMethodName                = "/orchd.v1.Orchd/Search"
+	Orchd_ListSources_FullMethodName           = "/orchd.v1.Orchd/ListSources"
+	Orchd_DeleteSource_FullMethodName          = "/orchd.v1.Orchd/DeleteSource"
+	Orchd_Dispatch_FullMethodName              = "/orchd.v1.Orchd/Dispatch"
+	Orchd_ListTasks_FullMethodName             = "/orchd.v1.Orchd/ListTasks"
+	Orchd_GetTask_FullMethodName               = "/orchd.v1.Orchd/GetTask"
+	Orchd_Status_FullMethodName                = "/orchd.v1.Orchd/Status"
+	Orchd_Restart_FullMethodName               = "/orchd.v1.Orchd/Restart"
+	Orchd_SummarizeSession_FullMethodName      = "/orchd.v1.Orchd/SummarizeSession"
+	Orchd_RecommendModel_FullMethodName        = "/orchd.v1.Orchd/RecommendModel"
+	Orchd_RateTask_FullMethodName              = "/orchd.v1.Orchd/RateTask"
+	Orchd_MigrateHybrid_FullMethodName         = "/orchd.v1.Orchd/MigrateHybrid"
+	Orchd_DropBackup_FullMethodName            = "/orchd.v1.Orchd/DropBackup"
+	Orchd_ListPRs_FullMethodName               = "/orchd.v1.Orchd/ListPRs"
+	Orchd_GetGitHubIdentity_FullMethodName     = "/orchd.v1.Orchd/GetGitHubIdentity"
+	Orchd_ListGitHubScopes_FullMethodName      = "/orchd.v1.Orchd/ListGitHubScopes"
+	Orchd_SetGitHubScope_FullMethodName        = "/orchd.v1.Orchd/SetGitHubScope"
+	Orchd_ListGitHubRepos_FullMethodName       = "/orchd.v1.Orchd/ListGitHubRepos"
+	Orchd_ListGitHubItems_FullMethodName       = "/orchd.v1.Orchd/ListGitHubItems"
+	Orchd_TailLogs_FullMethodName              = "/orchd.v1.Orchd/TailLogs"
+	Orchd_GetSystemMetrics_FullMethodName      = "/orchd.v1.Orchd/GetSystemMetrics"
+	Orchd_ListDocs_FullMethodName              = "/orchd.v1.Orchd/ListDocs"
+	Orchd_GetDocument_FullMethodName           = "/orchd.v1.Orchd/GetDocument"
+	Orchd_ListRegisteredSources_FullMethodName = "/orchd.v1.Orchd/ListRegisteredSources"
+	Orchd_SaveSource_FullMethodName            = "/orchd.v1.Orchd/SaveSource"
+	Orchd_RemoveSource_FullMethodName          = "/orchd.v1.Orchd/RemoveSource"
+	Orchd_RefreshSource_FullMethodName         = "/orchd.v1.Orchd/RefreshSource"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -110,6 +116,20 @@ type OrchdClient interface {
 	// GetSystemMetrics reports resource use of orchd and the processes it runs,
 	// the size of its data, and task counts.
 	GetSystemMetrics(ctx context.Context, in *GetSystemMetricsRequest, opts ...grpc.CallOption) (*SystemMetrics, error)
+	// ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
+	// repos, and every indexed doc with its GitHub location.
+	ListDocs(ctx context.Context, in *ListDocsRequest, opts ...grpc.CallOption) (*ListDocsResponse, error)
+	// GetDocument rebuilds one indexed source from its stored chunks.
+	GetDocument(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*Document, error)
+	// ListRegisteredSources lists the sources registered for refresh on a
+	// cadence (web URLs, local repos, local owner directories).
+	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
+	// SaveSource adds or updates a registered source.
+	SaveSource(ctx context.Context, in *SaveSourceRequest, opts ...grpc.CallOption) (*RegisteredSource, error)
+	// RemoveSource unregisters a source, optionally deleting what it indexed.
+	RemoveSource(ctx context.Context, in *RemoveSourceRequest, opts ...grpc.CallOption) (*RemoveSourceResponse, error)
+	// RefreshSource refreshes one registered source, or all, now.
+	RefreshSource(ctx context.Context, in *RefreshSourceRequest, opts ...grpc.CallOption) (*RefreshSourceResponse, error)
 }
 
 type orchdClient struct {
@@ -350,6 +370,66 @@ func (c *orchdClient) GetSystemMetrics(ctx context.Context, in *GetSystemMetrics
 	return out, nil
 }
 
+func (c *orchdClient) ListDocs(ctx context.Context, in *ListDocsRequest, opts ...grpc.CallOption) (*ListDocsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDocsResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListDocs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) GetDocument(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*Document, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Document)
+	err := c.cc.Invoke(ctx, Orchd_GetDocument_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListRegisteredSourcesResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListRegisteredSources_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) SaveSource(ctx context.Context, in *SaveSourceRequest, opts ...grpc.CallOption) (*RegisteredSource, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegisteredSource)
+	err := c.cc.Invoke(ctx, Orchd_SaveSource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) RemoveSource(ctx context.Context, in *RemoveSourceRequest, opts ...grpc.CallOption) (*RemoveSourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveSourceResponse)
+	err := c.cc.Invoke(ctx, Orchd_RemoveSource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) RefreshSource(ctx context.Context, in *RefreshSourceRequest, opts ...grpc.CallOption) (*RefreshSourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshSourceResponse)
+	err := c.cc.Invoke(ctx, Orchd_RefreshSource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrchdServer is the server API for Orchd service.
 // All implementations must embed UnimplementedOrchdServer
 // for forward compatibility.
@@ -416,6 +496,20 @@ type OrchdServer interface {
 	// GetSystemMetrics reports resource use of orchd and the processes it runs,
 	// the size of its data, and task counts.
 	GetSystemMetrics(context.Context, *GetSystemMetricsRequest) (*SystemMetrics, error)
+	// ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
+	// repos, and every indexed doc with its GitHub location.
+	ListDocs(context.Context, *ListDocsRequest) (*ListDocsResponse, error)
+	// GetDocument rebuilds one indexed source from its stored chunks.
+	GetDocument(context.Context, *GetDocumentRequest) (*Document, error)
+	// ListRegisteredSources lists the sources registered for refresh on a
+	// cadence (web URLs, local repos, local owner directories).
+	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
+	// SaveSource adds or updates a registered source.
+	SaveSource(context.Context, *SaveSourceRequest) (*RegisteredSource, error)
+	// RemoveSource unregisters a source, optionally deleting what it indexed.
+	RemoveSource(context.Context, *RemoveSourceRequest) (*RemoveSourceResponse, error)
+	// RefreshSource refreshes one registered source, or all, now.
+	RefreshSource(context.Context, *RefreshSourceRequest) (*RefreshSourceResponse, error)
 	mustEmbedUnimplementedOrchdServer()
 }
 
@@ -494,6 +588,24 @@ func (UnimplementedOrchdServer) TailLogs(context.Context, *TailLogsRequest) (*Ta
 }
 func (UnimplementedOrchdServer) GetSystemMetrics(context.Context, *GetSystemMetricsRequest) (*SystemMetrics, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSystemMetrics not implemented")
+}
+func (UnimplementedOrchdServer) ListDocs(context.Context, *ListDocsRequest) (*ListDocsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDocs not implemented")
+}
+func (UnimplementedOrchdServer) GetDocument(context.Context, *GetDocumentRequest) (*Document, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDocument not implemented")
+}
+func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
+}
+func (UnimplementedOrchdServer) SaveSource(context.Context, *SaveSourceRequest) (*RegisteredSource, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveSource not implemented")
+}
+func (UnimplementedOrchdServer) RemoveSource(context.Context, *RemoveSourceRequest) (*RemoveSourceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveSource not implemented")
+}
+func (UnimplementedOrchdServer) RefreshSource(context.Context, *RefreshSourceRequest) (*RefreshSourceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RefreshSource not implemented")
 }
 func (UnimplementedOrchdServer) mustEmbedUnimplementedOrchdServer() {}
 func (UnimplementedOrchdServer) testEmbeddedByValue()               {}
@@ -930,6 +1042,114 @@ func _Orchd_GetSystemMetrics_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_ListDocs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDocsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListDocs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListDocs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListDocs(ctx, req.(*ListDocsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_GetDocument_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDocumentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetDocument(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetDocument_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetDocument(ctx, req.(*GetDocumentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRegisteredSourcesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListRegisteredSources(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListRegisteredSources_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListRegisteredSources(ctx, req.(*ListRegisteredSourcesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_SaveSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveSourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SaveSource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SaveSource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SaveSource(ctx, req.(*SaveSourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_RemoveSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveSourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).RemoveSource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_RemoveSource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).RemoveSource(ctx, req.(*RemoveSourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_RefreshSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshSourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).RefreshSource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_RefreshSource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).RefreshSource(ctx, req.(*RefreshSourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Orchd_ServiceDesc is the grpc.ServiceDesc for Orchd service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1028,6 +1248,30 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSystemMetrics",
 			Handler:    _Orchd_GetSystemMetrics_Handler,
+		},
+		{
+			MethodName: "ListDocs",
+			Handler:    _Orchd_ListDocs_Handler,
+		},
+		{
+			MethodName: "GetDocument",
+			Handler:    _Orchd_GetDocument_Handler,
+		},
+		{
+			MethodName: "ListRegisteredSources",
+			Handler:    _Orchd_ListRegisteredSources_Handler,
+		},
+		{
+			MethodName: "SaveSource",
+			Handler:    _Orchd_SaveSource_Handler,
+		},
+		{
+			MethodName: "RemoveSource",
+			Handler:    _Orchd_RemoveSource_Handler,
+		},
+		{
+			MethodName: "RefreshSource",
+			Handler:    _Orchd_RefreshSource_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
