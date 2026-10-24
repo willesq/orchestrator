@@ -9,7 +9,7 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
 | `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
@@ -107,10 +107,24 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
 - **Docs:** what `orch docs` keeps in memory: the synced owners' docs as the store holds them, by
   repo, with a filter and each doc's chunk count (`ListDocs`). Paths and addresses show control
   and bidi characters as escapes, and an address containing them cannot be copied.
-  - **Reading:** choosing a doc rebuilds it from its chunks (`GetDocument`). The text is shown
-    verbatim and labelled as a rebuild, because it is close to the original but not exact. It is
-    shown in a read-only text view that lays out only what is visible, so a large doc does not
-    block the window.
+  - **Reading:** choosing a doc rebuilds it from its chunks (`GetDocument`). A callout at the top
+    says it is a rebuild, close to the original but not exact. It is shown in a read-only text
+    view that lays out only what is visible, so a large doc does not block the window.
+  - **Rendered or Source:** markdown (synced and repo docs, and any `.md` source) is rendered by
+    default with `swift-markdown`, off the main thread: headings, emphasis, lists and task lists,
+    quotes, code, tables as aligned rows. Source shows the stored text as is. The rendering is
+    inert, because the content is untrusted:
+    - images are never loaded; their alt text is shown;
+    - raw HTML is shown as text, never interpreted;
+    - only plain `http`/`https` links are clickable, relative ones resolved against the doc's
+      GitHub location at the indexed commit, and a click is checked again before it opens.
+    - a link whose text names another host shows the real host beside it.
+
+    Rendering runs on its own thread with a 64 MB stack, because the parser recurses once per
+    level of nesting: markdown nested deeper than 64 quote levels, or with a run of more than 256
+    emphasis or link markers, is shown as its source instead, and nesting past 32 levels renders
+    as plain text. Table cells are cut to 80 characters, and a table that would pad past 256 KB is
+    shown unpadded. Choosing another doc cancels a render in progress.
   - **Open on GitHub:** opens the file at the commit that was indexed, and only an exact
     `https://github.com/<owner>/<repo>/blob/<ref>/<path>` URL.
   - **Search:** within this doc (`source_uri`) or this repo (`all_tags` `owner:` and `repo:`). A hit

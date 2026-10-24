@@ -107,6 +107,14 @@ public struct RebuiltDocument: Sendable, Equatable {
     public let oversize: Bool
     public let webURL: String
 
+    /// Whether the doc is markdown, so it can be rendered: a synced or repo
+    /// doc (only *.md is indexed from repos) or a markdown file path.
+    public var isMarkdown: Bool {
+        if sourceType == "repo_doc" { return true }
+        let path = (URL(string: sourceURI)?.path ?? sourceURI).lowercased()
+        return path.hasSuffix(".md") || path.hasSuffix(".markdown")
+    }
+
     public init(sourceURI: String, sourceType: String = "", text: String, chunks: Int = 0,
                 malformed: Bool = false, oversize: Bool = false, webURL: String = "") {
         self.sourceURI = sourceURI
