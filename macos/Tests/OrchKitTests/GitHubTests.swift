@@ -110,11 +110,31 @@ private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: T
         api.failScopes = true
         let model = GitHubModel(api: api)
         await model.refresh()
-        #expect(model.lastError == "unavailable")
+        #expect(model.scopesError == "unavailable" && model.lastError == nil, "loaded items must not hide the scopes error")
+        #expect(model.needsScopes)
         api.failScopes = false
         api.failItems = true
         await model.refresh()
-        #expect(model.lastError == "unavailable" && model.scopes.count == 2)
+        #expect(model.scopesError == nil && model.lastError == "unavailable" && model.scopes.count == 2)
+        #expect(!model.needsScopes)
+    }
+
+    @Test func pollingRetriesScopesUntilTheyLoad() async throws {
+        let api = FakeGitHub()
+        api.failScopes = true
+        let model = GitHubModel(api: api, interval: .milliseconds(20))
+        model.start()
+        try await Task.sleep(for: .milliseconds(70))
+        #expect(model.scopes.isEmpty && model.scopesError != nil)
+        api.failScopes = false
+        try await Task.sleep(for: .milliseconds(80))
+        model.stop()
+        #expect(model.scopes.count == 2 && model.identity?.login == "willesq" && model.scopesError == nil)
+        let loads = api.refreshes.count
+        model.start()
+        try await Task.sleep(for: .milliseconds(80))
+        model.stop()
+        #expect(api.refreshes.count == loads + 1, "once loaded, polling reloads only items")
     }
 
     @Test func togglingAndItemsModeAreSent() async {

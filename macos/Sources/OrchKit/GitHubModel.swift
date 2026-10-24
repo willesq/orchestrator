@@ -14,6 +14,10 @@ public final class GitHubModel {
     public private(set) var scopes: [GitHubScope] = []
     public private(set) var warning: String?
     public private(set) var items: GitHubItemList?
+    /// Why scopes or identity could not load; kept until they do, so an
+    /// unrelated success cannot hide it.
+    public private(set) var scopesError: String?
+    /// The last failed activity load or scope change.
     public private(set) var lastError: String?
     /// Owners with a change on its way to orchd.
     public private(set) var saving: Set<String> = []
@@ -56,7 +60,6 @@ public final class GitHubModel {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
-        var scopesLoaded = false
         do {
             let list = try await api.gitHubScopes(refresh: rediscover)
             // A scope with a change on its way keeps the local value, so a
@@ -65,23 +68,18 @@ public final class GitHubModel {
                 saving.contains(fresh.owner) ? (scopes.first { $0.owner == fresh.owner } ?? fresh) : fresh
             }
             warning = list.warning
-            lastError = nil
-            scopesLoaded = true
+            identity = try await api.gitHubIdentity(refresh: false)
+            scopesError = nil
         } catch {
-            lastError = DaemonMonitor.describe(error)
+            scopesError = DaemonMonitor.describe(error)
         }
-        if let id = try? await api.gitHubIdentity(refresh: false) {
-            identity = id
-        }
-        // Loaded items must not hide a scopes error from this same refresh.
-        await refreshItems(clearsError: scopesLoaded)
+        await refreshItems()
     }
 
-    /// Reloads items; a success clears an earlier error unless clearsError is false.
-    public func refreshItems(clearsError: Bool = true) async {
+    public func refreshItems() async {
         do {
             items = try await api.gitHubItems()
-            if clearsError { lastError = nil }
+            lastError = nil
         } catch {
             lastError = DaemonMonitor.describe(error)
         }
@@ -95,7 +93,14 @@ public final class GitHubModel {
             while !Task.isCancelled {
                 guard let interval = self?.interval else { return }
                 try? await Task.sleep(for: interval)
-                await self?.refreshItems()
+                // Retry scopes and identity until they load (orchd may have
+                // been starting or upgrading); after that only items change
+                // on their own. orchd answers these from its identity cache.
+                if self?.needsScopes == true {
+                    await self?.refresh()
+                } else {
+                    await self?.refreshItems()
+                }
             }
         }
     }
@@ -104,6 +109,9 @@ public final class GitHubModel {
         pollTask?.cancel()
         pollTask = nil
     }
+
+    /// Whether scopes or identity still have to load.
+    public var needsScopes: Bool { scopes.isEmpty || identity == nil || scopesError != nil }
 
     @discardableResult
     public func setEnabled(_ owner: String, _ enabled: Bool) async -> Bool {
