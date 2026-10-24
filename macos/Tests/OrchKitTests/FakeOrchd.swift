@@ -4,7 +4,7 @@ import GRPCNIOTransportHTTP2
 import GRPCProtobuf
 @testable import OrchKit
 
-/// Serves canned `Status` and `ListPRs` responses on a Unix socket, so
+/// Serves canned responses on a Unix socket, so
 /// DaemonClient is exercised over a real gRPC connection without a running
 /// orchd.
 struct FakeOrchdService: RegistrableRPCService {
@@ -19,6 +19,8 @@ struct FakeOrchdService: RegistrableRPCService {
     var ghScopes = Orchd_V1_ListGitHubScopesResponse()
     var ghRepos = Orchd_V1_ListGitHubReposResponse()
     var ghItems = Orchd_V1_ListGitHubItemsResponse()
+    var logs = Orchd_V1_TailLogsResponse()
+    var metrics = Orchd_V1_SystemMetrics()
     /// Records requests the fake received, for assertions.
     var recorder = Recorder()
 
@@ -27,6 +29,22 @@ struct FakeOrchdService: RegistrableRPCService {
         let recorder = self.recorder
         let tasks = self.tasks, dispatch = self.dispatch, recommend = self.recommend
         let ghIdentity = self.ghIdentity, ghScopes = self.ghScopes, ghRepos = self.ghRepos, ghItems = self.ghItems
+        let logs = self.logs, metrics = self.metrics
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.TailLogs.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_TailLogsRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_TailLogsResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: logs))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.GetSystemMetrics.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_GetSystemMetricsRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_SystemMetrics>()
+        ) { _, _ in
+            StreamingServerResponse(single: ServerResponse(message: metrics))
+        }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.GetGitHubIdentity.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_GetGitHubIdentityRequest>(),

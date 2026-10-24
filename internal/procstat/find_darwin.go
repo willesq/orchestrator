@@ -3,8 +3,8 @@
 package procstat
 
 import (
+	"bytes"
 	"os"
-	"strings"
 
 	"golang.org/x/sys/unix"
 )
@@ -21,8 +21,7 @@ func FindByName(name string) (int, error) {
 	var pid int
 	var newest int64
 	for _, k := range procs {
-		comm := strings.TrimRight(string(k.Proc.P_comm[:]), "\x00")
-		if comm != name || k.Eproc.Ucred.Uid != uid {
+		if commName(k.Proc.P_comm[:]) != name || k.Eproc.Ucred.Uid != uid {
 			continue
 		}
 		if started := k.Proc.P_starttime.Sec; pid == 0 || started > newest {
@@ -30,4 +29,14 @@ func FindByName(name string) (int, error) {
 		}
 	}
 	return pid, nil
+}
+
+// commName reads the kernel's NUL-terminated command name. The buffer can hold
+// leftovers of an earlier, longer name after the terminator, so it stops at
+// the first NUL rather than trimming trailing ones.
+func commName(b []byte) string {
+	if i := bytes.IndexByte(b, 0); i >= 0 {
+		b = b[:i]
+	}
+	return string(b)
 }

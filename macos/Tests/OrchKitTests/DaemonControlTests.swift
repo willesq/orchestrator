@@ -56,7 +56,9 @@ import Testing
             Issue.record("expected a failure")
         } catch let DaemonControl.ControlError.failed(status, output) {
             #expect(status == 4)
-            #expect(output.count == 300_000)
+            // All of it was read (or the child would still be blocked); the
+            // message keeps only the start.
+            #expect(output.count == 501)
         }
     }
 

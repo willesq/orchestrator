@@ -51,7 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let root = MainWindow(
                 monitor: model.monitor, prMonitor: model.prMonitor, restart: model.restart,
                 search: model.search, sources: model.sources, tasks: model.tasks, dispatch: model.dispatch,
-                github: model.github
+                github: model.github, system: model.system, logs: model.logs
             )
             let hosting = NSHostingController(rootView: root)
             // The window keeps the size the user gives it. By default the
@@ -98,9 +98,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return true
     }
 
-    /// The GitHub tab polls while open; a closed window (kept, not released)
-    /// must not keep it polling.
+    /// The GitHub and System tabs poll while open; a closed window (kept, not
+    /// released) must not keep them polling.
     func windowWillClose(_ notification: Notification) {
         model.github.stop()
+        model.system.stop()
+        model.logs.stop()
     }
 }

@@ -138,6 +138,8 @@ var knownSources = map[string]bool{
 	"workflow-worker": true, "rag": true, "database": true,
 }
 
+var migration = regexp.MustCompile(`^OK +\d+_\S+\.sql\b`)
+
 // Attribute splits a standard-logger line into its source and message:
 // "docs: synced 3 repos" is ("docs-scheduler", "synced 3 repos"). Lines with no
 // known prefix belong to orchd; goose's levelled lines to the database.
@@ -156,6 +158,10 @@ func Attribute(line string) (source, message string) {
 		if strings.HasPrefix(line, level) {
 			return "database", line
 		}
+	}
+	// goose reports each migration it applies as "OK   0001_name.sql (…)".
+	if migration.MatchString(line) {
+		return "database", line
 	}
 	return "orchd", line
 }

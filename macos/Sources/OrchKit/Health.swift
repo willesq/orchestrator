@@ -10,13 +10,20 @@ public struct Subsystem: Sendable, Equatable, Identifiable {
     /// The last start or stop failure; empty when healthy.
     public let error: String
     public let restarts: Int
+    public let startedAt: Date?
+    /// The unit's last heartbeat: its last tick, or for a long-running unit
+    /// when it came up.
+    public let lastBeat: Date?
 
-    public init(name: String, state: String, detail: String = "", error: String = "", restarts: Int = 0) {
+    public init(name: String, state: String, detail: String = "", error: String = "", restarts: Int = 0,
+                startedAt: Date? = nil, lastBeat: Date? = nil) {
         self.name = name
         self.state = state
         self.detail = detail
         self.error = error
         self.restarts = restarts
+        self.startedAt = startedAt
+        self.lastBeat = lastBeat
     }
 
     public var isFailed: Bool { state == "failed" || !error.isEmpty }
