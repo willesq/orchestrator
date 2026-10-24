@@ -321,3 +321,100 @@ struct LiveDaemonTests {
         }
     }
 }
+
+@Suite struct GitHubRoundTripTests {
+    private func withClient(_ service: FakeOrchdService, _ body: (DaemonClient) async throws -> Void) async throws {
+        try await withFakeOrchd(service) { socket in
+            let client = try DaemonClient(socketPath: socket)
+            let runner = Task { try? await client.run() }
+            defer {
+                client.close()
+                runner.cancel()
+            }
+            try await body(client)
+        }
+    }
+
+    @Test func identityScopesReposAndItems() async throws {
+        var service = FakeOrchdService()
+        service.ghIdentity.login = "willesq"
+        service.ghIdentity.orgs = ["WippData"]
+        var team = Orchd_V1_GitHubTeam()
+        team.org = "WippData"
+        team.slug = "admins"
+        team.name = "Admins"
+        service.ghIdentity.teams = [team]
+        var me = Orchd_V1_GitHubScope()
+        me.owner = "willesq"
+        me.kind = "user"
+        me.enabled = true
+        me.items = "involving"
+        me.repoMode = "all"
+        var org = Orchd_V1_GitHubScope()
+        org.owner = "WippData"
+        org.kind = "org"
+        org.items = "bogus"
+        org.repoMode = "exclude"
+        org.repos = ["legacy"]
+        service.ghScopes.scopes = [me, org]
+        service.ghScopes.warning = "Could not reach GitHub"
+        var repo = Orchd_V1_GitHubRepo()
+        repo.name = "api"
+        repo.`private` = true
+        repo.archived = true
+        service.ghRepos.repos = [repo]
+        var pr = Orchd_V1_GitHubItem()
+        pr.url = "https://github.com/WippData/api/pull/3"
+        pr.title = "fix"
+        pr.repo = "WippData/api"
+        pr.kind = "pr"
+        pr.number = 3
+        pr.author = "willesq"
+        pr.updatedAt = "2026-10-23T10:00:00Z"
+        pr.ciState = "failure"
+        pr.reasons = ["authored", "something_new"]
+        pr.attention = "ci_failed"
+        var issue = Orchd_V1_GitHubItem()
+        issue.url = "https://github.com/willesq/orch/issues/9"
+        issue.kind = "issue"
+        issue.updatedAt = "not a date"
+        service.ghItems.items = [pr, issue]
+        service.ghItems.updatedAt = 1_800_000_000
+
+        try await withClient(service) { client in
+            let id = try await client.gitHubIdentity(refresh: true)
+            #expect(id == GitHubIdentity(login: "willesq", orgs: ["WippData"], teams: [GitHubTeam(org: "WippData", slug: "admins", name: "Admins")]))
+            #expect(service.recorder.last(Orchd_V1_GetGitHubIdentityRequest.self)?.refresh == true)
+
+            let list = try await client.gitHubScopes(refresh: false)
+            #expect(list.warning == "Could not reach GitHub")
+            #expect(list.scopes == [
+                GitHubScope(owner: "willesq", isUser: true, enabled: true),
+                GitHubScope(owner: "WippData", isUser: false, items: .involving, repoMode: .exclude, repos: ["legacy"]),
+            ])
+
+            let repos = try await client.gitHubRepos(owner: "WippData")
+            #expect(repos == [GitHubRepo(name: "api", isPrivate: true, isArchived: true)])
+            #expect(service.recorder.last(Orchd_V1_ListGitHubReposRequest.self)?.owner == "WippData")
+
+            let items = try await client.gitHubItems()
+            #expect(items.updatedAt == Date(timeIntervalSince1970: 1_800_000_000))
+            #expect(items.items[0].isPR && items.items[0].number == 3 && items.items[0].reasons == [.authored])
+            #expect(items.items[0].attention == .ciFailed && items.items[0].updatedAt != nil)
+            #expect(!items.items[1].isPR && items.items[1].updatedAt == nil)
+        }
+    }
+
+    @Test func setScopeSendsReposOnlyWhenPicked() async throws {
+        let service = FakeOrchdService()
+        try await withClient(service) { client in
+            let stored = try await client.setGitHubScope(
+                GitHubScope(owner: "WippData", isUser: false, enabled: true, items: .all, repoMode: .include, repos: ["api"]))
+            #expect(stored == GitHubScope(owner: "WippData", isUser: false, enabled: true, items: .all, repoMode: .include, repos: ["api"]))
+            let sent = try #require(service.recorder.last(Orchd_V1_SetGitHubScopeRequest.self))
+            #expect(sent.scope.owner == "WippData" && sent.scope.items == "all" && sent.scope.repoMode == "include" && sent.scope.repos == ["api"])
+            _ = try await client.setGitHubScope(GitHubScope(owner: "WippData", isUser: false, repoMode: .all, repos: ["stale"]))
+            #expect(service.recorder.last(Orchd_V1_SetGitHubScopeRequest.self)?.scope.repos.isEmpty == true)
+        }
+    }
+}

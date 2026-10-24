@@ -15,6 +15,10 @@ struct FakeOrchdService: RegistrableRPCService {
     var tasks = Orchd_V1_ListTasksResponse()
     var dispatch = Orchd_V1_DispatchResponse()
     var recommend = Orchd_V1_RecommendModelResponse()
+    var ghIdentity = Orchd_V1_GitHubIdentity()
+    var ghScopes = Orchd_V1_ListGitHubScopesResponse()
+    var ghRepos = Orchd_V1_ListGitHubReposResponse()
+    var ghItems = Orchd_V1_ListGitHubItemsResponse()
     /// Records requests the fake received, for assertions.
     var recorder = Recorder()
 
@@ -22,6 +26,54 @@ struct FakeOrchdService: RegistrableRPCService {
         let status = self.status, prs = self.prs, search = self.search, sources = self.sources
         let recorder = self.recorder
         let tasks = self.tasks, dispatch = self.dispatch, recommend = self.recommend
+        let ghIdentity = self.ghIdentity, ghScopes = self.ghScopes, ghRepos = self.ghRepos, ghItems = self.ghItems
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.GetGitHubIdentity.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_GetGitHubIdentityRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_GitHubIdentity>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: ghIdentity))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListGitHubScopes.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListGitHubScopesRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListGitHubScopesResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: ghScopes))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.SetGitHubScope.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_SetGitHubScopeRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_SetGitHubScopeResponse>()
+        ) { request, _ in
+            var scope = Orchd_V1_GitHubScope()
+            for try await message in request.messages {
+                recorder.record(message)
+                scope = message.scope
+            }
+            scope.kind = "org"
+            var response = Orchd_V1_SetGitHubScopeResponse()
+            response.scope = scope
+            return StreamingServerResponse(single: ServerResponse(message: response))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListGitHubRepos.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListGitHubReposRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListGitHubReposResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: ghRepos))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListGitHubItems.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListGitHubItemsRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListGitHubItemsResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: ghItems))
+        }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.ListTasks.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_ListTasksRequest>(),

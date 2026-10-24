@@ -33,9 +33,10 @@ final class AppModel {
     let sources: SourcesModel
     let tasks: TasksModel
     let dispatch: DispatchModel
+    let github: GitHubModel
 
     init() {
-        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI
+        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -52,6 +53,7 @@ final class AppModel {
         dispatch = DispatchModel(api: api) { await tasks.refresh() }
         restart = RestartModel(api: api) { await monitor.refresh() }
         prMonitor = PRMonitor(api: api)
+        github = GitHubModel(api: api)
     }
 
     /// Starts polling; called once the app has finished launching, and not
@@ -103,7 +105,7 @@ enum BrandGlyph {
 
 /// Stands in when the gRPC transport cannot even be built, so the tray still
 /// shows the daemon as down instead of the app failing to launch.
-private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI {
+private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI {
     let reason: String
 
     private var failure: DaemonControl.ControlError { .failed(status: -1, output: reason) }
@@ -118,4 +120,9 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI {
     func rate(id: String, _ rating: TaskRating) async throws { throw failure }
     func dispatch(_ draft: DispatchDraft) async throws -> DispatchOutcome { throw failure }
     func recommend(taskKind: String) async throws -> (route: RouteInfo?, fromTable: Bool) { throw failure }
+    func gitHubIdentity(refresh: Bool) async throws -> GitHubIdentity { throw failure }
+    func gitHubScopes(refresh: Bool) async throws -> GitHubScopeList { throw failure }
+    func setGitHubScope(_ scope: GitHubScope) async throws -> GitHubScope { throw failure }
+    func gitHubRepos(owner: String) async throws -> [GitHubRepo] { throw failure }
+    func gitHubItems() async throws -> GitHubItemList { throw failure }
 }
