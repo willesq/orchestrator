@@ -63,7 +63,14 @@ when their wording scores low by meaning.
 ```sh
 orch search "where is sync_meta kept"     # hits marked "exact" or "keyword"
 orch search --mode dense "where is sync_meta kept"
+orch search --require-tag owner:willesq --require-tag repo:orchestrator "install"   # one repo's docs
+orch search --uri repo://willesq/orchestrator/README.md "install"                   # one doc
+orch rag show repo://willesq/orchestrator/README.md   # the doc as memory holds it
 ```
+
+`orch rag show` rebuilds a source from its chunks: in order, without their section context
+lines, with the overlap between chunks trimmed. It is what retrieval sees, close to but not
+exactly the original.
 
 ## Measuring retrieval
 

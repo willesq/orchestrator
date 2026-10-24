@@ -366,7 +366,7 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 	if opts.SourceType != "" {
 		must["source_type"] = opts.SourceType
 	}
-	filter := buildFilter(must, nil, opts.Range)
+	filter := buildFilter(must, nil, nil, opts.Range)
 	fields := []string{"source_uri", "source_type", "scope", "tags", fieldStartedAt, fieldEndedAt, fieldIngestedAt}
 
 	agg := map[string]*SourceSummary{}

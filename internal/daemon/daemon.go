@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -32,6 +33,7 @@ import (
 	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
+	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/embed"
 	"github.com/willesq/orchestrator/internal/github"
 	"github.com/willesq/orchestrator/internal/handoff"
@@ -43,6 +45,7 @@ import (
 	"github.com/willesq/orchestrator/internal/routing"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/selfupdate"
+	"github.com/willesq/orchestrator/internal/sources"
 	"github.com/willesq/orchestrator/internal/supervisor"
 	"github.com/willesq/orchestrator/internal/version"
 	"github.com/willesq/orchestrator/internal/workflows"
@@ -108,6 +111,15 @@ type server struct {
 	handoffDir string
 	// system serves TailLogs and GetSystemMetrics; nil when unavailable.
 	system *systemProbe
+	// docsReg and sourcesReg back the Docs and Sources RPCs, and documents
+	// rebuilds indexed sources; each is nil when unavailable.
+	docsReg    *docs.Registry
+	sourcesReg *sources.Registry
+	documents  documentReader
+	// nudgeMu guards lastNudge, when RefreshSource last restarted the
+	// sources scheduler.
+	nudgeMu   sync.Mutex
+	lastNudge time.Time
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -143,6 +155,9 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 	if k := req.GetTopK(); k < 0 || k > maxSearchTopK {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "top_k %d must be between 0 and %d", k, maxSearchTopK)
 	}
+	if err := checkTags(req.GetTags(), req.GetAllTags()); err != nil {
+		return nil, err
+	}
 	tr, err := timeRange(req.GetSince(), req.GetUntil())
 	if err != nil {
 		return nil, err
@@ -152,6 +167,8 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 		Scope:      req.GetScope(),
 		SourceType: req.GetSourceType(),
 		Tags:       req.GetTags(),
+		AllTags:    req.GetAllTags(),
+		SourceURI:  req.GetSourceUri(),
 		Mode:       req.GetMode(),
 		Range:      tr,
 	})
@@ -575,6 +592,9 @@ func Run(ctx context.Context) error {
 		github:       ghService,
 		handoffDir:   handoff.Dir(),
 		system:       system,
+		docsReg:      docs.NewRegistry(store),
+		sourcesReg:   sources.NewRegistry(store),
+		documents:    svc,
 	})
 	go func() {
 		<-runCtx.Done()

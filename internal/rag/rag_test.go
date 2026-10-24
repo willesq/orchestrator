@@ -61,6 +61,7 @@ func TestBuildFilter(t *testing.T) {
 		name      string
 		must      map[string]string
 		tags      []string
+		allTags   []string
 		wantNil   bool
 		wantConds int
 		tr        TimeRange
@@ -69,12 +70,13 @@ func TestBuildFilter(t *testing.T) {
 		{name: "skips empty values", must: map[string]string{"scope": "work", "source_type": ""}, tags: nil, wantConds: 1},
 		{name: "scope plus tags", must: map[string]string{"scope": "work"}, tags: []string{"go"}, wantConds: 2},
 		{name: "tags only", must: nil, tags: []string{"a", "b"}, wantConds: 1},
+		{name: "every required tag is its own condition", allTags: []string{"owner:o", "repo:r", ""}, wantConds: 2},
 		{name: "a date range adds both ends", tr: TimeRange{Since: time.Unix(100, 0), Until: time.Unix(200, 0)}, wantConds: 2},
 		{name: "an open-ended range adds one", tr: TimeRange{Since: time.Unix(100, 0)}, wantConds: 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			f := buildFilter(tt.must, tt.tags, tt.tr)
+			f := buildFilter(tt.must, tt.tags, tt.allTags, tt.tr)
 			if tt.wantNil {
 				if f != nil {
 					t.Errorf("expected nil filter, got %v", f)

@@ -49,6 +49,10 @@ type SearchOpts struct {
 	Scope      string
 	SourceType string
 	Tags       []string
+	// AllTags keeps only content carrying every one of these tags.
+	AllTags []string
+	// SourceURI keeps only one source's content.
+	SourceURI string
 	// Mode overrides the service's SearchMode for this search ("" keeps it).
 	Mode string
 	// Range keeps only content dated within it.
@@ -95,6 +99,9 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	if opts.SourceType != "" {
 		must["source_type"] = opts.SourceType
 	}
+	if opts.SourceURI != "" {
+		must["source_uri"] = opts.SourceURI
+	}
 	st := s.active()
 	mode, explicit := opts.Mode, opts.Mode != ""
 	if !explicit {
@@ -129,7 +136,7 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 			note = "collection has no keyword index; answered by meaning only"
 		}
 	}
-	raw, err := st.Search(ctx, vecs[0], opts.TopK, must, opts.Tags, opts.Range)
+	raw, err := st.Search(ctx, vecs[0], opts.TopK, must, opts.Tags, opts.AllTags, opts.Range)
 	if err != nil {
 		return nil, "", err
 	}
@@ -149,10 +156,13 @@ func (s *Service) hybridSearch(ctx context.Context, st *QdrantStore, query strin
 	var derr error
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); dense, derr = st.Search(ctx, vec, n, must, opts.Tags, opts.Range) }()
 	go func() {
 		defer wg.Done()
-		keyword, kerr = st.KeywordSearch(ctx, bm25.Query(query), min(n*2, maxCandidates), must, opts.Tags, opts.Range)
+		dense, derr = st.Search(ctx, vec, n, must, opts.Tags, opts.AllTags, opts.Range)
+	}()
+	go func() {
+		defer wg.Done()
+		keyword, kerr = st.KeywordSearch(ctx, bm25.Query(query), min(n*2, maxCandidates), must, opts.Tags, opts.AllTags, opts.Range)
 	}()
 	wg.Wait()
 	if derr != nil {

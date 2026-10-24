@@ -300,7 +300,7 @@ type queryResponse struct {
 // KeywordSearch ranks a hybrid collection by BM25: the query's terms against
 // each chunk's sparse vector, with Qdrant applying IDF. Hits carry their dense
 // vector. An empty query vector matches nothing.
-func (q *QdrantStore) KeywordSearch(ctx context.Context, query bm25.Vector, topK int, must map[string]string, anyTags []string, tr TimeRange) ([]SearchHit, error) {
+func (q *QdrantStore) KeywordSearch(ctx context.Context, query bm25.Vector, topK int, must map[string]string, anyTags, allTags []string, tr TimeRange) ([]SearchHit, error) {
 	if query.IsEmpty() {
 		return nil, nil
 	}
@@ -311,7 +311,7 @@ func (q *QdrantStore) KeywordSearch(ctx context.Context, query bm25.Vector, topK
 		"with_payload": true,
 		"with_vector":  []string{denseName},
 	}
-	if filter := buildFilter(must, anyTags, tr); filter != nil {
+	if filter := buildFilter(must, anyTags, allTags, tr); filter != nil {
 		body["filter"] = filter
 	}
 	var resp queryResponse
@@ -327,9 +327,10 @@ type searchResponse struct {
 }
 
 // Search runs a vector query, optionally filtered by exact-match payload fields
-// in must (all must match), anyTags (payload.tags contains any) and tr.
-func (q *QdrantStore) Search(ctx context.Context, vector []float32, topK int, must map[string]string, anyTags []string, tr TimeRange) ([]SearchHit, error) {
-	filter := buildFilter(must, anyTags, tr)
+// in must (all must match), anyTags (payload.tags contains any), allTags
+// (payload.tags contains every one) and tr.
+func (q *QdrantStore) Search(ctx context.Context, vector []float32, topK int, must map[string]string, anyTags, allTags []string, tr TimeRange) ([]SearchHit, error) {
+	filter := buildFilter(must, anyTags, allTags, tr)
 	l, err := q.Layout(ctx)
 	if err != nil {
 		return nil, err
@@ -461,7 +462,7 @@ func EqFilter(key, value string) map[string]any {
 	}}
 }
 
-func buildFilter(must map[string]string, anyTags []string, tr TimeRange) map[string]any {
+func buildFilter(must map[string]string, anyTags, allTags []string, tr TimeRange) map[string]any {
 	var conds []any
 	for k, val := range must {
 		if val == "" {
@@ -476,6 +477,15 @@ func buildFilter(must map[string]string, anyTags []string, tr TimeRange) map[str
 		conds = append(conds, map[string]any{
 			"key":   "tags",
 			"match": map[string]any{"any": anyTags},
+		})
+	}
+	for _, tag := range allTags {
+		if tag == "" {
+			continue
+		}
+		conds = append(conds, map[string]any{
+			"key":   "tags",
+			"match": map[string]any{"value": tag},
 		})
 	}
 	conds = append(conds, tr.conditions()...)
