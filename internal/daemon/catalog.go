@@ -8,11 +8,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/willesq/orchestrator/internal/github"
 	"github.com/willesq/orchestrator/internal/rag"
@@ -30,8 +32,9 @@ const (
 	// maxDocumentBytes keeps a GetDocument reply under the 4 MiB clients
 	// accept by default.
 	maxDocumentBytes = 3 << 20
-	// maxDocFiles bounds a ListDocs reply the same way.
-	maxDocFiles = 10_000
+	// maxDocFiles and maxDocListBytes bound a ListDocs reply the same way.
+	maxDocFiles     = 10_000
+	maxDocListBytes = 3 << 20
 	// refreshNudgeGap stops repeated RefreshSource calls from restarting the
 	// scheduler before it can finish a refresh.
 	refreshNudgeGap = 10 * time.Second
@@ -70,23 +73,52 @@ func (s *server) ListDocs(ctx context.Context, _ *orchdv1.ListDocsRequest) (*orc
 		}
 		out.Owners = append(out.Owners, pb)
 	}
-	list, err := s.docsReg.ListDocs(ctx)
+	if s.rag == nil {
+		return nil, grpcstatus.Error(codes.Unavailable, "rag store unavailable")
+	}
+	// The catalog is what the store holds, not what the registry recorded:
+	// a doc whose ingest failed, or whose content was deleted, is not listed.
+	stored, _, _, err := s.rag.ListSources(ctx, rag.ListSourcesOpts{SourceType: "repo_doc", URIPrefix: "repo://"})
 	if err != nil {
 		return nil, err
 	}
-	for _, d := range list {
-		if len(out.Files) == maxDocFiles {
+	recorded, err := s.docsReg.ListDocs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	changed := make(map[string]int64, len(recorded))
+	for _, d := range recorded {
+		changed[d.URI] = d.UpdatedAt
+	}
+	synced := map[string]bool{}
+	for _, o := range owners {
+		synced[o.Owner] = true
+	}
+	sort.Slice(stored, func(i, j int) bool { return stored[i].SourceURI < stored[j].SourceURI })
+	size := proto.Size(out)
+	for _, src := range stored {
+		owner, repo, path, ok := splitRepoURI(src.SourceURI)
+		// Only docs `orch docs` stored: the registry records each one, and
+		// only orchd's sync writes it. Any client can store text under a
+		// repo:// URI, and a local owner folder can share a synced owner's name.
+		if _, recordedDoc := changed[src.SourceURI]; !ok || !synced[owner] || !recordedDoc {
+			continue
+		}
+		if len(out.Files) == maxDocFiles || size > maxDocListBytes {
 			out.Truncated = true
 			break
 		}
-		owner, repo, path, ok := splitRepoURI(d.URI)
-		if !ok {
-			continue
+		f := &orchdv1.DocFile{
+			SourceUri: src.SourceURI, Owner: owner, Repo: repo, Path: path,
+			Chunks: clampInt32(src.Chunks), IngestedAt: toUnix(src.IngestedAt), UpdatedAt: changed[src.SourceURI],
 		}
-		f := &orchdv1.DocFile{SourceUri: d.URI, Owner: owner, Repo: repo, Path: path, UpdatedAt: d.UpdatedAt}
+		if f.UpdatedAt == 0 {
+			f.UpdatedAt = f.IngestedAt
+		}
 		if sha, tracked := heads[owner+"/"+repo]; tracked {
 			f.WebUrl = gitHubFileURL(owner, repo, sha, path)
 		}
+		size += proto.Size(f)
 		out.Files = append(out.Files, f)
 	}
 	return out, nil

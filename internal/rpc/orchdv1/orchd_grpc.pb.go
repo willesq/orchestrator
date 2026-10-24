@@ -117,7 +117,7 @@ type OrchdClient interface {
 	// the size of its data, and task counts.
 	GetSystemMetrics(ctx context.Context, in *GetSystemMetricsRequest, opts ...grpc.CallOption) (*SystemMetrics, error)
 	// ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
-	// repos, and every indexed doc with its GitHub location.
+	// repos, and every doc of theirs the store holds, with its GitHub location.
 	ListDocs(ctx context.Context, in *ListDocsRequest, opts ...grpc.CallOption) (*ListDocsResponse, error)
 	// GetDocument rebuilds one indexed source from its stored chunks.
 	GetDocument(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*Document, error)
@@ -497,7 +497,7 @@ type OrchdServer interface {
 	// the size of its data, and task counts.
 	GetSystemMetrics(context.Context, *GetSystemMetricsRequest) (*SystemMetrics, error)
 	// ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
-	// repos, and every indexed doc with its GitHub location.
+	// repos, and every doc of theirs the store holds, with its GitHub location.
 	ListDocs(context.Context, *ListDocsRequest) (*ListDocsResponse, error)
 	// GetDocument rebuilds one indexed source from its stored chunks.
 	GetDocument(context.Context, *GetDocumentRequest) (*Document, error)

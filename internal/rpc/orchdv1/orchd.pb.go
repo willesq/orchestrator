@@ -3993,10 +3993,11 @@ func (*ListDocsRequest) Descriptor() ([]byte, []int) {
 }
 
 type ListDocsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Owners        []*DocOwner            `protobuf:"bytes,1,rep,name=owners,proto3" json:"owners,omitempty"`
-	Files         []*DocFile             `protobuf:"bytes,2,rep,name=files,proto3" json:"files,omitempty"`          // ordered by source_uri
-	Truncated     bool                   `protobuf:"varint,3,opt,name=truncated,proto3" json:"truncated,omitempty"` // more files than one reply carries
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Owners []*DocOwner            `protobuf:"bytes,1,rep,name=owners,proto3" json:"owners,omitempty"`
+	// What the store holds for the synced owners, ordered by source_uri.
+	Files         []*DocFile `protobuf:"bytes,2,rep,name=files,proto3" json:"files,omitempty"`
+	Truncated     bool       `protobuf:"varint,3,opt,name=truncated,proto3" json:"truncated,omitempty"` // more files than one reply carries
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4234,8 +4235,10 @@ type DocFile struct {
 	Owner         string                 `protobuf:"bytes,2,opt,name=owner,proto3" json:"owner,omitempty"`
 	Repo          string                 `protobuf:"bytes,3,opt,name=repo,proto3" json:"repo,omitempty"`
 	Path          string                 `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`
-	UpdatedAt     int64                  `protobuf:"varint,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // unix seconds of the last ingest that changed it
-	WebUrl        string                 `protobuf:"bytes,6,opt,name=web_url,json=webUrl,proto3" json:"web_url,omitempty"`           // the file on GitHub at the indexed commit
+	UpdatedAt     int64                  `protobuf:"varint,5,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`    // unix seconds of the last ingest that changed it
+	WebUrl        string                 `protobuf:"bytes,6,opt,name=web_url,json=webUrl,proto3" json:"web_url,omitempty"`              // the file on GitHub at the indexed commit
+	Chunks        int32                  `protobuf:"varint,7,opt,name=chunks,proto3" json:"chunks,omitempty"`                           // chunks held in the store
+	IngestedAt    int64                  `protobuf:"varint,8,opt,name=ingested_at,json=ingestedAt,proto3" json:"ingested_at,omitempty"` // unix seconds of the latest store of any chunk
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4310,6 +4313,20 @@ func (x *DocFile) GetWebUrl() string {
 		return x.WebUrl
 	}
 	return ""
+}
+
+func (x *DocFile) GetChunks() int32 {
+	if x != nil {
+		return x.Chunks
+	}
+	return 0
+}
+
+func (x *DocFile) GetIngestedAt() int64 {
+	if x != nil {
+		return x.IngestedAt
+	}
+	return 0
 }
 
 type GetDocumentRequest struct {
@@ -5286,7 +5303,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"lastSynced\x12\x14\n" +
 	"\x05files\x18\x04 \x01(\x05R\x05files\x12\x16\n" +
 	"\x06status\x18\x05 \x01(\tR\x06status\x12\x17\n" +
-	"\aweb_url\x18\x06 \x01(\tR\x06webUrl\"\x9e\x01\n" +
+	"\aweb_url\x18\x06 \x01(\tR\x06webUrl\"\xd7\x01\n" +
 	"\aDocFile\x12\x1d\n" +
 	"\n" +
 	"source_uri\x18\x01 \x01(\tR\tsourceUri\x12\x14\n" +
@@ -5295,7 +5312,10 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x04path\x18\x04 \x01(\tR\x04path\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\x05 \x01(\x03R\tupdatedAt\x12\x17\n" +
-	"\aweb_url\x18\x06 \x01(\tR\x06webUrl\"3\n" +
+	"\aweb_url\x18\x06 \x01(\tR\x06webUrl\x12\x16\n" +
+	"\x06chunks\x18\a \x01(\x05R\x06chunks\x12\x1f\n" +
+	"\vingested_at\x18\b \x01(\x03R\n" +
+	"ingestedAt\"3\n" +
 	"\x12GetDocumentRequest\x12\x1d\n" +
 	"\n" +
 	"source_uri\x18\x01 \x01(\tR\tsourceUri\"\xf3\x01\n" +

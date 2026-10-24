@@ -36,9 +36,11 @@ final class AppModel {
     let github: GitHubModel
     let system: SystemModel
     let logs: LogsModel
+    let docs: DocsModel
+    let registeredSources: RegisteredSourcesModel
 
     init() {
-        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & SystemAPI
+        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & SystemAPI & CatalogAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -58,6 +60,8 @@ final class AppModel {
         github = GitHubModel(api: api)
         system = SystemModel(api: api, loadReport: { try await DaemonControl().statusReport() })
         logs = LogsModel(api: api)
+        docs = DocsModel(api: api)
+        registeredSources = RegisteredSourcesModel(api: api)
     }
 
     /// Starts polling; called once the app has finished launching, and not
@@ -109,7 +113,7 @@ enum BrandGlyph {
 
 /// Stands in when the gRPC transport cannot even be built, so the tray still
 /// shows the daemon as down instead of the app failing to launch.
-private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI {
+private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI, CatalogAPI {
     let reason: String
 
     private var failure: DaemonControl.ControlError { .failed(status: -1, output: reason) }
@@ -131,4 +135,10 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
     func gitHubItems() async throws -> GitHubItemList { throw failure }
     func tailLogs(after: UInt64, limit: Int) async throws -> LogPage { throw failure }
     func systemMetrics() async throws -> SystemMetrics { throw failure }
+    func listDocs() async throws -> DocCatalog { throw failure }
+    func document(uri: String) async throws -> RebuiltDocument { throw failure }
+    func registeredSources() async throws -> [RegisteredSource] { throw failure }
+    func saveSource(_ draft: SourceDraft, replacing: String?) async throws -> RegisteredSource { throw failure }
+    func removeSource(id: String, purge: Bool) async throws -> PurgeResult { throw failure }
+    func refreshSource(id: String?) async throws { throw failure }
 }

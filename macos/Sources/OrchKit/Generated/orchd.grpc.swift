@@ -999,7 +999,7 @@ extension Orchd_V1_Orchd {
         /// > Source IDL Documentation:
         /// >
         /// > ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
-        /// > repos, and every indexed doc with its GitHub location.
+        /// > repos, and every doc of theirs the store holds, with its GitHub location.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Orchd_V1_ListDocsRequest` message.
@@ -1956,7 +1956,7 @@ extension Orchd_V1_Orchd {
         /// > Source IDL Documentation:
         /// >
         /// > ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
-        /// > repos, and every indexed doc with its GitHub location.
+        /// > repos, and every doc of theirs the store holds, with its GitHub location.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Orchd_V1_ListDocsRequest` message.
@@ -2847,7 +2847,7 @@ extension Orchd_V1_Orchd.ClientProtocol {
     /// > Source IDL Documentation:
     /// >
     /// > ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
-    /// > repos, and every indexed doc with its GitHub location.
+    /// > repos, and every doc of theirs the store holds, with its GitHub location.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Orchd_V1_ListDocsRequest` message.
@@ -3799,7 +3799,7 @@ extension Orchd_V1_Orchd.ClientProtocol {
     /// > Source IDL Documentation:
     /// >
     /// > ListDocs lists the GitHub owners whose docs orchd keeps in sync, their
-    /// > repos, and every indexed doc with its GitHub location.
+    /// > repos, and every doc of theirs the store holds, with its GitHub location.
     ///
     /// - Parameters:
     ///   - message: request message to send.

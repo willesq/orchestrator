@@ -21,6 +21,9 @@ struct FakeOrchdService: RegistrableRPCService {
     var ghItems = Orchd_V1_ListGitHubItemsResponse()
     var logs = Orchd_V1_TailLogsResponse()
     var metrics = Orchd_V1_SystemMetrics()
+    var docs = Orchd_V1_ListDocsResponse()
+    var document = Orchd_V1_Document()
+    var registered = Orchd_V1_ListRegisteredSourcesResponse()
     /// Records requests the fake received, for assertions.
     var recorder = Recorder()
 
@@ -30,6 +33,62 @@ struct FakeOrchdService: RegistrableRPCService {
         let tasks = self.tasks, dispatch = self.dispatch, recommend = self.recommend
         let ghIdentity = self.ghIdentity, ghScopes = self.ghScopes, ghRepos = self.ghRepos, ghItems = self.ghItems
         let logs = self.logs, metrics = self.metrics
+        let docs = self.docs, document = self.document, registered = self.registered
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListDocs.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListDocsRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListDocsResponse>()
+        ) { _, _ in
+            StreamingServerResponse(single: ServerResponse(message: docs))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.GetDocument.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_GetDocumentRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_Document>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: document))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListRegisteredSources.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListRegisteredSourcesRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListRegisteredSourcesResponse>()
+        ) { _, _ in
+            StreamingServerResponse(single: ServerResponse(message: registered))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.SaveSource.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_SaveSourceRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_RegisteredSource>()
+        ) { request, _ in
+            var saved = Orchd_V1_RegisteredSource()
+            for try await message in request.messages {
+                recorder.record(message)
+                saved = message.source
+            }
+            saved.id = "\(saved.kind)|\(saved.uri)"
+            saved.status = "new"
+            return StreamingServerResponse(single: ServerResponse(message: saved))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.RemoveSource.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_RemoveSourceRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_RemoveSourceResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            var response = Orchd_V1_RemoveSourceResponse()
+            response.purgedSources = 2
+            response.purgedChunks = 9
+            return StreamingServerResponse(single: ServerResponse(message: response))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.RefreshSource.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_RefreshSourceRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_RefreshSourceResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: Orchd_V1_RefreshSourceResponse()))
+        }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.TailLogs.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_TailLogsRequest>(),
