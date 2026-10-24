@@ -13,7 +13,7 @@ public protocol DaemonAPI: Sendable {
 /// Talks to orchd over its Unix socket. One long-lived HTTP/2 connection is
 /// shared by every call; the transport reconnects on its own when orchd
 /// restarts and recreates the socket.
-public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, Sendable {
+public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI, Sendable {
     private let client: GRPCClient<HTTP2ClientTransport.Posix>
     private let orchd: Orchd_V1_Orchd.Client<HTTP2ClientTransport.Posix>
     private let callTimeout: Duration
@@ -51,7 +51,8 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
             version: response.version,
             uptimeSeconds: response.uptimeSeconds,
             subsystems: response.subsystems.map {
-                Subsystem(name: $0.name, state: $0.state, detail: $0.detail, error: $0.error, restarts: Int($0.restarts))
+                Subsystem(name: $0.name, state: $0.state, detail: $0.detail, error: $0.error, restarts: Int($0.restarts),
+                          startedAt: date(fromUnix: $0.startedAt), lastBeat: date(fromUnix: $0.lastBeat))
             }
         )
     }
@@ -234,6 +235,34 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
                 )
             },
             updatedAt: date(fromUnix: r.updatedAt)
+        )
+    }
+
+    public func tailLogs(after: UInt64, limit: Int) async throws -> LogPage {
+        var request = Orchd_V1_TailLogsRequest()
+        request.afterSeq = after
+        request.limit = Int32(clamping: max(limit, 0))
+        let r = try await orchd.tailLogs(request, options: callOptions)
+        return LogPage(
+            lines: r.entries.map {
+                LogLine(seq: $0.seq, at: Date(timeIntervalSince1970: TimeInterval($0.atUnixMs) / 1000),
+                        source: $0.source, message: $0.message)
+            },
+            lastSeq: r.lastSeq, oldestSeq: r.oldestSeq, sources: r.sources
+        )
+    }
+
+    public func systemMetrics() async throws -> SystemMetrics {
+        let r = try await orchd.getSystemMetrics(Orchd_V1_GetSystemMetricsRequest(), options: callOptions)
+        return SystemMetrics(
+            at: Date(timeIntervalSince1970: TimeInterval(r.atUnixMs) / 1000),
+            processes: r.processes.map {
+                ProcessStats(name: $0.name, pid: Int($0.pid), rssBytes: $0.rssBytes, cpuPercent: $0.cpuPercent,
+                             uptimeSeconds: $0.uptimeSeconds, running: $0.running)
+            },
+            goroutines: Int(r.goroutines), heapBytes: r.heapBytes,
+            data: r.data.map { DataUsage(name: $0.name, path: $0.path, bytes: $0.bytes) },
+            tasks: r.tasks.mapValues { Int($0) }
         )
     }
 

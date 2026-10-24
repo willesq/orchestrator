@@ -75,6 +75,8 @@ func TestAttribute(t *testing.T) {
 		{"2026/10/23 18:19:24 pr-babysitter: rate limited", "pr-babysitter", "rate limited"},
 		{"2026/10/23 18:19:24 goose: migrated", "database", "migrated"},
 		{"2026/10/23 18:19:24 INFO Applying migrations...", "database", "INFO Applying migrations..."},
+		{"2026/10/23 18:19:24 OK   0007_models.sql (250.29µs)", "database", "OK   0007_models.sql (250.29µs)"},
+		{"2026/10/23 18:19:24 OK, done", "orchd", "OK, done"},
 		{"2026/10/23 18:19:24 orchd 0.19.0 listening on x", "orchd", "orchd 0.19.0 listening on x"},
 		{"2026/10/23 18:19:24 orchd: model routing is off", "orchd", "model routing is off"},
 		{"2026/10/23 18:19:24 session abc: summary skipped", "orchd", "session abc: summary skipped"},

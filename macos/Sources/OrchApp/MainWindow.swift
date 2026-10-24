@@ -2,13 +2,14 @@ import OrchKit
 import SwiftUI
 
 enum Pane: String, CaseIterable, Identifiable {
-    case dashboard, memory, tasks, github
+    case dashboard, system, memory, tasks, github
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: "Dashboard"
+        case .system: "System"
         case .memory: "Memory"
         case .tasks: "Tasks"
         case .github: "GitHub"
@@ -18,6 +19,7 @@ enum Pane: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .dashboard: "gauge.with.dots.needle.33percent"
+        case .system: "cpu"
         case .memory: "brain.head.profile"
         case .tasks: "checklist"
         case .github: "point.3.connected.trianglepath.dotted"
@@ -34,6 +36,8 @@ struct MainWindow: View {
     let tasks: TasksModel
     let dispatch: DispatchModel
     let github: GitHubModel
+    let system: SystemModel
+    let logs: LogsModel
 
     @AppStorage("pane") private var pane: Pane = .dashboard
 
@@ -47,6 +51,8 @@ struct MainWindow: View {
             switch pane {
             case .dashboard:
                 DashboardView(monitor: monitor, prMonitor: prMonitor, restart: restart)
+            case .system:
+                SystemView(model: system, logs: logs, restart: restart)
             case .memory:
                 MemoryView(search: search, sources: sources)
             case .tasks:

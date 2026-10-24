@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `MemoryView`, `TasksView`, `GitHubView`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `SystemView`, `LogsView`, `MemoryView`, `TasksView`, `GitHubView`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -85,6 +85,25 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
 - **Dashboard:** orchd's health, every subsystem with its detail or last error and restart count,
   a **Restart** button for each unit, **Restart all** (the `Restart` RPC, one at a time), and the
   Needs you list.
+- **System:** an Overview/Logs switch in the toolbar. Both poll only while the tab is shown.
+  - **Overview:**
+    - **Process tiles:** CPU and memory for orchd and qdrant (`GetSystemMetrics` every 2 s), each
+      with a two-minute sparkline. A process that stops or comes back under a new PID starts a
+      new line.
+    - **Runtime:** orchd's goroutines and Go heap.
+    - **Subsystems:** each unit's heartbeat age, ticking every second, with **Restart** for each.
+    - **Storage and tasks:** on-disk store sizes and task counts by status.
+    - **Status report:** the full `orch status --json` report every 15 s. The app runs `orch`
+      from an argument array, as for daemon control, so the report covers the checks that work
+      with orchd down.
+  - **Logs:** `TailLogs` every second.
+    - **Buffer:** keeps the latest 5000 lines from every source.
+    - **Controls:** a source picker shows one source or all of them. A text filter, **Pause**
+      (resuming catches up) and **Clear** sit beside it.
+    - **Gaps:** if lines rolled out of orchd's memory before the app read them, a note says how
+      many.
+    - **Restarts:** when orchd restarts, its numbering starts over, so the view starts over too.
+    - **Text:** log text is shown verbatim and never rendered.
 - **Memory:** a Search/Sources switch in the toolbar.
 - **Memory → Search:** the `Search` RPC with mode (default, hybrid, meaning only), a source-type
   filter and a result count of 1–100. Each hit shows its score, source, type and date.

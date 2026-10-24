@@ -34,9 +34,11 @@ final class AppModel {
     let tasks: TasksModel
     let dispatch: DispatchModel
     let github: GitHubModel
+    let system: SystemModel
+    let logs: LogsModel
 
     init() {
-        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI
+        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & SystemAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -54,6 +56,8 @@ final class AppModel {
         restart = RestartModel(api: api) { await monitor.refresh() }
         prMonitor = PRMonitor(api: api)
         github = GitHubModel(api: api)
+        system = SystemModel(api: api, loadReport: { try await DaemonControl().statusReport() })
+        logs = LogsModel(api: api)
     }
 
     /// Starts polling; called once the app has finished launching, and not
@@ -105,7 +109,7 @@ enum BrandGlyph {
 
 /// Stands in when the gRPC transport cannot even be built, so the tray still
 /// shows the daemon as down instead of the app failing to launch.
-private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI {
+private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI {
     let reason: String
 
     private var failure: DaemonControl.ControlError { .failed(status: -1, output: reason) }
@@ -125,4 +129,6 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
     func setGitHubScope(_ scope: GitHubScope) async throws -> GitHubScope { throw failure }
     func gitHubRepos(owner: String) async throws -> [GitHubRepo] { throw failure }
     func gitHubItems() async throws -> GitHubItemList { throw failure }
+    func tailLogs(after: UInt64, limit: Int) async throws -> LogPage { throw failure }
+    func systemMetrics() async throws -> SystemMetrics { throw failure }
 }
