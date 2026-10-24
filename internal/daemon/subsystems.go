@@ -8,6 +8,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -66,6 +67,8 @@ type deps struct {
 	// restart asks orchd to shut down so its service manager starts it again.
 	// Nil drops the self-update unit for the same reason.
 	restart func(reason string)
+	// system receives qdrant's output and PID; nil discards them.
+	system *systemProbe
 }
 
 // subsystems lists orchd's supervised units in start order (stopped in reverse).
@@ -73,7 +76,7 @@ type deps struct {
 // — there is nothing for `orch restart` to bounce in that case.
 func subsystems(d deps) []supervisor.Unit {
 	var out []supervisor.Unit
-	if u, ok := qdrantUnit(d.settings, d.apiKey); ok {
+	if u, ok := qdrantUnit(d.settings, d.apiKey, d.system); ok {
 		out = append(out, u)
 	}
 	if d.settings.Queue.Worker.Enabled {
@@ -133,7 +136,7 @@ func selfUpdateUnit(w *selfupdate.Watcher, restart func(reason string), supervis
 			if !supervised {
 				// Adopting the build keeps this to one line per new build rather
 				// than one per check, for as long as the process stays up.
-				log.Printf("orchd: a new build is installed at %s (%s), but nothing supervises "+
+				log.Printf("self-update: a new build is installed at %s (%s), but nothing supervises "+
 					"this process — run 'orch restart' to pick it up", w.Path(), b)
 				w.Adopt(b)
 				return
@@ -146,11 +149,16 @@ func selfUpdateUnit(w *selfupdate.Watcher, restart func(reason string), supervis
 // qdrantUnit owns the native (Docker-free) engine's lifecycle. In docker or
 // external mode the engine belongs to someone else, so there is no unit: the
 // second return value is false and `orch status` reports the configured URL.
-func qdrantUnit(s config.Settings, apiKey string) (supervisor.Unit, bool) {
+func qdrantUnit(s config.Settings, apiKey string, sys *systemProbe) (supervisor.Unit, bool) {
 	if s.RAG.Qdrant.Mode != "binary" {
 		return supervisor.Unit{}, false
 	}
+	var output io.Writer
+	if sys != nil && sys.logs != nil {
+		output = sys.logs.SourceWriter("qdrant")
+	}
 	qp := qdrant.New(qdrant.Config{
+		Output:   output,
 		Version:  s.RAG.Qdrant.Version,
 		BinDir:   filepath.Join(paths.DataDir(), "bin"),
 		Storage:  s.QdrantStorageDir(),
@@ -158,6 +166,9 @@ func qdrantUnit(s config.Settings, apiKey string) (supervisor.Unit, bool) {
 		GRPCPort: s.RAG.Qdrant.GRPCPort,
 		APIKey:   apiKey,
 	})
+	if sys != nil {
+		sys.qdrantPID = qp.PID
+	}
 	return supervisor.Unit{
 		Name:   UnitQdrant,
 		Detail: fmt.Sprintf("native engine on :%d", s.RAG.Qdrant.HTTPPort),
@@ -274,11 +285,11 @@ func prsUnit(s config.Settings, store *sql.DB, gh *github.Service) supervisor.Un
 			last = time.Now()
 			if err := bb.Sweep(ctx); rateLimited(err) {
 				backoffUntil = time.Now().Add(rateLimitBackoff)
-				log.Printf("orchd: GitHub rate limit; PR sweeps paused for %s: %v", rateLimitBackoff, err)
+				log.Printf("pr-babysitter: GitHub rate limit; PR sweeps paused for %s: %v", rateLimitBackoff, err)
 			}
 			if attr != nil {
 				if err := attr.Sweep(ctx); err != nil {
-					log.Printf("orchd: pr outcomes: %v", err)
+					log.Printf("pr-babysitter: pr outcomes: %v", err)
 				}
 			}
 		},
@@ -425,7 +436,7 @@ func (t taskRunner) task(ctx context.Context, in workflows.AgentTaskInput) agent
 	// Codex switched off after the task was routed to it: run on Claude Code
 	// with the agent's own model rather than fail.
 	if task.Provider == agentrun.ProviderCodex && (t.r == nil || t.r.Codex.Bin == "") {
-		log.Printf("orchd: task %s: routed to codex, which the worker no longer runs; running on Claude Code", in.ID)
+		log.Printf("workflow-worker: task %s: routed to codex, which the worker no longer runs; running on Claude Code", in.ID)
 		task.Provider, task.Model, task.Effort = "", "", ""
 		return task
 	}
@@ -434,7 +445,7 @@ func (t taskRunner) task(ctx context.Context, in workflows.AgentTaskInput) agent
 	}
 	m, err := t.models.Get(ctx, in.Route.Provider, task.Model)
 	if err != nil || !m.Routable() {
-		log.Printf("orchd: task %s: routed model %s/%s is no longer routable; running the agent's own model",
+		log.Printf("workflow-worker: task %s: routed model %s/%s is no longer routable; running the agent's own model",
 			in.ID, in.Route.Provider, task.Model)
 		task.Model, task.Effort = "", ""
 		return task

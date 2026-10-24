@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -34,6 +35,8 @@ type Config struct {
 	HTTPPort int
 	GRPCPort int
 	APIKey   string // optional; health checks don't require it
+	// Output receives the engine's stdout and stderr; nil discards them.
+	Output io.Writer
 }
 
 // downloadFunc fetches url into dest.
@@ -52,17 +55,26 @@ type Provisioner struct {
 	run      runFunc
 	stop     stopFunc
 	httpc    *http.Client
+	// pid is the engine this provisioner started; 0 when it did not start one
+	// (none running, or an existing engine was reused).
+	pid atomic.Int64
 }
 
 // New builds a provisioner with real download + exec, overridable in tests.
 func New(cfg Config) *Provisioner {
-	return &Provisioner{
+	p := &Provisioner{
 		cfg:      cfg,
 		download: httpDownload,
-		run:      execRun,
 		httpc:    &http.Client{Timeout: 3 * time.Second},
 	}
+	p.run = func(bin, dir string, env []string) (stopFunc, error) {
+		return execRun(bin, dir, env, cfg.Output, &p.pid)
+	}
+	return p
 }
+
+// PID is the process ID of the engine this provisioner started, or 0.
+func (p *Provisioner) PID() int { return int(p.pid.Load()) }
 
 // BinaryPath is where the qdrant binary is cached.
 func (p *Provisioner) BinaryPath() string { return filepath.Join(p.cfg.BinDir, "qdrant") }
@@ -219,19 +231,30 @@ func httpDownload(ctx context.Context, url, dest string) error {
 	return err
 }
 
-// execRun starts a binary and returns a stop handle that SIGTERMs and reaps it.
-func execRun(bin, dir string, env []string) (stopFunc, error) {
+// execRun starts a binary with its output going to out (nil discards it),
+// records its process ID in pid, and returns a stop handle that SIGTERMs and
+// reaps it.
+func execRun(bin, dir string, env []string, out io.Writer, pid *atomic.Int64) (stopFunc, error) {
 	cmd := exec.Command(bin)
 	cmd.Dir = dir
 	cmd.Env = env
+	cmd.Stdout, cmd.Stderr = out, out
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	return func() error {
-		if cmd.Process != nil {
-			_ = cmd.Process.Signal(syscall.SIGTERM)
-		}
+	started := int64(cmd.Process.Pid)
+	pid.Store(started)
+	// Wait as soon as it starts, so a crash clears the PID at once: a dead PID
+	// left behind could be reused by an unrelated process.
+	done := make(chan struct{})
+	go func() {
 		_ = cmd.Wait()
+		pid.CompareAndSwap(started, 0)
+		close(done)
+	}()
+	return func() error {
+		_ = cmd.Process.Signal(syscall.SIGTERM)
+		<-done
 		return nil
 	}, nil
 }

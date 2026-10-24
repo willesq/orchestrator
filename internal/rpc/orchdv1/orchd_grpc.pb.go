@@ -40,6 +40,8 @@ const (
 	Orchd_SetGitHubScope_FullMethodName    = "/orchd.v1.Orchd/SetGitHubScope"
 	Orchd_ListGitHubRepos_FullMethodName   = "/orchd.v1.Orchd/ListGitHubRepos"
 	Orchd_ListGitHubItems_FullMethodName   = "/orchd.v1.Orchd/ListGitHubItems"
+	Orchd_TailLogs_FullMethodName          = "/orchd.v1.Orchd/TailLogs"
+	Orchd_GetSystemMetrics_FullMethodName  = "/orchd.v1.Orchd/GetSystemMetrics"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -102,6 +104,12 @@ type OrchdClient interface {
 	// ListGitHubItems serves the watcher's cache: open PRs and issues in the
 	// enabled scopes, each with why it is watched. Never calls gh.
 	ListGitHubItems(ctx context.Context, in *ListGitHubItemsRequest, opts ...grpc.CallOption) (*ListGitHubItemsResponse, error)
+	// TailLogs returns orchd's recent log lines, kept in memory, after a
+	// sequence number, so a caller can poll for new lines.
+	TailLogs(ctx context.Context, in *TailLogsRequest, opts ...grpc.CallOption) (*TailLogsResponse, error)
+	// GetSystemMetrics reports resource use of orchd and the processes it runs,
+	// the size of its data, and task counts.
+	GetSystemMetrics(ctx context.Context, in *GetSystemMetricsRequest, opts ...grpc.CallOption) (*SystemMetrics, error)
 }
 
 type orchdClient struct {
@@ -322,6 +330,26 @@ func (c *orchdClient) ListGitHubItems(ctx context.Context, in *ListGitHubItemsRe
 	return out, nil
 }
 
+func (c *orchdClient) TailLogs(ctx context.Context, in *TailLogsRequest, opts ...grpc.CallOption) (*TailLogsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TailLogsResponse)
+	err := c.cc.Invoke(ctx, Orchd_TailLogs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) GetSystemMetrics(ctx context.Context, in *GetSystemMetricsRequest, opts ...grpc.CallOption) (*SystemMetrics, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SystemMetrics)
+	err := c.cc.Invoke(ctx, Orchd_GetSystemMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrchdServer is the server API for Orchd service.
 // All implementations must embed UnimplementedOrchdServer
 // for forward compatibility.
@@ -382,6 +410,12 @@ type OrchdServer interface {
 	// ListGitHubItems serves the watcher's cache: open PRs and issues in the
 	// enabled scopes, each with why it is watched. Never calls gh.
 	ListGitHubItems(context.Context, *ListGitHubItemsRequest) (*ListGitHubItemsResponse, error)
+	// TailLogs returns orchd's recent log lines, kept in memory, after a
+	// sequence number, so a caller can poll for new lines.
+	TailLogs(context.Context, *TailLogsRequest) (*TailLogsResponse, error)
+	// GetSystemMetrics reports resource use of orchd and the processes it runs,
+	// the size of its data, and task counts.
+	GetSystemMetrics(context.Context, *GetSystemMetricsRequest) (*SystemMetrics, error)
 	mustEmbedUnimplementedOrchdServer()
 }
 
@@ -454,6 +488,12 @@ func (UnimplementedOrchdServer) ListGitHubRepos(context.Context, *ListGitHubRepo
 }
 func (UnimplementedOrchdServer) ListGitHubItems(context.Context, *ListGitHubItemsRequest) (*ListGitHubItemsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListGitHubItems not implemented")
+}
+func (UnimplementedOrchdServer) TailLogs(context.Context, *TailLogsRequest) (*TailLogsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TailLogs not implemented")
+}
+func (UnimplementedOrchdServer) GetSystemMetrics(context.Context, *GetSystemMetricsRequest) (*SystemMetrics, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSystemMetrics not implemented")
 }
 func (UnimplementedOrchdServer) mustEmbedUnimplementedOrchdServer() {}
 func (UnimplementedOrchdServer) testEmbeddedByValue()               {}
@@ -854,6 +894,42 @@ func _Orchd_ListGitHubItems_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_TailLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TailLogsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).TailLogs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_TailLogs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).TailLogs(ctx, req.(*TailLogsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_GetSystemMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSystemMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetSystemMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetSystemMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetSystemMetrics(ctx, req.(*GetSystemMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Orchd_ServiceDesc is the grpc.ServiceDesc for Orchd service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -944,6 +1020,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListGitHubItems",
 			Handler:    _Orchd_ListGitHubItems_Handler,
+		},
+		{
+			MethodName: "TailLogs",
+			Handler:    _Orchd_TailLogs_Handler,
+		},
+		{
+			MethodName: "GetSystemMetrics",
+			Handler:    _Orchd_GetSystemMetrics_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

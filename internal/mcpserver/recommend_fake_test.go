@@ -83,3 +83,11 @@ var fakeGitHub = struct {
 func (f *fakeClient) ListGitHubItems(context.Context, *orchdv1.ListGitHubItemsRequest, ...grpc.CallOption) (*orchdv1.ListGitHubItemsResponse, error) {
 	return &orchdv1.ListGitHubItemsResponse{}, nil
 }
+
+func (f *fakeClient) TailLogs(context.Context, *orchdv1.TailLogsRequest, ...grpc.CallOption) (*orchdv1.TailLogsResponse, error) {
+	return &orchdv1.TailLogsResponse{}, nil
+}
+
+func (f *fakeClient) GetSystemMetrics(context.Context, *orchdv1.GetSystemMetricsRequest, ...grpc.CallOption) (*orchdv1.SystemMetrics, error) {
+	return &orchdv1.SystemMetrics{}, nil
+}

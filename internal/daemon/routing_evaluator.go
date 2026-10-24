@@ -69,7 +69,7 @@ func routingEvaluatorUnit(s config.Settings, store *sql.DB) (supervisor.Unit, bo
 	}
 	policy := routing.PolicyFrom(s.Routing)
 	if err := policy.Validate(); err != nil {
-		log.Printf("orchd: routing evaluator off: %v", err)
+		log.Printf("routing-evaluator: off: %v", err)
 		return supervisor.Unit{}, false
 	}
 	every := interval(s.Routing.Evaluate.Interval, 7*24*time.Hour)
@@ -91,7 +91,7 @@ func routingEvaluatorUnit(s config.Settings, store *sql.DB) (supervisor.Unit, bo
 		Detail: fmt.Sprintf("model discovery + routing evaluation every %s; %s changes", every, mode),
 		Tick: func(ctx context.Context) {
 			if err := ev.Tick(ctx); err != nil {
-				log.Printf("orchd: routing evaluator: %v", err)
+				log.Printf("routing-evaluator: %v", err)
 			}
 		},
 		Interval: min(routingEvaluatorCheck, every),

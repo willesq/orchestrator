@@ -23,6 +23,12 @@ the MCP servers are clients that dial it per call.
    trust boundary: the gRPC server has no auth.
 10. Serve gRPC until the context ends.
 
+Before step 2, `log` output is also teed into an in-memory ring of the last 5000 lines
+(`internal/logs`), which `TailLogs` serves. Each line is tagged with a source from its prefix:
+a subsystem name (`pr-babysitter: ...`), `qdrant` for the engine's stdout and stderr, `database`
+for migration output, `rag` for the embedder, and `orchd` otherwise. Control and ANSI
+characters are stripped and lines are capped at 2000 characters.
+
 Shutdown runs in reverse: graceful gRPC stop, remove the socket, stop subsystems in reverse order,
 close the workflow backend, the embedder, then the database. Self-update exits through the same
 path by cancelling the run context.
@@ -57,6 +63,8 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `SetGitHubScope` | scope → scope | only a discovered scope (`NotFound` otherwise); its kind cannot change; enabled, items (`involving`/`all`), repo mode (`all`/`include`/`exclude`) and repo names are validated (`InvalidArgument`) |
 | `ListGitHubRepos` | owner → repos (name, private, archived) | the user's own account through `/user/repos?affiliation=owner`, an org through `/orgs/<org>/repos`; login validated |
 | `ListGitHubItems` | kind, owner → items (PRs and issues with kind, number, author, reasons, attention), updated_at | the watcher's cache only, never `gh`; kind `pr`/`issue` or empty (anything else → `InvalidArgument`); owner matched case-insensitively |
+| `TailLogs` | after_seq, source, limit → entries (seq, time, source, message), last_seq, oldest_seq, sources | in-memory lines only; limit default 500, max 5000, and at most 3 MiB, newest kept when more match; `oldest_seq` past the caller's `after_seq` means lines rolled out |
+| `GetSystemMetrics` | → processes (orchd, qdrant: pid, RSS, CPU %, uptime), goroutines, heap, data sizes, task counts by status | read natively through `internal/procstat`, never a command; CPU since the previous call; data sizes cached 30 s; a failed task count leaves `tasks` empty |
 | `ListPRs` | needs_me → PRs (with reasons and attention), updated_at | reads the PR babysitter's cache only, never `gh`; most urgent first, then repo and title; `updated_at` is the cache file's mtime, 0 before the first sweep; an unparseable cache → `Unavailable` |
 
 Dispatch inserts the ledger row before creating the workflow (a row without a workflow is

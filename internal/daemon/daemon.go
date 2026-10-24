@@ -15,6 +15,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"net"
@@ -34,6 +35,7 @@ import (
 	"github.com/willesq/orchestrator/internal/embed"
 	"github.com/willesq/orchestrator/internal/github"
 	"github.com/willesq/orchestrator/internal/handoff"
+	"github.com/willesq/orchestrator/internal/logs"
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/queue"
@@ -104,6 +106,8 @@ type server struct {
 	github *github.Service
 	// handoffDir is where SetGitHubScope asks the PR watcher to sweep now.
 	handoffDir string
+	// system serves TailLogs and GetSystemMetrics; nil when unavailable.
+	system *systemProbe
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -429,6 +433,9 @@ func clampInt32(n int) int32 {
 }
 
 // Run serves orchd until ctx is canceled.
+// logRingSize is how many recent log lines orchd keeps for TailLogs.
+const logRingSize = 5000
+
 func Run(ctx context.Context) error {
 	if err := paths.Ensure(); err != nil {
 		return err
@@ -439,6 +446,14 @@ func Run(ctx context.Context) error {
 	if err := paths.EnsureToolPATH(); err != nil {
 		return err
 	}
+	// Keep recent log lines in memory for TailLogs, alongside wherever log
+	// already writes (the service manager's log file).
+	ring := logs.NewRing(logRingSize)
+	prevOutput := log.Writer()
+	log.SetOutput(io.MultiWriter(prevOutput, ring.LogWriter()))
+	defer log.SetOutput(prevOutput)
+	system := newSystemProbe(ring)
+
 	store, err := db.Open()
 	if err != nil {
 		return err
@@ -477,6 +492,13 @@ func Run(ctx context.Context) error {
 	}
 	defer func() { _ = b.Close() }()
 	tasks := queue.NewSQLTaskStore(store)
+	system.tasks = tasks.CountByStatus
+	system.data = []dataPath{
+		{name: "database", path: paths.DBFile()},
+		{name: "workflows", path: queue.BackendFile()},
+		{name: "qdrant", path: s.QdrantStorageDir()},
+		{name: "models", path: resolveModelDir(s)},
+	}
 	workflows.SetStore(tasks)
 	workflows.SetNotifier(notifyTaskDone)
 	disp := queue.NewDispatcher(b, tasks)
@@ -509,7 +531,7 @@ func Run(ctx context.Context) error {
 	for _, u := range subsystems(deps{
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
-		summaries: summaries, github: ghService,
+		summaries: summaries, github: ghService, system: system,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return err
@@ -552,6 +574,7 @@ func Run(ctx context.Context) error {
 		prStateFile:  paths.PRStateFile(),
 		github:       ghService,
 		handoffDir:   handoff.Dir(),
+		system:       system,
 	})
 	go func() {
 		<-runCtx.Done()
@@ -578,11 +601,11 @@ var selfUpdateWatch = func() (*selfupdate.Watcher, bool) {
 	if err == nil {
 		var w *selfupdate.Watcher
 		if w, err = selfupdate.NewWatcher(exe); err == nil {
-			log.Printf("orchd: watching %s for new builds (%s)", w.Path(), w.Baseline())
+			log.Printf("self-update: watching %s for new builds (%s)", w.Path(), w.Baseline())
 			return w, selfupdate.Supervised()
 		}
 	}
-	log.Printf("orchd: self-update watch disabled: %v", err)
+	log.Printf("self-update: watch disabled: %v", err)
 	return nil, false
 }
 

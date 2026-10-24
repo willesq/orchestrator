@@ -33,6 +33,7 @@ func NewRootCmd(cf clientFactory) *cobra.Command {
 		newConfigCmd(),
 		newPingCmd(cf),
 		newStatusCmd(cf),
+		newLogsCmd(cf),
 		newRestartCmd(cf),
 		newDaemonCmd(cf),
 		newIngestCmd(cf),

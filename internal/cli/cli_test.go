@@ -713,7 +713,12 @@ type fakeClient struct {
 	statusErr    error
 	restartErr   error
 	restartNames []string
-	err          error
+	// tails are TailLogs's replies in order; once used up, TailLogs fails with
+	// tailErr, which ends a --follow loop.
+	tails    []*orchdv1.TailLogsResponse
+	tailReqs []*orchdv1.TailLogsRequest
+	tailErr  error
+	err      error
 }
 
 func (f *fakeClient) Ping(context.Context, *orchdv1.PingRequest, ...grpc.CallOption) (*orchdv1.PingResponse, error) {

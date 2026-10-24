@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
@@ -82,4 +83,21 @@ var fakeGitHub = struct {
 
 func (f *fakeClient) ListGitHubItems(context.Context, *orchdv1.ListGitHubItemsRequest, ...grpc.CallOption) (*orchdv1.ListGitHubItemsResponse, error) {
 	return &orchdv1.ListGitHubItemsResponse{}, nil
+}
+
+func (f *fakeClient) TailLogs(_ context.Context, req *orchdv1.TailLogsRequest, _ ...grpc.CallOption) (*orchdv1.TailLogsResponse, error) {
+	f.tailReqs = append(f.tailReqs, proto.Clone(req).(*orchdv1.TailLogsRequest))
+	if f.err != nil {
+		return nil, f.err
+	}
+	if len(f.tails) == 0 {
+		return nil, f.tailErr
+	}
+	resp := f.tails[0]
+	f.tails = f.tails[1:]
+	return resp, nil
+}
+
+func (f *fakeClient) GetSystemMetrics(context.Context, *orchdv1.GetSystemMetricsRequest, ...grpc.CallOption) (*orchdv1.SystemMetrics, error) {
+	return &orchdv1.SystemMetrics{}, f.err
 }

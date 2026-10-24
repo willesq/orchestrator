@@ -3478,6 +3478,468 @@ func (x *GitHubItem) GetAttention() string {
 	return ""
 }
 
+type TailLogsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AfterSeq      uint64                 `protobuf:"varint,1,opt,name=after_seq,json=afterSeq,proto3" json:"after_seq,omitempty"` // only lines newer than this; 0 = from the oldest kept
+	Source        string                 `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`                      // optional: one source, such as orchd or qdrant
+	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`                       // most lines to return, newest kept; 0 = 500
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TailLogsRequest) Reset() {
+	*x = TailLogsRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TailLogsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TailLogsRequest) ProtoMessage() {}
+
+func (x *TailLogsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TailLogsRequest.ProtoReflect.Descriptor instead.
+func (*TailLogsRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *TailLogsRequest) GetAfterSeq() uint64 {
+	if x != nil {
+		return x.AfterSeq
+	}
+	return 0
+}
+
+func (x *TailLogsRequest) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *TailLogsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type TailLogsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entries       []*LogEntry            `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`                       // oldest first
+	LastSeq       uint64                 `protobuf:"varint,2,opt,name=last_seq,json=lastSeq,proto3" json:"last_seq,omitempty"`       // newest sequence logged; pass back as after_seq
+	OldestSeq     uint64                 `protobuf:"varint,3,opt,name=oldest_seq,json=oldestSeq,proto3" json:"oldest_seq,omitempty"` // oldest still kept; a gap means lines were dropped
+	Sources       []string               `protobuf:"bytes,4,rep,name=sources,proto3" json:"sources,omitempty"`                       // every source seen so far, sorted
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TailLogsResponse) Reset() {
+	*x = TailLogsResponse{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TailLogsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TailLogsResponse) ProtoMessage() {}
+
+func (x *TailLogsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TailLogsResponse.ProtoReflect.Descriptor instead.
+func (*TailLogsResponse) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *TailLogsResponse) GetEntries() []*LogEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *TailLogsResponse) GetLastSeq() uint64 {
+	if x != nil {
+		return x.LastSeq
+	}
+	return 0
+}
+
+func (x *TailLogsResponse) GetOldestSeq() uint64 {
+	if x != nil {
+		return x.OldestSeq
+	}
+	return 0
+}
+
+func (x *TailLogsResponse) GetSources() []string {
+	if x != nil {
+		return x.Sources
+	}
+	return nil
+}
+
+type LogEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Seq           uint64                 `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	AtUnixMs      int64                  `protobuf:"varint,2,opt,name=at_unix_ms,json=atUnixMs,proto3" json:"at_unix_ms,omitempty"`
+	Source        string                 `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"`
+	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogEntry) Reset() {
+	*x = LogEntry{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogEntry) ProtoMessage() {}
+
+func (x *LogEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
+func (*LogEntry) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *LogEntry) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *LogEntry) GetAtUnixMs() int64 {
+	if x != nil {
+		return x.AtUnixMs
+	}
+	return 0
+}
+
+func (x *LogEntry) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *LogEntry) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type GetSystemMetricsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSystemMetricsRequest) Reset() {
+	*x = GetSystemMetricsRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSystemMetricsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSystemMetricsRequest) ProtoMessage() {}
+
+func (x *GetSystemMetricsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSystemMetricsRequest.ProtoReflect.Descriptor instead.
+func (*GetSystemMetricsRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{56}
+}
+
+type SystemMetrics struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AtUnixMs      int64                  `protobuf:"varint,1,opt,name=at_unix_ms,json=atUnixMs,proto3" json:"at_unix_ms,omitempty"`
+	Processes     []*ProcessMetrics      `protobuf:"bytes,2,rep,name=processes,proto3" json:"processes,omitempty"`
+	Goroutines    int32                  `protobuf:"varint,3,opt,name=goroutines,proto3" json:"goroutines,omitempty"`
+	HeapBytes     uint64                 `protobuf:"varint,4,opt,name=heap_bytes,json=heapBytes,proto3" json:"heap_bytes,omitempty"` // orchd's live Go heap
+	Data          []*DataSize            `protobuf:"bytes,5,rep,name=data,proto3" json:"data,omitempty"`
+	Tasks         map[string]int32       `protobuf:"bytes,6,rep,name=tasks,proto3" json:"tasks,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // task count by status
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SystemMetrics) Reset() {
+	*x = SystemMetrics{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SystemMetrics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SystemMetrics) ProtoMessage() {}
+
+func (x *SystemMetrics) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SystemMetrics.ProtoReflect.Descriptor instead.
+func (*SystemMetrics) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *SystemMetrics) GetAtUnixMs() int64 {
+	if x != nil {
+		return x.AtUnixMs
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetProcesses() []*ProcessMetrics {
+	if x != nil {
+		return x.Processes
+	}
+	return nil
+}
+
+func (x *SystemMetrics) GetGoroutines() int32 {
+	if x != nil {
+		return x.Goroutines
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetHeapBytes() uint64 {
+	if x != nil {
+		return x.HeapBytes
+	}
+	return 0
+}
+
+func (x *SystemMetrics) GetData() []*DataSize {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *SystemMetrics) GetTasks() map[string]int32 {
+	if x != nil {
+		return x.Tasks
+	}
+	return nil
+}
+
+// ProcessMetrics describes one OS process orchd runs or depends on.
+type ProcessMetrics struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"` // orchd | qdrant
+	Pid           int32                  `protobuf:"varint,2,opt,name=pid,proto3" json:"pid,omitempty"`  // 0 when not running
+	RssBytes      uint64                 `protobuf:"varint,3,opt,name=rss_bytes,json=rssBytes,proto3" json:"rss_bytes,omitempty"`
+	CpuPercent    float64                `protobuf:"fixed64,4,opt,name=cpu_percent,json=cpuPercent,proto3" json:"cpu_percent,omitempty"` // of one core, since the previous call (or start)
+	UptimeSeconds int64                  `protobuf:"varint,5,opt,name=uptime_seconds,json=uptimeSeconds,proto3" json:"uptime_seconds,omitempty"`
+	Running       bool                   `protobuf:"varint,6,opt,name=running,proto3" json:"running,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProcessMetrics) Reset() {
+	*x = ProcessMetrics{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProcessMetrics) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProcessMetrics) ProtoMessage() {}
+
+func (x *ProcessMetrics) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProcessMetrics.ProtoReflect.Descriptor instead.
+func (*ProcessMetrics) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *ProcessMetrics) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ProcessMetrics) GetPid() int32 {
+	if x != nil {
+		return x.Pid
+	}
+	return 0
+}
+
+func (x *ProcessMetrics) GetRssBytes() uint64 {
+	if x != nil {
+		return x.RssBytes
+	}
+	return 0
+}
+
+func (x *ProcessMetrics) GetCpuPercent() float64 {
+	if x != nil {
+		return x.CpuPercent
+	}
+	return 0
+}
+
+func (x *ProcessMetrics) GetUptimeSeconds() int64 {
+	if x != nil {
+		return x.UptimeSeconds
+	}
+	return 0
+}
+
+func (x *ProcessMetrics) GetRunning() bool {
+	if x != nil {
+		return x.Running
+	}
+	return false
+}
+
+// DataSize is the on-disk size of one of orchd's stores.
+type DataSize struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
+	Bytes         uint64                 `protobuf:"varint,3,opt,name=bytes,proto3" json:"bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DataSize) Reset() {
+	*x = DataSize{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DataSize) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DataSize) ProtoMessage() {}
+
+func (x *DataSize) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DataSize.ProtoReflect.Descriptor instead.
+func (*DataSize) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *DataSize) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *DataSize) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *DataSize) GetBytes() uint64 {
+	if x != nil {
+		return x.Bytes
+	}
+	return 0
+}
+
 var File_internal_rpc_orchdv1_orchd_proto protoreflect.FileDescriptor
 
 const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
@@ -3768,7 +4230,51 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	" \x01(\tR\x0ereviewDecision\x12\x1c\n" +
 	"\tmergeable\x18\v \x01(\tR\tmergeable\x12\x18\n" +
 	"\areasons\x18\f \x03(\tR\areasons\x12\x1c\n" +
-	"\tattention\x18\r \x01(\tR\tattention2\x9a\f\n" +
+	"\tattention\x18\r \x01(\tR\tattention\"\\\n" +
+	"\x0fTailLogsRequest\x12\x1b\n" +
+	"\tafter_seq\x18\x01 \x01(\x04R\bafterSeq\x12\x16\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\"\x94\x01\n" +
+	"\x10TailLogsResponse\x12,\n" +
+	"\aentries\x18\x01 \x03(\v2\x12.orchd.v1.LogEntryR\aentries\x12\x19\n" +
+	"\blast_seq\x18\x02 \x01(\x04R\alastSeq\x12\x1d\n" +
+	"\n" +
+	"oldest_seq\x18\x03 \x01(\x04R\toldestSeq\x12\x18\n" +
+	"\asources\x18\x04 \x03(\tR\asources\"l\n" +
+	"\bLogEntry\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x1c\n" +
+	"\n" +
+	"at_unix_ms\x18\x02 \x01(\x03R\batUnixMs\x12\x16\n" +
+	"\x06source\x18\x03 \x01(\tR\x06source\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\"\x19\n" +
+	"\x17GetSystemMetricsRequest\"\xc0\x02\n" +
+	"\rSystemMetrics\x12\x1c\n" +
+	"\n" +
+	"at_unix_ms\x18\x01 \x01(\x03R\batUnixMs\x126\n" +
+	"\tprocesses\x18\x02 \x03(\v2\x18.orchd.v1.ProcessMetricsR\tprocesses\x12\x1e\n" +
+	"\n" +
+	"goroutines\x18\x03 \x01(\x05R\n" +
+	"goroutines\x12\x1d\n" +
+	"\n" +
+	"heap_bytes\x18\x04 \x01(\x04R\theapBytes\x12&\n" +
+	"\x04data\x18\x05 \x03(\v2\x12.orchd.v1.DataSizeR\x04data\x128\n" +
+	"\x05tasks\x18\x06 \x03(\v2\".orchd.v1.SystemMetrics.TasksEntryR\x05tasks\x1a8\n" +
+	"\n" +
+	"TasksEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"\xb5\x01\n" +
+	"\x0eProcessMetrics\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
+	"\x03pid\x18\x02 \x01(\x05R\x03pid\x12\x1b\n" +
+	"\trss_bytes\x18\x03 \x01(\x04R\brssBytes\x12\x1f\n" +
+	"\vcpu_percent\x18\x04 \x01(\x01R\n" +
+	"cpuPercent\x12%\n" +
+	"\x0euptime_seconds\x18\x05 \x01(\x03R\ruptimeSeconds\x12\x18\n" +
+	"\arunning\x18\x06 \x01(\bR\arunning\"H\n" +
+	"\bDataSize\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\x12\x14\n" +
+	"\x05bytes\x18\x03 \x01(\x04R\x05bytes2\xad\r\n" +
 	"\x05Orchd\x125\n" +
 	"\x04Ping\x12\x15.orchd.v1.PingRequest\x1a\x16.orchd.v1.PingResponse\x12;\n" +
 	"\x06Ingest\x12\x17.orchd.v1.IngestRequest\x1a\x18.orchd.v1.IngestResponse\x12;\n" +
@@ -3791,7 +4297,9 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x10ListGitHubScopes\x12!.orchd.v1.ListGitHubScopesRequest\x1a\".orchd.v1.ListGitHubScopesResponse\x12S\n" +
 	"\x0eSetGitHubScope\x12\x1f.orchd.v1.SetGitHubScopeRequest\x1a .orchd.v1.SetGitHubScopeResponse\x12V\n" +
 	"\x0fListGitHubRepos\x12 .orchd.v1.ListGitHubReposRequest\x1a!.orchd.v1.ListGitHubReposResponse\x12V\n" +
-	"\x0fListGitHubItems\x12 .orchd.v1.ListGitHubItemsRequest\x1a!.orchd.v1.ListGitHubItemsResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
+	"\x0fListGitHubItems\x12 .orchd.v1.ListGitHubItemsRequest\x1a!.orchd.v1.ListGitHubItemsResponse\x12A\n" +
+	"\bTailLogs\x12\x19.orchd.v1.TailLogsRequest\x1a\x1a.orchd.v1.TailLogsResponse\x12N\n" +
+	"\x10GetSystemMetrics\x12!.orchd.v1.GetSystemMetricsRequest\x1a\x17.orchd.v1.SystemMetricsB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
 
 var (
 	file_internal_rpc_orchdv1_orchd_proto_rawDescOnce sync.Once
@@ -3805,7 +4313,7 @@ func file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP() []byte {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescData
 }
 
-var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
+var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 61)
 var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*PingRequest)(nil),              // 0: orchd.v1.PingRequest
 	(*PingResponse)(nil),             // 1: orchd.v1.PingResponse
@@ -3860,6 +4368,14 @@ var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*ListGitHubItemsRequest)(nil),   // 50: orchd.v1.ListGitHubItemsRequest
 	(*ListGitHubItemsResponse)(nil),  // 51: orchd.v1.ListGitHubItemsResponse
 	(*GitHubItem)(nil),               // 52: orchd.v1.GitHubItem
+	(*TailLogsRequest)(nil),          // 53: orchd.v1.TailLogsRequest
+	(*TailLogsResponse)(nil),         // 54: orchd.v1.TailLogsResponse
+	(*LogEntry)(nil),                 // 55: orchd.v1.LogEntry
+	(*GetSystemMetricsRequest)(nil),  // 56: orchd.v1.GetSystemMetricsRequest
+	(*SystemMetrics)(nil),            // 57: orchd.v1.SystemMetrics
+	(*ProcessMetrics)(nil),           // 58: orchd.v1.ProcessMetrics
+	(*DataSize)(nil),                 // 59: orchd.v1.DataSize
+	nil,                              // 60: orchd.v1.SystemMetrics.TasksEntry
 }
 var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	6,  // 0: orchd.v1.SearchResponse.hits:type_name -> orchd.v1.SearchHit
@@ -3878,53 +4394,61 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	44, // 13: orchd.v1.SetGitHubScopeResponse.scope:type_name -> orchd.v1.GitHubScope
 	49, // 14: orchd.v1.ListGitHubReposResponse.repos:type_name -> orchd.v1.GitHubRepo
 	52, // 15: orchd.v1.ListGitHubItemsResponse.items:type_name -> orchd.v1.GitHubItem
-	0,  // 16: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
-	2,  // 17: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
-	4,  // 18: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
-	7,  // 19: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
-	10, // 20: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
-	12, // 21: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
-	14, // 22: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
-	16, // 23: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
-	19, // 24: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
-	23, // 25: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
-	25, // 26: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
-	28, // 27: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
-	30, // 28: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
-	32, // 29: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
-	34, // 30: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
-	36, // 31: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
-	39, // 32: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
-	42, // 33: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
-	45, // 34: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
-	47, // 35: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
-	50, // 36: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
-	1,  // 37: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
-	3,  // 38: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
-	5,  // 39: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
-	8,  // 40: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
-	11, // 41: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
-	13, // 42: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
-	15, // 43: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
-	17, // 44: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
-	20, // 45: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
-	24, // 46: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
-	26, // 47: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
-	29, // 48: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
-	31, // 49: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
-	33, // 50: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
-	35, // 51: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
-	37, // 52: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
-	40, // 53: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
-	43, // 54: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
-	46, // 55: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
-	48, // 56: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
-	51, // 57: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
-	37, // [37:58] is the sub-list for method output_type
-	16, // [16:37] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	55, // 16: orchd.v1.TailLogsResponse.entries:type_name -> orchd.v1.LogEntry
+	58, // 17: orchd.v1.SystemMetrics.processes:type_name -> orchd.v1.ProcessMetrics
+	59, // 18: orchd.v1.SystemMetrics.data:type_name -> orchd.v1.DataSize
+	60, // 19: orchd.v1.SystemMetrics.tasks:type_name -> orchd.v1.SystemMetrics.TasksEntry
+	0,  // 20: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
+	2,  // 21: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
+	4,  // 22: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
+	7,  // 23: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
+	10, // 24: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
+	12, // 25: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
+	14, // 26: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
+	16, // 27: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
+	19, // 28: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
+	23, // 29: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
+	25, // 30: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
+	28, // 31: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
+	30, // 32: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
+	32, // 33: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
+	34, // 34: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
+	36, // 35: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
+	39, // 36: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
+	42, // 37: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
+	45, // 38: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
+	47, // 39: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
+	50, // 40: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
+	53, // 41: orchd.v1.Orchd.TailLogs:input_type -> orchd.v1.TailLogsRequest
+	56, // 42: orchd.v1.Orchd.GetSystemMetrics:input_type -> orchd.v1.GetSystemMetricsRequest
+	1,  // 43: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
+	3,  // 44: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
+	5,  // 45: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
+	8,  // 46: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
+	11, // 47: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
+	13, // 48: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
+	15, // 49: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
+	17, // 50: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
+	20, // 51: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
+	24, // 52: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
+	26, // 53: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
+	29, // 54: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
+	31, // 55: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
+	33, // 56: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
+	35, // 57: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
+	37, // 58: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
+	40, // 59: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
+	43, // 60: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
+	46, // 61: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
+	48, // 62: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
+	51, // 63: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
+	54, // 64: orchd.v1.Orchd.TailLogs:output_type -> orchd.v1.TailLogsResponse
+	57, // 65: orchd.v1.Orchd.GetSystemMetrics:output_type -> orchd.v1.SystemMetrics
+	43, // [43:66] is the sub-list for method output_type
+	20, // [20:43] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_internal_rpc_orchdv1_orchd_proto_init() }
@@ -3938,7 +4462,7 @@ func file_internal_rpc_orchdv1_orchd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_rpc_orchdv1_orchd_proto_rawDesc), len(file_internal_rpc_orchdv1_orchd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   53,
+			NumMessages:   61,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
