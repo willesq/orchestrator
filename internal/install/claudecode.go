@@ -3,7 +3,9 @@ package install
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -93,23 +95,73 @@ func (ClaudeCode) settingsEdit(bins Bins, home string) Edit {
 // eventMap maps our orch-hook slug to a harness's hook event name.
 type eventMap = []struct{ Slug, Event string }
 
+// hookFieldsFunc returns the harness-specific fields (timeout, async, ...) to
+// set on the orch-hook command for an event slug, or nil for none. Each harness
+// gets its own, because their hook schemas differ in units and supported keys.
+type hookFieldsFunc func(slug string) map[string]any
+
+// hookTimeoutSeconds bounds how long each orch-hook event may run.
+//
+// Reason: without an explicit timeout Claude Code waits up to 600 s (30 s on
+// UserPromptSubmit), so a stalled orchd would freeze every turn, and SessionEnd
+// hooks share a 1.5 s budget that can cut session capture short. Claude Code
+// raises that budget to match the largest per-hook SessionEnd timeout, up to
+// 60 s. The values are ceilings well above normal run times: the transcript
+// parsers (session-end, pre-compact) get the most, the prompt and start hooks,
+// which make bounded orchd and git calls, get 10 s, and the pure file writers 5 s.
+var hookTimeoutSeconds = map[string]int{
+	"session-start":      10,
+	"user-prompt-submit": 10,
+	"stop":               5,
+	"session-end":        15,
+	"pre-compact":        15,
+	"post-tool-use":      5,
+	"subagent-stop":      5,
+}
+
+// claudeHookFields sets Claude Code's per-hook timeout (seconds) and runs
+// post-tool-use in the background.
+//
+// Reason for async: post-tool-use only drops hand-off files for orchd and
+// prints nothing, so there is no decision or context for Claude to wait on.
+// Claude Code does not enforce timeout on an async hook; it is written anyway
+// so the bound still holds if async is ever removed.
+func claudeHookFields(slug string) map[string]any {
+	f := map[string]any{}
+	if s, ok := hookTimeoutSeconds[slug]; ok {
+		f["timeout"] = s
+	}
+	if slug == "post-tool-use" {
+		f["async"] = true
+	}
+	return f
+}
+
 // applyHooks registers orch-hook using the Claude-style event names.
 func applyHooks(root map[string]any, orchHookBin string) string {
-	return applyHooksWithEvents(root, orchHookBin, eventSlugs)
+	return applyHooksWithEvents(root, orchHookBin, eventSlugs, claudeHookFields)
 }
 
 // applyHooksWithEvents registers orch-hook for every event, dropping prior
-// orchestrator entries and preserving all third-party ones. Returns a summary.
-func applyHooksWithEvents(root map[string]any, orchHookBin string, events eventMap) string {
+// orchestrator entries and preserving all third-party ones. fields, when not
+// nil, adds harness-specific keys to each orch-hook command. Returns a summary.
+func applyHooksWithEvents(root map[string]any, orchHookBin string, events eventMap, fields hookFieldsFunc) string {
 	hooks, _ := root["hooks"].(map[string]any)
 	if hooks == nil {
 		hooks = map[string]any{}
 	}
 	inPlace, added, preserved := 0, 0, 0
+	var settings []string
 	for _, ev := range events {
-		entry := map[string]any{
-			"hooks": []any{map[string]any{"type": "command", "command": orchHookBin + " " + ev.Slug}},
+		cmd := map[string]any{"type": "command", "command": orchHookBin + " " + ev.Slug}
+		if fields != nil {
+			f := fields(ev.Slug)
+			maps.Copy(cmd, f)
+			if len(f) > 0 {
+				settings = append(settings, ev.Event+" "+describeFields(f))
+			}
 		}
+		entry := map[string]any{"hooks": []any{cmd}}
 		arr, _ := hooks[ev.Event].([]any)
 		var kept []any
 		placed := false
@@ -136,9 +188,24 @@ func applyHooksWithEvents(root map[string]any, orchHookBin string, events eventM
 		hooks[ev.Event] = kept
 	}
 	root["hooks"] = hooks
-	return fmt.Sprintf(
+	summary := fmt.Sprintf(
 		"hooks: wired orch-hook for %d events (%d replaced in place, %d appended); preserved %d third-party entr(ies)",
 		len(events), inPlace, added, preserved)
+	if len(settings) > 0 {
+		summary += "\nhooks: orch-hook settings: " + strings.Join(settings, ", ")
+	}
+	return summary
+}
+
+// describeFields renders hook fields as "timeout=5 async=true", keys sorted so
+// the dry-run output is stable.
+func describeFields(f map[string]any) string {
+	keys := slices.Sorted(maps.Keys(f))
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		parts[i] = fmt.Sprintf("%s=%v", k, f[k])
+	}
+	return strings.Join(parts, " ")
 }
 
 // isOrchHook reports whether a hook entry belongs to the orchestrator (old Python
