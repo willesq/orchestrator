@@ -48,6 +48,31 @@ func TestShippedAssetsAreWellFormed(t *testing.T) {
 					t.Errorf("hard-codes the machine-specific path %q", local)
 				}
 			}
+			// bypassPermissions must never ship: these agents run shell tools over
+			// attacker-controlled PR content, so they stay under normal prompting.
+			if strings.Contains(s, "bypassPermissions") {
+				t.Errorf("ships bypassPermissions, which must not run against hostile input")
+			}
+			// Frontmatter keys must be from the known set. A typo like `mode:`
+			// (the real key is `permissionMode`) is silently ignored by the
+			// harness, so catch it here rather than shipping a dead directive.
+			allowedKeys := map[string]bool{
+				"name": true, "description": true, "model": true,
+				"tools": true, "mcpServers": true, "allowed-tools": true,
+			}
+			for _, line := range strings.Split(s[:end+4], "\n") {
+				// Top-level keys only: skip the delimiter, comments, blank lines,
+				// indented continuations, and list items.
+				if line == "---" || line == "" || strings.HasPrefix(line, "#") ||
+					strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") ||
+					strings.HasPrefix(line, "-") {
+					continue
+				}
+				key, _, ok := strings.Cut(line, ":")
+				if ok && !allowedKeys[key] {
+					t.Errorf("unknown frontmatter key %q", key)
+				}
+			}
 		})
 	}
 }
