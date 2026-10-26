@@ -21,7 +21,11 @@ struct DocsView: View {
                 .help("Reload the list of synced docs")
             }
         }
-        .task { if model.catalog == nil { await model.load() } }
+        .task {
+            if model.catalog == nil { await model.load() }
+            // A sync already running when the tab opens is followed too.
+            if model.sync?.running == true { await model.follow() }
+        }
     }
 }
 
@@ -32,6 +36,7 @@ private struct DocList: View {
         // Grouped once per update rather than once per use.
         let groups = model.groups
         VStack(spacing: 0) {
+            SyncStatus(model: model)
             TextField("Filter by path or repo", text: $model.filter)
                 .textFieldStyle(.roundedBorder)
                 .padding(8)
@@ -91,6 +96,11 @@ private struct RepoHeader: View {
     var body: some View {
         HStack {
             Text(verbatim: displaySafe("\(group.owner)/\(group.repo)")).font(.subheadline.weight(.semibold))
+            if let info = group.info, info.failed {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .help(displaySafe("Last sync failed: \(info.error)"))
+            }
             Spacer()
             if let info = group.info, let synced = info.lastSynced {
                 Text("synced \(synced, format: .relative(presentation: .named))")
@@ -376,5 +386,68 @@ struct RichTextView: NSViewRepresentable {
             // Handled either way: a link that fails the check opens nothing.
             return true
         }
+    }
+}
+
+/// Sync progress, and what needs attention after a sync failed: the failing
+/// repos with their causes, and Sync now.
+private struct SyncStatus: View {
+    let model: DocsModel
+    @State private var showFailures = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let sync = model.sync, sync.running {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(verbatim: sync.total > 0
+                        ? "Syncing \(displaySafe(sync.owner)): \(sync.done) of \(sync.total) repos"
+                        : "Syncing \(displaySafe(sync.owner))…")
+                        .font(.callout)
+                    Spacer()
+                }
+            } else if let catalog = model.catalog, catalog.needsAttention {
+                attention(catalog)
+            }
+            if let refused = model.syncError {
+                Label(displaySafe(refused), systemImage: "hand.raised").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder private func attention(_ catalog: DocCatalog) -> some View {
+        let failing = catalog.failingRepos
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                Text(failing.isEmpty ? "The last docs sync needs attention" : "\(failing.count) repo\(failing.count == 1 ? "" : "s") failed to sync")
+                    .font(.callout.weight(.semibold))
+                Spacer()
+                Button("Sync now") { Task { await model.syncNow() } }
+                    .controlSize(.small)
+                    .disabled(model.isFollowingSync)
+                    .help("Ask orchd to sync now; it runs one sync at a time")
+            }
+            ForEach(catalog.failingOwners) { owner in
+                Text(verbatim: displaySafe(owner.error)).font(.caption).foregroundStyle(.secondary)
+            }
+            if !failing.isEmpty {
+                DisclosureGroup(isExpanded: $showFailures) {
+                    ForEach(Array(failing.prefix(50).enumerated()), id: \.offset) { _, item in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(verbatim: displaySafe("\(item.owner)/\(item.repo.repo)")).font(.caption.weight(.semibold))
+                            Text(verbatim: displaySafe(item.repo.error)).font(.caption2).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                } label: {
+                    Text("Show the failing repos").font(.caption)
+                }
+            }
+        }
+        .padding(8)
+        .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
     }
 }

@@ -395,6 +395,60 @@ func TestDataSectionCounts(t *testing.T) {
 	}
 }
 
+func TestDocsLineNeedsAttention(t *testing.T) {
+	tests := []struct {
+		name        string
+		ownerStatus string
+		ownerError  string
+		repoError   bool
+		wantWarn    bool
+		wantDetail  []string
+	}{
+		{name: "a healthy owner", ownerStatus: "ok", wantDetail: []string{"last sync 30m ago"}},
+		{
+			name: "a failing repo", ownerStatus: "partial", ownerError: "1 of 2 repos failed; see each repo's error", repoError: true,
+			wantWarn: true, wantDetail: []string{"1 repo(s) failing", "willesq: 1 of 2 repos failed", "orch docs sync"},
+		},
+		{
+			name: "a sync that stopped early", ownerStatus: "error", ownerError: "stopped after 3 repos in a row could not reach GitHub",
+			repoError: true, wantWarn: true, wantDetail: []string{"could not reach GitHub"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := healthyDeps(t)
+			conn, err := db.Open()
+			if err != nil {
+				t.Fatalf("db.Open: %v", err)
+			}
+			ctx := context.Background()
+			if _, err := conn.ExecContext(ctx,
+				`INSERT INTO docs_owners (owner, refresh_secs, last_synced, status, error) VALUES (?,?,?,?,?)`,
+				"willesq", 3600, testNow.Unix()-1800, tt.ownerStatus, tt.ownerError); err != nil {
+				t.Fatal(err)
+			}
+			if tt.repoError {
+				if _, err := conn.ExecContext(ctx,
+					`INSERT INTO docs_repos (owner, repo, status, error) VALUES (?,?,?,?)`,
+					"willesq", "airflow", "error", "clone failed (network): GitHub could not be reached"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			_ = conn.Close()
+			d.Store = db.OpenReader
+			got := line(t, section(t, Collect(context.Background(), d), "data"), "docs owners")
+			if (got.Level == LevelWarn) != tt.wantWarn {
+				t.Errorf("level = %q, want warn %v (%+v)", got.Level, tt.wantWarn, got)
+			}
+			for _, w := range tt.wantDetail {
+				if !strings.Contains(got.Detail, w) {
+					t.Errorf("detail %q missing %q", got.Detail, w)
+				}
+			}
+		})
+	}
+}
+
 func TestDataSectionQueryErrors(t *testing.T) {
 	tests := []struct {
 		name  string

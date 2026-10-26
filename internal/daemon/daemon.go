@@ -120,6 +120,8 @@ type server struct {
 	// sources scheduler.
 	nudgeMu   sync.Mutex
 	lastNudge time.Time
+	// docsSync runs docs syncs one at a time; nil when unavailable.
+	docsSync docsSyncer
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -544,11 +546,12 @@ func Run(ctx context.Context) error {
 	// cache.
 	ghService := github.NewService(github.NewStore(store), github.GH)
 
+	docsSched := newDocsScheduler(s, store, svc)
 	sup := supervisor.New(runCtx)
 	for _, u := range subsystems(deps{
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
-		summaries: summaries, github: ghService, system: system,
+		summaries: summaries, github: ghService, system: system, docs: docsSched,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return err
@@ -595,6 +598,7 @@ func Run(ctx context.Context) error {
 		docsReg:      docs.NewRegistry(store),
 		sourcesReg:   sources.NewRegistry(store),
 		documents:    svc,
+		docsSync:     docsSched,
 	})
 	go func() {
 		<-runCtx.Done()

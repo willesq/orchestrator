@@ -129,3 +129,25 @@ func (f *fakeClient) RemoveSource(context.Context, *orchdv1.RemoveSourceRequest,
 func (f *fakeClient) RefreshSource(context.Context, *orchdv1.RefreshSourceRequest, ...grpc.CallOption) (*orchdv1.RefreshSourceResponse, error) {
 	return &orchdv1.RefreshSourceResponse{}, f.err
 }
+
+func (f *fakeClient) SyncDocs(_ context.Context, req *orchdv1.SyncDocsRequest, _ ...grpc.CallOption) (*orchdv1.DocsSyncState, error) {
+	f.docsSyncReq = req
+	if f.docsSyncErr != nil {
+		return nil, f.docsSyncErr
+	}
+	return &orchdv1.DocsSyncState{}, f.err
+}
+
+func (f *fakeClient) GetDocsSync(context.Context, *orchdv1.GetDocsSyncRequest, ...grpc.CallOption) (*orchdv1.DocsSyncState, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if len(f.docsStates) == 0 {
+		return &orchdv1.DocsSyncState{}, nil
+	}
+	st := f.docsStates[0]
+	if len(f.docsStates) > 1 {
+		f.docsStates = f.docsStates[1:]
+	}
+	return st, nil
+}

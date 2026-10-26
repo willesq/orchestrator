@@ -136,6 +136,8 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
     func tailLogs(after: UInt64, limit: Int) async throws -> LogPage { throw failure }
     func systemMetrics() async throws -> SystemMetrics { throw failure }
     func listDocs() async throws -> DocCatalog { throw failure }
+    func syncDocs(owner: String?, force: Bool) async throws -> DocsSyncState { throw failure }
+    func docsSync() async throws -> DocsSyncState { throw failure }
     func document(uri: String) async throws -> RebuiltDocument { throw failure }
     func registeredSources() async throws -> [RegisteredSource] { throw failure }
     func saveSource(_ draft: SourceDraft, replacing: String?) async throws -> RegisteredSource { throw failure }

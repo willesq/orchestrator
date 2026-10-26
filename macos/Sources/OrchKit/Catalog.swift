@@ -3,6 +3,10 @@ import Foundation
 /// The orchd calls behind the Docs and Sources tabs.
 public protocol CatalogAPI: Sendable {
     func listDocs() async throws -> DocCatalog
+    /// Asks orchd to sync docs now: one owner, or all when nil; `force`
+    /// re-ingests everything. orchd refuses while a sync runs (nothing queues).
+    func syncDocs(owner: String?, force: Bool) async throws -> DocsSyncState
+    func docsSync() async throws -> DocsSyncState
     /// One indexed source rebuilt from its chunks.
     func document(uri: String) async throws -> RebuiltDocument
     func registeredSources() async throws -> [RegisteredSource]
@@ -20,11 +24,46 @@ public struct DocCatalog: Sendable, Equatable {
     public let files: [DocFile]
     /// More files exist than one reply carries.
     public let truncated: Bool
+    public let sync: DocsSyncState?
 
-    public init(owners: [DocOwner], files: [DocFile], truncated: Bool = false) {
+    public init(owners: [DocOwner], files: [DocFile], truncated: Bool = false, sync: DocsSyncState? = nil) {
         self.owners = owners
         self.files = files
         self.truncated = truncated
+        self.sync = sync
+    }
+
+    /// Repos whose last sync failed, with their owner.
+    public var failingRepos: [(owner: String, repo: DocRepo)] {
+        owners.flatMap { o in o.repos.filter(\.failed).map { (owner: o.owner, repo: $0) } }
+    }
+
+    /// Owners whose last sync failed or stopped early.
+    public var failingOwners: [DocOwner] { owners.filter { !$0.error.isEmpty && $0.status != "ok" } }
+
+    /// Whether the last sync needs the user's attention.
+    public var needsAttention: Bool { !failingRepos.isEmpty || !failingOwners.isEmpty }
+}
+
+/// orchd's docs sync: running now, or the last one.
+public struct DocsSyncState: Sendable, Equatable {
+    public let running: Bool
+    public let owner: String
+    public let startedAt: Date?
+    public let finishedAt: Date?
+    public let done: Int
+    public let total: Int
+    public let repo: String
+
+    public init(running: Bool = false, owner: String = "", startedAt: Date? = nil, finishedAt: Date? = nil,
+                done: Int = 0, total: Int = 0, repo: String = "") {
+        self.running = running
+        self.owner = owner
+        self.startedAt = startedAt
+        self.finishedAt = finishedAt
+        self.done = done
+        self.total = total
+        self.repo = repo
     }
 }
 
@@ -36,13 +75,17 @@ public struct DocOwner: Sendable, Equatable, Identifiable {
     public let lastSynced: Date?
     public let status: String
     public let repos: [DocRepo]
+    /// Why the last sync failed or stopped early.
+    public let error: String
 
-    public init(owner: String, refreshSeconds: Int64 = 0, lastSynced: Date? = nil, status: String = "", repos: [DocRepo] = []) {
+    public init(owner: String, refreshSeconds: Int64 = 0, lastSynced: Date? = nil, status: String = "", repos: [DocRepo] = [],
+                error: String = "") {
         self.owner = owner
         self.refreshSeconds = refreshSeconds
         self.lastSynced = lastSynced
         self.status = status
         self.repos = repos
+        self.error = error
     }
 }
 
@@ -55,15 +98,21 @@ public struct DocRepo: Sendable, Equatable, Identifiable {
     public let files: Int
     public let status: String
     public let webURL: String
+    /// Why the repo's last sync failed.
+    public let error: String
 
-    public init(repo: String, headSHA: String = "", lastSynced: Date? = nil, files: Int = 0, status: String = "", webURL: String = "") {
+    public init(repo: String, headSHA: String = "", lastSynced: Date? = nil, files: Int = 0, status: String = "", webURL: String = "",
+                error: String = "") {
         self.repo = repo
         self.headSHA = headSHA
         self.lastSynced = lastSynced
         self.files = files
         self.status = status
         self.webURL = webURL
+        self.error = error
     }
+
+    public var failed: Bool { status == "error" }
 }
 
 /// One synced markdown file, as the store holds it.

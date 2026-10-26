@@ -69,6 +69,8 @@ type deps struct {
 	restart func(reason string)
 	// system receives qdrant's output and PID; nil discards them.
 	system *systemProbe
+	// docs is the docs scheduler shared with the SyncDocs RPC; nil builds one.
+	docs *docs.Scheduler
 }
 
 // subsystems lists orchd's supervised units in start order (stopped in reverse).
@@ -86,7 +88,11 @@ func subsystems(d deps) []supervisor.Unit {
 		}
 		out = append(out, workerUnit(d.backend, d.settings.Queue.Worker, secretEnv(d.settings), reg))
 	}
-	out = append(out, sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, d.store, d.rag))
+	sched := d.docs
+	if sched == nil {
+		sched = newDocsScheduler(d.settings, d.store, d.rag)
+	}
+	out = append(out, sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, sched))
 	if d.settings.PRBabysitter.Enabled {
 		out = append(out, prsUnit(d.settings, d.store, d.github))
 	}
@@ -243,22 +249,32 @@ func sourcesUnit(s config.Settings, store *sql.DB, ing sources.Ingester) supervi
 	}
 }
 
-// docsUnit ingests GitHub code-repo markdown on a cadence (gh-CLI-driven, with
-// repo/file skipping; separate from the generic sources scheduler).
-func docsUnit(s config.Settings, store *sql.DB, ing docs.Ingester) supervisor.Unit {
-	sched := docs.NewScheduler(docs.NewRegistry(store), ing, docs.SyncOpts{
+// newDocsScheduler builds the one docs scheduler orchd runs: the docs unit
+// ticks it and SyncDocs asks it to run now, so a sync never runs twice at once.
+func newDocsScheduler(s config.Settings, store *sql.DB, ing docs.Ingester) *docs.Scheduler {
+	return docs.NewScheduler(docs.NewRegistry(store), ing, docs.SyncOpts{
 		RepoCache:       s.RepoCacheDir(),
 		IncludeArchived: s.Docs.IncludeArchived,
 		IncludeForks:    s.Docs.IncludeForks,
 		GH:              docs.NewGitHub(),
 		Git:             docs.NewGit(),
 		ExcludeDirs:     s.Ingest.ExcludeDirs,
-	})
+	}, interval(s.Docs.ScanInterval, time.Minute))
+}
+
+// docsTick is how often the docs unit checks for a requested sync. Checking
+// is a flag read, so a short cadence costs nothing and a request starts within
+// seconds without interrupting anything.
+const docsTick = 2 * time.Second
+
+// docsUnit ingests GitHub code-repo markdown on a cadence (gh-CLI-driven, with
+// repo/file skipping; separate from the generic sources scheduler).
+func docsUnit(s config.Settings, sched *docs.Scheduler) supervisor.Unit {
 	return supervisor.Unit{
 		Name:     UnitDocs,
 		Detail:   "GitHub markdown ingestion",
-		Tick:     sched.Scan,
-		Interval: interval(s.Docs.ScanInterval, time.Minute),
+		Tick:     sched.Tick,
+		Interval: docsTick,
 	}
 }
 
