@@ -94,6 +94,7 @@ func TestExploitFinderSandboxIsHardened(t *testing.T) {
 	for _, must := range []string{
 		"docker run --rm", "--network none", "--cap-drop ALL",
 		"no-new-privileges", "--read-only", "realpath", "not in allowlist",
+		"base64 -d",
 	} {
 		if !strings.Contains(s, must) {
 			t.Errorf("sandbox wrapper missing required control %q", must)

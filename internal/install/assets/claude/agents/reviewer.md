@@ -100,7 +100,7 @@ stop and return a message leading with `BLOCKED:` naming the decision you need.
    })
    ```
 
-   - `exploit-finder` is read-only; it runs no PoC when dispatched headless/as a queue task. Any interactive PoC is confined to a network-denied Docker container built from a stock base image (never the PR's Dockerfile, never prod/staging, never real credentials). It returns a summary that **leads with `Status:`** and writes the full chain report at the output path.
+   - `exploit-finder` is read-only except for PoCs, which run only through its pre-authorized sandbox wrapper (`orch install` allows exactly that command): a throwaway, network-denied container from a stock base image, never the PR's Dockerfile, never prod/staging, never real credentials. If that rule isn't installed or Docker is unavailable it runs no PoC and keeps chains `traced`. It returns a summary that **leads with `Status:`** and writes the full chain report at the output path.
    - Read its `Status:` line, not just the chain count. `Status: completed` + `Chains: 0` is a valid "nothing chained" result. `Status: failed`/`partial`, a missing report file, or an unparseable summary is a FAILED run — record it as degraded coverage, never as a clean zero-chain result.
    - If it fails or Docker is unavailable, capture the note and continue — don't block the primary review.
 6. Compile a unified review:
