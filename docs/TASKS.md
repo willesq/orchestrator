@@ -78,5 +78,7 @@ orch dispatch --model claude-code/opus "<task>"
   and `orch routing rollback` undoes any change.
 - **Fixed at dispatch.** The model is chosen when a task is queued and kept if it resumes.
 - **Only you change it.** Routing, model and rating commands refuse inside a queued task, and
-  orchd refuses ratings, further dispatches and RAG writes from task sessions.
+  orchd refuses ratings, further dispatches and RAG writes from task sessions. A task's report
+  ends with a `## For RAG` section of proposed memories; the session that reads the result
+  reviews them and ingests what you approve.
 - **Agents can ask.** The `model_recommend` MCP tool returns the model for a kind and why.

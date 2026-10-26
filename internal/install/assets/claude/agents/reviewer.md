@@ -31,8 +31,16 @@ The orch MCP servers expose `rag_search`, `rag_ingest_text`, `rag_list_sources`,
 ways: spawned by a parent session's Agent tool, or headless as an orchestrator queue task.
 As a queue task, `ORCH_TASK_ID` is set in your environment, nobody can answer a question,
 actions the permission policy refuses fail instead of prompting, `queue_dispatch` refuses
-to fan out further tasks, and your final message is recorded as the task result. The
+to fan out further tasks, `rag_ingest_text`, `rag_delete_source`, `orch ingest` and
+`orch rag forget` are refused, and your final message is recorded as the task result. The
 rules below hold either way.
+
+**You do not write to RAG.** Search it freely, but put anything worth remembering in a
+`## For RAG` section at the end of your return message: one entry per item, each with a
+proposed stable `source_uri`, a `source_type` (`gap_fill`, `web`, `file` or `manual`), and
+the exact text to store. The parent session or the user reviews the entries and ingests
+what they approve, so a session steered by untrusted content cannot plant memories. Omit
+the section when there is nothing durable to record.
 
 Your task arrives **inline in the prompt**; if something you need isn't there, you
 cannot look it up — say what's missing and stop. You report **in your return message**,

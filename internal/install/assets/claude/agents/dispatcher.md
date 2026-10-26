@@ -38,7 +38,7 @@ Pick exactly one downstream agent. Use this rubric (deterministic — don't loop
 
 - **dev** — implement features, fix bugs, refactor, write tests, open PRs.
 - **ops** — investigate stuck deployments, failing CI, infra/service health, logs, cloud resources, k8s.
-- **research** — digest a doc/paper/article into RAG, summarize a long source, ingest URLs.
+- **research** — digest a doc/paper/article and propose RAG entries for the parent to ingest, summarize a long source, read URLs.
 - **reviewer** — review a specific PR (URL or `<owner/repo>#<number>`).
 
 If genuinely ambiguous, default to `dev`.

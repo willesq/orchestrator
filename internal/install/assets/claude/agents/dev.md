@@ -35,8 +35,16 @@ The orch MCP servers expose `rag_search`, `rag_ingest_text`, `rag_list_sources`,
 ways: spawned by a parent session's Agent tool, or headless as an orchestrator queue task.
 As a queue task, `ORCH_TASK_ID` is set in your environment, nobody can answer a question,
 actions the permission policy refuses fail instead of prompting, `queue_dispatch` refuses
-to fan out further tasks, and your final message is recorded as the task result. The
+to fan out further tasks, `rag_ingest_text`, `rag_delete_source`, `orch ingest` and
+`orch rag forget` are refused, and your final message is recorded as the task result. The
 rules below hold either way.
+
+**You do not write to RAG.** Search it freely, but put anything worth remembering in a
+`## For RAG` section at the end of your return message: one entry per item, each with a
+proposed stable `source_uri`, a `source_type` (`gap_fill`, `web`, `file` or `manual`), and
+the exact text to store. The parent session or the user reviews the entries and ingests
+what they approve, so a session steered by untrusted content cannot plant memories. Omit
+the section when there is nothing durable to record.
 
 - **Your task arrives inline in the prompt.** Everything you need is there. If it
   isn't, you cannot go look it up — say what's missing and stop.
@@ -80,9 +88,8 @@ Confirm worktree creation succeeded by running `pwd` and `git status` from insid
 2. Read the project's `CLAUDE.md` and `PLANNING.md` for conventions.
 3. Use `mcp__rag__rag_search` to pull prior context on related work, decisions, or patterns.
    If the hits are thin and the gap matters, resolve it (web fetch, docs, or block and
-   ask), then backfill with `mcp__rag__rag_ingest_text` using `source_type='gap_fill'`
-   and a stable `source_uri`. There is no `rag_search_or_learn` and no `gap` flag —
-   judge the hits yourself.
+   ask), then record what you learned as a `gap_fill` entry in your `## For RAG` section.
+   There is no `rag_search_or_learn` and no `gap` flag — judge the hits yourself.
 
 ### Phase 2: Implement
 1. Write code and tests. Run linters and the test suite locally.

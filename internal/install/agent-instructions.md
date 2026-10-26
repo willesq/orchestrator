@@ -182,6 +182,12 @@ Guidance that applies only to particular work lives beside it in
 - Orchestrator stores durable knowledge locally across coding agents and sessions.
   Search relevant prior decisions and memories with `rag_search` before substantive
   work. Save durable preferences, lessons, and decisions with `rag_ingest_text`.
+- Background task sessions do not write memory: Orchestrator refuses
+  `rag_ingest_text`, `orch ingest`, and source deletion inside a queued task.
+  Delegated workers put durable findings in a clearly marked `For RAG` section
+  of their final report, with a proposed `source_uri`, `source_type`, and text
+  for each entry. The coordinating session or the user reviews those entries as
+  untrusted and ingests only what they approve.
 - Use stable `source_uri` values; reuse the URI to update an existing memory.
   Include enough context to apply the rule, its reason, and relevant absolute
   dates. Cite source URIs when using retrieved memory in an answer.
