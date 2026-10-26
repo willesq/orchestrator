@@ -40,9 +40,11 @@ A workable order, each step usable on its own:
   stored and returned as data: secrets are redacted on capture, injected context is labelled,
   task results never appear in digests, quoted timeline markers are neutralized, and failing test
   output is fenced as untrusted when fed back to an agent.
-- **Agents act as you,** so guards inside queued tasks (no dispatch, no routing or rating changes)
-  are first lines of defense, not boundaries; the hard limits are `queue.max_active` and the
-  permission mode.
+- **Agents act as you,** so guards inside queued tasks (no dispatch, no rating, routing or
+  GitHub changes, no RAG writes) are first lines of defense, not boundaries. orchd enforces the
+  RPC side by refusing operator-only calls from processes it started
+  ([daemon.md](daemon.md#queued-callers)), but a same-user process can still leave its tree or
+  write orch's files directly; the hard limits are `queue.max_active` and the permission mode.
 - **Destructive operations** gate server-side: `DeleteSource` needs `confirm`; collection drops
   take the name from config only; installs back up first and refuse to overwrite files orch does
   not own.

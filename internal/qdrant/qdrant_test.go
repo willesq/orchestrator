@@ -328,6 +328,25 @@ func TestEnvHardening(t *testing.T) {
 	}
 }
 
+func TestEnvDropsInheritedQdrantSettings(t *testing.T) {
+	t.Setenv("QDRANT__SERVICE__HOST", "0.0.0.0")
+	t.Setenv("QDRANT__SERVICE__READ_ONLY_API_KEY", "planted")
+	t.Setenv("QDRANT__CLUSTER__ENABLED", "true")
+	t.Setenv("ORCH_KEEP_ME", "1")
+	env := New(Config{HTTPPort: 6333, GRPCPort: 6334, Storage: "/tmp/s"}).env()
+	joined := "\n" + strings.Join(env, "\n") + "\n"
+	for _, bad := range []string{"=0.0.0.0\n", "READ_ONLY_API_KEY", "QDRANT__CLUSTER__ENABLED=true"} {
+		if strings.Contains(joined, bad) {
+			t.Errorf("env kept inherited %q", bad)
+		}
+	}
+	for _, want := range []string{"\nQDRANT__SERVICE__HOST=127.0.0.1\n", "\nQDRANT__CLUSTER__ENABLED=false\n", "\nORCH_KEEP_ME=1\n"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("env missing %q", strings.TrimSpace(want))
+		}
+	}
+}
+
 func TestHTTPDownload(t *testing.T) {
 	tests := []struct {
 		name    string

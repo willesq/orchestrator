@@ -19,8 +19,9 @@ the MCP servers are clients that dial it per call.
 7. Open the durable workflow backend (`<data>/workflows.db`) and wire the task ledger, completion
    notifier and dispatcher.
 8. Register the supervised subsystems below and start them, failing fast.
-9. Listen on the Unix socket (remove a stale one first, then `chmod 0600`). The socket is the only
-   trust boundary: the gRPC server has no auth.
+9. Listen on the Unix socket (remove a stale one first, then `chmod 0600`). The socket is the
+   trust boundary: anything running as the user can connect. orchd listens on nothing else; the
+   only TCP listener it starts is the Qdrant engine, on 127.0.0.1.
 10. Serve gRPC until the context ends.
 
 Before step 2, `log` output is also teed into an in-memory ring of the last 5000 lines
@@ -32,6 +33,42 @@ characters are stripped and lines are capped at 2000 characters.
 Shutdown runs in reverse: graceful gRPC stop, remove the socket, stop subsystems in reverse order,
 close the workflow backend, the embedder, then the database. Self-update exits through the same
 path by cancelling the run context.
+
+### Queued callers
+
+Queued task sessions run as the user too, so orchd attributes each connection to the process that
+opened it (`internal/daemon/callers.go`) rather than trusting clients to check `ORCH_TASK_ID`:
+
+- **Peer:** at connect time the server's transport credentials read the peer PID
+  (`LOCAL_PEERPID` on macOS, `SO_PEERCRED` on Linux) and walk its parents (`procstat.Parent`, at
+  most 256 steps). A process descended from orchd is one orchd started: a task session, its MCP
+  servers, hooks and shell commands, or a verification run. orchd itself is not its own
+  descendant. A walk that fails is retried once; a peer that still cannot be placed, or a call
+  without orchd's peer information, is treated as a task. On platforms without peer lookup, and
+  for a Linux peer in a PID namespace orchd cannot see (PID 0), only the next signal applies.
+- **Report:** `orchdclient` sends the `orch-task-id` metadata when `ORCH_TASK_ID` is set, which
+  names the task in the refusal and covers callers outside orchd's process tree.
+
+Unary and stream interceptors allow a queued caller only the RPCs that read state: `Ping`,
+`Search`, `ListSources`, `ListTasks`, `GetTask`, `Status`, `RecommendModel`, `ListPRs`, the
+GitHub reads (`GetGitHubIdentity`, `ListGitHubScopes`, `ListGitHubRepos`, `ListGitHubItems`),
+`TailLogs`, `GetSystemMetrics`, `ListDocs`, `GetDocument`, `GetDocsSync` and
+`ListRegisteredSources`. Every other RPC (`Dispatch`, `RateTask`, `Ingest`, `DeleteSource`,
+`SummarizeSession`, the migration, source, docs-sync, GitHub-scope and `Restart` calls, and any
+RPC added later) is refused with `PermissionDenied`, and the refusal is logged. A test fails
+when an RPC is in neither list. A queued session's own transcript is still
+stored: its session-end hook's `Ingest` and `SummarizeSession` are refused, so the hand-off unit
+stores the record and queues the summary from the entry the hook left.
+
+**Limits.** This raises the bar from "unset a variable" to "leave orchd's process tree"; it is
+advisory, not a sandbox, because a task runs as the user. A task can leave the tree in one
+command: `launchctl submit`, `open` (a `.command` file or an app), `osascript`, `at` or cron, or
+`systemd-run --user` all start a process launchd or systemd owns, and a process whose parent
+exits before orchd accepts its connection is reparented the same way. A task can also write the
+files orchd reads directly: hand-off entries, `orch.db` (the CLI writes routing and the model
+registry there, not over the socket) and the Qdrant API key file. The harness sandbox (Codex's,
+or Claude Code's permission rules) is the boundary for those. A PID can also be reused between
+connect and accept; audit tokens (`LOCAL_PEERTOKEN`) or pidfds would close that.
 
 Clients dial `unix://<socket>` lazily (failure surfaces on the first call) and set their own
 deadlines: hooks 0.5 s for writes and 3 s for prompt search; `orch status` 2–3 s; long CLI
@@ -140,7 +177,8 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 ## Invariants
 
 - Clients stay thin; every long-lived component is a named supervised unit, not a bare goroutine.
-- The socket (0600) is the only trust boundary; destructive operations gate server-side.
+- The socket (0600) is the trust boundary; destructive operations gate server-side, and
+  operator-only RPCs refuse queued callers server-side.
 - Bad requests fail at the RPC; nothing invalid becomes durable.
 - Task-completion events carry no result text (results may be steered by an untrusted repo).
 - Credentials orchd holds (the Qdrant key) are removed from child agent environments.

@@ -451,7 +451,9 @@ func newIngestCmd(cf clientFactory) *cobra.Command {
 		scope      string
 		tags       []string
 	)
-	textCmd := &cobra.Command{
+	// orchd refuses this from a queued task too; refusing first gives the
+	// session a plain reason before it reads stdin.
+	textCmd := operatorOnlyMsg("queue tasks cannot write to the RAG store", &cobra.Command{
 		Use:   "text",
 		Short: "Ingest text from stdin",
 		Args:  cobra.NoArgs,
@@ -486,7 +488,7 @@ func newIngestCmd(cf clientFactory) *cobra.Command {
 			fmt.Fprintf(c.OutOrStdout(), "ingested %d chunk(s) from %s\n", resp.GetChunks(), sourceURI)
 			return nil
 		},
-	}
+	})
 	textCmd.Flags().StringVar(&sourceURI, "source-uri", "", "source URI (required)")
 	textCmd.Flags().StringVar(&sourceType, "type", "manual", "source type")
 	textCmd.Flags().StringVar(&scope, "scope", "", "scope (personal|work|project:<name>)")
