@@ -105,7 +105,11 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     - **Restarts:** when orchd restarts, its numbering starts over, so the view starts over too.
     - **Text:** log text is shown verbatim and never rendered.
 - **Docs:** what `orch docs` keeps in memory: the synced owners' docs as the store holds them, by
-  repo, with a filter and each doc's chunk count (`ListDocs`). Paths and addresses show control
+  repo, with a filter and each doc's chunk count (`ListDocs`).
+  - **Sync status:** while orchd syncs, the progress (repos done of total). When the last sync
+    failed or stopped early, a banner says so, with the owner's reason, the failing repos and why
+    each failed, and **Sync now** (`SyncDocs`), which shows orchd's answer when a sync is already
+    running. A failing repo's header carries a ⚠ with its reason. Paths and addresses show control
   and bidi characters as escapes, and an address containing them cannot be copied.
   - **Reading:** choosing a doc rebuilds it from its chunks (`GetDocument`). A callout at the top
     says it is a rebuild, close to the original but not exact. It is shown in a read-only text

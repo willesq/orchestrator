@@ -35,6 +35,30 @@ struct FakeOrchdService: RegistrableRPCService {
         let logs = self.logs, metrics = self.metrics
         let docs = self.docs, document = self.document, registered = self.registered
         router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.SyncDocs.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_SyncDocsRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_DocsSyncState>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            var state = Orchd_V1_DocsSyncState()
+            state.owner = "willesq"
+            return StreamingServerResponse(single: ServerResponse(message: state))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.GetDocsSync.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_GetDocsSyncRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_DocsSyncState>()
+        ) { _, _ in
+            var state = Orchd_V1_DocsSyncState()
+            state.running = true
+            state.owner = "willesq"
+            state.startedAt = 1_700_000_000
+            state.done = 3
+            state.total = 52
+            state.repo = "airflow"
+            return StreamingServerResponse(single: ServerResponse(message: state))
+        }
+        router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.ListDocs.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_ListDocsRequest>(),
             serializer: ProtobufSerializer<Orchd_V1_ListDocsResponse>()

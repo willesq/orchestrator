@@ -182,7 +182,35 @@ Text sent with `orch ingest` or `rag_ingest_text` is stored as given.
 **Docs registry** (`orch docs add <owner>`, every 6 h): list the owner's repos with
 `gh api graphql` (skipping archived and forks by default), skip repos whose default-branch HEAD is
 unchanged, `gh repo clone --depth 1` into `<data>/repos`, and store each markdown file whose
-SHA-256 changed (hash saved only after a successful store).
+SHA-256 changed (hash saved only after a successful store). Clones use whatever protocol the
+user's gh is configured for (SSH or HTTPS).
+
+- **One sync at a time:** every docs sync runs in orchd: its scheduled scan, and `orch docs sync`
+  and `refresh` through the `SyncDocs` RPC. While one runs, another request is refused, not
+  queued.
+- **Failures are recorded, not skipped silently:** a repo whose clone fails gets status `error`
+  and an `error` reason, and the failure is logged under `docs-scheduler`. Failures are classified
+  so the reason says what to fix:
+  - `network`: GitHub could not be reached;
+  - `authentication`: the SSH agent or gh credentials were refused;
+  - `access`: the repo was not found or not readable;
+  - `stalled`: the clone wrote nothing for 45 s.
+
+  A successful sync clears a repo's error.
+- **Stalls are cut off:** clones run with `--progress` under a watchdog. One that writes nothing
+  for 45 s (typically waiting on SSH agent approval, such as an unanswered 1Password prompt, or a
+  connection that stopped responding) is stopped with its whole process group, so no `ssh` is
+  left behind. A clone also has a 3-minute limit overall.
+- **Fail fast:** after 3 network failures or stalls in a row, the owner's sync stops; the repos not
+  tried keep their previous state, and the owner records `error` with the reason. Otherwise an
+  owner with failed repos is `partial`. A sync stopped by orchd stopping records the reason but
+  leaves the owner due, so the rest syncs at the next scan.
+- **Safe error text:** recorded and logged reasons have credentials in URLs and token shapes
+  redacted, control and format characters removed, and are valid UTF-8, capped on a character
+  boundary.
+- **Needs attention:** `orch status` (and the app's System report) warns on the docs line with the
+  failing count and the reason; the app's Docs tab shows a banner, the failing repos with their
+  reasons, and Sync now.
 
 `ListDocs` serves the docs catalog: each owner the registry syncs, its repos with the indexed
 default-branch commit, and every doc that both the store holds and the registry recorded, with its

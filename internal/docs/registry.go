@@ -23,6 +23,9 @@ type Owner struct {
 	Tags        []string
 	LastSynced  int64 // unix seconds
 	Status      string
+	// Error says why the last sync failed or stopped early; empty when it
+	// completed.
+	Error string
 }
 
 // RepoState is the per-repo sync bookkeeping used to skip unchanged repos.
@@ -33,6 +36,8 @@ type RepoState struct {
 	LastSynced int64
 	Files      int
 	Status     string
+	// Error says why the repo's last sync failed; empty when it succeeded.
+	Error string
 }
 
 // Registry is the SQLite-backed store of docs owners + per-repo/file sync state.
@@ -58,7 +63,7 @@ func (r *Registry) AddOwner(ctx context.Context, o Owner) error {
 // ListOwners returns all registered owners.
 func (r *Registry) ListOwners(ctx context.Context) ([]Owner, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT owner, refresh_secs, scope, tags, last_synced, status FROM docs_owners ORDER BY owner`)
+		`SELECT owner, refresh_secs, scope, tags, last_synced, status, error FROM docs_owners ORDER BY owner`)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +74,7 @@ func (r *Registry) ListOwners(ctx context.Context) ([]Owner, error) {
 // DueOwners returns owners whose refresh interval has elapsed by `now`.
 func (r *Registry) DueOwners(ctx context.Context, now int64) ([]Owner, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT owner, refresh_secs, scope, tags, last_synced, status
+		`SELECT owner, refresh_secs, scope, tags, last_synced, status, error
 		 FROM docs_owners WHERE (? - last_synced) >= refresh_secs ORDER BY owner`, now)
 	if err != nil {
 		return nil, err
@@ -90,10 +95,19 @@ func (r *Registry) RemoveOwner(ctx context.Context, owner string) error {
 	return err
 }
 
-// MarkSynced records an owner's sync outcome (status + time).
-func (r *Registry) MarkSynced(ctx context.Context, owner string, now int64, status string) error {
+// MarkSynced records an owner's sync outcome: when, its status, and why it
+// failed or stopped early (empty when it completed).
+func (r *Registry) MarkSynced(ctx context.Context, owner string, now int64, status, reason string) error {
 	_, err := r.db.ExecContext(ctx,
-		`UPDATE docs_owners SET last_synced=?, status=? WHERE owner=?`, now, status, owner)
+		`UPDATE docs_owners SET last_synced=?, status=?, error=? WHERE owner=?`, now, status, reason, owner)
+	return err
+}
+
+// MarkStopped records why an owner's sync stopped before finishing, leaving
+// its last_synced as it was, so the owner stays due and is synced again on the
+// next scan.
+func (r *Registry) MarkStopped(ctx context.Context, owner, reason string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE docs_owners SET status='error', error=? WHERE owner=?`, reason, owner)
 	return err
 }
 
@@ -138,19 +152,19 @@ func (r *Registry) RepoSHA(ctx context.Context, owner, repo string) (string, err
 // SetRepoState upserts per-repo sync bookkeeping.
 func (r *Registry) SetRepoState(ctx context.Context, rs RepoState) error {
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO docs_repos (owner, repo, head_sha, last_synced, files, status)
-		 VALUES (?, ?, ?, ?, ?, ?)
+		`INSERT INTO docs_repos (owner, repo, head_sha, last_synced, files, status, error)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(owner, repo) DO UPDATE SET
 		   head_sha=excluded.head_sha, last_synced=excluded.last_synced,
-		   files=excluded.files, status=excluded.status`,
-		rs.Owner, rs.Repo, rs.HeadSHA, rs.LastSynced, rs.Files, rs.Status)
+		   files=excluded.files, status=excluded.status, error=excluded.error`,
+		rs.Owner, rs.Repo, rs.HeadSHA, rs.LastSynced, rs.Files, rs.Status, rs.Error)
 	return err
 }
 
 // ListRepos returns the per-repo state for an owner.
 func (r *Registry) ListRepos(ctx context.Context, owner string) ([]RepoState, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT owner, repo, head_sha, last_synced, files, status
+		`SELECT owner, repo, head_sha, last_synced, files, status, error
 		 FROM docs_repos WHERE owner=? ORDER BY repo`, owner)
 	if err != nil {
 		return nil, err
@@ -159,7 +173,7 @@ func (r *Registry) ListRepos(ctx context.Context, owner string) ([]RepoState, er
 	var out []RepoState
 	for rows.Next() {
 		var rs RepoState
-		if err := rows.Scan(&rs.Owner, &rs.Repo, &rs.HeadSHA, &rs.LastSynced, &rs.Files, &rs.Status); err != nil {
+		if err := rows.Scan(&rs.Owner, &rs.Repo, &rs.HeadSHA, &rs.LastSynced, &rs.Files, &rs.Status, &rs.Error); err != nil {
 			return nil, err
 		}
 		out = append(out, rs)
@@ -191,7 +205,7 @@ func scanOwners(rows *sql.Rows) ([]Owner, error) {
 	for rows.Next() {
 		var o Owner
 		var tags string
-		if err := rows.Scan(&o.Owner, &o.RefreshSecs, &o.Scope, &tags, &o.LastSynced, &o.Status); err != nil {
+		if err := rows.Scan(&o.Owner, &o.RefreshSecs, &o.Scope, &tags, &o.LastSynced, &o.Status, &o.Error); err != nil {
 			return nil, err
 		}
 		if tags != "" {

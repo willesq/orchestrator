@@ -44,6 +44,8 @@ const (
 	Orchd_GetSystemMetrics_FullMethodName      = "/orchd.v1.Orchd/GetSystemMetrics"
 	Orchd_ListDocs_FullMethodName              = "/orchd.v1.Orchd/ListDocs"
 	Orchd_GetDocument_FullMethodName           = "/orchd.v1.Orchd/GetDocument"
+	Orchd_SyncDocs_FullMethodName              = "/orchd.v1.Orchd/SyncDocs"
+	Orchd_GetDocsSync_FullMethodName           = "/orchd.v1.Orchd/GetDocsSync"
 	Orchd_ListRegisteredSources_FullMethodName = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName            = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName          = "/orchd.v1.Orchd/RemoveSource"
@@ -121,6 +123,12 @@ type OrchdClient interface {
 	ListDocs(ctx context.Context, in *ListDocsRequest, opts ...grpc.CallOption) (*ListDocsResponse, error)
 	// GetDocument rebuilds one indexed source from its stored chunks.
 	GetDocument(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*Document, error)
+	// SyncDocs starts a docs sync now: one owner or every owner, and with force
+	// a full re-ingest. Only one sync runs at a time; a request while one runs
+	// is refused (Aborted), never queued.
+	SyncDocs(ctx context.Context, in *SyncDocsRequest, opts ...grpc.CallOption) (*DocsSyncState, error)
+	// GetDocsSync reports the running docs sync, or the last one.
+	GetDocsSync(ctx context.Context, in *GetDocsSyncRequest, opts ...grpc.CallOption) (*DocsSyncState, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -390,6 +398,26 @@ func (c *orchdClient) GetDocument(ctx context.Context, in *GetDocumentRequest, o
 	return out, nil
 }
 
+func (c *orchdClient) SyncDocs(ctx context.Context, in *SyncDocsRequest, opts ...grpc.CallOption) (*DocsSyncState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DocsSyncState)
+	err := c.cc.Invoke(ctx, Orchd_SyncDocs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) GetDocsSync(ctx context.Context, in *GetDocsSyncRequest, opts ...grpc.CallOption) (*DocsSyncState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DocsSyncState)
+	err := c.cc.Invoke(ctx, Orchd_GetDocsSync_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -501,6 +529,12 @@ type OrchdServer interface {
 	ListDocs(context.Context, *ListDocsRequest) (*ListDocsResponse, error)
 	// GetDocument rebuilds one indexed source from its stored chunks.
 	GetDocument(context.Context, *GetDocumentRequest) (*Document, error)
+	// SyncDocs starts a docs sync now: one owner or every owner, and with force
+	// a full re-ingest. Only one sync runs at a time; a request while one runs
+	// is refused (Aborted), never queued.
+	SyncDocs(context.Context, *SyncDocsRequest) (*DocsSyncState, error)
+	// GetDocsSync reports the running docs sync, or the last one.
+	GetDocsSync(context.Context, *GetDocsSyncRequest) (*DocsSyncState, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -594,6 +628,12 @@ func (UnimplementedOrchdServer) ListDocs(context.Context, *ListDocsRequest) (*Li
 }
 func (UnimplementedOrchdServer) GetDocument(context.Context, *GetDocumentRequest) (*Document, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDocument not implemented")
+}
+func (UnimplementedOrchdServer) SyncDocs(context.Context, *SyncDocsRequest) (*DocsSyncState, error) {
+	return nil, status.Error(codes.Unimplemented, "method SyncDocs not implemented")
+}
+func (UnimplementedOrchdServer) GetDocsSync(context.Context, *GetDocsSyncRequest) (*DocsSyncState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDocsSync not implemented")
 }
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
@@ -1078,6 +1118,42 @@ func _Orchd_GetDocument_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_SyncDocs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncDocsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SyncDocs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SyncDocs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SyncDocs(ctx, req.(*SyncDocsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_GetDocsSync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDocsSyncRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetDocsSync(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetDocsSync_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetDocsSync(ctx, req.(*GetDocsSyncRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -1256,6 +1332,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetDocument",
 			Handler:    _Orchd_GetDocument_Handler,
+		},
+		{
+			MethodName: "SyncDocs",
+			Handler:    _Orchd_SyncDocs_Handler,
+		},
+		{
+			MethodName: "GetDocsSync",
+			Handler:    _Orchd_GetDocsSync_Handler,
 		},
 		{
 			MethodName: "ListRegisteredSources",

@@ -275,15 +275,36 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
                 DocOwner(owner: o.owner, refreshSeconds: o.refreshSecs, lastSynced: date(fromUnix: o.lastSynced), status: o.status,
                          repos: o.repos.map {
                              DocRepo(repo: $0.repo, headSHA: $0.headSha, lastSynced: date(fromUnix: $0.lastSynced),
-                                     files: Int($0.files), status: $0.status, webURL: $0.webURL)
-                         })
+                                     files: Int($0.files), status: $0.status, webURL: $0.webURL, error: $0.error)
+                         }, error: o.error)
             },
             files: r.files.map {
                 DocFile(sourceURI: $0.sourceUri, owner: $0.owner, repo: $0.repo, path: $0.path,
                         updatedAt: date(fromUnix: $0.updatedAt), webURL: $0.webURL, chunks: Int($0.chunks))
             },
-            truncated: r.truncated
+            truncated: r.truncated,
+            sync: r.hasSync ? Self.docsSync(r.sync) : nil
         )
+    }
+
+    public func syncDocs(owner: String?, force: Bool) async throws -> DocsSyncState {
+        var request = Orchd_V1_SyncDocsRequest()
+        request.owner = owner ?? ""
+        request.force = force
+        // Starting the sync restarts orchd's docs unit, which can wait for a
+        // tick in progress to stop.
+        var options = CallOptions.defaults
+        options.timeout = .seconds(40)
+        return Self.docsSync(try await orchd.syncDocs(request, options: options))
+    }
+
+    public func docsSync() async throws -> DocsSyncState {
+        Self.docsSync(try await orchd.getDocsSync(Orchd_V1_GetDocsSyncRequest(), options: callOptions))
+    }
+
+    static func docsSync(_ s: Orchd_V1_DocsSyncState) -> DocsSyncState {
+        DocsSyncState(running: s.running, owner: s.owner, startedAt: date(fromUnix: s.startedAt),
+                      finishedAt: date(fromUnix: s.finishedAt), done: Int(s.done), total: Int(s.total), repo: s.repo)
     }
 
     public func document(uri: String) async throws -> RebuiltDocument {

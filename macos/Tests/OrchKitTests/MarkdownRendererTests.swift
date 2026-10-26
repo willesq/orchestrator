@@ -6,7 +6,7 @@ import Testing
 @Suite struct MarkdownRendererTests {
     private let base = URL(string: "https://github.com/willesq/orchestrator/blob/abc123/docs/INSTALL.md")!
 
-    private func render(_ md: String) -> NSAttributedString { MarkdownRenderer(baseURL: base).render(md)! }
+    private func render(_ md: String) throws -> NSAttributedString { try #require(MarkdownRenderer(baseURL: base).render(md)) }
 
     /// The attribute at the first occurrence of `text`.
     private func attribute(_ key: NSAttributedString.Key, of text: String, in s: NSAttributedString) -> Any? {
@@ -19,20 +19,20 @@ import Testing
         attribute(.font, of: text, in: s) as? NSFont
     }
 
-    @Test func headingsParagraphsAndInlineStyles() {
-        let s = render("# Install\n\nRun **make** and *wait*, ~~not~~ `brew`.\nNext line.")
+    @Test func headingsParagraphsAndInlineStyles() throws {
+        let s = try render("# Install\n\nRun **make** and *wait*, ~~not~~ `brew`.\nNext line.")
         #expect(s.string == "Install\nRun make and wait, not brew. Next line.")
-        let heading = font(of: "Install", in: s)!, body = font(of: "Run", in: s)!
+        let heading = try #require(font(of: "Install", in: s)), body = try #require(font(of: "Run", in: s))
         #expect(heading.pointSize > body.pointSize)
-        #expect(NSFontManager.shared.traits(of: font(of: "make", in: s)!).contains(.boldFontMask) ||
-            font(of: "make", in: s)!.fontDescriptor.symbolicTraits.contains(.bold))
-        #expect(font(of: "wait", in: s)!.fontDescriptor.symbolicTraits.contains(.italic))
+        // Font descriptors, not NSFontManager, which is not safe on a test's thread.
+        #expect(try #require(font(of: "make", in: s)).fontDescriptor.symbolicTraits.contains(.bold))
+        #expect(try #require(font(of: "wait", in: s)).fontDescriptor.symbolicTraits.contains(.italic))
         #expect(attribute(.strikethroughStyle, of: "not", in: s) as? Int == NSUnderlineStyle.single.rawValue)
-        #expect(font(of: "brew", in: s)!.isFixedPitch)
+        #expect(try #require(font(of: "brew", in: s)).isFixedPitch)
     }
 
-    @Test func listsQuotesCodeAndRules() {
-        let s = render("""
+    @Test func listsQuotesCodeAndRules() throws {
+        let s = try render("""
         - one
         - two
           1. nested
@@ -50,7 +50,7 @@ import Testing
         #expect(s.string.contains("1.\tnested"))
         #expect(s.string.contains("☑\tdone"))
         #expect(s.string.contains("fmt.Println(\"hi\")"))
-        #expect(font(of: "fmt.Println", in: s)!.isFixedPitch)
+        #expect(try #require(font(of: "fmt.Println", in: s)).isFixedPitch)
         #expect(attribute(.foregroundColor, of: "quoted", in: s) as? NSColor == NSColor.secondaryLabelColor)
         #expect(s.string.contains("────"))
         let nestedIndent = (attribute(.paragraphStyle, of: "nested", in: s) as? NSParagraphStyle)?.headIndent ?? 0
@@ -58,15 +58,15 @@ import Testing
         #expect(nestedIndent > topIndent)
     }
 
-    @Test func tablesBecomeAlignedRows() {
-        let s = render("| Name | Size |\n|---|---|\n| orch.db | 140 KB |\n| qdrant | 1.7 GB |")
+    @Test func tablesBecomeAlignedRows() throws {
+        let s = try render("| Name | Size |\n|---|---|\n| orch.db | 140 KB |\n| qdrant | 1.7 GB |")
         #expect(s.string.contains("Name    │ Size"))
         #expect(s.string.contains("orch.db │ 140 KB"))
-        #expect(font(of: "Name", in: s)!.isFixedPitch)
+        #expect(try #require(font(of: "Name", in: s)).isFixedPitch)
     }
 
-    @Test func linksResolveAgainstTheDocAndOnlyHTTPOpens() {
-        let s = render("""
+    @Test func linksResolveAgainstTheDocAndOnlyHTTPOpens() throws {
+        let s = try render("""
         [abs](https://go.dev/doc) [rel](OPERATIONS.md) [up](../README.md#install) \
         [js](javascript:alert(1)) [file](file:///etc/passwd) [mail](mailto:a@b.c) [creds](https://u:p@x.dev)
         """)
@@ -79,12 +79,12 @@ import Testing
             #expect(attribute(.link, of: text, in: s) == nil, "\(text) must not be a link")
         }
         // Without a base, a relative link goes nowhere.
-        #expect(MarkdownRenderer(baseURL: nil).render("[rel](x.md)")!.attribute(.link, at: 0, effectiveRange: nil) == nil)
+        #expect(try #require(MarkdownRenderer(baseURL: nil).render("[rel](x.md)")).attribute(.link, at: 0, effectiveRange: nil) == nil)
         #expect(MarkdownRenderer.linkURL("  ", base: base) == nil)
     }
 
-    @Test func imagesAreNeverLoadedAndHTMLIsShownAsText() {
-        let s = render("![diagram of orchd](https://x.dev/track.png) and ![](y.png)\n\n<script>alert(1)</script>\n\nInline <b>bold</b>.")
+    @Test func imagesAreNeverLoadedAndHTMLIsShownAsText() throws {
+        let s = try render("![diagram of orchd](https://x.dev/track.png) and ![](y.png)\n\n<script>alert(1)</script>\n\nInline <b>bold</b>.")
         #expect(s.string.contains("[image: diagram of orchd]"))
         #expect(s.string.contains("[image]"))
         #expect(s.string.contains("<script>alert(1)</script>"))
@@ -118,29 +118,29 @@ import Testing
         #expect(await task.value == nil)
     }
 
-    @Test func tablesStayInProportionToTheirInput() {
+    @Test func tablesStayInProportionToTheirInput() throws {
         var md = "| a | b |\n|---|---|\n| " + String(repeating: "x", count: 20_000) + " | y |\n"
         md += String(repeating: "| s | t |\n", count: 2_000)
-        let s = render(md)
+        let s = try render(md)
         // Padding is bounded by the table cap, not by rows times the widest cell
         // (which was 40 MB for this input).
         #expect(s.length <= MarkdownRenderer.maxTableChars + md.count, "rendered \(s.length) characters from \(md.count)")
         // Past the cap, cells go unpadded: output stays in proportion to input.
         let wide = "| a | b |\n|---|---|\n" + String(repeating: "| " + String(repeating: "w", count: 70) + " | v |\n", count: 5_000)
-        #expect(render(wide).length < wide.count * 2)
+        #expect(try render(wide).length < wide.count * 2)
         #expect(s.string.contains("…"))
     }
 
-    @Test func linkTextNamingAnotherHostShowsTheRealOne() {
-        let s = render("[https://github.com/org/repo](https://evil.example/x) and [docs](https://go.dev)")
+    @Test func linkTextNamingAnotherHostShowsTheRealOne() throws {
+        let s = try render("[https://github.com/org/repo](https://evil.example/x) and [docs](https://go.dev)")
         #expect(s.string.contains("https://github.com/org/repo (evil.example)"))
         #expect(!s.string.contains("docs (go.dev)"))
     }
 
-    @Test func lineBreaksAndEmptyInput() {
-        #expect(render("a  \nb").string == "a\u{2028}b")
-        #expect(render("").string.isEmpty)
-        #expect(render("-").string.contains("•"))
+    @Test func lineBreaksAndEmptyInput() throws {
+        #expect(try render("a  \nb").string == "a\u{2028}b")
+        #expect(try render("").string.isEmpty)
+        #expect(try render("-").string.contains("•"))
     }
 
     @Test func markdownDetection() {

@@ -723,7 +723,12 @@ type fakeClient struct {
 	// document answers GetDocument; docReq records the request.
 	document *orchdv1.Document
 	docReq   *orchdv1.GetDocumentRequest
-	err      error
+	// docsSyncErr fails SyncDocs; docsStates are GetDocsSync's replies in
+	// order, the last repeating; docsSyncReq records the request.
+	docsSyncErr error
+	docsStates  []*orchdv1.DocsSyncState
+	docsSyncReq *orchdv1.SyncDocsRequest
+	err         error
 }
 
 func (f *fakeClient) Ping(context.Context, *orchdv1.PingRequest, ...grpc.CallOption) (*orchdv1.PingResponse, error) {

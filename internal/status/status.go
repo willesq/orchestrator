@@ -438,7 +438,37 @@ func docsLine(ctx context.Context, conn *sql.DB, now time.Time) Line {
 	if last > 0 {
 		detail = "last sync " + humanAgo(now, time.Unix(last, 0))
 	}
-	return Line{Name: "docs owners", Value: fmt.Sprintf("%d registered", len(owners)), Detail: detail}
+	line := Line{Name: "docs owners", Value: fmt.Sprintf("%d registered", len(owners)), Detail: detail}
+	// A failed sync needs attention: say how many repos are failing and why.
+	failing, reason := 0, ""
+	for _, o := range owners {
+		repos, err := docs.NewRegistry(conn).ListRepos(ctx, o.Owner)
+		if err != nil {
+			continue
+		}
+		for _, r := range repos {
+			if r.Status == "error" {
+				failing++
+				if reason == "" {
+					reason = o.Owner + "/" + r.Repo + ": " + r.Error
+				}
+			}
+		}
+		if o.Error != "" && o.Status != "ok" {
+			// The owner's own reason (stopped early, listing failed) explains
+			// the most.
+			reason = o.Owner + ": " + o.Error
+		}
+	}
+	if failing > 0 || reason != "" {
+		line.Level = LevelWarn
+		line.Value = fmt.Sprintf("%d registered, needs attention", len(owners))
+		if failing > 0 {
+			detail += fmt.Sprintf("; %d repo(s) failing", failing)
+		}
+		line.Detail = detail + "; " + reason + " — retry with: orch docs sync"
+	}
+	return line
 }
 
 // prsLine reports the PR babysitter's cached state, which survives orchd restarts.

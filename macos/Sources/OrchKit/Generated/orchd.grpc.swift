@@ -345,6 +345,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "SyncDocs" metadata.
+        public enum SyncDocs: Sendable {
+            /// Request type for "SyncDocs".
+            public typealias Input = Orchd_V1_SyncDocsRequest
+            /// Response type for "SyncDocs".
+            public typealias Output = Orchd_V1_DocsSyncState
+            /// Descriptor for "SyncDocs".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SyncDocs",
+                type: .unary
+            )
+        }
+        /// Namespace for "GetDocsSync" metadata.
+        public enum GetDocsSync: Sendable {
+            /// Request type for "GetDocsSync".
+            public typealias Input = Orchd_V1_GetDocsSyncRequest
+            /// Response type for "GetDocsSync".
+            public typealias Output = Orchd_V1_DocsSyncState
+            /// Descriptor for "GetDocsSync".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetDocsSync",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -424,6 +450,8 @@ public enum Orchd_V1_Orchd: Sendable {
             GetSystemMetrics.descriptor,
             ListDocs.descriptor,
             GetDocument.descriptor,
+            SyncDocs.descriptor,
+            GetDocsSync.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -1039,6 +1067,54 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_Document>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_Document>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SyncDocs" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SyncDocs starts a docs sync now: one owner or every owner, and with force
+        /// > a full re-ingest. Only one sync runs at a time; a request while one runs
+        /// > is refused (Aborted), never queued.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SyncDocsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SyncDocsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_DocsSyncState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func syncDocs<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SyncDocsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SyncDocsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DocsSyncState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetDocsSync" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetDocsSync reports the running docs sync, or the last one.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetDocsSyncRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetDocsSyncRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_DocsSyncState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getDocsSync<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetDocsSyncRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetDocsSyncRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DocsSyncState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListRegisteredSources" method.
@@ -2020,6 +2096,76 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "SyncDocs" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SyncDocs starts a docs sync now: one owner or every owner, and with force
+        /// > a full re-ingest. Only one sync runs at a time; a request while one runs
+        /// > is refused (Aborted), never queued.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SyncDocsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SyncDocsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_DocsSyncState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func syncDocs<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SyncDocsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SyncDocsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DocsSyncState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SyncDocs.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetDocsSync" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetDocsSync reports the running docs sync, or the last one.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetDocsSyncRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetDocsSyncRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_DocsSyncState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getDocsSync<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetDocsSyncRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetDocsSyncRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DocsSyncState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetDocsSync.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -2896,6 +3042,66 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetDocumentRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_Document>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SyncDocs" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SyncDocs starts a docs sync now: one owner or every owner, and with force
+    /// > a full re-ingest. Only one sync runs at a time; a request while one runs
+    /// > is refused (Aborted), never queued.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SyncDocsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func syncDocs<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SyncDocsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.syncDocs(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SyncDocsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_DocsSyncState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetDocsSync" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetDocsSync reports the running docs sync, or the last one.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetDocsSyncRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getDocsSync<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetDocsSyncRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getDocsSync(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetDocsSyncRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_DocsSyncState>(),
             options: options,
             onResponse: handleResponse
         )
@@ -3855,6 +4061,74 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.getDocument(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SyncDocs" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SyncDocs starts a docs sync now: one owner or every owner, and with force
+    /// > a full re-ingest. Only one sync runs at a time; a request while one runs
+    /// > is refused (Aborted), never queued.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func syncDocs<Result>(
+        _ message: Orchd_V1_SyncDocsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SyncDocsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.syncDocs(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetDocsSync" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetDocsSync reports the running docs sync, or the last one.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getDocsSync<Result>(
+        _ message: Orchd_V1_GetDocsSyncRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetDocsSyncRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getDocsSync(
             request: request,
             options: options,
             onResponse: handleResponse

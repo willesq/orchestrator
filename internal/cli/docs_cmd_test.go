@@ -3,188 +3,182 @@ package cli
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
+
+	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/docs"
-	"github.com/willesq/orchestrator/internal/rag"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
-// fakeGH / fakeGit stand in for the gh + git CLIs so a foreground sync is
-// exercised end to end without network access.
-type fakeGH struct {
-	repos []docs.Repo
-	err   error
-}
-
-func (f fakeGH) ListRepos(context.Context, string) ([]docs.Repo, error) { return f.repos, f.err }
-
-type fakeGit struct {
-	files map[string]string // relative path → contents, written into every dest
-	err   error
-}
-
-func (f fakeGit) Sync(_ context.Context, _, _, dest string) error {
-	if f.err != nil {
-		return f.err
-	}
-	for rel, body := range f.files {
-		p := filepath.Join(dest, rel)
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// stubDocsTooling points the foreground sync at the fakes for one test.
-func stubDocsTooling(t *testing.T, gh docs.GitHub, g docs.Git) {
-	t.Helper()
-	origGH, origGit := newDocsGitHub, newDocsGit
-	newDocsGitHub = func() docs.GitHub { return gh }
-	newDocsGit = func() docs.Git { return g }
-	t.Cleanup(func() { newDocsGitHub, newDocsGit = origGH, origGit })
-}
-
 func TestDocsCLIFlow(t *testing.T) {
-	tests := []struct{ name string }{{name: "add, list, status, sync, refresh, remove"}}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
-			f := factory(&fakeClient{}, nil)
-			mustRun := func(args ...string) string {
-				out, err := run(f, "", args...)
-				if err != nil {
-					t.Fatalf("%v: %v", args, err)
-				}
-				return out
-			}
-			if out := mustRun("docs", "add", "willesq", "--refresh", "6h", "--tag", "x"); !strings.Contains(out, "added docs owner willesq") {
-				t.Errorf("add: %q", out)
-			}
-			if out := mustRun("docs", "owners", "list"); !strings.Contains(out, "willesq") {
-				t.Errorf("owners list: %q", out)
-			}
-			if out := mustRun("docs", "list"); !strings.Contains(out, "no docs ingested") {
-				t.Errorf("list before sync: %q", out)
-			}
-			if out := mustRun("docs", "status"); !strings.Contains(out, "willesq") || !strings.Contains(out, "last=never") {
-				t.Errorf("status: %q", out)
-			}
-			if out := mustRun("docs", "sync", "willesq", "--background"); !strings.Contains(out, "marked for sync") {
-				t.Errorf("sync --background: %q", out)
-			}
-			if out := mustRun("docs", "refresh", "--background"); !strings.Contains(out, "caches cleared") {
-				t.Errorf("refresh: %q", out)
-			}
-			if out := mustRun("docs", "remove", "willesq"); !strings.Contains(out, "removed docs owner willesq") {
-				t.Errorf("remove: %q", out)
-			}
-			if out := mustRun("docs", "owners", "list"); !strings.Contains(out, "no docs owners") {
-				t.Errorf("owners list after remove: %q", out)
-			}
-			if out := mustRun("docs", "status"); !strings.Contains(out, "no docs owners") {
-				t.Errorf("status after remove: %q", out)
-			}
-		})
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	f := factory(&fakeClient{}, nil)
+	mustRun := func(args ...string) string {
+		out, err := run(f, "", args...)
+		if err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		return out
+	}
+	if out := mustRun("docs", "add", "willesq", "--refresh", "6h", "--tag", "x"); !strings.Contains(out, "added docs owner willesq") {
+		t.Errorf("add: %q", out)
+	}
+	if out := mustRun("docs", "owners", "list"); !strings.Contains(out, "willesq") {
+		t.Errorf("owners list: %q", out)
+	}
+	if out := mustRun("docs", "list"); !strings.Contains(out, "no docs ingested") {
+		t.Errorf("list before sync: %q", out)
+	}
+	if out := mustRun("docs", "status"); !strings.Contains(out, "willesq") || !strings.Contains(out, "last=never") {
+		t.Errorf("status: %q", out)
+	}
+	if out := mustRun("docs", "sync", "willesq", "--background"); !strings.Contains(out, "orchd is syncing") {
+		t.Errorf("sync --background: %q", out)
+	}
+	if out := mustRun("docs", "remove", "willesq"); !strings.Contains(out, "removed docs owner willesq") {
+		t.Errorf("remove: %q", out)
+	}
+	if out := mustRun("docs", "status"); !strings.Contains(out, "no docs owners") {
+		t.Errorf("status after remove: %q", out)
 	}
 }
 
-func TestDocsSyncForeground(t *testing.T) {
+// seedDocsOwner registers willesq with one healthy and one failing repo.
+func seedDocsOwner(t *testing.T, status, reason string) {
+	t.Helper()
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	reg := docs.NewRegistry(conn)
+	ctx := context.Background()
+	if err := reg.AddOwner(ctx, docs.Owner{Owner: "willesq", RefreshSecs: 3600}); err != nil {
+		t.Fatal(err)
+	}
+	_ = reg.SetRepoState(ctx, docs.RepoState{Owner: "willesq", Repo: "infra", HeadSHA: "abc", Files: 2, Status: "ok"})
+	if status != "ok" {
+		_ = reg.SetRepoState(ctx, docs.RepoState{Owner: "willesq", Repo: "airflow", Status: "error",
+			Error: "clone failed (network): GitHub could not be reached from this machine"})
+	}
+	_ = reg.MarkSynced(ctx, "willesq", time.Now().Unix(), status, reason)
+}
+
+func TestDocsSyncFollowsOrchd(t *testing.T) {
+	saved := docsPollInterval
+	docsPollInterval = time.Millisecond
+	t.Cleanup(func() { docsPollInterval = saved })
+	now := time.Now().Unix() + 5
+
 	tests := []struct {
-		name     string
-		gh       fakeGH
-		git      fakeGit
-		args     []string
-		want     string
-		wantErr  bool
-		wantSkip string // substring that must NOT appear
+		name      string
+		args      []string
+		status    string
+		reason    string
+		states    []*orchdv1.DocsSyncState
+		syncErr   error
+		wantForce bool
+		wantOwner string
+		want      []string
+		wantErr   string
 	}{
 		{
-			name: "syncs one owner now and reports repos + files",
-			gh:   fakeGH{repos: []docs.Repo{{Name: "infra", HeadSHA: "abc"}}},
-			git:  fakeGit{files: map[string]string{"README.md": "# hello"}},
-			args: []string{"docs", "sync", "willesq"},
-			want: "synced repos=1 files=1",
+			name:   "follows progress and reports a clean sync",
+			args:   []string{"docs", "sync", "willesq"},
+			status: "ok",
+			states: []*orchdv1.DocsSyncState{
+				{Running: true, Owner: "willesq", StartedAt: now, Done: 1, Total: 2, Repo: "infra"},
+				{Running: true, Owner: "willesq", StartedAt: now, Done: 2, Total: 2, Repo: "docs"},
+				{Owner: "willesq", StartedAt: now, FinishedAt: now + 1, Done: 2, Total: 2},
+			},
+			wantOwner: "willesq",
+			want:      []string{"willesq: 1/2 repos (last: infra)", "willesq: 2/2 repos", "repos=1 files=2 status=ok"},
 		},
 		{
-			name:     "syncs all owners when none is named",
-			gh:       fakeGH{repos: []docs.Repo{{Name: "infra", HeadSHA: "abc"}}},
-			git:      fakeGit{files: map[string]string{"docs/guide.md": "# guide"}},
-			args:     []string{"docs", "sync"},
-			want:     "syncing willesq",
-			wantSkip: "orchd will sync on its next scan",
+			name:   "a failed repo needs attention",
+			args:   []string{"docs", "refresh"},
+			status: "error",
+			reason: "stopped after 3 repos in a row could not reach GitHub; 40 not tried: check the network connection",
+			states: []*orchdv1.DocsSyncState{
+				{Running: true, Owner: "willesq", StartedAt: now, Done: 3, Total: 44, Repo: "airflow"},
+				{Owner: "willesq", StartedAt: now, FinishedAt: now + 1},
+			},
+			wantForce: true,
+			want:      []string{"stopped after 3 repos", "airflow: clone failed (network)"},
+			wantErr:   "needs attention",
 		},
 		{
-			name: "ingests nothing when the owner has no repos",
-			gh:   fakeGH{},
-			args: []string{"docs", "sync"},
-			want: "synced repos=0 files=0",
+			name:    "a running sync refuses the request instead of queueing it",
+			args:    []string{"docs", "sync"},
+			status:  "ok",
+			syncErr: grpcstatus.Error(codes.Aborted, "a docs sync is already running (willesq, started 2m0s ago, 10 of 52 repos); this request was not queued"),
+			wantErr: "already running",
 		},
 		{
-			name:    "unknown owner is an error",
-			gh:      fakeGH{},
+			name:    "an unknown owner is refused",
 			args:    []string{"docs", "sync", "nobody"},
-			wantErr: true,
-		},
-		{
-			name:    "repo enumeration failure surfaces as an error",
-			gh:      fakeGH{err: errors.New("gh: rate limited")},
-			args:    []string{"docs", "sync", "willesq"},
-			want:    "status=error",
-			wantErr: true,
-		},
-		{
-			name: "refresh re-ingests in the foreground",
-			gh:   fakeGH{repos: []docs.Repo{{Name: "infra", HeadSHA: "abc"}}},
-			git:  fakeGit{files: map[string]string{"README.md": "# hello"}},
-			args: []string{"docs", "refresh", "willesq"},
-			want: "synced repos=1 files=1",
+			status:  "ok",
+			syncErr: grpcstatus.Error(codes.NotFound, "nobody is not a docs owner"),
+			wantErr: "not a docs owner",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
-			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-			stubDocsTooling(t, tt.gh, tt.git)
-			f := factory(&fakeClient{ingest: &orchdv1.IngestResponse{Chunks: 1}}, nil)
-			if _, err := run(f, "", "docs", "add", "willesq"); err != nil {
-				t.Fatalf("add: %v", err)
+			seedDocsOwner(t, tt.status, tt.reason)
+			fc := &fakeClient{docsSyncErr: tt.syncErr, docsStates: tt.states}
+			out, err := run(factory(fc, nil), "", tt.args...)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("err = %v, want %q (out %q)", err, tt.wantErr, out)
+				}
+			} else if err != nil {
+				t.Fatalf("err = %v (out %q)", err, out)
 			}
-			out, err := run(f, "", tt.args...)
-			if tt.wantErr != (err != nil) {
-				t.Fatalf("err = %v, wantErr %v (out %q)", err, tt.wantErr, out)
+			for _, w := range tt.want {
+				if !strings.Contains(out, w) {
+					t.Errorf("output missing %q:\n%s", w, out)
+				}
 			}
-			if tt.want != "" && !strings.Contains(out, tt.want) {
-				t.Errorf("output %q missing %q", out, tt.want)
-			}
-			if tt.wantSkip != "" && strings.Contains(out, tt.wantSkip) {
-				t.Errorf("output %q should not contain %q", out, tt.wantSkip)
+			if tt.syncErr == nil && (fc.docsSyncReq.GetForce() != tt.wantForce || fc.docsSyncReq.GetOwner() != tt.wantOwner) {
+				t.Errorf("request = %v", fc.docsSyncReq)
 			}
 		})
+	}
+}
+
+func TestDocsSyncWhenOrchdHasNotStarted(t *testing.T) {
+	savedPoll, savedWait := docsPollInterval, docsStartWait
+	docsPollInterval, docsStartWait = time.Millisecond, 20*time.Millisecond
+	t.Cleanup(func() { docsPollInterval, docsStartWait = savedPoll, savedWait })
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	seedDocsOwner(t, "ok", "")
+	// Only an older, finished run is ever reported.
+	fc := &fakeClient{docsStates: []*orchdv1.DocsSyncState{{Owner: "willesq", StartedAt: 1, FinishedAt: 2}}}
+	out, err := run(factory(fc, nil), "", "docs", "sync", "willesq")
+	if err != nil || !strings.Contains(out, "next scan") {
+		t.Fatalf("out = %q, err = %v", out, err)
 	}
 }
 
 func TestDocsListShowsEachDocWithStaleness(t *testing.T) {
 	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
-	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-	stubDocsTooling(t,
-		fakeGH{repos: []docs.Repo{{Name: "infra", HeadSHA: "abc"}}},
-		fakeGit{files: map[string]string{"README.md": "# hello", "docs/guide.md": "# guide"}})
-	f := factory(&fakeClient{ingest: &orchdv1.IngestResponse{Chunks: 1}}, nil)
-	for _, args := range [][]string{{"docs", "add", "willesq"}, {"docs", "sync", "willesq"}} {
-		if out, err := run(f, "", args...); err != nil {
-			t.Fatalf("%v: %v (%q)", args, err, out)
-		}
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
 	}
-	out, err := run(f, "", "docs", "list")
+	reg := docs.NewRegistry(conn)
+	for _, uri := range []string{"repo://willesq/infra/README.md", "repo://willesq/infra/docs/guide.md"} {
+		_ = reg.SetHash(context.Background(), uri, "h", time.Now().Unix())
+	}
+	_ = conn.Close()
+	out, err := run(factory(&fakeClient{}, nil), "", "docs", "list")
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -202,49 +196,42 @@ func TestDocsListShowsEachDocWithStaleness(t *testing.T) {
 
 func TestDocsSyncDefersWhenDaemonUnreachable(t *testing.T) {
 	tests := []struct {
-		name string
-		cf   clientFactory
+		name  string
+		cf    clientFactory
+		args  []string
+		check func(t *testing.T, reg *docs.Registry)
 	}{
-		{name: "dial fails", cf: factory(nil, errors.New("no socket"))},
-		{name: "ping fails", cf: factory(&fakeClient{err: errors.New("orchd down")}, nil)},
+		{name: "dial fails", cf: factory(nil, errors.New("no socket")), args: []string{"docs", "sync", "willesq"}},
+		{
+			name: "orchd unavailable, refresh clears caches", cf: factory(&fakeClient{docsSyncErr: grpcstatus.Error(codes.Unavailable, "orchd down")}, nil),
+			args: []string{"docs", "refresh", "willesq"},
+			check: func(t *testing.T, reg *docs.Registry) {
+				if sha, _ := reg.RepoSHA(context.Background(), "willesq", "infra"); sha != "" {
+					t.Errorf("caches kept: %q", sha)
+				}
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
-			stubDocsTooling(t, fakeGH{}, fakeGit{})
-			if _, err := run(tt.cf, "", "docs", "add", "willesq"); err != nil {
-				t.Fatalf("add: %v", err)
-			}
-			out, err := run(tt.cf, "", "docs", "sync", "willesq")
+			seedDocsOwner(t, "ok", "")
+			out, err := run(tt.cf, "", tt.args...)
 			if err != nil {
 				t.Fatalf("sync: %v", err)
 			}
 			if !strings.Contains(out, "orchd unreachable") || !strings.Contains(out, "next scan") {
 				t.Errorf("output %q missing deferral notice", out)
 			}
-		})
-	}
-}
-
-func TestRPCIngester(t *testing.T) {
-	tests := []struct {
-		name       string
-		client     *fakeClient
-		wantChunks int
-		wantErr    bool
-	}{
-		{name: "returns chunk count", client: &fakeClient{ingest: &orchdv1.IngestResponse{Chunks: 3}}, wantChunks: 3},
-		{name: "propagates rpc error", client: &fakeClient{err: errors.New("boom")}, wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			meta := rag.Meta{SourceURI: "repo://willesq/infra/README.md", SourceType: "repo_doc", Tags: []string{"owner:willesq"}}
-			got, err := rpcIngester{client: tt.client}.IngestText(context.Background(), "text", meta)
-			if tt.wantErr != (err != nil) {
-				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
+			conn, _ := db.Open()
+			defer func() { _ = conn.Close() }()
+			reg := docs.NewRegistry(conn)
+			owners, _ := reg.ListOwners(context.Background())
+			if len(owners) != 1 || owners[0].LastSynced != 0 {
+				t.Errorf("owner not marked due: %+v", owners)
 			}
-			if got != tt.wantChunks {
-				t.Errorf("chunks = %d, want %d", got, tt.wantChunks)
+			if tt.check != nil {
+				tt.check(t, reg)
 			}
 		})
 	}

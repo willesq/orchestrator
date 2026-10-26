@@ -62,16 +62,19 @@ func (s *server) ListDocs(ctx context.Context, _ *orchdv1.ListDocsRequest) (*orc
 		}
 		pb := &orchdv1.DocOwner{
 			Owner: o.Owner, RefreshSecs: o.RefreshSecs, Scope: o.Scope, Tags: o.Tags,
-			LastSynced: o.LastSynced, Status: o.Status,
+			LastSynced: o.LastSynced, Status: o.Status, Error: o.Error,
 		}
 		for _, r := range repos {
 			heads[r.Owner+"/"+r.Repo] = r.HeadSHA
 			pb.Repos = append(pb.Repos, &orchdv1.DocRepo{
 				Repo: r.Repo, HeadSha: r.HeadSHA, LastSynced: r.LastSynced, Files: clampInt32(r.Files),
-				Status: r.Status, WebUrl: gitHubRepoURL(r.Owner, r.Repo),
+				Status: r.Status, WebUrl: gitHubRepoURL(r.Owner, r.Repo), Error: r.Error,
 			})
 		}
 		out.Owners = append(out.Owners, pb)
+	}
+	if s.docsSync != nil {
+		out.Sync = docsSyncState(s.docsSync.Progress())
 	}
 	if s.rag == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "rag store unavailable")

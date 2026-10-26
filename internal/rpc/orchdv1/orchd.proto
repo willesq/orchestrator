@@ -71,6 +71,12 @@ service Orchd {
   rpc ListDocs(ListDocsRequest) returns (ListDocsResponse);
   // GetDocument rebuilds one indexed source from its stored chunks.
   rpc GetDocument(GetDocumentRequest) returns (Document);
+  // SyncDocs starts a docs sync now: one owner or every owner, and with force
+  // a full re-ingest. Only one sync runs at a time; a request while one runs
+  // is refused (Aborted), never queued.
+  rpc SyncDocs(SyncDocsRequest) returns (DocsSyncState);
+  // GetDocsSync reports the running docs sync, or the last one.
+  rpc GetDocsSync(GetDocsSyncRequest) returns (DocsSyncState);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -521,6 +527,24 @@ message ListDocsResponse {
   // What the store holds for the synced owners, ordered by source_uri.
   repeated DocFile files = 2;
   bool truncated = 3;         // more files than one reply carries
+  DocsSyncState sync = 4;
+}
+
+message SyncDocsRequest {
+  string owner = 1; // empty = every owner
+  bool force = 2;   // re-clone and re-ingest everything, not just what changed
+}
+
+message GetDocsSyncRequest {}
+
+message DocsSyncState {
+  bool running = 1;
+  string owner = 2;       // being synced, or last synced
+  int64 started_at = 3;   // unix seconds
+  int64 finished_at = 4;  // unix seconds; 0 while running
+  int32 done = 5;         // repos handled so far, of total
+  int32 total = 6;
+  string repo = 7;        // the last repo handled
 }
 
 message DocOwner {
@@ -529,8 +553,9 @@ message DocOwner {
   string scope = 3;
   repeated string tags = 4;
   int64 last_synced = 5; // unix seconds; 0 = never
-  string status = 6;
+  string status = 6;      // ok | partial | error | new
   repeated DocRepo repos = 7;
+  string error = 8;       // why the last sync failed or stopped early
 }
 
 message DocRepo {
@@ -540,6 +565,7 @@ message DocRepo {
   int32 files = 4;
   string status = 5;
   string web_url = 6; // https://github.com/<owner>/<repo>
+  string error = 7;   // why the repo's last sync failed
 }
 
 message DocFile {

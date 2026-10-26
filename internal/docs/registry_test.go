@@ -46,7 +46,7 @@ func TestOwnerLifecycle(t *testing.T) {
 			if due, _ := reg.DueOwners(ctx, now); len(due) != 1 {
 				t.Fatalf("want 1 due, got %d", len(due))
 			}
-			if err := reg.MarkSynced(ctx, "willesq", now, "ok"); err != nil {
+			if err := reg.MarkSynced(ctx, "willesq", now, "ok", ""); err != nil {
 				t.Fatal(err)
 			}
 			if due, _ := reg.DueOwners(ctx, now+7199); len(due) != 0 {
@@ -63,7 +63,7 @@ func TestOwnerLifecycle(t *testing.T) {
 				t.Fatalf("mark-due should force due")
 			}
 			// mark all due.
-			_ = reg.MarkSynced(ctx, "willesq", now, "ok")
+			_ = reg.MarkSynced(ctx, "willesq", now, "ok", "")
 			if err := reg.MarkDue(ctx, ""); err != nil {
 				t.Fatal(err)
 			}
