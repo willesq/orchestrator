@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -165,8 +166,10 @@ func (p *Provisioner) Stop() error {
 
 // env is the hardened qdrant configuration (localhost, telemetry off, CORS off).
 func (p *Provisioner) env() []string {
-	env := append(os.Environ(),
+	env := append(withoutQdrantSettings(os.Environ()),
 		"QDRANT__SERVICE__HOST=127.0.0.1",
+		// Cluster mode would open a peer-to-peer port beside the two pinned here.
+		"QDRANT__CLUSTER__ENABLED=false",
 		fmt.Sprintf("QDRANT__SERVICE__HTTP_PORT=%d", p.cfg.HTTPPort),
 		fmt.Sprintf("QDRANT__SERVICE__GRPC_PORT=%d", p.cfg.GRPCPort),
 		"QDRANT__STORAGE__STORAGE_PATH="+p.cfg.Storage,
@@ -180,6 +183,20 @@ func (p *Provisioner) env() []string {
 		env = append(env, "QDRANT__SERVICE__API_KEY="+p.cfg.APIKey)
 	}
 	return env
+}
+
+// withoutQdrantSettings drops qdrant settings orchd inherited, so only the
+// hardened ones above configure the engine. An inherited QDRANT__ variable
+// could otherwise set what env leaves alone, such as a second, read-only API
+// key or cluster peers.
+func withoutQdrantSettings(environ []string) []string {
+	out := make([]string, 0, len(environ))
+	for _, kv := range environ {
+		if !strings.HasPrefix(kv, "QDRANT__") {
+			out = append(out, kv)
+		}
+	}
+	return out
 }
 
 // Ready reports whether the engine answers its readiness probe.

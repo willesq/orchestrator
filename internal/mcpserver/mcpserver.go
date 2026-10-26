@@ -51,7 +51,25 @@ func (r ragTools) search(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 	return mcp.NewToolResultText(formatHits(resp.GetHits())), nil
 }
 
+// queuedWriteRefusal explains why a queued session may not change the RAG
+// store, or is empty outside a task. orchd enforces the same rule; refusing
+// here gives the session a message it can act on.
+func queuedWriteRefusal() string {
+	id := os.Getenv(agentrun.TaskIDEnv)
+	if id == "" {
+		return ""
+	}
+	// A steered task session could plant or erase memories that later
+	// sessions trust, so what it learned goes in its result, which the
+	// operator reads, instead.
+	return "queue tasks cannot change the RAG store (running as " + id + "); " +
+		"put what you learned in your final report instead"
+}
+
 func (r ragTools) ingest(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if msg := queuedWriteRefusal(); msg != "" {
+		return mcp.NewToolResultError(msg), nil
+	}
 	text := req.GetString("text", "")
 	uri := req.GetString("source_uri", "")
 	if text == "" || uri == "" {
@@ -89,6 +107,9 @@ func (r ragTools) listSources(ctx context.Context, req mcp.CallToolRequest) (*mc
 }
 
 func (r ragTools) deleteSource(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if msg := queuedWriteRefusal(); msg != "" {
+		return mcp.NewToolResultError(msg), nil
+	}
 	uri := req.GetString("source_uri", "")
 	if uri == "" {
 		return mcp.NewToolResultError("source_uri is required"), nil

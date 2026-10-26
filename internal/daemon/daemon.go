@@ -40,6 +40,7 @@ import (
 	"github.com/willesq/orchestrator/internal/logs"
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
+	"github.com/willesq/orchestrator/internal/procstat"
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/routing"
@@ -582,7 +583,13 @@ func Run(ctx context.Context) error {
 		log.Printf("orchd: model routing is off: %v", routerErr)
 	}
 
-	gs := grpc.NewServer()
+	// Each connection is attributed to its process so operator-only RPCs can
+	// refuse queued tasks however they reach the socket (callers.go).
+	gs := grpc.NewServer(
+		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent}),
+		grpc.UnaryInterceptor(guardQueuedCallers),
+		grpc.StreamInterceptor(guardQueuedStreams),
+	)
 	orchdv1.RegisterOrchdServer(gs, &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks,
 		workerEnabled: s.Queue.Worker.Enabled,

@@ -55,8 +55,10 @@ The chunk's `heading` payload is the deepest path all its sections share.
 
 **Engine:** in `binary` mode orchd downloads the pinned release (`v1.17.1`,
 `qdrant-{aarch64,x86_64}-apple-darwin` or `-unknown-linux-musl`) to `<data>/bin/qdrant` and runs it
-on 127.0.0.1 with telemetry off, storage in `<data>/qdrant`, and the API key
-(`QDRANT__SERVICE__API_KEY`, sent by the client as the `api-key` header). Readiness: `GET /readyz`.
+on 127.0.0.1 (HTTP and gRPC) with telemetry and cluster mode off, storage in `<data>/qdrant`, and
+the API key (`QDRANT__SERVICE__API_KEY`, sent by the client as the `api-key` header). Inherited
+`QDRANT__*` variables are dropped, so orchd's environment cannot reconfigure the engine.
+Readiness: `GET /readyz`.
 
 **Collection (hybrid layout):**
 
@@ -149,6 +151,16 @@ Date bounds accept `2026-10-21` (UTC day), RFC 3339, `today`, `yesterday`, or ag
 GitHub tokens (`gh?_`, `github_pat_`), Slack tokens, Anthropic and OpenAI keys, and JWTs. Hooks and
 schedulers redact before storing; a file with more than 25 matches is skipped as a likely keystore.
 Text sent with `orch ingest` or `rag_ingest_text` is stored as given.
+
+**Queued tasks cannot write.** `rag_ingest_text`, `rag_delete_source`, `orch ingest text` and
+`orch rag forget` refuse inside a queued task, and orchd refuses `Ingest`, `DeleteSource` and
+`SummarizeSession` from one (see [daemon.md](daemon.md#queued-callers)). A session an untrusted
+repository steers could otherwise plant memories later sessions trust, or erase them. The
+installed specialist agents (`dev`, `ops`, `research`, `reviewer`) never ingest, queued or not:
+they end their report with a `## For RAG` section of proposed entries (`source_uri`,
+`source_type`, text), and the parent session reviews them as untrusted and ingests what the user
+approves (`orch-dispatch` Phase 4). Its own transcript is still stored through
+the hand-off unit, as a `session_record` like any session.
 
 ## Sources and docs
 
