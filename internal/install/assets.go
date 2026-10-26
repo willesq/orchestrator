@@ -38,6 +38,16 @@ func claudeAssetEdits(home string) []Edit {
 		label := "agent " + strings.TrimSuffix(path.Base(src), ".md")
 		edits = append(edits, assetEdit(home, src, dst, []string{dst}, label))
 	}
+	// Some agents ship a companion script next to the agent file (e.g. the
+	// exploit-finder sandbox wrapper). Installing it to a fixed path, rather than
+	// having the agent write it out each run, is what lets the agent invoke a
+	// known-good wrapper that an injected run cannot quietly replace.
+	helpers, _ := fs.Glob(assets, "assets/claude/agents/*.sh")
+	for _, src := range helpers {
+		dst := filepath.Join(home, ".claude", "agents", path.Base(src))
+		label := "agent helper " + path.Base(src)
+		edits = append(edits, assetEdit(home, src, dst, []string{dst}, label))
+	}
 	skills, _ := fs.Glob(assets, "assets/claude/skills/*/SKILL.md")
 	for _, src := range skills {
 		name := path.Base(path.Dir(src))

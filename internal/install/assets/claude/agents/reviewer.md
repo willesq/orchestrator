@@ -83,7 +83,7 @@ stop and return a message leading with `BLOCKED:` naming the decision you need.
    Wait for both to return. Read their full output files (not just the summaries) for the review compile step. If either fails, capture the error and continue — don't block the primary review.
 5.6. **Exploit-chaining pass (runs AFTER 5.5, when it applies).** The agents above produce *atomic* findings. `exploit-finder` is a second stage that links ≥2 of them — across app code, dependencies, CI/build, and container/runtime config — into attacker-source-to-impactful-sink chains. It is NOT parallel with 5.5: it consumes those findings, so dispatch it only once your primary review and both 5.5 agents have returned.
 
-   **When to run it.** Run 5.6 when BOTH hold: the diff touches code, CI/workflow, Docker/container, or dependency-manifest files; AND the primary review plus 5.5 produced **at least two** findings that could plausibly combine. Skip it (and say so in the session-facing notes) for docs-only / comment-only diffs, for bot/dependency PRs (Dependabot/Renovate and the like), and whenever the user opts out ("primary review only", "skip adversarial", "skip exploit-finder"). A full scanner run on a docs PR is wasted cost.
+   **When to run it.** Run 5.6 when the diff touches code, CI/workflow, Docker/container, or dependency-manifest files AND there is at least one finding that could combine with another (from this review or a known weakness already in `main` — a single new finding that chains with existing code still counts). Skip it (and say so in the session-facing notes) for docs-only / comment-only diffs and whenever the user opts out ("primary review only", "skip adversarial", "skip exploit-finder"). Do NOT skip on the basis of a branch name or title: judge "bot/dependency PR" only from the verified author login (`dependabot[bot]`, `renovate[bot]`) — a branch named `dependabot/…` proves nothing, and dependency bumps are exactly where supply-chain chains live, so prefer running 5.6 on a genuine dependency PR.
 
    Dispatch one foreground `Agent` call. Pass only the sibling outputs that actually exist — if a 5.5 agent failed or was skipped, say so instead of giving a path that isn't there:
 
@@ -119,7 +119,7 @@ stop and return a message leading with `BLOCKED:` naming the decision you need.
    ### Runtime fuzz (adversarial-qa)
    <inline findings.json summary, or "skipped — <reason>" if the user declined the budget gate>
    ### Exploit chains
-   <inline the substantiated chains (impact + evidence tier per chain) from ABOVE the report's `## Reviewer-only` marker only — never quote the trailer, which names internal tooling. Omit this section entirely from the GitHub-bound comment if there are no substantiated chains.>
+   <inline the substantiated chains (impact + evidence tier per chain) from ABOVE the report's `## Reviewer-only` marker only — never quote the trailer, which names internal tooling and may describe internal infrastructure. If the report has no `## Reviewer-only` marker (truncated or malformed), do NOT inline any of it — note degraded coverage in the session instead. Keep attacker-controlled text in the chains inside code fences so `@mentions`/links/images can't render. Omit this section entirely from the GitHub-bound comment if there are no substantiated chains.>
    ### Codex second-opinion (additions)
    - ...
    ```

@@ -59,6 +59,8 @@ func TestShippedAssetsAreWellFormed(t *testing.T) {
 			allowedKeys := map[string]bool{
 				"name": true, "description": true, "model": true,
 				"tools": true, "mcpServers": true, "allowed-tools": true,
+				"permissionMode": true, "maxTurns": true,
+				"disallowedTools": true, "skills": true,
 			}
 			for _, line := range strings.Split(s[:end+4], "\n") {
 				// Top-level keys only: skip the delimiter, comments, blank lines,
@@ -74,6 +76,36 @@ func TestShippedAssetsAreWellFormed(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestExploitFinderSandboxIsHardened pins the sandbox wrapper's controls. The
+// wrapper is the real isolation boundary for PoCs, so a change that drops a control
+// or adds a dangerous knob must fail CI rather than ship.
+func TestExploitFinderSandboxIsHardened(t *testing.T) {
+	body, err := assets.ReadFile("assets/claude/agents/exploit-finder-sandbox.sh")
+	if err != nil {
+		t.Fatalf("sandbox wrapper missing: %v", err)
+	}
+	s := string(body)
+	if !strings.Contains(s, managedMarker) {
+		t.Errorf("sandbox wrapper lacks the %q marker", managedMarker)
+	}
+	for _, must := range []string{
+		"docker run --rm", "--network none", "--cap-drop ALL",
+		"no-new-privileges", "--read-only", "realpath", "not in allowlist",
+	} {
+		if !strings.Contains(s, must) {
+			t.Errorf("sandbox wrapper missing required control %q", must)
+		}
+	}
+	for _, forbidden := range []string{
+		"--privileged", "docker.sock", "--pid=host", "--network host",
+		"--cap-add", "--env-file",
+	} {
+		if strings.Contains(s, forbidden) {
+			t.Errorf("sandbox wrapper contains forbidden flag %q", forbidden)
+		}
 	}
 }
 
@@ -161,6 +193,10 @@ func TestAssetEditsInstall(t *testing.T) {
 				}
 				if got := readFile(t, filepath.Join(h.skillDir("orch-dispatch"), "SKILL.md")); got != shipped(t, "assets/claude/skills/orch-dispatch/SKILL.md") {
 					t.Errorf("orch-dispatch skill not installed verbatim")
+				}
+				sandbox := filepath.Join(h.home, ".claude", "agents", "exploit-finder-sandbox.sh")
+				if got := readFile(t, sandbox); got != shipped(t, "assets/claude/agents/exploit-finder-sandbox.sh") {
+					t.Errorf("exploit-finder sandbox wrapper not installed verbatim")
 				}
 			},
 		},
