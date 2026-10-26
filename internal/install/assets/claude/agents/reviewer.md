@@ -66,7 +66,7 @@ stop and return a message leading with `BLOCKED:` naming the decision you need.
    Agent({
      description: "Threat-actor review of <repo>#<number>",
      subagent_type: "adversarial-reviewer",
-     prompt: "<PR url/coords + output path: ~/obsidian/sre/reviews/<DATE>/<repo>-<number>-adversarial.md>"
+     prompt: "<PR url/coords + output path: ~/.local/share/orch/reviews/<DATE>/<repo>-<number>-adversarial.md>"
    })
    Agent({
      description: "Runtime fuzz of <repo>#<number>",
@@ -96,7 +96,7 @@ stop and return a message leading with `BLOCKED:` naming the decision you need.
    - adversarial-reviewer: <report path, or 'unavailable — failed/skipped'>
    - adversarial-qa findings.json: <path, or 'skipped — <reason>'>
    - primary-review findings (inline): <your Blocking/Major list>
-   Output path: ~/obsidian/sre/reviews/<DATE>/<repo>-<number>-exploit-chains.md"
+   Output path: ~/.local/share/orch/reviews/<DATE>/<repo>-<number>-exploit-chains.md"
    })
    ```
 
