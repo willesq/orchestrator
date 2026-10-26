@@ -27,7 +27,8 @@ alone, and is safe to repeat. The default target is Claude Code; `--target codex
 `all` wire the others. `--home` relocates everything for testing.
 
 - **Hooks** run `orch-hook <event>` on session start and end, prompt submit, tool use,
-  compaction and subagent stop. Codex hooks must be trusted in Codex before they run.
+  compaction and subagent stop. For Claude Code and Gemini each has a timeout of 5 to 15 s, so a
+  stalled daemon cannot hold up a session. Codex hooks must be trusted in Codex before they run.
 - **MCP servers** `rag` and `queue` are registered, and for Claude Code their tools are allowed
   (`mcp__rag__*`, `mcp__queue__*`) user-wide, so hooks and background agents can use them
   without a prompt. Your existing `deny` and `ask` rules win and are reported instead.

@@ -69,7 +69,9 @@ pre-compact checkpoint, restoring live state the harness summary cannot see.
    Each that succeeds is cleared from the hand-off; orchd does whichever did not.
 
 The hook takes about 0.5 s on a 29 MB transcript; embedding is left to orchd, because harnesses
-cancel exit hooks after a short limit.
+cancel exit hooks after a short limit. The install gives `session-end` an explicit 15 s timeout,
+which also raises Claude Code's shared 1.5 s SessionEnd budget; per-event timeouts are listed in
+[install.md](install.md#claude-code).
 
 ### Transcript format
 
