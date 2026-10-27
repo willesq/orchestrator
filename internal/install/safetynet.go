@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/willesq/orchestrator/internal/safetynet"
+	"github.com/willesq/orchestrator/internal/settings"
 )
 
 // safetyNetRunner builds the runner the plugin steps use. Tests replace it so
@@ -158,6 +159,12 @@ var credentialReadDeny = []string{"Read(~/.config/gh/**)", "Read(~/.netrc)", "Re
 // applyCredentialDeny appends the credential deny rules, skipping any present.
 // Deny rules only narrow what an agent may do, and never prompt.
 func applyCredentialDeny(root map[string]any) (string, error) {
+	return applyCredentialDenyWith(root, settings.Toggles{})
+}
+
+// applyCredentialDenyWith is applyCredentialDeny leaving out any deny rule
+// the user turned off in orch.
+func applyCredentialDenyWith(root map[string]any, t settings.Toggles) (string, error) {
 	perms, err := permissionsObject(root)
 	if err != nil {
 		return "", err
@@ -166,20 +173,31 @@ func applyCredentialDeny(root map[string]any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var added []string
+	var added, off []string
 	for _, rule := range credentialReadDeny {
 		if containsRule(deny, rule) {
+			continue
+		}
+		if t.Disabled(ProviderClaudeCode, KindPermission, PermissionIdentity("deny", rule)) {
+			off = append(off, rule)
 			continue
 		}
 		deny = append(deny, rule)
 		added = append(added, rule)
 	}
+	note := ""
+	if len(off) > 0 {
+		note = "; left out " + strings.Join(off, ", ") + " — turned off in orch"
+	}
 	if len(added) == 0 {
+		if len(off) > 0 {
+			return "permissions.deny: credential-file Read rules in place" + note, nil
+		}
 		return "permissions.deny: credential-file Read rules already present", nil
 	}
 	perms["deny"] = deny
 	root["permissions"] = perms
-	return "permissions.deny: added " + strings.Join(added, ", ") + " (keeps file tools off credential files)", nil
+	return "permissions.deny: added " + strings.Join(added, ", ") + " (keeps file tools off credential files)" + note, nil
 }
 
 func containsRule(rules []any, want string) bool {

@@ -53,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 search: model.search, sources: model.sources, tasks: model.tasks, dispatch: model.dispatch,
                 github: model.github, system: model.system, logs: model.logs,
                 docs: model.docs, registeredSources: model.registeredSources,
-                safetyNet: model.safetyNet
+                safetyNet: model.safetyNet, claude: model.claude
             )
             let hosting = NSHostingController(rootView: root)
             // The window keeps the size the user gives it. By default the

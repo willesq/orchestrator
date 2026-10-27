@@ -67,6 +67,12 @@ skills `orch-dispatch`, `orch-pr-status`, `orch-rag-ingest`, `orch-rag-query`,
 retired `~/.claude/orchestrator` checkout replaced; any other file aborts the install rather than
 being overwritten.
 
+**Items turned off in orch:** the settings edit reads the toggles from `orch.db` (read-only,
+works with orchd down) and leaves out each orch item the user turned off: a disabled orch-hook
+event is left as it is, a disabled orch allow or credential deny rule is not added, and the
+summary names them. An unreadable store stops the plan instead of re-enabling them. See
+[settings.md](settings.md#orch-install-and-drift).
+
 ### Safety net
 
 `internal/safetynet` holds the pin (`Pinned`: version, repository URL, ref, commit, release date,
@@ -169,7 +175,8 @@ verified.
 
 ## Status checks
 
-- **Drift:** each adapter's pending edits.
+- **Drift:** each adapter's pending edits. Items turned off in orch are not drift; the
+  `claude-code` line reports `N disabled by you`.
 - **Instruction footprint:** for each harness whose entry file exists, follow `@` imports (depth 5,
   each file once) and report bytes and estimated tokens (`(bytes+3)/4`), the context cost of every
   session.

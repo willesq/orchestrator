@@ -31,6 +31,7 @@ import (
 	"github.com/willesq/orchestrator/internal/qdrant"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/selfupdate"
+	"github.com/willesq/orchestrator/internal/settings"
 	"github.com/willesq/orchestrator/internal/sources"
 	"github.com/willesq/orchestrator/internal/supervisor"
 	"github.com/willesq/orchestrator/internal/workflows"
@@ -71,6 +72,9 @@ type deps struct {
 	system *systemProbe
 	// docs is the docs scheduler shared with the SyncDocs RPC; nil builds one.
 	docs *docs.Scheduler
+	// settingsSvc is the settings reconciler shared with the settings RPCs;
+	// nil drops the settings watcher.
+	settingsSvc *settings.Service
 }
 
 // subsystems lists orchd's supervised units in start order (stopped in reverse).
@@ -93,6 +97,9 @@ func subsystems(d deps) []supervisor.Unit {
 		sched = newDocsScheduler(d.settings, d.store, d.rag)
 	}
 	out = append(out, sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, sched))
+	if d.settingsSvc != nil {
+		out = append(out, settingsUnit(d.settingsSvc))
+	}
 	if d.settings.PRBabysitter.Enabled {
 		out = append(out, prsUnit(d.settings, d.store, d.github))
 	}

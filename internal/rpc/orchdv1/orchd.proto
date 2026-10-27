@@ -94,6 +94,21 @@ service Orchd {
   // orch-guards rules, and returns the resulting state. One action runs at a
   // time; a request while one runs is refused (Aborted), never queued.
   rpc InstallSafetyNet(InstallSafetyNetRequest) returns (SafetyNetState);
+  // ListSettings lists the settings orch manages in other tools' files
+  // (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+  // each with its desired state and origin, and each provider's kinds with
+  // the fields an add form needs. It reads the files first, so the list
+  // reflects changes made outside orch.
+  rpc ListSettings(ListSettingsRequest) returns (ListSettingsResponse);
+  // SetSettingEnabled turns one item on or off: it is written into, or
+  // taken out of, its file at once, and the choice is kept in orch.db.
+  rpc SetSettingEnabled(SetSettingEnabledRequest) returns (SettingItem);
+  // AddSetting validates a new item (a hook or a permission rule), writes it
+  // to its file and records it as added by you.
+  rpc AddSetting(AddSettingRequest) returns (SettingItem);
+  // RemoveSetting deletes an item you added or orch found from its file and
+  // forgets it. Items orch install writes can only be turned off.
+  rpc RemoveSetting(RemoveSettingRequest) returns (RemoveSettingResponse);
 }
 
 message PingRequest {}
@@ -724,3 +739,83 @@ message SafetyNetAction {
   string error = 7;
   string log = 8;        // command output, capped
 }
+
+message ListSettingsRequest {
+  string provider = 1; // empty: every provider
+  string kind = 2;     // empty: every kind
+}
+
+message ListSettingsResponse {
+  repeated SettingsProvider providers = 1;
+  repeated SettingItem items = 2;
+  // revision changes whenever an item or a provider's state changes.
+  int64 revision = 3;
+}
+
+message SettingsProvider {
+  string name = 1;  // stable key, e.g. claude-code
+  string title = 2;
+  repeated SettingKind kinds = 3;
+  repeated string files = 4; // the files it reads and writes
+  string error = 5;          // why its files could not be read or parsed
+  int64 observed_at = 6;     // unix seconds of the last look; 0 = never
+}
+
+message SettingKind {
+  string name = 1; // e.g. hook, permission, plugin, rule
+  string title = 2;
+  string group_title = 3; // what an item's group is: an event, a list, ...
+  bool addable = 4;
+  bool removable = 5;
+  // state_in_file: turning an item off records off in the file; otherwise
+  // the item is taken out of the file and orch keeps it.
+  bool state_in_file = 6;
+  repeated SettingField fields = 7; // the add form
+}
+
+message SettingField {
+  string name = 1;
+  string label = 2;
+  string type = 3; // string, text, int, bool or enum
+  bool required = 4;
+  repeated string options = 5; // enum values
+  string help = 6;
+  string placeholder = 7;
+}
+
+message SettingItem {
+  string provider = 1;
+  string kind = 2;
+  string identity = 3;
+  bool enabled = 4; // desired state
+  string origin = 5; // orch, you or found
+  // status: active, disabled (turned off in orch), removed (taken out of
+  // its file outside orch) or missing (an orch item orch install restores).
+  string status = 6;
+  string group = 7;
+  string summary = 8;
+  string payload_json = 9; // what is written back to the file
+  int64 created_at = 10;
+  int64 updated_at = 11;
+}
+
+message SetSettingEnabledRequest {
+  string provider = 1;
+  string kind = 2;
+  string identity = 3;
+  bool enabled = 4;
+}
+
+message AddSettingRequest {
+  string provider = 1;
+  string kind = 2;
+  map<string, string> fields = 3; // by SettingField.name
+}
+
+message RemoveSettingRequest {
+  string provider = 1;
+  string kind = 2;
+  string identity = 3;
+}
+
+message RemoveSettingResponse {}

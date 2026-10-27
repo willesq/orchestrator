@@ -357,6 +357,30 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
         _ = try await orchd.refreshSource(request, options: options)
     }
 
+    func orchdSettings() async throws -> Orchd_V1_ListSettingsResponse {
+        try await orchd.listSettings(Orchd_V1_ListSettingsRequest(), options: callOptions)
+    }
+
+    // Changes read the file, write it and re-read it; still well under the
+    // longer bound used for other writes.
+    private var settingsWriteOptions: CallOptions {
+        var options = CallOptions.defaults
+        options.timeout = .seconds(15)
+        return options
+    }
+
+    func orchdSetSetting(_ request: Orchd_V1_SetSettingEnabledRequest) async throws -> Orchd_V1_SettingItem {
+        try await orchd.setSettingEnabled(request, options: settingsWriteOptions)
+    }
+
+    func orchdAddSetting(_ request: Orchd_V1_AddSettingRequest) async throws -> Orchd_V1_SettingItem {
+        try await orchd.addSetting(request, options: settingsWriteOptions)
+    }
+
+    func orchdRemoveSetting(_ request: Orchd_V1_RemoveSettingRequest) async throws {
+        _ = try await orchd.removeSetting(request, options: settingsWriteOptions)
+    }
+
     func getSafetyNet() async throws -> Orchd_V1_SafetyNetState {
         try await orchd.getSafetyNet(Orchd_V1_GetSafetyNetRequest(), options: callOptions)
     }

@@ -540,6 +540,14 @@ func TestHarnessSection(t *testing.T) {
 			name: "error is surfaced", info: HarnessInfo{Name: "gemini", Err: "bad plan"},
 			wantValue: "unknown", wantLevel: LevelWarn, wantHas: "bad plan",
 		},
+		{
+			name: "items turned off in orch are not drift", info: HarnessInfo{Name: "claude-code", Disabled: 3},
+			wantValue: "wired", wantLevel: LevelOK, wantHas: "3 disabled by you (orch settings list)",
+		},
+		{
+			name: "drift and disabled items together", info: HarnessInfo{Name: "claude-code", Pending: 1, Disabled: 1},
+			wantValue: "drifted", wantLevel: LevelWarn, wantHas: "--apply; 1 disabled by you",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

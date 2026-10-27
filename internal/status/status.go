@@ -72,7 +72,10 @@ type ServiceInfo struct {
 type HarnessInfo struct {
 	Name    string `json:"name"`
 	Pending int    `json:"pending"` // edits `orch install --apply` would make
-	Err     string `json:"error,omitempty"`
+	// Disabled counts the items the user turned off in orch, which install
+	// leaves out and drift ignores.
+	Disabled int    `json:"disabled,omitempty"`
+	Err      string `json:"error,omitempty"`
 }
 
 // Deps are the seams Collect reads the world through; the CLI wires the real ones
@@ -260,6 +263,14 @@ func harnessSection(d Deps) Section {
 		case h.Pending > 0:
 			l.Value, l.Level = "drifted", LevelWarn
 			l.Detail = fmt.Sprintf("%d edit(s) pending — run: orch install --target %s --apply", h.Pending, h.Name)
+		}
+		if h.Err == "" && h.Disabled > 0 {
+			off := fmt.Sprintf("%d disabled by you (orch settings list)", h.Disabled)
+			if l.Detail == "" {
+				l.Detail = off
+			} else {
+				l.Detail += "; " + off
+			}
 		}
 		sec.Lines = append(sec.Lines, l)
 	}

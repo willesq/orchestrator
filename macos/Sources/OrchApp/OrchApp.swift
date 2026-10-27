@@ -39,9 +39,11 @@ final class AppModel {
     let docs: DocsModel
     let registeredSources: RegisteredSourcesModel
     let safetyNet: SafetyNetModel
+    let claude: SettingsModel
 
     init() {
         let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & SystemAPI & CatalogAPI & SafetyNetAPI
+            & SettingsAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -64,6 +66,7 @@ final class AppModel {
         docs = DocsModel(api: api)
         registeredSources = RegisteredSourcesModel(api: api)
         safetyNet = SafetyNetModel(api: api)
+        claude = SettingsModel(api: api, providers: ["claude-code", "cc-safety-net"])
     }
 
     /// Starts polling; called once the app has finished launching, and not
@@ -115,7 +118,8 @@ enum BrandGlyph {
 
 /// Stands in when the gRPC transport cannot even be built, so the tray still
 /// shows the daemon as down instead of the app failing to launch.
-private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI, CatalogAPI, SafetyNetAPI {
+private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI, CatalogAPI, SafetyNetAPI,
+    SettingsAPI {
     let reason: String
 
     private var failure: DaemonControl.ControlError { .failed(status: -1, output: reason) }
@@ -142,6 +146,10 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
     func docsSync() async throws -> DocsSyncState { throw failure }
     func safetyNet() async throws -> SafetyNetState { throw failure }
     func installSafetyNet(rulesOnly: Bool) async throws -> SafetyNetState { throw failure }
+    func settings() async throws -> SettingsListing { throw failure }
+    func setSetting(_ ref: SettingRef, enabled: Bool) async throws -> SettingItem { throw failure }
+    func addSetting(provider: String, kind: String, fields: [String: String]) async throws -> SettingItem { throw failure }
+    func removeSetting(_ ref: SettingRef) async throws { throw failure }
     func document(uri: String) async throws -> RebuiltDocument { throw failure }
     func registeredSources() async throws -> [RegisteredSource] { throw failure }
     func saveSource(_ draft: SourceDraft, replacing: String?) async throws -> RegisteredSource { throw failure }

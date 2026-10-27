@@ -113,6 +113,10 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `RefreshSource` | id (empty = all) → marked | marks due, then restarts `sources-scheduler`, which refreshes on start; at most one restart per 10 s, so repeated calls cannot keep cutting a refresh short |
 | `GetSafetyNet` | → state (`missing`/`legacy`/`outdated`/`disabled`/`ok`), ok, pinned version, commit and release date, installed version and commit, competing copies, rules (rule.json state, every listed rulebook and its rules, problems), unreadable files, action | read from Claude Code's plugin files and the cc-safety-net rules on every call; runs no command |
 | `InstallSafetyNet` | rules_only → the same state | one action at a time: a request while one runs is refused with `Aborted`, never queued. Writes the marketplace manifest, the `orch-guards` rulebook and the rule.json merge (backed up to `<data>/backups/`), then runs the planned `claude plugin` commands (see [install.md](install.md#safety-net)) with the configured `queue.worker.claude_bin`, or the one found on `PATH`. The action is detached from the request with its own 10-minute deadline, so a client that gives up mid-migration cannot leave Claude Code without the plugin; `GetSafetyNet` reports how it ended. Unlike `orch install`, it re-enables a disabled plugin. `rules_only` writes only the rule files. A failed action is returned as the state with the action's error and log, not as an RPC error. The log keeps the last 4 KiB of each command's output and 16 KiB in all, with URL credentials and secret-shaped strings masked. Logged before and after |
+| `ListSettings` | provider, kind (empty = all) → providers (kinds and add-form fields, files, error, last look), items (state, origin, status, group, summary, payload), revision | syncs the files first; task-callable. See [settings.md](settings.md) |
+| `SetSettingEnabled` | provider, kind, identity, enabled → item | writes the file at once (backed up before the first change, atomic, refused with `Aborted` if the file changed underneath); unknown → `NotFound`; a plugin or rule gone from its file → `FailedPrecondition`; operator-only |
+| `AddSetting` | provider, kind, fields → item | hooks and permission rules only; validated (`InvalidArgument`); already listed → `AlreadyExists`; operator-only |
+| `RemoveSetting` | provider, kind, identity → — | items added by you or found; orch's → `FailedPrecondition`; operator-only |
 | `ListPRs` | needs_me → PRs (with reasons and attention), updated_at | reads the PR babysitter's cache only, never `gh`; most urgent first, then repo and title; `updated_at` is the cache file's mtime, 0 before the first sweep; an unparseable cache → `Unavailable` |
 
 Dispatch inserts the ledger row before creating the workflow (a row without a workflow is
@@ -138,6 +142,7 @@ Unit names are a public contract (`orch restart <name>`).
 | `routing-evaluator` | Tick | hourly check; run every `routing.evaluate.interval` (168h) | `routing.evaluate.enabled` | discover models, propose routes |
 | `handoff` | Run | 10 s; entries settle 5 s | always | store work hooks handed off |
 | `session-summarizer` | Run | queue-driven | `sessions.summarize.enabled` | model-written session summaries |
+| `settings-watcher` | Tick | 2 s | the user's home resolves | import edits made outside orch to `~/.claude/settings.json` and cc-safety-net's rule files ([settings.md](settings.md)); never writes |
 | `self-update` | Tick | 1m | orchd can locate its own binary | exit when a new build is installed (only logs when not supervised) |
 
 **Self-update** never downloads. It watches the binary orchd was launched from (resolved path,
@@ -155,7 +160,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 |---|---|
 | `<config>/config.yaml` | settings ([config.md](config.md)) |
 | `<config>/AGENTS.md`, `policy/`, `rag-eval.yaml` | shared agent policy; retrieval golden set |
-| `<data>/orch.db` | SQLite: tasks, sources, docs, models, routing |
+| `<data>/orch.db` | SQLite: tasks, sources, docs, models, routing, managed settings |
 | `<data>/workflows.db` | durable workflow state |
 | `<data>/qdrant/`, `bin/qdrant`, `qdrant-api-key` (0600) | vector store, engine binary, API key |
 | `<data>/models/minilm/` | embedding model |
@@ -176,6 +181,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `docs_owners`, `docs_repos`, `doc_hashes` | GitHub owners and cadence; per-repo HEAD; content hash per `repo://` URI |
 | `providers`, `models` | provider state; model registry (tier, efforts, visibility, state) |
 | `routing`, `routing_history` | current table (kind, rank, provider, model, effort, rationale, evidence_n, pinned); prior generations |
+| `settings_items` | provider, kind, identity (key), enabled, origin (`orch`/`you`/`found`), payload (JSON), present, removed_at, created_at, updated_at ([settings.md](settings.md)) |
 
 ## Invariants
 

@@ -46,6 +46,32 @@ alone, and is safe to repeat. The default target is Claude Code; `--target codex
 
 Backups go to `~/.local/share/orch/backups`, owner-only.
 
+## Turning settings off
+
+The app's **Claude** tab (or `orch settings`) lists every hook, permission rule and plugin in
+`~/.claude/settings.json` and every cc-safety-net rule, marked as added by orch, by you, or found
+in the file. Turning one off takes effect at once (Claude Code and cc-safety-net reload their
+files) and is remembered in this machine's `orch.db`:
+
+- `orch install --apply` does not put back anything you turned off, and `orch status` does not
+  call it drift; it reports `N disabled by you`. Items orch adds can be turned off but not
+  removed.
+- Turning an item back on restores exactly what was in the file.
+- The tab also adds and removes hooks and permission rules.
+- Edits made to the files by hand or by other tools are picked up within a few seconds; the file
+  wins, so an entry another tool re-adds shows as on again, and one removed elsewhere is marked
+  removed rather than put back.
+- Choices are per machine. Nothing is synced: a rule off on one Mac stays on on another.
+- If `orch.db` cannot be read, `orch install` stops rather than re-enabling what you turned off.
+
+```sh
+orch settings list                       # everything, with state and origin
+orch settings disable hook 'SessionStart/orch-hook session-start'
+orch settings enable rule orch-guards/gh-auth-token
+```
+
+Details: [internals/settings.md](internals/settings.md).
+
 ## Safety net
 
 For Claude Code, install also sets up [cc-safety-net](https://github.com/kenryu42/cc-safety-net),

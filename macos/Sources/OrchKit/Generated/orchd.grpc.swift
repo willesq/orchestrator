@@ -449,6 +449,58 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ListSettings" metadata.
+        public enum ListSettings: Sendable {
+            /// Request type for "ListSettings".
+            public typealias Input = Orchd_V1_ListSettingsRequest
+            /// Response type for "ListSettings".
+            public typealias Output = Orchd_V1_ListSettingsResponse
+            /// Descriptor for "ListSettings".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListSettings",
+                type: .unary
+            )
+        }
+        /// Namespace for "SetSettingEnabled" metadata.
+        public enum SetSettingEnabled: Sendable {
+            /// Request type for "SetSettingEnabled".
+            public typealias Input = Orchd_V1_SetSettingEnabledRequest
+            /// Response type for "SetSettingEnabled".
+            public typealias Output = Orchd_V1_SettingItem
+            /// Descriptor for "SetSettingEnabled".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SetSettingEnabled",
+                type: .unary
+            )
+        }
+        /// Namespace for "AddSetting" metadata.
+        public enum AddSetting: Sendable {
+            /// Request type for "AddSetting".
+            public typealias Input = Orchd_V1_AddSettingRequest
+            /// Response type for "AddSetting".
+            public typealias Output = Orchd_V1_SettingItem
+            /// Descriptor for "AddSetting".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "AddSetting",
+                type: .unary
+            )
+        }
+        /// Namespace for "RemoveSetting" metadata.
+        public enum RemoveSetting: Sendable {
+            /// Request type for "RemoveSetting".
+            public typealias Input = Orchd_V1_RemoveSettingRequest
+            /// Response type for "RemoveSetting".
+            public typealias Output = Orchd_V1_RemoveSettingResponse
+            /// Descriptor for "RemoveSetting".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "RemoveSetting",
+                type: .unary
+            )
+        }
         /// Descriptors for all methods in the "orchd.v1.Orchd" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             Ping.descriptor,
@@ -483,7 +535,11 @@ public enum Orchd_V1_Orchd: Sendable {
             RemoveSource.descriptor,
             RefreshSource.descriptor,
             GetSafetyNet.descriptor,
-            InstallSafetyNet.descriptor
+            InstallSafetyNet.descriptor,
+            ListSettings.descriptor,
+            SetSettingEnabled.descriptor,
+            AddSetting.descriptor,
+            RemoveSetting.descriptor
         ]
     }
 }
@@ -1286,6 +1342,105 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SafetyNetState>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListSettings" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListSettings lists the settings orch manages in other tools' files
+        /// > (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+        /// > each with its desired state and origin, and each provider's kinds with
+        /// > the fields an add form needs. It reads the files first, so the list
+        /// > reflects changes made outside orch.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListSettingsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListSettingsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListSettingsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listSettings<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListSettingsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListSettingsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListSettingsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSettingsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetSettingEnabled" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetSettingEnabled turns one item on or off: it is written into, or
+        /// > taken out of, its file at once, and the choice is kept in orch.db.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetSettingEnabledRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetSettingEnabledRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SettingItem` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setSettingEnabled<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetSettingEnabledRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetSettingEnabledRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SettingItem>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "AddSetting" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > AddSetting validates a new item (a hook or a permission rule), writes it
+        /// > to its file and records it as added by you.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_AddSettingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_AddSettingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SettingItem` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func addSetting<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_AddSettingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_AddSettingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SettingItem>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RemoveSetting" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveSetting deletes an item you added or orch found from its file and
+        /// > forgets it. Items orch install writes can only be turned off.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RemoveSettingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RemoveSettingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RemoveSettingResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func removeSetting<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RemoveSettingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RemoveSettingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RemoveSettingResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSettingResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -2452,6 +2607,149 @@ extension Orchd_V1_Orchd {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "ListSettings" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListSettings lists the settings orch manages in other tools' files
+        /// > (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+        /// > each with its desired state and origin, and each provider's kinds with
+        /// > the fields an add form needs. It reads the files first, so the list
+        /// > reflects changes made outside orch.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListSettingsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListSettingsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListSettingsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listSettings<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListSettingsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListSettingsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListSettingsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSettingsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListSettings.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SetSettingEnabled" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetSettingEnabled turns one item on or off: it is written into, or
+        /// > taken out of, its file at once, and the choice is kept in orch.db.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetSettingEnabledRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetSettingEnabledRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SettingItem` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setSettingEnabled<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetSettingEnabledRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetSettingEnabledRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SettingItem>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SetSettingEnabled.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "AddSetting" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > AddSetting validates a new item (a hook or a permission rule), writes it
+        /// > to its file and records it as added by you.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_AddSettingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_AddSettingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SettingItem` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func addSetting<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_AddSettingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_AddSettingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SettingItem>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.AddSetting.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "RemoveSetting" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveSetting deletes an item you added or orch found from its file and
+        /// > forgets it. Items orch install writes can only be turned off.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RemoveSettingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RemoveSettingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RemoveSettingResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func removeSetting<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RemoveSettingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RemoveSettingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RemoveSettingResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSettingResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.RemoveSetting.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -3431,6 +3729,129 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_InstallSafetyNetRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SafetyNetState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListSettings" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListSettings lists the settings orch manages in other tools' files
+    /// > (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+    /// > each with its desired state and origin, and each provider's kinds with
+    /// > the fields an add form needs. It reads the files first, so the list
+    /// > reflects changes made outside orch.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListSettingsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listSettings<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListSettingsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSettingsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listSettings(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListSettingsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListSettingsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetSettingEnabled" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetSettingEnabled turns one item on or off: it is written into, or
+    /// > taken out of, its file at once, and the choice is kept in orch.db.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SetSettingEnabledRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setSettingEnabled<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SetSettingEnabledRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setSettingEnabled(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetSettingEnabledRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SettingItem>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "AddSetting" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > AddSetting validates a new item (a hook or a permission rule), writes it
+    /// > to its file and records it as added by you.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_AddSettingRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func addSetting<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_AddSettingRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.addSetting(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_AddSettingRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SettingItem>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RemoveSetting" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RemoveSetting deletes an item you added or orch found from its file and
+    /// > forgets it. Items orch install writes can only be turned off.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RemoveSettingRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func removeSetting<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RemoveSettingRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSettingResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.removeSetting(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RemoveSettingRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RemoveSettingResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -4544,6 +4965,145 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.installSafetyNet(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListSettings" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListSettings lists the settings orch manages in other tools' files
+    /// > (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+    /// > each with its desired state and origin, and each provider's kinds with
+    /// > the fields an add form needs. It reads the files first, so the list
+    /// > reflects changes made outside orch.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listSettings<Result>(
+        _ message: Orchd_V1_ListSettingsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSettingsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListSettingsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listSettings(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetSettingEnabled" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetSettingEnabled turns one item on or off: it is written into, or
+    /// > taken out of, its file at once, and the choice is kept in orch.db.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setSettingEnabled<Result>(
+        _ message: Orchd_V1_SetSettingEnabledRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SetSettingEnabledRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setSettingEnabled(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "AddSetting" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > AddSetting validates a new item (a hook or a permission rule), writes it
+    /// > to its file and records it as added by you.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func addSetting<Result>(
+        _ message: Orchd_V1_AddSettingRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_AddSettingRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.addSetting(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RemoveSetting" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RemoveSetting deletes an item you added or orch found from its file and
+    /// > forgets it. Items orch install writes can only be turned off.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func removeSetting<Result>(
+        _ message: Orchd_V1_RemoveSettingRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSettingResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RemoveSettingRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.removeSetting(
             request: request,
             options: options,
             onResponse: handleResponse
