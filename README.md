@@ -15,10 +15,14 @@ runs background agent tasks that survive restarts.
 - **`orch`** (the CLI) and **`orch-hook`** (harness hooks) are thin clients of `orchd`, over a
   Unix socket. MCP servers expose search and the task queue to agents.
 - **`Orch.app`**, a macOS menu bar app, shows orchd's health and the PRs that need you, starts or
-  restarts orchd, and has a window for its subsystems, searching memory, the task queue, and the
-  GitHub accounts and orgs it watches. Like
+  restarts orchd, and has a window for its subsystems, searching memory, the task queue, the
+  GitHub accounts and orgs it watches, the safety net, and a Claude tab that turns Claude Code
+  hooks, permissions, plugins and cc-safety-net rules on or off (per machine, kept in `orch.db`,
+  honored by `orch install`). Like
   the CLI, it talks to `orchd` and never opens the databases directly.
-- **`orch install`** wires the hooks, MCP servers and a shared agent policy into each harness.
+- **`orch install`** wires the hooks, MCP servers and a shared agent policy into each harness,
+  and for Claude Code installs [cc-safety-net](docs/INSTALL.md#safety-net) pinned to a reviewed
+  release with orch's guard rules.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full picture.
 
@@ -46,7 +50,7 @@ Then use your coding agent as usual. `orch search "<query>"` searches memory dir
 | [INSTALL.md](docs/INSTALL.md) | Install, harness wiring, shared agent policy, building from source |
 | [MEMORY.md](docs/MEMORY.md) | Session memory, chunking, hybrid search, retrieval evals |
 | [TASKS.md](docs/TASKS.md) | Background tasks, model registry, routing |
-| [OPERATIONS.md](docs/OPERATIONS.md) | Status, restarts, upgrades |
+| [OPERATIONS.md](docs/OPERATIONS.md) | Status, restarts, upgrades, Claude settings |
 | [internals/](docs/internals/README.md) | Implementation reference: APIs, formats, algorithms, building your own |
 
 ## Contributing

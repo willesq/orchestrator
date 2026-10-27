@@ -14,8 +14,9 @@ public struct MetricSample: Sendable, Equatable, Identifiable {
 @MainActor
 @Observable
 public final class SystemModel {
-    /// Samples kept per process: two minutes at the default interval.
-    public static let historyLength = 60
+    /// Samples kept per process: six minutes while the tab is shown, longer
+    /// from the slower sampling while it is not.
+    public static let historyLength = 180
 
     public private(set) var metrics: SystemMetrics?
     public private(set) var status: DaemonStatus?
@@ -31,15 +32,45 @@ public final class SystemModel {
     private let loadReport: @Sendable () async throws -> StatusReport
     private let interval: Duration
     private let reportInterval: Duration
+    private let backgroundInterval: Duration
     private var pollTask: Task<Void, Never>?
     private var reportTask: Task<Void, Never>?
+    private var backgroundTask: Task<Void, Never>?
 
     public init(api: any SystemAPI, loadReport: @escaping @Sendable () async throws -> StatusReport,
-                interval: Duration = .seconds(2), reportInterval: Duration = .seconds(15)) {
+                interval: Duration = .seconds(2), reportInterval: Duration = .seconds(15),
+                backgroundInterval: Duration = .seconds(10)) {
         self.api = api
         self.loadReport = loadReport
         self.interval = interval
         self.reportInterval = reportInterval
+        self.backgroundInterval = backgroundInterval
+    }
+
+    /// Records one metrics sample without touching status, for the slow
+    /// sampling that keeps the sparklines' history while the tab is hidden.
+    public func sample() async {
+        guard let m = try? await api.systemMetrics() else { return }
+        record(m)
+    }
+
+    /// Samples metrics slowly for as long as the app runs, skipping while the
+    /// tab polls, so the sparklines open with history instead of two points.
+    /// Calling it again is a no-op.
+    public func startSampling() {
+        guard backgroundTask == nil else { return }
+        backgroundTask = Task { [weak self] in
+            while !Task.isCancelled {
+                if self?.pollTask == nil { await self?.sample() }
+                guard let interval = self?.backgroundInterval else { return }
+                try? await Task.sleep(for: interval)
+            }
+        }
+    }
+
+    public func stopSampling() {
+        backgroundTask?.cancel()
+        backgroundTask = nil
     }
 
     public func refresh() async {

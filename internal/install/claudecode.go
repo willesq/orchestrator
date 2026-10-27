@@ -3,8 +3,12 @@ package install
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"path/filepath"
+	"slices"
 	"strings"
+
+	"github.com/willesq/orchestrator/internal/settings"
 )
 
 // ClaudeCode wires the orchestrator into Claude Code (~/.claude).
@@ -24,9 +28,11 @@ var eventSlugs = []struct{ Slug, Event string }{
 	{"subagent-stop", "SubagentStop"},
 }
 
-// Edits implements Adapter: settings.json (hooks + MCP), ~/.claude.json (MCP, if
-// present, where user-scope servers like serena live), the shell alias, the plist,
-// and the orchestrator subagents and skills.
+// Edits implements Adapter: settings.json (hooks, MCP, permissions,
+// attribution), ~/.claude.json (MCP, if present, where user-scope servers like
+// serena live), the shell alias, the plist, the orchestrator subagents and
+// skills, and the cc-safety-net marketplace and guard rules. The plugin itself
+// is installed by Steps.
 func (c ClaudeCode) Edits(bins Bins, home string) []Edit {
 	edits := append(instructionEdits(home, c.Name()), []Edit{
 		c.settingsEdit(bins, home),
@@ -34,7 +40,8 @@ func (c ClaudeCode) Edits(bins Bins, home string) []Edit {
 		aliasEdit(bins.Orch, home),
 		plistEdit(bins.Orchd, home),
 	}...)
-	return append(edits, claudeAssetEdits(home)...)
+	edits = append(edits, claudeAssetEdits(home)...)
+	return append(edits, safetyNetEdits(home)...)
 }
 
 // claudeJSONEdit updates rag/queue MCP registration in ~/.claude.json ONLY if the
@@ -75,9 +82,26 @@ func (ClaudeCode) settingsEdit(bins Bins, home string) Edit {
 					return nil, "", fmt.Errorf("parse settings.json: %w", err)
 				}
 			}
-			hookSummary := applyHooks(root, bins.OrchHook)
+			// Reason: items the user turned off in orch are left out, so
+			// install never puts them back and status never calls them
+			// drift. A store that cannot be read stops the plan instead of
+			// being taken as "nothing is off", which would re-enable them.
+			toggles, err := loadToggles()
+			if err != nil {
+				return nil, "", fmt.Errorf("%w — refusing to write settings.json, so items turned off in orch stay off; "+
+					"fix orch.db or re-run once orchd has released it", err)
+			}
+			hookSummary := applyClaudeHooks(root, bins.OrchHook, toggles)
 			mcpSummary := applyMCP(root, bins.Orch)
-			permSummary, err := applyPermissions(root)
+			permSummary, err := applyPermissionsWith(root, toggles)
+			if err != nil {
+				return nil, "", err
+			}
+			denySummary, err := applyCredentialDenyWith(root, toggles)
+			if err != nil {
+				return nil, "", err
+			}
+			attrSummary, err := applyAttribution(root)
 			if err != nil {
 				return nil, "", err
 			}
@@ -85,7 +109,7 @@ func (ClaudeCode) settingsEdit(bins Bins, home string) Edit {
 			if err != nil {
 				return nil, "", err
 			}
-			return out, strings.Join([]string{hookSummary, mcpSummary, permSummary}, "\n"), nil
+			return out, strings.Join([]string{hookSummary, mcpSummary, permSummary, denySummary, attrSummary}, "\n"), nil
 		},
 	}
 }
@@ -93,23 +117,88 @@ func (ClaudeCode) settingsEdit(bins Bins, home string) Edit {
 // eventMap maps our orch-hook slug to a harness's hook event name.
 type eventMap = []struct{ Slug, Event string }
 
+// hookFieldsFunc returns the harness-specific fields (timeout, async, ...) to
+// set on the orch-hook command for an event slug, or nil for none. Each harness
+// gets its own, because their hook schemas differ in units and supported keys.
+type hookFieldsFunc func(slug string) map[string]any
+
+// hookTimeoutSeconds bounds how long each orch-hook event may run.
+//
+// Reason: without an explicit timeout Claude Code waits up to 600 s (30 s on
+// UserPromptSubmit), so a stalled orchd would freeze every turn, and SessionEnd
+// hooks share a 1.5 s budget that can cut session capture short. Claude Code
+// raises that budget to match the largest per-hook SessionEnd timeout, up to
+// 60 s. The values are ceilings well above normal run times: the transcript
+// parsers (session-end, pre-compact) get the most, the prompt and start hooks,
+// which make bounded orchd and git calls, get 10 s, and the pure file writers 5 s.
+var hookTimeoutSeconds = map[string]int{
+	"session-start":      10,
+	"user-prompt-submit": 10,
+	"stop":               5,
+	"session-end":        15,
+	"pre-compact":        15,
+	"post-tool-use":      5,
+	"subagent-stop":      5,
+}
+
+// claudeHookFields sets Claude Code's per-hook timeout (seconds) and runs
+// post-tool-use in the background.
+//
+// Reason for async: post-tool-use only drops hand-off files for orchd and
+// prints nothing, so there is no decision or context for Claude to wait on.
+// Claude Code does not enforce timeout on an async hook; it is written anyway
+// so the bound still holds if async is ever removed.
+func claudeHookFields(slug string) map[string]any {
+	f := map[string]any{}
+	if s, ok := hookTimeoutSeconds[slug]; ok {
+		f["timeout"] = s
+	}
+	if slug == "post-tool-use" {
+		f["async"] = true
+	}
+	return f
+}
+
 // applyHooks registers orch-hook using the Claude-style event names.
 func applyHooks(root map[string]any, orchHookBin string) string {
-	return applyHooksWithEvents(root, orchHookBin, eventSlugs)
+	return applyClaudeHooks(root, orchHookBin, settings.Toggles{})
+}
+
+// applyClaudeHooks registers orch-hook for Claude Code, leaving alone each
+// event whose orch-hook handler the user turned off in orch.
+func applyClaudeHooks(root map[string]any, orchHookBin string, t settings.Toggles) string {
+	skip := func(event, slug string) bool {
+		return t.Disabled(ProviderClaudeCode, KindHook, HookIdentity(event, slug))
+	}
+	return applyHooksWithEvents(root, orchHookBin, eventSlugs, claudeHookFields, skip)
 }
 
 // applyHooksWithEvents registers orch-hook for every event, dropping prior
-// orchestrator entries and preserving all third-party ones. Returns a summary.
-func applyHooksWithEvents(root map[string]any, orchHookBin string, events eventMap) string {
+// orchestrator entries and preserving all third-party ones. fields, when not
+// nil, adds harness-specific keys to each orch-hook command. skip, when not
+// nil, names events to leave exactly as they are. Returns a summary.
+func applyHooksWithEvents(root map[string]any, orchHookBin string, events eventMap, fields hookFieldsFunc,
+	skip func(event, slug string) bool) string {
 	hooks, _ := root["hooks"].(map[string]any)
 	if hooks == nil {
 		hooks = map[string]any{}
 	}
 	inPlace, added, preserved := 0, 0, 0
+	var fieldNotes, skipped []string
 	for _, ev := range events {
-		entry := map[string]any{
-			"hooks": []any{map[string]any{"type": "command", "command": orchHookBin + " " + ev.Slug}},
+		if skip != nil && skip(ev.Event, ev.Slug) {
+			skipped = append(skipped, ev.Event)
+			continue
 		}
+		cmd := map[string]any{"type": "command", "command": orchHookBin + " " + ev.Slug}
+		if fields != nil {
+			f := fields(ev.Slug)
+			maps.Copy(cmd, f)
+			if len(f) > 0 {
+				fieldNotes = append(fieldNotes, ev.Event+" "+describeFields(f))
+			}
+		}
+		entry := map[string]any{"hooks": []any{cmd}}
 		arr, _ := hooks[ev.Event].([]any)
 		var kept []any
 		placed := false
@@ -136,9 +225,27 @@ func applyHooksWithEvents(root map[string]any, orchHookBin string, events eventM
 		hooks[ev.Event] = kept
 	}
 	root["hooks"] = hooks
-	return fmt.Sprintf(
+	summary := fmt.Sprintf(
 		"hooks: wired orch-hook for %d events (%d replaced in place, %d appended); preserved %d third-party entr(ies)",
-		len(events), inPlace, added, preserved)
+		len(events)-len(skipped), inPlace, added, preserved)
+	if len(fieldNotes) > 0 {
+		summary += "\nhooks: orch-hook settings: " + strings.Join(fieldNotes, ", ")
+	}
+	if len(skipped) > 0 {
+		summary += "\nhooks: left " + strings.Join(skipped, ", ") + " alone — turned off in orch"
+	}
+	return summary
+}
+
+// describeFields renders hook fields as "timeout=5 async=true", keys sorted so
+// the dry-run output is stable.
+func describeFields(f map[string]any) string {
+	keys := slices.Sorted(maps.Keys(f))
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		parts[i] = fmt.Sprintf("%s=%v", k, f[k])
+	}
+	return strings.Join(parts, " ")
 }
 
 // isOrchHook reports whether a hook entry belongs to the orchestrator (old Python
@@ -323,6 +430,12 @@ func ruleList(perms map[string]any, key string) ([]any, error) {
 // an allow rule in Claude Code, so a server the user has explicitly denied is
 // left alone and reported instead of being fought over.
 func applyPermissions(root map[string]any) (string, error) {
+	return applyPermissionsWith(root, settings.Toggles{})
+}
+
+// applyPermissionsWith is applyPermissions leaving out any allow rule the
+// user turned off in orch.
+func applyPermissionsWith(root map[string]any, t settings.Toggles) (string, error) {
 	perms, err := permissionsObject(root)
 	if err != nil {
 		return "", err
@@ -340,9 +453,11 @@ func applyPermissions(root map[string]any) (string, error) {
 		return "", err
 	}
 
-	var added, already, denied, asked []string
+	var added, already, denied, asked, off []string
 	for _, server := range orchMCPServers {
 		switch {
+		case t.Disabled(ProviderClaudeCode, KindPermission, PermissionIdentity("allow", mcpToolRule(server))):
+			off = append(off, server)
 		case overlapsServer(deny, server):
 			denied = append(denied, server)
 		case overlapsServer(ask, server):
@@ -393,6 +508,9 @@ func applyPermissions(root map[string]any) (string, error) {
 	if len(asked) > 0 {
 		notes = append(notes,
 			"added no allow for "+strings.Join(asked, " + ")+" — an existing ask rule keeps those tools behind a confirmation")
+	}
+	if len(off) > 0 {
+		notes = append(notes, "added no allow for "+strings.Join(off, " + ")+" — turned off in orch")
 	}
 	return "permissions.allow: " + strings.Join(notes, "; "), nil
 }

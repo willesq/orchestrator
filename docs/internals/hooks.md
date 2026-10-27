@@ -22,7 +22,7 @@ they name a file.
 | `pre-compact` | Writes `sessions/<id>.checkpoint.yaml` with the last request and reply. |
 | `session-end` | See [session end](#session-end). |
 | `subagent-stop` | Appends `{kind: complete, source: subagent_type, summary}` (redacted, 200 bytes) to the parent session's event stream. |
-| `post-tool-use` | After `gh pr create\|ready\|close\|merge\|reopen\|edit`, requests a PR refresh. After `Edit`/`Write`/`MultiEdit` of markdown or a file under `~/.claude/`, hands the file off to be stored again. |
+| `post-tool-use` | After `gh pr create\|ready\|close\|merge\|reopen\|edit`, requests a PR refresh, and after `gh pr create` (also `rtk gh pr create`) registers the PR with PR Watch (below). After `Edit`/`Write`/`MultiEdit` of markdown or a file under `~/.claude/`, hands the file off to be stored again. |
 
 ## Prompt context
 
@@ -69,7 +69,9 @@ pre-compact checkpoint, restoring live state the harness summary cannot see.
    Each that succeeds is cleared from the hand-off; orchd does whichever did not.
 
 The hook takes about 0.5 s on a 29 MB transcript; embedding is left to orchd, because harnesses
-cancel exit hooks after a short limit.
+cancel exit hooks after a short limit. The install gives `session-end` an explicit 15 s timeout,
+which also raises Claude Code's shared 1.5 s SessionEnd budget; per-event timeouts are listed in
+[install.md](install.md#claude-code).
 
 ### Transcript format
 
@@ -135,3 +137,22 @@ the excerpt.
 `<data>/events/<stream>.jsonl`, appended one object per line:
 `{"kind", "source", "task_id"?, "summary", "timestamp"}` with kind `complete`, `blocked`, `failed`
 or `info`. Streams: one per session, plus `queue`, `routing`, `pr-babysitter`.
+
+## PR Watch registration
+
+After a Bash `gh pr create`, `post-tool-use` takes the last
+`https://github.com/<owner>/<repo>/pull/<n>` URL from `tool_response.stdout`, then `stderr`
+(where gh reports "a pull request ... already exists: <url>"), or from `tool_response` when it
+is a string, and appends `{"url", "added_at"}` (RFC 3339 UTC) to `~/.pr-watch.json`, the file
+the PR Watch menu bar app reads.
+
+- Only an existing file is changed; without one the user is not using PR Watch.
+- A URL already present is skipped; entries and other top-level keys are kept as they are and
+  never removed.
+- A file whose `prs` is not an array, or that does not parse, is left untouched.
+- The write takes the lock directory `~/.pr-watch.json.lock` (shared with other writers; one
+  older than a minute is moved aside atomically and removed, so two writers cannot both claim it,
+  and the hook gives up after 3 s), writes a temp file in the target's directory with the
+  original mode, and renames it over the target. A symlinked registry is written through to its
+  target and keeps its link. Anything but a regular file under 4 MiB is left alone.
+- There is no `gh` fallback when the output holds no URL, so the hook stays local and fast.

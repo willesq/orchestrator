@@ -27,7 +27,8 @@ alone, and is safe to repeat. The default target is Claude Code; `--target codex
 `all` wire the others. `--home` relocates everything for testing.
 
 - **Hooks** run `orch-hook <event>` on session start and end, prompt submit, tool use,
-  compaction and subagent stop. Codex hooks must be trusted in Codex before they run.
+  compaction and subagent stop. For Claude Code and Gemini each has a timeout of 5 to 15 s, so a
+  stalled daemon cannot hold up a session. Codex hooks must be trusted in Codex before they run.
 - **MCP servers** `rag` and `queue` are registered, and for Claude Code their tools are allowed
   (`mcp__rag__*`, `mcp__queue__*`) user-wide, so hooks and background agents can use them
   without a prompt. Your existing `deny` and `ask` rules win and are reported instead.
@@ -37,8 +38,86 @@ alone, and is safe to repeat. The default target is Claude Code; `--target codex
   copies: `orch status` reports hand-edited installed copies as drift.
 - **launchd** keeps `orchd` running when Homebrew does not manage it, and an `orch` alias in
   `~/.zprofile` points at the installed binary.
+- **Safety net** (Claude Code): see [below](#safety-net).
+- **Settings** (Claude Code): `permissions.deny` gains `Read(~/.config/gh/**)`, `Read(~/.netrc)`
+  and `Read(~/.docker/config.json)`, so the file tools cannot read credential files, and
+  `attribution.commit` is set to `""`, so commits carry no coding-agent co-author trailer. Other
+  attribution keys and every other setting are left alone. Install never adds `ask` rules.
 
 Backups go to `~/.local/share/orch/backups`, owner-only.
+
+## Turning settings off
+
+The app's **Claude** tab (or `orch settings`) lists every hook, permission rule and plugin in
+`~/.claude/settings.json` and every cc-safety-net rule, marked as added by orch, by you, or found
+in the file. Turning one off takes effect at once (Claude Code and cc-safety-net reload their
+files) and is remembered in this machine's `orch.db`:
+
+- `orch install --apply` does not put back anything you turned off, and `orch status` does not
+  call it drift; it reports `N disabled by you`. Items orch adds can be turned off but not
+  removed.
+- Turning an item back on restores exactly what was in the file.
+- The tab also adds and removes hooks and permission rules.
+- Edits made to the files by hand or by other tools are picked up within a few seconds; the file
+  wins, so an entry another tool re-adds shows as on again, and one removed elsewhere is marked
+  removed rather than put back.
+- Choices are per machine. Nothing is synced: a rule off on one Mac stays on on another.
+- If `orch.db` cannot be read, `orch install` stops rather than re-enabling what you turned off.
+
+```sh
+orch settings list                       # everything, with state and origin
+orch settings disable hook 'SessionStart/orch-hook session-start'
+orch settings enable rule orch-guards/gh-auth-token
+```
+
+Details: [internals/settings.md](internals/settings.md).
+
+## Safety net
+
+For Claude Code, install also sets up [cc-safety-net](https://github.com/kenryu42/cc-safety-net),
+a plugin that blocks destructive shell commands, pinned to the release this orch was reviewed
+against (2.6.10), plus orch's own guard rules. There is nothing to do by hand:
+
+1. A local marketplace, `orch-pinned`, is written to
+   `~/.local/share/orch/marketplaces/orch-pinned/`. It serves the plugin at one commit, so an
+   upstream release never reaches you until an orch release pins it. Pins are at least 14 days
+   old.
+2. `claude plugin` registers the marketplace and installs `cc-safety-net@orch-pinned`. An older
+   copy from another marketplace (for example `safety-net@cc-marketplace`) is uninstalled
+   first, and `cc-marketplace` is unregistered when no other installed plugin uses it. A pinned
+   copy that is out of date is upgraded. A plugin you disabled stays disabled. After an install
+   or upgrade, orch checks that Claude Code recorded the pinned commit and fails loudly if not.
+3. The `orch-guards` rulebook is written to `~/.cc-safety-net/rules/orch-guards/rulebook.json`
+   (or under `CC_SAFETY_NET_HOME`) and enabled in `rules/rule.json`, with `rtk` as a transparent
+   wrapper so `rtk git push ...` is checked as `git push ...`. Your own rulebooks, overrides and
+   wrappers are kept, and `rule.json` is backed up before it changes.
+
+`orch-guards` denies only what the shared policy forbids, and never prompts:
+
+| Blocks | Still allowed |
+|---|---|
+| `gh auth token`, `gh auth status --show-token`, `gh auth git-credential`, `security find-*-password -w/-g`, `security dump-keychain -d`, `git credential fill` | `gh auth status`; git's own `credential.helper=!gh auth git-credential` |
+| `git push` to `main`/`master` (also `HEAD:main`, `refs/heads/main`), deleting them (`:main`), `--all`, `--mirror`, `--no-verify` | feature-branch pushes, including names like `feat/main-fix` |
+| `git commit --no-verify`, `-n`, `--no-gpg-sign` | `git commit -S` |
+| `gh repo delete`, `gh repo edit --visibility` | every other `gh` call, including `gh api` writes, PR comments, edits and merges |
+
+orch owns `orch-guards` and overwrites it on upgrade; put personal rules in a rulebook of your
+own and list it in `rule.json`. `orch status` shows a `safety-net` line, and Orch.app's Safety
+Net tab shows the same state with Install, Upgrade and Repair rules buttons.
+
+Limitations:
+
+- Rules match exact tokens after cc-safety-net parses the command, so some forms get through:
+  - `git -c commit.gpgsign=false commit` (a global `commit.gpgsign=true` still applies);
+  - a push refspec naming another source branch, such as `git push origin feat:main`; branch
+    protection on the server is the backstop;
+  - a credential command assembled inside a Python or Node string.
+- Rule files are not tamper-resistant: an agent can edit `~/.cc-safety-net/rules/`. They guard
+  against mistakes, not a hostile agent. orch does not write cc-safety-net's `policy.json` and
+  leaves its safety level at `standard`.
+- A rulebook that fails validation is skipped silently by cc-safety-net; the Safety Net tab and
+  `orch status` report it.
+- Running Claude Code sessions load a newly installed plugin only after a restart.
 
 ## Shared agent policy
 

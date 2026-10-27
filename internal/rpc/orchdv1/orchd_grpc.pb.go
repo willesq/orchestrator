@@ -44,10 +44,18 @@ const (
 	Orchd_GetSystemMetrics_FullMethodName      = "/orchd.v1.Orchd/GetSystemMetrics"
 	Orchd_ListDocs_FullMethodName              = "/orchd.v1.Orchd/ListDocs"
 	Orchd_GetDocument_FullMethodName           = "/orchd.v1.Orchd/GetDocument"
+	Orchd_SyncDocs_FullMethodName              = "/orchd.v1.Orchd/SyncDocs"
+	Orchd_GetDocsSync_FullMethodName           = "/orchd.v1.Orchd/GetDocsSync"
 	Orchd_ListRegisteredSources_FullMethodName = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName            = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName          = "/orchd.v1.Orchd/RemoveSource"
 	Orchd_RefreshSource_FullMethodName         = "/orchd.v1.Orchd/RefreshSource"
+	Orchd_GetSafetyNet_FullMethodName          = "/orchd.v1.Orchd/GetSafetyNet"
+	Orchd_InstallSafetyNet_FullMethodName      = "/orchd.v1.Orchd/InstallSafetyNet"
+	Orchd_ListSettings_FullMethodName          = "/orchd.v1.Orchd/ListSettings"
+	Orchd_SetSettingEnabled_FullMethodName     = "/orchd.v1.Orchd/SetSettingEnabled"
+	Orchd_AddSetting_FullMethodName            = "/orchd.v1.Orchd/AddSetting"
+	Orchd_RemoveSetting_FullMethodName         = "/orchd.v1.Orchd/RemoveSetting"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -121,6 +129,12 @@ type OrchdClient interface {
 	ListDocs(ctx context.Context, in *ListDocsRequest, opts ...grpc.CallOption) (*ListDocsResponse, error)
 	// GetDocument rebuilds one indexed source from its stored chunks.
 	GetDocument(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*Document, error)
+	// SyncDocs starts a docs sync now: one owner or every owner, and with force
+	// a full re-ingest. Only one sync runs at a time; a request while one runs
+	// is refused (Aborted), never queued.
+	SyncDocs(ctx context.Context, in *SyncDocsRequest, opts ...grpc.CallOption) (*DocsSyncState, error)
+	// GetDocsSync reports the running docs sync, or the last one.
+	GetDocsSync(ctx context.Context, in *GetDocsSyncRequest, opts ...grpc.CallOption) (*DocsSyncState, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -130,6 +144,29 @@ type OrchdClient interface {
 	RemoveSource(ctx context.Context, in *RemoveSourceRequest, opts ...grpc.CallOption) (*RemoveSourceResponse, error)
 	// RefreshSource refreshes one registered source, or all, now.
 	RefreshSource(ctx context.Context, in *RefreshSourceRequest, opts ...grpc.CallOption) (*RefreshSourceResponse, error)
+	// GetSafetyNet reports how cc-safety-net is installed in Claude Code
+	// against the version this orch pins, the guard rules, and the last
+	// install action. Read from plugin and rule files; runs no command.
+	GetSafetyNet(ctx context.Context, in *GetSafetyNetRequest, opts ...grpc.CallOption) (*SafetyNetState, error)
+	// InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+	// orch-guards rules, and returns the resulting state. One action runs at a
+	// time; a request while one runs is refused (Aborted), never queued.
+	InstallSafetyNet(ctx context.Context, in *InstallSafetyNetRequest, opts ...grpc.CallOption) (*SafetyNetState, error)
+	// ListSettings lists the settings orch manages in other tools' files
+	// (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+	// each with its desired state and origin, and each provider's kinds with
+	// the fields an add form needs. It reads the files first, so the list
+	// reflects changes made outside orch.
+	ListSettings(ctx context.Context, in *ListSettingsRequest, opts ...grpc.CallOption) (*ListSettingsResponse, error)
+	// SetSettingEnabled turns one item on or off: it is written into, or
+	// taken out of, its file at once, and the choice is kept in orch.db.
+	SetSettingEnabled(ctx context.Context, in *SetSettingEnabledRequest, opts ...grpc.CallOption) (*SettingItem, error)
+	// AddSetting validates a new item (a hook or a permission rule), writes it
+	// to its file and records it as added by you.
+	AddSetting(ctx context.Context, in *AddSettingRequest, opts ...grpc.CallOption) (*SettingItem, error)
+	// RemoveSetting deletes an item you added or orch found from its file and
+	// forgets it. Items orch install writes can only be turned off.
+	RemoveSetting(ctx context.Context, in *RemoveSettingRequest, opts ...grpc.CallOption) (*RemoveSettingResponse, error)
 }
 
 type orchdClient struct {
@@ -390,6 +427,26 @@ func (c *orchdClient) GetDocument(ctx context.Context, in *GetDocumentRequest, o
 	return out, nil
 }
 
+func (c *orchdClient) SyncDocs(ctx context.Context, in *SyncDocsRequest, opts ...grpc.CallOption) (*DocsSyncState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DocsSyncState)
+	err := c.cc.Invoke(ctx, Orchd_SyncDocs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) GetDocsSync(ctx context.Context, in *GetDocsSyncRequest, opts ...grpc.CallOption) (*DocsSyncState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DocsSyncState)
+	err := c.cc.Invoke(ctx, Orchd_GetDocsSync_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -424,6 +481,66 @@ func (c *orchdClient) RefreshSource(ctx context.Context, in *RefreshSourceReques
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RefreshSourceResponse)
 	err := c.cc.Invoke(ctx, Orchd_RefreshSource_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) GetSafetyNet(ctx context.Context, in *GetSafetyNetRequest, opts ...grpc.CallOption) (*SafetyNetState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SafetyNetState)
+	err := c.cc.Invoke(ctx, Orchd_GetSafetyNet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) InstallSafetyNet(ctx context.Context, in *InstallSafetyNetRequest, opts ...grpc.CallOption) (*SafetyNetState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SafetyNetState)
+	err := c.cc.Invoke(ctx, Orchd_InstallSafetyNet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ListSettings(ctx context.Context, in *ListSettingsRequest, opts ...grpc.CallOption) (*ListSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSettingsResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) SetSettingEnabled(ctx context.Context, in *SetSettingEnabledRequest, opts ...grpc.CallOption) (*SettingItem, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SettingItem)
+	err := c.cc.Invoke(ctx, Orchd_SetSettingEnabled_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) AddSetting(ctx context.Context, in *AddSettingRequest, opts ...grpc.CallOption) (*SettingItem, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SettingItem)
+	err := c.cc.Invoke(ctx, Orchd_AddSetting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) RemoveSetting(ctx context.Context, in *RemoveSettingRequest, opts ...grpc.CallOption) (*RemoveSettingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveSettingResponse)
+	err := c.cc.Invoke(ctx, Orchd_RemoveSetting_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -501,6 +618,12 @@ type OrchdServer interface {
 	ListDocs(context.Context, *ListDocsRequest) (*ListDocsResponse, error)
 	// GetDocument rebuilds one indexed source from its stored chunks.
 	GetDocument(context.Context, *GetDocumentRequest) (*Document, error)
+	// SyncDocs starts a docs sync now: one owner or every owner, and with force
+	// a full re-ingest. Only one sync runs at a time; a request while one runs
+	// is refused (Aborted), never queued.
+	SyncDocs(context.Context, *SyncDocsRequest) (*DocsSyncState, error)
+	// GetDocsSync reports the running docs sync, or the last one.
+	GetDocsSync(context.Context, *GetDocsSyncRequest) (*DocsSyncState, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -510,6 +633,29 @@ type OrchdServer interface {
 	RemoveSource(context.Context, *RemoveSourceRequest) (*RemoveSourceResponse, error)
 	// RefreshSource refreshes one registered source, or all, now.
 	RefreshSource(context.Context, *RefreshSourceRequest) (*RefreshSourceResponse, error)
+	// GetSafetyNet reports how cc-safety-net is installed in Claude Code
+	// against the version this orch pins, the guard rules, and the last
+	// install action. Read from plugin and rule files; runs no command.
+	GetSafetyNet(context.Context, *GetSafetyNetRequest) (*SafetyNetState, error)
+	// InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+	// orch-guards rules, and returns the resulting state. One action runs at a
+	// time; a request while one runs is refused (Aborted), never queued.
+	InstallSafetyNet(context.Context, *InstallSafetyNetRequest) (*SafetyNetState, error)
+	// ListSettings lists the settings orch manages in other tools' files
+	// (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+	// each with its desired state and origin, and each provider's kinds with
+	// the fields an add form needs. It reads the files first, so the list
+	// reflects changes made outside orch.
+	ListSettings(context.Context, *ListSettingsRequest) (*ListSettingsResponse, error)
+	// SetSettingEnabled turns one item on or off: it is written into, or
+	// taken out of, its file at once, and the choice is kept in orch.db.
+	SetSettingEnabled(context.Context, *SetSettingEnabledRequest) (*SettingItem, error)
+	// AddSetting validates a new item (a hook or a permission rule), writes it
+	// to its file and records it as added by you.
+	AddSetting(context.Context, *AddSettingRequest) (*SettingItem, error)
+	// RemoveSetting deletes an item you added or orch found from its file and
+	// forgets it. Items orch install writes can only be turned off.
+	RemoveSetting(context.Context, *RemoveSettingRequest) (*RemoveSettingResponse, error)
 	mustEmbedUnimplementedOrchdServer()
 }
 
@@ -595,6 +741,12 @@ func (UnimplementedOrchdServer) ListDocs(context.Context, *ListDocsRequest) (*Li
 func (UnimplementedOrchdServer) GetDocument(context.Context, *GetDocumentRequest) (*Document, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDocument not implemented")
 }
+func (UnimplementedOrchdServer) SyncDocs(context.Context, *SyncDocsRequest) (*DocsSyncState, error) {
+	return nil, status.Error(codes.Unimplemented, "method SyncDocs not implemented")
+}
+func (UnimplementedOrchdServer) GetDocsSync(context.Context, *GetDocsSyncRequest) (*DocsSyncState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDocsSync not implemented")
+}
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
 }
@@ -606,6 +758,24 @@ func (UnimplementedOrchdServer) RemoveSource(context.Context, *RemoveSourceReque
 }
 func (UnimplementedOrchdServer) RefreshSource(context.Context, *RefreshSourceRequest) (*RefreshSourceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshSource not implemented")
+}
+func (UnimplementedOrchdServer) GetSafetyNet(context.Context, *GetSafetyNetRequest) (*SafetyNetState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSafetyNet not implemented")
+}
+func (UnimplementedOrchdServer) InstallSafetyNet(context.Context, *InstallSafetyNetRequest) (*SafetyNetState, error) {
+	return nil, status.Error(codes.Unimplemented, "method InstallSafetyNet not implemented")
+}
+func (UnimplementedOrchdServer) ListSettings(context.Context, *ListSettingsRequest) (*ListSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSettings not implemented")
+}
+func (UnimplementedOrchdServer) SetSettingEnabled(context.Context, *SetSettingEnabledRequest) (*SettingItem, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSettingEnabled not implemented")
+}
+func (UnimplementedOrchdServer) AddSetting(context.Context, *AddSettingRequest) (*SettingItem, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddSetting not implemented")
+}
+func (UnimplementedOrchdServer) RemoveSetting(context.Context, *RemoveSettingRequest) (*RemoveSettingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveSetting not implemented")
 }
 func (UnimplementedOrchdServer) mustEmbedUnimplementedOrchdServer() {}
 func (UnimplementedOrchdServer) testEmbeddedByValue()               {}
@@ -1078,6 +1248,42 @@ func _Orchd_GetDocument_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_SyncDocs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncDocsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SyncDocs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SyncDocs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SyncDocs(ctx, req.(*SyncDocsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_GetDocsSync_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDocsSyncRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetDocsSync(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetDocsSync_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetDocsSync(ctx, req.(*GetDocsSyncRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -1146,6 +1352,114 @@ func _Orchd_RefreshSource_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).RefreshSource(ctx, req.(*RefreshSourceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_GetSafetyNet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSafetyNetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetSafetyNet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetSafetyNet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetSafetyNet(ctx, req.(*GetSafetyNetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_InstallSafetyNet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InstallSafetyNetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).InstallSafetyNet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_InstallSafetyNet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).InstallSafetyNet(ctx, req.(*InstallSafetyNetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ListSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListSettings(ctx, req.(*ListSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_SetSettingEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSettingEnabledRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SetSettingEnabled(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SetSettingEnabled_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SetSettingEnabled(ctx, req.(*SetSettingEnabledRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_AddSetting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddSettingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).AddSetting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_AddSetting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).AddSetting(ctx, req.(*AddSettingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_RemoveSetting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveSettingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).RemoveSetting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_RemoveSetting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).RemoveSetting(ctx, req.(*RemoveSettingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1258,6 +1572,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Orchd_GetDocument_Handler,
 		},
 		{
+			MethodName: "SyncDocs",
+			Handler:    _Orchd_SyncDocs_Handler,
+		},
+		{
+			MethodName: "GetDocsSync",
+			Handler:    _Orchd_GetDocsSync_Handler,
+		},
+		{
 			MethodName: "ListRegisteredSources",
 			Handler:    _Orchd_ListRegisteredSources_Handler,
 		},
@@ -1272,6 +1594,30 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RefreshSource",
 			Handler:    _Orchd_RefreshSource_Handler,
+		},
+		{
+			MethodName: "GetSafetyNet",
+			Handler:    _Orchd_GetSafetyNet_Handler,
+		},
+		{
+			MethodName: "InstallSafetyNet",
+			Handler:    _Orchd_InstallSafetyNet_Handler,
+		},
+		{
+			MethodName: "ListSettings",
+			Handler:    _Orchd_ListSettings_Handler,
+		},
+		{
+			MethodName: "SetSettingEnabled",
+			Handler:    _Orchd_SetSettingEnabled_Handler,
+		},
+		{
+			MethodName: "AddSetting",
+			Handler:    _Orchd_AddSetting_Handler,
+		},
+		{
+			MethodName: "RemoveSetting",
+			Handler:    _Orchd_RemoveSetting_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

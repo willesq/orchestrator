@@ -2,23 +2,18 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 
-	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/docs"
-	"github.com/willesq/orchestrator/internal/rag"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
-)
-
-// Seams for the foreground sync's external tooling, overridable in tests.
-var (
-	newDocsGitHub = docs.NewGitHub
-	newDocsGit    = docs.NewGit
 )
 
 func newDocsCmd(cf clientFactory) *cobra.Command {
@@ -176,18 +171,20 @@ func newDocsSyncCmd(cf clientFactory) *cobra.Command {
 	var background bool
 	cmd := &cobra.Command{
 		Use:   "sync [owner]",
-		Short: "Run an incremental sync now (skips unchanged repos + files)",
-		Args:  cobra.MaximumNArgs(1),
+		Short: "Ask orchd to sync now (skips unchanged repos + files) and follow it",
+		Long: `Ask orchd to sync docs now and show its progress. orchd runs one docs sync
+at a time: if one is already running, this says so and exits (nothing is queued).`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			reg, closeFn, err := openDocsRegistry()
 			if err != nil {
 				return err
 			}
 			defer closeFn()
-			return runDocsSync(c, cf, reg, ownerArg(args), background)
+			return runDocsSync(c, cf, reg, ownerArg(args), false, background)
 		},
 	}
-	cmd.Flags().BoolVar(&background, "background", false, "only mark due; let orchd sync on its next scan")
+	cmd.Flags().BoolVar(&background, "background", false, "start the sync and return without following it")
 	return cmd
 }
 
@@ -195,7 +192,7 @@ func newDocsRefreshCmd(cf clientFactory) *cobra.Command {
 	var background bool
 	cmd := &cobra.Command{
 		Use:   "refresh [owner]",
-		Short: "Force a full re-ingest (clears repo-SHA + file-hash caches), then sync now",
+		Short: "Ask orchd for a full re-ingest (clears repo-SHA + file-hash caches) and follow it",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			reg, closeFn, err := openDocsRegistry()
@@ -203,15 +200,10 @@ func newDocsRefreshCmd(cf clientFactory) *cobra.Command {
 				return err
 			}
 			defer closeFn()
-			owner := ownerArg(args)
-			if err := reg.ClearCaches(c.Context(), owner); err != nil {
-				return err
-			}
-			fmt.Fprintln(c.OutOrStdout(), "caches cleared")
-			return runDocsSync(c, cf, reg, owner, background)
+			return runDocsSync(c, cf, reg, ownerArg(args), true, background)
 		},
 	}
-	cmd.Flags().BoolVar(&background, "background", false, "only mark due; let orchd re-ingest on its next scan")
+	cmd.Flags().BoolVar(&background, "background", false, "start the re-ingest and return without following it")
 	return cmd
 }
 
@@ -222,77 +214,103 @@ func ownerArg(args []string) string {
 	return ""
 }
 
-// runDocsSync syncs in the foreground so the user sees the result of this
-// command rather than waiting on orchd's scan. Embedding + storage still belong
-// to the daemon, so ingestion is routed over its Ingest RPC; if the daemon is
-// unreachable (or --background is set) we fall back to marking the owner due.
-func runDocsSync(c *cobra.Command, cf clientFactory, reg *docs.Registry, owner string, background bool) error {
-	out := c.OutOrStdout()
-	if background {
-		if err := reg.MarkDue(c.Context(), owner); err != nil {
-			return err
-		}
-		fmt.Fprintln(out, "marked for sync; orchd will sync on its next scan")
-		return nil
-	}
+// docsPollInterval is how often a followed sync is checked; a variable so
+// tests need not wait.
+var docsPollInterval = 2 * time.Second
 
+// docsStartWait bounds how long to wait for orchd to begin a requested sync
+// before leaving it to orchd.
+var docsStartWait = 30 * time.Second
+
+// runDocsSync asks orchd to sync, so every sync runs in orchd, one at a time.
+// It follows the sync unless background is set, then shows how each owner
+// fared. If orchd is unreachable, the owner is marked due (and with force its
+// caches cleared) so orchd syncs on its next scan.
+func runDocsSync(c *cobra.Command, cf clientFactory, reg *docs.Registry, owner string, force, background bool) error {
+	out := c.OutOrStdout()
 	client, cleanup, err := cf()
 	if err != nil {
-		return docsSyncDeferred(c, reg, owner, err)
+		return docsSyncDeferred(c, reg, owner, force, err)
 	}
 	defer cleanup()
-	pingCtx, cancel := context.WithTimeout(c.Context(), 3*time.Second)
-	defer cancel()
-	if _, err := client.Ping(pingCtx, &orchdv1.PingRequest{}); err != nil {
-		return docsSyncDeferred(c, reg, owner, err)
+	callCtx, cancel := context.WithTimeout(c.Context(), 45*time.Second)
+	requested := time.Now().Add(-time.Second)
+	_, err = client.SyncDocs(callCtx, &orchdv1.SyncDocsRequest{Owner: owner, Force: force})
+	cancel()
+	switch grpcstatus.Code(err) {
+	case codes.OK:
+	case codes.Unavailable:
+		// orchd is not reachable. A deadline is not treated the same way:
+		// orchd may have accepted the request, and clearing caches here
+		// would race its sync.
+		return docsSyncDeferred(c, reg, owner, force, err)
+	default:
+		return errors.New(grpcstatus.Convert(err).Message())
 	}
-
+	if background {
+		fmt.Fprintln(out, "orchd is syncing; follow it with: orch docs status")
+		return nil
+	}
+	if err := followDocsSync(c.Context(), client, out, requested); err != nil {
+		return err
+	}
 	owners, err := selectOwners(c.Context(), reg, owner)
 	if err != nil {
 		return err
 	}
-	if len(owners) == 0 {
-		fmt.Fprintln(out, "no docs owners registered")
-		return nil
-	}
-
-	s, err := loadSettings()
-	if err != nil {
-		return err
-	}
-	opts := docs.SyncOpts{
-		RepoCache:       s.RepoCacheDir(),
-		IncludeArchived: s.Docs.IncludeArchived,
-		IncludeForks:    s.Docs.IncludeForks,
-		GH:              newDocsGitHub(),
-		Git:             newDocsGit(),
-		Now:             func() int64 { return time.Now().Unix() },
-		ExcludeDirs:     s.Ingest.ExcludeDirs,
-	}
-	ing := rpcIngester{client: client}
-
-	var firstErr error
+	var failed bool
 	for _, o := range owners {
-		fmt.Fprintf(out, "syncing %s ...\n", o.Owner)
-		status, err := docs.SyncOwner(c.Context(), reg, o, ing, opts)
-		if err := reg.MarkSynced(c.Context(), o.Owner, time.Now().Unix(), status); err != nil && firstErr == nil {
-			firstErr = err
-		}
-		if err != nil {
-			fmt.Fprintf(out, "%-20s status=error: %v\n", o.Owner, err)
-			if firstErr == nil {
-				firstErr = err
-			}
-			continue
-		}
-		printOwnerResult(c.Context(), out, reg, o.Owner, status)
+		failed = printOwnerResult(c.Context(), out, reg, o) || failed
 	}
-	return firstErr
+	if failed {
+		return errors.New("the docs sync needs attention: see the errors above")
+	}
+	return nil
 }
 
-// docsSyncDeferred is the daemon-unreachable fallback: mark due so the sync
-// still happens once orchd is back, and say why it didn't run now.
-func docsSyncDeferred(c *cobra.Command, reg *docs.Registry, owner string, cause error) error {
+// followDocsSync prints the sync's progress until it finishes.
+func followDocsSync(ctx context.Context, client orchdv1.OrchdClient, out io.Writer, requested time.Time) error {
+	began := false
+	lastDone := -1
+	wait := time.Now().Add(docsStartWait)
+	for {
+		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		st, err := client.GetDocsSync(callCtx, &orchdv1.GetDocsSyncRequest{})
+		cancel()
+		if err != nil {
+			return err
+		}
+		started := st.GetStartedAt() >= requested.Unix()
+		if st.GetRunning() && started {
+			began = true
+			// Nothing to show until orchd has listed the owner's repos.
+			if st.GetTotal() > 0 && int(st.GetDone()) != lastDone {
+				lastDone = int(st.GetDone())
+				fmt.Fprintf(out, "%s: %d/%d repos (last: %s)\n", st.GetOwner(), st.GetDone(), st.GetTotal(), st.GetRepo())
+			}
+		} else if began || (started && st.GetFinishedAt() > 0) {
+			return nil
+		} else if time.Now().After(wait) {
+			fmt.Fprintln(out, "orchd has not started the sync yet; it will run on its next scan")
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			fmt.Fprintln(out, "stopped following; orchd keeps syncing")
+			return nil
+		case <-time.After(docsPollInterval):
+		}
+	}
+}
+
+// docsSyncDeferred is the daemon-unreachable fallback: mark due (clearing the
+// caches for a re-ingest) so the sync still happens once orchd is back.
+func docsSyncDeferred(c *cobra.Command, reg *docs.Registry, owner string, force bool, cause error) error {
+	if force {
+		if err := reg.ClearCaches(c.Context(), owner); err != nil {
+			return err
+		}
+	}
 	if err := reg.MarkDue(c.Context(), owner); err != nil {
 		return err
 	}
@@ -318,40 +336,30 @@ func selectOwners(ctx context.Context, reg *docs.Registry, owner string) ([]docs
 	return nil, fmt.Errorf("docs owner %q is not registered", owner)
 }
 
-func printOwnerResult(ctx context.Context, out io.Writer, reg *docs.Registry, owner, status string) {
-	repos, _ := reg.ListRepos(ctx, owner)
+// printOwnerResult shows how an owner's last sync went, with each failing
+// repo and why; it reports whether anything needs attention.
+func printOwnerResult(ctx context.Context, out io.Writer, reg *docs.Registry, o docs.Owner) bool {
+	repos, _ := reg.ListRepos(ctx, o.Owner)
 	files := 0
+	var failing []docs.RepoState
 	for _, r := range repos {
 		files += r.Files
+		if r.Status == "error" {
+			failing = append(failing, r)
+		}
 	}
-	fmt.Fprintf(out, "%-20s synced repos=%d files=%d status=%s\n", owner, len(repos), files, status)
-}
-
-// rpcIngester adapts orchd's Ingest RPC to the docs.Ingester seam so a CLI-side
-// sync reuses the daemon's embedder and vector store instead of loading its own.
-type rpcIngester struct{ client orchdv1.OrchdClient }
-
-func (r rpcIngester) IngestText(ctx context.Context, text string, m rag.Meta) (int, error) {
-	resp, err := r.client.Ingest(ctx, &orchdv1.IngestRequest{
-		Text:       text,
-		SourceUri:  m.SourceURI,
-		SourceType: m.SourceType,
-		Scope:      m.Scope,
-		Tags:       m.Tags,
-	})
-	if err != nil {
-		return 0, err
+	fmt.Fprintf(out, "%-20s repos=%d files=%d status=%s\n", o.Owner, len(repos), files, o.Status)
+	if o.Error != "" {
+		fmt.Fprintf(out, "  %s\n", o.Error)
 	}
-	return int(resp.GetChunks()), nil
-}
-
-// loadSettings resolves config for the foreground sync (defaults < file < env).
-func loadSettings() (config.Settings, error) {
-	v, err := config.Load()
-	if err != nil {
-		return config.Settings{}, err
+	for i, r := range failing {
+		if i == 10 {
+			fmt.Fprintf(out, "  … and %d more failing repos\n", len(failing)-10)
+			break
+		}
+		fmt.Fprintf(out, "  %s: %s\n", r.Repo, r.Error)
 	}
-	return config.Unmarshal(v)
+	return o.Error != "" || len(failing) > 0
 }
 
 func newDocsRemoveCmd() *cobra.Command {

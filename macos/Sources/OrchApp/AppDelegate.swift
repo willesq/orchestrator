@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             name: LaunchPolicy.showWindowNotification, object: nil
         )
         if handOffToRunningCopy() { return }
+        AppearanceChoice.stored().apply()
         model.start()
         if LaunchPolicy.opensWindowAtLaunch(launchedAsLoginItem: launchedAsLoginItem) {
             showMainWindow()
@@ -52,7 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 monitor: model.monitor, prMonitor: model.prMonitor, restart: model.restart,
                 search: model.search, sources: model.sources, tasks: model.tasks, dispatch: model.dispatch,
                 github: model.github, system: model.system, logs: model.logs,
-                docs: model.docs, registeredSources: model.registeredSources
+                docs: model.docs, registeredSources: model.registeredSources,
+                safetyNet: model.safetyNet, claude: model.claude
             )
             let hosting = NSHostingController(rootView: root)
             // The window keeps the size the user gives it. By default the

@@ -102,8 +102,8 @@ var allowedModes = []string{"auto", "dontAsk", "acceptEdits", "plan"}
 func ValidPermissionMode(mode string) bool { return slices.Contains(allowedModes, mode) }
 
 // dispatchTools are denied to every run so a task cannot queue more tasks. This
-// is a first line only; the daemon's cap on active tasks is the actual bound,
-// since a session could reach orchd some other way.
+// is a first line only: orchd refuses Dispatch from processes it started, and
+// its cap on active tasks bounds what slips past both.
 const dispatchTools = "mcp__queue__queue_dispatch,Bash(orch dispatch:*)"
 
 // ValidAgent reports whether name can be passed to --agent.

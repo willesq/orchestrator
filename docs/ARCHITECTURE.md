@@ -96,7 +96,7 @@ Swift package in `macos/`.
 | Memory | `rag` (chunk, embed, store, search, migrate), `embed`, `bm25`, `qdrant`, `redact`, `rageval` |
 | Sources | `sources` (registry and freshness), `docs` (GitHub repos), `mdwalk`, `session`, `summarize`, `handoff` |
 | Tasks and routing | `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `taskfmt` |
-| Harness integration | `install` (adapters, shipped agents, skills and policy), `hook`, `mcpserver` |
+| Harness integration | `install` (adapters, shipped agents, skills and policy), `safetynet` (cc-safety-net pin, detection and guard rules), `settings` (managed Claude Code and cc-safety-net settings, their store and reconciler; [internals/settings.md](internals/settings.md)), `hook`, `mcpserver` |
 | CLI and status | `cli`, `status`, `check` |
 | Infrastructure | `config`, `paths`, `db`, `events`, `prs`, `model`, `version` |
 

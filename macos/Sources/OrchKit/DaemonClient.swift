@@ -275,15 +275,36 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
                 DocOwner(owner: o.owner, refreshSeconds: o.refreshSecs, lastSynced: date(fromUnix: o.lastSynced), status: o.status,
                          repos: o.repos.map {
                              DocRepo(repo: $0.repo, headSHA: $0.headSha, lastSynced: date(fromUnix: $0.lastSynced),
-                                     files: Int($0.files), status: $0.status, webURL: $0.webURL)
-                         })
+                                     files: Int($0.files), status: $0.status, webURL: $0.webURL, error: $0.error)
+                         }, error: o.error)
             },
             files: r.files.map {
                 DocFile(sourceURI: $0.sourceUri, owner: $0.owner, repo: $0.repo, path: $0.path,
                         updatedAt: date(fromUnix: $0.updatedAt), webURL: $0.webURL, chunks: Int($0.chunks))
             },
-            truncated: r.truncated
+            truncated: r.truncated,
+            sync: r.hasSync ? Self.docsSync(r.sync) : nil
         )
+    }
+
+    public func syncDocs(owner: String?, force: Bool) async throws -> DocsSyncState {
+        var request = Orchd_V1_SyncDocsRequest()
+        request.owner = owner ?? ""
+        request.force = force
+        // Starting the sync restarts orchd's docs unit, which can wait for a
+        // tick in progress to stop.
+        var options = CallOptions.defaults
+        options.timeout = .seconds(40)
+        return Self.docsSync(try await orchd.syncDocs(request, options: options))
+    }
+
+    public func docsSync() async throws -> DocsSyncState {
+        Self.docsSync(try await orchd.getDocsSync(Orchd_V1_GetDocsSyncRequest(), options: callOptions))
+    }
+
+    static func docsSync(_ s: Orchd_V1_DocsSyncState) -> DocsSyncState {
+        DocsSyncState(running: s.running, owner: s.owner, startedAt: date(fromUnix: s.startedAt),
+                      finishedAt: date(fromUnix: s.finishedAt), done: Int(s.done), total: Int(s.total), repo: s.repo)
     }
 
     public func document(uri: String) async throws -> RebuiltDocument {
@@ -334,6 +355,44 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
         var options = CallOptions.defaults
         options.timeout = .seconds(40)
         _ = try await orchd.refreshSource(request, options: options)
+    }
+
+    func orchdSettings() async throws -> Orchd_V1_ListSettingsResponse {
+        try await orchd.listSettings(Orchd_V1_ListSettingsRequest(), options: callOptions)
+    }
+
+    // Changes read the file, write it and re-read it; still well under the
+    // longer bound used for other writes.
+    private var settingsWriteOptions: CallOptions {
+        var options = CallOptions.defaults
+        options.timeout = .seconds(15)
+        return options
+    }
+
+    func orchdSetSetting(_ request: Orchd_V1_SetSettingEnabledRequest) async throws -> Orchd_V1_SettingItem {
+        try await orchd.setSettingEnabled(request, options: settingsWriteOptions)
+    }
+
+    func orchdAddSetting(_ request: Orchd_V1_AddSettingRequest) async throws -> Orchd_V1_SettingItem {
+        try await orchd.addSetting(request, options: settingsWriteOptions)
+    }
+
+    func orchdRemoveSetting(_ request: Orchd_V1_RemoveSettingRequest) async throws {
+        _ = try await orchd.removeSetting(request, options: settingsWriteOptions)
+    }
+
+    func getSafetyNet() async throws -> Orchd_V1_SafetyNetState {
+        try await orchd.getSafetyNet(Orchd_V1_GetSafetyNetRequest(), options: callOptions)
+    }
+
+    func runSafetyNetInstall(rulesOnly: Bool) async throws -> Orchd_V1_SafetyNetState {
+        var request = Orchd_V1_InstallSafetyNetRequest()
+        request.rulesOnly = rulesOnly
+        // An install clones the plugin repository and runs several claude
+        // commands, each bounded by orchd; this covers all of them.
+        var options = CallOptions.defaults
+        options.timeout = .seconds(600)
+        return try await orchd.installSafetyNet(request, options: options)
     }
 
     static func source(_ s: Orchd_V1_RegisteredSource) -> RegisteredSource {

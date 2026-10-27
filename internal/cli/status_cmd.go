@@ -16,6 +16,7 @@ import (
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/install"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/safetynet"
 	"github.com/willesq/orchestrator/internal/status"
 )
 
@@ -79,6 +80,7 @@ func statusDeps(cf clientFactory, s config.Settings) status.Deps {
 		Checks:                 check.Preconditions(),
 		Store:                  db.OpenReader,
 		Harness:                harnessInfo,
+		SafetyNet:              safetyNetLines,
 		RepositoryInstructions: repositoryInstructions,
 		InstructionLoad:        instructionLoad,
 	}
@@ -143,9 +145,32 @@ func harnessInfo() []status.HarnessInfo {
 		} else {
 			info.Pending = n
 		}
+		if a.Name() == install.ProviderClaudeCode {
+			// An unreadable store already fails Pending above.
+			info.Disabled, _ = install.DisabledCount()
+		}
 		out = append(out, info)
 	}
 	return out
+}
+
+// safetyNetLines reports cc-safety-net and the guard rules, read from their
+// files so it works with orchd down. Anything but ok is a warning.
+func safetyNetLines() []status.Line {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return []status.Line{{Name: "safety-net", Value: "unknown", Level: status.LevelWarn, Detail: err.Error()}}
+	}
+	return []status.Line{safetyNetLine(safetynet.Detect(safetynet.Locate(home)))}
+}
+
+func safetyNetLine(st safetynet.State) status.Line {
+	value, detail := st.Summary()
+	l := status.Line{Name: "safety-net", Value: value, Detail: detail, Level: status.LevelOK}
+	if !st.OK() {
+		l.Level = status.LevelWarn
+	}
+	return l
 }
 
 // installBins resolves the binary paths install plans point at: the given dir, or

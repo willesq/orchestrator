@@ -71,6 +71,12 @@ service Orchd {
   rpc ListDocs(ListDocsRequest) returns (ListDocsResponse);
   // GetDocument rebuilds one indexed source from its stored chunks.
   rpc GetDocument(GetDocumentRequest) returns (Document);
+  // SyncDocs starts a docs sync now: one owner or every owner, and with force
+  // a full re-ingest. Only one sync runs at a time; a request while one runs
+  // is refused (Aborted), never queued.
+  rpc SyncDocs(SyncDocsRequest) returns (DocsSyncState);
+  // GetDocsSync reports the running docs sync, or the last one.
+  rpc GetDocsSync(GetDocsSyncRequest) returns (DocsSyncState);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -80,6 +86,29 @@ service Orchd {
   rpc RemoveSource(RemoveSourceRequest) returns (RemoveSourceResponse);
   // RefreshSource refreshes one registered source, or all, now.
   rpc RefreshSource(RefreshSourceRequest) returns (RefreshSourceResponse);
+  // GetSafetyNet reports how cc-safety-net is installed in Claude Code
+  // against the version this orch pins, the guard rules, and the last
+  // install action. Read from plugin and rule files; runs no command.
+  rpc GetSafetyNet(GetSafetyNetRequest) returns (SafetyNetState);
+  // InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+  // orch-guards rules, and returns the resulting state. One action runs at a
+  // time; a request while one runs is refused (Aborted), never queued.
+  rpc InstallSafetyNet(InstallSafetyNetRequest) returns (SafetyNetState);
+  // ListSettings lists the settings orch manages in other tools' files
+  // (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+  // each with its desired state and origin, and each provider's kinds with
+  // the fields an add form needs. It reads the files first, so the list
+  // reflects changes made outside orch.
+  rpc ListSettings(ListSettingsRequest) returns (ListSettingsResponse);
+  // SetSettingEnabled turns one item on or off: it is written into, or
+  // taken out of, its file at once, and the choice is kept in orch.db.
+  rpc SetSettingEnabled(SetSettingEnabledRequest) returns (SettingItem);
+  // AddSetting validates a new item (a hook or a permission rule), writes it
+  // to its file and records it as added by you.
+  rpc AddSetting(AddSettingRequest) returns (SettingItem);
+  // RemoveSetting deletes an item you added or orch found from its file and
+  // forgets it. Items orch install writes can only be turned off.
+  rpc RemoveSetting(RemoveSettingRequest) returns (RemoveSettingResponse);
 }
 
 message PingRequest {}
@@ -521,6 +550,24 @@ message ListDocsResponse {
   // What the store holds for the synced owners, ordered by source_uri.
   repeated DocFile files = 2;
   bool truncated = 3;         // more files than one reply carries
+  DocsSyncState sync = 4;
+}
+
+message SyncDocsRequest {
+  string owner = 1; // empty = every owner
+  bool force = 2;   // re-clone and re-ingest everything, not just what changed
+}
+
+message GetDocsSyncRequest {}
+
+message DocsSyncState {
+  bool running = 1;
+  string owner = 2;       // being synced, or last synced
+  int64 started_at = 3;   // unix seconds
+  int64 finished_at = 4;  // unix seconds; 0 while running
+  int32 done = 5;         // repos handled so far, of total
+  int32 total = 6;
+  string repo = 7;        // the last repo handled
 }
 
 message DocOwner {
@@ -529,8 +576,9 @@ message DocOwner {
   string scope = 3;
   repeated string tags = 4;
   int64 last_synced = 5; // unix seconds; 0 = never
-  string status = 6;
+  string status = 6;      // ok | partial | error | new
   repeated DocRepo repos = 7;
+  string error = 8;       // why the last sync failed or stopped early
 }
 
 message DocRepo {
@@ -540,6 +588,7 @@ message DocRepo {
   int32 files = 4;
   string status = 5;
   string web_url = 6; // https://github.com/<owner>/<repo>
+  string error = 7;   // why the repo's last sync failed
 }
 
 message DocFile {
@@ -618,3 +667,155 @@ message RefreshSourceRequest {
 message RefreshSourceResponse {
   int32 marked = 1;
 }
+
+message GetSafetyNetRequest {}
+
+message InstallSafetyNetRequest {
+  // rules_only rewrites the orch-guards rulebook and rule.json and runs no
+  // plugin command (the app's Repair rules).
+  bool rules_only = 1;
+}
+
+message SafetyNetState {
+  // state: missing, legacy, outdated, disabled or ok.
+  string state = 1;
+  bool ok = 2; // plugin ok and rules ok
+  string pinned_version = 3;
+  string pinned_sha = 4;
+  string installed_version = 5; // empty when not installed by orch
+  string installed_sha = 6;
+  repeated SafetyNetInstall legacy = 7; // competing copies from other marketplaces
+  SafetyNetRules rules = 8;
+  repeated string errors = 9;   // plugin files that could not be read
+  SafetyNetAction action = 10;  // running or last install action
+  string pinned_released_on = 11; // YYYY-MM-DD
+}
+
+message SafetyNetInstall {
+  string id = 1; // plugin@marketplace
+  string scope = 2;
+  string version = 3;
+}
+
+message SafetyNetRules {
+  bool ok = 1;
+  string config_path = 2;
+  bool config_exists = 3;
+  string config_error = 4;
+  bool referenced = 5;        // rule.json lists orch-guards
+  bool rtk_wrapper = 6;       // rtk is a transparent wrapper
+  bool rulebook_current = 7;  // the orch-guards file matches this build
+  repeated SafetyNetRulebook rulebooks = 8;
+  repeated string problems = 9;
+}
+
+message SafetyNetRulebook {
+  string source = 1; // as listed in rule.json
+  string name = 2;
+  string owner = 3;  // orch or user
+  bool remote = 4;
+  string version = 5;
+  string description = 6;
+  string error = 7;  // missing or invalid: cc-safety-net skips it
+  repeated SafetyNetRule rules = 8;
+}
+
+message SafetyNetRule {
+  string name = 1;
+  string command = 2;
+  string subcommand = 3;
+  repeated string block_args = 4;
+  string reason = 5;
+  bool off = 6; // overridden to off in rule.json
+}
+
+message SafetyNetAction {
+  bool running = 1;
+  bool rules_only = 2;
+  int64 started_at = 3;  // unix seconds; 0 = never run
+  int64 finished_at = 4; // 0 while running
+  string step = 5;       // the step running, or the last one
+  bool ok = 6;
+  string error = 7;
+  string log = 8;        // command output, capped
+}
+
+message ListSettingsRequest {
+  string provider = 1; // empty: every provider
+  string kind = 2;     // empty: every kind
+}
+
+message ListSettingsResponse {
+  repeated SettingsProvider providers = 1;
+  repeated SettingItem items = 2;
+  // revision changes whenever an item or a provider's state changes.
+  int64 revision = 3;
+}
+
+message SettingsProvider {
+  string name = 1;  // stable key, e.g. claude-code
+  string title = 2;
+  repeated SettingKind kinds = 3;
+  repeated string files = 4; // the files it reads and writes
+  string error = 5;          // why its files could not be read or parsed
+  int64 observed_at = 6;     // unix seconds of the last look; 0 = never
+}
+
+message SettingKind {
+  string name = 1; // e.g. hook, permission, plugin, rule
+  string title = 2;
+  string group_title = 3; // what an item's group is: an event, a list, ...
+  bool addable = 4;
+  bool removable = 5;
+  // state_in_file: turning an item off records off in the file; otherwise
+  // the item is taken out of the file and orch keeps it.
+  bool state_in_file = 6;
+  repeated SettingField fields = 7; // the add form
+}
+
+message SettingField {
+  string name = 1;
+  string label = 2;
+  string type = 3; // string, text, int, bool or enum
+  bool required = 4;
+  repeated string options = 5; // enum values
+  string help = 6;
+  string placeholder = 7;
+}
+
+message SettingItem {
+  string provider = 1;
+  string kind = 2;
+  string identity = 3;
+  bool enabled = 4; // desired state
+  string origin = 5; // orch, you or found
+  // status: active, disabled (turned off in orch), removed (taken out of
+  // its file outside orch) or missing (an orch item orch install restores).
+  string status = 6;
+  string group = 7;
+  string summary = 8;
+  string payload_json = 9; // what is written back to the file
+  int64 created_at = 10;
+  int64 updated_at = 11;
+}
+
+message SetSettingEnabledRequest {
+  string provider = 1;
+  string kind = 2;
+  string identity = 3;
+  bool enabled = 4;
+}
+
+message AddSettingRequest {
+  string provider = 1;
+  string kind = 2;
+  map<string, string> fields = 3; // by SettingField.name
+}
+
+message RemoveSettingRequest {
+  string provider = 1;
+  string kind = 2;
+  string identity = 3;
+}
+
+message RemoveSettingResponse {}

@@ -38,6 +38,8 @@ There is no single "search or learn" tool. Do it explicitly:
    - **Nothing relevant:** say "Nothing relevant in RAG; answering from general knowledge," then answer.
 3. If you learned something durable while answering the gap, backfill it:
    `mcp__rag__rag_ingest_text` with `source_type='gap_fill'` and a stable `source_uri`.
+   Inside a queued task (`ORCH_TASK_ID` set) the ingest is refused; put the entry in the
+   `## For RAG` section of your final report instead.
 
 Step 3 is the only ingest this skill may perform, and only to close a gap it just
 hit. Everything else belongs to `orch-rag-ingest`.

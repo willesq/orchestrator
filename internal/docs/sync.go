@@ -1,16 +1,23 @@
 package docs
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
+	"unicode"
 
 	"github.com/willesq/orchestrator/internal/mdwalk"
 	"github.com/willesq/orchestrator/internal/rag"
@@ -52,43 +59,199 @@ type SyncOpts struct {
 	Now             func() int64 // injectable clock
 	// ExcludeDirs names directories never walked for markdown (ingest.exclude_dirs).
 	ExcludeDirs []string
+	// Progress, when set, hears after each repo is handled: how many of the
+	// owner's repos are done, of how many, and which one was last.
+	Progress func(done, total int, repo string)
 }
+
+// Result is how one owner's sync went.
+type Result struct {
+	// Status is "ok" when every repo synced, "partial" when some failed, and
+	// "error" when the repos could not be listed or the sync stopped early.
+	Status string
+	// Reason says why, for anything but "ok".
+	Reason string
+	// Repos counts the repos considered; Synced those cloned and ingested;
+	// Unchanged those skipped because their HEAD had not moved; Failed those
+	// whose clone failed; NotTried those left untouched after an early stop.
+	Repos, Synced, Unchanged, Failed, NotTried int
+}
+
+// maxNetworkFailures in a row stop an owner's sync: when GitHub cannot be
+// reached, every further clone would only wait out its own connection timeout.
+const maxNetworkFailures = 3
+
+// cloneTimeout bounds one clone, so a connection that hangs cannot stall the
+// sync. A variable so tests need not wait it out.
+var cloneTimeout = 3 * time.Minute
 
 // SyncOwner enumerates the owner's repos (one gh call/page), clones only the
 // repos whose HEAD moved, and ingests their markdown (skipping files whose
-// content hash is unchanged). Returns the owner's status ("ok" | "error").
-func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts SyncOpts) (string, error) {
+// content hash is unchanged).
+//
+// A repo whose clone fails is recorded with the reason and logged, and the
+// sync goes on with the next. After maxNetworkFailures network failures in a
+// row it stops: the remaining repos keep their previous state and the owner's
+// status is "error", with the reason.
+func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts SyncOpts) Result {
 	now := opts.Now
 	if now == nil {
 		now = func() int64 { return 0 }
 	}
 	repos, err := opts.GH.ListRepos(ctx, o.Owner)
 	if err != nil {
-		return "error", err // enumerate failed → flag, retain existing chunks
+		// Enumeration failed: flag it, and keep every repo's existing chunks.
+		reason := classify(err).describe("listing repos", err)
+		log.Printf("docs: %s: %s", o.Owner, reason)
+		return Result{Status: "error", Reason: reason}
 	}
+	var todo []Repo
 	for _, rp := range repos {
-		if rp.IsArchived && !opts.IncludeArchived {
+		if (rp.IsArchived && !opts.IncludeArchived) || (rp.IsFork && !opts.IncludeForks) {
 			continue
 		}
-		if rp.IsFork && !opts.IncludeForks {
-			continue
+		todo = append(todo, rp)
+	}
+	res := Result{Repos: len(todo)}
+	networkRun := 0
+	for i, rp := range todo {
+		if ctx.Err() != nil {
+			res.NotTried = len(todo) - i
+			res.Status, res.Reason = "error", "stopped: "+ctx.Err().Error()
+			return res
 		}
 		prev, _ := reg.RepoSHA(ctx, o.Owner, rp.Name)
 		if !opts.Force && rp.HeadSHA != "" && prev == rp.HeadSHA {
-			continue // repo unchanged → skip entirely (no clone, no re-ingest)
-		}
-		dest := filepath.Join(opts.RepoCache, o.Owner, rp.Name)
-		if err := opts.Git.Sync(ctx, o.Owner, rp.Name, dest); err != nil {
-			_ = reg.SetRepoState(ctx, RepoState{Owner: o.Owner, Repo: rp.Name, HeadSHA: prev, LastSynced: now(), Status: "error"})
+			res.Unchanged++ // repo unchanged → skip entirely (no clone, no re-ingest)
+			report(opts, i+1, len(todo), rp.Name)
 			continue
 		}
+		dest := filepath.Join(opts.RepoCache, o.Owner, rp.Name)
+		cloneCtx, cancel := context.WithTimeout(ctx, cloneTimeout)
+		err := opts.Git.Sync(cloneCtx, o.Owner, rp.Name, dest)
+		if err != nil && cloneCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
+			err = fmt.Errorf("clone took longer than %s: %w", cloneTimeout, err)
+		}
+		cancel()
+		if err != nil {
+			f := classify(err)
+			reason := f.describe("clone", err)
+			log.Printf("docs: %s/%s: %s", o.Owner, rp.Name, reason)
+			_ = reg.SetRepoState(ctx, RepoState{Owner: o.Owner, Repo: rp.Name, HeadSHA: prev, LastSynced: now(), Status: "error", Error: reason})
+			res.Failed++
+			report(opts, i+1, len(todo), rp.Name)
+			if f.kind == kindNetwork || f.kind == kindStalled {
+				networkRun++
+				if networkRun >= maxNetworkFailures {
+					res.NotTried = len(todo) - i - 1
+					res.Status = "error"
+					res.Reason = fmt.Sprintf("stopped after %d repos in a row could not be cloned (%s); %d not tried: %s",
+						networkRun, f.kind, res.NotTried, f.hint)
+					log.Printf("docs: %s: %s", o.Owner, res.Reason)
+					return res
+				}
+			} else {
+				networkRun = 0
+			}
+			continue
+		}
+		networkRun = 0
 		files := ingestRepoMarkdown(ctx, reg, dest, o, rp.Name, ing, opts)
 		_ = reg.SetRepoState(ctx, RepoState{
 			Owner: o.Owner, Repo: rp.Name, HeadSHA: rp.HeadSHA,
 			LastSynced: now(), Files: files, Status: "ok",
 		})
+		res.Synced++
+		report(opts, i+1, len(todo), rp.Name)
 	}
-	return "ok", nil
+	res.Status = "ok"
+	if res.Failed > 0 {
+		res.Status = "partial"
+		res.Reason = fmt.Sprintf("%d of %d repos failed; see each repo's error", res.Failed, res.Repos)
+	}
+	return res
+}
+
+func report(opts SyncOpts, done, total int, repo string) {
+	if opts.Progress != nil {
+		opts.Progress(done, total, repo)
+	}
+}
+
+// Failure kinds a sync tells apart, because each has a different fix.
+const (
+	kindStalled = "stalled"
+	kindNetwork = "network"
+	kindAuth    = "authentication"
+	kindAccess  = "access"
+	kindOther   = "other"
+)
+
+type failure struct{ kind, hint string }
+
+// describe is the reason recorded for a failed step: what failed, the kind,
+// what to do, and the command's own message, made safe by cleanReason.
+func (f failure) describe(step string, err error) string {
+	return fmt.Sprintf("%s failed (%s): %s — %s", step, f.kind, f.hint, cleanReason(err.Error(), 300))
+}
+
+// urlUserinfo matches the credentials part of a URL (scheme://user:secret@).
+var urlUserinfo = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@]+@`)
+
+// cleanReason makes command output safe to record, log and show: credentials
+// in URLs and known token shapes redacted, control and format characters
+// removed, valid UTF-8, one line, at most max characters. gh and git output can
+// echo a credential-bearing remote, and git relays the server's own text.
+func cleanReason(s string, max int) string {
+	s = strings.ToValidUTF8(s, "\uFFFD")
+	s = urlUserinfo.ReplaceAllString(s, "${1}[REDACTED]@")
+	s, _ = redact.Redact(s)
+	s = strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' || r == '\r' || r == '\t':
+			return ' '
+		case unicode.IsControl(r) || unicode.Is(unicode.Cf, r):
+			return -1
+		}
+		return r
+	}, s)
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > max {
+		s = string(r[:max]) + "…"
+	}
+	return s
+}
+
+// classify sorts a gh or git failure by what would fix it. Network problems
+// are checked first: git reports "Could not read from remote repository" for
+// an unreachable host as well as for a refused key.
+func classify(err error) failure {
+	msg := strings.ToLower(err.Error())
+	has := func(parts ...string) bool {
+		for _, p := range parts {
+			if strings.Contains(msg, p) {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case errors.Is(err, exec.ErrNotFound):
+		return failure{kindOther, "gh or git is not installed, or not on orchd's PATH"}
+	case errors.Is(err, errStalled):
+		return failure{kindStalled, "the clone stopped making progress; your SSH agent may be waiting for approval (for example a 1Password prompt), or GitHub stopped responding"}
+	case errors.Is(err, context.DeadlineExceeded) || has("operation timed out", "connection timed out", "timed out",
+		"could not resolve host", "network is unreachable", "no route to host", "connection refused",
+		"connection reset", "error connecting to", "took longer than", "temporary failure in name resolution"):
+		return failure{kindNetwork, "GitHub could not be reached from this machine; check the network connection"}
+	case has("permission denied (publickey", "host key verification failed", "agent refused", "sign_and_send_pubkey",
+		"authentication failed", "could not read username", "gh auth login"):
+		return failure{kindAuth, "GitHub did not accept the credentials; check that your SSH agent (for example 1Password) is unlocked and allows this key, or run gh auth status"}
+	case has("repository not found", "could not read from remote repository", "http 404", "http 403"):
+		return failure{kindAccess, "GitHub refused the repository; check that your account can still read it"}
+	default:
+		return failure{kindOther, "see the error"}
+	}
 }
 
 // ingestRepoMarkdown walks a cloned repo for *.md and ingests each file, skipping
@@ -149,8 +312,7 @@ func execRun(ctx context.Context, name string, args ...string) ([]byte, error) {
 	var ee *exec.ExitError
 	if errors.As(err, &ee) && len(ee.Stderr) > 0 {
 		// Reason: git/gh error text can echo a credential-bearing remote URL.
-		msg, _ := redact.Redact(strings.TrimSpace(string(ee.Stderr)))
-		return out, fmt.Errorf("%w: %s", err, msg)
+		return out, fmt.Errorf("%w: %s", err, cleanReason(string(ee.Stderr), 1000))
 	}
 	return out, err
 }
@@ -158,8 +320,122 @@ func execRun(ctx context.Context, name string, args ...string) ([]byte, error) {
 // NewGitHub returns the default gh-CLI-backed enumerator.
 func NewGitHub() GitHub { return ghGitHub{run: execRun} }
 
-// NewGit returns the default gh-CLI-backed cloner.
-func NewGit() Git { return ghGit{run: execRun} }
+// NewGit returns the default gh-CLI-backed cloner. Its clones run under a
+// stall watchdog, so one stuck on an unanswered SSH agent prompt or a silent
+// connection is stopped and reported instead of holding up the sync.
+func NewGit() Git {
+	return ghGit{run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		return runWatched(ctx, stallTimeout, name, args...)
+	}}
+}
+
+// stallTimeout is how long a clone may go without writing anything before it
+// counts as stalled. git reports progress continuously while it transfers
+// (the clone passes --progress), so silence means it is waiting on something:
+// usually SSH authentication, or a connection that stopped responding.
+var stallTimeout = 45 * time.Second
+
+// waitDelay bounds how long a stopped clone may keep its output pipe open
+// through a process that escaped its group. A variable so tests need not wait.
+var waitDelay = 5 * time.Second
+
+// errStalled marks a command stopped by the stall watchdog.
+var errStalled = errors.New("stalled")
+
+// runWatched runs a command like execRun, but stops it once it has written
+// nothing to stderr for stall. The command runs in its own process group, so
+// stopping it also stops what it started (gh starts git, git starts ssh) and
+// leaves nothing behind; WaitDelay bounds anything that escaped the group and
+// still holds the output pipe.
+func runWatched(ctx context.Context, stall time.Duration, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = waitDelay
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	tail := &stderrTail{activity: make(chan struct{}, 1)}
+	cmd.Stderr = tail
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	waited := make(chan error, 1)
+	go func() { waited <- cmd.Wait() }()
+	timer := time.NewTimer(stall)
+	defer timer.Stop()
+	var err error
+	stalled := false
+wait:
+	for {
+		select {
+		case <-tail.activity:
+			timer.Reset(stall)
+		case <-timer.C:
+			stalled = true
+			cancel()
+			err = <-waited
+			break wait
+		case err = <-waited:
+			break wait
+		}
+	}
+	if stalled {
+		return nil, fmt.Errorf("%w: no progress for %s", errStalled, stall)
+	}
+	if err != nil {
+		if msg := lastLines(tail.bytes()); msg != "" {
+			return nil, fmt.Errorf("%w: %s", err, cleanReason(msg, 1000))
+		}
+		return nil, err
+	}
+	return stdout.Bytes(), nil
+}
+
+// stderrTail keeps the end of a command's stderr and signals each write.
+type stderrTail struct {
+	mu       sync.Mutex
+	buf      []byte
+	activity chan struct{}
+}
+
+func (w *stderrTail) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	w.buf = append(w.buf, p...)
+	if len(w.buf) > 8192 {
+		w.buf = w.buf[len(w.buf)-8192:]
+	}
+	w.mu.Unlock()
+	select {
+	case w.activity <- struct{}{}:
+	default:
+	}
+	return len(p), nil
+}
+
+func (w *stderrTail) bytes() []byte {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]byte(nil), w.buf...)
+}
+
+// lastLines is the end of a command's stderr without progress chatter: git
+// rewrites its progress lines with carriage returns.
+func lastLines(b []byte) string {
+	var keep []string
+	for _, line := range strings.Split(strings.ReplaceAll(string(b), "\r", "\n"), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.Contains(line, "%") {
+			continue
+		}
+		keep = append(keep, line)
+	}
+	if len(keep) > 6 {
+		keep = keep[len(keep)-6:]
+	}
+	return strings.Join(keep, " ")
+}
 
 const repoQuery = `query($owner:String!,$cursor:String){repositoryOwner(login:$owner){repositories(first:100,after:$cursor,ownerAffiliations:OWNER){pageInfo{hasNextPage endCursor}nodes{name isArchived isFork defaultBranchRef{target{oid}}}}}}`
 
@@ -242,7 +518,9 @@ func (g ghGit) Sync(ctx context.Context, owner, repo, dest string) error {
 		return err
 	}
 	// `gh repo clone` uses the user's gh auth so private repos work.
-	if _, err := g.run(ctx, "gh", "repo", "clone", owner+"/"+repo, dest, "--", "--depth", "1"); err != nil {
+	// --progress keeps git reporting while it transfers, which the stall
+	// watchdog relies on.
+	if _, err := g.run(ctx, "gh", "repo", "clone", owner+"/"+repo, dest, "--", "--depth", "1", "--progress"); err != nil {
 		return fmt.Errorf("gh repo clone %s/%s: %w", owner, repo, err)
 	}
 	return nil

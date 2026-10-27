@@ -116,7 +116,9 @@ in the `routing` event stream, once per distinct proposal. It applies only with
 
 **Guards:** routing, model, provider and rating changes refuse inside a queued task
 (`ORCH_TASK_ID`), so a session steered by an untrusted repository cannot redirect later work or
-grade itself.
+grade itself. orchd enforces the RPC side itself (`Dispatch`, `RateTask` and the other
+operator-only RPCs; see [daemon.md](daemon.md#queued-callers)). Routing and the model registry
+are written to `orch.db` by the CLI, so for those the CLI check is the only one.
 
 ## PR outcomes (evidence)
 
@@ -150,9 +152,8 @@ with more than 10 PR URLs stays undecided.
     user's rate limit on other owners.
   - A forced refresh is honoured at most every 30 s.
   - gh's error text is cut to 512 bytes, with control characters removed.
-- **Accepted risk:** `orch github enable|disable` refuses to run inside a queued task, but like
-  every RPC on the 0600 socket, `SetGitHubScope` itself has no caller check. An agent running as the
-  user could call it directly.
+- **Queued tasks:** `orch github enable|disable` refuses to run inside a queued task, and orchd
+  refuses `SetGitHubScope` from one (see [daemon.md](daemon.md#queued-callers) for the limits).
 
 ## PR babysitter
 

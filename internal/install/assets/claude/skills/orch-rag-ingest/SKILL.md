@@ -67,7 +67,11 @@ server, not something to improvise around.
 ## When NOT to use this skill
 
 - User wants to *crawl* a site or recursively pull linked pages → that's the `research`
-  subagent. Recommend `/orch-dispatch ingest <url> and follow related links`.
+  subagent. Recommend `/orch-dispatch research <url> and follow related links`; it
+  returns a `For RAG` list, which you review and ingest per `orch-dispatch` Phase 4.
+- You are a queued task (`ORCH_TASK_ID` set): `rag_ingest_text`, `rag_delete_source`,
+  `orch ingest` and `orch rag forget` are refused. Put what should be stored in the
+  `## For RAG` section of your final report for the parent to ingest.
 - User wants a permanent watch on a directory → register it with `orch source add` or
   `orch repo add`. (The old `ingestion.watch_dirs` config key is gone along with the
   Python-era config file; the live config has no such key.)

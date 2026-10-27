@@ -58,6 +58,7 @@ func NewRootCmd(cf clientFactory) *cobra.Command {
 		newPRsCmd(),
 		newGitHubCmd(cf),
 		newRepoCmd(),
+		newSettingsCmd(cf),
 	)
 	return root
 }

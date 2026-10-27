@@ -30,7 +30,7 @@ func TestSchedulerScan(t *testing.T) {
 				Git:       git,
 				Now:       func() int64 { return now },
 			}
-			s := NewScheduler(reg, ing, opts)
+			s := NewScheduler(reg, ing, opts, 0)
 
 			s.Scan(ctx)
 			if len(ing.uris) != 1 {
@@ -68,7 +68,7 @@ func TestSchedulerScanErrors(t *testing.T) {
 			GH:        fakeGH{err: errors.New(`exec: "gh": executable file not found in $PATH`)},
 			Git:       &fakeGit{},
 			Now:       func() int64 { return now },
-		})
+		}, 0)
 
 		s.Scan(ctx)
 
@@ -98,7 +98,7 @@ func TestSchedulerScanErrors(t *testing.T) {
 			GH:        fakeGH{repos: []Repo{{Name: "docs", HeadSHA: "s1"}}},
 			Git:       &fakeGit{layout: map[string]map[string]string{"docs": {"README.md": "x"}}},
 			Now:       func() int64 { return now },
-		})
+		}, 0)
 		if err := reg.db.Close(); err != nil {
 			t.Fatal(err)
 		}
@@ -133,7 +133,7 @@ func TestSchedulerScanErrors(t *testing.T) {
 			GH:        gh,
 			Git:       &fakeGit{},
 			Now:       func() int64 { return now },
-		})
+		}, 0)
 
 		s.Scan(ctx)
 
@@ -150,7 +150,7 @@ func TestNewSchedulerDefaults(t *testing.T) {
 	tests := []struct{ name string }{{name: "nil clock gets a default"}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := NewScheduler(nil, nil, SyncOpts{})
+			s := NewScheduler(nil, nil, SyncOpts{}, 0)
 			if s.opts.Now == nil {
 				t.Fatal("default clock not applied")
 			}

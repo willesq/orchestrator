@@ -21,11 +21,12 @@ Each adapter returns a plan of edits: `{Path, Compute(old) → new, summary, Nor
 
 | File | Edit |
 |---|---|
-| `~/.claude/settings.json` | hooks, MCP servers, permissions |
+| `~/.claude/settings.json` | hooks, MCP servers, permissions, credential-file deny rules, `attribution.commit` |
 | `~/.claude.json` | MCP servers, only if the file exists |
 | `~/.claude/CLAUDE.md` | managed block importing the shared policy |
 | `~/.claude/agents/*.md`, `skills/*/SKILL.md` | shipped agents and skills |
 | `~/.zprofile`, LaunchAgent | see [common](#common) |
+| `<data>/marketplaces/orch-pinned/.claude-plugin/marketplace.json`, `~/.cc-safety-net/rules/` | the safety net, below |
 
 **Hooks:** for each event, `hooks.<Event>` gets
 `{"hooks": [{"type": "command", "command": "<bin>/orch-hook <slug>"}]}`. Events: `SessionStart`,
@@ -33,6 +34,17 @@ Each adapter returns a plan of edits: `{Path, Compute(old) → new, summary, Nor
 the slugs in [hooks.md](hooks.md). An entry is ours if its command contains the bin path,
 `orch-hook`, or `orchestrator/hooks/`; ours is updated in place, duplicates removed, and other
 tools' entries kept in order.
+
+Each command also carries a `timeout` in seconds, so a stalled orchd cannot hold a turn for
+Claude Code's 600 s default (30 s on `UserPromptSubmit`): `SessionStart` and `UserPromptSubmit`
+10, `Stop`, `PostToolUse` and `SubagentStop` 5, `SessionEnd` and `PreCompact` 15. SessionEnd
+hooks otherwise share a 1.5 s budget, which Claude Code raises to the largest per-hook SessionEnd
+`timeout` (up to 60 s), so the explicit 15 s keeps session capture from being cut off.
+`PostToolUse` is also `"async": true`: it only writes hand-off files and prints nothing, so Claude
+does not wait for it (Claude Code does not enforce `timeout` on async hooks; it is kept as a
+bound if async is removed). In `claude -p`, an async hook still running at teardown is killed;
+the hand-off write takes milliseconds, so this is not expected to lose work. An install from
+before these fields reads as drift, and `--apply` adds them in place.
 
 **MCP servers:** `mcpServers.rag = {"command": "<orch>", "args": ["mcp", "rag"]}`, likewise `queue`.
 
@@ -46,6 +58,13 @@ command (the wrapper, not free-form `docker`), is skipped when the user has a ma
 `ask` rule, and is re-added on the next install if deleted (an uninstall does not remove it, so a
 `deny` rule is the opt-out). A `permissions` value of an unexpected JSON type aborts the install.
 
+**Credential files and attribution:** `permissions.deny` gains `Read(~/.config/gh/**)`,
+`Read(~/.netrc)` and `Read(~/.docker/config.json)`, each only if absent, so the file tools cannot
+read them (cc-safety-net already blocks shell access). `attribution.commit` is set to `""`, so
+Claude Code adds no co-author trailer, per the shared policy; other `attribution` keys are kept.
+A `permissions.deny` or `attribution` of an unexpected JSON type aborts the install. No `ask`
+rule is ever written: guards deny narrowly and never prompt.
+
 **Agents and skills:** agents `adversarial-qa`, `adversarial-reviewer`, `dev`, `dispatcher`,
 `exploit-finder`, `ops`, `research`, `reviewer`, `security-audit`, `triage`; the helper script
 `exploit-finder-sandbox.sh` (the PoC sandbox wrapper, installed via an `agents/*.sh` glob
@@ -55,20 +74,99 @@ alongside the `*.md` agents); skills `orch-dispatch`, `orch-pr-status`, `orch-ra
 marked files updated, symlinks into the retired `~/.claude/orchestrator` checkout replaced; any
 other file aborts the install rather than being overwritten.
 
+**Items turned off in orch:** the settings edit reads the toggles from `orch.db` (read-only,
+works with orchd down) and leaves out each orch item the user turned off: a disabled orch-hook
+event is left as it is, a disabled orch allow or credential deny rule is not added, and the
+summary names them. An unreadable store stops the plan instead of re-enabling them. See
+[settings.md](settings.md#orch-install-and-drift).
+
+### Safety net
+
+`internal/safetynet` holds the pin (`Pinned`: version, repository URL, ref, commit, release date,
+and the npm CLI version used only by an opt-in test), detection, and command planning. A release
+bumps the pin deliberately, to a release at least 14 days old; a test checks the age.
+
+**Locations.** For the real home: `CC_SAFETY_NET_HOME` (absolute) or `~/.cc-safety-net`, and the
+marketplace under the orch data directory. A relocated `--home` uses `<home>/.cc-safety-net` and
+`<home>/.local/share/orch/marketplaces/`, and runs `claude` with `HOME=<home>` and without
+`CLAUDE_CONFIG_DIR` or `CC_SAFETY_NET_HOME`, so a test install cannot reach the real ones.
+
+**Detection** reads `~/.claude/plugins/installed_plugins.json`, `known_marketplaces.json` and
+`settings.json` `enabledPlugins` (none hold secrets; each read is capped at 1 MiB):
+
+| State | When |
+|---|---|
+| `legacy` | a user- or project-scope install named `safety-net` or `cc-safety-net` from any marketplace other than `orch-pinned` (its hook would run twice) |
+| `missing` | no user-scope `cc-safety-net@orch-pinned` |
+| `outdated` | ours at another version, at another recorded commit, or registered from another directory |
+| `disabled` | ours at the pin with `enabledPlugins` false |
+| `ok` | otherwise |
+
+Rules are ok when `rule.json` parses at version 1, lists `orch-guards`, has `rtk` in
+`transparent_wrappers`, and the rulebook file equals the embedded one by meaning. Every listed
+source is read for display: a bare name, or `owner/repo#ref/name` (its vendored copy), whose name
+must match `^[a-zA-Z][a-zA-Z0-9_-]{0,63}$` before it becomes a path, which also rules out
+traversal.
+
+**Edits** (after the agents and skills): the marketplace manifest, generated from the pin; the
+`orch-guards` rulebook, embedded from `internal/safetynet/orch-guards.rulebook.json` and
+overwritten (orch owns it); then `rule.json`, merged: version 1, `orch-guards` appended to
+`rules` and `rtk` to `transparent_wrappers` when absent, every other key, source, override and
+wrapper kept. An unparseable `rule.json`, a version other than 1, or a non-array `rules` aborts
+the plan instead of being rewritten.
+
+**Steps.** A plan may also carry steps: commands run after every edit is written, planned from
+the current state each time the plan is printed, counted or applied (a plan reused after Apply
+sees nothing left), printed as `=== RUN ===`, counted as drift by `orch status`, and stopping at
+the first failure. The Claude Code adapter plans `claude` commands, each an argument array with
+empty stdin and a 3-minute timeout:
+
+1. `plugin marketplace add <dir>` when `orch-pinned` is unknown; `marketplace remove orch-pinned`
+   first when it points elsewhere (which also uninstalls its plugins); `marketplace update
+   orch-pinned` when ours is outdated.
+2. `plugin uninstall <id> --scope user` for each user-scope competing copy. Project- and
+   local-scope copies are reported and left to the user.
+3. `plugin install cc-safety-net@orch-pinned --scope user` when missing, or `plugin update ...`
+   when outdated. `orch install` leaves a disabled plugin disabled; orchd's `InstallSafetyNet`
+   runs `plugin enable`.
+4. `plugin marketplace remove cc-marketplace` when it is registered and no other installed plugin
+   (and no remaining project-scope copy) comes from it.
+5. After an install or update, a check that Claude Code recorded the pinned commit: a missing or
+   different `gitCommitSha` fails the plan. The plugin is not uninstalled then, since an unpinned
+   copy still guards better than none.
+
+Each command runs in its own process group, so a timeout also stops the git and ssh it started,
+with a 5 s `WaitDelay` for anything still holding the output pipe. Only the last 4 KiB of output
+is kept, with URL credentials and secret-shaped strings masked. Without a `claude` CLI, `orch
+install` skips the plugin steps with a note, so `--target all` still wires the other harnesses;
+`orch status` keeps reporting them.
+
+`claude` is found as queued tasks find it (`PATH`, then the Homebrew and `~/.local/bin`
+locations). Tests replace the runner with `internal/safetynet/fakeclaude`, which edits the same
+files the real CLI writes; no test runs the real CLI. `TestRulebookWithPinnedCLI` runs every
+rule case through the pinned analyzer's `explain --json` (it analyzes and executes nothing) when
+`ORCH_CCSN_CLI` points at its `dist/bin/cc-safety-net.js`; it is skipped otherwise.
+
 ## Codex
 
 - `~/.codex/config.toml`: `[mcp_servers.orch_rag]` and `[mcp_servers.orch_queue]` with the same
   command and args.
-- `~/.codex/hooks.json`: same hook shape and events as Claude Code. Codex runs hooks only after
-  the user reviews and trusts them.
+- `~/.codex/hooks.json`: same hook shape and events as Claude Code, without the `timeout` and
+  `async` fields, which have not been checked against Codex's hook schema. Codex runs hooks only
+  after the user reviews and trusts them.
 - `~/.codex/AGENTS.md` (or a nonempty `AGENTS.override.md`, which Codex prefers): a managed block
   telling the agent to read the shared policy, since Codex does not expand `@` imports.
 
 ## Gemini
 
 `~/.gemini/settings.json`: the same MCP servers, and hooks mapped `SessionStart`, `BeforeAgent`
-(prompt), `SessionEnd`, `AfterTool`. `~/.gemini/GEMINI.md` imports the shared policy. Gemini's
-payload schema is assumed to match Claude Code's; this is not verified.
+(prompt), `SessionEnd`, `AfterTool`. `~/.gemini/GEMINI.md` imports the shared policy. Each
+command gets the same per-event `timeout` as Claude Code, converted to milliseconds, the unit
+Gemini CLI's hook configuration uses (default 60000): 10000, 10000, 15000, 5000. Gemini's hook
+configuration documents only `type`, `command`, `name`, `timeout` and `description`, so no `async`
+is written; Gemini does not wait for `SessionEnd` hooks at all (best effort), so that timeout only
+bounds the process. Gemini's payload schema is assumed to match Claude Code's; this is not
+verified.
 
 ## Common
 
@@ -84,7 +182,8 @@ payload schema is assumed to match Claude Code's; this is not verified.
 
 ## Status checks
 
-- **Drift:** each adapter's pending edits.
+- **Drift:** each adapter's pending edits. Items turned off in orch are not drift; the
+  `claude-code` line reports `N disabled by you`.
 - **Instruction footprint:** for each harness whose entry file exists, follow `@` imports (depth 5,
   each file once) and report bytes and estimated tokens (`(bytes+3)/4`), the context cost of every
   session.

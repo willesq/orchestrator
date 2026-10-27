@@ -345,6 +345,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "SyncDocs" metadata.
+        public enum SyncDocs: Sendable {
+            /// Request type for "SyncDocs".
+            public typealias Input = Orchd_V1_SyncDocsRequest
+            /// Response type for "SyncDocs".
+            public typealias Output = Orchd_V1_DocsSyncState
+            /// Descriptor for "SyncDocs".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SyncDocs",
+                type: .unary
+            )
+        }
+        /// Namespace for "GetDocsSync" metadata.
+        public enum GetDocsSync: Sendable {
+            /// Request type for "GetDocsSync".
+            public typealias Input = Orchd_V1_GetDocsSyncRequest
+            /// Response type for "GetDocsSync".
+            public typealias Output = Orchd_V1_DocsSyncState
+            /// Descriptor for "GetDocsSync".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetDocsSync",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -397,6 +423,84 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "GetSafetyNet" metadata.
+        public enum GetSafetyNet: Sendable {
+            /// Request type for "GetSafetyNet".
+            public typealias Input = Orchd_V1_GetSafetyNetRequest
+            /// Response type for "GetSafetyNet".
+            public typealias Output = Orchd_V1_SafetyNetState
+            /// Descriptor for "GetSafetyNet".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetSafetyNet",
+                type: .unary
+            )
+        }
+        /// Namespace for "InstallSafetyNet" metadata.
+        public enum InstallSafetyNet: Sendable {
+            /// Request type for "InstallSafetyNet".
+            public typealias Input = Orchd_V1_InstallSafetyNetRequest
+            /// Response type for "InstallSafetyNet".
+            public typealias Output = Orchd_V1_SafetyNetState
+            /// Descriptor for "InstallSafetyNet".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "InstallSafetyNet",
+                type: .unary
+            )
+        }
+        /// Namespace for "ListSettings" metadata.
+        public enum ListSettings: Sendable {
+            /// Request type for "ListSettings".
+            public typealias Input = Orchd_V1_ListSettingsRequest
+            /// Response type for "ListSettings".
+            public typealias Output = Orchd_V1_ListSettingsResponse
+            /// Descriptor for "ListSettings".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListSettings",
+                type: .unary
+            )
+        }
+        /// Namespace for "SetSettingEnabled" metadata.
+        public enum SetSettingEnabled: Sendable {
+            /// Request type for "SetSettingEnabled".
+            public typealias Input = Orchd_V1_SetSettingEnabledRequest
+            /// Response type for "SetSettingEnabled".
+            public typealias Output = Orchd_V1_SettingItem
+            /// Descriptor for "SetSettingEnabled".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SetSettingEnabled",
+                type: .unary
+            )
+        }
+        /// Namespace for "AddSetting" metadata.
+        public enum AddSetting: Sendable {
+            /// Request type for "AddSetting".
+            public typealias Input = Orchd_V1_AddSettingRequest
+            /// Response type for "AddSetting".
+            public typealias Output = Orchd_V1_SettingItem
+            /// Descriptor for "AddSetting".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "AddSetting",
+                type: .unary
+            )
+        }
+        /// Namespace for "RemoveSetting" metadata.
+        public enum RemoveSetting: Sendable {
+            /// Request type for "RemoveSetting".
+            public typealias Input = Orchd_V1_RemoveSettingRequest
+            /// Response type for "RemoveSetting".
+            public typealias Output = Orchd_V1_RemoveSettingResponse
+            /// Descriptor for "RemoveSetting".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "RemoveSetting",
+                type: .unary
+            )
+        }
         /// Descriptors for all methods in the "orchd.v1.Orchd" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             Ping.descriptor,
@@ -424,10 +528,18 @@ public enum Orchd_V1_Orchd: Sendable {
             GetSystemMetrics.descriptor,
             ListDocs.descriptor,
             GetDocument.descriptor,
+            SyncDocs.descriptor,
+            GetDocsSync.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
-            RefreshSource.descriptor
+            RefreshSource.descriptor,
+            GetSafetyNet.descriptor,
+            InstallSafetyNet.descriptor,
+            ListSettings.descriptor,
+            SetSettingEnabled.descriptor,
+            AddSetting.descriptor,
+            RemoveSetting.descriptor
         ]
     }
 }
@@ -1041,6 +1153,54 @@ extension Orchd_V1_Orchd {
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_Document>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
+        /// Call the "SyncDocs" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SyncDocs starts a docs sync now: one owner or every owner, and with force
+        /// > a full re-ingest. Only one sync runs at a time; a request while one runs
+        /// > is refused (Aborted), never queued.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SyncDocsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SyncDocsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_DocsSyncState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func syncDocs<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SyncDocsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SyncDocsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DocsSyncState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetDocsSync" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetDocsSync reports the running docs sync, or the last one.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetDocsSyncRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetDocsSyncRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_DocsSyncState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getDocsSync<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetDocsSyncRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetDocsSyncRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DocsSyncState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -1132,6 +1292,155 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RefreshSourceResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RefreshSourceResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetSafetyNet" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetSafetyNet reports how cc-safety-net is installed in Claude Code
+        /// > against the version this orch pins, the guard rules, and the last
+        /// > install action. Read from plugin and rule files; runs no command.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetSafetyNetRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetSafetyNetRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SafetyNetState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getSafetyNet<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetSafetyNetRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetSafetyNetRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SafetyNetState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "InstallSafetyNet" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+        /// > orch-guards rules, and returns the resulting state. One action runs at a
+        /// > time; a request while one runs is refused (Aborted), never queued.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_InstallSafetyNetRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_InstallSafetyNetRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SafetyNetState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func installSafetyNet<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_InstallSafetyNetRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_InstallSafetyNetRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SafetyNetState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListSettings" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListSettings lists the settings orch manages in other tools' files
+        /// > (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+        /// > each with its desired state and origin, and each provider's kinds with
+        /// > the fields an add form needs. It reads the files first, so the list
+        /// > reflects changes made outside orch.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListSettingsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListSettingsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListSettingsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listSettings<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListSettingsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListSettingsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListSettingsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSettingsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetSettingEnabled" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetSettingEnabled turns one item on or off: it is written into, or
+        /// > taken out of, its file at once, and the choice is kept in orch.db.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetSettingEnabledRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetSettingEnabledRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SettingItem` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setSettingEnabled<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetSettingEnabledRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetSettingEnabledRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SettingItem>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "AddSetting" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > AddSetting validates a new item (a hook or a permission rule), writes it
+        /// > to its file and records it as added by you.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_AddSettingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_AddSettingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SettingItem` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func addSetting<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_AddSettingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_AddSettingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SettingItem>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RemoveSetting" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveSetting deletes an item you added or orch found from its file and
+        /// > forgets it. Items orch install writes can only be turned off.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RemoveSettingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RemoveSettingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RemoveSettingResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func removeSetting<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RemoveSettingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RemoveSettingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RemoveSettingResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSettingResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -2020,6 +2329,76 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "SyncDocs" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SyncDocs starts a docs sync now: one owner or every owner, and with force
+        /// > a full re-ingest. Only one sync runs at a time; a request while one runs
+        /// > is refused (Aborted), never queued.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SyncDocsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SyncDocsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_DocsSyncState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func syncDocs<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SyncDocsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SyncDocsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DocsSyncState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SyncDocs.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetDocsSync" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetDocsSync reports the running docs sync, or the last one.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetDocsSyncRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetDocsSyncRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_DocsSyncState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getDocsSync<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetDocsSyncRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetDocsSyncRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DocsSyncState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetDocsSync.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -2150,6 +2529,221 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.RefreshSource.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetSafetyNet" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetSafetyNet reports how cc-safety-net is installed in Claude Code
+        /// > against the version this orch pins, the guard rules, and the last
+        /// > install action. Read from plugin and rule files; runs no command.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetSafetyNetRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetSafetyNetRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SafetyNetState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getSafetyNet<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetSafetyNetRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetSafetyNetRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SafetyNetState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetSafetyNet.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "InstallSafetyNet" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+        /// > orch-guards rules, and returns the resulting state. One action runs at a
+        /// > time; a request while one runs is refused (Aborted), never queued.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_InstallSafetyNetRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_InstallSafetyNetRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SafetyNetState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func installSafetyNet<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_InstallSafetyNetRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_InstallSafetyNetRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SafetyNetState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.InstallSafetyNet.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListSettings" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListSettings lists the settings orch manages in other tools' files
+        /// > (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+        /// > each with its desired state and origin, and each provider's kinds with
+        /// > the fields an add form needs. It reads the files first, so the list
+        /// > reflects changes made outside orch.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListSettingsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListSettingsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListSettingsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listSettings<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListSettingsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListSettingsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListSettingsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSettingsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListSettings.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SetSettingEnabled" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetSettingEnabled turns one item on or off: it is written into, or
+        /// > taken out of, its file at once, and the choice is kept in orch.db.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetSettingEnabledRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetSettingEnabledRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SettingItem` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setSettingEnabled<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetSettingEnabledRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetSettingEnabledRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SettingItem>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SetSettingEnabled.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "AddSetting" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > AddSetting validates a new item (a hook or a permission rule), writes it
+        /// > to its file and records it as added by you.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_AddSettingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_AddSettingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SettingItem` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func addSetting<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_AddSettingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_AddSettingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SettingItem>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.AddSetting.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "RemoveSetting" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveSetting deletes an item you added or orch found from its file and
+        /// > forgets it. Items orch install writes can only be turned off.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RemoveSettingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RemoveSettingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RemoveSettingResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func removeSetting<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RemoveSettingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RemoveSettingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RemoveSettingResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSettingResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.RemoveSetting.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -2901,6 +3495,66 @@ extension Orchd_V1_Orchd.ClientProtocol {
         )
     }
 
+    /// Call the "SyncDocs" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SyncDocs starts a docs sync now: one owner or every owner, and with force
+    /// > a full re-ingest. Only one sync runs at a time; a request while one runs
+    /// > is refused (Aborted), never queued.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SyncDocsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func syncDocs<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SyncDocsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.syncDocs(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SyncDocsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_DocsSyncState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetDocsSync" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetDocsSync reports the running docs sync, or the last one.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetDocsSyncRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getDocsSync<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetDocsSyncRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getDocsSync(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetDocsSyncRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_DocsSyncState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "ListRegisteredSources" method.
     ///
     /// > Source IDL Documentation:
@@ -3013,6 +3667,191 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RefreshSourceRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RefreshSourceResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetSafetyNet" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetSafetyNet reports how cc-safety-net is installed in Claude Code
+    /// > against the version this orch pins, the guard rules, and the last
+    /// > install action. Read from plugin and rule files; runs no command.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetSafetyNetRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getSafetyNet<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetSafetyNetRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getSafetyNet(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetSafetyNetRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SafetyNetState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "InstallSafetyNet" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+    /// > orch-guards rules, and returns the resulting state. One action runs at a
+    /// > time; a request while one runs is refused (Aborted), never queued.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_InstallSafetyNetRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func installSafetyNet<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_InstallSafetyNetRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.installSafetyNet(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_InstallSafetyNetRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SafetyNetState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListSettings" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListSettings lists the settings orch manages in other tools' files
+    /// > (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+    /// > each with its desired state and origin, and each provider's kinds with
+    /// > the fields an add form needs. It reads the files first, so the list
+    /// > reflects changes made outside orch.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListSettingsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listSettings<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListSettingsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSettingsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listSettings(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListSettingsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListSettingsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetSettingEnabled" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetSettingEnabled turns one item on or off: it is written into, or
+    /// > taken out of, its file at once, and the choice is kept in orch.db.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SetSettingEnabledRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setSettingEnabled<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SetSettingEnabledRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setSettingEnabled(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetSettingEnabledRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SettingItem>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "AddSetting" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > AddSetting validates a new item (a hook or a permission rule), writes it
+    /// > to its file and records it as added by you.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_AddSettingRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func addSetting<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_AddSettingRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.addSetting(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_AddSettingRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SettingItem>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RemoveSetting" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RemoveSetting deletes an item you added or orch found from its file and
+    /// > forgets it. Items orch install writes can only be turned off.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RemoveSettingRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func removeSetting<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RemoveSettingRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSettingResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.removeSetting(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RemoveSettingRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RemoveSettingResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -3861,6 +4700,74 @@ extension Orchd_V1_Orchd.ClientProtocol {
         )
     }
 
+    /// Call the "SyncDocs" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SyncDocs starts a docs sync now: one owner or every owner, and with force
+    /// > a full re-ingest. Only one sync runs at a time; a request while one runs
+    /// > is refused (Aborted), never queued.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func syncDocs<Result>(
+        _ message: Orchd_V1_SyncDocsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SyncDocsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.syncDocs(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetDocsSync" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetDocsSync reports the running docs sync, or the last one.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getDocsSync<Result>(
+        _ message: Orchd_V1_GetDocsSyncRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetDocsSyncRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getDocsSync(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "ListRegisteredSources" method.
     ///
     /// > Source IDL Documentation:
@@ -3988,6 +4895,215 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.refreshSource(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetSafetyNet" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetSafetyNet reports how cc-safety-net is installed in Claude Code
+    /// > against the version this orch pins, the guard rules, and the last
+    /// > install action. Read from plugin and rule files; runs no command.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getSafetyNet<Result>(
+        _ message: Orchd_V1_GetSafetyNetRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetSafetyNetRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getSafetyNet(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "InstallSafetyNet" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+    /// > orch-guards rules, and returns the resulting state. One action runs at a
+    /// > time; a request while one runs is refused (Aborted), never queued.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func installSafetyNet<Result>(
+        _ message: Orchd_V1_InstallSafetyNetRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_InstallSafetyNetRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.installSafetyNet(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListSettings" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListSettings lists the settings orch manages in other tools' files
+    /// > (Claude Code hooks, permission rules and plugins, cc-safety-net rules),
+    /// > each with its desired state and origin, and each provider's kinds with
+    /// > the fields an add form needs. It reads the files first, so the list
+    /// > reflects changes made outside orch.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listSettings<Result>(
+        _ message: Orchd_V1_ListSettingsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSettingsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListSettingsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listSettings(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetSettingEnabled" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetSettingEnabled turns one item on or off: it is written into, or
+    /// > taken out of, its file at once, and the choice is kept in orch.db.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setSettingEnabled<Result>(
+        _ message: Orchd_V1_SetSettingEnabledRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SetSettingEnabledRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setSettingEnabled(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "AddSetting" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > AddSetting validates a new item (a hook or a permission rule), writes it
+    /// > to its file and records it as added by you.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func addSetting<Result>(
+        _ message: Orchd_V1_AddSettingRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SettingItem>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_AddSettingRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.addSetting(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RemoveSetting" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RemoveSetting deletes an item you added or orch found from its file and
+    /// > forgets it. Items orch install writes can only be turned off.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func removeSetting<Result>(
+        _ message: Orchd_V1_RemoveSettingRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSettingResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RemoveSettingRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.removeSetting(
             request: request,
             options: options,
             onResponse: handleResponse

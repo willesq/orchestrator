@@ -145,12 +145,9 @@ func TestSyncOwner(t *testing.T) {
 				_ = reg.SetRepoState(ctx, RepoState{Owner: "acme", Repo: repo, HeadSHA: sha})
 			}
 
-			status, err := SyncOwner(ctx, reg, Owner{Owner: "acme"}, ing, opts)
-			if err != nil {
-				t.Fatalf("SyncOwner: %v", err)
-			}
-			if status != tt.wantStatus {
-				t.Errorf("status = %q, want %q", status, tt.wantStatus)
+			res := SyncOwner(ctx, reg, Owner{Owner: "acme"}, ing, opts)
+			if res.Status != tt.wantStatus {
+				t.Errorf("status = %q (%s), want %q", res.Status, res.Reason, tt.wantStatus)
 			}
 			if len(git.synced) != tt.wantSyncedNum {
 				t.Errorf("git clones = %d, want %d", len(git.synced), tt.wantSyncedNum)
@@ -170,9 +167,9 @@ func TestSyncOwnerEnumerateError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reg, ing, opts := syncDeps(t, fakeGH{err: errors.New("rate limited")}, &fakeGit{})
-			status, err := SyncOwner(context.Background(), reg, Owner{Owner: "acme"}, ing, opts)
-			if err == nil || status != "error" {
-				t.Fatalf("want (error, err), got (%q, %v)", status, err)
+			res := SyncOwner(context.Background(), reg, Owner{Owner: "acme"}, ing, opts)
+			if res.Status != "error" || !strings.Contains(res.Reason, "listing repos failed") {
+				t.Fatalf("result = %+v, want an error with the reason", res)
 			}
 		})
 	}
@@ -187,8 +184,8 @@ func TestFileHashSkip(t *testing.T) {
 			reg, ing, opts := syncDeps(t, fakeGH{repos: []Repo{{Name: "docs", HeadSHA: "s1"}}}, git)
 			ctx := context.Background()
 
-			if _, err := SyncOwner(ctx, reg, Owner{Owner: "acme"}, ing, opts); err != nil {
-				t.Fatal(err)
+			if res := SyncOwner(ctx, reg, Owner{Owner: "acme"}, ing, opts); res.Status != "ok" {
+				t.Fatal(res)
 			}
 			if len(ing.uris) != 2 {
 				t.Fatalf("first sync should ingest 2 files, got %v", ing.uris)
@@ -200,8 +197,8 @@ func TestFileHashSkip(t *testing.T) {
 			git2 := &fakeGit{layout: layout}
 			opts.GH = fakeGH{repos: []Repo{{Name: "docs", HeadSHA: "s2"}}}
 			opts.Git = git2
-			if _, err := SyncOwner(ctx, reg, Owner{Owner: "acme"}, ing, opts); err != nil {
-				t.Fatal(err)
+			if res := SyncOwner(ctx, reg, Owner{Owner: "acme"}, ing, opts); res.Status != "ok" {
+				t.Fatal(res)
 			}
 			if len(ing.uris) != 1 || !strings.HasSuffix(ing.uris[0], "/CHANGED.md") {
 				t.Fatalf("second sync should ingest only the changed file, got %v", ing.uris)

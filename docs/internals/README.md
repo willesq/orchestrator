@@ -10,7 +10,8 @@ use it. The code is the source of truth; these pages say what it does and why.
 | [memory.md](memory.md) | embedding, chunking, Qdrant layout and payload, BM25, hybrid search, timelines, redaction, sources, migration, evals |
 | [hooks.md](hooks.md) | hook events, prompt context, session records, hand-offs, summaries, events |
 | [tasks.md](tasks.md) | task queue, Claude Code and Codex runners, verification, model registry, routing, PR outcomes |
-| [install.md](install.md) | harness adapters, files written, shared policy, drift |
+| [install.md](install.md) | harness adapters, files written, shared policy, safety net, drift |
+| [settings.md](settings.md) | managed settings: Claude Code hooks, permissions and plugins, cc-safety-net rules, the reconciler, adding a provider |
 | [config.md](config.md) | every setting and its default |
 | [cli.md](cli.md) | command tree and MCP tools |
 | [app.md](app.md) | macOS menu bar app: connection, health, daemon control, signing and release |
@@ -40,9 +41,11 @@ A workable order, each step usable on its own:
   stored and returned as data: secrets are redacted on capture, injected context is labelled,
   task results never appear in digests, quoted timeline markers are neutralized, and failing test
   output is fenced as untrusted when fed back to an agent.
-- **Agents act as you,** so guards inside queued tasks (no dispatch, no routing or rating changes)
-  are first lines of defense, not boundaries; the hard limits are `queue.max_active` and the
-  permission mode.
+- **Agents act as you,** so guards inside queued tasks (no dispatch, no rating, routing or
+  GitHub changes, no RAG writes) are first lines of defense, not boundaries. orchd enforces the
+  RPC side by refusing operator-only calls from processes it started
+  ([daemon.md](daemon.md#queued-callers)), but a same-user process can still leave its tree or
+  write orch's files directly; the hard limits are `queue.max_active` and the permission mode.
 - **Destructive operations** gate server-side: `DeleteSource` needs `confirm`; collection drops
   take the name from config only; installs back up first and refuse to overwrite files orch does
   not own.

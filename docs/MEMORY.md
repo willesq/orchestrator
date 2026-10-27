@@ -7,7 +7,7 @@
 | Your sessions | At session end; `orchd` stores the redacted transcript in the background, tagged with the checkout path | `session_record`, `session_transcript` |
 | Registered repos and GitHub owners | Markdown ingested on a schedule (`orch repo add`, `orch source add owner <name>`) | `repo_doc` |
 | Web pages | Fetched on a schedule (`orch source add web <url>`) | `web` |
-| Anything else | `orch ingest`, or the `rag_ingest_text` MCP tool | your choice |
+| Anything else | `orch ingest`, or the `rag_ingest_text` MCP tool (not from queued tasks) | your choice |
 
 Every stored chunk records when it was stored. Session transcripts mark each turn with its UTC
 time, such as `[2026-10-21T14:02Z] user: …`, and each chunk is dated by the turns it holds, so a

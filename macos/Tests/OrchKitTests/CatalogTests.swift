@@ -22,6 +22,20 @@ private final class FakeCatalog: CatalogAPI, MemoryAPI, @unchecked Sendable {
         return catalog
     }
 
+    var syncRefusal: (any Error)?
+    var syncStates: [DocsSyncState] = []
+    private(set) var syncRequests: [Bool] = []
+
+    func syncDocs(owner: String?, force: Bool) async throws -> DocsSyncState {
+        lock.withLock { syncRequests.append(force) }
+        if let syncRefusal { throw syncRefusal }
+        return DocsSyncState()
+    }
+
+    func docsSync() async throws -> DocsSyncState {
+        lock.withLock { syncStates.count > 1 ? syncStates.removeFirst() : (syncStates.first ?? DocsSyncState()) }
+    }
+
     func document(uri: String) async throws -> RebuiltDocument {
         try await Task.sleep(for: documentDelay)
         if failDocument { throw Down() }
@@ -140,6 +154,40 @@ private func file(_ owner: String, _ repo: String, _ path: String) -> DocFile {
         await model.load()
         #expect(model.lastError == "unavailable")
         #expect(model.catalog != nil, "a failed reload keeps the last list")
+    }
+
+    @Test func syncNowFollowsUntilDoneAndReloads() async {
+        let (model, api) = await loaded()
+        let now = Date()
+        api.syncStates = [
+            DocsSyncState(running: true, owner: "willesq", startedAt: now, done: 1, total: 2, repo: "a"),
+            DocsSyncState(owner: "willesq", startedAt: now, finishedAt: now.addingTimeInterval(1), done: 2, total: 2),
+        ]
+        await model.syncNow(force: true, poll: .milliseconds(5))
+        #expect(api.syncRequests == [true])
+        #expect(model.sync?.running == false && model.sync?.done == 2)
+        #expect(!model.isFollowingSync && model.syncError == nil)
+    }
+
+    @Test func aRefusedSyncSaysWhy() async {
+        let (model, api) = await loaded()
+        api.syncRefusal = Refused()
+        await model.syncNow(poll: .milliseconds(5))
+        #expect(model.syncError == "a docs sync is already running (willesq, started 2m0s ago, 10 of 52 repos); this request was not queued")
+        #expect(!model.isFollowingSync)
+    }
+
+    @Test func attentionSummary() {
+        let ok = DocCatalog(owners: [DocOwner(owner: "o", status: "ok", repos: [DocRepo(repo: "a", status: "ok")])], files: [])
+        #expect(!ok.needsAttention && ok.failingRepos.isEmpty)
+        let bad = DocCatalog(owners: [
+            DocOwner(owner: "o", status: "error", repos: [DocRepo(repo: "a", status: "error", error: "clone failed (network)"), DocRepo(repo: "b", status: "ok")],
+                     error: "stopped after 3 repos"),
+        ], files: [])
+        #expect(bad.needsAttention)
+        #expect(bad.failingRepos.map(\.repo.repo) == ["a"])
+        #expect(bad.failingOwners.map(\.owner) == ["o"])
+        #expect(DocRepo(repo: "x", status: "error").failed)
     }
 
     @Test func emptyWithoutACatalog() {
@@ -341,6 +389,13 @@ private func file(_ owner: String, _ repo: String, _ path: String) -> DocFile {
         service.docs.owners = [owner]
         service.docs.files = [docFile]
         service.docs.truncated = true
+        var syncState = Orchd_V1_DocsSyncState()
+        syncState.running = true
+        syncState.owner = "willesq"
+        service.docs.sync = syncState
+        service.docs.owners[0].error = "1 of 2 repos failed"
+        service.docs.owners[0].repos[0].status = "error"
+        service.docs.owners[0].repos[0].error = "clone failed (network)"
         service.document.sourceUri = docFile.sourceUri
         service.document.sourceType = "repo_doc"
         service.document.text = "# Orch"
@@ -363,9 +418,12 @@ private func file(_ owner: String, _ repo: String, _ path: String) -> DocFile {
             }
             let catalog = try await client.listDocs()
             #expect(catalog.truncated)
+            #expect(catalog.sync?.running == true && catalog.sync?.owner == "willesq")
             #expect(catalog.owners == [DocOwner(owner: "willesq", refreshSeconds: 3600, status: "",
                                                 repos: [DocRepo(repo: "orchestrator", headSHA: "abc",
-                                                                lastSynced: Date(timeIntervalSince1970: 1_700_000_000), files: 2)])])
+                                                                lastSynced: Date(timeIntervalSince1970: 1_700_000_000), files: 2,
+                                                                status: "error", error: "clone failed (network)")],
+                                                error: "1 of 2 repos failed")])
             #expect(catalog.files.first?.webURL == docFile.webURL && catalog.files.first?.updatedAt == Date(timeIntervalSince1970: 1_700_000_100))
             #expect(catalog.files.first?.chunks == 4)
 
@@ -394,6 +452,16 @@ private func file(_ owner: String, _ repo: String, _ path: String) -> DocFile {
             try await client.refreshSource(id: nil)
             #expect(service.recorder.last(Orchd_V1_RefreshSourceRequest.self)?.id == "")
 
+            let started = try await client.syncDocs(owner: "willesq", force: true)
+            #expect(started.owner == "willesq")
+            let syncReq = service.recorder.last(Orchd_V1_SyncDocsRequest.self)
+            #expect(syncReq?.owner == "willesq" && syncReq?.force == true)
+            _ = try await client.syncDocs(owner: nil, force: false)
+            #expect(service.recorder.last(Orchd_V1_SyncDocsRequest.self)?.owner == "")
+            let running = try await client.docsSync()
+            #expect(running == DocsSyncState(running: true, owner: "willesq", startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+                                             done: 3, total: 52, repo: "airflow"))
+
             _ = try await client.search(SearchQuery(text: "q", sourceURI: "u", allTags: ["owner:o", ""]))
             let search = service.recorder.last(Orchd_V1_SearchRequest.self)
             #expect(search?.sourceUri == "u" && search?.allTags == ["owner:o"])
@@ -412,10 +480,19 @@ private final class SlowSources: CatalogAPI, MemoryAPI, @unchecked Sendable {
     }
 
     func listDocs() async throws -> DocCatalog { DocCatalog(owners: [], files: []) }
+    func syncDocs(owner: String?, force: Bool) async throws -> DocsSyncState { DocsSyncState() }
+    func docsSync() async throws -> DocsSyncState { DocsSyncState() }
     func document(uri: String) async throws -> RebuiltDocument { RebuiltDocument(sourceURI: uri, text: "") }
     func saveSource(_ draft: SourceDraft, replacing: String?) async throws -> RegisteredSource { throw Down() }
     func removeSource(id: String, purge: Bool) async throws -> PurgeResult { throw Down() }
     func refreshSource(id: String?) async throws {}
     func search(_ query: SearchQuery) async throws -> SearchResult { SearchResult(hits: [], fallback: nil) }
     func listSources(type: String, limit: Int) async throws -> SourceList { SourceList(sources: [], totalSources: 0, totalChunks: 0) }
+}
+
+/// An RPC refusal as grpc-swift describes it.
+private struct Refused: Error, CustomStringConvertible {
+    var description: String {
+        #"RPCError(code: aborted, message: "a docs sync is already running (willesq, started 2m0s ago, 10 of 52 repos); this request was not queued")"#
+    }
 }

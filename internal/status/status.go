@@ -72,7 +72,10 @@ type ServiceInfo struct {
 type HarnessInfo struct {
 	Name    string `json:"name"`
 	Pending int    `json:"pending"` // edits `orch install --apply` would make
-	Err     string `json:"error,omitempty"`
+	// Disabled counts the items the user turned off in orch, which install
+	// leaves out and drift ignores.
+	Disabled int    `json:"disabled,omitempty"`
+	Err      string `json:"error,omitempty"`
 }
 
 // Deps are the seams Collect reads the world through; the CLI wires the real ones
@@ -95,6 +98,9 @@ type Deps struct {
 	Store func() (*sql.DB, error)
 	// Harness reports per-harness install drift.
 	Harness func() []HarnessInfo
+	// SafetyNet reports the cc-safety-net install and guard rules, shown with
+	// the harness wiring; nil leaves it out.
+	SafetyNet func() []Line
 	// RepositoryInstructions checks the current repository's shared guidance.
 	RepositoryInstructions func() []Line
 	// InstructionLoad sizes the instructions each harness loads into every
@@ -241,7 +247,11 @@ func buildLine(running string) Line {
 func harnessSection(d Deps) Section {
 	sec := Section{Title: "harness wiring"}
 	infos := d.Harness()
-	if len(infos) == 0 {
+	var safety []Line
+	if d.SafetyNet != nil {
+		safety = d.SafetyNet()
+	}
+	if len(infos) == 0 && len(safety) == 0 {
 		sec.Note = "not inspected"
 		return sec
 	}
@@ -254,8 +264,17 @@ func harnessSection(d Deps) Section {
 			l.Value, l.Level = "drifted", LevelWarn
 			l.Detail = fmt.Sprintf("%d edit(s) pending — run: orch install --target %s --apply", h.Pending, h.Name)
 		}
+		if h.Err == "" && h.Disabled > 0 {
+			off := fmt.Sprintf("%d disabled by you (orch settings list)", h.Disabled)
+			if l.Detail == "" {
+				l.Detail = off
+			} else {
+				l.Detail += "; " + off
+			}
+		}
 		sec.Lines = append(sec.Lines, l)
 	}
+	sec.Lines = append(sec.Lines, safety...)
 	return sec
 }
 
@@ -438,7 +457,37 @@ func docsLine(ctx context.Context, conn *sql.DB, now time.Time) Line {
 	if last > 0 {
 		detail = "last sync " + humanAgo(now, time.Unix(last, 0))
 	}
-	return Line{Name: "docs owners", Value: fmt.Sprintf("%d registered", len(owners)), Detail: detail}
+	line := Line{Name: "docs owners", Value: fmt.Sprintf("%d registered", len(owners)), Detail: detail}
+	// A failed sync needs attention: say how many repos are failing and why.
+	failing, reason := 0, ""
+	for _, o := range owners {
+		repos, err := docs.NewRegistry(conn).ListRepos(ctx, o.Owner)
+		if err != nil {
+			continue
+		}
+		for _, r := range repos {
+			if r.Status == "error" {
+				failing++
+				if reason == "" {
+					reason = o.Owner + "/" + r.Repo + ": " + r.Error
+				}
+			}
+		}
+		if o.Error != "" && o.Status != "ok" {
+			// The owner's own reason (stopped early, listing failed) explains
+			// the most.
+			reason = o.Owner + ": " + o.Error
+		}
+	}
+	if failing > 0 || reason != "" {
+		line.Level = LevelWarn
+		line.Value = fmt.Sprintf("%d registered, needs attention", len(owners))
+		if failing > 0 {
+			detail += fmt.Sprintf("; %d repo(s) failing", failing)
+		}
+		line.Detail = detail + "; " + reason + " — retry with: orch docs sync"
+	}
+	return line
 }
 
 // prsLine reports the PR babysitter's cached state, which survives orchd restarts.

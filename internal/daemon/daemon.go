@@ -40,11 +40,13 @@ import (
 	"github.com/willesq/orchestrator/internal/logs"
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
+	"github.com/willesq/orchestrator/internal/procstat"
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/routing"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/selfupdate"
+	"github.com/willesq/orchestrator/internal/settings"
 	"github.com/willesq/orchestrator/internal/sources"
 	"github.com/willesq/orchestrator/internal/supervisor"
 	"github.com/willesq/orchestrator/internal/version"
@@ -120,6 +122,14 @@ type server struct {
 	// sources scheduler.
 	nudgeMu   sync.Mutex
 	lastNudge time.Time
+	// docsSync runs docs syncs one at a time; nil when unavailable.
+	docsSync docsSyncer
+	// safetyNet runs cc-safety-net install actions one at a time; nil when
+	// the user's home cannot be resolved.
+	safetyNet *safetyNetManager
+	// settings reconciles the Claude Code and cc-safety-net settings orch
+	// manages; nil when the user's home cannot be resolved.
+	settings *settings.Service
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -544,11 +554,14 @@ func Run(ctx context.Context) error {
 	// cache.
 	ghService := github.NewService(github.NewStore(store), github.GH)
 
+	docsSched := newDocsScheduler(s, store, svc)
+	settingsSvc := settingsFor(store)
 	sup := supervisor.New(runCtx)
 	for _, u := range subsystems(deps{
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
-		summaries: summaries, github: ghService, system: system,
+		summaries: summaries, github: ghService, system: system, docs: docsSched,
+		settingsSvc: settingsSvc,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return err
@@ -579,7 +592,13 @@ func Run(ctx context.Context) error {
 		log.Printf("orchd: model routing is off: %v", routerErr)
 	}
 
-	gs := grpc.NewServer()
+	// Each connection is attributed to its process so operator-only RPCs can
+	// refuse queued tasks however they reach the socket (callers.go).
+	gs := grpc.NewServer(
+		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent}),
+		grpc.UnaryInterceptor(guardQueuedCallers),
+		grpc.StreamInterceptor(guardQueuedStreams),
+	)
 	orchdv1.RegisterOrchdServer(gs, &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks,
 		workerEnabled: s.Queue.Worker.Enabled,
@@ -595,6 +614,9 @@ func Run(ctx context.Context) error {
 		docsReg:      docs.NewRegistry(store),
 		sourcesReg:   sources.NewRegistry(store),
 		documents:    svc,
+		docsSync:     docsSched,
+		safetyNet:    safetyNetFor(s),
+		settings:     settingsSvc,
 	})
 	go func() {
 		<-runCtx.Done()

@@ -31,6 +31,11 @@ public final class DocsModel {
     public var filter = ""
     public private(set) var scope = Scope.doc
     public let search: SearchModel
+    /// orchd's docs sync, while one is followed.
+    public private(set) var sync: DocsSyncState?
+    /// Why the last Sync now was refused, e.g. one is already running.
+    public private(set) var syncError: String?
+    public private(set) var isFollowingSync = false
 
     private let api: any CatalogAPI
     /// Bumped per selection, so a slow load cannot replace a newer one.
@@ -46,11 +51,56 @@ public final class DocsModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            catalog = try await api.listDocs()
+            let fresh = try await api.listDocs()
+            catalog = fresh
+            if let running = fresh.sync, running.running { sync = running }
             lastError = nil
         } catch {
             lastError = DaemonMonitor.describe(error)
         }
+    }
+
+    /// Asks orchd to sync now and follows it until it finishes, then reloads
+    /// the list. orchd runs one sync at a time; a refusal is shown, not queued.
+    public func syncNow(force: Bool = false, poll: Duration = .seconds(2)) async {
+        guard !isFollowingSync else { return }
+        syncError = nil
+        do {
+            sync = try await api.syncDocs(owner: nil, force: force)
+        } catch {
+            syncError = Self.refusal(error)
+            return
+        }
+        await follow(poll: poll)
+    }
+
+    /// Follows a running sync until it finishes, then reloads the list.
+    public func follow(poll: Duration = .seconds(2)) async {
+        guard !isFollowingSync else { return }
+        isFollowingSync = true
+        defer { isFollowingSync = false }
+        let requested = Date().addingTimeInterval(-1)
+        var began = sync?.running == true
+        let deadline = Date().addingTimeInterval(30)
+        while !Task.isCancelled {
+            try? await Task.sleep(for: poll)
+            guard let state = try? await api.docsSync() else { break }
+            sync = state
+            if state.running { began = true; continue }
+            // Finished, or never began (orchd syncs on its next scan).
+            let finishedSince = (state.finishedAt ?? .distantPast) >= requested
+            if began || finishedSince || Date() > deadline { break }
+        }
+        await load()
+    }
+
+    /// orchd's own message for a refused request, which says why.
+    static func refusal(_ error: any Error) -> String {
+        let text = String(describing: error)
+        if let range = text.range(of: "message: \""), let end = text[range.upperBound...].firstIndex(of: "\"") {
+            return String(text[range.upperBound..<end])
+        }
+        return DaemonMonitor.describe(error)
     }
 
     /// The docs passing the filter, grouped by repo in owner and repo order.

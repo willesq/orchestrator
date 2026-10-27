@@ -9,25 +9,50 @@ struct TasksView: View {
     @State private var showDispatch = false
 
     var body: some View {
-        HSplitView {
-            list.frame(minWidth: 280, idealWidth: 320)
-            Group {
-                if let task = model.selected {
-                    TaskDetail(task: task, model: model)
-                } else {
-                    ContentUnavailableView("Select a task", systemImage: "list.bullet.rectangle")
+        Group {
+            if model.loaded && model.tasks.isEmpty {
+                // Nothing to select, so no detail pane: one empty state with
+                // the action that fills the list.
+                VStack(spacing: 0) {
+                    if let error = model.lastError {
+                        Text(error).font(.caption).foregroundStyle(.red).padding(8)
+                    }
+                    if model.filter == .all {
+                        EmptyState(symbol: "paperplane", title: "No tasks yet",
+                                   message: "Dispatch a task and a background agent works on it; its progress and result show up here.",
+                                   actionTitle: "Dispatch task", action: { showDispatch = true })
+                    } else {
+                        EmptyState(symbol: "line.3.horizontal.decrease.circle", title: "No \(model.filter.label.lowercased()) tasks",
+                                   message: "No task has this status.",
+                                   actionTitle: "Show all tasks", action: { model.filter = .all })
+                    }
+                }
+            } else {
+                HSplitView {
+                    list.frame(minWidth: 280, idealWidth: 320)
+                    Group {
+                        if let task = model.selected {
+                            TaskDetail(task: task, model: model)
+                        } else {
+                            EmptyState(symbol: "list.bullet.rectangle", title: "No task selected",
+                                       message: "Select a task to see its body, result and outcome.")
+                        }
+                    }
+                    .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("Tasks")
         .toolbar {
             Picker("Status", selection: $model.filter) {
-                ForEach(TaskStatusFilter.allCases) { Text($0.label).tag($0) }
+                ForEach(TaskStatusFilter.allCases) { Text("Status: \($0.label)").tag($0) }
             }
+            .help("Show tasks with this status")
             .onChange(of: model.filter) { Task { await model.refresh() } }
             Button { Task { await model.refresh() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-            Button { showDispatch = true } label: { Label("Dispatch", systemImage: "paperplane") }
+                .help("Reload the task list")
+            Button { showDispatch = true } label: { Label("Dispatch task", systemImage: "paperplane") }
+                .help("Dispatch a task to a background agent")
         }
         .sheet(isPresented: $showDispatch) { DispatchSheet(model: dispatch) }
         .task { if !model.loaded { await model.refresh() } }
@@ -43,21 +68,15 @@ struct TasksView: View {
                     Text(verbatim: task.headline.isEmpty ? task.id : task.headline).lineLimit(1)
                     HStack(spacing: 6) {
                         StatusBadge(status: task.status)
-                        Text(verbatim: task.agent).font(.caption).foregroundStyle(.secondary)
+                        Text(verbatim: task.agent).font(.caption).foregroundStyle(Color.secondaryText)
                         if let rating = task.rating {
-                            Text(rating.label).font(.caption).foregroundStyle(.secondary)
+                            Text(rating.label).font(.caption).foregroundStyle(Color.secondaryText)
                         }
                         Spacer()
-                        Text(verbatim: task.updatedAt).font(.caption2).foregroundStyle(.tertiary)
+                        Text(verbatim: task.updatedAt).font(.caption2).foregroundStyle(Color.tertiaryText)
                     }
                 }
                 .tag(task.id)
-            }
-            .overlay {
-                if model.loaded && model.tasks.isEmpty {
-                    ContentUnavailableView("No tasks", systemImage: "tray",
-                                           description: Text("Dispatch one with the paper plane."))
-                }
             }
         }
     }
@@ -67,20 +86,15 @@ private struct StatusBadge: View {
     let status: String
 
     var body: some View {
-        Text(verbatim: status.replacingOccurrences(of: "_", with: " "))
-            .font(.caption2.weight(.medium))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(color.opacity(0.2), in: .capsule)
-            .foregroundStyle(color)
+        Chip(text: status.replacingOccurrences(of: "_", with: " "), tone: tone)
     }
 
-    private var color: Color {
+    private var tone: Tone {
         switch status {
-        case "complete": .green
-        case "failed": .red
-        case "in_progress": .blue
-        default: .secondary
+        case "complete": .good
+        case "failed": .bad
+        case "in_progress": .accent
+        default: .neutral
         }
     }
 }
@@ -96,7 +110,7 @@ private struct TaskDetail: View {
                     StatusBadge(status: task.status)
                     Text(verbatim: task.id).font(.caption.monospaced()).textSelection(.enabled)
                     Spacer()
-                    Text(verbatim: task.agent).foregroundStyle(.secondary)
+                    Text(verbatim: task.agent).foregroundStyle(Color.secondaryText)
                 }
                 facts
                 section("Task", task.body)
@@ -124,7 +138,7 @@ private struct TaskDetail: View {
 
     private func row(_ label: String, _ value: String) -> some View {
         GridRow {
-            Text(label).foregroundStyle(.secondary)
+            Text(label).foregroundStyle(Color.secondaryText)
             Text(verbatim: value).textSelection(.enabled)
         }
     }
@@ -166,7 +180,7 @@ private struct TaskDetail: View {
                 }
             }
             Text("Ratings teach model routing which models do this kind of task well.")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption).foregroundStyle(Color.secondaryText)
         }
     }
 }
@@ -195,7 +209,7 @@ private struct DispatchSheet: View {
             if let route = model.recommendation?.route {
                 let source = model.recommendation?.fromTable == true ? "learned" : "proposed"
                 Text(verbatim: "Routing would use \(route.label) (\(source), \(route.confidence) confidence)")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Color.secondaryText)
             }
             TextEditor(text: $model.draft.body)
                 .font(.body.monospaced())
@@ -208,7 +222,7 @@ private struct DispatchSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: "Queued \(outcome.id)").font(.callout.monospaced()).textSelection(.enabled)
                     if let route = outcome.route {
-                        Text(verbatim: "Routed to \(route.label)").font(.caption).foregroundStyle(.secondary)
+                        Text(verbatim: "Routed to \(route.label)").font(.caption).foregroundStyle(Color.secondaryText)
                     }
                     if !outcome.workerEnabled {
                         Text("No worker is enabled, so it waits until queue.worker.enabled is on.")

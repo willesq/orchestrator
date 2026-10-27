@@ -19,8 +19,9 @@ the MCP servers are clients that dial it per call.
 7. Open the durable workflow backend (`<data>/workflows.db`) and wire the task ledger, completion
    notifier and dispatcher.
 8. Register the supervised subsystems below and start them, failing fast.
-9. Listen on the Unix socket (remove a stale one first, then `chmod 0600`). The socket is the only
-   trust boundary: the gRPC server has no auth.
+9. Listen on the Unix socket (remove a stale one first, then `chmod 0600`). The socket is the
+   trust boundary: anything running as the user can connect. orchd listens on nothing else; the
+   only TCP listener it starts is the Qdrant engine, on 127.0.0.1.
 10. Serve gRPC until the context ends.
 
 Before step 2, `log` output is also teed into an in-memory ring of the last 5000 lines
@@ -32,6 +33,42 @@ characters are stripped and lines are capped at 2000 characters.
 Shutdown runs in reverse: graceful gRPC stop, remove the socket, stop subsystems in reverse order,
 close the workflow backend, the embedder, then the database. Self-update exits through the same
 path by cancelling the run context.
+
+### Queued callers
+
+Queued task sessions run as the user too, so orchd attributes each connection to the process that
+opened it (`internal/daemon/callers.go`) rather than trusting clients to check `ORCH_TASK_ID`:
+
+- **Peer:** at connect time the server's transport credentials read the peer PID
+  (`LOCAL_PEERPID` on macOS, `SO_PEERCRED` on Linux) and walk its parents (`procstat.Parent`, at
+  most 256 steps). A process descended from orchd is one orchd started: a task session, its MCP
+  servers, hooks and shell commands, or a verification run. orchd itself is not its own
+  descendant. A walk that fails is retried once; a peer that still cannot be placed, or a call
+  without orchd's peer information, is treated as a task. On platforms without peer lookup, and
+  for a Linux peer in a PID namespace orchd cannot see (PID 0), only the next signal applies.
+- **Report:** `orchdclient` sends the `orch-task-id` metadata when `ORCH_TASK_ID` is set, which
+  names the task in the refusal and covers callers outside orchd's process tree.
+
+Unary and stream interceptors allow a queued caller only the RPCs that read state: `Ping`,
+`Search`, `ListSources`, `ListTasks`, `GetTask`, `Status`, `RecommendModel`, `ListPRs`, the
+GitHub reads (`GetGitHubIdentity`, `ListGitHubScopes`, `ListGitHubRepos`, `ListGitHubItems`),
+`TailLogs`, `GetSystemMetrics`, `ListDocs`, `GetDocument`, `GetDocsSync` and
+`ListRegisteredSources`. Every other RPC (`Dispatch`, `RateTask`, `Ingest`, `DeleteSource`,
+`SummarizeSession`, the migration, source, docs-sync, GitHub-scope and `Restart` calls, and any
+RPC added later) is refused with `PermissionDenied`, and the refusal is logged. A test fails
+when an RPC is in neither list. A queued session's own transcript is still
+stored: its session-end hook's `Ingest` and `SummarizeSession` are refused, so the hand-off unit
+stores the record and queues the summary from the entry the hook left.
+
+**Limits.** This raises the bar from "unset a variable" to "leave orchd's process tree"; it is
+advisory, not a sandbox, because a task runs as the user. A task can leave the tree in one
+command: `launchctl submit`, `open` (a `.command` file or an app), `osascript`, `at` or cron, or
+`systemd-run --user` all start a process launchd or systemd owns, and a process whose parent
+exits before orchd accepts its connection is reparented the same way. A task can also write the
+files orchd reads directly: hand-off entries, `orch.db` (the CLI writes routing and the model
+registry there, not over the socket) and the Qdrant API key file. The harness sandbox (Codex's,
+or Claude Code's permission rules) is the boundary for those. A PID can also be reused between
+connect and accept; audit tokens (`LOCAL_PEERTOKEN`) or pidfds would close that.
 
 Clients dial `unix://<socket>` lazily (failure surfaces on the first call) and set their own
 deadlines: hooks 0.5 s for writes and 3 s for prompt search; `orch status` 2–3 s; long CLI
@@ -67,11 +104,19 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `GetSystemMetrics` | → processes (orchd, qdrant: pid, RSS, CPU %, uptime), goroutines, heap, data sizes, task counts by status | read natively through `internal/procstat`, never a command; CPU since the previous call; data sizes cached 30 s; a failed task count leaves `tasks` empty |
 | `Search` filters | source_uri, all_tags | `source_uri` keeps one source; `all_tags` requires every tag (e.g. `owner:o`, `repo:r` for one repo's docs), alongside `tags` (any); each tag list at most 32 tags of 256 bytes |
 | `ListDocs` | → owners (repos, indexed commit), files (URI, path, chunks, GitHub URL), truncated | files are docs both the store holds and the registry recorded; GitHub URLs pinned to the indexed commit; owner and repo names validated before a URL is built; at most 10,000 files or 3 MiB |
+| `SyncDocs` | owner (empty = all), force → sync state | refused with `Aborted` while a sync runs, which is never interrupted (nothing is queued); owner validated and must be registered (`NotFound`); with the scheduler's run lock held, force clears the owner's caches and the owner is marked due; the `docs-scheduler` tick (every 2 s) then scans |
+| `GetDocsSync` | → running, owner, started/finished, done of total, last repo | the docs scheduler's progress |
 | `GetDocument` | source_uri → text, chunks, malformed, oversize, web_url | rebuilt from chunks (see [memory.md](memory.md)); over 3 MiB → `oversize`, no text; nothing indexed → `NotFound`; URI ≤ 4096 bytes |
 | `ListRegisteredSources` | → sources (with how to search within each) | the `sources` registry |
 | `SaveSource` | source, replace_id → source | `sources.Validate` (`InvalidArgument`); upsert by kind and URI; `replace_id` (an edit that changed kind or URI) is removed after the new entry is stored, and must exist (`NotFound`) |
 | `RemoveSource` | id, purge, confirm → purged counts | unknown → `NotFound`; `purge` needs `confirm` (`FailedPrecondition`); content is purged before the source is unregistered, and docs the docs registry owns are kept |
 | `RefreshSource` | id (empty = all) → marked | marks due, then restarts `sources-scheduler`, which refreshes on start; at most one restart per 10 s, so repeated calls cannot keep cutting a refresh short |
+| `GetSafetyNet` | → state (`missing`/`legacy`/`outdated`/`disabled`/`ok`), ok, pinned version, commit and release date, installed version and commit, competing copies, rules (rule.json state, every listed rulebook and its rules, problems), unreadable files, action | read from Claude Code's plugin files and the cc-safety-net rules on every call; runs no command |
+| `InstallSafetyNet` | rules_only → the same state | one action at a time: a request while one runs is refused with `Aborted`, never queued. Writes the marketplace manifest, the `orch-guards` rulebook and the rule.json merge (backed up to `<data>/backups/`), then runs the planned `claude plugin` commands (see [install.md](install.md#safety-net)) with the configured `queue.worker.claude_bin`, or the one found on `PATH`. The action is detached from the request with its own 10-minute deadline, so a client that gives up mid-migration cannot leave Claude Code without the plugin; `GetSafetyNet` reports how it ended. Unlike `orch install`, it re-enables a disabled plugin. `rules_only` writes only the rule files. A failed action is returned as the state with the action's error and log, not as an RPC error. The log keeps the last 4 KiB of each command's output and 16 KiB in all, with URL credentials and secret-shaped strings masked. Logged before and after |
+| `ListSettings` | provider, kind (empty = all) → providers (kinds and add-form fields, files, error, last look), items (state, origin, status, group, summary, payload), revision | syncs the files first; task-callable. See [settings.md](settings.md) |
+| `SetSettingEnabled` | provider, kind, identity, enabled → item | writes the file at once (backed up before the first change, atomic, refused with `Aborted` if the file changed underneath); unknown → `NotFound`; a plugin or rule gone from its file → `FailedPrecondition`; operator-only |
+| `AddSetting` | provider, kind, fields → item | hooks and permission rules only; validated (`InvalidArgument`); already listed → `AlreadyExists`; operator-only |
+| `RemoveSetting` | provider, kind, identity → — | items added by you or found; orch's → `FailedPrecondition`; operator-only |
 | `ListPRs` | needs_me → PRs (with reasons and attention), updated_at | reads the PR babysitter's cache only, never `gh`; most urgent first, then repo and title; `updated_at` is the cache file's mtime, 0 before the first sweep; an unparseable cache → `Unavailable` |
 
 Dispatch inserts the ledger row before creating the workflow (a row without a workflow is
@@ -97,6 +142,7 @@ Unit names are a public contract (`orch restart <name>`).
 | `routing-evaluator` | Tick | hourly check; run every `routing.evaluate.interval` (168h) | `routing.evaluate.enabled` | discover models, propose routes |
 | `handoff` | Run | 10 s; entries settle 5 s | always | store work hooks handed off |
 | `session-summarizer` | Run | queue-driven | `sessions.summarize.enabled` | model-written session summaries |
+| `settings-watcher` | Tick | 2 s | the user's home resolves | import edits made outside orch to `~/.claude/settings.json` and cc-safety-net's rule files ([settings.md](settings.md)); never writes |
 | `self-update` | Tick | 1m | orchd can locate its own binary | exit when a new build is installed (only logs when not supervised) |
 
 **Self-update** never downloads. It watches the binary orchd was launched from (resolved path,
@@ -114,7 +160,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 |---|---|
 | `<config>/config.yaml` | settings ([config.md](config.md)) |
 | `<config>/AGENTS.md`, `policy/`, `rag-eval.yaml` | shared agent policy; retrieval golden set |
-| `<data>/orch.db` | SQLite: tasks, sources, docs, models, routing |
+| `<data>/orch.db` | SQLite: tasks, sources, docs, models, routing, managed settings |
 | `<data>/workflows.db` | durable workflow state |
 | `<data>/qdrant/`, `bin/qdrant`, `qdrant-api-key` (0600) | vector store, engine binary, API key |
 | `<data>/models/minilm/` | embedding model |
@@ -122,6 +168,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `<data>/handoff/` (0700) | work hooks left for orchd; `failed/` after 8 attempts; `pr-sweep` request |
 | `<data>/events/` | JSONL event streams (`queue`, `routing`, `pr-babysitter`, per session) |
 | `<data>/pr_babysitter_state.json`, `routing_evaluator_state.json` | subsystem state |
+| `<data>/marketplaces/orch-pinned/` | the orch-owned Claude Code marketplace pinning cc-safety-net |
 | `<data>/repos/`, `tasks/`, `codex/`, `migrations/`, `eval/`, `backups/` | repo clones, task scratch, Codex state, migration markers, eval runs, install backups (0600 files) |
 
 ### `orch.db` schema
@@ -134,11 +181,13 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `docs_owners`, `docs_repos`, `doc_hashes` | GitHub owners and cadence; per-repo HEAD; content hash per `repo://` URI |
 | `providers`, `models` | provider state; model registry (tier, efforts, visibility, state) |
 | `routing`, `routing_history` | current table (kind, rank, provider, model, effort, rationale, evidence_n, pinned); prior generations |
+| `settings_items` | provider, kind, identity (key), enabled, origin (`orch`/`you`/`found`), payload (JSON), present, removed_at, created_at, updated_at ([settings.md](settings.md)) |
 
 ## Invariants
 
 - Clients stay thin; every long-lived component is a named supervised unit, not a bare goroutine.
-- The socket (0600) is the only trust boundary; destructive operations gate server-side.
+- The socket (0600) is the trust boundary; destructive operations gate server-side, and
+  operator-only RPCs refuse queued callers server-side.
 - Bad requests fail at the RPC; nothing invalid becomes durable.
 - Task-completion events carry no result text (results may be steered by an untrusted repo).
 - Credentials orchd holds (the Qdrant key) are removed from child agent environments.

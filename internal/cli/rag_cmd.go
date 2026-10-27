@@ -125,7 +125,7 @@ func parseBounds(since, until string) (int64, int64, error) {
 
 func newRAGForgetCmd(cf clientFactory) *cobra.Command {
 	var yes bool
-	cmd := &cobra.Command{
+	cmd := operatorOnlyMsg("queue tasks cannot delete from the RAG store", &cobra.Command{
 		Use:   "forget <source-uri>",
 		Short: "Permanently delete every chunk belonging to one source URI",
 		Args:  cobra.ExactArgs(1),
@@ -160,7 +160,7 @@ func newRAGForgetCmd(cf clientFactory) *cobra.Command {
 			fmt.Fprintf(c.OutOrStdout(), "deleted %d chunk(s) from %s\n", resp.GetDeleted(), uri)
 			return nil
 		},
-	}
+	})
 	cmd.Flags().BoolVar(&yes, "yes", false, "confirm the deletion")
 	return cmd
 }

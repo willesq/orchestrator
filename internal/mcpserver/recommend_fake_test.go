@@ -115,3 +115,35 @@ func (f *fakeClient) RemoveSource(context.Context, *orchdv1.RemoveSourceRequest,
 func (f *fakeClient) RefreshSource(context.Context, *orchdv1.RefreshSourceRequest, ...grpc.CallOption) (*orchdv1.RefreshSourceResponse, error) {
 	return &orchdv1.RefreshSourceResponse{}, nil
 }
+
+func (f *fakeClient) SyncDocs(context.Context, *orchdv1.SyncDocsRequest, ...grpc.CallOption) (*orchdv1.DocsSyncState, error) {
+	return &orchdv1.DocsSyncState{}, nil
+}
+
+func (f *fakeClient) GetDocsSync(context.Context, *orchdv1.GetDocsSyncRequest, ...grpc.CallOption) (*orchdv1.DocsSyncState, error) {
+	return &orchdv1.DocsSyncState{}, nil
+}
+
+func (f *fakeClient) GetSafetyNet(context.Context, *orchdv1.GetSafetyNetRequest, ...grpc.CallOption) (*orchdv1.SafetyNetState, error) {
+	return &orchdv1.SafetyNetState{}, nil
+}
+
+func (f *fakeClient) InstallSafetyNet(context.Context, *orchdv1.InstallSafetyNetRequest, ...grpc.CallOption) (*orchdv1.SafetyNetState, error) {
+	return &orchdv1.SafetyNetState{}, nil
+}
+
+func (f *fakeClient) ListSettings(context.Context, *orchdv1.ListSettingsRequest, ...grpc.CallOption) (*orchdv1.ListSettingsResponse, error) {
+	return &orchdv1.ListSettingsResponse{}, nil
+}
+
+func (f *fakeClient) SetSettingEnabled(context.Context, *orchdv1.SetSettingEnabledRequest, ...grpc.CallOption) (*orchdv1.SettingItem, error) {
+	return &orchdv1.SettingItem{}, nil
+}
+
+func (f *fakeClient) AddSetting(context.Context, *orchdv1.AddSettingRequest, ...grpc.CallOption) (*orchdv1.SettingItem, error) {
+	return &orchdv1.SettingItem{}, nil
+}
+
+func (f *fakeClient) RemoveSetting(context.Context, *orchdv1.RemoveSettingRequest, ...grpc.CallOption) (*orchdv1.RemoveSettingResponse, error) {
+	return &orchdv1.RemoveSettingResponse{}, nil
+}
