@@ -175,6 +175,26 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     `https://github.com/<owner>/<repo>/pull|issues/<n>` URLs. Titles and authors are other people's
     text, shown verbatim.
   - **Refresh** asks GitHub for your orgs and teams again.
+- **Claude:** the managed settings ([settings.md](settings.md)): Claude Code's hooks, permission
+  rules and plugins, and cc-safety-net's rules, in four sections (Hooks grouped by event,
+  Permissions by list, Plugins by marketplace, Safety Net rules by rulebook), each with how many
+  are on.
+  - **Live:** `ListSettings` every 2 s while the tab is shown, so edits made to the files elsewhere
+    appear within a few seconds; nothing is redrawn when the listing has not changed.
+  - **Rows:** a switch, the summary (command, matcher and `if`, rule text, plugin, rule and what it
+    blocks), and an origin badge (`orch`, `you`, `found`). A removed or missing item says why. A
+    change in flight shows a spinner; a refusal (for example, the file changed underneath, or
+    the file does not parse) is shown under that row.
+  - **Detail:** the selected item's group, ID, origin, when it changed, and the exact JSON written
+    to the file, with **Remove…** (confirmed) for items you added or orch found.
+  - **Add:** the toolbar's Add opens a form built from the kind's fields as orchd describes them
+    (hooks and permission rules); required fields and whole numbers are checked before sending,
+    and orchd's refusal is shown in the form.
+  - **Scope:** the header shows the file and "This Mac only": choices live in this machine's
+    `orch.db`.
+  - **Reuse:** `SettingsModel` (OrchKit) takes the provider names it shows, and the list, row,
+    detail and add-form views in `SettingsComponents.swift` take a provider and kind, so a tab over
+    another tool's settings reuses them. Every string from a file goes through `displaySafe`.
 - **Safety Net:** cc-safety-net in Claude Code (`GetSafetyNet`, read when the tab opens and on
   **Reload**).
   - **State:** a badge (Protected, Rules incomplete, Not installed, Old copy installed, Update

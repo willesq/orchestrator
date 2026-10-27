@@ -28,6 +28,7 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | `routing show\|evaluate\|apply\|rollback\|set\|clear` | routing table (changes *operator-only*) |
 | `qdrant status\|cutover\|migrate` | vector store engine |
 | `github scopes [--refresh] [--json]`, `github enable <owner> [--all-items] [--include\|--exclude <repos>]`, `github disable <owner>`, `github teams [--refresh]`, `github repos <owner>` | choose which GitHub accounts and orgs orch monitors (enable/disable *operator-only*) |
+| `settings list [--provider] [--kind] [--json]`, `settings enable\|disable <kind> <id> [--provider]` | managed Claude Code hooks, permissions and plugins and cc-safety-net rules: list with state and origin, turn one on or off (enable/disable *operator-only*; [settings.md](settings.md)) |
 | `prs [--blocked\|--ready\|--needs-me] [--json]` | cached status of PRs in your enabled GitHub scopes (never calls `gh`); `--needs-me` lists what needs you, most urgent first |
 
 ## MCP tools
