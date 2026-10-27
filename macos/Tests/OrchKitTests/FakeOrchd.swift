@@ -25,6 +25,8 @@ struct FakeOrchdService: RegistrableRPCService {
     var document = Orchd_V1_Document()
     var registered = Orchd_V1_ListRegisteredSourcesResponse()
     var safetyNet = Orchd_V1_SafetyNetState()
+    var settings = Orchd_V1_ListSettingsResponse()
+    var settingItem = Orchd_V1_SettingItem()
     /// Records requests the fake received, for assertions.
     var recorder = Recorder()
 
@@ -36,6 +38,38 @@ struct FakeOrchdService: RegistrableRPCService {
         let logs = self.logs, metrics = self.metrics
         let docs = self.docs, document = self.document, registered = self.registered
         let safetyNet = self.safetyNet
+        let settings = self.settings, settingItem = self.settingItem
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListSettings.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListSettingsRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListSettingsResponse>()
+        ) { _, _ in
+            StreamingServerResponse(single: ServerResponse(message: settings))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.SetSettingEnabled.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_SetSettingEnabledRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_SettingItem>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: settingItem))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.AddSetting.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_AddSettingRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_SettingItem>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: settingItem))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.RemoveSetting.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_RemoveSettingRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_RemoveSettingResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: Orchd_V1_RemoveSettingResponse()))
+        }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.GetSafetyNet.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_GetSafetyNetRequest>(),

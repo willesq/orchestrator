@@ -2,7 +2,7 @@ import OrchKit
 import SwiftUI
 
 enum Pane: String, CaseIterable, Identifiable {
-    case dashboard, system, memory, docs, sources, tasks, github, safetyNet
+    case dashboard, system, memory, docs, sources, tasks, github, claude, safetyNet
 
     var id: String { rawValue }
 
@@ -15,6 +15,7 @@ enum Pane: String, CaseIterable, Identifiable {
         case .sources: "Sources"
         case .tasks: "Tasks"
         case .github: "GitHub"
+        case .claude: "Claude"
         case .safetyNet: "Safety Net"
         }
     }
@@ -28,6 +29,7 @@ enum Pane: String, CaseIterable, Identifiable {
         case .sources: "tray.full"
         case .tasks: "checklist"
         case .github: "point.3.connected.trianglepath.dotted"
+        case .claude: "slider.horizontal.3"
         case .safetyNet: "checkmark.shield"
         }
     }
@@ -47,6 +49,7 @@ struct MainWindow: View {
     let docs: DocsModel
     let registeredSources: RegisteredSourcesModel
     let safetyNet: SafetyNetModel
+    let claude: SettingsModel
 
     @AppStorage("pane") private var pane: Pane = .dashboard
 
@@ -72,6 +75,8 @@ struct MainWindow: View {
                 TasksView(model: tasks, dispatch: dispatch)
             case .github:
                 GitHubView(model: github)
+            case .claude:
+                ClaudeView(model: claude)
             case .safetyNet:
                 SafetyNetView(model: safetyNet)
             }
