@@ -265,6 +265,26 @@ func TestApplyPermissions(t *testing.T) {
 			wantAllow:   []string{"mcp__queue__*"},
 			wantSummary: "an existing deny rule",
 		},
+		{
+			name:        "exploit-finder sandbox rule is added on a fresh file",
+			existing:    map[string]any{},
+			wantAllow:   []string{exploitFinderSandboxRule},
+			wantSummary: "exploit-finder PoCs run in its sandboxed container",
+		},
+		{
+			name: "existing sandbox rule is not duplicated",
+			existing: map[string]any{
+				"permissions": map[string]any{"allow": []any{exploitFinderSandboxRule}},
+			},
+			wantAllow: []string{exploitFinderSandboxRule},
+		},
+		{
+			name: "a deny of the sandbox rule is respected",
+			existing: map[string]any{
+				"permissions": map[string]any{"deny": []any{exploitFinderSandboxRule}},
+			},
+			wantNotAllow: []string{exploitFinderSandboxRule},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -451,8 +471,10 @@ func TestApplyPermissionsKeepsUnrecognizedEntries(t *testing.T) {
 				t.Fatalf("applyPermissions: %v", err)
 			}
 			got := root["permissions"].(map[string]any)["allow"].([]any)
-			if len(got) != len(tt.existing)+len(orchMCPServers) {
-				t.Fatalf("allow = %v, want the original entry plus one rule per orch server", got)
+			// original entry + one rule per orch MCP server + the exploit-finder
+			// sandbox bash rule.
+			if len(got) != len(tt.existing)+len(orchMCPServers)+1 {
+				t.Fatalf("allow = %v, want the original entry plus one rule per orch server plus the sandbox rule", got)
 			}
 			if fmt.Sprint(got[0]) != fmt.Sprint(tt.existing[0]) {
 				t.Errorf("unrecognized entry %v was rewritten to %v", tt.existing[0], got[0])

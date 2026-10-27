@@ -51,7 +51,12 @@ before these fields reads as drift, and `--apply` adds them in place.
 **Permissions:** for each server, append `mcp__<server>__*` to `permissions.allow` so hooks and
 background agents, which cannot answer prompts, can use memory. Skip it if a `deny` or `ask` rule
 covers the server (`mcp__*`, `mcp__<s>`, or any `mcp__<s>__…` rule), and report why; skip if an
-allow rule already covers it. A `permissions` value of an unexpected JSON type aborts the install.
+allow rule already covers it. Also append the single Bash rule
+`Bash(sh ~/.claude/agents/exploit-finder-sandbox.sh:*)`, which lets `exploit-finder` run its PoC
+sandbox wrapper without a per-run prompt a nested agent can't answer; it allows only that one
+command (the wrapper, not free-form `docker`), is skipped when the user has a matching `deny` or
+`ask` rule, and is re-added on the next install if deleted (an uninstall does not remove it, so a
+`deny` rule is the opt-out). A `permissions` value of an unexpected JSON type aborts the install.
 
 **Credential files and attribution:** `permissions.deny` gains `Read(~/.config/gh/**)`,
 `Read(~/.netrc)` and `Read(~/.docker/config.json)`, each only if absent, so the file tools cannot
@@ -60,12 +65,14 @@ Claude Code adds no co-author trailer, per the shared policy; other `attribution
 A `permissions.deny` or `attribution` of an unexpected JSON type aborts the install. No `ask`
 rule is ever written: guards deny narrowly and never prompt.
 
-**Agents and skills:** agents `dev`, `dispatcher`, `ops`, `research`, `reviewer`, `triage`;
-skills `orch-dispatch`, `orch-pr-status`, `orch-rag-ingest`, `orch-rag-query`,
-`orch-repo-onboard`, `orch-task-status`, embedded from `internal/install/assets/`. Each carries a
-`managed-by: orch` marker: missing files are created, marked files updated, symlinks into the
-retired `~/.claude/orchestrator` checkout replaced; any other file aborts the install rather than
-being overwritten.
+**Agents and skills:** agents `dev`, `dispatcher`, `exploit-finder`, `ops`, `research`,
+`reviewer`, `triage`; the helper script `exploit-finder-sandbox.sh` (the PoC sandbox wrapper,
+installed via an `agents/*.sh` glob alongside the `*.md` agents); skills `orch-dispatch`,
+`orch-pr-status`, `orch-rag-ingest`, `orch-rag-query`, `orch-repo-onboard`, `orch-task-status`,
+embedded from
+`internal/install/assets/`. Each carries a `managed-by: orch` marker: missing files are created,
+marked files updated, symlinks into the retired `~/.claude/orchestrator` checkout replaced; any
+other file aborts the install rather than being overwritten.
 
 **Items turned off in orch:** the settings edit reads the toggles from `orch.db` (read-only,
 works with orchd down) and leaves out each orch item the user turned off: a disabled orch-hook

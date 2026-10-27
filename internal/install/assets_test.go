@@ -48,7 +48,69 @@ func TestShippedAssetsAreWellFormed(t *testing.T) {
 					t.Errorf("hard-codes the machine-specific path %q", local)
 				}
 			}
+			// bypassPermissions must never ship: these agents run shell tools over
+			// attacker-controlled PR content, so they stay under normal prompting.
+			if strings.Contains(s, "bypassPermissions") {
+				t.Errorf("ships bypassPermissions, which must not run against hostile input")
+			}
+			// Frontmatter keys must be from the known set. A typo like `mode:`
+			// (the real key is `permissionMode`) is silently ignored by the
+			// harness, so catch it here rather than shipping a dead directive.
+			allowedKeys := map[string]bool{
+				"name": true, "description": true, "model": true,
+				"tools": true, "mcpServers": true, "allowed-tools": true,
+				"permissionMode": true, "maxTurns": true,
+				"disallowedTools": true, "skills": true,
+			}
+			for _, line := range strings.Split(s[:end+4], "\n") {
+				// Top-level keys only: skip the delimiter, comments, blank lines,
+				// indented continuations, and list items.
+				if line == "---" || line == "" || strings.HasPrefix(line, "#") ||
+					strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") ||
+					strings.HasPrefix(line, "-") {
+					continue
+				}
+				key, _, ok := strings.Cut(line, ":")
+				if ok && !allowedKeys[key] {
+					t.Errorf("unknown frontmatter key %q", key)
+				}
+			}
 		})
+	}
+}
+
+// TestExploitFinderSandboxIsHardened pins the sandbox wrapper's controls. The
+// wrapper is the real isolation boundary for PoCs, so a change that drops a control
+// or adds a dangerous knob must fail CI rather than ship.
+func TestExploitFinderSandboxIsHardened(t *testing.T) {
+	body, err := assets.ReadFile("assets/claude/agents/exploit-finder-sandbox.sh")
+	if err != nil {
+		t.Fatalf("sandbox wrapper missing: %v", err)
+	}
+	s := string(body)
+	if !strings.Contains(s, managedMarker) {
+		t.Errorf("sandbox wrapper lacks the %q marker", managedMarker)
+	}
+	for _, must := range []string{
+		"docker run --rm", "--network none", "--cap-drop ALL",
+		"no-new-privileges", "--read-only", "realpath", "not in allowlist",
+		// PoC runs from stdin (no base64 arg, no caller-side $()), is capped by an
+		// in-container timeout, and the named container is force-killed on exit.
+		"sh -s", "timeout 300", "--name", "docker kill", "trap cleanup",
+		// Registry-/digest-qualified refs are rejected before the allowlist.
+		"*/* | *@*",
+	} {
+		if !strings.Contains(s, must) {
+			t.Errorf("sandbox wrapper missing required control %q", must)
+		}
+	}
+	for _, forbidden := range []string{
+		"--privileged", "docker.sock", "--pid=host", "--network host",
+		"--cap-add", "--env-file",
+	} {
+		if strings.Contains(s, forbidden) {
+			t.Errorf("sandbox wrapper contains forbidden flag %q", forbidden)
+		}
 	}
 }
 
@@ -136,6 +198,10 @@ func TestAssetEditsInstall(t *testing.T) {
 				}
 				if got := readFile(t, filepath.Join(h.skillDir("orch-dispatch"), "SKILL.md")); got != shipped(t, "assets/claude/skills/orch-dispatch/SKILL.md") {
 					t.Errorf("orch-dispatch skill not installed verbatim")
+				}
+				sandbox := filepath.Join(h.home, ".claude", "agents", "exploit-finder-sandbox.sh")
+				if got := readFile(t, sandbox); got != shipped(t, "assets/claude/agents/exploit-finder-sandbox.sh") {
+					t.Errorf("exploit-finder sandbox wrapper not installed verbatim")
 				}
 			},
 		},

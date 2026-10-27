@@ -326,6 +326,26 @@ func isOrchMCPServer(name string) bool {
 // untrusted input, or when queue_dispatch stops being a stub.
 func mcpToolRule(server string) string { return "mcp__" + server + "__*" }
 
+// exploitFinderSandboxRule pre-authorizes the exploit-finder PoC sandbox wrapper,
+// and only that exact command. The wrapper (installed to ~/.claude/agents) hard-codes
+// a network-denied, non-root, read-only, cap-dropped, throwaway container and an
+// image allowlist, so allowing it to run without a per-run confirmation permits only
+// a safely-sandboxed PoC — never a free-form `docker` command. The agent is
+// instructed to invoke exactly this shape; anything else (a different docker
+// invocation, extra flags, a compound command) falls outside the rule and stays
+// gated. The wrapper, not this rule, is the security boundary.
+const exploitFinderSandboxRule = "Bash(sh ~/.claude/agents/exploit-finder-sandbox.sh:*)"
+
+// hasRule reports whether the list already contains the exact rule string.
+func hasRule(rules []any, rule string) bool {
+	for _, r := range rules {
+		if s, ok := r.(string); ok && s == rule {
+			return true
+		}
+	}
+	return false
+}
+
 // allowsServer reports whether the allow list already covers every tool of the
 // named server. Claude Code honours the blanket "mcp__*" and the bare server
 // form ("mcp__rag") as well as the per-server wildcard, so any of the three
@@ -449,12 +469,24 @@ func applyPermissionsWith(root map[string]any, t settings.Toggles) (string, erro
 			added = append(added, server)
 		}
 	}
-	if len(added) > 0 {
+	// Pre-authorize the exploit-finder sandbox wrapper so a PoC can run without a
+	// per-run confirmation the nested agent has no way to answer. A deny the user
+	// added outranks an allow in Claude Code, so an existing deny is left alone.
+	bashAdded := false
+	if !hasRule(deny, exploitFinderSandboxRule) && !hasRule(ask, exploitFinderSandboxRule) && !hasRule(allow, exploitFinderSandboxRule) {
+		allow = append(allow, exploitFinderSandboxRule)
+		bashAdded = true
+	}
+
+	if len(added) > 0 || bashAdded {
 		perms["allow"] = allow
 		root["permissions"] = perms
 	}
 
 	var notes []string
+	if bashAdded {
+		notes = append(notes, "added "+exploitFinderSandboxRule+" — exploit-finder PoCs run in its sandboxed container without prompting")
+	}
 	if len(added) > 0 {
 		rules := make([]string, len(added))
 		for i, s := range added {
