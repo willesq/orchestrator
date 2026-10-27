@@ -145,6 +145,10 @@ func harnessInfo() []status.HarnessInfo {
 		} else {
 			info.Pending = n
 		}
+		if a.Name() == install.ProviderClaudeCode {
+			// An unreadable store already fails Pending above.
+			info.Disabled, _ = install.DisabledCount()
+		}
 		out = append(out, info)
 	}
 	return out

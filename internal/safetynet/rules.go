@@ -28,6 +28,10 @@ var nameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]{0,63}$`)
 
 func validName(s string) bool { return nameRe.MatchString(s) }
 
+// ValidName reports whether s is a valid cc-safety-net rulebook or rule
+// name. Every name orch turns into a path or an override key is checked.
+func ValidName(s string) bool { return validName(s) }
+
 // maxRuleFile bounds how much of a rule file is read. Real rulebooks are a few
 // KiB; the cap keeps a stray huge file from stalling a status call.
 const maxRuleFile = 1 << 20
@@ -256,8 +260,10 @@ func DetectRules(loc Locations) RulesState {
 	return st
 }
 
-// sourceName returns the rulebook name of a rule.json source: a bare local
+// SourceName returns the rulebook name of a rule.json source: a bare local
 // name, or the last segment of a GitHub source "owner/repo#ref/name".
+func SourceName(src string) (name string, remote bool) { return sourceName(src) }
+
 func sourceName(src string) (name string, remote bool) {
 	if i := strings.LastIndex(src, "/"); i >= 0 {
 		return src[i+1:], true
@@ -286,6 +292,13 @@ func readRulebook(loc Locations, src string, overrides map[string]any) RulebookI
 		}
 		return info
 	}
+	return ParseRulebook(info, raw, overrides)
+}
+
+// ParseRulebook fills info (Source, Name and Path already set) from a
+// rulebook's bytes, marking each rule off that overrides turns off.
+func ParseRulebook(info RulebookInfo, raw []byte, overrides map[string]any) RulebookInfo {
+	name := info.Name
 	var rb struct {
 		RulebookVersion int    `json:"rulebook_version"`
 		Name            string `json:"name"`

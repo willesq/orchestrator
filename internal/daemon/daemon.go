@@ -46,6 +46,7 @@ import (
 	"github.com/willesq/orchestrator/internal/routing"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/selfupdate"
+	"github.com/willesq/orchestrator/internal/settings"
 	"github.com/willesq/orchestrator/internal/sources"
 	"github.com/willesq/orchestrator/internal/supervisor"
 	"github.com/willesq/orchestrator/internal/version"
@@ -126,6 +127,9 @@ type server struct {
 	// safetyNet runs cc-safety-net install actions one at a time; nil when
 	// the user's home cannot be resolved.
 	safetyNet *safetyNetManager
+	// settings reconciles the Claude Code and cc-safety-net settings orch
+	// manages; nil when the user's home cannot be resolved.
+	settings *settings.Service
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -551,11 +555,13 @@ func Run(ctx context.Context) error {
 	ghService := github.NewService(github.NewStore(store), github.GH)
 
 	docsSched := newDocsScheduler(s, store, svc)
+	settingsSvc := settingsFor(store)
 	sup := supervisor.New(runCtx)
 	for _, u := range subsystems(deps{
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
 		summaries: summaries, github: ghService, system: system, docs: docsSched,
+		settingsSvc: settingsSvc,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return err
@@ -610,6 +616,7 @@ func Run(ctx context.Context) error {
 		documents:    svc,
 		docsSync:     docsSched,
 		safetyNet:    safetyNetFor(s),
+		settings:     settingsSvc,
 	})
 	go func() {
 		<-runCtx.Done()

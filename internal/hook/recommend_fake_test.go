@@ -131,3 +131,19 @@ func (f *fakeClient) GetSafetyNet(context.Context, *orchdv1.GetSafetyNetRequest,
 func (f *fakeClient) InstallSafetyNet(context.Context, *orchdv1.InstallSafetyNetRequest, ...grpc.CallOption) (*orchdv1.SafetyNetState, error) {
 	return &orchdv1.SafetyNetState{}, nil
 }
+
+func (f *fakeClient) ListSettings(context.Context, *orchdv1.ListSettingsRequest, ...grpc.CallOption) (*orchdv1.ListSettingsResponse, error) {
+	return &orchdv1.ListSettingsResponse{}, nil
+}
+
+func (f *fakeClient) SetSettingEnabled(context.Context, *orchdv1.SetSettingEnabledRequest, ...grpc.CallOption) (*orchdv1.SettingItem, error) {
+	return &orchdv1.SettingItem{}, nil
+}
+
+func (f *fakeClient) AddSetting(context.Context, *orchdv1.AddSettingRequest, ...grpc.CallOption) (*orchdv1.SettingItem, error) {
+	return &orchdv1.SettingItem{}, nil
+}
+
+func (f *fakeClient) RemoveSetting(context.Context, *orchdv1.RemoveSettingRequest, ...grpc.CallOption) (*orchdv1.RemoveSettingResponse, error) {
+	return &orchdv1.RemoveSettingResponse{}, nil
+}

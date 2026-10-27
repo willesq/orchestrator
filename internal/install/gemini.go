@@ -62,7 +62,7 @@ func geminiSettingsEdit(bins Bins, home string) Edit {
 				}
 			}
 			mcpSummary := applyMCP(root, bins.Orch)
-			hookSummary := applyHooksWithEvents(root, bins.OrchHook, geminiEvents, geminiHookFields)
+			hookSummary := applyHooksWithEvents(root, bins.OrchHook, geminiEvents, geminiHookFields, nil)
 			out, err := marshalJSON(root)
 			if err != nil {
 				return nil, "", err

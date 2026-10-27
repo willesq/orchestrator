@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/willesq/orchestrator/internal/settings"
 )
 
 // ClaudeCode wires the orchestrator into Claude Code (~/.claude).
@@ -80,13 +82,22 @@ func (ClaudeCode) settingsEdit(bins Bins, home string) Edit {
 					return nil, "", fmt.Errorf("parse settings.json: %w", err)
 				}
 			}
-			hookSummary := applyHooks(root, bins.OrchHook)
+			// Reason: items the user turned off in orch are left out, so
+			// install never puts them back and status never calls them
+			// drift. A store that cannot be read stops the plan instead of
+			// being taken as "nothing is off", which would re-enable them.
+			toggles, err := loadToggles()
+			if err != nil {
+				return nil, "", fmt.Errorf("%w — refusing to write settings.json, so items turned off in orch stay off; "+
+					"fix orch.db or re-run once orchd has released it", err)
+			}
+			hookSummary := applyClaudeHooks(root, bins.OrchHook, toggles)
 			mcpSummary := applyMCP(root, bins.Orch)
-			permSummary, err := applyPermissions(root)
+			permSummary, err := applyPermissionsWith(root, toggles)
 			if err != nil {
 				return nil, "", err
 			}
-			denySummary, err := applyCredentialDeny(root)
+			denySummary, err := applyCredentialDenyWith(root, toggles)
 			if err != nil {
 				return nil, "", err
 			}
@@ -150,26 +161,41 @@ func claudeHookFields(slug string) map[string]any {
 
 // applyHooks registers orch-hook using the Claude-style event names.
 func applyHooks(root map[string]any, orchHookBin string) string {
-	return applyHooksWithEvents(root, orchHookBin, eventSlugs, claudeHookFields)
+	return applyClaudeHooks(root, orchHookBin, settings.Toggles{})
+}
+
+// applyClaudeHooks registers orch-hook for Claude Code, leaving alone each
+// event whose orch-hook handler the user turned off in orch.
+func applyClaudeHooks(root map[string]any, orchHookBin string, t settings.Toggles) string {
+	skip := func(event, slug string) bool {
+		return t.Disabled(ProviderClaudeCode, KindHook, HookIdentity(event, slug))
+	}
+	return applyHooksWithEvents(root, orchHookBin, eventSlugs, claudeHookFields, skip)
 }
 
 // applyHooksWithEvents registers orch-hook for every event, dropping prior
 // orchestrator entries and preserving all third-party ones. fields, when not
-// nil, adds harness-specific keys to each orch-hook command. Returns a summary.
-func applyHooksWithEvents(root map[string]any, orchHookBin string, events eventMap, fields hookFieldsFunc) string {
+// nil, adds harness-specific keys to each orch-hook command. skip, when not
+// nil, names events to leave exactly as they are. Returns a summary.
+func applyHooksWithEvents(root map[string]any, orchHookBin string, events eventMap, fields hookFieldsFunc,
+	skip func(event, slug string) bool) string {
 	hooks, _ := root["hooks"].(map[string]any)
 	if hooks == nil {
 		hooks = map[string]any{}
 	}
 	inPlace, added, preserved := 0, 0, 0
-	var settings []string
+	var fieldNotes, skipped []string
 	for _, ev := range events {
+		if skip != nil && skip(ev.Event, ev.Slug) {
+			skipped = append(skipped, ev.Event)
+			continue
+		}
 		cmd := map[string]any{"type": "command", "command": orchHookBin + " " + ev.Slug}
 		if fields != nil {
 			f := fields(ev.Slug)
 			maps.Copy(cmd, f)
 			if len(f) > 0 {
-				settings = append(settings, ev.Event+" "+describeFields(f))
+				fieldNotes = append(fieldNotes, ev.Event+" "+describeFields(f))
 			}
 		}
 		entry := map[string]any{"hooks": []any{cmd}}
@@ -201,9 +227,12 @@ func applyHooksWithEvents(root map[string]any, orchHookBin string, events eventM
 	root["hooks"] = hooks
 	summary := fmt.Sprintf(
 		"hooks: wired orch-hook for %d events (%d replaced in place, %d appended); preserved %d third-party entr(ies)",
-		len(events), inPlace, added, preserved)
-	if len(settings) > 0 {
-		summary += "\nhooks: orch-hook settings: " + strings.Join(settings, ", ")
+		len(events)-len(skipped), inPlace, added, preserved)
+	if len(fieldNotes) > 0 {
+		summary += "\nhooks: orch-hook settings: " + strings.Join(fieldNotes, ", ")
+	}
+	if len(skipped) > 0 {
+		summary += "\nhooks: left " + strings.Join(skipped, ", ") + " alone — turned off in orch"
 	}
 	return summary
 }
@@ -381,6 +410,12 @@ func ruleList(perms map[string]any, key string) ([]any, error) {
 // an allow rule in Claude Code, so a server the user has explicitly denied is
 // left alone and reported instead of being fought over.
 func applyPermissions(root map[string]any) (string, error) {
+	return applyPermissionsWith(root, settings.Toggles{})
+}
+
+// applyPermissionsWith is applyPermissions leaving out any allow rule the
+// user turned off in orch.
+func applyPermissionsWith(root map[string]any, t settings.Toggles) (string, error) {
 	perms, err := permissionsObject(root)
 	if err != nil {
 		return "", err
@@ -398,9 +433,11 @@ func applyPermissions(root map[string]any) (string, error) {
 		return "", err
 	}
 
-	var added, already, denied, asked []string
+	var added, already, denied, asked, off []string
 	for _, server := range orchMCPServers {
 		switch {
+		case t.Disabled(ProviderClaudeCode, KindPermission, PermissionIdentity("allow", mcpToolRule(server))):
+			off = append(off, server)
 		case overlapsServer(deny, server):
 			denied = append(denied, server)
 		case overlapsServer(ask, server):
@@ -439,6 +476,9 @@ func applyPermissions(root map[string]any) (string, error) {
 	if len(asked) > 0 {
 		notes = append(notes,
 			"added no allow for "+strings.Join(asked, " + ")+" — an existing ask rule keeps those tools behind a confirmation")
+	}
+	if len(off) > 0 {
+		notes = append(notes, "added no allow for "+strings.Join(off, " + ")+" — turned off in orch")
 	}
 	return "permissions.allow: " + strings.Join(notes, "; "), nil
 }
