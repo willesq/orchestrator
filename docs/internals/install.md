@@ -65,11 +65,11 @@ Claude Code adds no co-author trailer, per the shared policy; other `attribution
 A `permissions.deny` or `attribution` of an unexpected JSON type aborts the install. No `ask`
 rule is ever written: guards deny narrowly and never prompt.
 
-**Agents and skills:** agents `adversarial-qa`, `adversarial-reviewer`, `dev`, `dispatcher`,
-`exploit-finder`, `ops`, `research`, `reviewer`, `security-audit`, `triage`; the helper script
-`exploit-finder-sandbox.sh` (the PoC sandbox wrapper, installed via an `agents/*.sh` glob
-alongside the `*.md` agents); skills `orch-dispatch`, `orch-pr-status`, `orch-rag-ingest`,
-`orch-rag-query`, `orch-repo-onboard`, `orch-task-status`, embedded from
+**Agents and skills:** agents `dev`, `dispatcher`, `exploit-finder`, `ops`, `research`,
+`reviewer`, `triage`; the helper script `exploit-finder-sandbox.sh` (the PoC sandbox wrapper,
+installed via an `agents/*.sh` glob alongside the `*.md` agents); skills `orch-dispatch`,
+`orch-pr-status`, `orch-rag-ingest`, `orch-rag-query`, `orch-repo-onboard`, `orch-task-status`,
+embedded from
 `internal/install/assets/`. Each carries a `managed-by: orch` marker: missing files are created,
 marked files updated, symlinks into the retired `~/.claude/orchestrator` checkout replaced; any
 other file aborts the install rather than being overwritten.
