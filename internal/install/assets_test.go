@@ -94,7 +94,11 @@ func TestExploitFinderSandboxIsHardened(t *testing.T) {
 	for _, must := range []string{
 		"docker run --rm", "--network none", "--cap-drop ALL",
 		"no-new-privileges", "--read-only", "realpath", "not in allowlist",
-		"base64 -d",
+		// PoC runs from stdin (no base64 arg, no caller-side $()), is capped by an
+		// in-container timeout, and the named container is force-killed on exit.
+		"sh -s", "timeout 300", "--name", "docker kill", "trap cleanup",
+		// Registry-/digest-qualified refs are rejected before the allowlist.
+		"*/* | *@*",
 	} {
 		if !strings.Contains(s, must) {
 			t.Errorf("sandbox wrapper missing required control %q", must)
