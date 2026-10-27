@@ -15,18 +15,18 @@ struct NeedsYouSection: View {
                 if let updated = monitor.list?.updatedAt {
                     Text("updated \(updated, format: .relative(presentation: .named))")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
             }
             let prs = monitor.needsYou
             if monitor.list == nil {
                 Text(monitor.lastError.map { "Could not load PRs: \($0)" } ?? "Loading PRs…")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             } else if prs.isEmpty {
                 Label("Nothing needs you", systemImage: "checkmark.circle")
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             } else {
                 ForEach(prs.prefix(shown)) { pr in
                     PRRow(pr: pr)
@@ -34,7 +34,7 @@ struct NeedsYouSection: View {
                 if prs.count > shown {
                     Text("and \(prs.count - shown) more (orch prs --needs-me)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
             }
         }
@@ -53,10 +53,10 @@ private struct PRRow: View {
                     .foregroundStyle(tint)
                     .frame(width: 16)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(pr.title).font(.callout).lineLimit(1)
-                    Text("\(pr.repo) · \(pr.attention?.label ?? "")")
+                    Text(verbatim: displaySafe(pr.title)).font(.callout).lineLimit(1)
+                    Text(verbatim: displaySafe("\(pr.repo) · \(pr.attention?.label ?? "")"))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)

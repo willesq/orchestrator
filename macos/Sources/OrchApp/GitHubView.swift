@@ -47,7 +47,7 @@ private struct ScopesColumn: View {
                     } icon: {
                         Image(systemName: "person.crop.circle")
                     }
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                 }
                 if let error = model.scopesError {
                     Text(verbatim: "Could not load your accounts: \(error). Retrying.")
@@ -63,7 +63,7 @@ private struct ScopesColumn: View {
             Section("Watching") {
                 if model.scopes.isEmpty && model.scopesError == nil {
                     Text("No accounts yet. Check that gh is signed in, then refresh.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .textStyle(.supporting)
                 }
                 ForEach(model.scopes) { scope in
                     ScopeRow(scope: scope, model: model)
@@ -72,12 +72,12 @@ private struct ScopesColumn: View {
             Section("Your teams") {
                 let teams = model.identity?.teams ?? []
                 if model.identity != nil && teams.isEmpty {
-                    Text("You are not on any teams.").font(.callout).foregroundStyle(.secondary)
+                    Text("You are not on any teams.").textStyle(.supporting)
                 }
                 ForEach(teams) { team in
                     VStack(alignment: .leading, spacing: 1) {
                         Text(verbatim: team.name.isEmpty ? team.slug : team.name)
-                        Text(verbatim: "\(team.org)/\(team.slug)").font(.caption).foregroundStyle(.secondary)
+                        Text(verbatim: "\(team.org)/\(team.slug)").textStyle(.caption)
                     }
                 }
             }
@@ -98,10 +98,7 @@ private struct ScopeRow: View {
                 Toggle(isOn: Binding(get: { scope.enabled }, set: { on in Task { await model.setEnabled(scope.owner, on) } })) {
                     HStack(spacing: 6) {
                         Text(verbatim: scope.owner).font(.body.weight(.medium))
-                        Text(scope.isUser ? "You" : "Org")
-                            .font(.caption2)
-                            .padding(.horizontal, 5)
-                            .background(.quaternary, in: .capsule)
+                        Chip(text: scope.isUser ? "You" : "Org")
                     }
                 }
                 .toggleStyle(.switch)
@@ -116,7 +113,7 @@ private struct ScopeRow: View {
                 }
                 .controlSize(.small)
                 HStack {
-                    Text(verbatim: scope.coverage).font(.caption).foregroundStyle(.secondary)
+                    Text(verbatim: scope.coverage).textStyle(.caption)
                     Spacer()
                     Button("Repos…") { pickingRepos = true }
                         .controlSize(.small)
@@ -155,8 +152,8 @@ private struct RepoPicker: View {
                         )) {
                             HStack {
                                 Text(verbatim: repo.name)
-                                if repo.isPrivate { Image(systemName: "lock").font(.caption).foregroundStyle(.secondary) }
-                                if repo.isArchived { Text("archived").font(.caption).foregroundStyle(.secondary) }
+                                if repo.isPrivate { Image(systemName: "lock").font(.caption).foregroundStyle(Color.secondaryText) }
+                                if repo.isArchived { Text("archived").font(.caption).foregroundStyle(Color.secondaryText) }
                             }
                         }
                         .toggleStyle(.checkbox)
@@ -172,7 +169,7 @@ private struct RepoPicker: View {
                     ProgressView("Loading repos…").frame(maxWidth: .infinity, minHeight: 260)
                 }
                 Text(mode == .include ? "\(picked.count) selected" : "\(picked.count) excluded")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Color.secondaryText)
             }
             HStack {
                 Spacer()
@@ -198,38 +195,78 @@ private struct RepoPicker: View {
 }
 
 private struct ActivityColumn: View {
-    let model: GitHubModel
+    @Bindable var model: GitHubModel
 
     var body: some View {
-        let items = model.visibleItems
+        let sections = model.sections
         VStack(spacing: 0) {
             HStack {
-                Text("Activity").font(.headline)
+                Text("Activity").textStyle(.section)
                 Spacer()
                 if let updated = model.items?.updatedAt {
-                    Text("updated \(updated, format: .relative(presentation: .named))")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Text("updated \(updated, format: .relative(presentation: .named))").textStyle(.caption)
                 }
             }
             .padding(12)
             Divider()
             Group {
                 if model.items == nil, let error = model.lastError {
-                    ContentUnavailableView("Activity unavailable", systemImage: "exclamationmark.triangle",
-                                           description: Text(verbatim: error))
+                    EmptyState(symbol: "exclamationmark.triangle", title: "Activity unavailable", message: error,
+                               actionTitle: "Try again", action: { Task { await model.refreshItems() } })
                 } else if model.items == nil {
                     ProgressView()
-                } else if items.isEmpty {
-                    ContentUnavailableView("Nothing open", systemImage: "checkmark.circle",
-                                           description: Text("Open PRs and issues in the accounts you watch show up here."))
+                } else if sections.needsAction.isEmpty && sections.other.isEmpty {
+                    empty
                 } else {
-                    List(items) { item in ItemRow(item: item) }
-                        .listStyle(.inset)
+                    List {
+                        if !sections.needsAction.isEmpty {
+                            Section {
+                                ForEach(sections.needsAction) { ItemRow(item: $0) }
+                            } header: {
+                                header("Needs action", count: sections.needsAction.count)
+                            }
+                        }
+                        if !sections.other.isEmpty {
+                            Section {
+                                ForEach(sections.other) { ItemRow(item: $0) }
+                            } header: {
+                                header("Everything else", count: sections.other.count)
+                            }
+                        }
+                    }
+                    .listStyle(.inset)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private func header(_ title: String, count: Int) -> some View {
+        HStack {
+            Text(title).textStyle(.section)
+            Spacer()
+            Text("\(count)").textStyle(.caption).monospacedDigit()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Says what the filter hides, and offers to show everything.
+    @ViewBuilder private var empty: some View {
+        switch model.filter {
+        case .all:
+            EmptyState(symbol: "checkmark.circle", title: "Nothing open",
+                       message: "Open PRs and issues in the accounts you watch show up here.")
+        case .prs:
+            EmptyState(symbol: "arrow.triangle.pull", title: "No open PRs",
+                       message: "None of the accounts you watch has an open PR involving you.",
+                       actionTitle: "Show everything", action: { model.filter = .all })
+        case .issues:
+            EmptyState(symbol: "smallcircle.filled.circle", title: "No open issues",
+                       message: "None of the accounts you watch has an open issue involving you.",
+                       actionTitle: "Show everything", action: { model.filter = .all })
+        }
     }
 }
 
@@ -237,30 +274,40 @@ private struct ItemRow: View {
     let item: GitHubItem
 
     var body: some View {
+        // Items untouched for months are quieter, so live work stands out.
+        let stale = item.isStale()
         Button {
             if let url = item.webURL { NSWorkspace.shared.open(url) }
         } label: {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: item.isPR ? "arrow.triangle.pull" : "smallcircle.filled.circle")
-                    .foregroundStyle(item.attention != nil ? Color.red : item.isPR ? Color.purple : Color.green)
+                    .foregroundStyle(item.attention != nil ? Color.red : stale ? Color.secondaryText : item.isPR ? Color.purple : Color.green)
                     .frame(width: 16)
+                    .accessibilityLabel(item.isPR ? "Pull request" : "Issue")
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(verbatim: item.title).lineLimit(2)
+                    Text(verbatim: displaySafe(item.title))
+                        .lineLimit(2)
+                        .foregroundStyle(stale ? Color.secondaryText : Color.primary)
                     HStack(spacing: 6) {
-                        Text(verbatim: "\(item.repo)#\(item.number)")
-                        if !item.author.isEmpty { Text(verbatim: "by \(item.author)") }
+                        Text(verbatim: displaySafe("\(item.repo)#\(item.number)"))
+                        if !item.author.isEmpty { Text(verbatim: displaySafe("by \(item.author)")) }
                         if let when = item.updatedAt {
                             Text(when, format: .relative(presentation: .named))
                         }
                         if item.isDraft { Text("draft") }
                     }
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-                    HStack(spacing: 4) {
-                        if let attention = item.attention {
-                            Chip(text: attention.label, color: .red)
+                    .foregroundStyle(stale ? Color.tertiaryText : Color.secondaryText)
+                    let reasons = item.chipReasons
+                    if item.attention != nil || !reasons.isEmpty {
+                        HStack(spacing: 4) {
+                            if let attention = item.attention {
+                                Chip(text: attention.label, tone: .bad, symbol: attention.symbolName)
+                            }
+                            if !stale {
+                                ForEach(reasons, id: \.self) { Chip(text: $0.label) }
+                            }
                         }
-                        ForEach(item.reasons, id: \.self) { Chip(text: $0.label, color: .secondary) }
                     }
                 }
                 Spacer(minLength: 0)
@@ -270,19 +317,6 @@ private struct ItemRow: View {
         .buttonStyle(.plain)
         .disabled(item.webURL == nil)
         .padding(.vertical, 3)
-    }
-}
-
-private struct Chip: View {
-    let text: String
-    let color: Color
-
-    var body: some View {
-        Text(text)
-            .font(.caption2.weight(.medium))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(color.opacity(0.15), in: .capsule)
-            .foregroundStyle(color)
+        .help(item.webURL?.absoluteString ?? displaySafe(item.url))
     }
 }

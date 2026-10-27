@@ -54,6 +54,13 @@ public final class GitHubModel {
         }
     }
 
+    /// The visible items split into those that need the user and the rest,
+    /// each newest first.
+    public var sections: (needsAction: [GitHubItem], other: [GitHubItem]) {
+        let items = visibleItems
+        return (items.filter { $0.attention != nil }, items.filter { $0.attention == nil })
+    }
+
     /// Reloads identity, scopes and items. `rediscover` asks GitHub for the
     /// user's orgs and teams now rather than from orchd's cache.
     public func refresh(rediscover: Bool = false) async {

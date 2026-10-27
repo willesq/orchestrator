@@ -168,6 +168,20 @@ public struct GitHubItem: Sendable, Equatable, Identifiable {
 
     /// The item's page, only when it is exactly a github.com pull or issue URL.
     public var webURL: URL? { githubItemURL(url) }
+
+    /// Why the item is watched, without the reason its attention already
+    /// says: a PR waiting on the user's review shows "Review requested" once.
+    public var chipReasons: [GitHubReason] {
+        guard let attention else { return reasons }
+        return reasons.filter { $0.label != attention.label }
+    }
+
+    /// Untouched for longer than `age` and not waiting on the user: shown
+    /// quieter, because it is unlikely to need anything soon.
+    public func isStale(now: Date = .now, age: TimeInterval = 180 * 86400) -> Bool {
+        guard attention == nil, let updatedAt else { return false }
+        return now.timeIntervalSince(updatedAt) > age
+    }
 }
 
 public struct GitHubItemList: Sendable, Equatable {

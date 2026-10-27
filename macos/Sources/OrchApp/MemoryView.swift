@@ -16,7 +16,7 @@ struct MemoryView: View {
     var body: some View {
         Group {
             switch tab {
-            case .search: SearchPane(model: search)
+            case .search: SearchPane(model: search, sources: sources)
             case .sources: SourcesPane(model: sources)
             }
         }
@@ -37,24 +37,19 @@ struct MemoryView: View {
 
 private struct SearchPane: View {
     @Bindable var model: SearchModel
+    let sources: SourcesModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                TextField("Search memory", text: $model.query.text)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { Task { await model.search() } }
-                Picker("Mode", selection: $model.query.mode) {
-                    ForEach(SearchMode.allCases) { Text($0.label).tag($0) }
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    TextField("Search memory", text: $model.query.text)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { Task { await model.search() } }
+                    Button("Search") { Task { await model.search() } }
+                        .keyboardShortcut(.defaultAction)
                 }
-                .fixedSize()
-                TextField("Type", text: $model.query.sourceType)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 110)
-                Stepper("Top \(model.query.limit)", value: $model.query.limit, in: 1...SearchQuery.maxResults)
-                    .fixedSize()
-                Button("Search") { Task { await model.search() } }
-                    .keyboardShortcut(.defaultAction)
+                filters
             }
             .padding(12)
             if let error = model.lastError {
@@ -67,6 +62,43 @@ private struct SearchPane: View {
             Divider()
             results.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .task { if sources.list == nil { await sources.refresh() } }
+    }
+
+    /// Plainly labelled menus in place of free text and a stepper.
+    private var filters: some View {
+        HStack(spacing: 14) {
+            Picker("Match", selection: $model.query.mode) {
+                ForEach(SearchMode.allCases) { Text($0.label).tag($0).help($0.help) }
+            }
+            .fixedSize()
+            .help(model.query.mode.help)
+            Picker("Type", selection: $model.query.sourceType) {
+                Text("Any type").tag("")
+                Divider()
+                ForEach(typeChoices, id: \.self) { Text(verbatim: displaySafe($0)).tag($0) }
+            }
+            .fixedSize()
+            .help("Only results from sources of this type")
+            Picker("Show", selection: $model.query.limit) {
+                ForEach(limitChoices, id: \.self) { Text("\($0) results").tag($0) }
+            }
+            .fixedSize()
+            Spacer()
+        }
+        .controlSize(.small)
+    }
+
+    /// The store's types, plus a typed-in one that is not listed yet.
+    private var typeChoices: [String] {
+        let known = sources.knownTypes
+        let current = model.query.sourceType
+        return current.isEmpty || known.contains(current) ? known : known + [current]
+    }
+
+    private var limitChoices: [Int] {
+        let current = model.query.limit
+        return SearchQuery.limitChoices.contains(current) ? SearchQuery.limitChoices : (SearchQuery.limitChoices + [current]).sorted()
     }
 
     @ViewBuilder private var results: some View {
@@ -74,15 +106,33 @@ private struct SearchPane: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let result = model.result {
             if result.hits.isEmpty {
-                ContentUnavailableView.search(text: model.answered?.text ?? "")
+                EmptyState(symbol: "magnifyingglass", title: "No results",
+                           message: "Nothing in memory matches \u{201C}\(model.answered?.text ?? "")\u{201D}. Try other words, or any type.")
             } else {
                 List(Array(result.hits.enumerated()), id: \.offset) { index, hit in
                     HitRow(rank: index + 1, hit: hit)
                 }
             }
         } else {
-            ContentUnavailableView("Search your memory", systemImage: "magnifyingglass",
-                                   description: Text("Indexed docs, repos and past sessions."))
+            VStack(spacing: 0) {
+                EmptyState(symbol: "magnifyingglass", title: "Search your memory",
+                           message: "Indexed docs, repos and past sessions.")
+                    .frame(maxHeight: 260)
+                if !model.recent.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Recent searches").textStyle(.caption)
+                        ForEach(model.recent, id: \.self) { text in
+                            Button { Task { await model.repeatSearch(text) } } label: {
+                                Label { Text(verbatim: text) } icon: { Image(systemName: "clock.arrow.circlepath") }
+                            }
+                            .buttonStyle(.link)
+                        }
+                    }
+                    .frame(maxWidth: 360, alignment: .leading)
+                }
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
         }
     }
 }
@@ -95,26 +145,37 @@ private struct HitRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text("\(rank).").foregroundStyle(.secondary)
-                Text(String(format: "%.2f", hit.score)).font(.caption.monospacedDigit())
-                    .padding(.horizontal, 4).background(.quaternary, in: .rect(cornerRadius: 3))
-                Text(verbatim: hit.sourceURI).font(.callout.monospaced()).lineLimit(1).truncationMode(.middle)
-                    .textSelection(.enabled)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(rank)").textStyle(.caption).monospacedDigit().frame(minWidth: 16, alignment: .trailing)
+                Text(verbatim: hit.sourceTitle).font(.body.weight(.medium)).lineLimit(1)
+                if !hit.sourceType.isEmpty { Chip(text: displaySafe(hit.sourceType)) }
                 Spacer()
-                if !hit.sourceType.isEmpty { Text(verbatim: hit.sourceType).font(.caption).foregroundStyle(.secondary) }
                 if let when = hit.startedAt ?? hit.ingestedAt {
-                    Text(when, format: .dateTime.year().month().day()).font(.caption).foregroundStyle(.secondary)
+                    Text(when, format: .dateTime.year().month().day()).textStyle(.caption)
                 }
+                Text(String(format: "%.2f", hit.score))
+                    .textStyle(.caption)
+                    .monospacedDigit()
+                    .help("Relevance score")
             }
+            Text(verbatim: displaySafe(hit.sourceURI))
+                .textStyle(.codeCaption)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .padding(.leading, 24)
             // Indexed content is untrusted: plain Text, never Markdown.
-            Text(verbatim: hit.text)
+            Text(verbatim: expanded ? hit.text : hit.preview)
                 .font(.callout)
                 .lineLimit(expanded ? nil : 4)
                 .textSelection(.enabled)
-            Button(expanded ? "Less" : "More") { expanded.toggle() }
-                .buttonStyle(.link)
-                .font(.caption)
+                .padding(.leading, 24)
+            if hit.isLong {
+                Button(expanded ? "Show less" : "Show more") { expanded.toggle() }
+                    .buttonStyle(.link)
+                    .font(.caption)
+                    .padding(.leading, 24)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -128,16 +189,17 @@ private struct SourcesPane: View {
             HStack {
                 Picker("Type", selection: $model.typeFilter) {
                     Text("All types").tag("")
-                    ForEach(model.knownTypes, id: \.self) { Text(verbatim: $0).tag($0) }
+                    ForEach(model.knownTypes, id: \.self) { Text(verbatim: displaySafe($0)).tag($0) }
                 }
                 .fixedSize()
                 .onChange(of: model.typeFilter) { Task { await model.refresh() } }
                 Spacer()
                 if let list = model.list {
-                    Text("\(list.totalSources) sources · \(list.totalChunks) chunks")
-                        .font(.caption).foregroundStyle(.secondary)
+                    Text("\(list.totalSources) sources · \(list.totalChunks) chunks").textStyle(.caption)
                 }
                 Button { Task { await model.refresh() } } label: { Image(systemName: "arrow.clockwise") }
+                    .help("Reload the list")
+                    .accessibilityLabel("Reload")
             }
             .padding(12)
             if let error = model.lastError {
@@ -145,10 +207,15 @@ private struct SourcesPane: View {
             }
             Divider()
             Table(model.list?.sources ?? []) {
-                TableColumn("Source") { Text(verbatim: $0.uri).font(.callout.monospaced()).textSelection(.enabled) }
-                TableColumn("Type") { Text(verbatim: $0.sourceType) }.width(110)
-                TableColumn("Scope") { Text(verbatim: $0.scope) }.width(140)
-                TableColumn("Chunks") { Text("\($0.chunks)").monospacedDigit() }.width(60)
+                TableColumn("Source") {
+                    Text(verbatim: displaySafe($0.uri)).font(.callout.monospaced()).lineLimit(1).truncationMode(.middle)
+                        .help(displaySafe($0.uri)).textSelection(.enabled)
+                }
+                .width(min: 240, ideal: 520)
+                TableColumn("Type") { Text(verbatim: displaySafe($0.sourceType)) }.width(min: 90, ideal: 140, max: 180)
+                TableColumn("Scope") { Text(verbatim: displaySafe($0.scope)) }.width(min: 50, ideal: 80, max: 160)
+                TableColumn("Chunks") { Text("\($0.chunks)").monospacedDigit().frame(maxWidth: .infinity, alignment: .trailing) }
+                    .width(64)
                 TableColumn("Stored") { source in
                     if let at = source.ingestedAt { Text(at, format: .relative(presentation: .named)) }
                 }

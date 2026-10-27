@@ -38,7 +38,7 @@ toggle.
 merely mentions orch-hook is someone else's, so it cannot take over orch-hook's identity and a
 toggle made on it; `mcp__rag__*` and `mcp__queue__*` allows, the credential-file `Read` denies,
 `cc-safety-net@orch-pinned`, and the local `orch-guards` rulebook's rules); `you` for what was
-added through orch; `found` for everything else seen in a file.
+added through orch; `found` for everything else seen in a file (Orch.app labels it "external").
 
 **Status** (derived): `active` (on and in the file), `disabled` (turned off through orch),
 `removed` (vanished from the file outside orch), `missing` (an enabled orch item absent from the

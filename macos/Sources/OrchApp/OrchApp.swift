@@ -40,6 +40,8 @@ final class AppModel {
     let registeredSources: RegisteredSourcesModel
     let safetyNet: SafetyNetModel
     let claude: SettingsModel
+    /// Keeps the sidebar's badges current between visits to their tabs.
+    private(set) var badges: PeriodicRefresh?
 
     init() {
         let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & SystemAPI & CatalogAPI & SafetyNetAPI
@@ -75,6 +77,16 @@ final class AppModel {
         monitor.start()
         prMonitor.onNewlyNeedingYou = { [notifier] prs in notifier.post(prs) }
         prMonitor.start()
+        system.startSampling()
+        // Docs, Safety Net and Claude change rarely; every few minutes is
+        // plenty for a badge, and each tab reloads itself when opened.
+        let badges = PeriodicRefresh(interval: .seconds(300), actions: [
+            { [docs] in await docs.load() },
+            { [safetyNet] in await safetyNet.load() },
+            { [claude] in await claude.load() },
+        ])
+        badges.start()
+        self.badges = badges
     }
 }
 

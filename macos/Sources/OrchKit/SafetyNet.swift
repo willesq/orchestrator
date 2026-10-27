@@ -67,6 +67,37 @@ public struct SafetyNetState: Sendable, Equatable {
     public var canUpgrade: Bool { state == "outdated" }
     /// Repair applies: the guard rules are missing, stale or not enabled.
     public var canRepairRules: Bool { !rules.ok }
+
+    /// The one action that applies now, most fundamental first: a missing or
+    /// competing plugin is installed before it can be upgraded, and the rules
+    /// are repaired once the plugin itself is right. nil when up to date.
+    public var nextAction: SafetyNetNextAction? {
+        if canInstall { return .install }
+        if canUpgrade { return .upgrade }
+        if canRepairRules { return .repairRules }
+        return nil
+    }
+}
+
+/// An action the Safety Net tab offers.
+public enum SafetyNetNextAction: Sendable, Equatable {
+    case install, upgrade, repairRules
+
+    public var title: String {
+        switch self {
+        case .install: "Install"
+        case .upgrade: "Upgrade"
+        case .repairRules: "Repair rules"
+        }
+    }
+
+    public var help: String {
+        switch self {
+        case .install: "Install the pinned cc-safety-net into Claude Code, replacing any other copy"
+        case .upgrade: "Move cc-safety-net to the version this orch pins"
+        case .repairRules: "Rewrite the orch-guards rulebook and enable it, keeping your own rulebooks"
+        }
+    }
 }
 
 public struct SafetyNetInstall: Sendable, Equatable, Identifiable {
@@ -137,6 +168,16 @@ public struct SafetyNetRulebook: Sendable, Equatable, Identifiable {
     }
 
     public var isOrch: Bool { owner == "orch" }
+
+    /// The settings item for one of its rules, as the cc-safety-net settings
+    /// provider names it ("<rulebook>/<rule>"), so this tab and the Claude
+    /// tab toggle the same thing.
+    public func settingRef(for rule: SafetyNetRule) -> SettingRef {
+        SettingRef(provider: SafetyNetRulebook.settingsProvider, kind: "rule", identity: "\(name)/\(rule.name)")
+    }
+
+    /// The settings provider for cc-safety-net's rules.
+    public static let settingsProvider = "cc-safety-net"
 }
 
 public struct SafetyNetRule: Sendable, Equatable, Identifiable {
@@ -161,6 +202,17 @@ public struct SafetyNetRule: Sendable, Equatable, Identifiable {
 
     /// "git push" for a rule on git's push subcommand.
     public var commandLine: String { subcommand.isEmpty ? command : "\(command) \(subcommand)" }
+
+    /// What the rule blocks, as one phrase: "git worktree add", or
+    /// "git checkout -b, -B or --orphan" when it blocks several arguments,
+    /// or "any git push" when it blocks the command outright.
+    public var blockedPhrase: String {
+        switch blockArgs.count {
+        case 0: "any \(commandLine)"
+        case 1: "\(commandLine) \(blockArgs[0])"
+        default: "\(commandLine) \(blockArgs.dropLast().joined(separator: ", ")) or \(blockArgs.last!)"
+        }
+    }
 }
 
 /// The running install action, or the last one.
@@ -273,6 +325,15 @@ public final class SafetyNetModel {
 
     /// Rewrites the orch-guards rulebook and its rule.json entry only.
     public func repairRules() async { await run(rulesOnly: true, verb: "Repaired the rules") }
+
+    /// Runs the action the tab offers.
+    public func perform(_ action: SafetyNetNextAction) async {
+        switch action {
+        case .install: await install()
+        case .upgrade: await upgrade()
+        case .repairRules: await repairRules()
+        }
+    }
 
     /// Runs one action, polling orchd for its current step meanwhile. orchd
     /// runs one action at a time; a refusal is shown, not queued.
