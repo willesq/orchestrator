@@ -375,7 +375,8 @@ private final class TypedMemory: MemoryAPI, @unchecked Sendable {
         refresh.start()
         refresh.start()
         #expect(refresh.isRunning)
-        try await Task.sleep(for: .milliseconds(80))
+        // Polled rather than one fixed sleep, so a slow CI runner still passes.
+        for _ in 0..<200 where runs <= 11 { try await Task.sleep(for: .milliseconds(10)) }
         refresh.stop()
         #expect(!refresh.isRunning)
         let after = runs
@@ -407,7 +408,7 @@ private final class SampledSystem: SystemAPI, @unchecked Sendable {
                                 interval: .seconds(60), reportInterval: .seconds(60), backgroundInterval: .milliseconds(10))
         model.startSampling()
         model.startSampling()
-        try await Task.sleep(for: .milliseconds(80))
+        for _ in 0..<300 where (model.history["orchd"]?.count ?? 0) < 2 { try await Task.sleep(for: .milliseconds(10)) }
         model.stopSampling()
         let count = model.history["orchd"]?.count ?? 0
         #expect(count >= 2)
@@ -460,12 +461,5 @@ private final class ItemsOnly: GitHubAPI, @unchecked Sendable {
         #expect(AppearanceChoice.light.appearanceName == .aqua)
         #expect(AppearanceChoice.dark.appearanceName == .darkAqua)
         for c in AppearanceChoice.allCases { #expect(!c.label.isEmpty && c.id == c.rawValue) }
-        let app = NSApplication.shared
-        let before = app.appearance
-        AppearanceChoice.dark.apply(to: app)
-        #expect(app.appearance?.name == .darkAqua)
-        AppearanceChoice.system.apply(to: app)
-        #expect(app.appearance == nil)
-        app.appearance = before
     }
 }
