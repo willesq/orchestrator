@@ -52,6 +52,7 @@ var taskCallable = map[string]bool{
 	orchdv1.Orchd_GetDocument_FullMethodName:           true,
 	orchdv1.Orchd_GetDocsSync_FullMethodName:           true,
 	orchdv1.Orchd_ListRegisteredSources_FullMethodName: true,
+	orchdv1.Orchd_GetSafetyNet_FullMethodName:          true,
 }
 
 // operatorActions says what each operator-only RPC would do, for the refusal.
@@ -69,6 +70,7 @@ var operatorActions = map[string]string{
 	orchdv1.Orchd_SyncDocs_FullMethodName:         "sync docs",
 	orchdv1.Orchd_SetGitHubScope_FullMethodName:   "change GitHub monitoring",
 	orchdv1.Orchd_Restart_FullMethodName:          "restart orchd subsystems",
+	orchdv1.Orchd_InstallSafetyNet_FullMethodName: "install or upgrade cc-safety-net",
 }
 
 // refuseQueued returns the refusal for method when ctx's caller is a queued
