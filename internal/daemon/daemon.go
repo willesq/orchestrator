@@ -122,6 +122,9 @@ type server struct {
 	lastNudge time.Time
 	// docsSync runs docs syncs one at a time; nil when unavailable.
 	docsSync docsSyncer
+	// safetyNet runs cc-safety-net install actions one at a time; nil when
+	// the user's home cannot be resolved.
+	safetyNet *safetyNetManager
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -599,6 +602,7 @@ func Run(ctx context.Context) error {
 		sourcesReg:   sources.NewRegistry(store),
 		documents:    svc,
 		docsSync:     docsSched,
+		safetyNet:    safetyNetFor(s),
 	})
 	go func() {
 		<-runCtx.Done()

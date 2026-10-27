@@ -1657,6 +1657,242 @@ public nonisolated struct Orchd_V1_RefreshSourceResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Orchd_V1_GetSafetyNetRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_InstallSafetyNetRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// rules_only rewrites the orch-guards rulebook and rule.json and runs no
+  /// plugin command (the app's Repair rules).
+  public var rulesOnly: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SafetyNetState: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// state: missing, legacy, outdated, disabled or ok.
+  public var state: String {
+    get {_storage._state}
+    set {_uniqueStorage()._state = newValue}
+  }
+
+  /// plugin ok and rules ok
+  public var ok: Bool {
+    get {_storage._ok}
+    set {_uniqueStorage()._ok = newValue}
+  }
+
+  public var pinnedVersion: String {
+    get {_storage._pinnedVersion}
+    set {_uniqueStorage()._pinnedVersion = newValue}
+  }
+
+  public var pinnedSha: String {
+    get {_storage._pinnedSha}
+    set {_uniqueStorage()._pinnedSha = newValue}
+  }
+
+  /// empty when not installed by orch
+  public var installedVersion: String {
+    get {_storage._installedVersion}
+    set {_uniqueStorage()._installedVersion = newValue}
+  }
+
+  public var installedSha: String {
+    get {_storage._installedSha}
+    set {_uniqueStorage()._installedSha = newValue}
+  }
+
+  /// competing copies from other marketplaces
+  public var legacy: [Orchd_V1_SafetyNetInstall] {
+    get {_storage._legacy}
+    set {_uniqueStorage()._legacy = newValue}
+  }
+
+  public var rules: Orchd_V1_SafetyNetRules {
+    get {_storage._rules ?? Orchd_V1_SafetyNetRules()}
+    set {_uniqueStorage()._rules = newValue}
+  }
+  /// Returns true if `rules` has been explicitly set.
+  public var hasRules: Bool {_storage._rules != nil}
+  /// Clears the value of `rules`. Subsequent reads from it will return its default value.
+  public mutating func clearRules() {_uniqueStorage()._rules = nil}
+
+  /// plugin files that could not be read
+  public var errors: [String] {
+    get {_storage._errors}
+    set {_uniqueStorage()._errors = newValue}
+  }
+
+  /// running or last install action
+  public var action: Orchd_V1_SafetyNetAction {
+    get {_storage._action ?? Orchd_V1_SafetyNetAction()}
+    set {_uniqueStorage()._action = newValue}
+  }
+  /// Returns true if `action` has been explicitly set.
+  public var hasAction: Bool {_storage._action != nil}
+  /// Clears the value of `action`. Subsequent reads from it will return its default value.
+  public mutating func clearAction() {_uniqueStorage()._action = nil}
+
+  /// YYYY-MM-DD
+  public var pinnedReleasedOn: String {
+    get {_storage._pinnedReleasedOn}
+    set {_uniqueStorage()._pinnedReleasedOn = newValue}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public nonisolated struct Orchd_V1_SafetyNetInstall: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// plugin@marketplace
+  public var id: String = String()
+
+  public var scope: String = String()
+
+  public var version: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SafetyNetRules: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var ok: Bool = false
+
+  public var configPath: String = String()
+
+  public var configExists: Bool = false
+
+  public var configError: String = String()
+
+  /// rule.json lists orch-guards
+  public var referenced: Bool = false
+
+  /// rtk is a transparent wrapper
+  public var rtkWrapper: Bool = false
+
+  /// the orch-guards file matches this build
+  public var rulebookCurrent: Bool = false
+
+  public var rulebooks: [Orchd_V1_SafetyNetRulebook] = []
+
+  public var problems: [String] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SafetyNetRulebook: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// as listed in rule.json
+  public var source: String = String()
+
+  public var name: String = String()
+
+  /// orch or user
+  public var owner: String = String()
+
+  public var remote: Bool = false
+
+  public var version: String = String()
+
+  public var description_p: String = String()
+
+  /// missing or invalid: cc-safety-net skips it
+  public var error: String = String()
+
+  public var rules: [Orchd_V1_SafetyNetRule] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SafetyNetRule: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var command: String = String()
+
+  public var subcommand: String = String()
+
+  public var blockArgs: [String] = []
+
+  public var reason: String = String()
+
+  /// overridden to off in rule.json
+  public var off: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SafetyNetAction: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var running: Bool = false
+
+  public var rulesOnly: Bool = false
+
+  /// unix seconds; 0 = never run
+  public var startedAt: Int64 = 0
+
+  /// 0 while running
+  public var finishedAt: Int64 = 0
+
+  /// the step running, or the last one
+  public var step: String = String()
+
+  public var ok: Bool = false
+
+  public var error: String = String()
+
+  /// command output, capped
+  public var log: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "orchd.v1"
@@ -5086,6 +5322,490 @@ nonisolated extension Orchd_V1_RefreshSourceResponse: SwiftProtobuf.Message, Swi
 
   public static func ==(lhs: Orchd_V1_RefreshSourceResponse, rhs: Orchd_V1_RefreshSourceResponse) -> Bool {
     if lhs.marked != rhs.marked {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_GetSafetyNetRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetSafetyNetRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_GetSafetyNetRequest, rhs: Orchd_V1_GetSafetyNetRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_InstallSafetyNetRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".InstallSafetyNetRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}rules_only\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.rulesOnly) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.rulesOnly != false {
+      try visitor.visitSingularBoolField(value: self.rulesOnly, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_InstallSafetyNetRequest, rhs: Orchd_V1_InstallSafetyNetRequest) -> Bool {
+    if lhs.rulesOnly != rhs.rulesOnly {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SafetyNetState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SafetyNetState"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}state\0\u{1}ok\0\u{3}pinned_version\0\u{3}pinned_sha\0\u{3}installed_version\0\u{3}installed_sha\0\u{1}legacy\0\u{1}rules\0\u{1}errors\0\u{1}action\0\u{3}pinned_released_on\0")
+
+  fileprivate class _StorageClass {
+    var _state: String = String()
+    var _ok: Bool = false
+    var _pinnedVersion: String = String()
+    var _pinnedSha: String = String()
+    var _installedVersion: String = String()
+    var _installedSha: String = String()
+    var _legacy: [Orchd_V1_SafetyNetInstall] = []
+    var _rules: Orchd_V1_SafetyNetRules? = nil
+    var _errors: [String] = []
+    var _action: Orchd_V1_SafetyNetAction? = nil
+    var _pinnedReleasedOn: String = String()
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _state = source._state
+      _ok = source._ok
+      _pinnedVersion = source._pinnedVersion
+      _pinnedSha = source._pinnedSha
+      _installedVersion = source._installedVersion
+      _installedSha = source._installedSha
+      _legacy = source._legacy
+      _rules = source._rules
+      _errors = source._errors
+      _action = source._action
+      _pinnedReleasedOn = source._pinnedReleasedOn
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._state) }()
+        case 2: try { try decoder.decodeSingularBoolField(value: &_storage._ok) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._pinnedVersion) }()
+        case 4: try { try decoder.decodeSingularStringField(value: &_storage._pinnedSha) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._installedVersion) }()
+        case 6: try { try decoder.decodeSingularStringField(value: &_storage._installedSha) }()
+        case 7: try { try decoder.decodeRepeatedMessageField(value: &_storage._legacy) }()
+        case 8: try { try decoder.decodeSingularMessageField(value: &_storage._rules) }()
+        case 9: try { try decoder.decodeRepeatedStringField(value: &_storage._errors) }()
+        case 10: try { try decoder.decodeSingularMessageField(value: &_storage._action) }()
+        case 11: try { try decoder.decodeSingularStringField(value: &_storage._pinnedReleasedOn) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._state.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._state, fieldNumber: 1)
+      }
+      if _storage._ok != false {
+        try visitor.visitSingularBoolField(value: _storage._ok, fieldNumber: 2)
+      }
+      if !_storage._pinnedVersion.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._pinnedVersion, fieldNumber: 3)
+      }
+      if !_storage._pinnedSha.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._pinnedSha, fieldNumber: 4)
+      }
+      if !_storage._installedVersion.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._installedVersion, fieldNumber: 5)
+      }
+      if !_storage._installedSha.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._installedSha, fieldNumber: 6)
+      }
+      if !_storage._legacy.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._legacy, fieldNumber: 7)
+      }
+      try { if let v = _storage._rules {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
+      } }()
+      if !_storage._errors.isEmpty {
+        try visitor.visitRepeatedStringField(value: _storage._errors, fieldNumber: 9)
+      }
+      try { if let v = _storage._action {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+      } }()
+      if !_storage._pinnedReleasedOn.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._pinnedReleasedOn, fieldNumber: 11)
+      }
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SafetyNetState, rhs: Orchd_V1_SafetyNetState) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._state != rhs_storage._state {return false}
+        if _storage._ok != rhs_storage._ok {return false}
+        if _storage._pinnedVersion != rhs_storage._pinnedVersion {return false}
+        if _storage._pinnedSha != rhs_storage._pinnedSha {return false}
+        if _storage._installedVersion != rhs_storage._installedVersion {return false}
+        if _storage._installedSha != rhs_storage._installedSha {return false}
+        if _storage._legacy != rhs_storage._legacy {return false}
+        if _storage._rules != rhs_storage._rules {return false}
+        if _storage._errors != rhs_storage._errors {return false}
+        if _storage._action != rhs_storage._action {return false}
+        if _storage._pinnedReleasedOn != rhs_storage._pinnedReleasedOn {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SafetyNetInstall: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SafetyNetInstall"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}scope\0\u{1}version\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.scope) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.version) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if !self.scope.isEmpty {
+      try visitor.visitSingularStringField(value: self.scope, fieldNumber: 2)
+    }
+    if !self.version.isEmpty {
+      try visitor.visitSingularStringField(value: self.version, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SafetyNetInstall, rhs: Orchd_V1_SafetyNetInstall) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.scope != rhs.scope {return false}
+    if lhs.version != rhs.version {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SafetyNetRules: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SafetyNetRules"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ok\0\u{3}config_path\0\u{3}config_exists\0\u{3}config_error\0\u{1}referenced\0\u{3}rtk_wrapper\0\u{3}rulebook_current\0\u{1}rulebooks\0\u{1}problems\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.ok) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.configPath) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.configExists) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.configError) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.referenced) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.rtkWrapper) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.rulebookCurrent) }()
+      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.rulebooks) }()
+      case 9: try { try decoder.decodeRepeatedStringField(value: &self.problems) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.ok != false {
+      try visitor.visitSingularBoolField(value: self.ok, fieldNumber: 1)
+    }
+    if !self.configPath.isEmpty {
+      try visitor.visitSingularStringField(value: self.configPath, fieldNumber: 2)
+    }
+    if self.configExists != false {
+      try visitor.visitSingularBoolField(value: self.configExists, fieldNumber: 3)
+    }
+    if !self.configError.isEmpty {
+      try visitor.visitSingularStringField(value: self.configError, fieldNumber: 4)
+    }
+    if self.referenced != false {
+      try visitor.visitSingularBoolField(value: self.referenced, fieldNumber: 5)
+    }
+    if self.rtkWrapper != false {
+      try visitor.visitSingularBoolField(value: self.rtkWrapper, fieldNumber: 6)
+    }
+    if self.rulebookCurrent != false {
+      try visitor.visitSingularBoolField(value: self.rulebookCurrent, fieldNumber: 7)
+    }
+    if !self.rulebooks.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.rulebooks, fieldNumber: 8)
+    }
+    if !self.problems.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.problems, fieldNumber: 9)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SafetyNetRules, rhs: Orchd_V1_SafetyNetRules) -> Bool {
+    if lhs.ok != rhs.ok {return false}
+    if lhs.configPath != rhs.configPath {return false}
+    if lhs.configExists != rhs.configExists {return false}
+    if lhs.configError != rhs.configError {return false}
+    if lhs.referenced != rhs.referenced {return false}
+    if lhs.rtkWrapper != rhs.rtkWrapper {return false}
+    if lhs.rulebookCurrent != rhs.rulebookCurrent {return false}
+    if lhs.rulebooks != rhs.rulebooks {return false}
+    if lhs.problems != rhs.problems {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SafetyNetRulebook: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SafetyNetRulebook"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}source\0\u{1}name\0\u{1}owner\0\u{1}remote\0\u{1}version\0\u{1}description\0\u{1}error\0\u{1}rules\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.source) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.remote) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.version) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.rules) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.source.isEmpty {
+      try visitor.visitSingularStringField(value: self.source, fieldNumber: 1)
+    }
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 2)
+    }
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 3)
+    }
+    if self.remote != false {
+      try visitor.visitSingularBoolField(value: self.remote, fieldNumber: 4)
+    }
+    if !self.version.isEmpty {
+      try visitor.visitSingularStringField(value: self.version, fieldNumber: 5)
+    }
+    if !self.description_p.isEmpty {
+      try visitor.visitSingularStringField(value: self.description_p, fieldNumber: 6)
+    }
+    if !self.error.isEmpty {
+      try visitor.visitSingularStringField(value: self.error, fieldNumber: 7)
+    }
+    if !self.rules.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.rules, fieldNumber: 8)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SafetyNetRulebook, rhs: Orchd_V1_SafetyNetRulebook) -> Bool {
+    if lhs.source != rhs.source {return false}
+    if lhs.name != rhs.name {return false}
+    if lhs.owner != rhs.owner {return false}
+    if lhs.remote != rhs.remote {return false}
+    if lhs.version != rhs.version {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.rules != rhs.rules {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SafetyNetRule: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SafetyNetRule"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}command\0\u{1}subcommand\0\u{3}block_args\0\u{1}reason\0\u{1}off\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.command) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.subcommand) }()
+      case 4: try { try decoder.decodeRepeatedStringField(value: &self.blockArgs) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.reason) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.off) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.command.isEmpty {
+      try visitor.visitSingularStringField(value: self.command, fieldNumber: 2)
+    }
+    if !self.subcommand.isEmpty {
+      try visitor.visitSingularStringField(value: self.subcommand, fieldNumber: 3)
+    }
+    if !self.blockArgs.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.blockArgs, fieldNumber: 4)
+    }
+    if !self.reason.isEmpty {
+      try visitor.visitSingularStringField(value: self.reason, fieldNumber: 5)
+    }
+    if self.off != false {
+      try visitor.visitSingularBoolField(value: self.off, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SafetyNetRule, rhs: Orchd_V1_SafetyNetRule) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.command != rhs.command {return false}
+    if lhs.subcommand != rhs.subcommand {return false}
+    if lhs.blockArgs != rhs.blockArgs {return false}
+    if lhs.reason != rhs.reason {return false}
+    if lhs.off != rhs.off {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SafetyNetAction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SafetyNetAction"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}running\0\u{3}rules_only\0\u{3}started_at\0\u{3}finished_at\0\u{1}step\0\u{1}ok\0\u{1}error\0\u{1}log\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.running) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.rulesOnly) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.startedAt) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.finishedAt) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.step) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.ok) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.log) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.running != false {
+      try visitor.visitSingularBoolField(value: self.running, fieldNumber: 1)
+    }
+    if self.rulesOnly != false {
+      try visitor.visitSingularBoolField(value: self.rulesOnly, fieldNumber: 2)
+    }
+    if self.startedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.startedAt, fieldNumber: 3)
+    }
+    if self.finishedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.finishedAt, fieldNumber: 4)
+    }
+    if !self.step.isEmpty {
+      try visitor.visitSingularStringField(value: self.step, fieldNumber: 5)
+    }
+    if self.ok != false {
+      try visitor.visitSingularBoolField(value: self.ok, fieldNumber: 6)
+    }
+    if !self.error.isEmpty {
+      try visitor.visitSingularStringField(value: self.error, fieldNumber: 7)
+    }
+    if !self.log.isEmpty {
+      try visitor.visitSingularStringField(value: self.log, fieldNumber: 8)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SafetyNetAction, rhs: Orchd_V1_SafetyNetAction) -> Bool {
+    if lhs.running != rhs.running {return false}
+    if lhs.rulesOnly != rhs.rulesOnly {return false}
+    if lhs.startedAt != rhs.startedAt {return false}
+    if lhs.finishedAt != rhs.finishedAt {return false}
+    if lhs.step != rhs.step {return false}
+    if lhs.ok != rhs.ok {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.log != rhs.log {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

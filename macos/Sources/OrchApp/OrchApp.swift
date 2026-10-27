@@ -38,9 +38,10 @@ final class AppModel {
     let logs: LogsModel
     let docs: DocsModel
     let registeredSources: RegisteredSourcesModel
+    let safetyNet: SafetyNetModel
 
     init() {
-        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & SystemAPI & CatalogAPI
+        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & SystemAPI & CatalogAPI & SafetyNetAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -62,6 +63,7 @@ final class AppModel {
         logs = LogsModel(api: api)
         docs = DocsModel(api: api)
         registeredSources = RegisteredSourcesModel(api: api)
+        safetyNet = SafetyNetModel(api: api)
     }
 
     /// Starts polling; called once the app has finished launching, and not
@@ -113,7 +115,7 @@ enum BrandGlyph {
 
 /// Stands in when the gRPC transport cannot even be built, so the tray still
 /// shows the daemon as down instead of the app failing to launch.
-private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI, CatalogAPI {
+private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI, CatalogAPI, SafetyNetAPI {
     let reason: String
 
     private var failure: DaemonControl.ControlError { .failed(status: -1, output: reason) }
@@ -138,6 +140,8 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
     func listDocs() async throws -> DocCatalog { throw failure }
     func syncDocs(owner: String?, force: Bool) async throws -> DocsSyncState { throw failure }
     func docsSync() async throws -> DocsSyncState { throw failure }
+    func safetyNet() async throws -> SafetyNetState { throw failure }
+    func installSafetyNet(rulesOnly: Bool) async throws -> SafetyNetState { throw failure }
     func document(uri: String) async throws -> RebuiltDocument { throw failure }
     func registeredSources() async throws -> [RegisteredSource] { throw failure }
     func saveSource(_ draft: SourceDraft, replacing: String?) async throws -> RegisteredSource { throw failure }

@@ -6,12 +6,12 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | Command | Purpose |
 |---|---|
 | `version`, `ping` | build version; orchd reachability |
-| `status [--json]` | whole-system report; works with orchd down; always exits 0 |
+| `status [--json]` | whole-system report, including the `safety-net` line; works with orchd down; always exits 0 |
 | `check` | pass/fail preconditions: ONNX Runtime dylib, embedding model, `gh auth status`, orchd ping |
 | `config get\|set\|list` | settings ([config.md](config.md)) |
 | `daemon status\|start\|stop\|restart` | orchd via `brew services` or launchd |
 | `restart [orchd\|subsystems\|<unit>] [--list]` | bounce orchd, or restart units in place |
-| `install [--apply] [--target] [--home] [--bin-dir]` | wire harnesses ([install.md](install.md)) |
+| `install [--apply] [--target] [--home] [--bin-dir]` | wire harnesses, and for Claude Code the pinned cc-safety-net and its guard rules ([install.md](install.md)) |
 | `mcp rag\|queue` | stdio MCP servers |
 | `ingest text --source-uri <uri> [--type] [--scope] [--tag]` | store stdin |
 | `search <query> [--top-k] [--scope] [--type] [--tag] [--mode] [--since] [--until]` | search memory |

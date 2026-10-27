@@ -14,6 +14,7 @@ package install
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -87,15 +88,46 @@ func (e Edit) evaluate() (evaluated, error) {
 	return ev, nil
 }
 
-// Plan is an ordered set of edits for a target harness.
+// Step is an action an install takes beyond writing files, such as running
+// `claude plugin install`. Steps run after every edit is written, in order,
+// and each must be idempotent: a plan only lists the steps the current state
+// still needs, so a fully installed harness plans none.
+type Step struct {
+	Summary string
+	Run     func(ctx context.Context) (output string, err error)
+}
+
+// stepper is implemented by adapters that also take actions.
+type stepper interface {
+	Steps(home string) []Step
+}
+
+// Plan is an ordered set of edits, then steps, for a target harness.
+//
+// Steps is called each time the plan is printed, counted or applied, rather
+// than once when it is built, because the state it plans from changes when
+// the steps run: a plan reused after Apply must see that nothing is left.
 type Plan struct {
 	Target string
 	Edits  []Edit
+	Steps  func() []Step
 }
 
 // BuildPlan computes the plan for an adapter.
 func BuildPlan(a Adapter, bins Bins, home string) Plan {
-	return Plan{Target: a.Name(), Edits: a.Edits(bins, home)}
+	p := Plan{Target: a.Name(), Edits: a.Edits(bins, home)}
+	if s, ok := a.(stepper); ok {
+		p.Steps = func() []Step { return s.Steps(home) }
+	}
+	return p
+}
+
+// steps plans the steps against the current state.
+func (p Plan) steps() []Step {
+	if p.Steps == nil {
+		return nil
+	}
+	return p.Steps()
 }
 
 // AdapterFor returns the harness adapter for a target name.
@@ -146,7 +178,7 @@ func (p Plan) Pending() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	pending := 0
+	pending := len(p.steps())
 	for _, ev := range evs {
 		if ev.changed {
 			pending++
@@ -180,17 +212,30 @@ func (p Plan) Print(w io.Writer) error {
 		}
 		fmt.Fprintf(w, "\n=== %s %s ===\n%s\n", action, e.Path, ev.summary)
 	}
-	if changed == 0 {
+	steps := p.steps()
+	for _, s := range steps {
+		fmt.Fprintf(w, "\n=== RUN ===\n%s\n", s.Summary)
+	}
+	switch {
+	case changed == 0 && len(steps) == 0:
 		fmt.Fprintf(w, "\nAlready fully installed for %q — nothing to do.\n", p.Target)
-	} else {
+	case len(steps) == 0:
 		fmt.Fprintf(w, "\n%d file(s) would change. Re-run with --apply to write (originals backed up first).\n", changed)
+	default:
+		fmt.Fprintf(w, "\n%d file(s) would change and %d step(s) would run. Re-run with --apply to do it (originals backed up first).\n", changed, len(steps))
 	}
 	return nil
 }
 
 // Apply performs only the edits that actually change a file, backing up each
-// modified file first. Idempotent: an already-installed harness writes nothing.
+// modified file first, then runs the plan's steps. Idempotent: an
+// already-installed harness writes and runs nothing.
 func (p Plan) Apply(w io.Writer, backupDir string) error {
+	return p.ApplyContext(context.Background(), w, backupDir)
+}
+
+// ApplyContext is Apply with a context bounding the steps.
+func (p Plan) ApplyContext(ctx context.Context, w io.Writer, backupDir string) error {
 	// Compute everything before touching the filesystem — see evaluateAll.
 	evs, err := p.evaluateAll()
 	if err != nil {
@@ -238,12 +283,38 @@ func (p Plan) Apply(w io.Writer, backupDir string) error {
 			fmt.Fprintf(w, "  %s\n", line)
 		}
 	}
-	if changed == 0 {
-		fmt.Fprintf(w, "already fully installed for %q — nothing changed.\n", p.Target)
-	} else {
+	if changed > 0 {
 		fmt.Fprintf(w, "%d file(s) changed; backups in %s\n", changed, dest)
 	}
+	ran, err := p.runSteps(ctx, w)
+	if err != nil {
+		return err
+	}
+	if changed == 0 && ran == 0 {
+		fmt.Fprintf(w, "already fully installed for %q — nothing changed.\n", p.Target)
+	}
 	return nil
+}
+
+// runSteps runs each step in order and stops at the first failure: later
+// steps can depend on earlier ones (install needs the marketplace added).
+// Steps are planned after the edits are written, from the state they leave.
+func (p Plan) runSteps(ctx context.Context, w io.Writer) (int, error) {
+	steps := p.steps()
+	for _, s := range steps {
+		fmt.Fprintf(w, "run %s\n", s.Summary)
+		out, err := s.Run(ctx)
+		for _, line := range strings.Split(out, "\n") {
+			if line != "" {
+				fmt.Fprintf(w, "  %s\n", line)
+			}
+		}
+		if err != nil {
+			first, _, _ := strings.Cut(s.Summary, "\n")
+			return 0, fmt.Errorf("%s: %w", first, err)
+		}
+	}
+	return len(steps), nil
 }
 
 // unlinkSymlinks removes each path that is currently a symlink, leaving regular

@@ -423,6 +423,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "GetSafetyNet" metadata.
+        public enum GetSafetyNet: Sendable {
+            /// Request type for "GetSafetyNet".
+            public typealias Input = Orchd_V1_GetSafetyNetRequest
+            /// Response type for "GetSafetyNet".
+            public typealias Output = Orchd_V1_SafetyNetState
+            /// Descriptor for "GetSafetyNet".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetSafetyNet",
+                type: .unary
+            )
+        }
+        /// Namespace for "InstallSafetyNet" metadata.
+        public enum InstallSafetyNet: Sendable {
+            /// Request type for "InstallSafetyNet".
+            public typealias Input = Orchd_V1_InstallSafetyNetRequest
+            /// Response type for "InstallSafetyNet".
+            public typealias Output = Orchd_V1_SafetyNetState
+            /// Descriptor for "InstallSafetyNet".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "InstallSafetyNet",
+                type: .unary
+            )
+        }
         /// Descriptors for all methods in the "orchd.v1.Orchd" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             Ping.descriptor,
@@ -455,7 +481,9 @@ public enum Orchd_V1_Orchd: Sendable {
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
-            RefreshSource.descriptor
+            RefreshSource.descriptor,
+            GetSafetyNet.descriptor,
+            InstallSafetyNet.descriptor
         ]
     }
 }
@@ -1208,6 +1236,56 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RefreshSourceResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RefreshSourceResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetSafetyNet" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetSafetyNet reports how cc-safety-net is installed in Claude Code
+        /// > against the version this orch pins, the guard rules, and the last
+        /// > install action. Read from plugin and rule files; runs no command.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetSafetyNetRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetSafetyNetRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SafetyNetState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getSafetyNet<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetSafetyNetRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetSafetyNetRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SafetyNetState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "InstallSafetyNet" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+        /// > orch-guards rules, and returns the resulting state. One action runs at a
+        /// > time; a request while one runs is refused (Aborted), never queued.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_InstallSafetyNetRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_InstallSafetyNetRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SafetyNetState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func installSafetyNet<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_InstallSafetyNetRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_InstallSafetyNetRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SafetyNetState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -2302,6 +2380,78 @@ extension Orchd_V1_Orchd {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "GetSafetyNet" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetSafetyNet reports how cc-safety-net is installed in Claude Code
+        /// > against the version this orch pins, the guard rules, and the last
+        /// > install action. Read from plugin and rule files; runs no command.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetSafetyNetRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetSafetyNetRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SafetyNetState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getSafetyNet<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetSafetyNetRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetSafetyNetRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SafetyNetState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetSafetyNet.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "InstallSafetyNet" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+        /// > orch-guards rules, and returns the resulting state. One action runs at a
+        /// > time; a request while one runs is refused (Aborted), never queued.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_InstallSafetyNetRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_InstallSafetyNetRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SafetyNetState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func installSafetyNet<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_InstallSafetyNetRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_InstallSafetyNetRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SafetyNetState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.InstallSafetyNet.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -3219,6 +3369,68 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RefreshSourceRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RefreshSourceResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetSafetyNet" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetSafetyNet reports how cc-safety-net is installed in Claude Code
+    /// > against the version this orch pins, the guard rules, and the last
+    /// > install action. Read from plugin and rule files; runs no command.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetSafetyNetRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getSafetyNet<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetSafetyNetRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getSafetyNet(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetSafetyNetRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SafetyNetState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "InstallSafetyNet" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+    /// > orch-guards rules, and returns the resulting state. One action runs at a
+    /// > time; a request while one runs is refused (Aborted), never queued.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_InstallSafetyNetRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func installSafetyNet<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_InstallSafetyNetRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.installSafetyNet(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_InstallSafetyNetRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SafetyNetState>(),
             options: options,
             onResponse: handleResponse
         )
@@ -4262,6 +4474,76 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.refreshSource(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetSafetyNet" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetSafetyNet reports how cc-safety-net is installed in Claude Code
+    /// > against the version this orch pins, the guard rules, and the last
+    /// > install action. Read from plugin and rule files; runs no command.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getSafetyNet<Result>(
+        _ message: Orchd_V1_GetSafetyNetRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetSafetyNetRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getSafetyNet(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "InstallSafetyNet" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+    /// > orch-guards rules, and returns the resulting state. One action runs at a
+    /// > time; a request while one runs is refused (Aborted), never queued.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func installSafetyNet<Result>(
+        _ message: Orchd_V1_InstallSafetyNetRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SafetyNetState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_InstallSafetyNetRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.installSafetyNet(
             request: request,
             options: options,
             onResponse: handleResponse

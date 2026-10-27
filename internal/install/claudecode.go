@@ -26,9 +26,11 @@ var eventSlugs = []struct{ Slug, Event string }{
 	{"subagent-stop", "SubagentStop"},
 }
 
-// Edits implements Adapter: settings.json (hooks + MCP), ~/.claude.json (MCP, if
-// present, where user-scope servers like serena live), the shell alias, the plist,
-// and the orchestrator subagents and skills.
+// Edits implements Adapter: settings.json (hooks, MCP, permissions,
+// attribution), ~/.claude.json (MCP, if present, where user-scope servers like
+// serena live), the shell alias, the plist, the orchestrator subagents and
+// skills, and the cc-safety-net marketplace and guard rules. The plugin itself
+// is installed by Steps.
 func (c ClaudeCode) Edits(bins Bins, home string) []Edit {
 	edits := append(instructionEdits(home, c.Name()), []Edit{
 		c.settingsEdit(bins, home),
@@ -36,7 +38,8 @@ func (c ClaudeCode) Edits(bins Bins, home string) []Edit {
 		aliasEdit(bins.Orch, home),
 		plistEdit(bins.Orchd, home),
 	}...)
-	return append(edits, claudeAssetEdits(home)...)
+	edits = append(edits, claudeAssetEdits(home)...)
+	return append(edits, safetyNetEdits(home)...)
 }
 
 // claudeJSONEdit updates rag/queue MCP registration in ~/.claude.json ONLY if the
@@ -83,11 +86,19 @@ func (ClaudeCode) settingsEdit(bins Bins, home string) Edit {
 			if err != nil {
 				return nil, "", err
 			}
+			denySummary, err := applyCredentialDeny(root)
+			if err != nil {
+				return nil, "", err
+			}
+			attrSummary, err := applyAttribution(root)
+			if err != nil {
+				return nil, "", err
+			}
 			out, err := marshalJSON(root)
 			if err != nil {
 				return nil, "", err
 			}
-			return out, strings.Join([]string{hookSummary, mcpSummary, permSummary}, "\n"), nil
+			return out, strings.Join([]string{hookSummary, mcpSummary, permSummary, denySummary, attrSummary}, "\n"), nil
 		},
 	}
 }

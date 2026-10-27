@@ -151,3 +151,11 @@ func (f *fakeClient) GetDocsSync(context.Context, *orchdv1.GetDocsSyncRequest, .
 	}
 	return st, nil
 }
+
+func (f *fakeClient) GetSafetyNet(context.Context, *orchdv1.GetSafetyNetRequest, ...grpc.CallOption) (*orchdv1.SafetyNetState, error) {
+	return &orchdv1.SafetyNetState{}, nil
+}
+
+func (f *fakeClient) InstallSafetyNet(context.Context, *orchdv1.InstallSafetyNetRequest, ...grpc.CallOption) (*orchdv1.SafetyNetState, error) {
+	return &orchdv1.SafetyNetState{}, nil
+}

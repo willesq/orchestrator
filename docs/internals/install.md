@@ -21,11 +21,12 @@ Each adapter returns a plan of edits: `{Path, Compute(old) → new, summary, Nor
 
 | File | Edit |
 |---|---|
-| `~/.claude/settings.json` | hooks, MCP servers, permissions |
+| `~/.claude/settings.json` | hooks, MCP servers, permissions, credential-file deny rules, `attribution.commit` |
 | `~/.claude.json` | MCP servers, only if the file exists |
 | `~/.claude/CLAUDE.md` | managed block importing the shared policy |
 | `~/.claude/agents/*.md`, `skills/*/SKILL.md` | shipped agents and skills |
 | `~/.zprofile`, LaunchAgent | see [common](#common) |
+| `<data>/marketplaces/orch-pinned/.claude-plugin/marketplace.json`, `~/.cc-safety-net/rules/` | the safety net, below |
 
 **Hooks:** for each event, `hooks.<Event>` gets
 `{"hooks": [{"type": "command", "command": "<bin>/orch-hook <slug>"}]}`. Events: `SessionStart`,
@@ -52,12 +53,86 @@ background agents, which cannot answer prompts, can use memory. Skip it if a `de
 covers the server (`mcp__*`, `mcp__<s>`, or any `mcp__<s>__…` rule), and report why; skip if an
 allow rule already covers it. A `permissions` value of an unexpected JSON type aborts the install.
 
+**Credential files and attribution:** `permissions.deny` gains `Read(~/.config/gh/**)`,
+`Read(~/.netrc)` and `Read(~/.docker/config.json)`, each only if absent, so the file tools cannot
+read them (cc-safety-net already blocks shell access). `attribution.commit` is set to `""`, so
+Claude Code adds no co-author trailer, per the shared policy; other `attribution` keys are kept.
+A `permissions.deny` or `attribution` of an unexpected JSON type aborts the install. No `ask`
+rule is ever written: guards deny narrowly and never prompt.
+
 **Agents and skills:** agents `dev`, `dispatcher`, `ops`, `research`, `reviewer`, `triage`;
 skills `orch-dispatch`, `orch-pr-status`, `orch-rag-ingest`, `orch-rag-query`,
 `orch-repo-onboard`, `orch-task-status`, embedded from `internal/install/assets/`. Each carries a
 `managed-by: orch` marker: missing files are created, marked files updated, symlinks into the
 retired `~/.claude/orchestrator` checkout replaced; any other file aborts the install rather than
 being overwritten.
+
+### Safety net
+
+`internal/safetynet` holds the pin (`Pinned`: version, repository URL, ref, commit, release date,
+and the npm CLI version used only by an opt-in test), detection, and command planning. A release
+bumps the pin deliberately, to a release at least 14 days old; a test checks the age.
+
+**Locations.** For the real home: `CC_SAFETY_NET_HOME` (absolute) or `~/.cc-safety-net`, and the
+marketplace under the orch data directory. A relocated `--home` uses `<home>/.cc-safety-net` and
+`<home>/.local/share/orch/marketplaces/`, and runs `claude` with `HOME=<home>` and without
+`CLAUDE_CONFIG_DIR` or `CC_SAFETY_NET_HOME`, so a test install cannot reach the real ones.
+
+**Detection** reads `~/.claude/plugins/installed_plugins.json`, `known_marketplaces.json` and
+`settings.json` `enabledPlugins` (none hold secrets; each read is capped at 1 MiB):
+
+| State | When |
+|---|---|
+| `legacy` | a user- or project-scope install named `safety-net` or `cc-safety-net` from any marketplace other than `orch-pinned` (its hook would run twice) |
+| `missing` | no user-scope `cc-safety-net@orch-pinned` |
+| `outdated` | ours at another version, at another recorded commit, or registered from another directory |
+| `disabled` | ours at the pin with `enabledPlugins` false |
+| `ok` | otherwise |
+
+Rules are ok when `rule.json` parses at version 1, lists `orch-guards`, has `rtk` in
+`transparent_wrappers`, and the rulebook file equals the embedded one by meaning. Every listed
+source is read for display: a bare name, or `owner/repo#ref/name` (its vendored copy), whose name
+must match `^[a-zA-Z][a-zA-Z0-9_-]{0,63}$` before it becomes a path, which also rules out
+traversal.
+
+**Edits** (after the agents and skills): the marketplace manifest, generated from the pin; the
+`orch-guards` rulebook, embedded from `internal/safetynet/orch-guards.rulebook.json` and
+overwritten (orch owns it); then `rule.json`, merged: version 1, `orch-guards` appended to
+`rules` and `rtk` to `transparent_wrappers` when absent, every other key, source, override and
+wrapper kept. An unparseable `rule.json`, a version other than 1, or a non-array `rules` aborts
+the plan instead of being rewritten.
+
+**Steps.** A plan may also carry steps: commands run after every edit is written, planned from
+the current state each time the plan is printed, counted or applied (a plan reused after Apply
+sees nothing left), printed as `=== RUN ===`, counted as drift by `orch status`, and stopping at
+the first failure. The Claude Code adapter plans `claude` commands, each an argument array with
+empty stdin and a 3-minute timeout:
+
+1. `plugin marketplace add <dir>` when `orch-pinned` is unknown; `marketplace remove orch-pinned`
+   first when it points elsewhere (which also uninstalls its plugins); `marketplace update
+   orch-pinned` when ours is outdated.
+2. `plugin uninstall <id> --scope user` for each user-scope competing copy. Project- and
+   local-scope copies are reported and left to the user.
+3. `plugin install cc-safety-net@orch-pinned --scope user` when missing, or `plugin update ...`
+   when outdated. `orch install` leaves a disabled plugin disabled; orchd's `InstallSafetyNet`
+   runs `plugin enable`.
+4. `plugin marketplace remove cc-marketplace` when it is registered and no other installed plugin
+   (and no remaining project-scope copy) comes from it.
+5. After an install or update, a check that Claude Code recorded the pinned commit: a missing or
+   different `gitCommitSha` fails the plan. The plugin is not uninstalled then, since an unpinned
+   copy still guards better than none.
+
+Each command runs in its own process group, so a timeout also stops the git and ssh it started,
+with a 5 s `WaitDelay` for anything still holding the output pipe. Only the last 4 KiB of output
+is kept, with URL credentials and secret-shaped strings masked. Without a `claude` CLI, `orch
+install` skips the plugin steps with a note, so `--target all` still wires the other harnesses;
+`orch status` keeps reporting them.
+
+`claude` is found as queued tasks find it (`PATH`, then the Homebrew and `~/.local/bin`
+locations). Tests replace the runner with `internal/safetynet/fakeclaude`, which edits the same
+files the real CLI writes; no test runs the real CLI. `TestRulebookWithPinnedCLI` runs every
+rule case through the pinned analyzer's `explain --json` (it analyzes and executes nothing) when
+`ORCH_CCSN_CLI` points at its `dist/bin/cc-safety-net.js`; it is skipped otherwise.
 
 ## Codex
 

@@ -5147,6 +5147,665 @@ func (x *RefreshSourceResponse) GetMarked() int32 {
 	return 0
 }
 
+type GetSafetyNetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSafetyNetRequest) Reset() {
+	*x = GetSafetyNetRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[78]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSafetyNetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSafetyNetRequest) ProtoMessage() {}
+
+func (x *GetSafetyNetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[78]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSafetyNetRequest.ProtoReflect.Descriptor instead.
+func (*GetSafetyNetRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{78}
+}
+
+type InstallSafetyNetRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// rules_only rewrites the orch-guards rulebook and rule.json and runs no
+	// plugin command (the app's Repair rules).
+	RulesOnly     bool `protobuf:"varint,1,opt,name=rules_only,json=rulesOnly,proto3" json:"rules_only,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InstallSafetyNetRequest) Reset() {
+	*x = InstallSafetyNetRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[79]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InstallSafetyNetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InstallSafetyNetRequest) ProtoMessage() {}
+
+func (x *InstallSafetyNetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[79]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InstallSafetyNetRequest.ProtoReflect.Descriptor instead.
+func (*InstallSafetyNetRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{79}
+}
+
+func (x *InstallSafetyNetRequest) GetRulesOnly() bool {
+	if x != nil {
+		return x.RulesOnly
+	}
+	return false
+}
+
+type SafetyNetState struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// state: missing, legacy, outdated, disabled or ok.
+	State            string              `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
+	Ok               bool                `protobuf:"varint,2,opt,name=ok,proto3" json:"ok,omitempty"` // plugin ok and rules ok
+	PinnedVersion    string              `protobuf:"bytes,3,opt,name=pinned_version,json=pinnedVersion,proto3" json:"pinned_version,omitempty"`
+	PinnedSha        string              `protobuf:"bytes,4,opt,name=pinned_sha,json=pinnedSha,proto3" json:"pinned_sha,omitempty"`
+	InstalledVersion string              `protobuf:"bytes,5,opt,name=installed_version,json=installedVersion,proto3" json:"installed_version,omitempty"` // empty when not installed by orch
+	InstalledSha     string              `protobuf:"bytes,6,opt,name=installed_sha,json=installedSha,proto3" json:"installed_sha,omitempty"`
+	Legacy           []*SafetyNetInstall `protobuf:"bytes,7,rep,name=legacy,proto3" json:"legacy,omitempty"` // competing copies from other marketplaces
+	Rules            *SafetyNetRules     `protobuf:"bytes,8,opt,name=rules,proto3" json:"rules,omitempty"`
+	Errors           []string            `protobuf:"bytes,9,rep,name=errors,proto3" json:"errors,omitempty"`                                                // plugin files that could not be read
+	Action           *SafetyNetAction    `protobuf:"bytes,10,opt,name=action,proto3" json:"action,omitempty"`                                               // running or last install action
+	PinnedReleasedOn string              `protobuf:"bytes,11,opt,name=pinned_released_on,json=pinnedReleasedOn,proto3" json:"pinned_released_on,omitempty"` // YYYY-MM-DD
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SafetyNetState) Reset() {
+	*x = SafetyNetState{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[80]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SafetyNetState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SafetyNetState) ProtoMessage() {}
+
+func (x *SafetyNetState) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[80]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SafetyNetState.ProtoReflect.Descriptor instead.
+func (*SafetyNetState) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{80}
+}
+
+func (x *SafetyNetState) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *SafetyNetState) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *SafetyNetState) GetPinnedVersion() string {
+	if x != nil {
+		return x.PinnedVersion
+	}
+	return ""
+}
+
+func (x *SafetyNetState) GetPinnedSha() string {
+	if x != nil {
+		return x.PinnedSha
+	}
+	return ""
+}
+
+func (x *SafetyNetState) GetInstalledVersion() string {
+	if x != nil {
+		return x.InstalledVersion
+	}
+	return ""
+}
+
+func (x *SafetyNetState) GetInstalledSha() string {
+	if x != nil {
+		return x.InstalledSha
+	}
+	return ""
+}
+
+func (x *SafetyNetState) GetLegacy() []*SafetyNetInstall {
+	if x != nil {
+		return x.Legacy
+	}
+	return nil
+}
+
+func (x *SafetyNetState) GetRules() *SafetyNetRules {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+func (x *SafetyNetState) GetErrors() []string {
+	if x != nil {
+		return x.Errors
+	}
+	return nil
+}
+
+func (x *SafetyNetState) GetAction() *SafetyNetAction {
+	if x != nil {
+		return x.Action
+	}
+	return nil
+}
+
+func (x *SafetyNetState) GetPinnedReleasedOn() string {
+	if x != nil {
+		return x.PinnedReleasedOn
+	}
+	return ""
+}
+
+type SafetyNetInstall struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // plugin@marketplace
+	Scope         string                 `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`
+	Version       string                 `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SafetyNetInstall) Reset() {
+	*x = SafetyNetInstall{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[81]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SafetyNetInstall) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SafetyNetInstall) ProtoMessage() {}
+
+func (x *SafetyNetInstall) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[81]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SafetyNetInstall.ProtoReflect.Descriptor instead.
+func (*SafetyNetInstall) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{81}
+}
+
+func (x *SafetyNetInstall) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SafetyNetInstall) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *SafetyNetInstall) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+type SafetyNetRules struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Ok              bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	ConfigPath      string                 `protobuf:"bytes,2,opt,name=config_path,json=configPath,proto3" json:"config_path,omitempty"`
+	ConfigExists    bool                   `protobuf:"varint,3,opt,name=config_exists,json=configExists,proto3" json:"config_exists,omitempty"`
+	ConfigError     string                 `protobuf:"bytes,4,opt,name=config_error,json=configError,proto3" json:"config_error,omitempty"`
+	Referenced      bool                   `protobuf:"varint,5,opt,name=referenced,proto3" json:"referenced,omitempty"`                                  // rule.json lists orch-guards
+	RtkWrapper      bool                   `protobuf:"varint,6,opt,name=rtk_wrapper,json=rtkWrapper,proto3" json:"rtk_wrapper,omitempty"`                // rtk is a transparent wrapper
+	RulebookCurrent bool                   `protobuf:"varint,7,opt,name=rulebook_current,json=rulebookCurrent,proto3" json:"rulebook_current,omitempty"` // the orch-guards file matches this build
+	Rulebooks       []*SafetyNetRulebook   `protobuf:"bytes,8,rep,name=rulebooks,proto3" json:"rulebooks,omitempty"`
+	Problems        []string               `protobuf:"bytes,9,rep,name=problems,proto3" json:"problems,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SafetyNetRules) Reset() {
+	*x = SafetyNetRules{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[82]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SafetyNetRules) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SafetyNetRules) ProtoMessage() {}
+
+func (x *SafetyNetRules) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[82]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SafetyNetRules.ProtoReflect.Descriptor instead.
+func (*SafetyNetRules) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{82}
+}
+
+func (x *SafetyNetRules) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *SafetyNetRules) GetConfigPath() string {
+	if x != nil {
+		return x.ConfigPath
+	}
+	return ""
+}
+
+func (x *SafetyNetRules) GetConfigExists() bool {
+	if x != nil {
+		return x.ConfigExists
+	}
+	return false
+}
+
+func (x *SafetyNetRules) GetConfigError() string {
+	if x != nil {
+		return x.ConfigError
+	}
+	return ""
+}
+
+func (x *SafetyNetRules) GetReferenced() bool {
+	if x != nil {
+		return x.Referenced
+	}
+	return false
+}
+
+func (x *SafetyNetRules) GetRtkWrapper() bool {
+	if x != nil {
+		return x.RtkWrapper
+	}
+	return false
+}
+
+func (x *SafetyNetRules) GetRulebookCurrent() bool {
+	if x != nil {
+		return x.RulebookCurrent
+	}
+	return false
+}
+
+func (x *SafetyNetRules) GetRulebooks() []*SafetyNetRulebook {
+	if x != nil {
+		return x.Rulebooks
+	}
+	return nil
+}
+
+func (x *SafetyNetRules) GetProblems() []string {
+	if x != nil {
+		return x.Problems
+	}
+	return nil
+}
+
+type SafetyNetRulebook struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Source        string                 `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"` // as listed in rule.json
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Owner         string                 `protobuf:"bytes,3,opt,name=owner,proto3" json:"owner,omitempty"` // orch or user
+	Remote        bool                   `protobuf:"varint,4,opt,name=remote,proto3" json:"remote,omitempty"`
+	Version       string                 `protobuf:"bytes,5,opt,name=version,proto3" json:"version,omitempty"`
+	Description   string                 `protobuf:"bytes,6,opt,name=description,proto3" json:"description,omitempty"`
+	Error         string                 `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"` // missing or invalid: cc-safety-net skips it
+	Rules         []*SafetyNetRule       `protobuf:"bytes,8,rep,name=rules,proto3" json:"rules,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SafetyNetRulebook) Reset() {
+	*x = SafetyNetRulebook{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[83]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SafetyNetRulebook) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SafetyNetRulebook) ProtoMessage() {}
+
+func (x *SafetyNetRulebook) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[83]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SafetyNetRulebook.ProtoReflect.Descriptor instead.
+func (*SafetyNetRulebook) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{83}
+}
+
+func (x *SafetyNetRulebook) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *SafetyNetRulebook) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SafetyNetRulebook) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *SafetyNetRulebook) GetRemote() bool {
+	if x != nil {
+		return x.Remote
+	}
+	return false
+}
+
+func (x *SafetyNetRulebook) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *SafetyNetRulebook) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *SafetyNetRulebook) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *SafetyNetRulebook) GetRules() []*SafetyNetRule {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+type SafetyNetRule struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Command       string                 `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`
+	Subcommand    string                 `protobuf:"bytes,3,opt,name=subcommand,proto3" json:"subcommand,omitempty"`
+	BlockArgs     []string               `protobuf:"bytes,4,rep,name=block_args,json=blockArgs,proto3" json:"block_args,omitempty"`
+	Reason        string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	Off           bool                   `protobuf:"varint,6,opt,name=off,proto3" json:"off,omitempty"` // overridden to off in rule.json
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SafetyNetRule) Reset() {
+	*x = SafetyNetRule{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[84]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SafetyNetRule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SafetyNetRule) ProtoMessage() {}
+
+func (x *SafetyNetRule) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[84]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SafetyNetRule.ProtoReflect.Descriptor instead.
+func (*SafetyNetRule) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{84}
+}
+
+func (x *SafetyNetRule) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SafetyNetRule) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *SafetyNetRule) GetSubcommand() string {
+	if x != nil {
+		return x.Subcommand
+	}
+	return ""
+}
+
+func (x *SafetyNetRule) GetBlockArgs() []string {
+	if x != nil {
+		return x.BlockArgs
+	}
+	return nil
+}
+
+func (x *SafetyNetRule) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *SafetyNetRule) GetOff() bool {
+	if x != nil {
+		return x.Off
+	}
+	return false
+}
+
+type SafetyNetAction struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Running       bool                   `protobuf:"varint,1,opt,name=running,proto3" json:"running,omitempty"`
+	RulesOnly     bool                   `protobuf:"varint,2,opt,name=rules_only,json=rulesOnly,proto3" json:"rules_only,omitempty"`
+	StartedAt     int64                  `protobuf:"varint,3,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`    // unix seconds; 0 = never run
+	FinishedAt    int64                  `protobuf:"varint,4,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"` // 0 while running
+	Step          string                 `protobuf:"bytes,5,opt,name=step,proto3" json:"step,omitempty"`                                // the step running, or the last one
+	Ok            bool                   `protobuf:"varint,6,opt,name=ok,proto3" json:"ok,omitempty"`
+	Error         string                 `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`
+	Log           string                 `protobuf:"bytes,8,opt,name=log,proto3" json:"log,omitempty"` // command output, capped
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SafetyNetAction) Reset() {
+	*x = SafetyNetAction{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[85]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SafetyNetAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SafetyNetAction) ProtoMessage() {}
+
+func (x *SafetyNetAction) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[85]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SafetyNetAction.ProtoReflect.Descriptor instead.
+func (*SafetyNetAction) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{85}
+}
+
+func (x *SafetyNetAction) GetRunning() bool {
+	if x != nil {
+		return x.Running
+	}
+	return false
+}
+
+func (x *SafetyNetAction) GetRulesOnly() bool {
+	if x != nil {
+		return x.RulesOnly
+	}
+	return false
+}
+
+func (x *SafetyNetAction) GetStartedAt() int64 {
+	if x != nil {
+		return x.StartedAt
+	}
+	return 0
+}
+
+func (x *SafetyNetAction) GetFinishedAt() int64 {
+	if x != nil {
+		return x.FinishedAt
+	}
+	return 0
+}
+
+func (x *SafetyNetAction) GetStep() string {
+	if x != nil {
+		return x.Step
+	}
+	return ""
+}
+
+func (x *SafetyNetAction) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *SafetyNetAction) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *SafetyNetAction) GetLog() string {
+	if x != nil {
+		return x.Log
+	}
+	return ""
+}
+
 var File_internal_rpc_orchdv1_orchd_proto protoreflect.FileDescriptor
 
 const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
@@ -5582,7 +6241,74 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x14RefreshSourceRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"/\n" +
 	"\x15RefreshSourceResponse\x12\x16\n" +
-	"\x06marked\x18\x01 \x01(\x05R\x06marked2\x89\x12\n" +
+	"\x06marked\x18\x01 \x01(\x05R\x06marked\"\x15\n" +
+	"\x13GetSafetyNetRequest\"8\n" +
+	"\x17InstallSafetyNetRequest\x12\x1d\n" +
+	"\n" +
+	"rules_only\x18\x01 \x01(\bR\trulesOnly\"\xab\x03\n" +
+	"\x0eSafetyNetState\x12\x14\n" +
+	"\x05state\x18\x01 \x01(\tR\x05state\x12\x0e\n" +
+	"\x02ok\x18\x02 \x01(\bR\x02ok\x12%\n" +
+	"\x0epinned_version\x18\x03 \x01(\tR\rpinnedVersion\x12\x1d\n" +
+	"\n" +
+	"pinned_sha\x18\x04 \x01(\tR\tpinnedSha\x12+\n" +
+	"\x11installed_version\x18\x05 \x01(\tR\x10installedVersion\x12#\n" +
+	"\rinstalled_sha\x18\x06 \x01(\tR\finstalledSha\x122\n" +
+	"\x06legacy\x18\a \x03(\v2\x1a.orchd.v1.SafetyNetInstallR\x06legacy\x12.\n" +
+	"\x05rules\x18\b \x01(\v2\x18.orchd.v1.SafetyNetRulesR\x05rules\x12\x16\n" +
+	"\x06errors\x18\t \x03(\tR\x06errors\x121\n" +
+	"\x06action\x18\n" +
+	" \x01(\v2\x19.orchd.v1.SafetyNetActionR\x06action\x12,\n" +
+	"\x12pinned_released_on\x18\v \x01(\tR\x10pinnedReleasedOn\"R\n" +
+	"\x10SafetyNetInstall\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\x12\x18\n" +
+	"\aversion\x18\x03 \x01(\tR\aversion\"\xcc\x02\n" +
+	"\x0eSafetyNetRules\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1f\n" +
+	"\vconfig_path\x18\x02 \x01(\tR\n" +
+	"configPath\x12#\n" +
+	"\rconfig_exists\x18\x03 \x01(\bR\fconfigExists\x12!\n" +
+	"\fconfig_error\x18\x04 \x01(\tR\vconfigError\x12\x1e\n" +
+	"\n" +
+	"referenced\x18\x05 \x01(\bR\n" +
+	"referenced\x12\x1f\n" +
+	"\vrtk_wrapper\x18\x06 \x01(\bR\n" +
+	"rtkWrapper\x12)\n" +
+	"\x10rulebook_current\x18\a \x01(\bR\x0frulebookCurrent\x129\n" +
+	"\trulebooks\x18\b \x03(\v2\x1b.orchd.v1.SafetyNetRulebookR\trulebooks\x12\x1a\n" +
+	"\bproblems\x18\t \x03(\tR\bproblems\"\xee\x01\n" +
+	"\x11SafetyNetRulebook\x12\x16\n" +
+	"\x06source\x18\x01 \x01(\tR\x06source\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
+	"\x05owner\x18\x03 \x01(\tR\x05owner\x12\x16\n" +
+	"\x06remote\x18\x04 \x01(\bR\x06remote\x12\x18\n" +
+	"\aversion\x18\x05 \x01(\tR\aversion\x12 \n" +
+	"\vdescription\x18\x06 \x01(\tR\vdescription\x12\x14\n" +
+	"\x05error\x18\a \x01(\tR\x05error\x12-\n" +
+	"\x05rules\x18\b \x03(\v2\x17.orchd.v1.SafetyNetRuleR\x05rules\"\xa6\x01\n" +
+	"\rSafetyNetRule\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\acommand\x18\x02 \x01(\tR\acommand\x12\x1e\n" +
+	"\n" +
+	"subcommand\x18\x03 \x01(\tR\n" +
+	"subcommand\x12\x1d\n" +
+	"\n" +
+	"block_args\x18\x04 \x03(\tR\tblockArgs\x12\x16\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x12\x10\n" +
+	"\x03off\x18\x06 \x01(\bR\x03off\"\xd6\x01\n" +
+	"\x0fSafetyNetAction\x12\x18\n" +
+	"\arunning\x18\x01 \x01(\bR\arunning\x12\x1d\n" +
+	"\n" +
+	"rules_only\x18\x02 \x01(\bR\trulesOnly\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\x03 \x01(\x03R\tstartedAt\x12\x1f\n" +
+	"\vfinished_at\x18\x04 \x01(\x03R\n" +
+	"finishedAt\x12\x12\n" +
+	"\x04step\x18\x05 \x01(\tR\x04step\x12\x0e\n" +
+	"\x02ok\x18\x06 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05error\x18\a \x01(\tR\x05error\x12\x10\n" +
+	"\x03log\x18\b \x01(\tR\x03log2\xa3\x13\n" +
 	"\x05Orchd\x125\n" +
 	"\x04Ping\x12\x15.orchd.v1.PingRequest\x1a\x16.orchd.v1.PingResponse\x12;\n" +
 	"\x06Ingest\x12\x17.orchd.v1.IngestRequest\x1a\x18.orchd.v1.IngestResponse\x12;\n" +
@@ -5616,7 +6342,9 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\n" +
 	"SaveSource\x12\x1b.orchd.v1.SaveSourceRequest\x1a\x1a.orchd.v1.RegisteredSource\x12M\n" +
 	"\fRemoveSource\x12\x1d.orchd.v1.RemoveSourceRequest\x1a\x1e.orchd.v1.RemoveSourceResponse\x12P\n" +
-	"\rRefreshSource\x12\x1e.orchd.v1.RefreshSourceRequest\x1a\x1f.orchd.v1.RefreshSourceResponseB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
+	"\rRefreshSource\x12\x1e.orchd.v1.RefreshSourceRequest\x1a\x1f.orchd.v1.RefreshSourceResponse\x12G\n" +
+	"\fGetSafetyNet\x12\x1d.orchd.v1.GetSafetyNetRequest\x1a\x18.orchd.v1.SafetyNetState\x12O\n" +
+	"\x10InstallSafetyNet\x12!.orchd.v1.InstallSafetyNetRequest\x1a\x18.orchd.v1.SafetyNetStateB>Z<github.com/willesq/orchestrator/internal/rpc/orchdv1;orchdv1b\x06proto3"
 
 var (
 	file_internal_rpc_orchdv1_orchd_proto_rawDescOnce sync.Once
@@ -5630,7 +6358,7 @@ func file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP() []byte {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescData
 }
 
-var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 79)
+var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 87)
 var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*PingRequest)(nil),                   // 0: orchd.v1.PingRequest
 	(*PingResponse)(nil),                  // 1: orchd.v1.PingResponse
@@ -5710,7 +6438,15 @@ var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*RemoveSourceResponse)(nil),          // 75: orchd.v1.RemoveSourceResponse
 	(*RefreshSourceRequest)(nil),          // 76: orchd.v1.RefreshSourceRequest
 	(*RefreshSourceResponse)(nil),         // 77: orchd.v1.RefreshSourceResponse
-	nil,                                   // 78: orchd.v1.SystemMetrics.TasksEntry
+	(*GetSafetyNetRequest)(nil),           // 78: orchd.v1.GetSafetyNetRequest
+	(*InstallSafetyNetRequest)(nil),       // 79: orchd.v1.InstallSafetyNetRequest
+	(*SafetyNetState)(nil),                // 80: orchd.v1.SafetyNetState
+	(*SafetyNetInstall)(nil),              // 81: orchd.v1.SafetyNetInstall
+	(*SafetyNetRules)(nil),                // 82: orchd.v1.SafetyNetRules
+	(*SafetyNetRulebook)(nil),             // 83: orchd.v1.SafetyNetRulebook
+	(*SafetyNetRule)(nil),                 // 84: orchd.v1.SafetyNetRule
+	(*SafetyNetAction)(nil),               // 85: orchd.v1.SafetyNetAction
+	nil,                                   // 86: orchd.v1.SystemMetrics.TasksEntry
 }
 var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	6,  // 0: orchd.v1.SearchResponse.hits:type_name -> orchd.v1.SearchHit
@@ -5732,80 +6468,89 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	55, // 16: orchd.v1.TailLogsResponse.entries:type_name -> orchd.v1.LogEntry
 	58, // 17: orchd.v1.SystemMetrics.processes:type_name -> orchd.v1.ProcessMetrics
 	59, // 18: orchd.v1.SystemMetrics.data:type_name -> orchd.v1.DataSize
-	78, // 19: orchd.v1.SystemMetrics.tasks:type_name -> orchd.v1.SystemMetrics.TasksEntry
+	86, // 19: orchd.v1.SystemMetrics.tasks:type_name -> orchd.v1.SystemMetrics.TasksEntry
 	65, // 20: orchd.v1.ListDocsResponse.owners:type_name -> orchd.v1.DocOwner
 	67, // 21: orchd.v1.ListDocsResponse.files:type_name -> orchd.v1.DocFile
 	64, // 22: orchd.v1.ListDocsResponse.sync:type_name -> orchd.v1.DocsSyncState
 	66, // 23: orchd.v1.DocOwner.repos:type_name -> orchd.v1.DocRepo
 	72, // 24: orchd.v1.ListRegisteredSourcesResponse.sources:type_name -> orchd.v1.RegisteredSource
 	72, // 25: orchd.v1.SaveSourceRequest.source:type_name -> orchd.v1.RegisteredSource
-	0,  // 26: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
-	2,  // 27: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
-	4,  // 28: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
-	7,  // 29: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
-	10, // 30: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
-	12, // 31: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
-	14, // 32: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
-	16, // 33: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
-	19, // 34: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
-	23, // 35: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
-	25, // 36: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
-	28, // 37: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
-	30, // 38: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
-	32, // 39: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
-	34, // 40: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
-	36, // 41: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
-	39, // 42: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
-	42, // 43: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
-	45, // 44: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
-	47, // 45: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
-	50, // 46: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
-	53, // 47: orchd.v1.Orchd.TailLogs:input_type -> orchd.v1.TailLogsRequest
-	56, // 48: orchd.v1.Orchd.GetSystemMetrics:input_type -> orchd.v1.GetSystemMetricsRequest
-	60, // 49: orchd.v1.Orchd.ListDocs:input_type -> orchd.v1.ListDocsRequest
-	68, // 50: orchd.v1.Orchd.GetDocument:input_type -> orchd.v1.GetDocumentRequest
-	62, // 51: orchd.v1.Orchd.SyncDocs:input_type -> orchd.v1.SyncDocsRequest
-	63, // 52: orchd.v1.Orchd.GetDocsSync:input_type -> orchd.v1.GetDocsSyncRequest
-	70, // 53: orchd.v1.Orchd.ListRegisteredSources:input_type -> orchd.v1.ListRegisteredSourcesRequest
-	73, // 54: orchd.v1.Orchd.SaveSource:input_type -> orchd.v1.SaveSourceRequest
-	74, // 55: orchd.v1.Orchd.RemoveSource:input_type -> orchd.v1.RemoveSourceRequest
-	76, // 56: orchd.v1.Orchd.RefreshSource:input_type -> orchd.v1.RefreshSourceRequest
-	1,  // 57: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
-	3,  // 58: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
-	5,  // 59: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
-	8,  // 60: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
-	11, // 61: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
-	13, // 62: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
-	15, // 63: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
-	17, // 64: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
-	20, // 65: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
-	24, // 66: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
-	26, // 67: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
-	29, // 68: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
-	31, // 69: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
-	33, // 70: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
-	35, // 71: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
-	37, // 72: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
-	40, // 73: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
-	43, // 74: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
-	46, // 75: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
-	48, // 76: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
-	51, // 77: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
-	54, // 78: orchd.v1.Orchd.TailLogs:output_type -> orchd.v1.TailLogsResponse
-	57, // 79: orchd.v1.Orchd.GetSystemMetrics:output_type -> orchd.v1.SystemMetrics
-	61, // 80: orchd.v1.Orchd.ListDocs:output_type -> orchd.v1.ListDocsResponse
-	69, // 81: orchd.v1.Orchd.GetDocument:output_type -> orchd.v1.Document
-	64, // 82: orchd.v1.Orchd.SyncDocs:output_type -> orchd.v1.DocsSyncState
-	64, // 83: orchd.v1.Orchd.GetDocsSync:output_type -> orchd.v1.DocsSyncState
-	71, // 84: orchd.v1.Orchd.ListRegisteredSources:output_type -> orchd.v1.ListRegisteredSourcesResponse
-	72, // 85: orchd.v1.Orchd.SaveSource:output_type -> orchd.v1.RegisteredSource
-	75, // 86: orchd.v1.Orchd.RemoveSource:output_type -> orchd.v1.RemoveSourceResponse
-	77, // 87: orchd.v1.Orchd.RefreshSource:output_type -> orchd.v1.RefreshSourceResponse
-	57, // [57:88] is the sub-list for method output_type
-	26, // [26:57] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	81, // 26: orchd.v1.SafetyNetState.legacy:type_name -> orchd.v1.SafetyNetInstall
+	82, // 27: orchd.v1.SafetyNetState.rules:type_name -> orchd.v1.SafetyNetRules
+	85, // 28: orchd.v1.SafetyNetState.action:type_name -> orchd.v1.SafetyNetAction
+	83, // 29: orchd.v1.SafetyNetRules.rulebooks:type_name -> orchd.v1.SafetyNetRulebook
+	84, // 30: orchd.v1.SafetyNetRulebook.rules:type_name -> orchd.v1.SafetyNetRule
+	0,  // 31: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
+	2,  // 32: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
+	4,  // 33: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
+	7,  // 34: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
+	10, // 35: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
+	12, // 36: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
+	14, // 37: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
+	16, // 38: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
+	19, // 39: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
+	23, // 40: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
+	25, // 41: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
+	28, // 42: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
+	30, // 43: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
+	32, // 44: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
+	34, // 45: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
+	36, // 46: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
+	39, // 47: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
+	42, // 48: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
+	45, // 49: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
+	47, // 50: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
+	50, // 51: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
+	53, // 52: orchd.v1.Orchd.TailLogs:input_type -> orchd.v1.TailLogsRequest
+	56, // 53: orchd.v1.Orchd.GetSystemMetrics:input_type -> orchd.v1.GetSystemMetricsRequest
+	60, // 54: orchd.v1.Orchd.ListDocs:input_type -> orchd.v1.ListDocsRequest
+	68, // 55: orchd.v1.Orchd.GetDocument:input_type -> orchd.v1.GetDocumentRequest
+	62, // 56: orchd.v1.Orchd.SyncDocs:input_type -> orchd.v1.SyncDocsRequest
+	63, // 57: orchd.v1.Orchd.GetDocsSync:input_type -> orchd.v1.GetDocsSyncRequest
+	70, // 58: orchd.v1.Orchd.ListRegisteredSources:input_type -> orchd.v1.ListRegisteredSourcesRequest
+	73, // 59: orchd.v1.Orchd.SaveSource:input_type -> orchd.v1.SaveSourceRequest
+	74, // 60: orchd.v1.Orchd.RemoveSource:input_type -> orchd.v1.RemoveSourceRequest
+	76, // 61: orchd.v1.Orchd.RefreshSource:input_type -> orchd.v1.RefreshSourceRequest
+	78, // 62: orchd.v1.Orchd.GetSafetyNet:input_type -> orchd.v1.GetSafetyNetRequest
+	79, // 63: orchd.v1.Orchd.InstallSafetyNet:input_type -> orchd.v1.InstallSafetyNetRequest
+	1,  // 64: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
+	3,  // 65: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
+	5,  // 66: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
+	8,  // 67: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
+	11, // 68: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
+	13, // 69: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
+	15, // 70: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
+	17, // 71: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
+	20, // 72: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
+	24, // 73: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
+	26, // 74: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
+	29, // 75: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
+	31, // 76: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
+	33, // 77: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
+	35, // 78: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
+	37, // 79: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
+	40, // 80: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
+	43, // 81: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
+	46, // 82: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
+	48, // 83: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
+	51, // 84: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
+	54, // 85: orchd.v1.Orchd.TailLogs:output_type -> orchd.v1.TailLogsResponse
+	57, // 86: orchd.v1.Orchd.GetSystemMetrics:output_type -> orchd.v1.SystemMetrics
+	61, // 87: orchd.v1.Orchd.ListDocs:output_type -> orchd.v1.ListDocsResponse
+	69, // 88: orchd.v1.Orchd.GetDocument:output_type -> orchd.v1.Document
+	64, // 89: orchd.v1.Orchd.SyncDocs:output_type -> orchd.v1.DocsSyncState
+	64, // 90: orchd.v1.Orchd.GetDocsSync:output_type -> orchd.v1.DocsSyncState
+	71, // 91: orchd.v1.Orchd.ListRegisteredSources:output_type -> orchd.v1.ListRegisteredSourcesResponse
+	72, // 92: orchd.v1.Orchd.SaveSource:output_type -> orchd.v1.RegisteredSource
+	75, // 93: orchd.v1.Orchd.RemoveSource:output_type -> orchd.v1.RemoveSourceResponse
+	77, // 94: orchd.v1.Orchd.RefreshSource:output_type -> orchd.v1.RefreshSourceResponse
+	80, // 95: orchd.v1.Orchd.GetSafetyNet:output_type -> orchd.v1.SafetyNetState
+	80, // 96: orchd.v1.Orchd.InstallSafetyNet:output_type -> orchd.v1.SafetyNetState
+	64, // [64:97] is the sub-list for method output_type
+	31, // [31:64] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_internal_rpc_orchdv1_orchd_proto_init() }
@@ -5819,7 +6564,7 @@ func file_internal_rpc_orchdv1_orchd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_rpc_orchdv1_orchd_proto_rawDesc), len(file_internal_rpc_orchdv1_orchd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   79,
+			NumMessages:   87,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

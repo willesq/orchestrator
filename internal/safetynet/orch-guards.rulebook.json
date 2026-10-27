@@ -1,0 +1,116 @@
+{
+  "rulebook_version": 1,
+  "name": "orch-guards",
+  "version": "1.0.0",
+  "description": "Installed and owned by orch; overwritten on upgrade. Blocks only what the shared agent policy forbids: printing live credentials, pushing to the default branch, skipping hooks or signing, and deleting or exposing a repository. Everything else, including gh api writes, PR comments, edits and merges, stays allowed.",
+  "author": "orch",
+  "allowed_commands": ["gh", "security", "git"],
+  "rules": [
+    {
+      "name": "gh-auth-token",
+      "command": "gh",
+      "subcommand": "auth",
+      "block_args": ["token"],
+      "reason": "gh auth token prints a live credential into the session. Use gh itself (gh api, gh pr ...) or code that consumes the token in its own process.",
+      "intent": "use_alternative"
+    },
+    {
+      "name": "gh-auth-show-token",
+      "command": "gh",
+      "subcommand": "auth",
+      "block_args": ["--show-token", "-t"],
+      "reason": "gh auth status --show-token prints a live credential. Plain gh auth status shows the same account details without it.",
+      "intent": "use_alternative"
+    },
+    {
+      "name": "gh-git-credential",
+      "command": "gh",
+      "subcommand": "auth",
+      "block_args": ["git-credential"],
+      "reason": "gh auth git-credential prints a live credential. Let git call it as a credential helper instead: git -c 'credential.helper=!gh auth git-credential' push ...",
+      "intent": "use_alternative"
+    },
+    {
+      "name": "keychain-generic-password",
+      "command": "security",
+      "subcommand": "find-generic-password",
+      "block_args": ["-w", "-g"],
+      "reason": "Printing a keychain password exposes a live credential. Look up the item without -w/-g, or ask the user.",
+      "intent": "manual_only"
+    },
+    {
+      "name": "keychain-internet-password",
+      "command": "security",
+      "subcommand": "find-internet-password",
+      "block_args": ["-w", "-g"],
+      "reason": "Printing a keychain password exposes a live credential. Look up the item without -w/-g, or ask the user.",
+      "intent": "manual_only"
+    },
+    {
+      "name": "keychain-dump",
+      "command": "security",
+      "subcommand": "dump-keychain",
+      "block_args": ["-d"],
+      "reason": "dump-keychain -d prints every stored secret. Ask the user instead.",
+      "intent": "manual_only"
+    },
+    {
+      "name": "git-credential-fill",
+      "command": "git",
+      "subcommand": "credential",
+      "block_args": ["fill"],
+      "reason": "git credential fill prints a live credential. Let git use its credential helper inside the push or fetch.",
+      "intent": "use_alternative"
+    },
+    {
+      "name": "git-push-default-branch",
+      "command": "git",
+      "subcommand": "push",
+      "block_args": ["main", "master", "+main", "+master", "HEAD:main", "HEAD:master", "HEAD:refs/heads/main", "HEAD:refs/heads/master", "refs/heads/main", "refs/heads/master", ":main", ":master", ":refs/heads/main", ":refs/heads/master", "--all", "--mirror"],
+      "reason": "Never push to the default branch. Push a feature branch and open a PR.",
+      "intent": "use_alternative"
+    },
+    {
+      "name": "git-push-no-verify",
+      "command": "git",
+      "subcommand": "push",
+      "block_args": ["--no-verify"],
+      "reason": "Don't skip git hooks. Fix what the pre-push hook reports.",
+      "intent": "use_alternative"
+    },
+    {
+      "name": "git-commit-skip-checks",
+      "command": "git",
+      "subcommand": "commit",
+      "block_args": ["--no-verify", "-n", "--no-gpg-sign"],
+      "reason": "Commits are signed (git commit -S) and run their hooks. Fix the hook failure or unlock the signer instead of skipping it.",
+      "intent": "use_alternative"
+    },
+    {
+      "name": "gh-repo-delete",
+      "command": "gh",
+      "subcommand": "repo",
+      "block_args": ["delete"],
+      "reason": "Deleting a repository can't be undone. Tell the user what you want to delete and let them run it.",
+      "intent": "manual_only"
+    },
+    {
+      "name": "gh-repo-visibility",
+      "command": "gh",
+      "subcommand": "repo",
+      "block_args": ["--visibility", "--visibility=public", "--visibility=private", "--visibility=internal"],
+      "reason": "Changing a repository's visibility can expose private code. Let the user do it.",
+      "intent": "manual_only"
+    }
+  ],
+  "tests": [
+    {"command": "gh auth token", "expect": "blocked", "rule": "gh-auth-token"},
+    {"command": "gh auth status", "expect": "allowed"},
+    {"command": "gh auth status --show-token", "expect": "blocked", "rule": "gh-auth-show-token"},
+    {"command": "git push origin main", "expect": "blocked", "rule": "git-push-default-branch"},
+    {"command": "git push -u origin feat/x", "expect": "allowed"},
+    {"command": "git commit -S -m wip", "expect": "allowed"},
+    {"command": "gh api -X POST repos/o/r/issues -f title=x", "expect": "allowed"},
+    {"command": "gh pr merge 1 --squash", "expect": "allowed"}
+  ]
+}

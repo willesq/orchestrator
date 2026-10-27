@@ -12,7 +12,8 @@ var ghPRRe = regexp.MustCompile(`\bgh\s+pr\s+(create|ready|close|merge|reopen|ed
 
 // postToolUse reacts to tool calls: edited native-config and markdown files are
 // stored again, and a `gh pr` mutation refreshes the PR cache. orchd does both;
-// the hook only hands them off, so it never holds up the agent.
+// the hook only hands them off, so it never holds up the agent. A new PR is
+// also registered with the PR Watch app, a small local file append.
 func postToolUse(p Payload) error {
 	switch p.ToolName {
 	case "Bash":
@@ -31,6 +32,7 @@ func maybePokeBabysitter(p Payload) error {
 	if !ghPRRe.MatchString(in.Command) {
 		return nil
 	}
+	maybeRegisterPR(p, in.Command)
 	// A gh pr mutation happened: ask orchd to refresh the PR cache. Refreshing
 	// it here took over ten seconds, all of it spent blocking the agent.
 	_ = handoff.RequestPRSweep(handoff.Dir())
