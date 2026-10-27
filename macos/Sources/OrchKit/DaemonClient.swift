@@ -357,6 +357,20 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
         _ = try await orchd.refreshSource(request, options: options)
     }
 
+    func getSafetyNet() async throws -> Orchd_V1_SafetyNetState {
+        try await orchd.getSafetyNet(Orchd_V1_GetSafetyNetRequest(), options: callOptions)
+    }
+
+    func runSafetyNetInstall(rulesOnly: Bool) async throws -> Orchd_V1_SafetyNetState {
+        var request = Orchd_V1_InstallSafetyNetRequest()
+        request.rulesOnly = rulesOnly
+        // An install clones the plugin repository and runs several claude
+        // commands, each bounded by orchd; this covers all of them.
+        var options = CallOptions.defaults
+        options.timeout = .seconds(600)
+        return try await orchd.installSafetyNet(request, options: options)
+    }
+
     static func source(_ s: Orchd_V1_RegisteredSource) -> RegisteredSource {
         RegisteredSource(id: s.id, kind: SourceKind(rawValue: s.kind), uri: s.uri, scope: s.scope, tags: s.tags,
                          refreshSeconds: s.refreshSecs, lastFetched: date(fromUnix: s.lastFetched), status: s.status,

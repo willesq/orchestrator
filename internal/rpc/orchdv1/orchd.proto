@@ -86,6 +86,14 @@ service Orchd {
   rpc RemoveSource(RemoveSourceRequest) returns (RemoveSourceResponse);
   // RefreshSource refreshes one registered source, or all, now.
   rpc RefreshSource(RefreshSourceRequest) returns (RefreshSourceResponse);
+  // GetSafetyNet reports how cc-safety-net is installed in Claude Code
+  // against the version this orch pins, the guard rules, and the last
+  // install action. Read from plugin and rule files; runs no command.
+  rpc GetSafetyNet(GetSafetyNetRequest) returns (SafetyNetState);
+  // InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+  // orch-guards rules, and returns the resulting state. One action runs at a
+  // time; a request while one runs is refused (Aborted), never queued.
+  rpc InstallSafetyNet(InstallSafetyNetRequest) returns (SafetyNetState);
 }
 
 message PingRequest {}
@@ -643,4 +651,76 @@ message RefreshSourceRequest {
 
 message RefreshSourceResponse {
   int32 marked = 1;
+}
+
+message GetSafetyNetRequest {}
+
+message InstallSafetyNetRequest {
+  // rules_only rewrites the orch-guards rulebook and rule.json and runs no
+  // plugin command (the app's Repair rules).
+  bool rules_only = 1;
+}
+
+message SafetyNetState {
+  // state: missing, legacy, outdated, disabled or ok.
+  string state = 1;
+  bool ok = 2; // plugin ok and rules ok
+  string pinned_version = 3;
+  string pinned_sha = 4;
+  string installed_version = 5; // empty when not installed by orch
+  string installed_sha = 6;
+  repeated SafetyNetInstall legacy = 7; // competing copies from other marketplaces
+  SafetyNetRules rules = 8;
+  repeated string errors = 9;   // plugin files that could not be read
+  SafetyNetAction action = 10;  // running or last install action
+  string pinned_released_on = 11; // YYYY-MM-DD
+}
+
+message SafetyNetInstall {
+  string id = 1; // plugin@marketplace
+  string scope = 2;
+  string version = 3;
+}
+
+message SafetyNetRules {
+  bool ok = 1;
+  string config_path = 2;
+  bool config_exists = 3;
+  string config_error = 4;
+  bool referenced = 5;        // rule.json lists orch-guards
+  bool rtk_wrapper = 6;       // rtk is a transparent wrapper
+  bool rulebook_current = 7;  // the orch-guards file matches this build
+  repeated SafetyNetRulebook rulebooks = 8;
+  repeated string problems = 9;
+}
+
+message SafetyNetRulebook {
+  string source = 1; // as listed in rule.json
+  string name = 2;
+  string owner = 3;  // orch or user
+  bool remote = 4;
+  string version = 5;
+  string description = 6;
+  string error = 7;  // missing or invalid: cc-safety-net skips it
+  repeated SafetyNetRule rules = 8;
+}
+
+message SafetyNetRule {
+  string name = 1;
+  string command = 2;
+  string subcommand = 3;
+  repeated string block_args = 4;
+  string reason = 5;
+  bool off = 6; // overridden to off in rule.json
+}
+
+message SafetyNetAction {
+  bool running = 1;
+  bool rules_only = 2;
+  int64 started_at = 3;  // unix seconds; 0 = never run
+  int64 finished_at = 4; // 0 while running
+  string step = 5;       // the step running, or the last one
+  bool ok = 6;
+  string error = 7;
+  string log = 8;        // command output, capped
 }

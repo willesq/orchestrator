@@ -95,6 +95,9 @@ type Deps struct {
 	Store func() (*sql.DB, error)
 	// Harness reports per-harness install drift.
 	Harness func() []HarnessInfo
+	// SafetyNet reports the cc-safety-net install and guard rules, shown with
+	// the harness wiring; nil leaves it out.
+	SafetyNet func() []Line
 	// RepositoryInstructions checks the current repository's shared guidance.
 	RepositoryInstructions func() []Line
 	// InstructionLoad sizes the instructions each harness loads into every
@@ -241,7 +244,11 @@ func buildLine(running string) Line {
 func harnessSection(d Deps) Section {
 	sec := Section{Title: "harness wiring"}
 	infos := d.Harness()
-	if len(infos) == 0 {
+	var safety []Line
+	if d.SafetyNet != nil {
+		safety = d.SafetyNet()
+	}
+	if len(infos) == 0 && len(safety) == 0 {
 		sec.Note = "not inspected"
 		return sec
 	}
@@ -256,6 +263,7 @@ func harnessSection(d Deps) Section {
 		}
 		sec.Lines = append(sec.Lines, l)
 	}
+	sec.Lines = append(sec.Lines, safety...)
 	return sec
 }
 

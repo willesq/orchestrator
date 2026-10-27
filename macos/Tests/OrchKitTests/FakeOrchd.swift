@@ -24,6 +24,7 @@ struct FakeOrchdService: RegistrableRPCService {
     var docs = Orchd_V1_ListDocsResponse()
     var document = Orchd_V1_Document()
     var registered = Orchd_V1_ListRegisteredSourcesResponse()
+    var safetyNet = Orchd_V1_SafetyNetState()
     /// Records requests the fake received, for assertions.
     var recorder = Recorder()
 
@@ -34,6 +35,22 @@ struct FakeOrchdService: RegistrableRPCService {
         let ghIdentity = self.ghIdentity, ghScopes = self.ghScopes, ghRepos = self.ghRepos, ghItems = self.ghItems
         let logs = self.logs, metrics = self.metrics
         let docs = self.docs, document = self.document, registered = self.registered
+        let safetyNet = self.safetyNet
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.GetSafetyNet.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_GetSafetyNetRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_SafetyNetState>()
+        ) { _, _ in
+            StreamingServerResponse(single: ServerResponse(message: safetyNet))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.InstallSafetyNet.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_InstallSafetyNetRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_SafetyNetState>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: safetyNet))
+        }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.SyncDocs.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_SyncDocsRequest>(),

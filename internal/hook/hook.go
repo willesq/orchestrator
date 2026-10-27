@@ -27,6 +27,9 @@ type Payload struct {
 	FinalResponse   string          `json:"final_response"`
 	ToolName        string          `json:"tool_name"`
 	ToolInput       json.RawMessage `json:"tool_input"`
+	// ToolResponse is a PostToolUse tool's result; for Bash, an object with
+	// stdout and stderr.
+	ToolResponse json.RawMessage `json:"tool_response"`
 	// Source says why a SessionStart fired: startup, resume, clear or compact.
 	Source string `json:"source"`
 }

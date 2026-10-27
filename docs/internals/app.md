@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the safety net (`SafetyNet`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `SafetyNetView`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -175,6 +175,22 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     `https://github.com/<owner>/<repo>/pull|issues/<n>` URLs. Titles and authors are other people's
     text, shown verbatim.
   - **Refresh** asks GitHub for your orgs and teams again.
+- **Safety Net:** cc-safety-net in Claude Code (`GetSafetyNet`, read when the tab opens and on
+  **Reload**).
+  - **State:** a badge (Protected, Rules incomplete, Not installed, Old copy installed, Update
+    available, Disabled), the installed and pinned version with the pinned commit and release
+    date, any competing copy, what is wrong with the rules, and plugin files that could not be
+    read.
+  - **Rulebooks:** every source `rule.json` lists, in order, marked orch or yours, with each rule's
+    command, blocked arguments and reason; a rule overridden to `off` is struck through, and a
+    rulebook cc-safety-net would skip shows why.
+  - **Actions:** **Install** (missing, old copy, or disabled), **Upgrade** (outdated) and **Repair
+    rules** (rules not ok, rule files only) send `InstallSafetyNet` with a 10-minute deadline.
+    While it runs, the tab polls `GetSafetyNet` every second for the current step; afterwards it
+    shows the result, the error, and the command output. orchd's refusal when an action is
+    already running is shown as is.
+  - **Text:** rule names, reasons, paths, errors and command output come from files and commands,
+    so all of it goes through `displaySafe`.
 - **Dispatch:** a sheet that sends `Dispatch` with an agent, an optional task kind (showing what
   `RecommendModel` would route it to), an optional pinned model, an optional working directory
   (chosen with a folder picker) and the task body.

@@ -50,6 +50,8 @@ const (
 	Orchd_SaveSource_FullMethodName            = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName          = "/orchd.v1.Orchd/RemoveSource"
 	Orchd_RefreshSource_FullMethodName         = "/orchd.v1.Orchd/RefreshSource"
+	Orchd_GetSafetyNet_FullMethodName          = "/orchd.v1.Orchd/GetSafetyNet"
+	Orchd_InstallSafetyNet_FullMethodName      = "/orchd.v1.Orchd/InstallSafetyNet"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -138,6 +140,14 @@ type OrchdClient interface {
 	RemoveSource(ctx context.Context, in *RemoveSourceRequest, opts ...grpc.CallOption) (*RemoveSourceResponse, error)
 	// RefreshSource refreshes one registered source, or all, now.
 	RefreshSource(ctx context.Context, in *RefreshSourceRequest, opts ...grpc.CallOption) (*RefreshSourceResponse, error)
+	// GetSafetyNet reports how cc-safety-net is installed in Claude Code
+	// against the version this orch pins, the guard rules, and the last
+	// install action. Read from plugin and rule files; runs no command.
+	GetSafetyNet(ctx context.Context, in *GetSafetyNetRequest, opts ...grpc.CallOption) (*SafetyNetState, error)
+	// InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+	// orch-guards rules, and returns the resulting state. One action runs at a
+	// time; a request while one runs is refused (Aborted), never queued.
+	InstallSafetyNet(ctx context.Context, in *InstallSafetyNetRequest, opts ...grpc.CallOption) (*SafetyNetState, error)
 }
 
 type orchdClient struct {
@@ -458,6 +468,26 @@ func (c *orchdClient) RefreshSource(ctx context.Context, in *RefreshSourceReques
 	return out, nil
 }
 
+func (c *orchdClient) GetSafetyNet(ctx context.Context, in *GetSafetyNetRequest, opts ...grpc.CallOption) (*SafetyNetState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SafetyNetState)
+	err := c.cc.Invoke(ctx, Orchd_GetSafetyNet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) InstallSafetyNet(ctx context.Context, in *InstallSafetyNetRequest, opts ...grpc.CallOption) (*SafetyNetState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SafetyNetState)
+	err := c.cc.Invoke(ctx, Orchd_InstallSafetyNet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrchdServer is the server API for Orchd service.
 // All implementations must embed UnimplementedOrchdServer
 // for forward compatibility.
@@ -544,6 +574,14 @@ type OrchdServer interface {
 	RemoveSource(context.Context, *RemoveSourceRequest) (*RemoveSourceResponse, error)
 	// RefreshSource refreshes one registered source, or all, now.
 	RefreshSource(context.Context, *RefreshSourceRequest) (*RefreshSourceResponse, error)
+	// GetSafetyNet reports how cc-safety-net is installed in Claude Code
+	// against the version this orch pins, the guard rules, and the last
+	// install action. Read from plugin and rule files; runs no command.
+	GetSafetyNet(context.Context, *GetSafetyNetRequest) (*SafetyNetState, error)
+	// InstallSafetyNet installs, upgrades or repairs cc-safety-net and the
+	// orch-guards rules, and returns the resulting state. One action runs at a
+	// time; a request while one runs is refused (Aborted), never queued.
+	InstallSafetyNet(context.Context, *InstallSafetyNetRequest) (*SafetyNetState, error)
 	mustEmbedUnimplementedOrchdServer()
 }
 
@@ -646,6 +684,12 @@ func (UnimplementedOrchdServer) RemoveSource(context.Context, *RemoveSourceReque
 }
 func (UnimplementedOrchdServer) RefreshSource(context.Context, *RefreshSourceRequest) (*RefreshSourceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshSource not implemented")
+}
+func (UnimplementedOrchdServer) GetSafetyNet(context.Context, *GetSafetyNetRequest) (*SafetyNetState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSafetyNet not implemented")
+}
+func (UnimplementedOrchdServer) InstallSafetyNet(context.Context, *InstallSafetyNetRequest) (*SafetyNetState, error) {
+	return nil, status.Error(codes.Unimplemented, "method InstallSafetyNet not implemented")
 }
 func (UnimplementedOrchdServer) mustEmbedUnimplementedOrchdServer() {}
 func (UnimplementedOrchdServer) testEmbeddedByValue()               {}
@@ -1226,6 +1270,42 @@ func _Orchd_RefreshSource_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_GetSafetyNet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSafetyNetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetSafetyNet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetSafetyNet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetSafetyNet(ctx, req.(*GetSafetyNetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_InstallSafetyNet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InstallSafetyNetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).InstallSafetyNet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_InstallSafetyNet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).InstallSafetyNet(ctx, req.(*InstallSafetyNetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Orchd_ServiceDesc is the grpc.ServiceDesc for Orchd service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1356,6 +1436,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RefreshSource",
 			Handler:    _Orchd_RefreshSource_Handler,
+		},
+		{
+			MethodName: "GetSafetyNet",
+			Handler:    _Orchd_GetSafetyNet_Handler,
+		},
+		{
+			MethodName: "InstallSafetyNet",
+			Handler:    _Orchd_InstallSafetyNet_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -12,6 +12,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/paths"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/safetynet"
 	"github.com/willesq/orchestrator/internal/status"
 	"github.com/willesq/orchestrator/internal/supervisor"
 )
@@ -288,5 +289,19 @@ func TestSettingsLoad(t *testing.T) {
 				t.Errorf("expected the default collection to be set")
 			}
 		})
+	}
+}
+
+func TestSafetyNetLine(t *testing.T) {
+	isolate(t)
+	lines := safetyNetLines()
+	if len(lines) != 1 || lines[0].Name != "safety-net" || lines[0].Value != "missing" || lines[0].Level != status.LevelWarn ||
+		!strings.Contains(lines[0].Detail, "orch install --apply") {
+		t.Fatalf("lines %+v", lines)
+	}
+	ok := safetynet.State{Plugin: safetynet.StateOK, Pinned: safetynet.Pinned,
+		Rules: safetynet.RulesState{Referenced: true, RTKWrapper: true, RulebookCurrent: true}}
+	if l := safetyNetLine(ok); l.Level != status.LevelOK || l.Value != "ok" {
+		t.Errorf("ok line %+v", l)
 	}
 }

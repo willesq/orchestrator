@@ -10,7 +10,7 @@ use it. The code is the source of truth; these pages say what it does and why.
 | [memory.md](memory.md) | embedding, chunking, Qdrant layout and payload, BM25, hybrid search, timelines, redaction, sources, migration, evals |
 | [hooks.md](hooks.md) | hook events, prompt context, session records, hand-offs, summaries, events |
 | [tasks.md](tasks.md) | task queue, Claude Code and Codex runners, verification, model registry, routing, PR outcomes |
-| [install.md](install.md) | harness adapters, files written, shared policy, drift |
+| [install.md](install.md) | harness adapters, files written, shared policy, safety net, drift |
 | [config.md](config.md) | every setting and its default |
 | [cli.md](cli.md) | command tree and MCP tools |
 | [app.md](app.md) | macOS menu bar app: connection, health, daemon control, signing and release |

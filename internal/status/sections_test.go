@@ -661,3 +661,22 @@ func TestVectorSectionRedactsURLCredentials(t *testing.T) {
 		})
 	}
 }
+
+func TestHarnessSectionSafetyNet(t *testing.T) {
+	d := healthyDeps(t)
+	d.Harness = func() []HarnessInfo { return nil }
+	d.SafetyNet = func() []Line {
+		return []Line{{Name: "safety-net", Value: "legacy", Level: LevelWarn, Detail: "run: orch install --apply"}}
+	}
+	sec := section(t, Collect(context.Background(), d), "harness wiring")
+	if sec.Note != "" {
+		t.Errorf("note %q with a safety-net line", sec.Note)
+	}
+	if got := line(t, sec, "safety-net"); got.Value != "legacy" || got.Level != LevelWarn {
+		t.Errorf("line = %+v", got)
+	}
+	d.SafetyNet = func() []Line { return nil }
+	if sec := section(t, Collect(context.Background(), d), "harness wiring"); sec.Note != "not inspected" {
+		t.Errorf("empty section note %q", sec.Note)
+	}
+}
