@@ -82,18 +82,34 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
 
 "Open Orchestrator…" in the menu, or opening the app, shows a window with a sidebar.
 
-- **Dashboard:** orchd's health, every subsystem with its detail or last error and restart count,
-  a **Restart** button for each unit, **Restart all** (the `Restart` RPC, one at a time), and the
-  Needs you list.
+- **Look:** one shared set of pieces in `Theme.swift`: a small type scale (monospace only for
+  commands, paths, code and rule tokens), secondary text raised to WCAG AA contrast in both
+  appearances, one raised card surface, chips, status dots, and an empty state with its primary
+  action. Everything uses system colors, so light and dark mode follow the system.
+- **Appearance:** follows the system's light or dark mode by default. A picker at the foot of the
+  sidebar and in the menu bar panel keeps Light or Dark instead (`appearance` in user defaults,
+  applied to the whole app, menu bar panel included, at launch and on change).
+- **Sidebar badges:** Docs shows how many repos failed to sync, GitHub how many PRs need you,
+  Safety Net a dot in its state's color, and Claude an orange dot when items were removed or are
+  missing from their files. They come from the models the tabs use; a `PeriodicRefresh` reloads
+  docs, Safety Net and settings every five minutes, and the PR count follows `PRMonitor`.
+
+- **Dashboard:** orchd's health, then summary chips for Docs, Safety Net and PRs that open their
+  tabs, the Needs you list, and every subsystem with its detail or last error and restart count.
+  Each unit has a menu (the ellipsis, or a right-click) with **Restart**; **Restart all** stays in
+  the card header (the `Restart` RPC, one at a time).
 - **System:** an Overview/Logs switch in the toolbar. Both poll only while the tab is shown.
   - **Overview:**
     - **Process tiles:** CPU and memory for orchd and qdrant (`GetSystemMetrics` every 2 s), each
-      with a two-minute sparkline. A process that stops or comes back under a new PID starts a
-      new line.
+      with a sparkline scaled to its own range, so a steady value is a line rather than a block.
+      While the tab is hidden the app samples metrics every 10 s, so the lines open with history.
+      A process that stops or comes back under a new PID starts a new line.
     - **Runtime:** orchd's goroutines and Go heap.
-    - **Subsystems:** each unit's heartbeat age, ticking every second, with **Restart** for each.
+    - **Subsystems:** each unit's heartbeat age, ticking every second, with the same menu as the
+      Dashboard.
     - **Storage and tasks:** on-disk store sizes and task counts by status.
-    - **Status report:** the full `orch status --json` report every 15 s. The app runs `orch`
+    - **Status report:** the full `orch status --json` report every 15 s. The header counts the
+      lines that warn or fail ("2 need attention"), so a warning is never summed up as no problems. The app runs `orch`
       from an argument array, as for daemon control, so the report covers the checks that work
       with orchd down.
   - **Logs:** `TailLogs` every second.
@@ -106,9 +122,11 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     - **Text:** log text is shown verbatim and never rendered.
 - **Docs:** what `orch docs` keeps in memory: the synced owners' docs as the store holds them, by
   repo, with a filter and each doc's chunk count (`ListDocs`).
+  - **List:** each repo is a heading with its files under it and each file's chunk count.
   - **Sync status:** while orchd syncs, the progress (repos done of total). When the last sync
-    failed or stopped early, a banner says so, with the owner's reason, the failing repos and why
-    each failed, and **Sync now** (`SyncDocs`), which shows orchd's answer when a sync is already
+    failed or stopped early, a banner says so in a headline, one line with the most common cause,
+    and **Sync now** (`SyncDocs`). The disclosure shows the owner's reason and the failing repos
+    grouped by cause, in a capped scrolling area, which shows orchd's answer when a sync is already
     running. A failing repo's header carries a ⚠ with its reason. Paths and addresses show control
   and bidi characters as escapes, and an address containing them cannot be copied.
   - **Reading:** choosing a doc rebuilds it from its chunks (`GetDocument`). A callout at the top
@@ -134,7 +152,8 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
   - **Search:** within this doc (`source_uri`) or this repo (`all_tags` `owner:` and `repo:`). A hit
     in another doc of the repo opens that doc.
 - **Sources:** the sources registered for refresh on a cadence: web pages, local repos and local
-  owner folders.
+  owner folders. With none registered, the tab shows an empty state with **Add source** instead of
+  an empty table.
   - **List:** each source's status, refresh interval and last fetch.
   - **Add and edit:** a sheet that checks orchd's rules before sending (`SaveSource`); an edit
     that changes the address replaces the entry.
@@ -144,8 +163,11 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
   - **Open:** a web source's page, only for plain `http`/`https` URLs.
   - **Search:** within the selected source, using the filter orchd returns for it.
 - **Memory:** a Search/Indexed switch in the toolbar.
-- **Memory → Search:** the `Search` RPC with mode (default, hybrid, meaning only), a source-type
-  filter and a result count of 1–100. Each hit shows its score, source, type and date.
+- **Memory → Search:** the `Search` RPC with labelled menus: **Match** (as configured, words and
+  meaning, meaning only), **Type** (the source types seen in the store) and **Show** (5 to 100
+  results). Each hit shows a short source name, its type chip, date and score, the full address,
+  and a preview with blank lines collapsed; **Show more** appears only when the text is long.
+  Before the first search, the empty state lists this launch's recent searches.
   - Indexed text is untrusted, so it is shown verbatim and never rendered as Markdown.
   - A newer search cancels an older one, and a cancelled search that finishes late cannot replace
     newer results.
@@ -153,7 +175,8 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     the embedding model.
 - **Memory → Indexed:** `ListSources`, every source in memory, up to 200 at a time with totals,
   filtered by type.
-- **Tasks:** `ListTasks`, up to 100 at a time, filtered by status.
+- **Tasks:** `ListTasks`, up to 100 at a time, filtered by status. With no tasks, the tab shows
+  one empty state with **Dispatch task** (or **Show all tasks** under a filter) and no detail pane.
   - **Detail:** the selected task's model, run models, duration, turns, cost, verification and PR
     outcome, plus its body and result, shown verbatim.
   - **PR links:** opened only through the same `github.com/<owner>/<repo>/pull/<n>` check.
@@ -169,9 +192,11 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     Changes go to `SetGitHubScope`. orchd then sweeps within about a minute, and the activity list
     reloads every 30 s while the tab is open.
   - **Your teams:** from `GetGitHubIdentity`.
-  - **Activity:** `ListGitHubItems`, filtered by All, PRs or Issues in the toolbar. Items that need
-    you come first, then the newest. Each row shows its title, `repo#number`, author, age, and its
-    reasons as chips. Clicking opens the item, but only exact
+  - **Activity:** `ListGitHubItems`, filtered by All, PRs or Issues in the toolbar, in two sections:
+    **Needs action** and **Everything else**, each newest first. Each row shows its title,
+    `repo#number`, author, age, and its reasons as chips; a reason its attention already states is
+    not repeated. Items untouched for six months that need nothing are shown quieter. An empty
+    filter says what it hides and offers **Show everything**. Clicking opens the item, but only exact
     `https://github.com/<owner>/<repo>/pull|issues/<n>` URLs. Titles and authors are other people's
     text, shown verbatim.
   - **Refresh** asks GitHub for your orgs and teams again.
@@ -181,8 +206,13 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
   are on.
   - **Live:** `ListSettings` every 2 s while the tab is shown, so edits made to the files elsewhere
     appear within a few seconds; nothing is redrawn when the listing has not changed.
-  - **Rows:** a switch, the summary (command, matcher and `if`, rule text, plugin, rule and what it
-    blocks), and an origin badge (`orch`, `you`, `found`). A removed or missing item says why. A
+  - **Rows:** a switch, a readable name, the exact text under it, and an origin badge (`orch`,
+    `you`, `external` for what was already in the file). A hook is named after what it runs: known
+    tools (Orca's `.orca/agent-hooks` wrapper, cc-status, cc-safety-net, rtk) by name,
+    `orch-hook` and `serena-hooks` with their subcommand, anything else by its program's base name.
+    Its matcher is a chip, and the full command is a truncated monospace line (in full in the
+    detail pane). The section picker reads "Hooks · 37 on" or "Hooks · 35 of 37 on".
+  - **Filter:** the toolbar's search field keeps items whose name, command or matcher match. A removed or missing item says why. A
     change in flight shows a spinner; a refusal (for example, the file changed underneath, or
     the file does not parse) is shown under that row.
   - **Detail:** the selected item's group, ID, origin, when it changed, and the exact JSON written
@@ -201,11 +231,14 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     available, Disabled), the installed and pinned version with the pinned commit and release
     date, any competing copy, what is wrong with the rules, and plugin files that could not be
     read.
-  - **Rulebooks:** every source `rule.json` lists, in order, marked orch or yours, with each rule's
-    command, blocked arguments and reason; a rule overridden to `off` is struck through, and a
-    rulebook cc-safety-net would skip shows why.
-  - **Actions:** **Install** (missing, old copy, or disabled), **Upgrade** (outdated) and **Repair
-    rules** (rules not ok, rule files only) send `InstallSafetyNet` with a 10-minute deadline.
+  - **Rulebooks:** every source `rule.json` lists, in order, marked orch or yours. Each rule reads
+    as one phrase ("Blocks `git worktree add`") with its reason under it, and has the same switch
+    as the Claude tab: it goes through the cc-safety-net settings provider (`SetSettingEnabled`
+    on `<rulebook>/<rule>`), so both tabs agree. A rulebook cc-safety-net would skip shows why.
+  - **Actions:** only the action that applies is shown, as the primary button: **Install**
+    (missing, old copy, or disabled), else **Upgrade** (outdated), else **Repair rules** (rules
+    not ok, rule files only); otherwise the header says "Up to date". Each sends `InstallSafetyNet`
+    with a 10-minute deadline.
     While it runs, the tab polls `GetSafetyNet` every second for the current step; afterwards it
     shows the result, the error, and the command output. orchd's refusal when an action is
     already running is shown as is.
