@@ -106,6 +106,33 @@ public final class SettingsModel {
         return sorted.map { name in SettingGroup(name: name, items: items.filter { $0.group == name }) }
     }
 
+    /// A kind's groups keeping only items whose display matches `query`;
+    /// groups left empty are dropped.
+    public func groups(provider: String, kind: String, matching query: String) -> [SettingGroup] {
+        let all = groups(provider: provider, kind: kind)
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return all }
+        return all.compactMap { g in
+            let kept = g.items.filter { $0.display.matches(query) || $0.group.localizedCaseInsensitiveContains(query) }
+            return kept.isEmpty ? nil : SettingGroup(name: g.name, items: kept)
+        }
+    }
+
+    /// Items of the shown providers that were removed or are missing from
+    /// their files: edited outside orch.
+    public var changedOutside: Int {
+        (listing?.items ?? []).filter { item in
+            providerNames.contains(item.ref.provider) && (item.status == .removed || item.status == .missing)
+        }.count
+    }
+
+    /// "Hooks · 37 on" when every item is on, "Hooks · 35 of 37 on" otherwise,
+    /// and the bare title when the kind has no items.
+    public func countLabel(_ title: String, provider: String, kind: String) -> String {
+        let c = counts(provider: provider, kind: kind)
+        if c.total == 0 { return title }
+        return c.on == c.total ? "\(title) · \(c.on) on" : "\(title) · \(c.on) of \(c.total) on"
+    }
+
     /// How many of a kind's items are on, of how many.
     public func counts(provider: String, kind: String) -> (on: Int, total: Int) {
         let items = items(provider: provider, kind: kind)

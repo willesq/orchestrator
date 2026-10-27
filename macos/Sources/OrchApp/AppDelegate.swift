@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             name: LaunchPolicy.showWindowNotification, object: nil
         )
         if handOffToRunningCopy() { return }
+        AppearanceChoice.stored().apply()
         model.start()
         if LaunchPolicy.opensWindowAtLaunch(launchedAsLoginItem: launchedAsLoginItem) {
             showMainWindow()

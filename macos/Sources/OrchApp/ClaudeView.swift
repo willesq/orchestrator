@@ -46,6 +46,7 @@ struct ClaudeView: View {
 
     @AppStorage("claudeSection") private var section: Section = .hooks
     @State private var adding: SettingDraft?
+    @State private var query = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,13 +55,15 @@ struct ClaudeView: View {
                 .padding(.bottom, 8)
             Divider()
             HSplitView {
-                SettingsKindList(model: model, provider: section.provider, kind: section.kind, emptyText: section.emptyText)
+                SettingsKindList(model: model, provider: section.provider, kind: section.kind, emptyText: section.emptyText,
+                                 query: query)
                     .frame(minWidth: 420, idealWidth: 560, maxWidth: .infinity)
                 SettingDetail(model: model)
                     .frame(minWidth: 280, idealWidth: 340, maxWidth: 520, maxHeight: .infinity)
             }
         }
         .navigationTitle("Claude")
+        .searchable(text: $query, placement: .toolbar, prompt: "Filter \(section.title.lowercased())")
         .toolbar {
             ToolbarItem {
                 Button {
@@ -101,18 +104,17 @@ private struct ClaudeHeader: View {
         VStack(alignment: .leading, spacing: 8) {
             Picker("Section", selection: $section) {
                 ForEach(ClaudeView.Section.allCases) { s in
-                    let c = model.counts(provider: s.provider, kind: s.kind)
-                    Text(c.total == 0 ? s.title : "\(s.title) \(c.on)/\(c.total)").tag(s)
+                    Text(model.countLabel(s.title, provider: s.provider, kind: s.kind)).tag(s)
                 }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             if let provider = model.listing?.provider(section.provider) {
                 HStack(spacing: 6) {
-                    Text(verbatim: displaySafe(provider.files.first ?? "")).font(.caption.monospaced()).foregroundStyle(.secondary)
+                    Text(verbatim: displaySafe(provider.files.first ?? "")).textStyle(.codeCaption)
                         .lineLimit(1).truncationMode(.middle)
                     Spacer()
-                    Text("This Mac only").font(.caption).foregroundStyle(.secondary)
+                    Label("This Mac only", systemImage: "desktopcomputer").textStyle(.caption)
                         .help("Choices are kept in this machine's orch.db and are not shared with other machines.")
                 }
                 if !provider.error.isEmpty {
@@ -128,7 +130,7 @@ private struct ClaudeHeader: View {
                     .foregroundStyle(.red)
                     .font(.callout)
             } else if let message = model.message {
-                Text(verbatim: message).font(.callout).foregroundStyle(.secondary).lineLimit(2)
+                Text(verbatim: message).textStyle(.supporting).lineLimit(2)
             }
         }
     }

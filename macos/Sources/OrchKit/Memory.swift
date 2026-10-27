@@ -9,10 +9,19 @@ public enum SearchMode: String, Sendable, CaseIterable, Identifiable {
 
     public var id: String { rawValue }
 
+    /// What each choice does, for its tooltip.
+    public var help: String {
+        switch self {
+        case .configured: "Search the way rag.search.mode in your config says"
+        case .hybrid: "Match exact words and meaning together"
+        case .dense: "Match by meaning only, ignoring exact words"
+        }
+    }
+
     public var label: String {
         switch self {
-        case .configured: "Default"
-        case .hybrid: "Hybrid"
+        case .configured: "As configured"
+        case .hybrid: "Words and meaning"
         case .dense: "Meaning only"
         }
     }
@@ -21,6 +30,8 @@ public enum SearchMode: String, Sendable, CaseIterable, Identifiable {
 public struct SearchQuery: Sendable, Equatable {
     /// orchd rejects anything above this.
     public static let maxResults = 100
+    /// The result counts the search view offers.
+    public static let limitChoices = [5, 10, 20, 50, 100]
 
     public var text: String
     public var limit: Int
@@ -87,6 +98,40 @@ public struct SearchHit: Sendable, Equatable {
         self.startedAt = startedAt
         self.ingestedAt = ingestedAt
     }
+
+    /// A short name for where the hit came from: a file's name, a page's
+    /// host and last path part, or "Session 1a2b3c4d · transcript".
+    public var sourceTitle: String {
+        guard let components = URLComponents(string: sourceURI), let scheme = components.scheme else {
+            return displaySafe(sourceURI)
+        }
+        let parts = components.path.split(separator: "/").map(String.init)
+        if scheme == "session" {
+            let id = String((components.host ?? parts.first ?? "").prefix(8))
+            let kind = parts.last ?? ""
+            return displaySafe(kind.isEmpty ? "Session \(id)" : "Session \(id) · \(kind)")
+        }
+        if let last = parts.last { return displaySafe(last) }
+        return displaySafe(components.host ?? sourceURI)
+    }
+
+    /// The text with surrounding space trimmed and runs of blank lines
+    /// collapsed to one, for the collapsed preview; expanded, the text shows
+    /// verbatim.
+    public var preview: String {
+        var out: [Substring] = []
+        var blank = false
+        for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let isBlank = line.allSatisfy(\.isWhitespace)
+            if isBlank && (blank || out.isEmpty) { continue }
+            blank = isBlank
+            out.append(isBlank ? "" : line)
+        }
+        return out.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Whether the preview is long enough that four lines may cut it.
+    public var isLong: Bool { preview.count > 320 || preview.split(separator: "\n").count > 4 }
 }
 
 public struct SearchResult: Sendable, Equatable {

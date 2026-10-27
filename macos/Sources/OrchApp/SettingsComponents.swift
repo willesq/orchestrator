@@ -14,10 +14,12 @@ struct SettingsKindList: View {
     let kind: String
     /// Shown when the kind has no items.
     let emptyText: String
+    /// Keeps only items whose name, text or matcher contains it.
+    var query = ""
 
     var body: some View {
         let spec = model.listing?.provider(provider)?.kind(kind)
-        let groups = model.groups(provider: provider, kind: kind)
+        let groups = model.groups(provider: provider, kind: kind, matching: query)
         List(selection: Binding(get: { model.selection }, set: { model.selection = $0 })) {
             ForEach(groups) { group in
                 Section {
@@ -26,45 +28,81 @@ struct SettingsKindList: View {
                     }
                 } header: {
                     HStack {
-                        Text(verbatim: displaySafe(group.name.isEmpty ? "Other" : group.name)).font(.headline)
+                        Text(verbatim: displaySafe(group.name.isEmpty ? "Other" : group.name)).textStyle(.section)
                         Spacer()
                         let on = group.items.filter(\.isOn).count
-                        Text("\(on) of \(group.items.count) on").foregroundStyle(.secondary)
+                        Text(on == group.items.count ? "\(on) on" : "\(on) of \(group.items.count) on").textStyle(.caption)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
                 }
             }
         }
         .overlay {
             if model.listing != nil && groups.isEmpty {
-                Text(emptyText).multilineTextAlignment(.center).foregroundStyle(.secondary).padding()
+                if query.isEmpty {
+                    EmptyState(symbol: "tray", title: "Nothing here yet", message: emptyText)
+                } else {
+                    EmptyState(symbol: "magnifyingglass", title: "No matches", message: "Nothing matches \u{201C}\(query)\u{201D}.")
+                }
             }
         }
     }
 }
 
-/// A row: the toggle, the summary, the origin, and any note or error.
+/// An item's on/off switch, shared by every view that lists settings items
+/// so the Claude and Safety Net tabs toggle the same thing the same way.
+struct SettingToggle: View {
+    let model: SettingsModel
+    let item: SettingItem
+    let kind: SettingKind?
+    /// What VoiceOver calls the switch.
+    let label: String
+
+    var body: some View {
+        Toggle(label, isOn: Binding(
+            get: { item.isOn },
+            set: { on in Task { await model.setEnabled(item, on) } }
+        ))
+        .labelsHidden()
+        .toggleStyle(.switch)
+        .controlSize(.mini)
+        .disabled(model.pending.contains(item.ref) || !item.canToggle(in: kind))
+        .help(item.isOn ? "On. Turn off to take it out of effect." : "Off. Turn on to put it back exactly.")
+        .accessibilityLabel(label)
+    }
+}
+
+/// A row: the toggle, a readable name with the exact text under it, the
+/// origin, and any note or error.
 struct SettingRow: View {
     let model: SettingsModel
     let item: SettingItem
     let kind: SettingKind?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Toggle("", isOn: Binding(
-                get: { item.isOn },
-                set: { on in Task { await model.setEnabled(item, on) } }
-            ))
-            .labelsHidden()
-            .toggleStyle(.switch)
-            .controlSize(.mini)
-            .disabled(model.pending.contains(item.ref) || !item.canToggle(in: kind))
-            .help(item.isOn ? "On. Turn off to take it out of effect." : "Off. Turn on to put it back exactly.")
+        let display = item.display
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            SettingToggle(model: model, item: item, kind: kind, label: display.title)
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: displaySafe(item.summary.isEmpty ? item.ref.identity : item.summary))
-                    .font(.callout.monospaced())
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .foregroundStyle(item.isOn ? .primary : .secondary)
+                HStack(spacing: 6) {
+                    Text(verbatim: display.title)
+                        .font(display.literalTitle ? TextStyle.code.font : TextStyle.rowTitle.font)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .foregroundStyle(item.isOn ? Color.primary : Color.secondaryText)
+                    if !display.matcher.isEmpty {
+                        Chip(text: display.matcher, help: "Runs only for tools matching \(display.matcher)")
+                    }
+                }
+                if !display.detail.isEmpty && display.detail != display.title {
+                    Text(verbatim: display.detail)
+                        .textStyle(.codeCaption)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .help(display.detail)
+                }
                 if let note = item.status.note {
                     Text(note).font(.caption).foregroundStyle(.orange)
                 }
@@ -79,7 +117,8 @@ struct SettingRow: View {
             if model.pending.contains(item.ref) { ProgressView().controlSize(.small) }
             OriginBadge(origin: item.origin)
         }
-        .padding(.vertical, 1)
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -88,20 +127,14 @@ struct OriginBadge: View {
     let origin: SettingOrigin
 
     var body: some View {
-        Text(origin.label)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(color.opacity(0.16), in: Capsule())
-            .foregroundStyle(color)
-            .help(origin.help)
+        Chip(text: origin.label, tone: tone, help: origin.help)
     }
 
-    private var color: Color {
+    private var tone: Tone {
         switch origin {
-        case .orch: .blue
-        case .you: .green
-        case .found: .secondary
+        case .orch: .accent
+        case .you: .good
+        case .found: .neutral
         }
     }
 }
@@ -118,12 +151,19 @@ struct SettingDetail: View {
             let kind = model.kind(of: item.ref)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    let display = item.display
                     HStack(alignment: .firstTextBaseline) {
-                        Text(verbatim: displaySafe(item.summary.isEmpty ? item.ref.identity : item.summary))
-                            .font(.headline.monospaced())
+                        Text(verbatim: display.title)
+                            .font(display.literalTitle ? .headline.monospaced() : TextStyle.title.font)
                             .textSelection(.enabled)
                         Spacer()
                         OriginBadge(origin: item.origin)
+                    }
+                    if !display.detail.isEmpty && display.detail != display.title {
+                        Text(verbatim: display.detail)
+                            .textStyle(.code)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
                         row("State", item.isOn ? "on" : "off")
@@ -132,7 +172,7 @@ struct SettingDetail: View {
                         row("Origin", item.origin.help)
                         if let at = item.updatedAt {
                             GridRow {
-                                Text("Changed").foregroundStyle(.secondary)
+                                Text("Changed").foregroundStyle(Color.secondaryText)
                                 Text(at, format: .relative(presentation: .named))
                             }
                         }
@@ -142,7 +182,7 @@ struct SettingDetail: View {
                         Text(note).font(.callout).foregroundStyle(.orange)
                     }
                     Text(kind?.stateInFile == true ? "In the file" : "Written to the file when on")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .textStyle(.caption)
                     Text(verbatim: item.prettyPayload)
                         .font(.caption.monospaced())
                         .textSelection(.enabled)
@@ -161,22 +201,21 @@ struct SettingDetail: View {
                             }
                     } else if item.origin == .orch {
                         Text("orch install adds this, so it can be turned off but not removed.")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .textStyle(.caption)
                     }
                 }
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         } else {
-            Text("Select an item to see exactly what it writes.")
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            EmptyState(symbol: "sidebar.right", title: "No item selected",
+                       message: "Select an item to see its full command and exactly what it writes.")
         }
     }
 
     private func row(_ label: String, _ value: String) -> some View {
         GridRow {
-            Text(label).foregroundStyle(.secondary)
+            Text(label).foregroundStyle(Color.secondaryText)
             Text(verbatim: displaySafe(value)).textSelection(.enabled).lineLimit(3)
         }
     }
@@ -239,11 +278,19 @@ struct SettingAddForm: View {
             case .text:
                 VStack(alignment: .leading) {
                     Text(label)
-                    TextEditor(text: binding).font(.body.monospaced()).frame(minHeight: 60)
+                    TextEditor(text: binding).font(TextStyle.code.font).frame(minHeight: 60)
                 }
             case .int, .string:
-                TextField(label, text: binding, prompt: field.placeholder.isEmpty ? nil : Text(verbatim: field.placeholder))
-                    .font(.body.monospaced())
+                // The label stays in the body font; only what is typed is a
+                // literal. The example is marked as one, so it is not read as
+                // a value already filled in.
+                LabeledContent(label) {
+                    TextField(label, text: binding,
+                              prompt: field.placeholder.isEmpty ? nil : Text(verbatim: "e.g. \(field.placeholder)"))
+                        .labelsHidden()
+                        .font(TextStyle.code.font)
+                        .multilineTextAlignment(.leading)
+                }
             }
         }
         .help(field.help)

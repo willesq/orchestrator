@@ -41,16 +41,18 @@ struct LogsView: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(maxWidth: 260)
             Spacer()
-            Text("\(count) lines")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
+            Text("\(count) line\(count == 1 ? "" : "s")")
+                .textStyle(.caption)
+                .monospacedDigit()
             Toggle(isOn: $model.paused) {
                 Label(model.paused ? "Resume" : "Pause", systemImage: model.paused ? "play.fill" : "pause.fill")
             }
             .toggleStyle(.button)
             .help(model.paused ? "Fetch new lines again" : "Stop fetching new lines")
+            .accessibilityLabel(model.paused ? "Resume" : "Pause")
             Button { model.clear() } label: { Label("Clear", systemImage: "trash") }
                 .help("Clear the lines shown; new ones keep arriving")
+                .accessibilityLabel("Clear")
         }
     }
 }
@@ -78,7 +80,8 @@ private struct LogLines: View {
             }
             .overlay {
                 if lines.isEmpty {
-                    Text("No log lines yet").foregroundStyle(.secondary)
+                    EmptyState(symbol: "text.alignleft", title: "No log lines yet",
+                               message: "Lines appear here as orchd and its subsystems log them.")
                 }
             }
         }
@@ -97,10 +100,10 @@ private struct LogRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(verbatim: Self.time.string(from: line.at))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.tertiaryText)
             Text(verbatim: line.source)
                 .foregroundStyle(SourceColor.of(line.source))
-                .frame(width: 130, alignment: .leading)
+                .frame(width: 104, alignment: .leading)
                 .lineLimit(1)
             // Log text is untrusted (qdrant's output, other people's PR
             // titles), so it is shown verbatim.
@@ -123,7 +126,7 @@ enum SourceColor {
     static let palette: [Color] = [.blue, .purple, .teal, .orange, .pink, .indigo, .brown, .mint, .cyan]
 
     static func of(_ source: String) -> Color {
-        if source == "orchd" { return .secondary }
+        if source == "orchd" { return .secondaryText }
         let hash = source.unicodeScalars.reduce(UInt32(5381)) { ($0 &* 33) &+ $1.value }
         return palette[Int(hash % UInt32(palette.count))]
     }

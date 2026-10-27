@@ -143,6 +143,18 @@ public struct StatusReport: Sendable, Equatable, Decodable {
     public let problems: Int
     public let sections: [Section]
 
+    /// Lines that warn or report a problem: what needs the user's attention,
+    /// which `problems` alone undercounts because it leaves warnings out.
+    public var attentionCount: Int {
+        sections.reduce(0) { n, s in n + s.lines.filter { $0.level == "warn" || $0.level == "bad" }.count }
+    }
+
+    /// The report's one-line state for its header.
+    public var headline: String {
+        let n = attentionCount
+        return n == 0 ? "all clear" : "\(n) need\(n == 1 ? "s" : "") attention"
+    }
+
     public init(version: String, problems: Int, sections: [Section]) {
         self.version = version
         self.problems = problems
@@ -159,6 +171,17 @@ public struct StatusReport: Sendable, Equatable, Decodable {
         problems = try c.decodeIfPresent(Int.self, forKey: .problems) ?? 0
         sections = try c.decodeIfPresent([Section].self, forKey: .sections) ?? []
     }
+}
+
+/// The y range a sparkline draws: the samples' own range with headroom, so
+/// a steady value is a line through the middle rather than a block filled
+/// up from zero, and a small wobble is not stretched to full height.
+public func sparklineDomain(_ values: [Double]) -> ClosedRange<Double> {
+    guard let lo = values.min(), let hi = values.max() else { return 0...1 }
+    // At least 5% of the value either side, so noise reads as noise.
+    let pad = max((hi - lo) * 0.2, abs(hi) * 0.05, 0.5)
+    let lower = lo >= 0 ? max(0, lo - pad) : lo - pad
+    return lower...(hi + pad)
 }
 
 /// Formats a byte count the way Finder does: `1.2 GB`, `340 MB`.

@@ -41,7 +41,7 @@ public enum SettingOrigin: String, Sendable {
         switch self {
         case .orch: "orch"
         case .you: "you"
-        case .found: "found"
+        case .found: "external"
         }
     }
 
@@ -49,7 +49,7 @@ public enum SettingOrigin: String, Sendable {
         switch self {
         case .orch: "Added by orch install. Turning it off keeps it off; it cannot be removed."
         case .you: "Added here in Orch."
-        case .found: "Found in the file, put there by another tool or by hand."
+        case .found: "Already in the file; not added by orch or by you."
         }
     }
 }

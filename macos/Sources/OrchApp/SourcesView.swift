@@ -13,11 +13,28 @@ struct SourcesView: View {
     }
 
     var body: some View {
-        HSplitView {
-            SourceTable(model: model)
-                .frame(minWidth: 380, idealWidth: 520, maxWidth: .infinity)
-            SourceDetail(model: model, onEdit: { editing = Editing(source: $0) })
-                .frame(minWidth: 320, idealWidth: 380, maxWidth: 560, maxHeight: .infinity)
+        Group {
+            if model.loaded && model.sources.isEmpty {
+                // No table, headers or detail pane behind an empty list: just
+                // what is missing and the way to add one.
+                VStack(spacing: 0) {
+                    EmptyState(symbol: "tray.and.arrow.down", title: "No sources yet",
+                               message: "Add a web page, a local repo or an owner folder, and orch keeps it in memory, fetching it again on a schedule.",
+                               actionTitle: "Add source", action: { editing = Editing(source: nil) })
+                    if let error = model.lastError {
+                        Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.red).padding(8)
+                    }
+                }
+            } else if !model.loaded && model.lastError == nil {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                HSplitView {
+                    SourceTable(model: model)
+                        .frame(minWidth: 380, idealWidth: 520, maxWidth: .infinity)
+                    SourceDetail(model: model, onEdit: { editing = Editing(source: $0) })
+                        .frame(minWidth: 320, idealWidth: 380, maxWidth: 560, maxHeight: .infinity)
+                }
+            }
         }
         .navigationTitle("Sources")
         .toolbar {
@@ -51,24 +68,16 @@ private struct SourceTable: View {
                 }
                 TableColumn("Status") { s in StatusChip(status: s.status) }
                     .width(70)
-                TableColumn("Refresh") { s in Text(refreshLabel(s.refreshSeconds)).foregroundStyle(.secondary) }
+                TableColumn("Refresh") { s in Text(refreshLabel(s.refreshSeconds)).foregroundStyle(Color.secondaryText) }
                     .width(90)
                 TableColumn("Fetched") { s in
                     if let at = s.lastFetched {
-                        Text(at, format: .relative(presentation: .named)).foregroundStyle(.secondary)
+                        Text(at, format: .relative(presentation: .named)).foregroundStyle(Color.secondaryText)
                     } else {
-                        Text("due").foregroundStyle(.secondary)
+                        Text("due").foregroundStyle(Color.secondaryText)
                     }
                 }
                 .width(100)
-            }
-            .overlay {
-                if model.loaded && model.sources.isEmpty {
-                    Text("No sources yet. Add a web page, a local repo or an owner folder to keep it in memory.")
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                        .padding()
-                }
             }
             if model.lastError != nil || model.message != nil {
                 Divider()
@@ -77,7 +86,7 @@ private struct SourceTable: View {
                         Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
                     }
                     if let message = model.message {
-                        Text(verbatim: message).foregroundStyle(.secondary)
+                        Text(verbatim: message).foregroundStyle(Color.secondaryText)
                     }
                 }
                 .font(.caption)
@@ -132,13 +141,13 @@ private struct SourceDetail: View {
                 if source.isSearchable {
                     ScopedSearch<NoScope>(search: model.search)
                 } else {
-                    Text("This source can't be searched on its own.").foregroundStyle(.secondary).padding(12)
+                    Text("This source can't be searched on its own.").foregroundStyle(Color.secondaryText).padding(12)
                 }
                 Spacer(minLength: 0)
             }
         } else {
             Text("Choose a source to see its details, refresh it or search within it.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondaryText)
                 .multilineTextAlignment(.center)
                 .padding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -147,7 +156,7 @@ private struct SourceDetail: View {
 
     private func row(_ label: String, _ value: String) -> some View {
         GridRow {
-            Text(label).foregroundStyle(.secondary)
+            Text(label).foregroundStyle(Color.secondaryText)
             Text(verbatim: value).textSelection(.enabled)
         }
     }
@@ -206,20 +215,15 @@ private struct StatusChip: View {
     let status: String
 
     var body: some View {
-        Text(verbatim: status)
-            .font(.caption)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background(color.opacity(0.18), in: Capsule())
-            .foregroundStyle(color)
+        Chip(text: displaySafe(status), tone: tone)
     }
 
-    private var color: Color {
+    private var tone: Tone {
         switch status {
-        case "ok": .green
-        case "missing": .orange
-        case "error": .red
-        default: .secondary
+        case "ok": .good
+        case "missing": .warning
+        case "error": .bad
+        default: .neutral
         }
     }
 }

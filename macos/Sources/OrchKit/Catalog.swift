@@ -43,6 +43,41 @@ public struct DocCatalog: Sendable, Equatable {
 
     /// Whether the last sync needs the user's attention.
     public var needsAttention: Bool { !failingRepos.isEmpty || !failingOwners.isEmpty }
+
+    /// Failing repos grouped by why they failed, the most common cause first,
+    /// so a cause shared by many repos is read once.
+    public var failureCauses: [DocFailureCause] {
+        var order: [String] = []
+        var repos: [String: [String]] = [:]
+        for item in failingRepos {
+            let cause = item.repo.error.trimmingCharacters(in: .whitespacesAndNewlines)
+            let key = cause.isEmpty ? "No reason recorded" : cause
+            if repos[key] == nil { order.append(key) }
+            repos[key, default: []].append("\(item.owner)/\(item.repo.repo)")
+        }
+        return order.enumerated()
+            .sorted { a, b in
+                let (na, nb) = (repos[a.element]!.count, repos[b.element]!.count)
+                return na != nb ? na > nb : a.offset < b.offset
+            }
+            .map { DocFailureCause(cause: $0.element, repos: repos[$0.element]!) }
+    }
+
+    /// One line for the failure banner: the most common repo failure, else
+    /// the first owner's reason.
+    public var commonCause: String? {
+        if let top = failureCauses.first {
+            return top.repos.count > 1 ? "\(top.repos.count) repos: \(top.cause)" : top.cause
+        }
+        return failingOwners.first?.error
+    }
+}
+
+/// Repos whose last sync failed for the same reason.
+public struct DocFailureCause: Sendable, Equatable, Identifiable {
+    public var id: String { cause }
+    public let cause: String
+    public let repos: [String]
 }
 
 /// orchd's docs sync: running now, or the last one.

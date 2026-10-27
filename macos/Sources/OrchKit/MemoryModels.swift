@@ -11,6 +11,9 @@ public final class SearchModel {
     public private(set) var lastError: String?
     /// The query `result` answers, so the view can say what it shows.
     public private(set) var answered: SearchQuery?
+    /// Recent searches that answered, newest first, kept for this launch only.
+    public private(set) var recent: [String] = []
+    public static let recentLimit = 5
 
     private let api: any MemoryAPI
     private var current: Task<Void, Never>?
@@ -49,6 +52,7 @@ public final class SearchModel {
             case .success(let found):
                 self.result = found
                 self.answered = q
+                self.remember(q.text)
                 self.lastError = nil
             case .failure(let error):
                 self.lastError = DaemonMonitor.describe(error)
@@ -57,6 +61,18 @@ public final class SearchModel {
         }
         current = task
         await task.value
+    }
+
+    private func remember(_ text: String) {
+        recent.removeAll { $0.caseInsensitiveCompare(text) == .orderedSame }
+        recent.insert(text, at: 0)
+        if recent.count > Self.recentLimit { recent.removeLast(recent.count - Self.recentLimit) }
+    }
+
+    /// Runs a recent search again.
+    public func repeatSearch(_ text: String) async {
+        query.text = text
+        await search()
     }
 
     /// Drops the results and any search in flight, keeping the query.
@@ -88,17 +104,21 @@ public final class SourcesModel {
 
     public func refresh() async {
         do {
-            list = try await api.listSources(type: typeFilter.trimmingCharacters(in: .whitespaces), limit: Self.pageSize)
+            let fresh = try await api.listSources(type: typeFilter.trimmingCharacters(in: .whitespaces), limit: Self.pageSize)
+            list = fresh
+            seenTypes.formUnion(fresh.sources.map(\.sourceType).filter { !$0.isEmpty })
             lastError = nil
         } catch {
             lastError = DaemonMonitor.describe(error)
         }
     }
 
-    /// Source types seen in the current list, for the filter menu.
-    public var knownTypes: [String] {
-        Array(Set(list?.sources.map(\.sourceType) ?? [])).filter { !$0.isEmpty }.sorted()
-    }
+    /// Every source type seen in any listing, so filtering to one type keeps
+    /// the others in the menu.
+    private var seenTypes: Set<String> = []
+
+    /// Source types seen so far, for the filter menus.
+    public var knownTypes: [String] { seenTypes.sorted() }
 }
 
 /// Restarts subsystems from the dashboard and reports what happened.

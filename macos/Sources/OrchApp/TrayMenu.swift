@@ -35,6 +35,9 @@ struct TrayMenu: View {
                     .buttonStyle(.link)
             }
             LoginItemRow(item: loginItem)
+            AppearancePicker()
+                .pickerStyle(.segmented)
+                .controlSize(.small)
             actions
         }
         .padding(12)
@@ -50,7 +53,7 @@ struct TrayMenu: View {
                 Text("Orchestrator").font(.headline)
                 Text(monitor.health.summary)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -105,7 +108,7 @@ private struct SubsystemList: View {
                     Spacer()
                     Text(verbatim: unit.isFailed ? "failed" : unit.state)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.secondaryText)
                 }
                 .help(unit.error.isEmpty ? unit.detail : unit.error)
             }
@@ -136,7 +139,7 @@ private struct LoginItemRow: View {
             case .unavailable:
                 Text("Only available when running Orch.app.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.secondaryText)
             case .enabled, .disabled:
                 EmptyView()
             }
