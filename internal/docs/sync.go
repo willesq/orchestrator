@@ -19,6 +19,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/willesq/orchestrator/internal/gitdates"
 	"github.com/willesq/orchestrator/internal/mdwalk"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/redact"
@@ -48,6 +49,13 @@ type Ingester interface {
 	IngestText(ctx context.Context, text string, m rag.Meta) (int, error)
 }
 
+// Remover deletes a source's chunks (implemented by *rag.Service). An
+// Ingester that is also a Remover has the chunks of docs removed from a repo
+// deleted on the next sync.
+type Remover interface {
+	DeleteSource(ctx context.Context, uri string) (int, error)
+}
+
 // SyncOpts carries the dependencies + policy for a sync.
 type SyncOpts struct {
 	RepoCache       string
@@ -62,6 +70,8 @@ type SyncOpts struct {
 	// Progress, when set, hears after each repo is handled: how many of the
 	// owner's repos are done, of how many, and which one was last.
 	Progress func(done, total int, repo string)
+	// Dates reads when each file in a clone last changed; nil is gitdates.Read.
+	Dates func(ctx context.Context, dir string) gitdates.Dates
 }
 
 // Result is how one owner's sync went.
@@ -261,14 +271,22 @@ func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o O
 	if now == nil {
 		now = func() int64 { return 0 }
 	}
+	readDates := opts.Dates
+	if readDates == nil {
+		readDates = gitdates.Read
+	}
+	dates := readDates(ctx, repoPath)
+	prefix := fmt.Sprintf("repo://%s/%s/", o.Owner, repo)
+	seen := map[string]bool{}
 	n := 0
-	mdwalk.Files(repoPath, opts.ExcludeDirs, func(p string) {
+	complete := mdwalk.FilesComplete(repoPath, opts.ExcludeDirs, func(p string) {
+		rel, _ := filepath.Rel(repoPath, p)
+		uri := prefix + rel
+		seen[uri] = true
 		raw, err := os.ReadFile(p)
 		if err != nil {
 			return
 		}
-		rel, _ := filepath.Rel(repoPath, p)
-		uri := fmt.Sprintf("repo://%s/%s/%s", o.Owner, repo, rel)
 		h := sha256Hex(raw)
 		if !opts.Force {
 			if prev, _ := reg.Hash(ctx, uri); prev == h {
@@ -281,17 +299,50 @@ func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o O
 		}
 		tags := append([]string{}, o.Tags...)
 		tags = append(tags, "owner:"+o.Owner, "repo:"+repo)
+		changed := dates.For(rel)
 		if _, err := ing.IngestText(ctx, content, rag.Meta{
 			SourceURI:  uri,
 			SourceType: "repo_doc",
 			Scope:      o.Scope,
 			Tags:       tags,
+			StartedAt:  changed,
+			EndedAt:    changed,
 		}); err == nil {
 			_ = reg.SetHash(ctx, uri, h, now())
 			n++
 		}
 	})
+	if complete {
+		pruneRemoved(ctx, reg, ing, prefix, seen)
+	}
 	return n
+}
+
+// pruneRemoved deletes the chunks of docs this repo's earlier syncs stored
+// that its clone no longer has, and forgets their hashes. A walk that found
+// nothing deletes nothing: an empty or unreadable clone is not a repo whose
+// docs were all removed.
+func pruneRemoved(ctx context.Context, reg *Registry, ing Ingester, prefix string, seen map[string]bool) {
+	rm, ok := ing.(Remover)
+	if !ok || len(seen) == 0 || ctx.Err() != nil {
+		return
+	}
+	known, err := reg.HashURIs(ctx, prefix)
+	if err != nil {
+		log.Printf("docs: listing %s docs: %v", prefix, err)
+		return
+	}
+	for _, uri := range known {
+		if seen[uri] {
+			continue
+		}
+		if _, err := rm.DeleteSource(ctx, uri); err != nil {
+			log.Printf("docs: removing %s, gone from its repo: %v", uri, err)
+			continue
+		}
+		_ = reg.DeleteHash(ctx, uri)
+		log.Printf("docs: removed %s, gone from its repo", uri)
+	}
 }
 
 func sha256Hex(b []byte) string {

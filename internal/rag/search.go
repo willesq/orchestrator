@@ -9,7 +9,6 @@ import (
 	"math"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +34,8 @@ type Hit struct {
 	// StartedAt and EndedAt span what the hit describes, such as the turns of
 	// a transcript chunk; IngestedAt is when it was stored. Zero when unknown.
 	StartedAt, EndedAt, IngestedAt time.Time
+	// Heading is the markdown section the chunk came from, when it has one.
+	Heading string
 }
 
 // Search modes.
@@ -57,6 +58,12 @@ type SearchOpts struct {
 	Mode string
 	// Range keeps only content dated within it.
 	Range TimeRange
+	// PerSource caps the hits one source may return: 0 uses the service's
+	// PerSource, a negative value lifts the cap. A search filtered to one
+	// source is never capped.
+	PerSource int
+	// Ranking is RankingWeighted or RankingPlain; "" uses the service's.
+	Ranking string
 }
 
 // ErrHybridUnavailable means a search asked explicitly for hybrid mode could
@@ -136,22 +143,66 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 			note = "collection has no keyword index; answered by meaning only"
 		}
 	}
-	raw, err := st.Search(ctx, vecs[0], opts.TopK, must, opts.Tags, opts.AllTags, opts.Range)
+	// Reranking and the per-source cap both need more candidates than are
+	// returned; a plain, uncapped dense search needs only what it returns.
+	n := opts.TopK
+	if s.reranks(opts) {
+		n = candidateDepth(opts.TopK)
+	}
+	raw, err := st.Search(ctx, vecs[0], n, must, opts.Tags, opts.AllTags, opts.Range)
 	if err != nil {
 		return nil, "", err
 	}
-	hits := make([]Hit, 0, len(raw))
+	cands := make([]candidate, 0, len(raw))
 	for _, r := range raw {
-		hits = append(hits, toHit(r, r.Score, 0, idents))
+		cands = append(cands, candidate{hit: r, score: float64(r.Score), cosine: r.Score})
 	}
-	return hits, note, nil
+	return s.finish(cands, opts, idents), note, nil
+}
+
+// perSource is the cap a search applies.
+func (s *Service) perSource(opts SearchOpts) int {
+	n := opts.PerSource
+	if n == 0 {
+		n = s.PerSource
+	}
+	if n < 0 || opts.SourceURI != "" {
+		return 0
+	}
+	return n
+}
+
+// reranks reports whether a search reorders or filters its candidates.
+func (s *Service) reranks(opts SearchOpts) bool {
+	profile := opts.Ranking
+	if profile == "" {
+		profile = s.Ranking.Profile
+	}
+	return profile != RankingPlain || s.perSource(opts) > 0
+}
+
+// candidateDepth is how many hits each side of a search offers for topK.
+func candidateDepth(topK int) int { return min(max(topK*candidatesPer, 20), maxCandidates) }
+
+// finish ranks candidates and converts the survivors to hits.
+func (s *Service) finish(cands []candidate, opts SearchOpts, idents []string) []Hit {
+	now := time.Now()
+	if s.now != nil {
+		now = s.now()
+	}
+	cands = rank(cands, s.Ranking, opts.Ranking, s.perSource(opts), opts.TopK, now)
+	hits := make([]Hit, 0, len(cands))
+	for _, c := range cands {
+		hits = append(hits, toHit(c.hit, c.cosine, c.keyword, idents))
+	}
+	return hits
 }
 
 // hybridSearch fuses dense and keyword results. A keyword failure is returned
 // separately as kerr with the dense results, so the caller decides whether
 // answering by meaning alone is acceptable.
 func (s *Service) hybridSearch(ctx context.Context, st *QdrantStore, query string, vec []float32, opts SearchOpts, must map[string]string, idents []string) (hits []Hit, kerr, err error) {
-	n := min(max(opts.TopK*candidatesPer, 20), maxCandidates)
+	n := candidateDepth(opts.TopK)
 	var dense, keyword []SearchHit
 	var derr error
 	var wg sync.WaitGroup
@@ -180,11 +231,8 @@ func (s *Service) hybridSearch(ctx context.Context, st *QdrantStore, query strin
 		kw = 0.5
 	}
 	type fused struct {
-		hit     SearchHit
-		rrf     float64
-		cosine  float32
-		keyword float32
-		hasCos  bool
+		candidate
+		hasCos bool
 	}
 	byID := map[string]*fused{}
 	var order []string
@@ -192,11 +240,11 @@ func (s *Service) hybridSearch(ctx context.Context, st *QdrantStore, query strin
 		id := h.PointID()
 		f, ok := byID[id]
 		if !ok {
-			f = &fused{hit: h}
+			f = &fused{candidate: candidate{hit: h}}
 			byID[id] = f
 			order = append(order, id)
 		}
-		f.rrf += weight / (k + float64(rank))
+		f.score += weight / (k + float64(rank))
 		return f
 	}
 	for i, h := range dense {
@@ -210,22 +258,11 @@ func (s *Service) hybridSearch(ctx context.Context, st *QdrantStore, query strin
 			f.cosine, f.hasCos = cosineWith(vec, h.Vector[denseName]), true
 		}
 	}
-	sort.SliceStable(order, func(i, j int) bool {
-		a, b := byID[order[i]], byID[order[j]]
-		if a.rrf != b.rrf {
-			return a.rrf > b.rrf
-		}
-		return a.cosine > b.cosine
-	})
-	if len(order) > opts.TopK {
-		order = order[:opts.TopK]
-	}
-	hits = make([]Hit, 0, len(order))
+	cands := make([]candidate, 0, len(order))
 	for _, id := range order {
-		f := byID[id]
-		hits = append(hits, toHit(f.hit, f.cosine, f.keyword, idents))
+		cands = append(cands, byID[id].candidate)
 	}
-	return hits, kerr, nil
+	return s.finish(cands, opts, idents), kerr, nil
 }
 
 // capPerSource keeps at most perSourceCap hits from each source, in order, so
@@ -276,6 +313,7 @@ func toHit(r SearchHit, cosine, keyword float32, idents []string) Hit {
 		StartedAt:  unixTime(r.Payload[fieldStartedAt]),
 		EndedAt:    unixTime(r.Payload[fieldEndedAt]),
 		IngestedAt: unixTime(r.Payload[fieldIngestedAt]),
+		Heading:    str(r.Payload["heading"]),
 	}
 }
 

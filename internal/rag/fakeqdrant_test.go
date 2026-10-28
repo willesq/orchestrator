@@ -22,6 +22,8 @@ type fakeQdrant struct {
 	upserts map[string]int
 	// failUpsertNo fails the write request with this number (1-based).
 	failUpsertNo map[string]int
+	// failVectors makes the next n vector updates fail.
+	failVectors int
 }
 
 type fakeCollection struct {
@@ -114,11 +116,47 @@ func (f *fakeQdrant) serve(w http.ResponseWriter, r *http.Request) {
 			c.points[p.ID] = p
 		}
 		writeJSON(w, map[string]any{"result": map[string]any{"status": "completed"}})
+	case action == "points" && r.Method == http.MethodPost:
+		ids, _ := body["ids"].([]any)
+		var out []map[string]any
+		for _, id := range ids {
+			if p, ok := c.points[fmt.Sprint(id)]; ok {
+				out = append(out, map[string]any{"id": p.ID, "payload": p.Payload})
+			}
+		}
+		writeJSON(w, map[string]any{"result": out})
+	case action == "points/vectors" && r.Method == http.MethodPut:
+		if f.failVectors > 0 {
+			f.failVectors--
+			http.Error(w, "injected failure", http.StatusInternalServerError)
+			return
+		}
+		pts, _ := body["points"].([]any)
+		for _, raw := range pts {
+			m := raw.(map[string]any)
+			p := c.points[fmt.Sprint(m["id"])]
+			b, _ := json.Marshal(m["vector"])
+			p.Vector = b
+			c.points[p.ID] = p
+		}
+		writeJSON(w, map[string]any{"result": map[string]any{"status": "completed"}})
+	case action == "points/payload" && r.Method == http.MethodPost:
+		pts, _ := body["points"].([]any)
+		add, _ := body["payload"].(map[string]any)
+		for _, id := range pts {
+			p := c.points[fmt.Sprint(id)]
+			for k, v := range add {
+				p.Payload[k] = v
+			}
+		}
+		writeJSON(w, map[string]any{"result": map[string]any{"status": "completed"}})
 	case action == "points/scroll":
+		// Like Qdrant, the offset is the id to start from, in id order, so a
+		// page is stable while earlier points change.
 		ids := c.matching(body["filter"])
 		start := 0
-		if off, ok := body["offset"].(float64); ok {
-			start = int(off)
+		if off, ok := body["offset"].(string); ok {
+			start = sort.SearchStrings(ids, off)
 		}
 		limit := int(body["limit"].(float64))
 		end := min(start+limit, len(ids))
@@ -128,7 +166,7 @@ func (f *fakeQdrant) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		var next any
 		if end < len(ids) {
-			next = end
+			next = ids[end]
 		}
 		writeJSON(w, map[string]any{"result": map[string]any{"points": out, "next_page_offset": next}})
 	case action == "points/count":
@@ -162,6 +200,7 @@ func (c *fakeCollection) sortedIDs() []string {
 func (c *fakeCollection) matching(filter any) []string {
 	f, _ := filter.(map[string]any)
 	must, _ := f["must"].([]any)
+	notMust, _ := f["must_not"].([]any)
 	var out []string
 	for _, id := range c.sortedIDs() {
 		p := c.points[id].Payload
@@ -181,6 +220,12 @@ func (c *fakeCollection) matching(filter any) []string {
 				if lte, has := rng["lte"].(float64); has && (!present || v > lte) {
 					ok = false
 				}
+			}
+		}
+		for _, cond := range notMust {
+			m := cond.(map[string]any)
+			if match, has := m["match"].(map[string]any); has && fmt.Sprint(p[m["key"].(string)]) == fmt.Sprint(match["value"]) {
+				ok = false
 			}
 		}
 		if ok {

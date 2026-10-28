@@ -1,11 +1,13 @@
 // Package rageval measures retrieval quality against a golden set: queries
 // paired with the source URIs that should come back. It scores a run by where
-// the first expected source ranks, so a change to chunking, ranking or the
+// the first expected source ranks (recall@k, MRR, nDCG@10), and compares two
+// runs with a paired bootstrap, so a change to chunking, ranking or the
 // embedding model can be judged by number rather than by feel.
 package rageval
 
 import (
-	"context"
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,10 +26,18 @@ type Case struct {
 	Query string `yaml:"query" json:"query"`
 	// Expect lists source URIs, any of which counts as a hit. A trailing "*"
 	// matches any URI with that prefix.
-	Expect     []string `yaml:"expect" json:"expect"`
+	Expect []string `yaml:"expect" json:"expect"`
+	// Span, when set, must appear in the hit's text for the hit to count:
+	// the source alone is then only a "source hit".
+	Span       string   `yaml:"span,omitempty" json:"span,omitempty"`
 	Scope      string   `yaml:"scope,omitempty" json:"scope,omitempty"`
 	SourceType string   `yaml:"source_type,omitempty" json:"source_type,omitempty"`
 	Tags       []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	// Section groups cases in the report: hard, legacy, seed-decision,
+	// seed-heading, seed-ident, or anything a user picks.
+	Section string `yaml:"section,omitempty" json:"section,omitempty"`
+	// Note says why the case exists; it is not scored.
+	Note string `yaml:"note,omitempty" json:"note,omitempty"`
 }
 
 // Set is a golden set.
@@ -58,7 +68,12 @@ func readCapped(path string) ([]byte, error) {
 	return b, nil
 }
 
-// LoadSet reads a golden set; a missing file is an empty set.
+// IsJSONL reports whether a set file is stored one JSON case per line.
+func IsJSONL(path string) bool { return strings.EqualFold(filepath.Ext(path), ".jsonl") }
+
+// LoadSet reads a golden set; a missing file is an empty set. A .jsonl file
+// holds one case per line (blank lines and lines starting with # are
+// skipped); anything else is YAML with a top-level cases list.
 func LoadSet(path string) (Set, error) {
 	var s Set
 	b, err := readCapped(path)
@@ -68,8 +83,13 @@ func LoadSet(path string) (Set, error) {
 	if err != nil {
 		return s, err
 	}
-	if err := yaml.Unmarshal(b, &s); err != nil {
-		return s, fmt.Errorf("%s: %w", path, err)
+	if IsJSONL(path) {
+		s, err = parseJSONL(b, path)
+	} else if err = yaml.Unmarshal(b, &s); err != nil {
+		err = fmt.Errorf("%s: %w", path, err)
+	}
+	if err != nil {
+		return Set{}, err
 	}
 	if len(s.Cases) > maxCases {
 		return s, fmt.Errorf("%s has %d cases; the limit is %d", path, len(s.Cases), maxCases)
@@ -82,124 +102,53 @@ func LoadSet(path string) (Set, error) {
 	return s, nil
 }
 
-// SaveSet writes a golden set, replacing the file atomically.
+func parseJSONL(b []byte, path string) (Set, error) {
+	var s Set
+	sc := bufio.NewScanner(bytes.NewReader(b))
+	sc.Buffer(make([]byte, 0, 64<<10), maxFileBytes)
+	line := 0
+	for sc.Scan() {
+		line++
+		t := strings.TrimSpace(sc.Text())
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		if len(s.Cases) == maxCases {
+			return s, fmt.Errorf("%s has more than %d cases; the limit is %d", path, maxCases, maxCases)
+		}
+		var c Case
+		dec := json.NewDecoder(strings.NewReader(t))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&c); err != nil {
+			return s, fmt.Errorf("%s:%d: %w", path, line, err)
+		}
+		s.Cases = append(s.Cases, c)
+	}
+	if err := sc.Err(); err != nil {
+		return s, fmt.Errorf("%s: %w", path, err)
+	}
+	return s, nil
+}
+
+// SaveSet writes a golden set, replacing the file atomically, as JSONL or
+// YAML by the file's extension.
 func SaveSet(path string, s Set) error {
-	b, err := yaml.Marshal(s)
-	if err != nil {
-		return err
-	}
-	return writeAtomic(path, b)
-}
-
-// Hit is one search result, reduced to what scoring needs.
-type Hit struct {
-	SourceURI string  `json:"source_uri"`
-	Score     float32 `json:"score"`
-}
-
-// Searcher runs one case's query and returns its hits, best first.
-type Searcher func(ctx context.Context, c Case, topK int) ([]Hit, error)
-
-// Result is how one case did.
-type Result struct {
-	Query string `json:"query"`
-	// Rank is the 1-based position of the first expected source among the
-	// distinct sources returned; 0 means it was not found in the top k.
-	Rank int      `json:"rank"`
-	Top  []string `json:"top"` // distinct sources returned, best first
-	Err  string   `json:"error,omitempty"`
-}
-
-// Report is a whole run.
-type Report struct {
-	TopK    int      `json:"top_k"`
-	Results []Result `json:"results"`
-	HitAt1  float64  `json:"hit_at_1"`
-	Recall  float64  `json:"recall_at_k"`
-	MRR     float64  `json:"mrr"`
-}
-
-// Run scores every case. Hits are ranked by distinct source, since several
-// chunks of one document should count once. A case whose search fails counts
-// as a miss and records the error.
-func Run(ctx context.Context, s Set, topK int, search Searcher) Report {
-	r := Report{TopK: topK}
-	for _, c := range s.Cases {
-		// A cancelled run stops rather than sending every remaining query.
-		if ctx.Err() != nil {
-			break
-		}
-		res := Result{Query: c.Query}
-		hits, err := search(ctx, c, topK)
+	if !IsJSONL(path) {
+		b, err := yaml.Marshal(s)
 		if err != nil {
-			res.Err = err.Error()
+			return err
 		}
-		seen := map[string]bool{}
-		for _, h := range hits {
-			if seen[h.SourceURI] {
-				continue
-			}
-			seen[h.SourceURI] = true
-			res.Top = append(res.Top, h.SourceURI)
-			if res.Rank == 0 && matchesAny(h.SourceURI, c.Expect) {
-				res.Rank = len(res.Top)
-			}
-		}
-		r.Results = append(r.Results, res)
+		return writeAtomic(path, b)
 	}
-	if n := float64(len(r.Results)); n > 0 {
-		for _, res := range r.Results {
-			if res.Rank == 1 {
-				r.HitAt1++
-			}
-			if res.Rank > 0 {
-				r.Recall++
-				r.MRR += 1 / float64(res.Rank)
-			}
-		}
-		r.HitAt1 /= n
-		r.Recall /= n
-		r.MRR /= n
-	}
-	return r
-}
-
-func matchesAny(uri string, patterns []string) bool {
-	for _, p := range patterns {
-		if prefix, ok := strings.CutSuffix(p, "*"); ok {
-			if strings.HasPrefix(uri, prefix) {
-				return true
-			}
-		} else if uri == p {
-			return true
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	for _, c := range s.Cases {
+		if err := enc.Encode(c); err != nil {
+			return err
 		}
 	}
-	return false
-}
-
-// Change is one case whose rank moved between two runs.
-type Change struct {
-	Query    string
-	From, To int // 0 = missed
-}
-
-// Better reports whether the case improved.
-func (c Change) Better() bool { return c.To != 0 && (c.From == 0 || c.To < c.From) }
-
-// Compare lists cases present in both runs whose rank changed, in run order.
-func Compare(before, after Report) []Change {
-	prev := map[string]int{}
-	for _, r := range before.Results {
-		prev[r.Query] = r.Rank
-	}
-	var out []Change
-	for _, r := range after.Results {
-		from, ok := prev[r.Query]
-		if ok && from != r.Rank {
-			out = append(out, Change{Query: r.Query, From: from, To: r.Rank})
-		}
-	}
-	return out
+	return writeAtomic(path, buf.Bytes())
 }
 
 // runName is a saved run's name; it becomes a file name.

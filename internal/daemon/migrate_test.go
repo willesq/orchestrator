@@ -26,6 +26,17 @@ type fakeMigrator struct {
 	dropErr  error
 	dropped  []string // collections dropped, with apply
 	planned  []string // collections planned, without apply
+
+	reindex    rag.ReindexReport
+	reindexErr error
+	reindexed  []bool // apply flag of each re-index call
+}
+
+func (f *fakeMigrator) ReindexKeywords(_ context.Context, apply bool) (rag.ReindexReport, error) {
+	f.reindexed = append(f.reindexed, apply)
+	rep := f.reindex
+	rep.Applied = apply
+	return rep, f.reindexErr
 }
 
 func (f *fakeMigrator) MigrationProgress() (rag.MigrationProgress, bool) {

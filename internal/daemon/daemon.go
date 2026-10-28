@@ -165,6 +165,12 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 	if k := req.GetTopK(); k < 0 || k > maxSearchTopK {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "top_k %d must be between 0 and %d", k, maxSearchTopK)
 	}
+	if r := req.GetRanking(); r != "" && r != rag.RankingWeighted && r != rag.RankingPlain {
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "ranking %q must be weighted or plain", r)
+	}
+	if n := req.GetPerSource(); n > maxSearchTopK {
+		return nil, grpcstatus.Errorf(codes.InvalidArgument, "per_source %d must be at most %d", n, maxSearchTopK)
+	}
 	if err := checkTags(req.GetTags(), req.GetAllTags()); err != nil {
 		return nil, err
 	}
@@ -173,6 +179,8 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 		return nil, err
 	}
 	hits, fallback, err := s.rag.Search(ctx, req.GetQuery(), rag.SearchOpts{
+		PerSource:  int(req.GetPerSource()),
+		Ranking:    req.GetRanking(),
 		TopK:       int(req.GetTopK()),
 		Scope:      req.GetScope(),
 		SourceType: req.GetSourceType(),
@@ -202,6 +210,7 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 			StartedAt:    toUnix(h.StartedAt),
 			EndedAt:      toUnix(h.EndedAt),
 			IngestedAt:   toUnix(h.IngestedAt),
+			Heading:      h.Heading,
 		})
 	}
 	return out, nil
@@ -681,6 +690,8 @@ func buildRAG(s config.Settings, qdrantURL, apiKey string) (*rag.Service, *embed
 	if w := s.RAG.Search.KeywordWeight; w > 0 {
 		svc.KeywordWeight = w
 	}
+	svc.Ranking = rankingParams(s.RAG.Search)
+	svc.PerSource = max(s.RAG.Search.PerSource, 0)
 	return svc, emb
 }
 

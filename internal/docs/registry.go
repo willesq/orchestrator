@@ -200,6 +200,32 @@ func (r *Registry) SetHash(ctx context.Context, uri, hash string, now int64) err
 	return err
 }
 
+// HashURIs returns the doc URIs with a stored hash that start with prefix.
+func (r *Registry) HashURIs(ctx context.Context, prefix string) ([]string, error) {
+	// substr, not LIKE: '_' and '%' are common in repo and file names.
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT uri FROM doc_hashes WHERE substr(uri, 1, ?) = ? ORDER BY uri`, len(prefix), prefix)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var u string
+		if err := rows.Scan(&u); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// DeleteHash forgets a doc URI's stored hash.
+func (r *Registry) DeleteHash(ctx context.Context, uri string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM doc_hashes WHERE uri=?`, uri)
+	return err
+}
+
 func scanOwners(rows *sql.Rows) ([]Owner, error) {
 	var out []Owner
 	for rows.Next() {

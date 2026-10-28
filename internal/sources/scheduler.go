@@ -2,6 +2,8 @@ package sources
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -28,8 +30,46 @@ func (s *Scheduler) Scan(ctx context.Context) {
 	if err != nil {
 		return
 	}
+	opts := s.opts
+	if all, err := s.reg.List(ctx); err == nil {
+		opts.Shared = sharedPrefixes(all, opts.KnownRoots)
+	} else {
+		// Without the full list, sharing cannot be ruled out: prune nothing.
+		opts.Shared = map[string]bool{"": true}
+	}
 	for _, src := range due {
-		status, _ := Refresh(ctx, src, s.ing, s.opts)
+		status, _ := Refresh(ctx, src, s.ing, opts)
 		_ = s.reg.MarkFetched(ctx, src.ID, now, status)
 	}
+}
+
+// sharedPrefixes returns the repo:// prefixes more than one source stores
+// under: two repo sources with the same directory name, or a repo source and
+// an owner source's subdirectory. One's walk must not prune the other's docs.
+func sharedPrefixes(srcs []Source, roots []string) map[string]bool {
+	count := map[string]int{}
+	for _, s := range srcs {
+		switch s.Kind {
+		case KindRepo:
+			count["repo://"+ownerLabel(s.Owner)+"/"+filepath.Base(filepath.Clean(s.URI))+"/"]++
+		case KindOwner:
+			seen := map[string]bool{}
+			for _, r := range roots {
+				entries, _ := os.ReadDir(filepath.Join(r, s.URI))
+				for _, e := range entries {
+					if e.IsDir() && !seen[e.Name()] {
+						seen[e.Name()] = true
+						count["repo://"+s.URI+"/"+e.Name()+"/"]++
+					}
+				}
+			}
+		}
+	}
+	shared := map[string]bool{}
+	for p, n := range count {
+		if n > 1 {
+			shared[p] = true
+		}
+	}
+	return shared
 }

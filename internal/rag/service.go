@@ -5,6 +5,7 @@ package rag
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -39,6 +40,9 @@ type Meta struct {
 	// transcript carries them. StartedAt and EndedAt, when set, then bound
 	// those times, so no chunk is dated outside its session.
 	Timeline bool
+	// KeepUndated stores content that has no date of its own undated, instead
+	// of dating it by when it is stored: a migration's copy is not new content.
+	KeepUndated bool
 }
 
 // Service ties the embedder and vector store together.
@@ -75,6 +79,14 @@ type Service struct {
 	// (rag.search.keyword_weight); 1 weighs both lists alike, the default 0.5
 	// gives meaning the larger share.
 	KeywordWeight float64
+	// Ranking weights fused candidates by source type and recency
+	// (rag.search.ranking and its weights).
+	Ranking RankingParams
+	// PerSource caps the hits one source may return to a search that does not
+	// set its own cap (rag.search.per_source); 0 leaves them uncapped.
+	PerSource int
+	// now is the clock ranking measures age by; nil is time.Now.
+	now func() time.Time
 
 	fallbackLog rateLog
 	// progress is set while a migration copies sources.
@@ -91,7 +103,7 @@ type Service struct {
 // tokens; chunkTokens is capped at what the model embeds.
 func NewService(emb Embedder, store *QdrantStore, chunkTokens, overlap int) *Service {
 	return &Service{emb: emb, store: store, chunkTokens: chunkTokens, overlap: overlap, MarkdownSections: true,
-		BM25: bm25.DefaultParams, SearchMode: ModeHybrid, RRFK: 60, KeywordWeight: 0.5}
+		BM25: bm25.DefaultParams, SearchMode: ModeHybrid, RRFK: 60, KeywordWeight: 0.5, Ranking: DefaultRanking()}
 }
 
 // active returns the store reads go to.
@@ -240,7 +252,7 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 	if m.SourceURI == "" {
 		return nil, 0, fmt.Errorf("source_uri is required")
 	}
-	pieces := s.split(text)
+	pieces := dedupeChunks(s.split(text))
 	if len(pieces) == 0 {
 		return nil, 0, nil
 	}
@@ -270,6 +282,8 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 			"tags":        m.Tags,
 			"chunk_index": i,
 			"chunk_total": len(chunks),
+			// Which tokenizer made the keyword vector, for ReindexKeywords.
+			fieldBM25Version: bm25.TokenizerVersion,
 		}
 		if h := pieces[i].heading; h != "" {
 			payload["heading"] = h
@@ -279,12 +293,38 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 			start, end = chunkSpan(c, &carried)
 			start, end = clamp(start, end, m.StartedAt, m.EndedAt)
 		}
+		if start.IsZero() && end.IsZero() {
+			// Every chunk is dated, so date-range searches find it: by its
+			// source's own span when it has one (a commit date, a session),
+			// otherwise by when it was stored (a fetch, a note).
+			start, end = m.StartedAt, m.EndedAt
+			if start.IsZero() && end.IsZero() && !m.KeepUndated {
+				start, end = ingested, ingested
+			}
+		}
 		setTime(payload, fieldStartedAt, start)
 		setTime(payload, fieldEndedAt, end)
 		setTime(payload, fieldIngestedAt, ingested)
 		points[i] = Point{ID: pointID(m.SourceURI, i), Vector: vecs[i], Sparse: bm25.Document(c, s.BM25), Payload: payload}
 	}
 	return points, dim, nil
+}
+
+// dedupeChunks drops a chunk whose text repeats an earlier chunk of the same
+// source: a repeated block (boilerplate, a pasted log) would otherwise be
+// stored, and returned, twice.
+func dedupeChunks(pieces []chunk) []chunk {
+	seen := make(map[[sha256.Size]byte]bool, len(pieces))
+	out := pieces[:0:0]
+	for _, p := range pieces {
+		h := sha256.Sum256([]byte(p.text))
+		if seen[h] {
+			continue
+		}
+		seen[h] = true
+		out = append(out, p)
+	}
+	return out
 }
 
 // writePoints stores one source's chunks in st and prunes what is left of an
@@ -457,6 +497,15 @@ func (s *Service) DeleteSource(ctx context.Context, uri string) (int, error) {
 		s.shadowResult(uri, err)
 	}
 	return n, nil
+}
+
+// HasSource reports whether any chunk is stored under uri.
+func (s *Service) HasSource(ctx context.Context, uri string) (bool, error) {
+	if uri == "" {
+		return false, nil
+	}
+	n, err := s.active().Count(ctx, EqFilter("source_uri", uri))
+	return n > 0, err
 }
 
 // pointID is a deterministic UUIDv5 so re-ingesting a source overwrites prior chunks.

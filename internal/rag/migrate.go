@@ -433,6 +433,7 @@ func (s *Service) readSource(ctx context.Context, st *QdrantStore, uri string) (
 	// A transcript's turns carry their own times, so its new chunks are dated
 	// by the turns they hold, within the source's span, as at ingest.
 	sr.meta.Timeline = sr.meta.SourceType == "session_transcript"
+	sr.meta.KeepUndated = true
 	return sr, nil
 }
 

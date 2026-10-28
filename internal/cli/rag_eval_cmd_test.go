@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -52,14 +53,19 @@ func TestRAGEval(t *testing.T) {
 	if _, err := run(cf, "", "rag", "eval", "add", "routing", "x"); err == nil {
 		t.Fatal("duplicate case accepted")
 	}
-	out, err := run(cf, "", "rag", "eval", "--top-k", "5", "--save", "before")
+	out, err := run(cf, "", "rag", "eval", "--top-k", "5", "--save", "before", "--cases", "--label", "base")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"✓   1  install orch", "✓   2  routing", "✗   -  never found", "3 cases, top 5: hit@1 0.33  recall@5 0.67  MRR 0.500", `saved as "before"`} {
+	for _, want := range []string{"✓   1  install orch", "✓   2  routing", "✗   -  never found", "3 cases, top 5 (base):",
+		"recall@1 0.33  @3 0.67  @5 0.67  @10 0.67  MRR 0.500", "source hit@5 0.67", "hard           n=3", `saved as "before"`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing %q:\n%s", want, out)
 		}
+	}
+	// Without --cases only cases outside the top 3 are listed.
+	if out, _ := run(cf, "", "rag", "eval", "--top-k", "5"); strings.Contains(out, "install orch") || !strings.Contains(out, "never found") {
+		t.Fatalf("default listing:\n%s", out)
 	}
 	last := ec.reqs[len(ec.reqs)-2] // the routing case's request
 	if last.GetSourceType() != "repo_doc" || last.GetTags()[0] != "repo:orchestrator" || last.GetTopK() != 5 {
@@ -72,7 +78,8 @@ func TestRAGEval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "vs saved:       hit@1 +0.33") || !strings.Contains(out, "better 2 → 1  routing") {
+	if !strings.Contains(out, "vs saved: recall@1 +0.33") || !strings.Contains(out, "better 2 → 1  routing") ||
+		!strings.Contains(out, "MRR       0.500 → 0.667") {
 		t.Fatalf("compare output:\n%s", out)
 	}
 	out, err = run(cf, "", "rag", "eval", "--json", "--top-k", "5")
@@ -80,12 +87,29 @@ func TestRAGEval(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rep struct {
-		HitAt1 float64 `json:"hit_at_1"`
+		RecallAt1 float64 `json:"recall_at_1"`
+		Version   int     `json:"version"`
 	}
-	if json.Unmarshal([]byte(out), &rep) != nil || rep.HitAt1 < 0.66 {
+	if json.Unmarshal([]byte(out), &rep) != nil || rep.RecallAt1 < 0.66 || rep.Version != 2 {
 		t.Fatalf("json = %s", out)
 	}
+	// A run scored the old way is not compared.
+	if err := os.WriteFile(filepath.Join(evalRunsDir(), "old.json"), []byte(`{"top_k":5,"results":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, _ := run(cf, "", "rag", "eval", "--compare", "old"); !strings.Contains(out, "scored differently") {
+		t.Fatalf("old run compared:\n%s", out)
+	}
+	// --section scores one section; an empty one is an error.
+	if _, err := run(cf, "", "rag", "eval", "--section", "nope"); err == nil {
+		t.Fatal("empty section accepted")
+	}
+	if out, err := run(cf, "", "rag", "eval", "--section", "hard", "--inject-format", "full"); err != nil || !strings.Contains(out, "3 cases") {
+		t.Fatalf("section run = %s, %v", out, err)
+	}
 	for _, args := range [][]string{
+		{"rag", "eval", "--per-source", "-2"},
+		{"rag", "eval", "--inject-format", "html"},
 		{"rag", "eval", "--top-k", "0"},
 		{"rag", "eval", "--compare", "absent"},
 		{"rag", "eval", "--save", "../escape"},
@@ -133,6 +157,12 @@ func TestRAGEvalPassesMode(t *testing.T) {
 	}
 	if got := ec.reqs[len(ec.reqs)-1].GetMode(); got != "dense" {
 		t.Fatalf("mode = %q", got)
+	}
+	if _, err := run(cf, "", "rag", "eval", "--ranking", "plain", "--per-source", "-1"); err != nil {
+		t.Fatal(err)
+	}
+	if last := ec.reqs[len(ec.reqs)-1]; last.GetRanking() != "plain" || last.GetPerSource() != -1 {
+		t.Fatalf("ranking/per_source not passed: %+v", last)
 	}
 }
 

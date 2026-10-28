@@ -24,38 +24,64 @@ func fixed(byQuery map[string][]string) Searcher {
 
 func TestRunScores(t *testing.T) {
 	s := Set{Cases: []Case{
-		{Query: "first", Expect: []string{"repo://a/README.md"}},
-		{Query: "dup chunks count once", Expect: []string{"repo://c"}},
+		{Query: "first", Expect: []string{"repo://a/README.md"}, Section: "hard"},
+		{Query: "dup chunks rank by position", Expect: []string{"repo://c"}},
 		{Query: "prefix", Expect: []string{"session://*"}},
 		{Query: "any of several", Expect: []string{"x://nope", "repo://b"}},
 		{Query: "missed", Expect: []string{"repo://never"}},
 		{Query: "boom", Expect: []string{"repo://a"}},
 	}}
 	r := Run(context.Background(), s, 10, fixed(map[string][]string{
-		"first":                 {"repo://a/README.md", "repo://b"},
-		"dup chunks count once": {"repo://a", "repo://a", "repo://a", "repo://c"},
-		"prefix":                {"repo://a", "session://123/summary"},
-		"any of several":        {"repo://z", "repo://y", "repo://b"},
-		"missed":                {"repo://a"},
-	}))
-	want := []int{1, 2, 2, 3, 0, 0}
+		"first":                       {"repo://a/README.md", "repo://b"},
+		"dup chunks rank by position": {"repo://a", "repo://a", "repo://a", "repo://c"},
+		"prefix":                      {"repo://a", "session://123/summary"},
+		"any of several":              {"repo://z", "repo://y", "repo://b"},
+		"missed":                      {"repo://a"},
+	}), nil)
+	want := []int{1, 4, 2, 3, 0, 0}
 	for i, res := range r.Results {
-		if res.Rank != want[i] {
-			t.Errorf("%q rank = %d, want %d (top %v)", res.Query, res.Rank, want[i], res.Top)
+		if res.Rank != want[i] || res.SourceRank != want[i] {
+			t.Errorf("%q rank = %d/%d, want %d (top %v)", res.Query, res.Rank, res.SourceRank, want[i], res.Top)
 		}
 	}
 	if r.Results[1].Top[0] != "repo://a" || len(r.Results[1].Top) != 2 {
-		t.Errorf("duplicates not collapsed: %v", r.Results[1].Top)
+		t.Errorf("duplicates not collapsed in Top: %v", r.Results[1].Top)
 	}
-	if r.Results[5].Err == "" {
+	if r.Results[5].Err == "" || r.Errors != 1 {
 		t.Error("search error not recorded")
 	}
 	near := func(a, b float64) bool { return a-b < 1e-9 && b-a < 1e-9 }
-	if !near(r.HitAt1, 1.0/6) || !near(r.Recall, 4.0/6) || !near(r.MRR, (1+0.5+0.5+1.0/3)/6) {
-		t.Fatalf("hit@1 %v recall %v mrr %v", r.HitAt1, r.Recall, r.MRR)
+	if !near(r.RecallAt1, 1.0/6) || !near(r.RecallAt3, 3.0/6) || !near(r.RecallAt10, 4.0/6) ||
+		!near(r.MRR, (1+0.25+0.5+1.0/3)/6) || !near(r.SourceHit, 4.0/6) {
+		t.Fatalf("metrics %+v", r.Metrics)
 	}
-	if empty := Run(context.Background(), Set{}, 5, fixed(nil)); empty.MRR != 0 || empty.TopK != 5 {
+	if r.Version != ReportVersion || r.Sections["hard"].N != 1 || r.Sections["hard"].RecallAt1 != 1 {
+		t.Fatalf("version/sections = %d %+v", r.Version, r.Sections)
+	}
+	if empty := Run(context.Background(), Set{}, 5, fixed(nil), nil); empty.MRR != 0 || empty.TopK != 5 || empty.Sections != nil {
 		t.Fatalf("empty = %+v", empty)
+	}
+}
+
+func TestSpanAndInjection(t *testing.T) {
+	s := Set{Cases: []Case{{Query: "q", Expect: []string{"u://a"}, Span: "The Decision"}}}
+	search := func(context.Context, Case, int) ([]Hit, error) {
+		return []Hit{{SourceURI: "u://a", Text: "intro"}, {SourceURI: "u://b"}, {SourceURI: "u://a", Text: "so the decision was made"}}, nil
+	}
+	calls := 0
+	r := Run(context.Background(), s, 5, search, func(c Case, hits []Hit) int { calls++; return 41 })
+	res := r.Results[0]
+	if res.SourceRank != 1 || res.Rank != 3 || res.InjectedTokens != 11 || calls != 1 || r.InjectedTokens != 11 {
+		t.Fatalf("result = %+v", res)
+	}
+	if NDCG10(res) != 0.5 || RR(res) != 1.0/3 || RecallAt3(res) != 1 || NDCG10(Result{Rank: 11}) != 0 {
+		t.Fatal("per-case metrics wrong")
+	}
+	if p := percentile([]float64{1, 2, 3, 4}, 0.95); p != 4 {
+		t.Fatalf("p95 = %v", p)
+	}
+	if percentile(nil, 0.5) != 0 {
+		t.Fatal("empty percentile")
 	}
 }
 
@@ -100,7 +126,7 @@ func TestSetRoundTrip(t *testing.T) {
 
 func TestRuns(t *testing.T) {
 	dir := t.TempDir()
-	r := Report{TopK: 5, Results: []Result{{Query: "q", Rank: 2}}, MRR: 0.5}
+	r := Report{TopK: 5, Results: []Result{{Query: "q", Rank: 2}}, Metrics: Metrics{MRR: 0.5}}
 	if err := SaveRun(dir, "baseline-1", r); err != nil {
 		t.Fatal(err)
 	}
@@ -170,8 +196,56 @@ func TestRunStopsWhenCancelled(t *testing.T) {
 		calls++
 		cancel()
 		return nil, nil
-	})
+	}, nil)
 	if calls != 1 || len(r.Results) != 1 {
 		t.Fatalf("calls = %d, results = %d; want the run to stop after the cancel", calls, len(r.Results))
+	}
+}
+
+func TestJSONLRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "eval", "golden.jsonl")
+	in := Set{Cases: []Case{
+		{Query: "what did we decide about <x> & y", Expect: []string{"session://s/*"}, Section: SectionHard, Span: "x"},
+		{Query: "ident_name", Expect: []string{"repo://o/r/a.md"}, Tags: []string{"repo:r"}},
+	}}
+	if err := SaveSet(path, in); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	if strings.Count(string(b), "\n") != 2 || strings.Contains(string(b), "\\u003c") {
+		t.Fatalf("not one readable case per line:\n%s", b)
+	}
+	// Comments and blank lines are skipped.
+	if err := os.WriteFile(path, append([]byte("# hand-written\n\n"), b...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := LoadSet(path)
+	if err != nil || len(out.Cases) != 2 || out.Cases[0].Span != "x" || out.Cases[1].Tags[0] != "repo:r" {
+		t.Fatalf("round trip = %+v, %v", out, err)
+	}
+	for name, body := range map[string]string{
+		"bad json":      "{",
+		"unknown field": `{"query":"q","expect":["u"],"bogus":1}`,
+		"no expect":     `{"query":"q"}`,
+	} {
+		if err := os.WriteFile(path, []byte(body+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LoadSet(path); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+	var many strings.Builder
+	for i := 0; i <= maxCases; i++ {
+		many.WriteString(`{"query":"q","expect":["u"]}` + "\n")
+	}
+	if err := os.WriteFile(path, []byte(many.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSet(path); err == nil || !strings.Contains(err.Error(), "limit is") {
+		t.Fatalf("too many jsonl cases err = %v", err)
+	}
+	if !IsJSONL("a.JSONL") || IsJSONL("a.yaml") {
+		t.Fatal("IsJSONL")
 	}
 }

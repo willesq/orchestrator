@@ -264,3 +264,25 @@ func TestSessionSummaryDefaults(t *testing.T) {
 		t.Errorf("summary defaults = %+v", got)
 	}
 }
+
+// A partial source_weights map replaces the default map (the daemon overlays
+// it on the defaults; see rankingParams).
+func TestSourceWeightsFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ORCH_CONFIG_DIR", dir)
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("rag:\n  search:\n    source_weights:\n      web: 0.5\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	v, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := Unmarshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := s.RAG.Search.SourceWeights
+	if w["web"] != 0.5 || s.RAG.Search.Ranking != "weighted" || s.RAG.Search.PerSource != 2 {
+		t.Fatalf("weights = %v, search = %+v", w, s.RAG.Search)
+	}
+}

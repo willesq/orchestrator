@@ -24,7 +24,12 @@ import (
 // only comparable with queries tokenized the same way, so any change to
 // tokenizing (the pattern, stopwords, limits, normalization) must bump it and
 // re-index.
-const TokenizerVersion = 1
+//
+// Version 2 splits a digit from a capital after it (OAuth2Token gives auth2,
+// token), and also indexes each separated part of an identifier that is
+// itself compound (rag.search.keyword_weight gives keyword_weight) and a
+// path's file name (internal/rag/search.go gives search.go).
+const TokenizerVersion = 2
 
 // Params are BM25's tuning constants.
 type Params struct {
@@ -108,6 +113,11 @@ func Tokens(text string) []string {
 					return out
 				}
 			}
+			for _, sub := range subIdentifiers(seg.text) {
+				if keep(sub) && !add(sub) {
+					return out
+				}
+			}
 			for _, p := range parts {
 				if keep(p) && !stopwords[p] && !add(p) {
 					return out
@@ -163,6 +173,37 @@ func bigrams(s string) []string {
 	return out
 }
 
+// subIdentifiers returns the pieces of an identifier between its dots,
+// slashes, colons and dashes that are compound themselves (snake_case or
+// camelCase), lowercased, and, for a path, its last element when that has a
+// dot: so a query naming keyword_weight or search.go matches
+// rag.search.keyword_weight or internal/rag/search.go as a whole term, not
+// only through the words they share.
+func subIdentifiers(s string) []string {
+	segs := strings.FieldsFunc(s, func(r rune) bool { return strings.ContainsRune("./:-", r) })
+	var out []string
+	for _, seg := range segs {
+		if len(out) >= maxParts {
+			break
+		}
+		if len(segs) > 1 && (strings.Contains(seg, "_") || len(splitCamel(seg)) > 1) {
+			out = append(out, strings.ToLower(seg))
+		}
+		// parse_HTTPRequest also yields httprequest.
+		if pieces := strings.FieldsFunc(seg, func(r rune) bool { return r == '_' }); len(pieces) > 1 {
+			for _, p := range pieces {
+				if len(splitCamel(p)) > 1 {
+					out = append(out, strings.ToLower(p))
+				}
+			}
+		}
+	}
+	if i := strings.LastIndexByte(s, '/'); i >= 0 && i+1 < len(s) && strings.Contains(s[i+1:], ".") {
+		out = append(out, strings.ToLower(s[i+1:]))
+	}
+	return out
+}
+
 // splitParts breaks an identifier at separators, underscores and camelCase
 // boundaries, lowercasing each part.
 func splitParts(s string) []string {
@@ -177,7 +218,8 @@ func splitParts(s string) []string {
 }
 
 // splitCamel splits "ProcessActivity" into process, activity and
-// "HTTPServer" into http, server; digits stay with the run before them.
+// "HTTPServer" into http, server; digits stay with the run before them, and a
+// capital after a digit starts a new part ("OAuth2Token": o, auth2, token).
 func splitCamel(s string) []string {
 	rs := []rune(s)
 	var parts []string
@@ -188,7 +230,7 @@ func splitCamel(s string) []string {
 		if i+1 < len(rs) {
 			next = rs[i+1]
 		}
-		boundary := unicode.IsLower(prev) && unicode.IsUpper(cur) ||
+		boundary := (unicode.IsLower(prev) || unicode.IsDigit(prev)) && unicode.IsUpper(cur) ||
 			unicode.IsUpper(prev) && unicode.IsUpper(cur) && unicode.IsLower(next)
 		if boundary {
 			parts = append(parts, strings.ToLower(string(rs[start:i])))

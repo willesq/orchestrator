@@ -19,6 +19,7 @@ type hybridMigrator interface {
 	MigrateHybrid(ctx context.Context, target string, apply bool, commit rag.Commit) (rag.MigrateReport, error)
 	MigrationProgress() (rag.MigrationProgress, bool)
 	DropCollection(ctx context.Context, name string, apply bool) (rag.DropReport, error)
+	ReindexKeywords(ctx context.Context, apply bool) (rag.ReindexReport, error)
 }
 
 // migrating allows one migration at a time: two would both dual-write and race
@@ -43,6 +44,30 @@ func (s *server) MigrateHybrid(ctx context.Context, req *orchdv1.MigrateHybridRe
 	// A refused or failed run still reports what it found, so the problems
 	// that stopped it can be fixed.
 	if err != nil {
+		resp.Error = err.Error()
+	}
+	return resp, nil
+}
+
+// ReindexKeywords brings the keyword vectors up to the current tokenizer. It
+// shares the migration lock: a re-index never races a migration's copy.
+func (s *server) ReindexKeywords(ctx context.Context, req *orchdv1.ReindexKeywordsRequest) (*orchdv1.ReindexKeywordsResponse, error) {
+	if s.migrator == nil {
+		return nil, grpcstatus.Error(codes.Unavailable, "re-indexing is unavailable")
+	}
+	if !migrating.TryLock() {
+		return nil, grpcstatus.Error(codes.Aborted, "a migration or re-index is already running")
+	}
+	defer migrating.Unlock()
+	rep, err := s.migrator.ReindexKeywords(ctx, req.GetApply())
+	resp := &orchdv1.ReindexKeywordsResponse{
+		Collection: rep.Collection, TokenizerVersion: int32(rep.Version), Total: int64(rep.Total),
+		Stale: int64(rep.Stale), Updated: int64(rep.Updated), Applied: rep.Applied,
+	}
+	if err != nil {
+		if !req.GetApply() || rep.Collection == "" {
+			return nil, grpcstatus.Error(codes.FailedPrecondition, err.Error())
+		}
 		resp.Error = err.Error()
 	}
 	return resp, nil

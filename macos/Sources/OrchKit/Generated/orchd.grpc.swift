@@ -215,6 +215,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ReindexKeywords" metadata.
+        public enum ReindexKeywords: Sendable {
+            /// Request type for "ReindexKeywords".
+            public typealias Input = Orchd_V1_ReindexKeywordsRequest
+            /// Response type for "ReindexKeywords".
+            public typealias Output = Orchd_V1_ReindexKeywordsResponse
+            /// Descriptor for "ReindexKeywords".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ReindexKeywords",
+                type: .unary
+            )
+        }
         /// Namespace for "ListPRs" metadata.
         public enum ListPRs: Sendable {
             /// Request type for "ListPRs".
@@ -518,6 +531,7 @@ public enum Orchd_V1_Orchd: Sendable {
             RateTask.descriptor,
             MigrateHybrid.descriptor,
             DropBackup.descriptor,
+            ReindexKeywords.descriptor,
             ListPRs.descriptor,
             GetGitHubIdentity.descriptor,
             ListGitHubScopes.descriptor,
@@ -914,6 +928,31 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DropBackupResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DropBackupResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ReindexKeywords" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ReindexKeywords recomputes, in place, the BM25 keyword vectors an older
+        /// > tokenizer made, from each chunk's stored text; counts unless apply.
+        /// > Resumable: chunks already re-indexed are skipped.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ReindexKeywordsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ReindexKeywordsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ReindexKeywordsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func reindexKeywords<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ReindexKeywordsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ReindexKeywordsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ReindexKeywordsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ReindexKeywordsResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListPRs" method.
@@ -1975,6 +2014,42 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.DropBackup.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ReindexKeywords" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ReindexKeywords recomputes, in place, the BM25 keyword vectors an older
+        /// > tokenizer made, from each chunk's stored text; counts unless apply.
+        /// > Resumable: chunks already re-indexed are skipped.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ReindexKeywordsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ReindexKeywordsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ReindexKeywordsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func reindexKeywords<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ReindexKeywordsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ReindexKeywordsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ReindexKeywordsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ReindexKeywordsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ReindexKeywords.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -3198,6 +3273,37 @@ extension Orchd_V1_Orchd.ClientProtocol {
         )
     }
 
+    /// Call the "ReindexKeywords" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ReindexKeywords recomputes, in place, the BM25 keyword vectors an older
+    /// > tokenizer made, from each chunk's stored text; counts unless apply.
+    /// > Resumable: chunks already re-indexed are skipped.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ReindexKeywordsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func reindexKeywords<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ReindexKeywordsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ReindexKeywordsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.reindexKeywords(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ReindexKeywordsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ReindexKeywordsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "ListPRs" method.
     ///
     /// > Source IDL Documentation:
@@ -4357,6 +4463,41 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.dropBackup(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ReindexKeywords" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ReindexKeywords recomputes, in place, the BM25 keyword vectors an older
+    /// > tokenizer made, from each chunk's stored text; counts unless apply.
+    /// > Resumable: chunks already re-indexed are skipped.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func reindexKeywords<Result>(
+        _ message: Orchd_V1_ReindexKeywordsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ReindexKeywordsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ReindexKeywordsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.reindexKeywords(
             request: request,
             options: options,
             onResponse: handleResponse

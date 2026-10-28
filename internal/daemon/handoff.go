@@ -18,6 +18,7 @@ import (
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/redact"
 	"github.com/willesq/orchestrator/internal/session"
+	"github.com/willesq/orchestrator/internal/sources"
 	"github.com/willesq/orchestrator/internal/supervisor"
 )
 
@@ -73,7 +74,7 @@ func lockSession(id string) func() {
 
 // handoffUnit does hand-offs as they appear, including any left from before
 // orchd last started. summaries is nil when summaries are off.
-func handoffUnit(ing summaryIngester, summaries *summaryQueue, dir string) supervisor.Unit {
+func handoffUnit(ing summaryIngester, summaries *summaryQueue, dir string, canonical sources.CanonicalFunc) supervisor.Unit {
 	return supervisor.Unit{
 		Name:   UnitHandoff,
 		Detail: "stores transcripts and documents that hooks hand off",
@@ -85,7 +86,7 @@ func handoffUnit(ing summaryIngester, summaries *summaryQueue, dir string) super
 				for {
 					cutoff := time.Now().Add(-handoffSettle)
 					storeSessions(ctx, ing, summaries, dir, cutoff)
-					storeFiles(ctx, ing, dir, cutoff)
+					storeFiles(ctx, ing, dir, cutoff, canonical)
 					beat()
 					select {
 					case <-ctx.Done():
@@ -193,7 +194,8 @@ func storeRecord(ctx context.Context, ing summaryIngester, s handoff.Session, st
 }
 
 // storeFiles stores the handed-off documents older than cutoff that are due.
-func storeFiles(ctx context.Context, ing summaryIngester, dir string, cutoff time.Time) {
+// canonical, when set, names the repo:// URIs a file's doc is synced under.
+func storeFiles(ctx context.Context, ing summaryIngester, dir string, cutoff time.Time, canonical sources.CanonicalFunc) {
 	pending, err := handoff.Files(dir, cutoff)
 	if err != nil {
 		log.Printf("handoff: list files: %v", err)
@@ -209,7 +211,7 @@ func storeFiles(ctx context.Context, ing summaryIngester, dir string, cutoff tim
 			continue
 		}
 		done++
-		err := storeFile(ctx, ing, f, home)
+		err := storeFile(ctx, ing, f, home, canonical)
 		switch {
 		case err == nil:
 			_ = handoff.DoneFile(dir, f)
@@ -226,7 +228,7 @@ func storeFiles(ctx context.Context, ing summaryIngester, dir string, cutoff tim
 // storeFile stores an edited document as it is now. The entry names only a
 // path, so what it may be is decided again here, after resolving symlinks, and
 // the file read is the one that was checked.
-func storeFile(ctx context.Context, ing summaryIngester, f handoff.File, home string) error {
+func storeFile(ctx context.Context, ing summaryIngester, f handoff.File, home string, canonical sources.CanonicalFunc) error {
 	sourceType, uri, ok := handoff.Classify(f.Path, home)
 	if !ok {
 		return nil
@@ -237,6 +239,11 @@ func storeFile(ctx context.Context, ing summaryIngester, f handoff.File, home st
 	}
 	if _, _, ok := handoff.Classify(resolved, home); !ok {
 		return nil
+	}
+	// Mapped from the resolved path: a link inside a repo to a note outside
+	// it is that note, not a repo doc.
+	if synced, err := canonicalStored(ctx, ing, canonical, uri, resolved); synced || err != nil {
+		return err
 	}
 	raw, ok, err := readRegular(resolved, maxHandoffDoc)
 	if err != nil || !ok {
@@ -251,6 +258,40 @@ func storeFile(ctx context.Context, ing summaryIngester, f handoff.File, home st
 	defer cancel()
 	_, err = ing.IngestText(ctx, text, rag.Meta{SourceURI: uri, SourceType: sourceType})
 	return err
+}
+
+// canonicalStore tells whether a source is stored and removes one
+// (implemented by *rag.Service).
+type canonicalStore interface {
+	HasSource(ctx context.Context, uri string) (bool, error)
+	DeleteSource(ctx context.Context, uri string) (int, error)
+}
+
+// canonicalStored reports whether an edited doc is already stored under the
+// repo:// URI the docs or sources sync gives it. Such a doc is not stored
+// again under its path (uri): the copy would duplicate it in every search,
+// and a worktree's would carry a branch's text beside the default branch's.
+// The edit reaches the store when it is merged and synced. A copy stored
+// before this check existed is removed. A doc no sync has stored, such as an
+// untracked plan, is still stored under its path.
+func canonicalStored(ctx context.Context, ing summaryIngester, canonical sources.CanonicalFunc, uri string, paths ...string) (bool, error) {
+	cs, ok := ing.(canonicalStore)
+	if canonical == nil || !ok {
+		return false, nil
+	}
+	for _, p := range paths {
+		for _, c := range canonical(ctx, p) {
+			has, err := cs.HasSource(ctx, c)
+			if err != nil {
+				return false, err
+			}
+			if has {
+				_, err := cs.DeleteSource(ctx, uri)
+				return true, err
+			}
+		}
+	}
+	return false, nil
 }
 
 // readRegular reads path if it is a regular file of at most limit bytes,

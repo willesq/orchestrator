@@ -44,6 +44,10 @@ service Orchd {
   rpc MigrateHybrid(MigrateHybridRequest) returns (MigrateHybridResponse);
   // DropBackup deletes the backup collection a migration kept; plans unless apply.
   rpc DropBackup(DropBackupRequest) returns (DropBackupResponse);
+  // ReindexKeywords recomputes, in place, the BM25 keyword vectors an older
+  // tokenizer made, from each chunk's stored text; counts unless apply.
+  // Resumable: chunks already re-indexed are skipped.
+  rpc ReindexKeywords(ReindexKeywordsRequest) returns (ReindexKeywordsResponse);
   // ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
   // awaiting their review, each with why it needs attention. Never calls gh.
   rpc ListPRs(ListPRsRequest) returns (ListPRsResponse);
@@ -147,6 +151,12 @@ message SearchRequest {
   int64 until = 8;
   string source_uri = 9;        // optional: only this source's content
   repeated string all_tags = 10; // optional: payload.tags contains every one
+  // optional: most hits one source may return; 0 uses rag.search.per_source,
+  // negative lifts the cap
+  int32 per_source = 11;
+  // optional: "weighted" (source type and recency) or "plain"; empty uses
+  // rag.search.ranking
+  string ranking = 12;
 }
 
 message SearchResponse {
@@ -170,6 +180,7 @@ message SearchHit {
   int64 started_at = 9;
   int64 ended_at = 10;
   int64 ingested_at = 11;
+  string heading = 12; // the markdown section the chunk came from, if any
 }
 
 message ListSourcesRequest {
@@ -379,6 +390,19 @@ message DropBackupResponse {
   string collection = 1;
   int64 points = 2;
   bool dropped = 3;
+}
+
+message ReindexKeywordsRequest {
+  bool apply = 1;
+}
+message ReindexKeywordsResponse {
+  string collection = 1;
+  int32 tokenizer_version = 2;
+  int64 total = 3;   // chunks in the collection
+  int64 stale = 4;   // chunks an older tokenizer indexed, before this run
+  int64 updated = 5; // chunks this run re-indexed
+  bool applied = 6;
+  string error = 7;  // why an applied run stopped early; what it did is still reported
 }
 
 message ListPRsRequest {

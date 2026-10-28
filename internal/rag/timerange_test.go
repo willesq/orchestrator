@@ -134,18 +134,24 @@ func TestSourceDatesAndUndatedContent(t *testing.T) {
 	}
 	for _, p := range f.collection("c").points {
 		if str(p.Payload["source_uri"]) == "manual://n" {
-			if _, dated := p.Payload[fieldStartedAt]; dated {
-				t.Fatal("an undated note was given a date")
-			}
-			if unixTime(p.Payload[fieldIngestedAt]).IsZero() {
+			stored := unixTime(p.Payload[fieldIngestedAt])
+			if stored.IsZero() {
 				t.Fatal("every chunk records when it was stored")
+			}
+			// A note with no date of its own is dated by when it was stored.
+			if !unixTime(p.Payload[fieldStartedAt]).Equal(stored) || !unixTime(p.Payload[fieldEndedAt]).Equal(stored) {
+				t.Fatalf("note dated %v to %v, want its ingest time %v", p.Payload[fieldStartedAt], p.Payload[fieldEndedAt], stored)
 			}
 		}
 	}
-	// A date range leaves undated content out; no range keeps it.
+	// A range over the session finds only it; one over today finds the note.
 	ranged, _, _, err := svc.ListSources(ctx, ListSourcesOpts{Range: TimeRange{Until: start.Add(time.Minute)}})
 	if err != nil || len(ranged) != 1 || ranged[0].SourceURI != "session://s/record" {
 		t.Fatalf("ranged = %+v, %v", ranged, err)
+	}
+	today, _, _, err := svc.ListSources(ctx, ListSourcesOpts{Range: TimeRange{Since: time.Now().Add(-time.Hour)}})
+	if err != nil || len(today) != 1 || today[0].SourceURI != "manual://n" {
+		t.Fatalf("today = %+v, %v", today, err)
 	}
 	if all, _, _, _ := svc.ListSources(ctx, ListSourcesOpts{}); len(all) != 2 {
 		t.Fatalf("all = %+v", all)

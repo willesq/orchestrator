@@ -97,3 +97,27 @@ func TestFilesMissingRoot(t *testing.T) {
 		t.Errorf("callback ran for a missing root")
 	}
 }
+
+func TestFilesCompleteReportsUnreadableDirs(t *testing.T) {
+	root := t.TempDir()
+	locked := filepath.Join(root, "locked")
+	if err := os.MkdirAll(locked, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "a.md"), []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !FilesComplete(root, nil, func(string) {}) {
+		t.Fatal("a readable tree reported incomplete")
+	}
+	if err := os.Chmod(locked, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+	if os.Geteuid() == 0 {
+		t.Skip("root reads everything")
+	}
+	if FilesComplete(root, nil, func(string) {}) {
+		t.Fatal("an unreadable directory went unreported")
+	}
+}

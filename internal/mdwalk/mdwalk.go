@@ -26,8 +26,17 @@ var DefaultExcludeDirs = []string{
 // always walked, whatever its name. Unreadable entries are passed over, since
 // ingest is best-effort per file.
 func Files(root string, exclude []string, fn func(path string)) {
+	FilesComplete(root, exclude, fn)
+}
+
+// FilesComplete is Files, reporting whether every entry could be read: a
+// caller that deletes what the walk did not find must not trust a walk that
+// passed over an unreadable directory.
+func FilesComplete(root string, exclude []string, fn func(path string)) bool {
+	complete := true
 	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
+			complete = false
 			return nil
 		}
 		if d.IsDir() {
@@ -41,4 +50,5 @@ func Files(root string, exclude []string, fn func(path string)) {
 		}
 		return nil
 	})
+	return complete
 }
