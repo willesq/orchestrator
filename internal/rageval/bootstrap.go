@@ -35,24 +35,10 @@ const bootstrapIters = 10000
 // hold (matched by query), resampling cases with replacement. The seed is
 // fixed, so the same two runs always give the same answer.
 func Bootstrap(name string, before, after Report, metric func(Result) float64) Paired {
-	// Each case pairs once: a key repeated in either run counts only its first
-	// result, so a duplicated case cannot weigh twice.
-	prev := make(map[string]Result, len(before.Results))
-	for _, r := range before.Results {
-		if _, dup := prev[resultKey(r)]; !dup {
-			prev[resultKey(r)] = r
-		}
-	}
 	var deltas []float64
 	p := Paired{Metric: name}
-	paired := map[string]bool{}
-	for _, r := range after.Results {
-		k := resultKey(r)
-		b, ok := prev[k]
-		if !ok || paired[k] {
-			continue
-		}
-		paired[k] = true
+	for _, pr := range pairResults(before, after) {
+		b, r := pr[0], pr[1]
 		vb, va := metric(b), metric(r)
 		if math.IsNaN(vb) || math.IsNaN(va) || math.IsInf(vb, 0) || math.IsInf(va, 0) {
 			continue

@@ -12,6 +12,7 @@ package daemon
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -41,6 +42,7 @@ import (
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/procstat"
+	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/routing"
@@ -59,6 +61,11 @@ type ragService interface {
 	Search(ctx context.Context, query string, opts rag.SearchOpts) ([]rag.Hit, string, error)
 	ListSources(ctx context.Context, opts rag.ListSourcesOpts) ([]rag.SourceSummary, int, int, error)
 	DeleteSource(ctx context.Context, uri string) (int, error)
+}
+
+// copyReader reads what is stored for a source (implemented by *rag.Service).
+type copyReader interface {
+	Copy(ctx context.Context, uri string) (rag.StoredCopy, bool, error)
 }
 
 // dispatcher enqueues durable agent-task workflows.
@@ -130,6 +137,9 @@ type server struct {
 	// settings reconciles the Claude Code and cc-safety-net settings orch
 	// manages; nil when the user's home cannot be resolved.
 	settings *settings.Service
+	// prune caps deletions by the docs and sources syncs; operators confirm
+	// a larger prune through RefreshSource and SyncDocs.
+	prune *prunecap.Guard
 }
 
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
@@ -140,6 +150,15 @@ func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingR
 }
 
 func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchdv1.IngestResponse, error) {
+	// A source a sync keeps is not a client's to replace: the replacement
+	// would hide the synced text until the sync next rewrote it.
+	if c, ok := s.rag.(copyReader); ok {
+		if cp, found, err := c.Copy(ctx, req.GetSourceUri()); err == nil && found &&
+			(cp.Writer == rag.WriterDocs || cp.Writer == rag.WriterSources) {
+			return nil, grpcstatus.Errorf(codes.FailedPrecondition,
+				"%s is kept by the %s sync; store the note under another source_uri", req.GetSourceUri(), cp.Writer)
+		}
+	}
 	n, err := s.rag.IngestText(ctx, req.GetText(), rag.Meta{
 		SourceURI:  req.GetSourceUri(),
 		SourceType: orDefault(req.GetSourceType(), "manual"),
@@ -625,6 +644,7 @@ func Run(ctx context.Context) error {
 		handoffDir:   handoff.Dir(),
 		system:       system,
 		docsReg:      docs.NewRegistry(store),
+		prune:        newPruneGuard(store),
 		sourcesReg:   sources.NewRegistry(store),
 		documents:    svc,
 		docsSync:     docsSched,
@@ -789,4 +809,11 @@ func codexRunnable(w config.QueueWorkerSettings) bool {
 	}
 	home, _ := os.UserHomeDir()
 	return agentrun.FindCodex(w.Codex.Bin, home) != ""
+}
+
+func newPruneGuard(store *sql.DB) *prunecap.Guard {
+	if store == nil {
+		return nil
+	}
+	return prunecap.New(store)
 }

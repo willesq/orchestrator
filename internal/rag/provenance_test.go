@@ -115,3 +115,48 @@ func TestWeightIgnoresANaNFloorAndNegativeScores(t *testing.T) {
 		}
 	}
 }
+
+func TestAPartialWriteIsDoneAgain(t *testing.T) {
+	svc, f := datedService(t)
+	svc.MarkdownSections = false
+	ctx := context.Background()
+	words := ""
+	for i := range 60 {
+		words += " w" + string(rune('a'+i%26)) + string(rune('a'+i/26))
+	}
+	m := Meta{SourceURI: "https://x", SourceType: "web", Writer: WriterSources}
+	n, err := svc.IngestText(ctx, words, m)
+	if err != nil || n < 3 {
+		t.Fatalf("n = %d, %v", n, err)
+	}
+	// The last chunk never landed (a failed later batch).
+	delete(f.collection("c").points, pointID("https://x", n-1))
+	if _, same := svc.skipUnchanged(ctx, words, m); same {
+		t.Fatal("a source missing its last chunk was taken as unchanged")
+	}
+	if _, err := svc.IngestText(ctx, words, m); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.collection("c").points[pointID("https://x", n-1)]; !ok {
+		t.Fatal("the rewrite did not restore the missing chunk")
+	}
+	// A surplus chunk left by a failed prune also fails the check.
+	f.collection("c").points["extra"] = fakePoint{ID: "extra", Payload: map[string]any{"source_uri": "https://x", "chunk_index": float64(n)}}
+	if _, same := svc.skipUnchanged(ctx, words, m); same {
+		t.Fatal("a source with a surplus chunk was taken as unchanged")
+	}
+	delete(f.collection("c").points, "extra")
+	if _, same := svc.skipUnchanged(ctx, words, m); !same {
+		t.Fatal("a whole, unchanged source was not recognized")
+	}
+	// The chunker's settings are part of a write.
+	svc.chunkTokens = 30
+	if _, same := svc.skipUnchanged(ctx, words, m); same {
+		t.Fatal("a chunk size change was not re-applied")
+	}
+	if finiteScore(nanFloat()) != 0 || finiteScore(-1) != 0 || finiteScore(inf()) <= 1e300 || finiteScore(2) != 2 {
+		t.Fatal("finiteScore")
+	}
+}
+
+func inf() float64 { z := 0.0; return 1 / z }

@@ -141,3 +141,12 @@ func TestParseSkipsAnOverlongLine(t *testing.T) {
 		t.Fatalf("parse = %v", f)
 	}
 }
+
+func TestParseUnquotesNames(t *testing.T) {
+	f := parse([]byte("\x001700000000\n\"q\\\"uote.md\"\n\"new\\nline.md\"\n\"caf\\303\\251.md\"\n"))
+	for _, name := range []string{`q"uote.md`, "new\nline.md", "café.md"} {
+		if f[name].Unix() != 1700000000 {
+			t.Errorf("%q not unquoted: %v", name, f)
+		}
+	}
+}

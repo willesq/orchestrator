@@ -13,6 +13,7 @@ import (
 	"github.com/willesq/orchestrator/internal/gitdates"
 	"github.com/willesq/orchestrator/internal/handoff"
 	"github.com/willesq/orchestrator/internal/mdwalk"
+	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/redact"
 )
@@ -39,6 +40,8 @@ type RefreshOpts struct {
 	ExcludeDirs []string
 	// Dates reads when each file in a repo last changed; nil is gitdates.Read.
 	Dates func(ctx context.Context, dir string) gitdates.Dates
+	// Guard caps deletions across scans; nil caps each refresh on its own.
+	Guard PruneGuard
 }
 
 // CheckoutURI is the URI a repo or owner source stores a local file under:
@@ -50,8 +53,10 @@ func CheckoutURI(path string) string {
 	return "checkout://" + filepath.ToSlash(filepath.Clean(path))
 }
 
-// Refresh brings one source up to date and returns its new status
-// ("ok" | "missing" | "error"). On absence it flags without deleting chunks.
+// Refresh brings one source up to date and returns its new status: "ok",
+// "missing" or "error"; "skipped: <why>" for a checkout left as last indexed
+// (not on its default branch); "attention: <why>" when a prune was refused
+// and waits for an operator. On absence it flags without deleting chunks.
 func Refresh(ctx context.Context, s Source, ing Ingester, opts RefreshOpts) (string, error) {
 	switch s.Kind {
 	case KindWeb:
@@ -99,7 +104,17 @@ func refreshWeb(ctx context.Context, s Source, ing Ingester, opts RefreshOpts) (
 	return "ok", nil
 }
 
+// repoResult is how one repo directory's refresh went.
+type repoResult struct {
+	stored  int    // docs stored
+	found   bool   // it had markdown to index
+	skipped string // why it was left as last indexed, if it was
+	refused string // why a prune was refused, if it was
+}
+
 // refreshOwner ingests markdown from every repo directory under <root>/<owner>.
+// Worktree containers (<repo>.worktrees) and linked worktrees are not repos
+// of their own: their branches are not the repo's docs.
 func refreshOwner(ctx context.Context, s Source, ing Ingester, opts RefreshOpts) (string, error) {
 	base := ""
 	for _, root := range opts.KnownRoots {
@@ -116,17 +131,35 @@ func refreshOwner(ctx context.Context, s Source, ing Ingester, opts RefreshOpts)
 	if err != nil {
 		return "missing", nil
 	}
-	ingested, found := 0, false
+	found := false
+	var skipped, refused []string
+	// One listing of what this refresh stored under the owner serves every
+	// repo in it, rather than one scan of the store per repo.
+	listing := &storedListing{prefix: CheckoutURI(resolve(base)) + "/"}
 	for _, e := range entries {
-		if !e.IsDir() {
+		if !e.IsDir() || mdwalk.IsWorktreesDir(e.Name()) {
 			continue
 		}
-		n, ok := ingestRepoMarkdown(ctx, filepath.Join(base, e.Name()), s.URI, s, ing, opts)
-		ingested += n
-		found = found || ok
+		dir := filepath.Join(base, e.Name())
+		if co, ok := handoff.CheckoutAt(dir); ok && co.Linked {
+			continue
+		}
+		r := ingestRepoMarkdown(ctx, dir, s.URI, s, ing, opts, listing)
+		found = found || r.found
+		if r.skipped != "" {
+			skipped = append(skipped, e.Name()+" "+r.skipped)
+		}
+		if r.refused != "" {
+			refused = append(refused, e.Name()+": "+r.refused)
+		}
 	}
-	if !found {
+	switch {
+	case len(refused) > 0:
+		return attention(s, refused), nil
+	case !found && len(skipped) == 0:
 		return "missing", nil
+	case len(skipped) > 0:
+		return fmt.Sprintf("ok; skipped %d: %s", len(skipped), strings.Join(skipped, "; ")), nil
 	}
 	return "ok", nil
 }
@@ -135,33 +168,46 @@ func refreshRepo(ctx context.Context, s Source, repoPath, owner string, ing Inge
 	if !isDir(repoPath) {
 		return "missing", nil
 	}
-	if _, ok := ingestRepoMarkdown(ctx, repoPath, owner, s, ing, opts); !ok {
+	r := ingestRepoMarkdown(ctx, repoPath, owner, s, ing, opts, nil)
+	switch {
+	case r.refused != "":
+		return attention(s, []string{r.refused}), nil
+	case r.skipped != "":
+		return "skipped: " + r.skipped, nil
+	case !r.found:
 		return "missing", nil
 	}
 	return "ok", nil
 }
 
-// onDefaultBranch reports whether a repo directory may be indexed: a git
-// checkout only on its default branch, so a PR or feature branch checked out
-// there is never indexed (or pruned) as the repo's docs; a plain directory
-// as it is.
-func onDefaultBranch(repoPath string) bool {
-	co, ok := handoff.FindCheckout(filepath.Join(repoPath, ".probe"))
-	return !ok || co.OnDefaultBranch()
+// attention is the status of a source whose prune was refused.
+func attention(s Source, reasons []string) string {
+	return "attention: " + strings.Join(reasons, "; ") + "; to remove them run: orch source refresh " + s.ID + " --confirm-prune"
+}
+
+// indexable reports whether a repo directory may be indexed now: a git
+// checkout rooted there only on its default branch, judged from its own .git
+// (never an enclosing repository's), so a PR or feature branch is never
+// indexed or pruned as the repo's docs; a plain directory as it is. When not,
+// it says why.
+func indexable(repoPath string) (bool, string) {
+	co, ok := handoff.CheckoutAt(repoPath)
+	if !ok {
+		return true, ""
+	}
+	return co.DefaultBranchState()
 }
 
 // ingestRepoMarkdown walks a repo dir for *.md files, outside the excluded
-// directories, and ingests each with repo + owner metadata under its
-// checkout:// URI. It returns how many files were stored, and whether the
-// repo had any markdown to index (false also for a checkout not on its
-// default branch, which is left as it was).
-func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, ing Ingester, opts RefreshOpts) (int, bool) {
-	if !onDefaultBranch(repoPath) {
-		log.Printf("sources: %s is not on its default branch; left as last indexed", repoPath)
-		return 0, true
-	}
+// directories and other checkouts, and ingests each with repo + owner
+// metadata under its checkout:// URI.
+func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, ing Ingester, opts RefreshOpts, listing *storedListing) repoResult {
 	// Stored under the resolved path, the one the edit hand-off maps to.
 	repoPath = resolve(repoPath)
+	if ok, why := indexable(repoPath); !ok {
+		log.Printf("sources: %s: %s; left as last indexed", repoPath, why)
+		return repoResult{skipped: why}
+	}
 	repoName := filepath.Base(repoPath)
 	readDates := opts.Dates
 	if readDates == nil {
@@ -170,8 +216,8 @@ func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, i
 	var dates *gitdates.Dates
 	prefix := CheckoutURI(repoPath) + "/"
 	seen := map[string]bool{}
-	n := 0
-	complete := mdwalk.FilesComplete(repoPath, opts.ExcludeDirs, func(p string) {
+	r := repoResult{}
+	complete := mdwalk.OwnFiles(repoPath, opts.ExcludeDirs, func(p string) {
 		rel, _ := filepath.Rel(repoPath, p)
 		seen[CheckoutURI(p)] = true
 		raw, err := os.ReadFile(p)
@@ -201,56 +247,100 @@ func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, i
 			EndedAt:    changed,
 			Writer:     rag.WriterSources,
 		}); err == nil {
-			n++
+			r.stored++
 		}
 	})
+	r.found = len(seen) > 0
 	if complete {
-		pruneRemoved(ctx, ing, prefix, seen)
+		if listing == nil {
+			listing = &storedListing{prefix: prefix}
+		}
+		r.refused = pruneRemoved(ctx, ing, opts, s, prefix, seen, listing)
 	}
-	return n, len(seen) > 0
+	return r
 }
 
-// maxPruneShare bounds what one refresh may delete: a walk that suddenly
-// misses more than half of a repo's stored docs (a half-finished checkout, a
-// sparse one) is more likely broken than a repo that lost them.
-const (
-	maxPruneShare = 0.5
-	minPruneCap   = 5
-)
+// PruneGuard bounds deletions (implemented by *prunecap.Guard).
+type PruneGuard interface {
+	Allow(ctx context.Context, key, prefix string, stored, gone int) (bool, string, error)
+	Done(ctx context.Context, prefix string, n int) error
+}
 
 // pruneRemoved deletes the docs this refresh stored under prefix that the
-// walk no longer found. Only chunks the sources refresh wrote are candidates,
-// never an agent's note or another writer's doc. A walk that found nothing
-// deletes nothing, and neither does one that would delete more than half of
-// what is stored (above a few docs).
-func pruneRemoved(ctx context.Context, ing Ingester, prefix string, seen map[string]bool) {
+// walk no longer found, and returns why it refused to, if it did. Only
+// chunks the sources refresh wrote are candidates, never an agent's note or
+// another writer's doc. A walk that found nothing deletes nothing. With a
+// guard, deletions are capped (see prunecap); without one, a refresh never
+// deletes more than half of what is stored at once.
+func pruneRemoved(ctx context.Context, ing Ingester, opts RefreshOpts, s Source, prefix string, seen map[string]bool, listing *storedListing) string {
 	p, ok := ing.(Pruner)
 	if !ok || len(seen) == 0 || ctx.Err() != nil {
-		return
+		return ""
 	}
-	stored, err := p.SourcesWrittenBy(ctx, prefix, rag.WriterSources)
+	all, err := listing.get(ctx, p)
 	if err != nil {
-		log.Printf("sources: listing %s: %v; not pruning", prefix, err)
-		return
+		log.Printf("sources: listing %s: %v; not pruning", listing.prefix, err)
+		return ""
 	}
-	var gone []string
-	for _, uri := range stored {
-		if strings.HasPrefix(uri, prefix) && !seen[uri] {
-			gone = append(gone, uri)
+	var stored, gone []string
+	for _, uri := range all {
+		if strings.HasPrefix(uri, prefix) {
+			stored = append(stored, uri)
+			if !seen[uri] {
+				gone = append(gone, uri)
+			}
 		}
 	}
-	if len(gone) > max(minPruneCap, int(maxPruneShare*float64(len(stored)))) {
-		log.Printf("sources: %s: %d of %d stored docs are gone at once; not pruning", prefix, len(gone), len(stored))
-		return
+	if len(gone) == 0 {
+		return ""
 	}
+	if opts.Guard != nil {
+		allowed, why, err := opts.Guard.Allow(ctx, prunecap.SourceKey(s.ID), prefix, len(stored), len(gone))
+		if err != nil {
+			log.Printf("sources: %s: prune guard: %v; not pruning", prefix, err)
+			return ""
+		}
+		if !allowed {
+			log.Printf("sources: %s: %s", prefix, why)
+			return why
+		}
+	} else if len(gone) > max(minPruneCap, len(stored)/2) {
+		return fmt.Sprintf("%d of %d stored docs are gone at once; none were removed", len(gone), len(stored))
+	}
+	removed := 0
 	for _, uri := range gone {
 		if _, err := p.DeleteSource(ctx, uri); err != nil {
 			log.Printf("sources: removing %s, gone from its repo: %v", uri, err)
 			continue
 		}
+		removed++
 		log.Printf("sources: removed %s, gone from its repo", uri)
 	}
+	if opts.Guard != nil {
+		_ = opts.Guard.Done(ctx, prefix, removed)
+	}
+	return ""
 }
+
+// storedListing is what the sources refresh stored under a prefix, listed
+// once on first use.
+type storedListing struct {
+	prefix string
+	uris   []string
+	err    error
+	done   bool
+}
+
+func (l *storedListing) get(ctx context.Context, p Pruner) ([]string, error) {
+	if !l.done {
+		l.uris, l.err = p.SourcesWrittenBy(ctx, l.prefix, rag.WriterSources)
+		l.done = true
+	}
+	return l.uris, l.err
+}
+
+// minPruneCap is how many docs a refresh without a guard may always remove.
+const minPruneCap = 5
 
 func isDir(path string) bool {
 	fi, err := os.Stat(path)

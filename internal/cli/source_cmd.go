@@ -1,21 +1,23 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/willesq/orchestrator/internal/db"
+	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/sources"
 )
 
-func newSourceCmd() *cobra.Command {
+func newSourceCmd(cf clientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "source",
 		Short: "Manage cadence-refreshed sources (web, repo, owner)",
 	}
-	cmd.AddCommand(newSourceAddCmd(), newSourceListCmd(), newSourceRemoveCmd(), newSourceRefreshCmd())
+	cmd.AddCommand(newSourceAddCmd(), newSourceListCmd(), newSourceRemoveCmd(), newSourceRefreshCmd(cf))
 	return cmd
 }
 
@@ -111,12 +113,25 @@ func newSourceRemoveCmd() *cobra.Command {
 	}
 }
 
-func newSourceRefreshCmd() *cobra.Command {
-	return &cobra.Command{
+func newSourceRefreshCmd(cf clientFactory) *cobra.Command {
+	var confirmPrune bool
+	cmd := &cobra.Command{
 		Use:   "refresh [id]",
 		Short: "Mark a source (or all) due for refresh on the next scan",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Mark a source (or all) due for refresh on the next scan.
+
+A refresh removes the docs of files gone from a repo, but no more than half of what a
+repo stored, counted over a week: past that it stops and the source's status says
+"attention". --confirm-prune lets the next refresh of that source remove them all
+(asks orchd, so it is refused inside a queued task).`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			if confirmPrune {
+				if len(args) != 1 {
+					return fmt.Errorf("--confirm-prune needs a source id (see orch source list)")
+				}
+				return confirmSourcePrune(c, cf, args[0])
+			}
 			reg, closeFn, err := openRegistry()
 			if err != nil {
 				return err
@@ -133,4 +148,21 @@ func newSourceRefreshCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&confirmPrune, "confirm-prune", false, "let the next refresh of this source remove more docs than the prune cap allows")
+	return cmd
+}
+
+func confirmSourcePrune(c *cobra.Command, cf clientFactory, id string) error {
+	client, cleanup, err := cf()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(c.Context(), 30*time.Second)
+	defer cancel()
+	if _, err := client.RefreshSource(ctx, &orchdv1.RefreshSourceRequest{Id: id, ConfirmPrune: true}); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.OutOrStdout(), "confirmed: the next refresh of %s may remove the docs gone from it; it runs now\n", id)
+	return nil
 }

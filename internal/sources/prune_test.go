@@ -57,6 +57,9 @@ func write(t *testing.T, p, body string) {
 func gitRepo(t *testing.T, dir, branch, defaultBranch string) {
 	t.Helper()
 	write(t, filepath.Join(dir, ".git", "HEAD"), "ref: refs/heads/"+branch+"\n")
+	if branch != "" {
+		write(t, filepath.Join(dir, ".git", "refs", "heads", branch), "0123\n")
+	}
 	write(t, filepath.Join(dir, ".git", "config"), "[remote \"origin\"]\n\turl = git@github.com:acme/widget.git\n")
 	if defaultBranch != "" {
 		write(t, filepath.Join(dir, ".git", "refs", "remotes", "origin", "HEAD"), "ref: refs/remotes/origin/"+defaultBranch+"\n")
@@ -112,12 +115,13 @@ func TestRefreshSkipsCheckoutsOffTheDefaultBranch(t *testing.T) {
 		repo := filepath.Join(resolve(t.TempDir()), "proj")
 		write(t, filepath.Join(repo, "README.md"), "# a PR's readme")
 		gitRepo(t, repo, tc.branch, tc.def)
-		if tc.branch == "" { // detached HEAD
+		write(t, filepath.Join(repo, ".git", "refs", "heads", "main"), "0123\n") // the PR branch is not the only one
+		if tc.branch == "" {                                                     // detached HEAD
 			write(t, filepath.Join(repo, ".git", "HEAD"), "0123456789abcdef0123456789abcdef01234567\n")
 		}
 		ing := &pruningIngester{stored: map[string]string{CheckoutURI(repo) + "/OLD.md": rag.WriterSources}}
 		status, err := Refresh(context.Background(), Source{Kind: KindRepo, URI: repo}, ing, RefreshOpts{})
-		if err != nil || status != "ok" || ing.calls != 0 || len(ing.deleted) != 0 {
+		if err != nil || !strings.HasPrefix(status, "skipped: ") || ing.calls != 0 || len(ing.deleted) != 0 {
 			t.Fatalf("%+v: status %q, %d stored, deleted %v", tc, status, ing.calls, ing.deleted)
 		}
 	}
@@ -197,5 +201,117 @@ func TestCanonical(t *testing.T) {
 	}
 	if !hasDotSegment("a/../b") || hasDotSegment("a/..b/c") || !hasDotSegment(".") {
 		t.Error("hasDotSegment")
+	}
+}
+
+func TestOwnerScansSkipWorktreesAndNestedCheckouts(t *testing.T) {
+	root := resolve(t.TempDir())
+	owner := filepath.Join(root, "acme")
+	repo := filepath.Join(owner, "widget")
+	write(t, filepath.Join(repo, "README.md"), "# main docs")
+	gitRepo(t, repo, "main", "main")
+	// gittree layout: <repo>.worktrees/<branch> beside the repo.
+	wt := filepath.Join(owner, "widget.worktrees", "feat", "x")
+	write(t, filepath.Join(wt, "README.md"), "# a feature branch")
+	wtGit := filepath.Join(repo, ".git", "worktrees", "x")
+	write(t, filepath.Join(wtGit, "commondir"), "../..\n")
+	write(t, filepath.Join(wtGit, "HEAD"), "ref: refs/heads/feat/x\n")
+	write(t, filepath.Join(wtGit, "gitdir"), filepath.Join(wt, ".git")+"\n")
+	write(t, filepath.Join(wt, ".git"), "gitdir: "+wtGit+"\n")
+	// A linked worktree directly under the owner, on the default branch.
+	direct := filepath.Join(owner, "widget-main-wt")
+	write(t, filepath.Join(direct, "README.md"), "# another worktree")
+	dGit := filepath.Join(repo, ".git", "worktrees", "d")
+	write(t, filepath.Join(dGit, "commondir"), "../..\n")
+	write(t, filepath.Join(dGit, "HEAD"), "ref: refs/heads/main\n")
+	write(t, filepath.Join(dGit, "gitdir"), filepath.Join(direct, ".git")+"\n")
+	write(t, filepath.Join(direct, ".git"), "gitdir: "+dGit+"\n")
+	// A nested checkout inside the repo, on a feature branch.
+	nested := filepath.Join(repo, "vendor-src", "lib")
+	write(t, filepath.Join(nested, "NESTED.md"), "# nested repo")
+	gitRepo(t, nested, "feat/y", "main")
+	ing := &pruningIngester{}
+	status, err := Refresh(context.Background(), Source{Kind: KindOwner, URI: "acme"}, ing, RefreshOpts{KnownRoots: []string{root}})
+	if err != nil || status != "ok" {
+		t.Fatalf("status %q, %v", status, err)
+	}
+	if len(ing.uris) != 1 || ing.uris[0] != CheckoutURI(filepath.Join(repo, "README.md")) {
+		t.Fatalf("stored %v; worktrees and nested checkouts must not be indexed", ing.uris)
+	}
+}
+
+func TestPlainDirectoryInsideARepoIsIndexed(t *testing.T) {
+	root := resolve(t.TempDir())
+	gitRepo(t, root, "feat/x", "main") // an enclosing repo on a feature branch
+	plain := filepath.Join(root, "acme", "notes")
+	write(t, filepath.Join(plain, "README.md"), "# notes")
+	ing := &pruningIngester{}
+	status, err := Refresh(context.Background(), Source{Kind: KindRepo, URI: plain}, ing, RefreshOpts{})
+	if err != nil || status != "ok" || ing.calls != 1 {
+		t.Fatalf("plain dir: %q, %d stored, %v", status, ing.calls, err)
+	}
+}
+
+// fakeGuard refuses or allows, recording calls.
+type fakeGuard struct {
+	allow bool
+	keys  []string
+	done  int
+}
+
+func (g *fakeGuard) Allow(_ context.Context, key, _ string, _, _ int) (bool, string, error) {
+	g.keys = append(g.keys, key)
+	if g.allow {
+		return true, "", nil
+	}
+	return false, "3 docs are gone", nil
+}
+
+func (g *fakeGuard) Done(_ context.Context, _ string, n int) error { g.done += n; return nil }
+
+func TestGuardedPruneAndAttention(t *testing.T) {
+	repo := filepath.Join(resolve(t.TempDir()), "proj")
+	write(t, filepath.Join(repo, "README.md"), "# a")
+	pre := CheckoutURI(repo) + "/"
+	stored := map[string]string{pre + "README.md": rag.WriterSources, pre + "B.md": rag.WriterSources}
+	src := Source{ID: "repo|" + repo, Kind: KindRepo, URI: repo}
+	g := &fakeGuard{}
+	ing := &pruningIngester{stored: stored}
+	status, _ := Refresh(context.Background(), src, ing, RefreshOpts{Guard: g})
+	if !strings.HasPrefix(status, "attention: 3 docs are gone") || !strings.Contains(status, "orch source refresh repo|"+repo+" --confirm-prune") ||
+		len(ing.deleted) != 0 || g.keys[0] != "source|repo|"+repo {
+		t.Fatalf("refused: %q, deleted %v, keys %v", status, ing.deleted, g.keys)
+	}
+	g.allow = true
+	status, _ = Refresh(context.Background(), src, ing, RefreshOpts{Guard: g})
+	if status != "ok" || len(ing.deleted) != 1 || g.done != 1 {
+		t.Fatalf("allowed: %q, deleted %v, done %d", status, ing.deleted, g.done)
+	}
+	// An owner source reports a refused repo too.
+	root := resolve(t.TempDir())
+	write(t, filepath.Join(root, "acme", "proj", "README.md"), "# a")
+	ip := CheckoutURI(filepath.Join(root, "acme", "proj")) + "/"
+	ing = &pruningIngester{stored: map[string]string{ip + "README.md": rag.WriterSources, ip + "B.md": rag.WriterSources}}
+	status, _ = Refresh(context.Background(), Source{ID: "owner|acme", Kind: KindOwner, URI: "acme"}, ing, RefreshOpts{KnownRoots: []string{root}, Guard: &fakeGuard{}})
+	if !strings.HasPrefix(status, "attention: proj: 3 docs are gone") {
+		t.Fatalf("owner refused: %q", status)
+	}
+}
+
+func TestOwnerStatusNamesSkippedRepos(t *testing.T) {
+	root := resolve(t.TempDir())
+	ok := filepath.Join(root, "acme", "ok")
+	write(t, filepath.Join(ok, "README.md"), "# a")
+	pr := filepath.Join(root, "acme", "pr")
+	write(t, filepath.Join(pr, "README.md"), "# b")
+	gitRepo(t, pr, "pr-7", "main")
+	status, _ := Refresh(context.Background(), Source{Kind: KindOwner, URI: "acme"}, &pruningIngester{}, RefreshOpts{KnownRoots: []string{root}})
+	if !strings.HasPrefix(status, "ok; skipped 1: pr on branch pr-7, not the default branch main") {
+		t.Fatalf("status = %q", status)
+	}
+	// Only skipped repos is not missing.
+	write(t, filepath.Join(ok, ".git", "HEAD"), "0123456789abcdef\n")
+	if status, _ := Refresh(context.Background(), Source{Kind: KindOwner, URI: "acme"}, &pruningIngester{}, RefreshOpts{KnownRoots: []string{root}}); !strings.HasPrefix(status, "ok; skipped 2") {
+		t.Fatalf("all skipped = %q", status)
 	}
 }

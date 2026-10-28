@@ -21,21 +21,38 @@ type Checkout struct {
 	// repository's config says: callers trust it only when it names a repo
 	// they already know.
 	Owner, Repo string
-	// Branch is the checked-out branch ("" when HEAD is detached), and
-	// DefaultBranch the origin's default as last fetched ("" when unknown).
+	// Branch is the checked-out branch ("" when HEAD is detached or
+	// unreadable), and DefaultBranch the repository's default ("" when
+	// unknown; see defaultBranch).
 	Branch, DefaultBranch string
+	// Linked marks a linked worktree (a .git file); Anonymous a .git that does
+	// not follow git's layout, whose identity is not believed; Unreadable a
+	// HEAD naming no usable branch.
+	Linked, Anonymous, Unreadable bool
 }
 
-// OnDefaultBranch reports whether the checkout is on its origin's default
-// branch, or, with no default recorded, on main or master.
+// OnDefaultBranch reports whether the checkout is on its default branch.
 func (c Checkout) OnDefaultBranch() bool {
-	if c.Branch == "" {
-		return false
+	ok, _ := c.DefaultBranchState()
+	return ok
+}
+
+// DefaultBranchState reports whether the checkout is on its default branch,
+// and when not, why, in words for a status line.
+func (c Checkout) DefaultBranchState() (bool, string) {
+	switch {
+	case c.Anonymous:
+		return false, "its .git does not follow git's layout"
+	case c.Unreadable:
+		return false, "its HEAD cannot be read (a reftable repository?)"
+	case c.Branch == "":
+		return false, "HEAD is detached"
+	case c.DefaultBranch == "":
+		return false, "on branch " + c.Branch + ", and the default branch is unknown (run: git remote set-head origin --auto)"
+	case c.Branch != c.DefaultBranch:
+		return false, "on branch " + c.Branch + ", not the default branch " + c.DefaultBranch
 	}
-	if c.DefaultBranch != "" {
-		return c.Branch == c.DefaultBranch
-	}
-	return c.Branch == "main" || c.Branch == "master"
+	return true, ""
 }
 
 // Bounds on what finding a checkout reads.
@@ -43,6 +60,7 @@ const (
 	maxGitDepth   = 64
 	maxGitPointer = 4 << 10
 	maxGitConfig  = 1 << 20
+	maxRefs       = 4096
 )
 
 // FindCheckout returns the git checkout holding path, by reading the .git
@@ -53,17 +71,7 @@ const (
 func FindCheckout(path string) (Checkout, bool) {
 	dir := filepath.Dir(filepath.Clean(path))
 	for i := 0; i < maxGitDepth; i++ {
-		if gitDir, ok := gitDirAt(dir); ok {
-			c := Checkout{Root: dir}
-			common, ok := commonDir(gitDir)
-			if !ok {
-				// A commondir outside the worktrees layout could borrow any
-				// repository's identity; the checkout is anonymous.
-				return c, true
-			}
-			c.Owner, c.Repo = githubRepo(originURL(common))
-			c.Branch = headBranch(gitDir)
-			c.DefaultBranch = symref(filepath.Join(common, "refs", "remotes", "origin", "HEAD"), "refs/remotes/origin/")
+		if c, ok := CheckoutAt(dir); ok {
 			return c, true
 		}
 		parent := filepath.Dir(dir)
@@ -75,32 +83,91 @@ func FindCheckout(path string) (Checkout, bool) {
 	return Checkout{}, false
 }
 
-// gitDirAt is the git directory of a working tree rooted at dir, if any.
-func gitDirAt(dir string) (string, bool) {
+// CheckoutAt returns the checkout whose root is dir itself, if dir has a
+// .git entry; it never looks above dir.
+func CheckoutAt(dir string) (Checkout, bool) {
+	dir = filepath.Clean(dir)
+	gitDir, linked, found := gitDirAt(dir)
+	if !found {
+		return Checkout{}, false
+	}
+	c := Checkout{Root: dir, Linked: linked}
+	if gitDir == "" {
+		// A .git file that does not point back here could borrow any
+		// repository's identity; the checkout is anonymous.
+		c.Anonymous = true
+		return c, true
+	}
+	common, ok := commonDir(gitDir)
+	if !ok {
+		c.Anonymous = true
+		return c, true
+	}
+	c.Owner, c.Repo = githubRepo(originURL(common))
+	head, readable := headRef(gitDir)
+	c.Branch, c.Unreadable = head, !readable
+	c.DefaultBranch = defaultBranch(common)
+	return c, true
+}
+
+// gitDirAt finds the git directory of a working tree rooted at dir: found
+// reports a .git entry at all. A .git directory is the git directory. A .git
+// file must point (symlinks resolved) at <common>/worktrees/<name> whose
+// gitdir file points back at this .git file, as git writes for a linked
+// worktree; otherwise gitDir is "" (found, but anonymous).
+func gitDirAt(dir string) (gitDir string, linked, found bool) {
 	p := filepath.Join(dir, ".git")
 	info, err := os.Lstat(p)
 	if err != nil {
-		return "", false
+		return "", false, false
 	}
 	if info.IsDir() {
-		return p, true
+		return p, false, true
 	}
 	if !info.Mode().IsRegular() {
-		return "", false
+		return "", false, false
 	}
 	b, err := readSmall(p, maxGitPointer)
 	if err != nil {
-		return "", false
+		return "", true, true
 	}
 	target, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "gitdir:")
 	if !ok {
-		return "", false
+		return "", true, true
 	}
 	target = strings.TrimSpace(target)
 	if !filepath.IsAbs(target) {
 		target = filepath.Join(dir, target)
 	}
-	return filepath.Clean(target), true
+	real, err := filepath.EvalSymlinks(filepath.Clean(target))
+	if err != nil {
+		return "", true, true
+	}
+	// A submodule or --separate-git-dir checkout: its git directory names
+	// this working tree in core.worktree.
+	if wt := configValue(real, "core", "worktree"); wt != "" {
+		if !filepath.IsAbs(wt) {
+			wt = filepath.Join(real, wt)
+		}
+		if samePath(wt, dir) {
+			return real, false, true
+		}
+	}
+	if filepath.Base(filepath.Dir(real)) != "worktrees" {
+		return "", true, true
+	}
+	back, err := readSmall(filepath.Join(real, "gitdir"), maxGitPointer)
+	if err != nil || !samePath(strings.TrimSpace(string(back)), p) {
+		return "", true, true
+	}
+	return real, true, true
+}
+
+// samePath compares two paths after cleaning and resolving symlinks.
+func samePath(a, b string) bool {
+	ra, err1 := filepath.EvalSymlinks(filepath.Clean(a))
+	rb, err2 := filepath.EvalSymlinks(filepath.Clean(b))
+	return err1 == nil && err2 == nil && ra == rb
 }
 
 // commonDir is where a git directory's shared config lives: a linked
@@ -117,15 +184,113 @@ func commonDir(gitDir string) (string, bool) {
 		c = filepath.Join(gitDir, c)
 	}
 	c = filepath.Clean(c)
+	if real, err := filepath.EvalSymlinks(c); err == nil {
+		c = real
+	}
 	if filepath.Dir(filepath.Clean(gitDir)) != filepath.Join(c, "worktrees") {
 		return "", false
 	}
 	return c, true
 }
 
-// headBranch is the branch a git directory's HEAD names, "" when detached.
+// headRef is the branch HEAD names: "" when detached; readable false when
+// HEAD is missing or names no usable branch (a reftable repository writes
+// "refs/heads/.invalid" there).
+func headRef(gitDir string) (string, bool) {
+	b, err := readSmall(filepath.Join(gitDir, "HEAD"), maxGitPointer)
+	if err != nil {
+		return "", false
+	}
+	t := strings.TrimSpace(string(b))
+	ref, ok := strings.CutPrefix(t, "ref:")
+	if !ok {
+		return "", true // a commit id: detached
+	}
+	name, ok := strings.CutPrefix(strings.TrimSpace(ref), "refs/heads/")
+	if !ok || name == "" || name == ".invalid" {
+		return "", false
+	}
+	return name, true
+}
+
+// headBranch is the branch a git directory's HEAD names, "" when detached
+// or unreadable.
 func headBranch(gitDir string) string {
-	return symref(filepath.Join(gitDir, "HEAD"), "refs/heads/")
+	b, _ := headRef(gitDir)
+	return b
+}
+
+// defaultBranch is the repository's default branch, in order: the origin's
+// HEAD as last fetched; the only local branch; init.defaultBranch from the
+// repository's config, when such a branch exists; main or master, when one
+// exists. "" when none of these settles it.
+func defaultBranch(common string) string {
+	if b := symref(filepath.Join(common, "refs", "remotes", "origin", "HEAD"), "refs/remotes/origin/"); b != "" {
+		return b
+	}
+	local := localBranches(common)
+	if len(local) == 1 {
+		for b := range local {
+			return b
+		}
+	}
+	if b := configValue(common, "init", "defaultbranch"); b != "" && local[b] {
+		return b
+	}
+	for _, b := range []string{"main", "master"} {
+		if local[b] {
+			return b
+		}
+	}
+	return ""
+}
+
+// localBranches lists branches from loose refs and packed-refs.
+func localBranches(common string) map[string]bool {
+	out := map[string]bool{}
+	heads := filepath.Join(common, "refs", "heads")
+	_ = filepath.WalkDir(heads, func(p string, d os.DirEntry, err error) error {
+		if err != nil || len(out) >= maxRefs {
+			return filepath.SkipDir
+		}
+		if d.Type().IsRegular() {
+			if rel, err := filepath.Rel(heads, p); err == nil {
+				out[filepath.ToSlash(rel)] = true
+			}
+		}
+		return nil
+	})
+	if b, err := readSmall(filepath.Join(common, "packed-refs"), maxGitConfig); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			if f := strings.Fields(line); len(f) == 2 && len(out) < maxRefs {
+				if name, ok := strings.CutPrefix(f[1], "refs/heads/"); ok {
+					out[name] = true
+				}
+			}
+		}
+	}
+	return out
+}
+
+// configValue reads one key from a git config file's section (both
+// lowercased, no subsection).
+func configValue(gitDir, section, key string) string {
+	b, err := readSmall(filepath.Join(gitDir, "config"), maxGitConfig)
+	if err != nil {
+		return ""
+	}
+	in := false
+	for _, raw := range strings.Split(string(b), "\n") {
+		line := strings.TrimSpace(raw)
+		if strings.HasPrefix(line, "[") {
+			in = strings.EqualFold(strings.Trim(line, "[] "), section)
+			continue
+		}
+		if k, v, ok := strings.Cut(line, "="); in && ok && strings.EqualFold(strings.TrimSpace(k), key) {
+			return strings.Trim(strings.TrimSpace(v), `"`)
+		}
+	}
+	return ""
 }
 
 // symref reads a symbolic ref file ("ref: <prefix><name>") and returns name.

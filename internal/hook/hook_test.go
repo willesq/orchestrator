@@ -257,3 +257,24 @@ func (f *fakeClient) SummarizeSession(_ context.Context, req *orchdv1.SummarizeS
 	f.summarized = append(f.summarized, req)
 	return &orchdv1.SummarizeSessionResponse{Accepted: true}, f.err
 }
+
+// Content a client stored is still a web page or tool output when its URI
+// or type says so, and `untrusted: exclude` keeps it out.
+func TestExcludeCoversClientStoredWebAndToolOutput(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", t.TempDir())
+	client := &fakeClient{search: &orchdv1.SearchResponse{Hits: []*orchdv1.SearchHit{
+		{SourceUri: "https://evil.example/page", SourceType: "manual", Trust: "client", Score: 0.9, Text: "a fetched page"},
+		{SourceUri: "manual://pr-123", SourceType: "tool_output", Trust: "client", Score: 0.85, Text: "a PR body"},
+		{SourceUri: "manual://note", SourceType: "manual", Trust: "client", Score: 0.8, Text: "a plain note about retries"},
+	}}}
+	cfg := defaultAutoRAG()
+	cfg.Untrusted = memctx.UntrustedExclude
+	var out bytes.Buffer
+	if err := userPromptSubmit(cfg, Payload{SessionID: "22222222-2222-2222-2222-222222222222", Prompt: "how do retries work?"},
+		&out, factory(client, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "evil.example") || strings.Contains(out.String(), "pr-123") || !strings.Contains(out.String(), "manual://note") {
+		t.Fatalf("exclude let client-stored web or tool output through:\n%s", out.String())
+	}
+}

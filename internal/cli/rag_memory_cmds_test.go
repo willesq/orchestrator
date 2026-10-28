@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/rageval"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/sources"
 )
 
 // storeClient serves a small store: sources by type and prefix, their text,
@@ -247,5 +249,63 @@ func TestSearchPassesRankingFlags(t *testing.T) {
 	}
 	if client.searchReq.GetRanking() != "plain" || client.searchReq.GetPerSource() != -1 {
 		t.Fatalf("req = %+v", client.searchReq)
+	}
+}
+
+func TestConfirmPruneFlags(t *testing.T) {
+	saved := docsPollInterval
+	docsPollInterval = time.Millisecond
+	t.Cleanup(func() { docsPollInterval = saved })
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	fc := &fakeClient{}
+	cf := factory(fc, nil)
+	if _, err := run(cf, "", "source", "refresh", "--confirm-prune"); err == nil {
+		t.Fatal("--confirm-prune without an id accepted")
+	}
+	out, err := run(cf, "", "source", "refresh", "repo|/x", "--confirm-prune")
+	if err != nil || fc.refreshReq.GetId() != "repo|/x" || !fc.refreshReq.GetConfirmPrune() || !strings.Contains(out, "confirmed") {
+		t.Fatalf("source confirm = %q, %v, %+v", out, err, fc.refreshReq)
+	}
+	if _, err := run(cf, "", "docs", "sync", "--confirm-prune"); err == nil {
+		t.Fatal("docs --confirm-prune without an owner accepted")
+	}
+	seedDocsOwner(t, "ok", "")
+	fc.docsStates = []*orchdv1.DocsSyncState{{Owner: "willesq", StartedAt: time.Now().Unix() + 5, FinishedAt: time.Now().Unix() + 6}}
+	if _, err := run(cf, "", "docs", "sync", "willesq", "--confirm-prune", "--background"); err != nil || !fc.docsSyncReq.GetConfirmPrune() || fc.docsSyncReq.GetOwner() != "willesq" {
+		t.Fatalf("docs confirm = %v, %+v", err, fc.docsSyncReq)
+	}
+}
+
+func TestDedupeListsLegacyLocalSourceCopies(t *testing.T) {
+	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	_ = sources.NewRegistry(conn).Add(ctx, sources.Source{Kind: sources.KindOwner, URI: "mine", RefreshSecs: 3600})
+	_ = docs.NewRegistry(conn).SetHash(ctx, "repo://local/notes/SYNCED.md", "h", 1)
+	_ = conn.Close()
+	sc := &storeClient{fakeClient: &fakeClient{}, docs: map[string]*orchdv1.Document{
+		"repo://local/notes/README.md": {SourceUri: "repo://local/notes/README.md", SourceType: "repo_doc", Text: "old"},
+		"repo://local/notes/SYNCED.md": {SourceUri: "repo://local/notes/SYNCED.md", SourceType: "repo_doc", Text: "has a hash"},
+		"repo://local/notes/NEW.md":    {SourceUri: "repo://local/notes/NEW.md", SourceType: "repo_doc", Writer: "client", Text: "a client's"},
+		"repo://mine/proj/README.md":   {SourceUri: "repo://mine/proj/README.md", SourceType: "repo_doc", Text: "old owner copy"},
+		"repo://other/proj/README.md":  {SourceUri: "repo://other/proj/README.md", SourceType: "repo_doc", Text: "not ours"},
+	}}
+	out, err := run(func() (orchdv1.OrchdClient, func(), error) { return sc, func() {}, nil }, "", "rag", "dedupe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"repo://local/notes/README.md", "repo://mine/proj/README.md", "stored by an earlier sources refresh"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q:\n%s", want, out)
+		}
+	}
+	for _, kept := range []string{"SYNCED.md", "NEW.md", "repo://other/"} {
+		if strings.Contains(out, kept) {
+			t.Errorf("%s listed:\n%s", kept, out)
+		}
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -119,5 +120,29 @@ func TestFilesCompleteReportsUnreadableDirs(t *testing.T) {
 	}
 	if FilesComplete(root, nil, func(string) {}) {
 		t.Fatal("an unreadable directory went unreported")
+	}
+}
+
+func TestOwnFilesSkipsOtherCheckouts(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"README.md", "docs/a.md", "nested/.git/HEAD", "nested/N.md", "x.worktrees/feat/W.md", "wt/.git", "wt/T.md"} {
+		p := filepath.Join(root, f)
+		_ = os.MkdirAll(filepath.Dir(p), 0o755)
+		_ = os.WriteFile(p, []byte("x"), 0o644)
+	}
+	var got []string
+	if !OwnFiles(root, nil, func(p string) { rel, _ := filepath.Rel(root, p); got = append(got, filepath.ToSlash(rel)) }) {
+		t.Fatal("incomplete")
+	}
+	if strings.Join(got, ",") != "README.md,docs/a.md" {
+		t.Fatalf("walked %v", got)
+	}
+	var all []string
+	FilesComplete(root, nil, func(p string) { all = append(all, p) })
+	if len(all) != 5 {
+		t.Fatalf("FilesComplete walked %d", len(all))
+	}
+	if IsWorktreesDir(".worktrees") || !IsWorktreesDir("repo.worktrees") {
+		t.Fatal("IsWorktreesDir")
 	}
 }

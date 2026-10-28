@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,5 +87,85 @@ func TestSyncDatesDocsAndRemovesDeletedOnes(t *testing.T) {
 	}
 	if err := reg.DeleteHash(ctx, "repo://none"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// copyingIng also answers Copy, with each URI's stored writer and hash.
+type copyingIng struct {
+	removingIng
+	copies map[string]rag.StoredCopy
+}
+
+func (c *copyingIng) IngestText(ctx context.Context, text string, m rag.Meta) (int, error) {
+	if c.copies == nil {
+		c.copies = map[string]rag.StoredCopy{}
+	}
+	c.copies[m.SourceURI] = rag.StoredCopy{Writer: m.Writer, ContentHash: rag.ContentHash(text)}
+	return c.removingIng.IngestText(ctx, text, m)
+}
+
+func (c *copyingIng) Copy(_ context.Context, uri string) (rag.StoredCopy, bool, error) {
+	cp, ok := c.copies[uri]
+	return cp, ok, nil
+}
+
+func TestSyncRestoresADocAClientOverwrote(t *testing.T) {
+	git := &fakeGit{layout: map[string]map[string]string{"docs": {"README.md": "the real readme"}}}
+	reg, _, opts := syncDeps(t, fakeGH{repos: []Repo{{Name: "docs", HeadSHA: "s1"}}}, freshGit{git})
+	ing := &copyingIng{}
+	ctx := context.Background()
+	o := Owner{Owner: "acme"}
+	SyncOwner(ctx, reg, o, ing, opts)
+	if len(ing.metas) != 1 {
+		t.Fatalf("first sync stored %d", len(ing.metas))
+	}
+	// Unchanged repo and doc: nothing is stored again.
+	SyncOwner(ctx, reg, o, ing, opts)
+	if len(ing.metas) != 1 {
+		t.Fatalf("an unchanged repo was re-stored: %d", len(ing.metas))
+	}
+	// A client overwrites the doc's URI: the next sync restores it, though
+	// neither the repo's HEAD nor the file changed.
+	ing.copies["repo://acme/docs/README.md"] = rag.StoredCopy{Writer: rag.WriterClient, ContentHash: "evil"}
+	SyncOwner(ctx, reg, o, ing, opts)
+	if len(ing.metas) != 2 || ing.copies["repo://acme/docs/README.md"].Writer != rag.WriterDocs {
+		t.Fatalf("overwrite not restored: %d stores, %+v", len(ing.metas), ing.copies["repo://acme/docs/README.md"])
+	}
+	// Docs stored before writers were recorded do not force a re-sync.
+	ing.copies["repo://acme/docs/README.md"] = rag.StoredCopy{}
+	if overwritten(ctx, reg, ing, "acme", "docs") {
+		t.Fatal("a legacy copy counted as overwritten")
+	}
+	if !storedAsSynced(ctx, &removingIng{}, "u", "t") {
+		t.Fatal("without Copy the registry is trusted")
+	}
+}
+
+// refusingGuard refuses every prune.
+type refusingGuard struct{ keys []string }
+
+func (g *refusingGuard) Allow(_ context.Context, key, _ string, _, _ int) (bool, string, error) {
+	g.keys = append(g.keys, key)
+	return false, "2 docs are gone", nil
+}
+func (g *refusingGuard) Done(context.Context, string, int) error { return nil }
+
+func TestRefusedPruneShowsOnTheRepo(t *testing.T) {
+	git := &fakeGit{layout: map[string]map[string]string{"docs": {"A.md": "a", "B.md": "b", "C.md": "c"}}}
+	reg, _, opts := syncDeps(t, fakeGH{repos: []Repo{{Name: "docs", HeadSHA: "s1"}}}, freshGit{git})
+	ing := &removingIng{}
+	ctx := context.Background()
+	o := Owner{Owner: "acme"}
+	SyncOwner(ctx, reg, o, ing, opts)
+	git.layout["docs"] = map[string]string{"A.md": "a"}
+	opts.GH = fakeGH{repos: []Repo{{Name: "docs", HeadSHA: "s2"}}}
+	g := &refusingGuard{}
+	opts.Guard = g
+	res := SyncOwner(ctx, reg, o, ing, opts)
+	repos, _ := reg.ListRepos(ctx, "acme")
+	if res.Status != "partial" || len(ing.deleted) != 0 || len(repos) != 1 || repos[0].Status != "error" ||
+		!strings.Contains(repos[0].Error, "prune refused: 2 docs are gone") || !strings.Contains(repos[0].Error, "orch docs sync acme --confirm-prune") ||
+		repos[0].HeadSHA != "s1" || g.keys[0] != "docs|acme" {
+		t.Fatalf("res %+v, deleted %v, repos %+v", res, ing.deleted, repos)
 	}
 }

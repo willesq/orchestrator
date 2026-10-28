@@ -17,6 +17,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/willesq/orchestrator/internal/github"
+	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/sources"
@@ -276,9 +277,21 @@ func (s *server) RefreshSource(ctx context.Context, req *orchdv1.RefreshSourceRe
 		return nil, grpcstatus.Error(codes.Unavailable, "sources registry unavailable")
 	}
 	marked := 1
+	if req.GetConfirmPrune() && req.GetId() == "" {
+		return nil, grpcstatus.Error(codes.InvalidArgument, "confirm_prune needs a source id")
+	}
 	if id := req.GetId(); id != "" {
 		if _, err := s.findSource(ctx, id); err != nil {
 			return nil, err
+		}
+		if req.GetConfirmPrune() {
+			if s.prune == nil {
+				return nil, grpcstatus.Error(codes.Unavailable, "prune guard unavailable")
+			}
+			if err := s.prune.Confirm(ctx, prunecap.SourceKey(id)); err != nil {
+				return nil, err
+			}
+			log.Printf("orchd: the next refresh of %s may prune past the cap (confirmed by the operator)", id)
 		}
 	} else {
 		list, err := s.sourcesReg.List(ctx)
@@ -367,8 +380,8 @@ func (s *server) indexedBy(ctx context.Context, src sources.Source) ([]string, e
 	var uris []string
 	for _, sum := range current {
 		if sum.Writer == rag.WriterSources && sum.SourceType == "repo_doc" && slices.Contains(sum.Tags, tag) &&
-			(src.Kind == sources.KindOwner && strings.Contains(sum.SourceURI, "/"+src.URI+"/") ||
-				src.Kind == sources.KindRepo && strings.HasPrefix(sum.SourceURI, sources.CheckoutURI(src.URI)+"/")) {
+			(src.Kind == sources.KindOwner && ownerDoc(sum, src.URI) ||
+				src.Kind == sources.KindRepo && strings.HasPrefix(sum.SourceURI, sources.CheckoutURI(sources.ResolvePath(src.URI))+"/")) {
 			uris = append(uris, sum.SourceURI)
 		}
 	}
@@ -401,6 +414,25 @@ func (s *server) indexedBy(ctx context.Context, src sources.Source) ([]string, e
 		uris = append(uris, sum.SourceURI)
 	}
 	return uris, nil
+}
+
+// ownerDoc reports whether a checkout:// doc sits in a repo directory of an
+// owner source: under a .../<owner>/<repo>/ segment pair whose repo is the
+// doc's own repo tag, as the owner refresh stores them.
+func ownerDoc(sum rag.SourceSummary, owner string) bool {
+	path := strings.TrimPrefix(sum.SourceURI, "checkout://")
+	for i := strings.Index(path, "/"+owner+"/"); i >= 0; {
+		rest := path[i+len(owner)+2:]
+		if repo, _, ok := strings.Cut(rest, "/"); ok && slices.Contains(sum.Tags, "repo:"+repo) {
+			return true
+		}
+		j := strings.Index(path[i+1:], "/"+owner+"/")
+		if j < 0 {
+			break
+		}
+		i += j + 1
+	}
+	return false
 }
 
 // docsOwners is the set of owners the GitHub docs sync tracks.

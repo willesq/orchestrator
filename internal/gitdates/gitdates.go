@@ -136,6 +136,13 @@ func parse(out []byte) map[string]time.Time {
 		if line == "" || cur.IsZero() {
 			continue
 		}
+		// git C-quotes a name with quotes, backslashes or control characters
+		// in it, whatever core.quotePath says.
+		if len(line) >= 2 && line[0] == '"' && line[len(line)-1] == '"' {
+			if unq, err := strconv.Unquote(line); err == nil {
+				line = unq
+			}
+		}
 		if _, ok := files[line]; !ok {
 			files[line] = cur
 		}

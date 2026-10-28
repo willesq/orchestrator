@@ -101,11 +101,15 @@ func rank(cands []candidate, p RankingParams, profile string, perSource, topK in
 	if profile == "" {
 		profile = p.Profile
 	}
+	for i := range cands {
+		// A weight below 1 would raise a negative (dense-only) score, and a
+		// NaN would break the sort.
+		cands[i].score = finiteScore(cands[i].score)
+	}
 	if profile != RankingPlain {
 		for i := range cands {
-			// A weight below 1 would raise a negative (dense-only) score.
-			cands[i].score = max(cands[i].score, 0)
 			cands[i].score *= p.weight(str(cands[i].hit.Payload["source_type"]), cands[i].date(), now)
+			cands[i].score = finiteScore(cands[i].score)
 		}
 	}
 	sort.SliceStable(cands, func(i, j int) bool {
@@ -137,4 +141,16 @@ func capSources(cands []candidate, n int) []candidate {
 		out = append(out, c)
 	}
 	return out
+}
+
+// finiteScore makes a score sortable: NaN and negatives are 0 and +Inf is
+// the largest float, so the comparison stays a strict weak order.
+func finiteScore(f float64) float64 {
+	switch {
+	case math.IsNaN(f) || f < 0:
+		return 0
+	case math.IsInf(f, 1):
+		return math.MaxFloat64
+	}
+	return f
 }

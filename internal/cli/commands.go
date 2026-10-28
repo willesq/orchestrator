@@ -19,6 +19,7 @@ import (
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/install"
 	"github.com/willesq/orchestrator/internal/mcpserver"
+	"github.com/willesq/orchestrator/internal/memctx"
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/qdrant"
@@ -660,8 +661,11 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 				if when != "" {
 					when = " · " + when
 				}
+				// Stored fields are the writer's choice: the URI and type are
+				// quoted and the text kept on one line, so neither can pass for
+				// another result when an agent reads this output.
 				fmt.Fprintf(c.OutOrStdout(), "%d. [%.3f%s] %s (%s)%s\n   %s\n",
-					i+1, h.GetScore(), match, h.GetSourceUri(), h.GetSourceType(), when, text)
+					i+1, h.GetScore(), match, memctx.QuoteField(h.GetSourceUri()), memctx.QuoteField(h.GetSourceType()), when, memctx.OneLine(text))
 			}
 			return nil
 		},

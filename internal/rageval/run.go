@@ -242,27 +242,49 @@ type Change struct {
 // Better reports whether the case improved.
 func (c Change) Better() bool { return c.To != 0 && (c.From == 0 || c.To < c.From) }
 
-// Compare lists cases present in both runs whose rank changed, in run order.
+// Compare lists cases present in both runs whose rank changed, in run order,
+// each case once.
 func Compare(before, after Report) []Change {
-	prev := map[string]int{}
-	for _, r := range before.Results {
-		prev[resultKey(r)] = r.Rank
-	}
 	var out []Change
-	for _, r := range after.Results {
-		from, ok := prev[resultKey(r)]
-		if ok && from != r.Rank {
-			out = append(out, Change{Query: r.Query, From: from, To: r.Rank})
+	for _, pr := range pairResults(before, after) {
+		if pr[0].Rank != pr[1].Rank {
+			out = append(out, Change{Query: pr[1].Query, From: pr[0].Rank, To: pr[1].Rank})
 		}
 	}
 	return out
 }
 
-// resultKey pairs a result across runs: by case key, or by query for runs
-// saved before keys were recorded.
-func resultKey(r Result) string {
-	if r.Key != "" {
-		return r.Key
+// pairResults matches each case of after with its result in before, once:
+// by case key, or failing that by query when the query names one case in
+// before (a run saved before keys were recorded, or with keys spelled
+// another way). A case repeated in either run pairs only its first result,
+// so it cannot weigh twice.
+func pairResults(before, after Report) [][2]Result {
+	byKey, byQuery := map[string]Result{}, map[string]Result{}
+	queries := map[string]int{}
+	for _, r := range before.Results {
+		if _, dup := byKey[r.Key]; r.Key != "" && !dup {
+			byKey[r.Key] = r
+		}
+		if queries[r.Query]++; queries[r.Query] == 1 {
+			byQuery[r.Query] = r
+		}
 	}
-	return r.Query
+	used := map[string]bool{}
+	var out [][2]Result
+	for _, r := range after.Results {
+		b, ok := byKey[r.Key]
+		id := "k\x00" + r.Key
+		if !ok || r.Key == "" {
+			b, ok = byQuery[r.Query]
+			ok = ok && queries[r.Query] == 1
+			id = "q\x00" + r.Query
+		}
+		if !ok || used[id] {
+			continue
+		}
+		used[id] = true
+		out = append(out, [2]Result{b, r})
+	}
+	return out
 }

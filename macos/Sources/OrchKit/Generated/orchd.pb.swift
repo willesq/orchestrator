@@ -1390,6 +1390,10 @@ public nonisolated struct Orchd_V1_SyncDocsRequest: Sendable {
   /// re-clone and re-ingest everything, not just what changed
   public var force: Bool = false
 
+  /// let the next sync of this owner remove more docs than the prune cap
+  /// allows (needs owner)
+  public var confirmPrune: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1703,6 +1707,10 @@ public nonisolated struct Orchd_V1_RefreshSourceRequest: Sendable {
 
   /// empty = every source
   public var id: String = String()
+
+  /// let the next refresh of this source remove more docs than the prune cap
+  /// allows (needs id)
+  public var confirmPrune: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -5008,7 +5016,7 @@ nonisolated extension Orchd_V1_ListDocsResponse: SwiftProtobuf.Message, SwiftPro
 
 nonisolated extension Orchd_V1_SyncDocsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SyncDocsRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{1}force\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{1}force\0\u{3}confirm_prune\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5018,6 +5026,7 @@ nonisolated extension Orchd_V1_SyncDocsRequest: SwiftProtobuf.Message, SwiftProt
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
       case 2: try { try decoder.decodeSingularBoolField(value: &self.force) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.confirmPrune) }()
       default: break
       }
     }
@@ -5030,12 +5039,16 @@ nonisolated extension Orchd_V1_SyncDocsRequest: SwiftProtobuf.Message, SwiftProt
     if self.force != false {
       try visitor.visitSingularBoolField(value: self.force, fieldNumber: 2)
     }
+    if self.confirmPrune != false {
+      try visitor.visitSingularBoolField(value: self.confirmPrune, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Orchd_V1_SyncDocsRequest, rhs: Orchd_V1_SyncDocsRequest) -> Bool {
     if lhs.owner != rhs.owner {return false}
     if lhs.force != rhs.force {return false}
+    if lhs.confirmPrune != rhs.confirmPrune {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -5670,7 +5683,7 @@ nonisolated extension Orchd_V1_RemoveSourceResponse: SwiftProtobuf.Message, Swif
 
 nonisolated extension Orchd_V1_RefreshSourceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RefreshSourceRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{3}confirm_prune\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5679,6 +5692,7 @@ nonisolated extension Orchd_V1_RefreshSourceRequest: SwiftProtobuf.Message, Swif
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.confirmPrune) }()
       default: break
       }
     }
@@ -5688,11 +5702,15 @@ nonisolated extension Orchd_V1_RefreshSourceRequest: SwiftProtobuf.Message, Swif
     if !self.id.isEmpty {
       try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
     }
+    if self.confirmPrune != false {
+      try visitor.visitSingularBoolField(value: self.confirmPrune, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Orchd_V1_RefreshSourceRequest, rhs: Orchd_V1_RefreshSourceRequest) -> Bool {
     if lhs.id != rhs.id {return false}
+    if lhs.confirmPrune != rhs.confirmPrune {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

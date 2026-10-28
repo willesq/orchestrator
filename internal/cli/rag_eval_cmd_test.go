@@ -176,7 +176,7 @@ func TestSearchShowsMatchKind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"[0.200 exact] u://exact", "[0.300 keyword] u://kw", "[0.600] u://dense"} {
+	for _, want := range []string{`[0.200 exact] "u://exact"`, `[0.300 keyword] "u://kw"`, `[0.600] "u://dense"`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q:\n%s", want, out)
 		}

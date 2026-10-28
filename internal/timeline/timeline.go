@@ -69,8 +69,8 @@ func Range(start, end time.Time) string {
 // "date unknown" for a session stored before sessions were dated, and "" for
 // other undated content, which never had a date to show.
 func Describe(start, end int64, sourceType string) string {
-	if start > 0 || end > 0 {
-		return Range(fromUnix(start), fromUnix(end))
+	if from, to := fromUnix(start), fromUnix(end); !from.IsZero() || !to.IsZero() {
+		return Range(from, to)
 	}
 	if strings.HasPrefix(sourceType, "session_") {
 		return "date unknown"
@@ -78,8 +78,10 @@ func Describe(start, end int64, sourceType string) string {
 	return ""
 }
 
+// fromUnix reads Unix seconds; zero for times before 2000 or more than two
+// days ahead, which no stored content can honestly carry.
 func fromUnix(s int64) time.Time {
-	if s <= 0 {
+	if s < 946684800 || s > time.Now().Add(48*time.Hour).Unix() {
 		return time.Time{}
 	}
 	return time.Unix(s, 0).UTC()

@@ -95,6 +95,8 @@ type Service struct {
 	PerSource int
 	// now is the clock ranking measures age by; nil is time.Now.
 	now func() time.Time
+	// writerIndex adds the writer payload index to an older collection once.
+	writerIndex sync.Once
 
 	fallbackLog rateLog
 	// progress is set while a migration copies sources.
@@ -237,8 +239,8 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 	// An unchanged write is skipped before embedding, so re-fetching an
 	// unchanged page neither costs an embed nor makes it look new. During a
 	// migration every write goes through, so the shadow gets it too.
-	if _, shadow := s.stores(); shadow == nil && m.SourceURI != "" {
-		if n, same := s.unchanged(ctx, s.active(), m.SourceURI, ingestHash(text, m)); same {
+	if m.SourceURI != "" {
+		if n, same := s.skipUnchanged(ctx, text, m); same {
 			return n, nil
 		}
 	}
@@ -258,6 +260,17 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 		s.shadowResult(m.SourceURI, writePoints(ctx, shadow, dim, m.SourceURI, points))
 	}
 	return len(points), nil
+}
+
+// skipUnchanged checks, under the source's write lock so no write is half
+// done meanwhile, whether the store already holds this exact write.
+func (s *Service) skipUnchanged(ctx context.Context, text string, m Meta) (int, bool) {
+	defer s.lockSource(m.SourceURI)()
+	active, shadow := s.stores()
+	if shadow != nil {
+		return 0, false
+	}
+	return s.unchanged(ctx, active, m.SourceURI, s.ingestHash(text, m))
 }
 
 // prepare chunks, embeds and weights text into points, without writing them.
@@ -286,7 +299,7 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 	}
 	points := make([]Point, len(chunks))
 	ingested := time.Now()
-	contentHash, writeHash, trust := ContentHash(text), ingestHash(text, m), TrustFor(m.Writer, m.SourceType)
+	contentHash, writeHash, trust := ContentHash(text), s.ingestHash(text, m), TrustFor(m.Writer, m.SourceType)
 	if m.ContentHash != "" {
 		contentHash = m.ContentHash
 	}

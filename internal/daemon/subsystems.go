@@ -28,6 +28,7 @@ import (
 	"github.com/willesq/orchestrator/internal/models"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/prs"
+	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/qdrant"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/selfupdate"
@@ -247,7 +248,8 @@ func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []str
 // sourcesUnit refreshes registered web/repo/owner sources on a cadence.
 func sourcesUnit(s config.Settings, store *sql.DB, ing sources.Ingester) supervisor.Unit {
 	sched := sources.NewScheduler(sources.NewRegistry(store), ing,
-		sources.RefreshOpts{KnownRoots: expandRoots(s.Sources.KnownRoots), ExcludeDirs: s.Ingest.ExcludeDirs})
+		sources.RefreshOpts{KnownRoots: expandRoots(s.Sources.KnownRoots), ExcludeDirs: s.Ingest.ExcludeDirs,
+			Guard: sourcesGuard(store)})
 	return supervisor.Unit{
 		Name:     UnitSources,
 		Detail:   "web/repo/owner source freshness",
@@ -266,6 +268,7 @@ func newDocsScheduler(s config.Settings, store *sql.DB, ing docs.Ingester) *docs
 		GH:              docs.NewGitHub(),
 		Git:             docs.NewGit(),
 		ExcludeDirs:     s.Ingest.ExcludeDirs,
+		Guard:           docsGuard(store),
 	}, interval(s.Docs.ScanInterval, time.Minute))
 }
 
@@ -508,4 +511,21 @@ func notifyTaskDone(in workflows.AgentTaskInput, o workflows.Outcome) {
 	}); err != nil {
 		log.Printf("queue: record completion of %s: %v", in.ID, err)
 	}
+}
+
+// sourcesGuard and docsGuard cap the syncs' deletions in orch.db; without a
+// store each sync caps itself (an interface holding a nil *Guard would not
+// compare equal to nil, so the nil case is spelled out).
+func sourcesGuard(store *sql.DB) sources.PruneGuard {
+	if store == nil {
+		return nil
+	}
+	return prunecap.New(store)
+}
+
+func docsGuard(store *sql.DB) docs.PruneGuard {
+	if store == nil {
+		return nil
+	}
+	return prunecap.New(store)
 }

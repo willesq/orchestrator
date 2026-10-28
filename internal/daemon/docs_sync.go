@@ -12,6 +12,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/github"
+	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
@@ -27,6 +28,9 @@ func (s *server) SyncDocs(ctx context.Context, req *orchdv1.SyncDocsRequest) (*o
 		return nil, grpcstatus.Error(codes.Unavailable, "docs sync unavailable")
 	}
 	owner := req.GetOwner()
+	if req.GetConfirmPrune() && owner == "" {
+		return nil, grpcstatus.Error(codes.InvalidArgument, "confirm_prune needs an owner")
+	}
 	if owner != "" {
 		if !github.ValidLogin(owner) {
 			return nil, grpcstatus.Errorf(codes.InvalidArgument, "invalid GitHub login %q", owner)
@@ -39,6 +43,15 @@ func (s *server) SyncDocs(ctx context.Context, req *orchdv1.SyncDocsRequest) (*o
 	// refused, and the running sync is not interrupted. The caches are
 	// cleared and the owner marked due only once no sync can be writing them.
 	err := s.docsSync.Request(func() error {
+		if req.GetConfirmPrune() {
+			if s.prune == nil {
+				return grpcstatus.Error(codes.Unavailable, "prune guard unavailable")
+			}
+			if err := s.prune.Confirm(ctx, prunecap.DocsKey(owner)); err != nil {
+				return err
+			}
+			log.Printf("docs: the next sync of %s may prune past the cap (confirmed by the operator)", owner)
+		}
 		if req.GetForce() {
 			if err := s.docsReg.ClearCaches(ctx, owner); err != nil {
 				return err

@@ -187,15 +187,23 @@ func (q *QdrantStore) EnsureCollection(ctx context.Context, dim int) error {
 		}
 		return err
 	}
-	// Reads and deletes filter by source, so index it.
-	if err := q.do(ctx, http.MethodPut, q.path("/index")+"?wait=true",
-		map[string]any{"field_name": "source_uri", "field_schema": "keyword"}, nil); err != nil {
-		return err
+	// Reads and deletes filter by source, and prunes by writer, so index both.
+	for _, field := range []string{"source_uri", fieldWriter} {
+		if err := q.EnsureIndex(ctx, field); err != nil {
+			return err
+		}
 	}
 	q.mu.Lock()
 	q.layout = LayoutHybrid
 	q.mu.Unlock()
 	return nil
+}
+
+// EnsureIndex adds a keyword payload index on field; adding one that exists
+// changes nothing.
+func (q *QdrantStore) EnsureIndex(ctx context.Context, field string) error {
+	return q.do(ctx, http.MethodPut, q.path("/index")+"?wait=true",
+		map[string]any{"field_name": field, "field_schema": "keyword"}, nil)
 }
 
 // Point is a single chunk to upsert: its dense vector, its BM25 sparse vector

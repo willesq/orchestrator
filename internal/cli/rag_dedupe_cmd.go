@@ -14,6 +14,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
+	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/redact"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
@@ -42,6 +43,11 @@ sources sync already stores under a repo:// URI, and with --apply deletes them:
 
 Text alone never makes a duplicate. A copy whose content differs (an edit not yet
 merged) is kept.
+
+It also lists the repo:// docs earlier versions stored for local repo and owner
+sources (under repo://local/, or a registered owner the docs sync does not track),
+with no writer recorded and no docs-sync hash: the refresh now keeps those under
+checkout:// and no longer updates or prunes the old copies.
 
 Without --apply it lists them and changes nothing. Edits made after this release no longer
 create such copies; this cleans up those made before.`,
@@ -74,6 +80,11 @@ create such copies; this cleans up those made before.`,
 			if err != nil {
 				return err
 			}
+			legacy, err := planLegacy(ctx, client, conn)
+			if err != nil {
+				return err
+			}
+			dups = append(dups, legacy...)
 			out := c.OutOrStdout()
 			var chunks int32
 			for _, d := range dups {
@@ -199,6 +210,55 @@ func fileHash(path string) string {
 	}
 	text, _ := redact.Redact(string(raw))
 	return rag.ContentHash(text)
+}
+
+// planLegacy lists the repo:// docs earlier versions of the sources refresh
+// stored for local repo and owner sources, which it now keeps under
+// checkout://, so they are duplicates the refresh no longer updates or prunes.
+// A doc is listed only when it has no writer recorded (stored before writers
+// were), and the docs sync has no hash for it (so it is not a synced doc),
+// under repo://local/ or under the owner of a registered owner source that
+// the docs sync does not track.
+func planLegacy(ctx context.Context, client orchdv1.OrchdClient, conn *sql.DB) ([]duplicate, error) {
+	if conn == nil {
+		return nil, nil
+	}
+	dreg, sreg := docs.NewRegistry(conn), sources.NewRegistry(conn)
+	prefixes := []string{"repo://local/"}
+	tracked := map[string]bool{}
+	if owners, err := dreg.ListOwners(ctx); err == nil {
+		for _, o := range owners {
+			tracked[strings.ToLower(o.Owner)] = true
+		}
+	}
+	if srcs, err := sreg.List(ctx); err == nil {
+		for _, src := range srcs {
+			if src.Kind == sources.KindOwner && !tracked[strings.ToLower(src.URI)] {
+				prefixes = append(prefixes, "repo://"+src.URI+"/")
+			}
+		}
+	}
+	var out []duplicate
+	for _, prefix := range prefixes {
+		resp, err := client.ListSources(ctx, &orchdv1.ListSourcesRequest{UriPrefix: prefix, SourceType: "repo_doc"})
+		if err != nil {
+			return nil, err
+		}
+		for _, src := range resp.GetSources() {
+			uri := src.GetSourceUri()
+			if h, err := dreg.Hash(ctx, uri); err != nil || h != "" {
+				continue
+			}
+			d, err := client.GetDocument(ctx, &orchdv1.GetDocumentRequest{SourceUri: uri})
+			if err != nil || d.GetWriter() != "" {
+				continue
+			}
+			out = append(out, duplicate{URI: uri, Chunks: src.GetChunks(),
+				Reason: "stored by an earlier sources refresh; the refresh now keeps this repo's docs under checkout://"})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].URI < out[j].URI })
+	return out, nil
 }
 
 // sameContent reports whether two stored copies hold the same text: by their

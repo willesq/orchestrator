@@ -150,9 +150,12 @@ func within(path, dir string) bool {
 	return path == dir || strings.HasPrefix(path, dir+string(filepath.Separator))
 }
 
-// resolve is dir with symlinks resolved, or dir cleaned when it cannot be:
+// resolve is ResolvePath.
+func resolve(dir string) string { return ResolvePath(dir) }
+
+// ResolvePath is dir with symlinks resolved, or cleaned when it cannot be:
 // the sources refresh stores files under their resolved paths.
-func resolve(dir string) string {
+func ResolvePath(dir string) string {
 	if real, err := filepath.EvalSymlinks(dir); err == nil {
 		return real
 	}

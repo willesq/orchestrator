@@ -5,8 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
+
+	"github.com/willesq/orchestrator/internal/bm25"
 )
 
 // Writers: which part of orchd stored a source. A writer is set by orchd's
@@ -75,11 +78,15 @@ func ContentHash(text string) string {
 // ingestHash identifies a whole write: text and everything stored with it. A
 // write whose hash matches what is stored changes nothing and is skipped, so
 // an unchanged page or doc keeps the date it was first stored.
-func ingestHash(text string, m Meta) string {
+//
+// The chunker's settings and the keyword tokenizer are part of it, so a
+// change to either re-chunks or re-indexes a source at its next write.
+func (s *Service) ingestHash(text string, m Meta) string {
 	tags := append([]string(nil), m.Tags...)
 	sort.Strings(tags)
 	key := strings.Join([]string{text, m.SourceType, m.Scope, strings.Join(tags, "\x01"), m.Writer,
-		fmt.Sprint(m.StartedAt.Unix(), m.EndedAt.Unix(), m.Timeline, m.KeepUndated)}, "\x00")
+		fmt.Sprint(m.StartedAt.Unix(), m.EndedAt.Unix(), m.Timeline, m.KeepUndated),
+		fmt.Sprint(s.chunkTokens, s.overlap, s.MarkdownSections, bm25.TokenizerVersion, s.BM25)}, "\x00")
 	sum := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(sum[:16])
 }
@@ -112,6 +119,13 @@ func (s *Service) SourcesWrittenBy(ctx context.Context, prefix, writer string) (
 	if writer == "" {
 		return nil, fmt.Errorf("writer is required")
 	}
+	// Collections made before writers were recorded lack the writer index;
+	// it is added once per process, so the filter is served from it.
+	s.writerIndex.Do(func() {
+		if err := s.active().EnsureIndex(ctx, fieldWriter); err != nil {
+			log.Printf("rag: indexing %s: %v", fieldWriter, err)
+		}
+	})
 	filter := EqFilter(fieldWriter, writer)
 	seen := map[string]bool{}
 	var out []string
@@ -137,16 +151,31 @@ func (s *Service) SourcesWrittenBy(ctx context.Context, prefix, writer string) (
 	return nil, fmt.Errorf("sources written by %s: exceeded %d pages", writer, maxScrollPages)
 }
 
-// unchanged reports whether the source already holds exactly this write.
+// unchanged reports whether the source already holds exactly this write,
+// whole: its first and last chunks carry the write's hash, and it holds
+// exactly the chunk count the write recorded. A write that failed part-way
+// (a later batch, or the prune of an older version's surplus chunks) fails
+// that check, so the next write of the same text is done again rather than
+// skipped.
 func (s *Service) unchanged(ctx context.Context, st *QdrantStore, uri, hash string) (int, bool) {
 	pts, err := st.Retrieve(ctx, []string{pointID(uri, 0)}, []string{fieldIngestHash, "chunk_total", "source_uri"})
 	if err != nil || len(pts) == 0 {
 		return 0, false
 	}
 	p := pts[0].Payload
-	total, _ := p["chunk_total"].(float64)
+	t, _ := p["chunk_total"].(float64)
+	total := int(t)
 	if str(p["source_uri"]) != uri || str(p[fieldIngestHash]) != hash || total < 1 {
 		return 0, false
 	}
-	return int(total), true
+	if total > 1 {
+		last, err := st.Retrieve(ctx, []string{pointID(uri, total-1)}, []string{fieldIngestHash, "source_uri"})
+		if err != nil || len(last) == 0 || str(last[0].Payload[fieldIngestHash]) != hash || str(last[0].Payload["source_uri"]) != uri {
+			return 0, false
+		}
+	}
+	if n, err := st.Count(ctx, EqFilter("source_uri", uri)); err != nil || n != total {
+		return 0, false
+	}
+	return total, true
 }

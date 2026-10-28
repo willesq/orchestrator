@@ -13,7 +13,9 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/willesq/orchestrator/internal/config"
+	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/handoff"
+	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/rag"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/sources"
@@ -241,14 +243,110 @@ func TestPurgeRemovesOnlyTheSourcesCheckoutDocs(t *testing.T) {
 	if _, err := s.SaveSource(ctx, &orchdv1.SaveSourceRequest{Source: &orchdv1.RegisteredSource{Kind: "repo", Uri: repo, RefreshSecs: 3600}}); err != nil {
 		t.Fatal(err)
 	}
-	pre := sources.CheckoutURI(repo) + "/"
+	pre := sources.CheckoutURI(sources.ResolvePath(repo)) + "/" // stored resolved
 	r.indexed = []indexedDoc{
 		{uri: pre + "README.md", sourceType: "repo_doc", tags: []string{"repo:notes"}, writer: rag.WriterSources},
 		{uri: pre + "AGENT.md", sourceType: "repo_doc", tags: []string{"repo:notes"}, writer: rag.WriterClient},
-		{uri: sources.CheckoutURI(repo+"2") + "/README.md", sourceType: "repo_doc", tags: []string{"repo:notes"}, writer: rag.WriterSources},
+		{uri: sources.CheckoutURI(sources.ResolvePath(repo)+"2") + "/README.md", sourceType: "repo_doc", tags: []string{"repo:notes"}, writer: rag.WriterSources},
 	}
 	resp, err := s.RemoveSource(ctx, &orchdv1.RemoveSourceRequest{Id: "repo|" + repo, Purge: true, Confirm: true})
 	if err != nil || strings.Join(r.deleted, ",") != pre+"README.md" || resp.GetPurgedSources() != 1 {
 		t.Fatalf("purge = %v, %v, deleted %v", resp, err, r.deleted)
+	}
+}
+
+// copyRag answers Copy for the Ingest guard.
+type copyRag struct {
+	metaRag
+	copies map[string]rag.StoredCopy
+}
+
+func (c copyRag) Copy(_ context.Context, uri string) (rag.StoredCopy, bool, error) {
+	cp, ok := c.copies[uri]
+	return cp, ok, nil
+}
+
+func TestIngestRefusesASyncedSource(t *testing.T) {
+	var metas []rag.Meta
+	s := &server{start: time.Now(), rag: copyRag{metaRag: metaRag{metas: &metas}, copies: map[string]rag.StoredCopy{
+		"repo://o/r/README.md": {Writer: rag.WriterDocs}, "checkout:///c/a.md": {Writer: rag.WriterSources},
+		"session://s/record": {Writer: rag.WriterSession}, "manual://n": {Writer: rag.WriterClient},
+	}}}
+	for _, uri := range []string{"repo://o/r/README.md", "checkout:///c/a.md"} {
+		_, err := s.Ingest(context.Background(), &orchdv1.IngestRequest{Text: "x", SourceUri: uri})
+		if grpcstatus.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), "kept by the") {
+			t.Errorf("%s: err = %v", uri, err)
+		}
+	}
+	// A session record (hooks store records this way) and a client's own note
+	// are still written.
+	for _, uri := range []string{"session://s/record", "manual://n", "manual://new"} {
+		if _, err := s.Ingest(context.Background(), &orchdv1.IngestRequest{Text: "x", SourceUri: uri}); err != nil {
+			t.Errorf("%s: %v", uri, err)
+		}
+	}
+	if len(metas) != 3 {
+		t.Fatalf("stored %d", len(metas))
+	}
+}
+
+func TestConfirmPruneRPCs(t *testing.T) {
+	ctx := context.Background()
+	s, _, _ := catalogServer(t)
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	src, err := s.SaveSource(ctx, &orchdv1.SaveSourceRequest{Source: &orchdv1.RegisteredSource{Kind: "web", Uri: "https://x.dev", RefreshSecs: 3600}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.RefreshSource(ctx, &orchdv1.RefreshSourceRequest{ConfirmPrune: true}); grpcstatus.Code(err) != codes.InvalidArgument {
+		t.Errorf("confirm without id err = %v", err)
+	}
+	if _, err := s.RefreshSource(ctx, &orchdv1.RefreshSourceRequest{Id: src.GetId(), ConfirmPrune: true}); grpcstatus.Code(err) != codes.Unavailable {
+		t.Errorf("no guard err = %v", err)
+	}
+	s.prune = prunecap.New(conn)
+	if _, err := s.RefreshSource(ctx, &orchdv1.RefreshSourceRequest{Id: src.GetId(), ConfirmPrune: true}); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	_ = conn.QueryRow(`SELECT count(*) FROM prune_confirm WHERE key=?`, prunecap.SourceKey(src.GetId())).Scan(&n)
+	if n != 1 {
+		t.Fatalf("confirmation not recorded: %d", n)
+	}
+	s.docsSync = &fakeDocsSync{}
+	if _, err := s.SyncDocs(ctx, &orchdv1.SyncDocsRequest{ConfirmPrune: true}); grpcstatus.Code(err) != codes.InvalidArgument {
+		t.Errorf("docs confirm without owner err = %v", err)
+	}
+	if _, err := s.SyncDocs(ctx, &orchdv1.SyncDocsRequest{Owner: "willesq", ConfirmPrune: true}); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.QueryRow(`SELECT count(*) FROM prune_confirm WHERE key=?`, prunecap.DocsKey("willesq")).Scan(&n)
+	if n != 1 {
+		t.Fatal("docs confirmation not recorded")
+	}
+	if g := sourcesGuard(nil); g != nil {
+		t.Fatal("a guard without a store")
+	}
+	if docsGuard(nil) != nil || newPruneGuard(nil) != nil || sourcesGuard(conn) == nil || docsGuard(conn) == nil {
+		t.Fatal("guards")
+	}
+}
+
+func TestOwnerDocMatchesOnlyItsRepoSegment(t *testing.T) {
+	sum := rag.SourceSummary{SourceURI: "checkout:///code/acme/widget/docs/a.md", Tags: []string{"repo:widget"}}
+	if !ownerDoc(sum, "acme") || ownerDoc(sum, "other") {
+		t.Fatal("owner match")
+	}
+	sum.Tags = []string{"repo:docs"} // the segment after acme is widget, not docs
+	if ownerDoc(sum, "acme") {
+		t.Fatal("matched on the wrong segment")
+	}
+	sum = rag.SourceSummary{SourceURI: "checkout:///x/acme/y/acme/lib/a.md", Tags: []string{"repo:lib"}}
+	if !ownerDoc(sum, "acme") {
+		t.Fatal("a later owner segment was missed")
 	}
 }

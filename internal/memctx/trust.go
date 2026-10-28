@@ -42,28 +42,50 @@ var (
 	toolTypes = map[string]bool{"tool_output": true, "tool": true, "github": true, "pr": true, "issue": true}
 )
 
-// TrustOf is a chunk's tier: the one its writer stored when there is one.
-// Content stored before writers were recorded is unverified, or web or tool
-// output when its type or URI says so; its type and URI were the writer's
-// choice, so they can only lower the tier, never raise it.
+// TrustOf is a chunk's tier: the one its writer stored, lowered to web or
+// tool when the chunk's type or URI says it is a web page or tool output.
+// Lowering applies to every tier but a syncer's (repo, web), whose type and
+// URI orchd chose itself; a client, an edited file or a session that carries
+// a page is still that page. Content stored before writers were recorded is
+// unverified unless its type or URI lowers it. A declared type or URI can
+// only lower a tier, never raise it.
 func TrustOf(stored, sourceType, uri string) Trust {
+	derived := derivedTrust(sourceType, uri)
 	switch t := Trust(strings.TrimSpace(stored)); t {
-	case TrustRepo, TrustSession, TrustFile, TrustClient, TrustWeb:
+	case TrustRepo, TrustWeb:
+		return t
+	case TrustTool:
+		return TrustTool
+	case TrustSession, TrustFile, TrustClient:
+		if derived != "" {
+			return derived
+		}
 		return t
 	}
+	if derived != "" {
+		return derived
+	}
+	return TrustUnverified
+}
+
+// derivedTrust is web or tool when a chunk's type or URI says so, else "".
+// The URI is folded (NFKC, lowercased, trimmed) first, so a fullwidth or
+// padded scheme is still a scheme.
+func derivedTrust(sourceType, uri string) Trust {
 	st := strings.ToLower(strings.TrimSpace(sourceType))
-	u := strings.ToLower(strings.TrimSpace(uri))
+	u := strings.ToLower(strings.TrimSpace(norm.NFKC.String(uri)))
 	scheme := ""
-	if i := strings.Index(u, "://"); i > 0 {
+	if i := strings.Index(u, ":"); i > 0 {
 		scheme = u[:i]
 	}
 	switch {
-	case webTypes[st] || strings.Contains(scheme, "http") || strings.HasPrefix(u, "www."):
+	case webTypes[st] || strings.Contains(scheme, "http") || strings.Contains(scheme, "ftp") ||
+		strings.HasPrefix(u, "www.") || strings.HasPrefix(u, "//"):
 		return TrustWeb
 	case toolTypes[st]:
 		return TrustTool
 	}
-	return TrustUnverified
+	return ""
 }
 
 // Untrusted reports whether content of this tier is third-party text: it is
@@ -111,8 +133,28 @@ var instructionPatterns = regexp.MustCompile(`(?i)` + strings.Join([]string{
 // it only adds a warning; it must never be what decides whether content is
 // shown or trusted.
 func InstructionLike(text string) bool {
-	return instructionPatterns.MatchString(text) || instructionPatterns.MatchString(normalize(text))
+	if instructionPatterns.MatchString(text) {
+		return true
+	}
+	// Normalized in overlapping windows, so a payload deep in a long text is
+	// still seen, up to maxScan bytes.
+	if len(text) > maxScan {
+		text = text[:maxScan]
+	}
+	for start := 0; ; start += maxNormalize / 2 {
+		end := min(start+maxNormalize, len(text))
+		if instructionPatterns.MatchString(normalize(text[start:end])) {
+			return true
+		}
+		if end == len(text) {
+			return false
+		}
+	}
 }
+
+// maxScan bounds how much of a text the normalized check reads; retrieved
+// chunks are a few kilobytes.
+const maxScan = 1 << 20
 
 // markup is emphasis and quoting that can split an instruction's words.
 var markup = regexp.MustCompile("[*_`~>#|]+")
@@ -122,9 +164,6 @@ var markup = regexp.MustCompile("[*_`~>#|]+")
 // collapses whitespace, so "**ignore** all *previous*\ninstructions" reads
 // as the sentence it is.
 func normalize(text string) string {
-	if len(text) > maxNormalize {
-		text = text[:maxNormalize]
-	}
 	t := norm.NFKC.String(text)
 	t = strings.Map(func(r rune) rune {
 		if unicode.Is(unicode.Cf, r) {
@@ -136,7 +175,7 @@ func normalize(text string) string {
 	return strings.Join(strings.Fields(t), " ")
 }
 
-// maxNormalize bounds the text normalized for matching.
+// maxNormalize is the window the normalized check reads at a time.
 const maxNormalize = 64 << 10
 
 // Printable replaces control and format characters (bidi overrides,

@@ -3,6 +3,7 @@ package handoff
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -33,6 +34,7 @@ func TestFindCheckout(t *testing.T) {
 	gitDir := filepath.Join(main, ".git", "worktrees", "x")
 	writeFile(t, filepath.Join(gitDir, "commondir"), "../..\n")
 	writeFile(t, filepath.Join(wt, ".git"), "gitdir: "+gitDir+"\n")
+	writeFile(t, filepath.Join(gitDir, "gitdir"), filepath.Join(wt, ".git")+"\n")
 	co, ok = FindCheckout(filepath.Join(wt, "README.md"))
 	if !ok || co.Root != wt || co.Owner != "acme" || co.Repo != "widget" {
 		t.Fatalf("worktree = %+v, %v", co, ok)
@@ -40,7 +42,7 @@ func TestFindCheckout(t *testing.T) {
 
 	// A relative gitdir, an https origin and no commondir.
 	other := filepath.Join(root, "other")
-	writeFile(t, filepath.Join(other, ".gitdir-real", "config"), "[remote \"origin\"]\n\turl = https://x-access-token@github.com/Acme/Tool/\n")
+	writeFile(t, filepath.Join(other, ".gitdir-real", "config"), "[core]\n\tworktree = ..\n[remote \"origin\"]\n\turl = https://x-access-token@github.com/Acme/Tool/\n")
 	writeFile(t, filepath.Join(other, ".git"), "gitdir: .gitdir-real")
 	if co, ok := FindCheckout(filepath.Join(other, "a.md")); !ok || co.Owner != "Acme" || co.Repo != "Tool" {
 		t.Fatalf("relative gitdir = %+v, %v", co, ok)
@@ -56,8 +58,8 @@ func TestFindCheckout(t *testing.T) {
 	// A malformed .git file, and no repository at all.
 	bad := filepath.Join(root, "bad")
 	writeFile(t, filepath.Join(bad, ".git"), "not a pointer")
-	if _, ok := FindCheckout(filepath.Join(bad, "a.md")); ok {
-		t.Fatal("malformed .git accepted")
+	if co, ok := FindCheckout(filepath.Join(bad, "a.md")); !ok || !co.Anonymous || co.Owner != "" {
+		t.Fatal("a malformed .git is not an anonymous checkout")
 	}
 	if _, ok := FindCheckout(filepath.Join(t.TempDir(), "x", "a.md")); ok {
 		t.Fatal("found a checkout where there is none")
@@ -116,6 +118,7 @@ func TestCheckoutBranchesAndCommondirLayout(t *testing.T) {
 	writeFile(t, filepath.Join(wtGit, "HEAD"), "ref: refs/heads/feat/x\n")
 	wt := filepath.Join(root, "wt")
 	writeFile(t, filepath.Join(wt, ".git"), "gitdir: "+wtGit+"\n")
+	writeFile(t, filepath.Join(wtGit, "gitdir"), filepath.Join(wt, ".git")+"\n")
 	co, _ = FindCheckout(filepath.Join(wt, "a.md"))
 	if co.Owner != "acme" || co.Branch != "feat/x" || co.OnDefaultBranch() {
 		t.Fatalf("worktree = %+v", co)
@@ -131,7 +134,7 @@ func TestCheckoutBranchesAndCommondirLayout(t *testing.T) {
 		t.Fatalf("commondir spoof = %+v, %v", co, ok)
 	}
 	// Detached HEAD, and no recorded default.
-	if (Checkout{}).OnDefaultBranch() || !(Checkout{Branch: "master"}).OnDefaultBranch() || (Checkout{Branch: "dev"}).OnDefaultBranch() {
+	if (Checkout{}).OnDefaultBranch() || !(Checkout{Branch: "master", DefaultBranch: "master"}).OnDefaultBranch() || (Checkout{Branch: "dev"}).OnDefaultBranch() {
 		t.Fatal("OnDefaultBranch")
 	}
 	if symref(filepath.Join(root, "none"), "refs/") != "" {
@@ -140,5 +143,70 @@ func TestCheckoutBranchesAndCommondirLayout(t *testing.T) {
 	writeFile(t, filepath.Join(root, "bad"), "ref: refs/tags/v1\n")
 	if symref(filepath.Join(root, "bad"), "refs/heads/") != "" {
 		t.Fatal("symref outside the prefix")
+	}
+}
+
+func TestGitdirPointerMustPointBack(t *testing.T) {
+	root := t.TempDir()
+	victim := filepath.Join(root, "victim")
+	writeFile(t, filepath.Join(victim, ".git", "config"), "[remote \"origin\"]\n\turl = git@github.com:acme/widget.git\n")
+	writeFile(t, filepath.Join(victim, ".git", "HEAD"), "ref: refs/heads/main\n")
+	// A .git file naming another repository's git directory borrows nothing.
+	w := filepath.Join(root, "w")
+	writeFile(t, filepath.Join(w, ".git"), "gitdir: "+filepath.Join(victim, ".git")+"\n")
+	if co, ok := CheckoutAt(w); !ok || !co.Anonymous || co.Owner != "" || co.OnDefaultBranch() {
+		t.Fatalf("borrowed gitdir = %+v, %v", co, ok)
+	}
+	// A worktrees entry whose gitdir file points elsewhere borrows nothing either.
+	wtGit := filepath.Join(victim, ".git", "worktrees", "x")
+	writeFile(t, filepath.Join(wtGit, "commondir"), "../..\n")
+	writeFile(t, filepath.Join(wtGit, "HEAD"), "ref: refs/heads/main\n")
+	writeFile(t, filepath.Join(wtGit, "gitdir"), "/somewhere/else/.git\n")
+	w2 := filepath.Join(root, "w2")
+	writeFile(t, filepath.Join(w2, ".git"), "gitdir: "+wtGit+"\n")
+	if co, _ := CheckoutAt(w2); !co.Anonymous || co.Owner != "" {
+		t.Fatalf("no back-pointer = %+v", co)
+	}
+	// CheckoutAt never looks above its directory.
+	if _, ok := CheckoutAt(filepath.Join(victim, "docs")); ok {
+		t.Fatal("CheckoutAt walked up")
+	}
+}
+
+func TestDefaultBranchFallbacks(t *testing.T) {
+	repo := func(t *testing.T, head string, files map[string]string) Checkout {
+		root := t.TempDir()
+		writeFile(t, filepath.Join(root, ".git", "HEAD"), head)
+		for name, body := range files {
+			writeFile(t, filepath.Join(root, ".git", name), body)
+		}
+		co, _ := CheckoutAt(root)
+		return co
+	}
+	cases := []struct {
+		name, head string
+		files      map[string]string
+		ok         bool
+		reason     string
+	}{
+		{"sole local branch", "ref: refs/heads/trunk\n", map[string]string{"refs/heads/trunk": "x"}, true, ""},
+		{"packed sole branch", "ref: refs/heads/develop\n", map[string]string{"packed-refs": "# pack\nabc refs/heads/develop\n"}, true, ""},
+		{"init.defaultBranch", "ref: refs/heads/trunk\n", map[string]string{"refs/heads/trunk": "x", "refs/heads/feat": "x",
+			"config": "[init]\n\tdefaultBranch = trunk\n"}, true, ""},
+		{"main exists", "ref: refs/heads/feat\n", map[string]string{"refs/heads/main": "x", "refs/heads/feat": "x"}, false, "not the default branch main"},
+		{"unknown", "ref: refs/heads/a\n", map[string]string{"refs/heads/a": "x", "refs/heads/b": "x"}, false, "default branch is unknown"},
+		{"detached", "0123456789abcdef\n", nil, false, "detached"},
+		{"reftable", "ref: refs/heads/.invalid\n", nil, false, "reftable"},
+		{"origin HEAD wins", "ref: refs/heads/main\n", map[string]string{"refs/heads/main": "x", "refs/remotes/origin/HEAD": "ref: refs/remotes/origin/trunk\n"}, false, "not the default branch trunk"},
+	}
+	for _, c := range cases {
+		co := repo(t, c.head, c.files)
+		ok, reason := co.DefaultBranchState()
+		if ok != c.ok || !strings.Contains(reason, c.reason) {
+			t.Errorf("%s: %v %q (%+v)", c.name, ok, reason, co)
+		}
+	}
+	if ok, r := (Checkout{Anonymous: true}).DefaultBranchState(); ok || !strings.Contains(r, "layout") {
+		t.Error("anonymous")
 	}
 }

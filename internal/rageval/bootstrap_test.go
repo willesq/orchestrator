@@ -90,3 +90,37 @@ func TestSplits(t *testing.T) {
 		t.Fatal("SplitOf")
 	}
 }
+
+func TestPairingAcrossVersionsAndDuplicates(t *testing.T) {
+	c := Case{Query: "q"}
+	// A run saved before keys existed pairs by query.
+	before := Report{Results: []Result{{Query: "q", Rank: 3}}}
+	after := Report{Results: []Result{{Query: "q", Key: c.Key(), Rank: 1}, {Query: "q", Key: c.Key(), Rank: 1}}}
+	if p := Bootstrap("MRR", before, after, RR); p.N != 1 {
+		t.Fatalf("legacy pairing N = %d", p.N)
+	}
+	if ch := Compare(before, after); len(ch) != 1 || ch[0].From != 3 || ch[0].To != 1 {
+		t.Fatalf("compare = %+v", ch)
+	}
+	if (Case{Query: "x", Tags: []string{"a,b"}}).Key() == (Case{Query: "x", Tags: []string{"a", "b"}}).Key() {
+		t.Fatal("tag lists collide")
+	}
+}
+
+func TestLoadSetRejectsUnknownSplits(t *testing.T) {
+	path := t.TempDir() + "/s.jsonl"
+	if err := SaveSet(path, Set{Cases: []Case{{Query: "q", Expect: []string{"u"}, Split: "Holdout"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadSet(path); err == nil {
+		t.Fatal("a mistyped split was accepted")
+	}
+}
+
+func TestPairingWhenKeysAreSpelledAnotherWay(t *testing.T) {
+	before := Report{Results: []Result{{Query: "q", Key: "q\x00\x00\x00", Rank: 3}, {Query: "dup", Key: "a", Rank: 1}, {Query: "dup", Key: "b", Rank: 1}}}
+	after := Report{Results: []Result{{Query: "q", Key: Case{Query: "q"}.Key(), Rank: 1}, {Query: "dup", Key: "c", Rank: 2}}}
+	if p := Bootstrap("MRR", before, after, RR); p.N != 1 {
+		t.Fatalf("N = %d; a unique query pairs, an ambiguous one does not", p.N)
+	}
+}

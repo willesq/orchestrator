@@ -244,7 +244,12 @@ func printEvalReport(out io.Writer, r rageval.Report, before *rageval.Report, al
 		return
 	}
 	fmt.Fprintf(out, "\nvs saved: %s\n", metricDelta(before.Metrics, r.Metrics))
-	for _, p := range rageval.CompareMetrics(*before, r) {
+	pairs := rageval.CompareMetrics(*before, r)
+	if len(pairs) > 0 && pairs[0].N == 0 {
+		fmt.Fprintln(out, "  no case of this run is in the saved one; nothing to pair")
+		return
+	}
+	for _, p := range pairs {
 		sig := ""
 		if p.Significant() {
 			sig = "  significant"

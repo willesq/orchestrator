@@ -70,7 +70,9 @@ func SplitOf(c Case) string {
 func (c Case) Key() string {
 	tags := append([]string(nil), c.Tags...)
 	sort.Strings(tags)
-	return strings.Join([]string{c.Query, c.Scope, c.SourceType, strings.Join(tags, ",")}, "\x00")
+	// JSON, so no tag list or field can run into the next ("a,b" is not a, b).
+	b, _ := json.Marshal([]any{c.Query, c.Scope, c.SourceType, tags})
+	return string(b)
 }
 
 // Set is a golden set.
@@ -130,6 +132,9 @@ func LoadSet(path string) (Set, error) {
 	for i, c := range s.Cases {
 		if strings.TrimSpace(c.Query) == "" || len(c.Expect) == 0 {
 			return s, fmt.Errorf("%s: case %d needs a query and at least one expected source", path, i+1)
+		}
+		if c.Split != "" && c.Split != SplitTune && c.Split != SplitHoldout {
+			return s, fmt.Errorf("%s: case %d has split %q; use %q or %q", path, i+1, c.Split, SplitTune, SplitHoldout)
 		}
 	}
 	return s, nil

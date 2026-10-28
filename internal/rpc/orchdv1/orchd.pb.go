@@ -4236,9 +4236,12 @@ func (x *ListDocsResponse) GetSync() *DocsSyncState {
 }
 
 type SyncDocsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Owner         string                 `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`  // empty = every owner
-	Force         bool                   `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"` // re-clone and re-ingest everything, not just what changed
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Owner string                 `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`  // empty = every owner
+	Force bool                   `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"` // re-clone and re-ingest everything, not just what changed
+	// let the next sync of this owner remove more docs than the prune cap
+	// allows (needs owner)
+	ConfirmPrune  bool `protobuf:"varint,3,opt,name=confirm_prune,json=confirmPrune,proto3" json:"confirm_prune,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4283,6 +4286,13 @@ func (x *SyncDocsRequest) GetOwner() string {
 func (x *SyncDocsRequest) GetForce() bool {
 	if x != nil {
 		return x.Force
+	}
+	return false
+}
+
+func (x *SyncDocsRequest) GetConfirmPrune() bool {
+	if x != nil {
+		return x.ConfirmPrune
 	}
 	return false
 }
@@ -5258,8 +5268,11 @@ func (x *RemoveSourceResponse) GetPurgedChunks() int32 {
 }
 
 type RefreshSourceRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // empty = every source
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"` // empty = every source
+	// let the next refresh of this source remove more docs than the prune cap
+	// allows (needs id)
+	ConfirmPrune  bool `protobuf:"varint,2,opt,name=confirm_prune,json=confirmPrune,proto3" json:"confirm_prune,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5299,6 +5312,13 @@ func (x *RefreshSourceRequest) GetId() string {
 		return x.Id
 	}
 	return ""
+}
+
+func (x *RefreshSourceRequest) GetConfirmPrune() bool {
+	if x != nil {
+		return x.ConfirmPrune
+	}
+	return false
 }
 
 type RefreshSourceResponse struct {
@@ -7098,10 +7118,11 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x06owners\x18\x01 \x03(\v2\x12.orchd.v1.DocOwnerR\x06owners\x12'\n" +
 	"\x05files\x18\x02 \x03(\v2\x11.orchd.v1.DocFileR\x05files\x12\x1c\n" +
 	"\ttruncated\x18\x03 \x01(\bR\ttruncated\x12+\n" +
-	"\x04sync\x18\x04 \x01(\v2\x17.orchd.v1.DocsSyncStateR\x04sync\"=\n" +
+	"\x04sync\x18\x04 \x01(\v2\x17.orchd.v1.DocsSyncStateR\x04sync\"b\n" +
 	"\x0fSyncDocsRequest\x12\x14\n" +
 	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x14\n" +
-	"\x05force\x18\x02 \x01(\bR\x05force\"\x14\n" +
+	"\x05force\x18\x02 \x01(\bR\x05force\x12#\n" +
+	"\rconfirm_prune\x18\x03 \x01(\bR\fconfirmPrune\"\x14\n" +
 	"\x12GetDocsSyncRequest\"\xbd\x01\n" +
 	"\rDocsSyncState\x12\x18\n" +
 	"\arunning\x18\x01 \x01(\bR\arunning\x12\x14\n" +
@@ -7189,9 +7210,10 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\aconfirm\x18\x03 \x01(\bR\aconfirm\"b\n" +
 	"\x14RemoveSourceResponse\x12%\n" +
 	"\x0epurged_sources\x18\x01 \x01(\x05R\rpurgedSources\x12#\n" +
-	"\rpurged_chunks\x18\x02 \x01(\x05R\fpurgedChunks\"&\n" +
+	"\rpurged_chunks\x18\x02 \x01(\x05R\fpurgedChunks\"K\n" +
 	"\x14RefreshSourceRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"/\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12#\n" +
+	"\rconfirm_prune\x18\x02 \x01(\bR\fconfirmPrune\"/\n" +
 	"\x15RefreshSourceResponse\x12\x16\n" +
 	"\x06marked\x18\x01 \x01(\x05R\x06marked\"\x15\n" +
 	"\x13GetSafetyNetRequest\"8\n" +

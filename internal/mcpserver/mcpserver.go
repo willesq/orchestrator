@@ -404,13 +404,19 @@ func formatSources(resp *orchdv1.ListSourcesResponse) string {
 		fmt.Fprintf(&b, " — showing %d", len(srcs))
 	}
 	b.WriteString("\n\n")
+	// Every field is the writer's choice, so each is quoted: a newline or a
+	// fake label in one cannot pass for another line of the listing.
 	for _, s := range srcs {
-		fmt.Fprintf(&b, "%6d  %-20s %s", s.GetChunks(), s.GetSourceType(), s.GetSourceUri())
+		fmt.Fprintf(&b, "%6d  %-20s %s", s.GetChunks(), memctx.QuoteField(s.GetSourceType()), memctx.QuoteField(s.GetSourceUri()))
 		if s.GetScope() != "" {
-			fmt.Fprintf(&b, "  scope=%s", s.GetScope())
+			fmt.Fprintf(&b, "  scope=%s", memctx.QuoteField(s.GetScope()))
 		}
 		if len(s.GetTags()) > 0 {
-			fmt.Fprintf(&b, "  tags=%s", strings.Join(s.GetTags(), ","))
+			tags := make([]string, len(s.GetTags()))
+			for i, t := range s.GetTags() {
+				tags[i] = memctx.QuoteField(t)
+			}
+			fmt.Fprintf(&b, "  tags=%s", strings.Join(tags, ","))
 		}
 		if when := timeline.Describe(s.GetStartedAt(), s.GetEndedAt(), s.GetSourceType()); when != "" {
 			fmt.Fprintf(&b, "  when=%s", when)

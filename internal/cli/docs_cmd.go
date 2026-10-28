@@ -168,7 +168,7 @@ func newDocsStatusCmd() *cobra.Command {
 }
 
 func newDocsSyncCmd(cf clientFactory) *cobra.Command {
-	var background bool
+	var background, confirmPrune bool
 	cmd := &cobra.Command{
 		Use:   "sync [owner]",
 		Short: "Ask orchd to sync now (skips unchanged repos + files) and follow it",
@@ -181,10 +181,14 @@ at a time: if one is already running, this says so and exits (nothing is queued)
 				return err
 			}
 			defer closeFn()
-			return runDocsSync(c, cf, reg, ownerArg(args), false, background)
+			if confirmPrune && ownerArg(args) == "" {
+				return errors.New("--confirm-prune needs an owner")
+			}
+			return runDocsSyncOpts(c, cf, reg, &orchdv1.SyncDocsRequest{Owner: ownerArg(args), ConfirmPrune: confirmPrune}, background)
 		},
 	}
 	cmd.Flags().BoolVar(&background, "background", false, "start the sync and return without following it")
+	cmd.Flags().BoolVar(&confirmPrune, "confirm-prune", false, "let this sync remove more docs gone from a repo than the prune cap allows")
 	return cmd
 }
 
@@ -227,6 +231,11 @@ var docsStartWait = 30 * time.Second
 // fared. If orchd is unreachable, the owner is marked due (and with force its
 // caches cleared) so orchd syncs on its next scan.
 func runDocsSync(c *cobra.Command, cf clientFactory, reg *docs.Registry, owner string, force, background bool) error {
+	return runDocsSyncOpts(c, cf, reg, &orchdv1.SyncDocsRequest{Owner: owner, Force: force}, background)
+}
+
+func runDocsSyncOpts(c *cobra.Command, cf clientFactory, reg *docs.Registry, req *orchdv1.SyncDocsRequest, background bool) error {
+	owner, force := req.GetOwner(), req.GetForce()
 	out := c.OutOrStdout()
 	client, cleanup, err := cf()
 	if err != nil {
@@ -235,7 +244,7 @@ func runDocsSync(c *cobra.Command, cf clientFactory, reg *docs.Registry, owner s
 	defer cleanup()
 	callCtx, cancel := context.WithTimeout(c.Context(), 45*time.Second)
 	requested := time.Now().Add(-time.Second)
-	_, err = client.SyncDocs(callCtx, &orchdv1.SyncDocsRequest{Owner: owner, Force: force})
+	_, err = client.SyncDocs(callCtx, req)
 	cancel()
 	switch grpcstatus.Code(err) {
 	case codes.OK:

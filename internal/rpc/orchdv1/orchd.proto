@@ -583,6 +583,9 @@ message ListDocsResponse {
 message SyncDocsRequest {
   string owner = 1; // empty = every owner
   bool force = 2;   // re-clone and re-ingest everything, not just what changed
+  // let the next sync of this owner remove more docs than the prune cap
+  // allows (needs owner)
+  bool confirm_prune = 3;
 }
 
 message GetDocsSyncRequest {}
@@ -692,6 +695,9 @@ message RemoveSourceResponse {
 
 message RefreshSourceRequest {
   string id = 1; // empty = every source
+  // let the next refresh of this source remove more docs than the prune cap
+  // allows (needs id)
+  bool confirm_prune = 2;
 }
 
 message RefreshSourceResponse {

@@ -135,7 +135,8 @@ func (f *fakeClient) RemoveSource(context.Context, *orchdv1.RemoveSourceRequest,
 	return &orchdv1.RemoveSourceResponse{}, f.err
 }
 
-func (f *fakeClient) RefreshSource(context.Context, *orchdv1.RefreshSourceRequest, ...grpc.CallOption) (*orchdv1.RefreshSourceResponse, error) {
+func (f *fakeClient) RefreshSource(_ context.Context, req *orchdv1.RefreshSourceRequest, _ ...grpc.CallOption) (*orchdv1.RefreshSourceResponse, error) {
+	f.refreshReq = req
 	return &orchdv1.RefreshSourceResponse{}, f.err
 }
 
