@@ -139,8 +139,12 @@ sync indexes) stores a `file://` copy only when it differs from the synced copy:
 branch that is not merged yet stays searchable under its path, and once the synced copy matches
 it, the path copy is removed at the next edit. Local repo and owner sources are indexed under
 `checkout://<path>`, apart from the GitHub docs, and only while checked out on their default
-branch. Docs removed from a repo are deleted at the next sync; docs stored before this release
-stay undated (and unverified) until they are stored again.
+branch. Docs removed from a repo are deleted at the next sync, but no more than half of a repo's
+docs in a week: past that the source (or the docs repo) shows as needing attention, and
+`orch source refresh <id> --confirm-prune` or `orch docs sync <owner> --confirm-prune` lets
+them go. Worktrees and nested checkouts are never read as a repo's docs, and a source whose
+checkout is off its default branch shows `skipped: …` with the reason. Docs stored before this
+release stay undated (and unverified) until they are stored again.
 
 ## Migrating an older store
 

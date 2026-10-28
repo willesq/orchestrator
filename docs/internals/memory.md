@@ -114,9 +114,13 @@ again.
 source is dropped before embedding, and the remaining chunks keep contiguous indices.
 
 **Unchanged writes.** Each chunk stores `ingest_hash`, over the text and everything stored with it
-(type, scope, tags, dates, writer). A write whose hash matches the source's first chunk is skipped
-before embedding (outside a migration), so a re-fetched page or re-walked doc that did not change
-keeps its date and costs nothing.
+(type, scope, tags, dates, writer) and the settings that shape it (chunk size and overlap, markdown
+sections, the BM25 tokenizer version and constants). Under the source's write lock, a write is
+skipped before embedding (outside a migration) only when the source is whole: its first and last
+chunks carry the write's hash and it holds exactly the recorded chunk count. So a re-fetched page or
+re-walked doc that did not change keeps its date and costs nothing, while a write that failed
+part-way (a later batch, or the prune of an older version's surplus) is done again next time, and a
+chunker change is applied at each source's next write.
 
 ### Provenance
 
@@ -132,9 +136,14 @@ Every write names its **writer**, set by orchd's own code, never by a client:
 
 `writer`, `trust` and `content_hash` (the first 16 bytes of SHA-256 of the text as given, kept
 through a migration) are stored on every chunk. A client cannot claim a tier: whatever type or URI
-it declares, an Ingest RPC write is `client`. Hits return `trust`, and `GetDocument` returns
+it declares, an Ingest RPC write is `client`, and the Ingest RPC refuses (`FailedPrecondition`) to
+replace a source the docs or sources sync stored, so a client cannot hide a synced doc behind its
+own text. Hits return `trust`, and `GetDocument` returns
 `writer`, `content_hash` and `trust`. Chunks stored before this have none, and readers treat them
-as unverified. Only `repo` is shown without a "data" caution, and even it is fenced in full-text
+as unverified. A `client`, `file` or `session` chunk whose type or URI says it is a web page or tool
+output (an `http(s)`/`ftp` scheme, `//` or `www.`, after NFKC folding; type `web` or `tool_output`
+and the like) is read as `web` or `tool`: the type and URI can lower a tier, never raise it, so
+`untrusted: exclude` still drops a page a client stored. Only `repo` is shown without a "data" caution, and even it is fenced in full-text
 output (see [hooks.md](hooks.md#prompt-context)). Session content is fenced because transcripts
 carry the tool output and web pages the agent read.
 
@@ -217,12 +226,19 @@ holdout, against fusion alone (0.702 / 0.571):
 | 180 | 0.5 | 0.85 | 0.9 | 0.740 | 0.603 |
 | 180 | 0.85 | 0.85 | 0.9 | 0.723 | 0.617 |
 
-The best tune score was floor 0.7. The default is the softer floor 0.85: within 0.02 on tune, equal
+The best tune score was floor 0.7. The default is the softer floor 0.85, a choice made after
+looking at holdout sections, so the holdout split no longer judges that one choice blind: within 0.02 on tune, equal
 on holdout overall, and better on the holdout sections weighting hurts (decisions 0.661 → 0.702,
 hand-written 0.721 → 0.720). On holdout the gain comes from repo-doc questions (identifiers 0.492
 → 0.573, headings 0.453 → 0.542 against plain fusion); the hand-written questions are slightly
 lower (13 cases, not significant). A per-source cap of 1 or 2 added +0.005 on tune and +0.009 on
 holdout.
+
+**Limits of the set.** Heading and identifier cases ask for the heading or identifier verbatim, so
+they measure lexical self-retrieval more than understanding; decision cases are cut from the
+record's own text. The hand-written sections are small (22 hard, 20 legacy), too small to show a
+change of a few points. Treat the numbers as directional, and add hand-written cases (`orch rag eval
+add --section hard`) before trusting a small difference.
 
 ## Timelines
 
@@ -262,17 +278,34 @@ the hand-off unit, as a `session_record` like any session.
   type `repo_doc`, tagged `repo:<name>` and `owner:<owner>`, dated by its last commit, written as
   `sources`. A local checkout is not the GitHub repo (it may be behind, ahead or on a branch), so it
   never shares the docs sync's `repo://<owner>/<repo>` names, and two checkouts of the same name
-  never share one. Earlier versions stored these under `repo://<owner|local>/<repo>/`; those stay
-  until purged.
-- **Default branch only:** a git checkout is indexed only on its origin's default branch (from
-  `refs/remotes/origin/HEAD`; `main` or `master` when none is recorded), read from `.git` files.
-  On another branch or a detached HEAD it is left as last indexed, neither stored nor pruned, so a
-  PR checked out there never becomes the repo's docs. A plain directory is indexed as it is.
+  never share one. Earlier versions stored these under `repo://<owner|local>/<repo>/`; `orch rag
+  dedupe` lists those leftovers.
+- **Other checkouts are not walked:** an owner scan skips `<repo>.worktrees` containers (gittree's
+  layout) and linked worktrees, and every walk skips a directory below the repo that has a `.git`
+  entry of its own (a nested repository or worktree) or is named `*.worktrees`. Each checkout is
+  judged on its own branch.
+- **Default branch only:** a working tree is indexed only on its default branch, judged from the
+  `.git` at the repo directory itself (never an enclosing repository's), read from files without
+  running git. The default is, in order: `refs/remotes/origin/HEAD`; the only local branch;
+  `init.defaultBranch` from the repo's config when such a branch exists; `main` or `master` when one
+  exists. On another branch, a detached HEAD, an unknown default, an unreadable HEAD (a reftable
+  repository) or a `.git` that does not follow git's layout, the repo is left as last indexed,
+  neither stored nor pruned, and the source's status says so (`skipped: on branch X, not the
+  default branch Y`; an owner source lists them after `ok; skipped N:`). A plain directory is
+  indexed as it is. A `.git` file is believed only when it points at `<common>/worktrees/<name>`
+  whose `gitdir` file points back at it, or at a git directory whose `core.worktree` names this
+  directory.
 - **Removed files:** after a complete walk, the sources this refresh wrote under the repo's
-  `checkout://` prefix (listed by `writer = sources` in the store) that the walk did not find are
-  deleted. An agent's note under the prefix is never a candidate. A walk that found no markdown,
-  could not read a directory, or would delete more than half of what is stored (beyond 5 docs)
-  deletes nothing, and a failed listing disables the step.
+  `checkout://` prefix (listed once per refresh by `writer = sources`, which has a payload index)
+  that the walk did not find are deleted. An agent's note under the prefix is never a candidate. A
+  walk that found no markdown or could not read a directory deletes nothing, and a failed listing
+  disables the step.
+- **Prune cap** (`internal/prunecap`, table `prune_state`): deletions under one prefix are capped at
+  half (at least 2) of what was stored when a 7-day window began, counted across scans, so the cap
+  cannot be walked down a half at a time. Past it nothing is deleted and the status turns
+  `attention: ...; to remove them run: orch source refresh <id> --confirm-prune` (counted in `orch
+  status`, red in the app). The confirmation (RPC `RefreshSource.confirm_prune`, operator-only) lets
+  the next prune through and starts a new window.
 - **Validation** (`sources.Validate`, used by `orch source add` and the `SaveSource` RPC):
   - a `web` URI is an `http`/`https` URL with a host and no credentials;
   - a `repo` URI is an absolute path, cleaned;
@@ -286,9 +319,11 @@ the hand-off unit, as a `session_record` like any session.
 - **Removal** unregisters the source and keeps what it indexed. `RemoveSource` with `purge` (and
   `confirm`) also deletes that content, before unregistering so a failed purge can be retried:
   - `web`: the URL's content.
-  - `repo` and `owner`: `repo_doc` content under the source's `repo://` prefix that carries its
-    `repo:<name>` or `owner:<name>` tag. Content of an owner the docs registry tracks, or with a
-    row in `doc_hashes`, is kept.
+  - `repo` and `owner`: `checkout://` docs written by the sources refresh that carry the source's
+    tag, under the repo's resolved path (a repo source) or in a `/<owner>/<repo>/` segment pair
+    matching the doc's repo tag (an owner source); plus `repo_doc` content earlier versions stored
+    under the source's `repo://` prefix with its tag. Content of an owner the docs registry tracks,
+    or with a row in `doc_hashes`, is kept.
   - It is refused for a repo source that shares its directory name with another (they share
     content), and for a stored row that fails validation (from before it existed).
   - A refresh running during the purge can store a source's docs again; purge again to remove them.
@@ -296,10 +331,14 @@ the hand-off unit, as a `session_record` like any session.
 **Docs registry** (`orch docs add <owner>`, every 6 h): list the owner's repos with
 `gh api graphql` (skipping archived and forks by default), skip repos whose default-branch HEAD is
 unchanged, `gh repo clone --depth 1` into `<data>/repos`, and store each markdown file whose
-SHA-256 changed (hash saved only after a successful store), dated by the clone's commit. Docs with
-a hash under the repo's `repo://` prefix that the clone no longer has are deleted, with their
-hashes (not when the clone has no markdown at all, a directory could not be read, or more than
-half of its docs, beyond 5, would go at once). Commit dates are read only when a doc changed. Clones use
+SHA-256 changed (hash saved only after a successful store), dated by the clone's commit. A file is
+skipped as unchanged only while its stored copy is still this sync's (writer `docs`, same content
+hash), and an unchanged repo is synced again when another writer has replaced one of its docs, so
+a client's overwrite is restored. Docs with a hash under the repo's `repo://` prefix that the clone
+no longer has are deleted, with their hashes (not when the clone has no markdown or a directory
+could not be read), under the same prune cap: a refused prune leaves the repo `error` with the
+reason and `orch docs sync <owner> --confirm-prune` (RPC `SyncDocs.confirm_prune`), and keeps its
+previous HEAD so every sync retries it. Commit dates are read only when a doc changed. Clones use
 whatever protocol the user's gh is configured for (SSH or HTTPS).
 
 - **One sync at a time:** every docs sync runs in orchd: its scheduled scan, and `orch docs sync`

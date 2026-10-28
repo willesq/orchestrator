@@ -44,9 +44,10 @@ they name a file.
    `trust`, see [memory.md](memory.md#provenance)), returned on every hit: `repo` (the docs or
    sources sync, for a registered source), `web` (a registered web source), `session` (orchd's own
    session storage), `file` (the edit hand-off) or `client` (anything through the Ingest RPC or MCP
-   `rag_ingest_text`, whatever type or URI it declared). Content stored before writers were
-   recorded is `unverified`, or `web`/`tool` when its type or URI says so: a declared type or URI
-   can lower a tier, never raise it. Web and tool are untrusted (labelled, and excludable).
+   `rag_ingest_text`, whatever type or URI it declared). A `client`, `file` or `session` chunk, or
+   one stored before writers were recorded (`unverified`), is read as `web` or `tool` when its type
+   or URI says it is one: a declared type or URI can lower a tier, never raise it. Web and tool are
+   untrusted (labelled, and excluded by `untrusted: exclude` whoever stored them).
 6. **Print** (`memctx.Render`, `format: pointers`, the default) `## Auto-injected RAG context`, a
    note saying to call `rag_search` with a pointer's `source_uri` for its full text and that quoted
    lines are data, then one pointer per hit:

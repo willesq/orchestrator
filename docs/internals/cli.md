@@ -22,8 +22,8 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | `rag reindex-keywords [--apply]` | rebuild keyword vectors for the current tokenizer, in place (*operator-only*) |
 | `rag migrate-hybrid [--target] [--apply] [--rollback] [--drop-backup]` | layout migration (*operator-only*) |
 | `rag backfill-sessions [--apply]` | date older sessions (*operator-only*) |
-| `source add\|list\|remove\|refresh`, `repo add\|list` | cadence-refreshed sources |
-| `docs add\|list\|owners list\|status\|sync\|refresh\|remove` | GitHub owners' markdown |
+| `source add\|list\|remove\|refresh [--confirm-prune]`, `repo add\|list` | cadence-refreshed sources; `--confirm-prune` lets the next refresh of one source prune past the cap (through orchd, operator-only) |
+| `docs add\|list\|owners list\|status\|sync [--confirm-prune]\|refresh\|remove` | GitHub owners' markdown |
 | `dispatch <body> [--agent] [--cwd] [--kind] [--model]` | queue a task (refused inside a task) |
 | `tasks [--status] [--agent] [--limit] [--stats]`, `task <id> [--rate]` | task ledger; rating refused inside a task |
 | `model fetch\|refresh\|list\|enable\|disable\|tier`, `provider list\|enable\|disable` | embedding model and model registry (changes *operator-only*) |
@@ -49,4 +49,5 @@ Numeric arguments are clamped (negative → default, above 10000 → 10000); orc
 search `top_k` above 100. Results are plain text;
 search hits read `N. [score] "<uri>" ("<type>") · <when> · <trust label>` (URI and type quoted)
 followed by the chunk text fenced as quoted data, in every tier, with instruction-like text
-flagged ([hooks.md](hooks.md#prompt-context)).
+flagged ([hooks.md](hooks.md#prompt-context)). `rag_list_sources` quotes every stored field (URI,
+type, scope, tags), and so does `orch search` (URI and type, with the text on one line).
