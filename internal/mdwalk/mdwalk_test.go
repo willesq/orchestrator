@@ -146,3 +146,41 @@ func TestOwnFilesSkipsOtherCheckouts(t *testing.T) {
 		t.Fatal("IsWorktreesDir")
 	}
 }
+
+func TestSymlinksOutOfTheTreeAreNotFollowed(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	_ = os.WriteFile(outside, []byte("TOP SECRET"), 0o600)
+	root := t.TempDir()
+	_ = os.WriteFile(filepath.Join(root, "real.md"), []byte("x"), 0o644)
+	if err := os.Symlink(outside, filepath.Join(root, "notes.md")); err != nil {
+		t.Skip(err)
+	}
+	_ = os.Symlink(filepath.Join(root, "real.md"), filepath.Join(root, "alias.md"))
+	_ = os.Symlink(filepath.Join(root, "missing"), filepath.Join(root, "dangling.md"))
+	// Inside the tree, but not markdown, or where the walk never goes.
+	_ = os.WriteFile(filepath.Join(root, ".env"), []byte("TOKEN=x"), 0o600)
+	_ = os.Symlink(filepath.Join(root, ".env"), filepath.Join(root, "env.md"))
+	for _, dir := range []string{".git", "node_modules", "nested/.git"} {
+		_ = os.MkdirAll(filepath.Join(root, dir), 0o755)
+	}
+	_ = os.WriteFile(filepath.Join(root, ".git", "config.md"), []byte("url"), 0o600)
+	_ = os.Symlink(filepath.Join(root, ".git", "config.md"), filepath.Join(root, "gitcfg.md"))
+	_ = os.WriteFile(filepath.Join(root, "node_modules", "pkg.md"), []byte("x"), 0o600)
+	_ = os.Symlink(filepath.Join(root, "node_modules", "pkg.md"), filepath.Join(root, "dep.md"))
+	_ = os.WriteFile(filepath.Join(root, "nested", "other.md"), []byte("x"), 0o600)
+	_ = os.Symlink(filepath.Join(root, "nested", "other.md"), filepath.Join(root, "other-link.md"))
+	for name, c := range map[string]struct {
+		walk func(string, []string, func(string)) bool
+		want string
+	}{
+		// FilesComplete walks into nested checkouts, so a link to one is fine.
+		"FilesComplete": {FilesComplete, "alias.md,other.md,other-link.md,real.md"},
+		"OwnFiles":      {OwnFiles, "alias.md,real.md"},
+	} {
+		var got []string
+		c.walk(root, []string{"node_modules"}, func(p string) { got = append(got, filepath.Base(p)) })
+		if strings.Join(got, ",") != c.want {
+			t.Errorf("%s walked %v, want %s", name, got, c.want)
+		}
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -47,10 +48,23 @@ func (s *server) SyncDocs(ctx context.Context, req *orchdv1.SyncDocsRequest) (*o
 			if s.prune == nil {
 				return grpcstatus.Error(codes.Unavailable, "prune guard unavailable")
 			}
-			if err := s.prune.Confirm(ctx, prunecap.DocsKey(owner)); err != nil {
+			granted, err := s.prune.Confirm(ctx, prunecap.DocsKey(owner))
+			if errors.Is(err, prunecap.ErrNothingRefused) {
+				return grpcstatus.Errorf(codes.FailedPrecondition, "%s has no refused prune to confirm", owner)
+			}
+			if err != nil {
 				return err
 			}
-			log.Printf("docs: the next sync of %s may prune past the cap (confirmed by the operator)", owner)
+			// A refused repo kept its new HEAD; forget it so this sync walks
+			// the repo again and uses the grant.
+			for _, p := range granted {
+				if repo, ok := docsRepoOf(p, owner); ok {
+					if err := s.docsReg.ForgetRepoSHA(ctx, owner, repo); err != nil {
+						return err
+					}
+				}
+			}
+			log.Printf("docs: confirmed for an hour, by the operator: the refused prunes of %s (%s)", owner, strings.Join(granted, ", "))
 		}
 		if req.GetForce() {
 			if err := s.docsReg.ClearCaches(ctx, owner); err != nil {
@@ -104,4 +118,14 @@ func docsSyncState(p docs.Progress) *orchdv1.DocsSyncState {
 		Running: p.Running, Owner: p.Owner, StartedAt: unixOrZero(p.StartedAt), FinishedAt: unixOrZero(p.FinishedAt),
 		Done: clampInt32(p.Done), Total: clampInt32(p.Total), Repo: p.Repo,
 	}
+}
+
+// docsRepoOf reads the repo from a docs prefix, repo://<owner>/<repo>/.
+func docsRepoOf(prefix, owner string) (string, bool) {
+	rest, ok := strings.CutPrefix(prefix, "repo://"+owner+"/")
+	if !ok {
+		return "", false
+	}
+	repo, _, ok := strings.Cut(rest, "/")
+	return repo, ok && repo != ""
 }

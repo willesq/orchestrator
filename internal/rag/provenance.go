@@ -113,6 +113,20 @@ func (s *Service) Copy(ctx context.Context, uri string) (StoredCopy, bool, error
 	return StoredCopy{Writer: str(p[fieldWriter]), Trust: str(p[fieldTrust]), ContentHash: str(p[fieldContentHash])}, true, nil
 }
 
+// ensureWriterIndex adds the writer payload index until one attempt succeeds.
+func (s *Service) ensureWriterIndex(ctx context.Context) {
+	s.writerMu.Lock()
+	defer s.writerMu.Unlock()
+	if s.writerIndexed {
+		return
+	}
+	if err := s.active().EnsureIndex(ctx, fieldWriter); err != nil {
+		log.Printf("rag: indexing %s: %v", fieldWriter, err)
+		return
+	}
+	s.writerIndexed = true
+}
+
 // SourcesWrittenBy lists the source URIs under prefix that writer stored.
 // The writer is matched in the store, so the scan returns only its chunks.
 func (s *Service) SourcesWrittenBy(ctx context.Context, prefix, writer string) ([]string, error) {
@@ -120,12 +134,9 @@ func (s *Service) SourcesWrittenBy(ctx context.Context, prefix, writer string) (
 		return nil, fmt.Errorf("writer is required")
 	}
 	// Collections made before writers were recorded lack the writer index;
-	// it is added once per process, so the filter is served from it.
-	s.writerIndex.Do(func() {
-		if err := s.active().EnsureIndex(ctx, fieldWriter); err != nil {
-			log.Printf("rag: indexing %s: %v", fieldWriter, err)
-		}
-	})
+	// it is added once per process, so the filter is served from it. A failed
+	// attempt is retried on the next call rather than remembered.
+	s.ensureWriterIndex(ctx)
 	filter := EqFilter(fieldWriter, writer)
 	seen := map[string]bool{}
 	var out []string

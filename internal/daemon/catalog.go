@@ -288,10 +288,14 @@ func (s *server) RefreshSource(ctx context.Context, req *orchdv1.RefreshSourceRe
 			if s.prune == nil {
 				return nil, grpcstatus.Error(codes.Unavailable, "prune guard unavailable")
 			}
-			if err := s.prune.Confirm(ctx, prunecap.SourceKey(id)); err != nil {
+			granted, err := s.prune.Confirm(ctx, prunecap.SourceKey(id))
+			if errors.Is(err, prunecap.ErrNothingRefused) {
+				return nil, grpcstatus.Errorf(codes.FailedPrecondition, "%s has no refused prune to confirm", id)
+			}
+			if err != nil {
 				return nil, err
 			}
-			log.Printf("orchd: the next refresh of %s may prune past the cap (confirmed by the operator)", id)
+			log.Printf("orchd: confirmed for an hour, by the operator: the refused prunes of %s (%s)", id, strings.Join(granted, ", "))
 		}
 	} else {
 		list, err := s.sourcesReg.List(ctx)

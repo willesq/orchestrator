@@ -144,11 +144,11 @@ func TestSyncRestoresADocAClientOverwrote(t *testing.T) {
 // refusingGuard refuses every prune.
 type refusingGuard struct{ keys []string }
 
-func (g *refusingGuard) Allow(_ context.Context, key, _ string, _, _ int) (bool, string, error) {
+func (g *refusingGuard) Decide(_ context.Context, key, _ string, _, _ int) (bool, string, error) {
 	g.keys = append(g.keys, key)
 	return false, "2 docs are gone", nil
 }
-func (g *refusingGuard) Done(context.Context, string, int) error { return nil }
+func (g *refusingGuard) Settled(context.Context, string, int) error { return nil }
 
 func TestRefusedPruneShowsOnTheRepo(t *testing.T) {
 	git := &fakeGit{layout: map[string]map[string]string{"docs": {"A.md": "a", "B.md": "b", "C.md": "c"}}}
@@ -165,7 +165,22 @@ func TestRefusedPruneShowsOnTheRepo(t *testing.T) {
 	repos, _ := reg.ListRepos(ctx, "acme")
 	if res.Status != "partial" || len(ing.deleted) != 0 || len(repos) != 1 || repos[0].Status != "error" ||
 		!strings.Contains(repos[0].Error, "prune refused: 2 docs are gone") || !strings.Contains(repos[0].Error, "orch docs sync acme --confirm-prune") ||
-		repos[0].HeadSHA != "s1" || g.keys[0] != "docs|acme" {
+		repos[0].HeadSHA != "s2" || g.keys[0] != "docs|acme" {
 		t.Fatalf("res %+v, deleted %v, repos %+v", res, ing.deleted, repos)
+	}
+	// The new HEAD is recorded, so the refused repo is not cloned again on
+	// every sync while it waits for the operator.
+	git.synced = nil
+	SyncOwner(ctx, reg, o, ing, opts)
+	if len(git.synced) != 0 || len(g.keys) != 1 {
+		t.Fatalf("refused repo re-synced: %v, decisions %v", git.synced, g.keys)
+	}
+	// Confirming forgets the HEAD, so the next sync walks it again.
+	if err := reg.ForgetRepoSHA(ctx, "acme", "docs"); err != nil {
+		t.Fatal(err)
+	}
+	SyncOwner(ctx, reg, o, ing, opts)
+	if len(git.synced) != 1 || len(g.keys) != 2 {
+		t.Fatalf("forgotten repo not re-synced: %v, decisions %v", git.synced, g.keys)
 	}
 }

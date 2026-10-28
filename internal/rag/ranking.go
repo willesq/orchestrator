@@ -116,7 +116,13 @@ func rank(cands []candidate, p RankingParams, profile string, perSource, topK in
 		if cands[i].score != cands[j].score {
 			return cands[i].score > cands[j].score
 		}
-		return cands[i].cosine > cands[j].cosine
+		// A NaN cosine compares false both ways, which breaks the sort's
+		// ordering; it ranks below every number instead.
+		ci, cj := float64(cands[i].cosine), float64(cands[j].cosine)
+		if math.IsNaN(cj) {
+			return !math.IsNaN(ci)
+		}
+		return ci > cj
 	})
 	if perSource > 0 {
 		cands = capSources(cands, perSource)

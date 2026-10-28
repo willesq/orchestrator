@@ -95,8 +95,10 @@ type Service struct {
 	PerSource int
 	// now is the clock ranking measures age by; nil is time.Now.
 	now func() time.Time
-	// writerIndex adds the writer payload index to an older collection once.
-	writerIndex sync.Once
+	// writerIndexed records that the writer payload index was added to an
+	// older collection; writerMu guards it so a failure is retried.
+	writerMu      sync.Mutex
+	writerIndexed bool
 
 	fallbackLog rateLog
 	// progress is set while a migration copies sources.

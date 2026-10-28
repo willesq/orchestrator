@@ -46,8 +46,8 @@ merged) is kept.
 
 It also lists the repo:// docs earlier versions stored for local repo and owner
 sources (under repo://local/, or a registered owner the docs sync does not track),
-with no writer recorded and no docs-sync hash: the refresh now keeps those under
-checkout:// and no longer updates or prunes the old copies.
+with no writer recorded and no docs-sync hash, once the refresh has stored their
+checkout:// replacement: the old copies are no longer updated or pruned.
 
 Without --apply it lists them and changes nothing. Edits made after this release no longer
 create such copies; this cleans up those made before.`,
@@ -80,7 +80,7 @@ create such copies; this cleans up those made before.`,
 			if err != nil {
 				return err
 			}
-			legacy, err := planLegacy(ctx, client, conn)
+			legacy, err := planLegacy(ctx, client, conn, s.Sources.KnownRoots)
 			if err != nil {
 				return err
 			}
@@ -219,11 +219,19 @@ func fileHash(path string) string {
 // were), and the docs sync has no hash for it (so it is not a synced doc),
 // under repo://local/ or under the owner of a registered owner source that
 // the docs sync does not track.
-func planLegacy(ctx context.Context, client orchdv1.OrchdClient, conn *sql.DB) ([]duplicate, error) {
+func planLegacy(ctx context.Context, client orchdv1.OrchdClient, conn *sql.DB, roots []string) ([]duplicate, error) {
 	if conn == nil {
 		return nil, nil
 	}
 	dreg, sreg := docs.NewRegistry(conn), sources.NewRegistry(conn)
+	srcs, _ := sreg.List(ctx)
+	home, _ := os.UserHomeDir()
+	roots = append([]string(nil), roots...)
+	for i, r := range roots {
+		if home != "" && (r == "~" || strings.HasPrefix(r, "~/")) {
+			roots[i] = filepath.Join(home, strings.TrimPrefix(r, "~"))
+		}
+	}
 	prefixes := []string{"repo://local/"}
 	tracked := map[string]bool{}
 	if owners, err := dreg.ListOwners(ctx); err == nil {
@@ -231,11 +239,9 @@ func planLegacy(ctx context.Context, client orchdv1.OrchdClient, conn *sql.DB) (
 			tracked[strings.ToLower(o.Owner)] = true
 		}
 	}
-	if srcs, err := sreg.List(ctx); err == nil {
-		for _, src := range srcs {
-			if src.Kind == sources.KindOwner && !tracked[strings.ToLower(src.URI)] {
-				prefixes = append(prefixes, "repo://"+src.URI+"/")
-			}
+	for _, src := range srcs {
+		if src.Kind == sources.KindOwner && !tracked[strings.ToLower(src.URI)] {
+			prefixes = append(prefixes, "repo://"+src.URI+"/")
 		}
 	}
 	var out []duplicate
@@ -253,12 +259,68 @@ func planLegacy(ctx context.Context, client orchdv1.OrchdClient, conn *sql.DB) (
 			if err != nil || d.GetWriter() != "" {
 				continue
 			}
+			// Only once its replacement exists: the old copy may be the only
+			// one of a repo whose refresh is skipped, moved or unregistered.
+			replacement := ""
+			for _, cu := range legacyReplacements(uri, srcs, roots) {
+				if r, err := client.GetDocument(ctx, &orchdv1.GetDocumentRequest{SourceUri: cu}); err == nil && r.GetWriter() == rag.WriterSources {
+					replacement = cu
+					break
+				}
+			}
+			if replacement == "" {
+				continue
+			}
 			out = append(out, duplicate{URI: uri, Chunks: src.GetChunks(),
-				Reason: "stored by an earlier sources refresh; the refresh now keeps this repo's docs under checkout://"})
+				Reason: "stored by an earlier sources refresh; the refresh now keeps it as " + replacement})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].URI < out[j].URI })
 	return out, nil
+}
+
+// legacyReplacements are the checkout:// URIs the sources refresh now gives
+// the doc an earlier version stored as repo://<owner|local>/<repo>/<path>.
+func legacyReplacements(uri string, srcs []sources.Source, roots []string) []string {
+	parts := strings.SplitN(strings.TrimPrefix(uri, "repo://"), "/", 3)
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+		return nil
+	}
+	owner, repo, rel := parts[0], parts[1], parts[2]
+	for _, seg := range strings.Split(rel, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return nil
+		}
+	}
+	rel = filepath.FromSlash(rel)
+	// Repo sources are told apart only by directory name, so two that share
+	// one would share the old URI: with more than one candidate, the copy may
+	// be the other's, and is kept.
+	var out []string
+	for _, src := range srcs {
+		switch src.Kind {
+		case sources.KindRepo:
+			label := src.Owner
+			if label == "" {
+				label = "local"
+			}
+			if label == owner && filepath.Base(filepath.Clean(src.URI)) == repo {
+				out = append(out, sources.CheckoutURI(filepath.Join(sources.ResolvePath(src.URI), rel)))
+			}
+		case sources.KindOwner:
+			if src.URI == owner {
+				for _, root := range roots {
+					if info, err := os.Stat(filepath.Join(root, owner, repo)); err == nil && info.IsDir() {
+						out = append(out, sources.CheckoutURI(filepath.Join(sources.ResolvePath(filepath.Join(root, owner, repo)), rel)))
+					}
+				}
+			}
+		}
+	}
+	if len(out) != 1 {
+		return nil
+	}
+	return out
 }
 
 // sameContent reports whether two stored copies hold the same text: by their

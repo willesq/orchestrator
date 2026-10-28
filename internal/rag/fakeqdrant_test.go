@@ -24,6 +24,9 @@ type fakeQdrant struct {
 	failUpsertNo map[string]int
 	// failVectors makes the next n vector updates fail.
 	failVectors int
+	// failIndexes makes the next n payload-index requests fail; indexes
+	// counts them.
+	failIndexes, indexes int
 }
 
 type fakeCollection struct {
@@ -97,6 +100,12 @@ func (f *fakeQdrant) serve(w http.ResponseWriter, r *http.Request) {
 		delete(f.collections, name)
 		writeJSON(w, map[string]any{"result": true})
 	case action == "index" && r.Method == http.MethodPut:
+		f.indexes++
+		if f.failIndexes > 0 {
+			f.failIndexes--
+			http.Error(w, "injected failure", http.StatusInternalServerError)
+			return
+		}
 		writeJSON(w, map[string]any{"result": map[string]any{"status": "acknowledged"}})
 	case action == "points" && r.Method == http.MethodPut:
 		if f.failUpserts[name] > 0 {

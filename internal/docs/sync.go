@@ -171,11 +171,12 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 		networkRun = 0
 		files, refused := ingestRepoMarkdown(ctx, reg, dest, o, rp.Name, ing, opts)
 		if refused != "" {
-			// The repo keeps its previous HEAD, so every sync retries it, and
-			// shows as failing until the operator confirms the prune.
+			// The repo records its new HEAD, so it is not cloned again until
+			// HEAD moves or the operator confirms the prune (which clears it),
+			// and shows as failing meanwhile.
 			_ = reg.SetRepoState(ctx, RepoState{
-				Owner: o.Owner, Repo: rp.Name, HeadSHA: prev, LastSynced: now(), Files: files, Status: "error",
-				Error: "prune refused: " + refused + "; to remove them run: orch docs sync " + o.Owner + " --confirm-prune",
+				Owner: o.Owner, Repo: rp.Name, HeadSHA: rp.HeadSHA, LastSynced: now(), Files: files, Status: "error",
+				Error: "prune refused: " + refused + "; the operator can confirm it with orch docs sync " + o.Owner + " --confirm-prune",
 			})
 			res.Failed++
 			report(opts, i+1, len(todo), rp.Name)
@@ -383,8 +384,8 @@ func overwritten(ctx context.Context, reg *Registry, ing Ingester, owner, repo s
 
 // PruneGuard bounds deletions (implemented by *prunecap.Guard).
 type PruneGuard interface {
-	Allow(ctx context.Context, key, prefix string, stored, gone int) (bool, string, error)
-	Done(ctx context.Context, prefix string, n int) error
+	Decide(ctx context.Context, key, prefix string, stored, gone int) (bool, string, error)
+	Settled(ctx context.Context, prefix string, count int) error
 }
 
 // minPruneCap is how many docs a sync may always remove at once.
@@ -411,12 +412,15 @@ func pruneRemoved(ctx context.Context, reg *Registry, ing Ingester, opts SyncOpt
 		}
 	}
 	if len(gone) == 0 {
+		if opts.Guard != nil {
+			_ = opts.Guard.Settled(ctx, prefix, len(known))
+		}
 		return ""
 	}
 	// A clone that suddenly lacks many of its docs is more likely broken
 	// than a repo that lost them.
 	if opts.Guard != nil {
-		allowed, why, err := opts.Guard.Allow(ctx, prunecap.DocsKey(o.Owner), prefix, len(known), len(gone))
+		allowed, why, err := opts.Guard.Decide(ctx, prunecap.DocsKey(o.Owner), prefix, len(known), len(gone))
 		if err != nil {
 			log.Printf("docs: %s: prune guard: %v; not pruning", prefix, err)
 			return ""
@@ -431,7 +435,7 @@ func pruneRemoved(ctx context.Context, reg *Registry, ing Ingester, opts SyncOpt
 	removed := 0
 	defer func() {
 		if opts.Guard != nil {
-			_ = opts.Guard.Done(ctx, prefix, removed)
+			_ = opts.Guard.Settled(ctx, prefix, len(known)-removed)
 		}
 	}()
 	for _, uri := range gone {

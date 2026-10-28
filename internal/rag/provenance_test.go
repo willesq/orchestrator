@@ -160,3 +160,25 @@ func TestAPartialWriteIsDoneAgain(t *testing.T) {
 }
 
 func inf() float64 { z := 0.0; return 1 / z }
+
+func TestWriterIndexIsRetriedAfterAFailure(t *testing.T) {
+	svc, f := datedService(t)
+	ctx := context.Background()
+	if _, err := svc.IngestText(ctx, "body", Meta{SourceURI: "checkout:///c/a.md", SourceType: "repo_doc", Writer: WriterSources}); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	f.failIndexes, f.indexes = 1, 0
+	f.mu.Unlock()
+	for i := 0; i < 3; i++ {
+		if _, err := svc.SourcesWrittenBy(ctx, "checkout://", WriterSources); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	// The failed attempt, then one success, then nothing more.
+	if f.indexes != 2 {
+		t.Fatalf("index requests = %d, want 2", f.indexes)
+	}
+}

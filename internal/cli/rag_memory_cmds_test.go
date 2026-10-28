@@ -277,22 +277,44 @@ func TestConfirmPruneFlags(t *testing.T) {
 }
 
 func TestDedupeListsLegacyLocalSourceCopies(t *testing.T) {
-	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	cfgDir, roots := t.TempDir(), t.TempDir()
+	roots = sources.ResolvePath(roots)
+	t.Setenv("ORCH_CONFIG_DIR", cfgDir)
 	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("sources:\n  known_roots: [\""+roots+"\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	notes := filepath.Join(roots, "local", "notes")
+	if err := os.MkdirAll(filepath.Join(roots, "mine", "proj"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dupA, dupB := filepath.Join(roots, "a", "dup"), filepath.Join(roots, "b", "dup")
 	conn, err := db.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
 	_ = sources.NewRegistry(conn).Add(ctx, sources.Source{Kind: sources.KindOwner, URI: "mine", RefreshSecs: 3600})
+	_ = sources.NewRegistry(conn).Add(ctx, sources.Source{Kind: sources.KindRepo, URI: notes, RefreshSecs: 3600})
+	_ = sources.NewRegistry(conn).Add(ctx, sources.Source{Kind: sources.KindRepo, URI: dupA, RefreshSecs: 3600})
+	_ = sources.NewRegistry(conn).Add(ctx, sources.Source{Kind: sources.KindRepo, URI: dupB, RefreshSecs: 3600})
 	_ = docs.NewRegistry(conn).SetHash(ctx, "repo://local/notes/SYNCED.md", "h", 1)
 	_ = conn.Close()
+	notesCopy := sources.CheckoutURI(filepath.Join(notes, "README.md"))
+	ownerCopy := sources.CheckoutURI(filepath.Join(roots, "mine", "proj", "README.md"))
 	sc := &storeClient{fakeClient: &fakeClient{}, docs: map[string]*orchdv1.Document{
-		"repo://local/notes/README.md": {SourceUri: "repo://local/notes/README.md", SourceType: "repo_doc", Text: "old"},
-		"repo://local/notes/SYNCED.md": {SourceUri: "repo://local/notes/SYNCED.md", SourceType: "repo_doc", Text: "has a hash"},
-		"repo://local/notes/NEW.md":    {SourceUri: "repo://local/notes/NEW.md", SourceType: "repo_doc", Writer: "client", Text: "a client's"},
-		"repo://mine/proj/README.md":   {SourceUri: "repo://mine/proj/README.md", SourceType: "repo_doc", Text: "old owner copy"},
-		"repo://other/proj/README.md":  {SourceUri: "repo://other/proj/README.md", SourceType: "repo_doc", Text: "not ours"},
+		notesCopy:                    {SourceUri: notesCopy, SourceType: "repo_doc", Writer: "sources", Text: "new"},
+		ownerCopy:                    {SourceUri: ownerCopy, SourceType: "repo_doc", Writer: "sources", Text: "new owner copy"},
+		"repo://local/notes/ONLY.md": {SourceUri: "repo://local/notes/ONLY.md", SourceType: "repo_doc", Text: "no replacement yet"},
+		// Two repo sources named dup: the old copy may be either's, so it stays.
+		sources.CheckoutURI(filepath.Join(dupB, "README.md")): {SourceUri: sources.CheckoutURI(filepath.Join(dupB, "README.md")), Writer: "sources", Text: "b"},
+		"repo://local/dup/README.md":                          {SourceUri: "repo://local/dup/README.md", SourceType: "repo_doc", Text: "a or b"},
+		"repo://local/notes/../x.md":                          {SourceUri: "repo://local/notes/../x.md", SourceType: "repo_doc", Text: "dot segment"},
+		"repo://local/notes/README.md":                        {SourceUri: "repo://local/notes/README.md", SourceType: "repo_doc", Text: "old"},
+		"repo://local/notes/SYNCED.md":                        {SourceUri: "repo://local/notes/SYNCED.md", SourceType: "repo_doc", Text: "has a hash"},
+		"repo://local/notes/NEW.md":                           {SourceUri: "repo://local/notes/NEW.md", SourceType: "repo_doc", Writer: "client", Text: "a client's"},
+		"repo://mine/proj/README.md":                          {SourceUri: "repo://mine/proj/README.md", SourceType: "repo_doc", Text: "old owner copy"},
+		"repo://other/proj/README.md":                         {SourceUri: "repo://other/proj/README.md", SourceType: "repo_doc", Text: "not ours"},
 	}}
 	out, err := run(func() (orchdv1.OrchdClient, func(), error) { return sc, func() {}, nil }, "", "rag", "dedupe")
 	if err != nil {
@@ -303,7 +325,7 @@ func TestDedupeListsLegacyLocalSourceCopies(t *testing.T) {
 			t.Errorf("missing %q:\n%s", want, out)
 		}
 	}
-	for _, kept := range []string{"SYNCED.md", "NEW.md", "repo://other/"} {
+	for _, kept := range []string{"SYNCED.md", "NEW.md", "ONLY.md", "repo://other/", "repo://local/dup/", "x.md"} {
 		if strings.Contains(out, kept) {
 			t.Errorf("%s listed:\n%s", kept, out)
 		}

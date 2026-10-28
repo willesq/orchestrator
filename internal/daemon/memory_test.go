@@ -14,6 +14,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
+	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/handoff"
 	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/rag"
@@ -309,11 +310,19 @@ func TestConfirmPruneRPCs(t *testing.T) {
 		t.Errorf("no guard err = %v", err)
 	}
 	s.prune = prunecap.New(conn)
+	// Nothing refused: nothing to confirm, and no grant waits for later.
+	if _, err := s.RefreshSource(ctx, &orchdv1.RefreshSourceRequest{Id: src.GetId(), ConfirmPrune: true}); grpcstatus.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("confirm with nothing refused err = %v", err)
+	}
+	const srcPrefix = "checkout:///code/x/"
+	if ok, _, err := s.prune.Decide(ctx, prunecap.SourceKey(src.GetId()), srcPrefix, 10, 9); ok || err != nil {
+		t.Fatalf("seed refusal: %v %v", ok, err)
+	}
 	if _, err := s.RefreshSource(ctx, &orchdv1.RefreshSourceRequest{Id: src.GetId(), ConfirmPrune: true}); err != nil {
 		t.Fatal(err)
 	}
 	var n int
-	_ = conn.QueryRow(`SELECT count(*) FROM prune_confirm WHERE key=?`, prunecap.SourceKey(src.GetId())).Scan(&n)
+	_ = conn.QueryRow(`SELECT count(*) FROM prune_confirm WHERE prefix=?`, srcPrefix).Scan(&n)
 	if n != 1 {
 		t.Fatalf("confirmation not recorded: %d", n)
 	}
@@ -321,12 +330,37 @@ func TestConfirmPruneRPCs(t *testing.T) {
 	if _, err := s.SyncDocs(ctx, &orchdv1.SyncDocsRequest{ConfirmPrune: true}); grpcstatus.Code(err) != codes.InvalidArgument {
 		t.Errorf("docs confirm without owner err = %v", err)
 	}
+	if _, err := s.SyncDocs(ctx, &orchdv1.SyncDocsRequest{Owner: "willesq", ConfirmPrune: true}); grpcstatus.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("docs confirm with nothing refused err = %v", err)
+	}
+	// A refused repo kept its HEAD; confirming forgets it so the sync walks
+	// the repo again and uses the grant.
+	if err := s.docsReg.SetRepoState(ctx, docs.RepoState{Owner: "willesq", Repo: "docs", HeadSHA: "s2", Status: "error"}); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _, err := s.prune.Decide(ctx, prunecap.DocsKey("willesq"), "repo://willesq/docs/", 10, 9); ok || err != nil {
+		t.Fatalf("seed docs refusal: %v %v", ok, err)
+	}
 	if _, err := s.SyncDocs(ctx, &orchdv1.SyncDocsRequest{Owner: "willesq", ConfirmPrune: true}); err != nil {
 		t.Fatal(err)
 	}
-	_ = conn.QueryRow(`SELECT count(*) FROM prune_confirm WHERE key=?`, prunecap.DocsKey("willesq")).Scan(&n)
+	_ = conn.QueryRow(`SELECT count(*) FROM prune_confirm WHERE prefix=?`, "repo://willesq/docs/").Scan(&n)
 	if n != 1 {
 		t.Fatal("docs confirmation not recorded")
+	}
+	repos, _ := s.docsReg.ListRepos(ctx, "willesq")
+	for _, r := range repos {
+		if (r.Repo == "docs") != (r.HeadSHA == "") {
+			t.Fatalf("only the refused repo's HEAD is forgotten: %+v", repos)
+		}
+	}
+	if r, ok := docsRepoOf("repo://willesq/docs/", "willesq"); !ok || r != "docs" {
+		t.Fatalf("docsRepoOf = %q %v", r, ok)
+	}
+	for _, bad := range []string{"repo://other/docs/", "repo://willesq/", "checkout:///x/"} {
+		if _, ok := docsRepoOf(bad, "willesq"); ok {
+			t.Errorf("docsRepoOf(%q) matched", bad)
+		}
 	}
 	if g := sourcesGuard(nil); g != nil {
 		t.Fatal("a guard without a store")

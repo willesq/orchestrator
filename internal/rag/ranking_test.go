@@ -89,6 +89,14 @@ func TestRankOrdersCapsAndCuts(t *testing.T) {
 	if got := uris(rank([]candidate{a, b}, RankingParams{Profile: RankingPlain}, "", 0, 2, rankNow)); !slices.Equal(got, []string{"b", "a"}) {
 		t.Errorf("tie = %v", got)
 	}
+	// A NaN cosine ties last, wherever it starts.
+	n, m := cand("n", "x", 1, rankNow), cand("m", "x", 1, rankNow)
+	n.cosine, m.cosine = float32(math.NaN()), 0.2
+	for _, in := range [][]candidate{{n, m, b}, {m, n, b}, {b, n, m}} {
+		if got := uris(rank(in, RankingParams{Profile: RankingPlain}, "", 0, 3, rankNow)); !slices.Equal(got, []string{"b", "m", "n"}) {
+			t.Errorf("NaN tie = %v", got)
+		}
+	}
 	// A candidate dated only by when it was stored is still dated.
 	c := candidate{hit: SearchHit{Payload: map[string]any{fieldIngestedAt: float64(rankNow.Unix())}}}
 	if !c.date().Equal(rankNow) {

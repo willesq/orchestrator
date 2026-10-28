@@ -200,6 +200,13 @@ func (r *Registry) SetHash(ctx context.Context, uri, hash string, now int64) err
 	return err
 }
 
+// ForgetRepoSHA clears a repo's recorded HEAD, so the next sync walks it
+// again even though HEAD has not moved.
+func (r *Registry) ForgetRepoSHA(ctx context.Context, owner, repo string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE docs_repos SET head_sha='' WHERE owner=? AND repo=?`, owner, repo)
+	return err
+}
+
 // HashURIs returns the doc URIs with a stored hash that start with prefix.
 func (r *Registry) HashURIs(ctx context.Context, prefix string) ([]string, error) {
 	// substr, not LIKE: '_' and '%' are common in repo and file names.

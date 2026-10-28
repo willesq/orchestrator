@@ -252,14 +252,14 @@ func TestPlainDirectoryInsideARepoIsIndexed(t *testing.T) {
 	}
 }
 
-// fakeGuard refuses or allows, recording calls.
+// fakeGuard refuses or allows, recording calls and settled counts.
 type fakeGuard struct {
-	allow bool
-	keys  []string
-	done  int
+	allow   bool
+	keys    []string
+	settled []int
 }
 
-func (g *fakeGuard) Allow(_ context.Context, key, _ string, _, _ int) (bool, string, error) {
+func (g *fakeGuard) Decide(_ context.Context, key, _ string, _, _ int) (bool, string, error) {
 	g.keys = append(g.keys, key)
 	if g.allow {
 		return true, "", nil
@@ -267,7 +267,10 @@ func (g *fakeGuard) Allow(_ context.Context, key, _ string, _, _ int) (bool, str
 	return false, "3 docs are gone", nil
 }
 
-func (g *fakeGuard) Done(_ context.Context, _ string, n int) error { g.done += n; return nil }
+func (g *fakeGuard) Settled(_ context.Context, _ string, n int) error {
+	g.settled = append(g.settled, n)
+	return nil
+}
 
 func TestGuardedPruneAndAttention(t *testing.T) {
 	repo := filepath.Join(resolve(t.TempDir()), "proj")
@@ -284,8 +287,15 @@ func TestGuardedPruneAndAttention(t *testing.T) {
 	}
 	g.allow = true
 	status, _ = Refresh(context.Background(), src, ing, RefreshOpts{Guard: g})
-	if status != "ok" || len(ing.deleted) != 1 || g.done != 1 {
-		t.Fatalf("allowed: %q, deleted %v, done %d", status, ing.deleted, g.done)
+	// The prune settles the baseline at what it left: 2 stored, 1 removed.
+	if status != "ok" || len(ing.deleted) != 1 || !slices.Equal(g.settled, []int{1}) {
+		t.Fatalf("allowed: %q, deleted %v, settled %v", status, ing.deleted, g.settled)
+	}
+	// A walk with nothing gone settles at what is stored.
+	g.settled = nil
+	ing.stored = map[string]string{pre + "README.md": rag.WriterSources}
+	if status, _ = Refresh(context.Background(), src, ing, RefreshOpts{Guard: g}); status != "ok" || !slices.Equal(g.settled, []int{1}) {
+		t.Fatalf("unchanged: %q, settled %v", status, g.settled)
 	}
 	// An owner source reports a refused repo too.
 	root := resolve(t.TempDir())

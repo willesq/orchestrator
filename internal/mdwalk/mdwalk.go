@@ -48,6 +48,10 @@ func OwnFiles(root string, exclude []string, fn func(path string)) bool {
 
 func walk(root string, exclude []string, ownOnly bool, fn func(path string)) bool {
 	complete := true
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		realRoot = filepath.Clean(root)
+	}
 	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			complete = false
@@ -63,6 +67,13 @@ func walk(root string, exclude []string, ownOnly bool, fn func(path string)) boo
 			return nil
 		}
 		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+			// A symlink is followed only to a markdown file the walk itself
+			// could reach: one pointing out of the tree, into .git, an
+			// excluded directory or another checkout would index whatever it
+			// names (a committed docs/x.md -> ../.env).
+			if d.Type()&fs.ModeSymlink != 0 && !reachable(p, realRoot, exclude, ownOnly) {
+				return nil
+			}
 			fn(p)
 		}
 		return nil
@@ -80,4 +91,33 @@ func IsWorktreesDir(name string) bool {
 func hasGit(dir string) bool {
 	_, err := os.Lstat(filepath.Join(dir, ".git"))
 	return err == nil
+}
+
+// reachable reports whether the symlink p resolves to a regular *.md file
+// within root that the walk would visit itself: no directory on the way is
+// .git or excluded, nor (ownOnly) another checkout.
+func reachable(p, root string, exclude []string, ownOnly bool) bool {
+	real, err := filepath.EvalSymlinks(p)
+	if err != nil || !strings.HasSuffix(strings.ToLower(real), ".md") {
+		return false
+	}
+	if info, err := os.Stat(real); err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	rel, err := filepath.Rel(root, real)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	dir := root
+	parts := strings.Split(filepath.Dir(rel), string(filepath.Separator))
+	for _, name := range parts {
+		if name == "." {
+			continue
+		}
+		dir = filepath.Join(dir, name)
+		if name == ".git" || slices.Contains(exclude, name) || (ownOnly && (IsWorktreesDir(name) || hasGit(dir))) {
+			return false
+		}
+	}
+	return true
 }

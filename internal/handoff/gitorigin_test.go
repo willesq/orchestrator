@@ -2,6 +2,7 @@ package handoff
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -42,10 +43,18 @@ func TestFindCheckout(t *testing.T) {
 
 	// A relative gitdir, an https origin and no commondir.
 	other := filepath.Join(root, "other")
-	writeFile(t, filepath.Join(other, ".gitdir-real", "config"), "[core]\n\tworktree = ..\n[remote \"origin\"]\n\turl = https://x-access-token@github.com/Acme/Tool/\n")
-	writeFile(t, filepath.Join(other, ".git"), "gitdir: .gitdir-real")
+	writeFile(t, filepath.Join(root, "other-git", "config"), "[core]\n\tworktree = ../other\n[remote \"origin\"]\n\turl = https://x-access-token@github.com/Acme/Tool/\n")
+	writeFile(t, filepath.Join(other, ".git"), "gitdir: ../other-git")
 	if co, ok := FindCheckout(filepath.Join(other, "a.md")); !ok || co.Owner != "Acme" || co.Repo != "Tool" {
 		t.Fatalf("relative gitdir = %+v, %v", co, ok)
+	}
+	// The same git directory shipped inside the tree (an archive or a copy)
+	// is not believed, whatever its core.worktree says.
+	inTree := filepath.Join(root, "in-tree")
+	writeFile(t, filepath.Join(inTree, ".gitdir-real", "config"), "[core]\n\tworktree = ..\n[remote \"origin\"]\n\turl = https://github.com/Acme/Tool\n")
+	writeFile(t, filepath.Join(inTree, ".git"), "gitdir: .gitdir-real")
+	if co, ok := FindCheckout(filepath.Join(inTree, "a.md")); !ok || !co.Anonymous || !strings.Contains(co.AnonymousWhy, "inside the checkout") {
+		t.Fatalf("in-tree gitdir = %+v, %v", co, ok)
 	}
 
 	// A non-GitHub origin is a checkout with no owner.
@@ -189,8 +198,9 @@ func TestDefaultBranchFallbacks(t *testing.T) {
 		ok         bool
 		reason     string
 	}{
-		{"sole local branch", "ref: refs/heads/trunk\n", map[string]string{"refs/heads/trunk": "x"}, true, ""},
-		{"packed sole branch", "ref: refs/heads/develop\n", map[string]string{"packed-refs": "# pack\nabc refs/heads/develop\n"}, true, ""},
+		// A lone local branch is not the default: a single-branch or PR clone has one.
+		{"sole local branch", "ref: refs/heads/trunk\n", map[string]string{"refs/heads/trunk": "x"}, false, "default branch is unknown"},
+		{"packed sole branch", "ref: refs/heads/develop\n", map[string]string{"packed-refs": "# pack\nabc refs/heads/develop\n"}, false, "default branch is unknown"},
 		{"init.defaultBranch", "ref: refs/heads/trunk\n", map[string]string{"refs/heads/trunk": "x", "refs/heads/feat": "x",
 			"config": "[init]\n\tdefaultBranch = trunk\n"}, true, ""},
 		{"main exists", "ref: refs/heads/feat\n", map[string]string{"refs/heads/main": "x", "refs/heads/feat": "x"}, false, "not the default branch main"},
@@ -208,5 +218,62 @@ func TestDefaultBranchFallbacks(t *testing.T) {
 	}
 	if ok, r := (Checkout{Anonymous: true}).DefaultBranchState(); ok || !strings.Contains(r, "layout") {
 		t.Error("anonymous")
+	}
+}
+
+func gitCmd(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// Layouts real git makes: relative worktree pointers, a separate git dir,
+// and a single-branch clone of a feature branch.
+func TestRealGitLayouts(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	root := t.TempDir()
+	up := filepath.Join(root, "up")
+	_ = os.MkdirAll(up, 0o755)
+	gitCmd(t, up, "init", "-q", "-b", "main")
+	writeFile(t, filepath.Join(up, "a.md"), "a")
+	gitCmd(t, up, "add", "-A")
+	gitCmd(t, up, "commit", "-q", "--no-gpg-sign", "-m", "1")
+	gitCmd(t, up, "branch", "feat")
+
+	rel := filepath.Join(root, "wt-rel")
+	gitCmd(t, up, "worktree", "add", "-q", "--relative-paths", rel, "feat")
+	co, ok := CheckoutAt(rel)
+	if !ok || co.Anonymous || !co.Linked || co.Branch != "feat" {
+		t.Fatalf("relative worktree = %+v", co)
+	}
+
+	sep := filepath.Join(root, "sep")
+	_ = os.MkdirAll(sep, 0o755)
+	gitCmd(t, sep, "init", "-q", "-b", "main", "--separate-git-dir", filepath.Join(root, "sep-git"))
+	co, _ = CheckoutAt(sep)
+	if ok, why := co.DefaultBranchState(); ok || !strings.Contains(why, "separate-git-dir") {
+		t.Fatalf("separate git dir = %+v, %q", co, why)
+	}
+
+	single := filepath.Join(root, "single")
+	gitCmd(t, root, "clone", "-q", "--single-branch", "--branch", "feat", up, single)
+	co, _ = CheckoutAt(single)
+	if ok, why := co.DefaultBranchState(); ok {
+		t.Fatalf("a single-branch clone of feat counted as the default (%+v, %q)", co, why)
+	}
+}
+
+func TestConfigInlineComments(t *testing.T) {
+	if got := configScalar(" develop # team default"); got != "develop" {
+		t.Fatalf("%q", got)
+	}
+	if got := configScalar(` "a # not a comment" ; c`); got != "a # not a comment" {
+		t.Fatalf("%q", got)
 	}
 }

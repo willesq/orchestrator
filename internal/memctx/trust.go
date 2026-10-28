@@ -68,19 +68,30 @@ func TrustOf(stored, sourceType, uri string) Trust {
 	return TrustUnverified
 }
 
+// webSchemes are further schemes whose content comes from off the machine
+// (or runs as script), read as web pages; a UNC path (\\host\share) too.
+var webSchemes = map[string]bool{"ws": true, "wss": true, "data": true, "javascript": true, "smb": true, "gopher": true}
+
 // derivedTrust is web or tool when a chunk's type or URI says so, else "".
-// The URI is folded (NFKC, lowercased, trimmed) first, so a fullwidth or
-// padded scheme is still a scheme.
+// The URI is folded (NFKC, lowercased, whitespace and format characters
+// removed) first, so a fullwidth, padded or split scheme is still a scheme.
 func derivedTrust(sourceType, uri string) Trust {
 	st := strings.ToLower(strings.TrimSpace(sourceType))
-	u := strings.ToLower(strings.TrimSpace(norm.NFKC.String(uri)))
+	// Format characters and whitespace are dropped first, so " h\u200bttps:"
+	// cannot hide a web scheme.
+	u := strings.ToLower(strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, norm.NFKC.String(uri)))
 	scheme := ""
 	if i := strings.Index(u, ":"); i > 0 {
 		scheme = u[:i]
 	}
 	switch {
 	case webTypes[st] || strings.Contains(scheme, "http") || strings.Contains(scheme, "ftp") ||
-		strings.HasPrefix(u, "www.") || strings.HasPrefix(u, "//"):
+		webSchemes[scheme] || strings.HasPrefix(u, "www.") || strings.HasPrefix(u, "//") || strings.HasPrefix(u, `\\`):
 		return TrustWeb
 	case toolTypes[st]:
 		return TrustTool
@@ -133,28 +144,54 @@ var instructionPatterns = regexp.MustCompile(`(?i)` + strings.Join([]string{
 // it only adds a warning; it must never be what decides whether content is
 // shown or trusted.
 func InstructionLike(text string) bool {
-	if instructionPatterns.MatchString(text) {
-		return true
+	// The raw pass reads the head of the text. The normalized pass first
+	// drops what carries no words (format characters, markup, repeated
+	// whitespace) from up to maxSqueeze bytes, so padding cannot push a
+	// payload out of the maxScan bytes it then reads. Both are bounded, so
+	// flagging a huge hit stays cheap; past maxSqueeze nothing is read, and
+	// the warning is advisory either way.
+	head := text
+	if len(head) > maxScan {
+		head = head[:maxScan]
 	}
-	// Normalized in overlapping windows, so a payload deep in a long text is
-	// still seen, up to maxScan bytes.
-	if len(text) > maxScan {
-		text = text[:maxScan]
-	}
-	for start := 0; ; start += maxNormalize / 2 {
-		end := min(start+maxNormalize, len(text))
-		if instructionPatterns.MatchString(normalize(text[start:end])) {
-			return true
-		}
-		if end == len(text) {
-			return false
-		}
-	}
+	return instructionPatterns.MatchString(head) || instructionPatterns.MatchString(normalize(squeeze(text)))
 }
 
-// maxScan bounds how much of a text the normalized check reads; retrieved
-// chunks are a few kilobytes.
-const maxScan = 1 << 20
+// maxScan is how many bytes of a text each pattern pass reads. A stored chunk
+// is at most 126 tokens, well under this once padding is dropped.
+const maxScan = 4 << 10
+
+// maxSqueeze is how many bytes of a text squeeze reads.
+const maxSqueeze = 1 << 20
+
+// squeeze returns up to maxScan bytes of text read from its first maxSqueeze
+// bytes, without format characters or markup and with each whitespace run
+// cut to one space.
+func squeeze(text string) string {
+	if len(text) > maxSqueeze {
+		text = text[:maxSqueeze]
+	}
+	var b strings.Builder
+	space := false
+	for _, r := range text {
+		switch {
+		case unicode.Is(unicode.Cf, r) || strings.ContainsRune("*_`~>#|", r):
+			continue
+		case unicode.IsSpace(r):
+			if space {
+				continue
+			}
+			space, r = true, ' '
+		default:
+			space = false
+		}
+		b.WriteRune(r)
+		if b.Len() >= maxScan {
+			break
+		}
+	}
+	return b.String()
+}
 
 // markup is emphasis and quoting that can split an instruction's words.
 var markup = regexp.MustCompile("[*_`~>#|]+")
@@ -174,9 +211,6 @@ func normalize(text string) string {
 	t = markup.ReplaceAllString(t, "")
 	return strings.Join(strings.Fields(t), " ")
 }
-
-// maxNormalize is the window the normalized check reads at a time.
-const maxNormalize = 64 << 10
 
 // Printable replaces control and format characters (bidi overrides,
 // zero-width and Unicode tag characters, which can hide text from a reader)

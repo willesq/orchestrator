@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+	"unicode"
 )
 
 // Checkout is the git working tree a file sits in.
@@ -29,6 +30,8 @@ type Checkout struct {
 	// not follow git's layout, whose identity is not believed; Unreadable a
 	// HEAD naming no usable branch.
 	Linked, Anonymous, Unreadable bool
+	// AnonymousWhy says why an anonymous checkout's .git was not believed.
+	AnonymousWhy string
 }
 
 // OnDefaultBranch reports whether the checkout is on its default branch.
@@ -42,6 +45,9 @@ func (c Checkout) OnDefaultBranch() bool {
 func (c Checkout) DefaultBranchState() (bool, string) {
 	switch {
 	case c.Anonymous:
+		if c.AnonymousWhy != "" {
+			return false, c.AnonymousWhy
+		}
 		return false, "its .git does not follow git's layout"
 	case c.Unreadable:
 		return false, "its HEAD cannot be read (a reftable repository?)"
@@ -87,7 +93,7 @@ func FindCheckout(path string) (Checkout, bool) {
 // .git entry; it never looks above dir.
 func CheckoutAt(dir string) (Checkout, bool) {
 	dir = filepath.Clean(dir)
-	gitDir, linked, found := gitDirAt(dir)
+	gitDir, linked, found, why := gitDirAt(dir)
 	if !found {
 		return Checkout{}, false
 	}
@@ -95,7 +101,7 @@ func CheckoutAt(dir string) (Checkout, bool) {
 	if gitDir == "" {
 		// A .git file that does not point back here could borrow any
 		// repository's identity; the checkout is anonymous.
-		c.Anonymous = true
+		c.Anonymous, c.AnonymousWhy = true, why
 		return c, true
 	}
 	common, ok := commonDir(gitDir)
@@ -112,28 +118,32 @@ func CheckoutAt(dir string) (Checkout, bool) {
 
 // gitDirAt finds the git directory of a working tree rooted at dir: found
 // reports a .git entry at all. A .git directory is the git directory. A .git
-// file must point (symlinks resolved) at <common>/worktrees/<name> whose
-// gitdir file points back at this .git file, as git writes for a linked
-// worktree; otherwise gitDir is "" (found, but anonymous).
-func gitDirAt(dir string) (gitDir string, linked, found bool) {
+// file (its path absolute or relative to dir) is believed when it points, with
+// symlinks resolved, at <common>/worktrees/<name> whose gitdir file points
+// back at this .git file (absolute, or relative to that directory, as
+// `git worktree add --relative-paths` writes), or at a git directory whose
+// core.worktree names dir. Anything else, a `--separate-git-dir` repository
+// included, is found but anonymous (gitDir ""), with why.
+func gitDirAt(dir string) (gitDir string, linked, found bool, why string) {
 	p := filepath.Join(dir, ".git")
 	info, err := os.Lstat(p)
 	if err != nil {
-		return "", false, false
+		return "", false, false, ""
 	}
 	if info.IsDir() {
-		return p, false, true
+		return p, false, true, ""
 	}
 	if !info.Mode().IsRegular() {
-		return "", false, false
+		return "", false, false, ""
 	}
+	bad := func(reason string) (string, bool, bool, string) { return "", true, true, reason }
 	b, err := readSmall(p, maxGitPointer)
 	if err != nil {
-		return "", true, true
+		return bad("its .git file cannot be read")
 	}
 	target, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "gitdir:")
 	if !ok {
-		return "", true, true
+		return bad("its .git file is not a gitdir pointer")
 	}
 	target = strings.TrimSpace(target)
 	if !filepath.IsAbs(target) {
@@ -141,26 +151,50 @@ func gitDirAt(dir string) (gitDir string, linked, found bool) {
 	}
 	real, err := filepath.EvalSymlinks(filepath.Clean(target))
 	if err != nil {
-		return "", true, true
+		return bad("its .git points at a git directory that does not exist")
 	}
-	// A submodule or --separate-git-dir checkout: its git directory names
-	// this working tree in core.worktree.
+	// git keeps a linked worktree's or submodule's git directory outside it.
+	// One inside the tree came with the files (an archive or a copy), so
+	// its refs and back-pointer say nothing about where the files came from.
+	if within(real, dir) {
+		return bad("its .git points at a git directory inside the checkout itself")
+	}
+	// A submodule, or a --separate-git-dir repository with core.worktree set:
+	// its git directory names this working tree.
 	if wt := configValue(real, "core", "worktree"); wt != "" {
 		if !filepath.IsAbs(wt) {
 			wt = filepath.Join(real, wt)
 		}
 		if samePath(wt, dir) {
-			return real, false, true
+			return real, false, true, ""
 		}
 	}
 	if filepath.Base(filepath.Dir(real)) != "worktrees" {
-		return "", true, true
+		return bad("its .git points at a git directory elsewhere (a --separate-git-dir repository?); " +
+			"set core.worktree there to this directory to index it")
 	}
 	back, err := readSmall(filepath.Join(real, "gitdir"), maxGitPointer)
-	if err != nil || !samePath(strings.TrimSpace(string(back)), p) {
-		return "", true, true
+	if err != nil {
+		return bad("its worktree's gitdir file cannot be read")
 	}
-	return real, true, true
+	bp := strings.TrimSpace(string(back))
+	if !filepath.IsAbs(bp) {
+		bp = filepath.Join(real, bp)
+	}
+	if !samePath(bp, p) {
+		return bad("its worktree's gitdir file points at another working tree")
+	}
+	return real, true, true, ""
+}
+
+// within reports whether path p is dir or below it, after resolving symlinks.
+func within(p, dir string) bool {
+	rd, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		rd = filepath.Clean(dir)
+	}
+	rel, err := filepath.Rel(rd, p)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // samePath compares two paths after cleaning and resolving symlinks.
@@ -207,7 +241,7 @@ func headRef(gitDir string) (string, bool) {
 		return "", true // a commit id: detached
 	}
 	name, ok := strings.CutPrefix(strings.TrimSpace(ref), "refs/heads/")
-	if !ok || name == "" || name == ".invalid" {
+	if !ok || name == "" || name == ".invalid" || len(name) > 255 || strings.IndexFunc(name, badRefRune) >= 0 {
 		return "", false
 	}
 	return name, true
@@ -221,19 +255,15 @@ func headBranch(gitDir string) string {
 }
 
 // defaultBranch is the repository's default branch, in order: the origin's
-// HEAD as last fetched; the only local branch; init.defaultBranch from the
-// repository's config, when such a branch exists; main or master, when one
-// exists. "" when none of these settles it.
+// HEAD as last fetched; init.defaultBranch from the repository's config, when
+// such a branch exists locally; main or master, when one exists. "" when none
+// of these settles it. A lone local branch is not taken as the default: a
+// single-branch or PR clone has exactly one.
 func defaultBranch(common string) string {
 	if b := symref(filepath.Join(common, "refs", "remotes", "origin", "HEAD"), "refs/remotes/origin/"); b != "" {
 		return b
 	}
 	local := localBranches(common)
-	if len(local) == 1 {
-		for b := range local {
-			return b
-		}
-	}
 	if b := configValue(common, "init", "defaultbranch"); b != "" && local[b] {
 		return b
 	}
@@ -287,10 +317,26 @@ func configValue(gitDir, section, key string) string {
 			continue
 		}
 		if k, v, ok := strings.Cut(line, "="); in && ok && strings.EqualFold(strings.TrimSpace(k), key) {
-			return strings.Trim(strings.TrimSpace(v), `"`)
+			return configScalar(v)
 		}
 	}
 	return ""
+}
+
+// configScalar reads a git config value: an inline comment (# or ;) outside
+// quotes ends it, and surrounding quotes are dropped.
+func configScalar(v string) string {
+	quoted := false
+	for i, r := range v {
+		switch {
+		case r == '"':
+			quoted = !quoted
+		case (r == '#' || r == ';') && !quoted:
+			v = v[:i]
+			return strings.Trim(strings.TrimSpace(v), `"`)
+		}
+	}
+	return strings.Trim(strings.TrimSpace(v), `"`)
 }
 
 // symref reads a symbolic ref file ("ref: <prefix><name>") and returns name.
@@ -328,7 +374,7 @@ func originURL(gitDir string) string {
 			continue
 		}
 		if k, v, ok := strings.Cut(line, "="); ok && strings.EqualFold(strings.TrimSpace(k), "url") {
-			return strings.Trim(strings.TrimSpace(v), `"`)
+			return configScalar(v)
 		}
 	}
 	return ""
@@ -360,4 +406,11 @@ func readSmall(path string, limit int64) ([]byte, error) {
 		return nil, fmt.Errorf("%s is not a regular file", path)
 	}
 	return io.ReadAll(io.LimitReader(f, limit))
+}
+
+// badRefRune reports a rune git never allows in a branch name: whitespace,
+// control and format characters. HEAD is the repository's to write, so a
+// name that breaks this is not used (it ends up in status lines).
+func badRefRune(r rune) bool {
+	return unicode.IsSpace(r) || unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '~' || r == '^' || r == ':'
 }

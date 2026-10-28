@@ -260,31 +260,31 @@ func Compare(before, after Report) []Change {
 // another way). A case repeated in either run pairs only its first result,
 // so it cannot weigh twice.
 func pairResults(before, after Report) [][2]Result {
-	byKey, byQuery := map[string]Result{}, map[string]Result{}
+	byKey, byQuery := map[string]int{}, map[string]int{}
 	queries := map[string]int{}
-	for _, r := range before.Results {
+	for i, r := range before.Results {
 		if _, dup := byKey[r.Key]; r.Key != "" && !dup {
-			byKey[r.Key] = r
+			byKey[r.Key] = i
 		}
 		if queries[r.Query]++; queries[r.Query] == 1 {
-			byQuery[r.Query] = r
+			byQuery[r.Query] = i
 		}
 	}
-	used := map[string]bool{}
+	// A before-result pairs at most once, whether matched by key or by
+	// query, so one baseline row cannot stand in for two after-rows.
+	used := map[int]bool{}
 	var out [][2]Result
 	for _, r := range after.Results {
 		b, ok := byKey[r.Key]
-		id := "k\x00" + r.Key
 		if !ok || r.Key == "" {
 			b, ok = byQuery[r.Query]
 			ok = ok && queries[r.Query] == 1
-			id = "q\x00" + r.Query
 		}
-		if !ok || used[id] {
+		if !ok || used[b] {
 			continue
 		}
-		used[id] = true
-		out = append(out, [2]Result{b, r})
+		used[b] = true
+		out = append(out, [2]Result{before.Results[b], r})
 	}
 	return out
 }

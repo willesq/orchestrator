@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/willesq/orchestrator/internal/gitdates"
 	"github.com/willesq/orchestrator/internal/handoff"
@@ -147,10 +148,10 @@ func refreshOwner(ctx context.Context, s Source, ing Ingester, opts RefreshOpts)
 		r := ingestRepoMarkdown(ctx, dir, s.URI, s, ing, opts, listing)
 		found = found || r.found
 		if r.skipped != "" {
-			skipped = append(skipped, e.Name()+" "+r.skipped)
+			skipped = append(skipped, statusSafe(e.Name())+" "+r.skipped)
 		}
 		if r.refused != "" {
-			refused = append(refused, e.Name()+": "+r.refused)
+			refused = append(refused, statusSafe(e.Name())+": "+r.refused)
 		}
 	}
 	switch {
@@ -180,9 +181,26 @@ func refreshRepo(ctx context.Context, s Source, repoPath, owner string, ing Inge
 	return "ok", nil
 }
 
+// statusSafe keeps text that came from a repository (a directory or branch
+// name) printable and short before it goes into a status line: control and
+// format characters become '?', whitespace runs one space, at most 120 runes.
+func statusSafe(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return '?'
+		}
+		return r
+	}, strings.ToValidUTF8(s, "?"))
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > 120 {
+		s = string(r[:119]) + "…"
+	}
+	return s
+}
+
 // attention is the status of a source whose prune was refused.
 func attention(s Source, reasons []string) string {
-	return "attention: " + strings.Join(reasons, "; ") + "; to remove them run: orch source refresh " + s.ID + " --confirm-prune"
+	return "attention: " + strings.Join(reasons, "; ") + "; the operator can confirm it with orch source refresh " + s.ID + " --confirm-prune"
 }
 
 // indexable reports whether a repo directory may be indexed now: a git
@@ -205,6 +223,7 @@ func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, i
 	// Stored under the resolved path, the one the edit hand-off maps to.
 	repoPath = resolve(repoPath)
 	if ok, why := indexable(repoPath); !ok {
+		why = statusSafe(why)
 		log.Printf("sources: %s: %s; left as last indexed", repoPath, why)
 		return repoResult{skipped: why}
 	}
@@ -262,8 +281,8 @@ func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, i
 
 // PruneGuard bounds deletions (implemented by *prunecap.Guard).
 type PruneGuard interface {
-	Allow(ctx context.Context, key, prefix string, stored, gone int) (bool, string, error)
-	Done(ctx context.Context, prefix string, n int) error
+	Decide(ctx context.Context, key, prefix string, stored, gone int) (bool, string, error)
+	Settled(ctx context.Context, prefix string, count int) error
 }
 
 // pruneRemoved deletes the docs this refresh stored under prefix that the
@@ -292,10 +311,13 @@ func pruneRemoved(ctx context.Context, ing Ingester, opts RefreshOpts, s Source,
 		}
 	}
 	if len(gone) == 0 {
+		if opts.Guard != nil {
+			_ = opts.Guard.Settled(ctx, prefix, len(stored))
+		}
 		return ""
 	}
 	if opts.Guard != nil {
-		allowed, why, err := opts.Guard.Allow(ctx, prunecap.SourceKey(s.ID), prefix, len(stored), len(gone))
+		allowed, why, err := opts.Guard.Decide(ctx, prunecap.SourceKey(s.ID), prefix, len(stored), len(gone))
 		if err != nil {
 			log.Printf("sources: %s: prune guard: %v; not pruning", prefix, err)
 			return ""
@@ -317,7 +339,7 @@ func pruneRemoved(ctx context.Context, ing Ingester, opts RefreshOpts, s Source,
 		log.Printf("sources: removed %s, gone from its repo", uri)
 	}
 	if opts.Guard != nil {
-		_ = opts.Guard.Done(ctx, prefix, removed)
+		_ = opts.Guard.Settled(ctx, prefix, len(stored)-removed)
 	}
 	return ""
 }

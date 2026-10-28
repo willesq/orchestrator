@@ -1,18 +1,16 @@
 -- +goose Up
--- How much a sync has pruned under each prefix since its baseline, so a cap
--- on deletions is measured against the last full listing rather than the
--- shrinking store, and cannot be walked down a half at a time.
+-- The prune cap's state per repo prefix: what a complete walk last found
+-- stored there, and a refused prune waiting for the operator.
 CREATE TABLE prune_state (
     prefix   TEXT PRIMARY KEY,
-    baseline INTEGER NOT NULL,       -- stored docs when the window began
-    pruned   INTEGER NOT NULL DEFAULT 0,
-    since    INTEGER NOT NULL        -- unix seconds the window began
+    key      TEXT NOT NULL DEFAULT '',  -- "source|<id>" or "docs|<owner>": who confirms it
+    baseline INTEGER NOT NULL,          -- docs stored after the last complete walk
+    refused  INTEGER NOT NULL DEFAULT 0 -- docs a refused prune would remove; 0 = none waiting
 );
--- An operator's confirmation that the next prune of a source or docs owner
--- may exceed the cap; consumed by that prune.
+-- One-shot, short-lived grants letting a refused prune of one prefix through.
 CREATE TABLE prune_confirm (
-    key TEXT PRIMARY KEY,            -- "source|<id>" or "docs|<owner>"
-    at  INTEGER NOT NULL
+    prefix TEXT PRIMARY KEY,
+    at     INTEGER NOT NULL             -- unix seconds granted; expires after an hour
 );
 
 -- +goose Down

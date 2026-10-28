@@ -86,7 +86,7 @@ func newSourceListCmd() *cobra.Command {
 				return nil
 			}
 			for _, s := range list {
-				fmt.Fprintf(c.OutOrStdout(), "%-6s %-40s status=%s refresh=%ds\n", s.Kind, s.URI, s.Status, s.RefreshSecs)
+				fmt.Fprintf(c.OutOrStdout(), "%-6s %-40s status=%s refresh=%ds\n", s.Kind, termSafe(s.URI), termSafe(s.Status), s.RefreshSecs)
 			}
 			return nil
 		},
@@ -120,10 +120,10 @@ func newSourceRefreshCmd(cf clientFactory) *cobra.Command {
 		Short: "Mark a source (or all) due for refresh on the next scan",
 		Long: `Mark a source (or all) due for refresh on the next scan.
 
-A refresh removes the docs of files gone from a repo, but no more than half of what a
-repo stored, counted over a week: past that it stops and the source's status says
-"attention". --confirm-prune lets the next refresh of that source remove them all
-(asks orchd, so it is refused inside a queued task).`,
+A refresh removes the docs of files gone from a repo, but no more than half of what the
+last complete refresh left: past that it stops and the source's status says "attention".
+--confirm-prune lets the refused prune through on the next refresh, within the hour, and
+fails when nothing was refused (asks orchd, so it is refused inside a queued task).`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			if confirmPrune {
