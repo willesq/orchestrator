@@ -32,17 +32,20 @@ not catch every secret shape.
   title, date, source URI, how far its origin is trusted, and the single most relevant line (for
   a session record, usually the decision itself); the agent reads the rest with `rag_search` and
   that `source_uri`. `hooks.auto_rag.format: full` injects whole chunks instead. Pointers cost
-  about a third fewer tokens than whole chunks on the golden set (238 against 354).
+  about a third fewer tokens than whole chunks on the golden set (253 against 383).
 
   ```
-  [1] session record · 2026-10-27 · session://…/record · own session
+  [1] "session record" · 2026-10-27 · "session://…/record" · own session
       "Author trust comes from GitHub's authorAssociation, not from PR text."
   ```
-- **Trust.** Memory is labelled by origin: your sessions, repo docs, notes, web pages, tool
-  output. Web pages and tool output are marked untrusted, and one that reads like an
-  instruction to the agent ("ignore previous instructions", "you must run …") is flagged as data.
-  `hooks.auto_rag.untrusted: exclude` keeps them out of prompts entirely. This is a guard, not a
-  wall: the labels come from how content was stored.
+- **Trust.** Each memory is labelled by which part of orchd stored it: a registered repo's docs
+  (`repo doc`), a registered web page (untrusted), your sessions (`own session`), a file an agent
+  edited, or something stored through `orch ingest` or the MCP `rag_ingest_text` tool (`stored by
+  a client`, whatever type or URI it claimed). Everything retrieved is shown quoted, as data;
+  text in any of them that reads like an instruction to the agent ("ignore previous
+  instructions", "you must run …") is flagged. `hooks.auto_rag.untrusted: exclude` keeps web pages
+  out of prompts. This is a guard, not a wall: the flag is a pattern list, and memory stored before
+  this release is labelled `unverified` until it is stored again.
 - **Updates.** Each prompt notes, once, which subagents and background tasks finished since the
   last one.
 - **Resume brief.** After Claude Code compacts a session, the next session start restores the
@@ -70,11 +73,11 @@ when their wording scores low by meaning.
 | `rag.search.keyword_weight` | `0.5` | Keyword list's share; 0.5 scored best on the eval |
 
 - **Ranking.** After fusion, scores are weighted by source type and age: session records and
-  docs over raw transcripts (`session_transcript` 0.7) and web pages (0.9), and newer over older,
-  halving toward a floor of 0.7 every 180 days, so an old decision that matches well is not
+  docs over raw transcripts (`session_transcript` 0.85) and web pages (0.9), and newer over older,
+  halving toward a floor of 0.85 every 180 days, so an old decision that matches well is not
   buried. `orch search --ranking plain` turns this off for one search.
-- **Diversity.** One source returns at most two hits (`rag.search.per_source`); prompt context
-  takes one per source. `--per-source -1` lifts the cap for one search.
+- **Diversity.** One source returns at most two hits to any search (`rag.search.per_source`,
+  so MCP and `orch search` too); prompt context takes one per source. `--per-source -1` lifts the cap for one search.
 - **Dates.** Everything stored is dated: repo docs by their last commit, sessions by when they
   ran, web pages and notes by when they were stored. So `--since` and `--until` find docs and
   notes too.
@@ -115,7 +118,8 @@ orch rag eval --ranking plain --per-source -1 --save fusion   # score other sett
 
 The set is `eval/golden.jsonl` in the data directory, one JSON case per line: `query`, `expect`
 (source URIs; a trailing `*` matches a prefix), and optionally `span` (text the answering chunk
-must hold), filters, `section` and `note`. Seed cases come from your session records' decisions
+must hold), filters, `section`, `note` and `split` (`tune` or `holdout`; by default a hash of the
+query decides). Choose settings with `--split tune` and judge them with `--split holdout`. Seed cases come from your session records' decisions
 and your repo docs' headings and identifiers, so they favour what the system already finds; keep a
 `hard` section of questions in your own words beside them. An older `rag-eval.yaml` in the config
 directory is used until the JSONL set exists and imported by the first seed.
@@ -123,16 +127,20 @@ directory is used until the JSONL set exists and imported by the first seed.
 ## Cleaning up and re-indexing
 
 ```sh
-orch rag dedupe                 # list file:// copies of docs also stored under repo://
+orch docs refresh               # re-store docs: commit dates, writer and content hash
+orch rag dedupe                 # list file:// copies identical to a synced doc
 orch rag dedupe --apply         # delete them
 orch rag reindex-keywords       # count chunks indexed by an older keyword tokenizer
 orch rag reindex-keywords --apply   # rebuild their keyword vectors in place; resumable
-orch docs refresh               # re-store docs so they carry their commit dates
 ```
 
-Editing a doc in a checkout of a repo the docs sync indexes no longer stores a `file://` copy;
-the edit arrives when it is merged and synced. Docs removed from a repo are deleted at the next
-sync.
+Editing a doc in a registered repo (a repo or owner source, or a checkout of a repo the docs
+sync indexes) stores a `file://` copy only when it differs from the synced copy: an edit on a
+branch that is not merged yet stays searchable under its path, and once the synced copy matches
+it, the path copy is removed at the next edit. Local repo and owner sources are indexed under
+`checkout://<path>`, apart from the GitHub docs, and only while checked out on their default
+branch. Docs removed from a repo are deleted at the next sync; docs stored before this release
+stay undated (and unverified) until they are stored again.
 
 ## Migrating an older store
 

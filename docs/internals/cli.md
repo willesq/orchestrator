@@ -17,8 +17,8 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | `search <query> [--top-k] [--scope] [--type] [--tag] [--require-tag] [--uri] [--mode] [--ranking] [--per-source] [--since] [--until]` | search memory |
 | `rag sources [--type] [--scope] [--prefix] [--limit] [--since] [--until]` | list stored sources |
 | `rag forget <uri> --yes` | delete one source |
-| `rag eval [--set] [--top-k] [--save] [--compare] [--mode] [--ranking] [--per-source] [--section] [--inject-format] [--cases] [--json]`, `rag eval add <query> <uri>… [--span] [--section]`, `rag eval seed` | retrieval golden set, scoring and paired-bootstrap comparison ([memory.md](memory.md#retrieval-evaluation)) |
-| `rag dedupe [--apply]` | delete path-keyed copies of repo docs (*operator-only*) |
+| `rag eval [--set] [--top-k] [--save] [--compare] [--mode] [--ranking] [--per-source] [--section] [--split] [--inject-format] [--cases] [--json]`, `rag eval add <query> <uri>… [--span] [--section]`, `rag eval seed` | retrieval golden set, scoring and paired-bootstrap comparison ([memory.md](memory.md#retrieval-evaluation)) |
+| `rag dedupe [--apply]` | delete path-keyed copies identical to a synced doc of a registered source (*operator-only*) |
 | `rag reindex-keywords [--apply]` | rebuild keyword vectors for the current tokenizer, in place (*operator-only*) |
 | `rag migrate-hybrid [--target] [--apply] [--rollback] [--drop-backup]` | layout migration (*operator-only*) |
 | `rag backfill-sessions [--apply]` | date older sessions (*operator-only*) |
@@ -47,6 +47,6 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 
 Numeric arguments are clamped (negative → default, above 10000 → 10000); orchd still rejects a
 search `top_k` above 100. Results are plain text;
-search hits read `N. [score] <uri> (<type>) · <when>` followed by the chunk text; a hit not from
-the user's sessions or repos adds its trust label and shows its text fenced as quoted data, with
-instruction-like text flagged ([hooks.md](hooks.md#prompt-context)).
+search hits read `N. [score] "<uri>" ("<type>") · <when> · <trust label>` (URI and type quoted)
+followed by the chunk text fenced as quoted data, in every tier, with instruction-like text
+flagged ([hooks.md](hooks.md#prompt-context)).

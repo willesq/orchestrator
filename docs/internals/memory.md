@@ -113,6 +113,31 @@ again.
 **Duplicates within a source.** A chunk whose text (SHA-256) repeats an earlier chunk of the same
 source is dropped before embedding, and the remaining chunks keep contiguous indices.
 
+**Unchanged writes.** Each chunk stores `ingest_hash`, over the text and everything stored with it
+(type, scope, tags, dates, writer). A write whose hash matches the source's first chunk is skipped
+before embedding (outside a migration), so a re-fetched page or re-walked doc that did not change
+keeps its date and costs nothing.
+
+### Provenance
+
+Every write names its **writer**, set by orchd's own code, never by a client:
+
+| Writer | Who | Stored `trust` |
+|---|---|---|
+| `docs` | the GitHub docs sync | `repo` |
+| `sources` | the sources refresh | `repo` (repo and owner sources), `web` (web sources) |
+| `session` | orchd's session storage (hand-off, summaries) | `session` |
+| `file` | the edit hand-off | `file` |
+| `client` | the Ingest RPC, so the CLI, hooks and MCP `rag_ingest_text` | `client` |
+
+`writer`, `trust` and `content_hash` (the first 16 bytes of SHA-256 of the text as given, kept
+through a migration) are stored on every chunk. A client cannot claim a tier: whatever type or URI
+it declares, an Ingest RPC write is `client`. Hits return `trust`, and `GetDocument` returns
+`writer`, `content_hash` and `trust`. Chunks stored before this have none, and readers treat them
+as unverified. Only `repo` is shown without a "data" caution, and even it is fenced in full-text
+output (see [hooks.md](hooks.md#prompt-context)). Session content is fenced because transcripts
+carry the tool output and web pages the agent read.
+
 Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<path>`,
 `file://<path>`, `claude://<path under ~/.claude>`, web URLs, and anything given to `orch ingest`.
 
@@ -130,8 +155,8 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
   `token`); each `. / : -` separated piece that is itself compound is emitted whole
   (`rag.search.keyword_weight` → `keyword_weight`; `parse_HTTPRequest` → `httprequest`); and a
   path's last element with a dot (`internal/rag/search.go` → `search.go`). On the golden set this
-  measured neutral (MRR 0.668 before and after the re-index); it is kept because it costs a
-  27-second re-index and never lowered a score.
+  measured neutral (MRR 0.666 before and 0.662 after the re-index, 95% CI −0.011 to +0.002); it is kept because the change is within
+  noise and the re-index takes 27 seconds.
 - **Term id:** FNV-1a 32-bit of the term.
 - **Document weight:** per distinct term `tf·(k1+1) / (tf + k1·(1 − b + b·len/avgLen))`, with
   k1 1.2, b 0.75, avgLen 55 (measured: a 110-token chunk is about 50 words), `len ≥ avgLen/4`. At
@@ -154,8 +179,9 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
 4. **Weight** (ranking `weighted`, the default; `plain` skips it): multiply each candidate's fused
    score by its source type's weight and by recency, `floor + (1 − floor) · 2^(−age / half-life)`.
    Age is from `ended_at`, else `started_at`, else `ingested_at`; undated content counts as one
-   half-life old; future dates count as now. Defaults: half-life 180 days, floor 0.7, weights
-   `session_transcript` 0.7, `web` 0.9, all else 1 (`rag.search.recency_half_life_days`,
+   half-life old; future dates count as now; a negative score is taken as 0 first. Defaults:
+   half-life 180 days, floor 0.85, weights `session_transcript` 0.85, `web` 0.9, all else 1
+   (`rag.search.recency_half_life_days`,
    `recency_floor`, `source_weights`). This runs client-side, after fusion, because fusion is
    client-side; Qdrant's formula queries would need fusion moved into the server.
 5. **Diversify:** keep at most `per_source` hits from one source (request field, else
@@ -176,11 +202,27 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
 Scores keep cosine meaning in both modes, so relevance floors (prompt context) work unchanged:
 weighting and the cap change the order, never a hit's score. Hits also carry their `heading`.
 
-Tuning on the golden set (162 cases, MRR, against fusion alone at 0.603): the transcript weight
-gave most of the gain (1.0 → 0.630, 0.85 → 0.663, 0.7 → 0.666, 0.6 → 0.665); without recency it
-was 0.631; half-lives of 90 to 365 days and floors of 0.5 to 0.85 all scored 0.662 to 0.666. A
-30-day half-life scored 0.673 but was not taken, since every case is from the last three months
-and a short half-life is what buries old decisions.
+**Tuning** used the golden set's `tune` split only (70 cases), on a read-only copy of the store,
+and the defaults were judged on the `holdout` split (92 cases). Decision cases accept any source
+of their session, so favouring records over transcripts cannot score by construction. MRR, tune /
+holdout, against fusion alone (0.702 / 0.571):
+
+| half-life | floor | transcript | web | tune | holdout |
+|---|---|---|---|---|---|
+| off | | 1 | 1 | 0.702 | 0.571 |
+| 180 | 0.7 | 1 | 1 | 0.730 | 0.588 |
+| off | | 0.7 | 1 | 0.708 | 0.592 |
+| 180 | 0.7 | 0.85 | 0.9 | 0.742 | 0.617 |
+| 90 / 365 | 0.7 | 0.85 | 0.9 | 0.742 | 0.618 / 0.617 |
+| 180 | 0.5 | 0.85 | 0.9 | 0.740 | 0.603 |
+| 180 | 0.85 | 0.85 | 0.9 | 0.723 | 0.617 |
+
+The best tune score was floor 0.7. The default is the softer floor 0.85: within 0.02 on tune, equal
+on holdout overall, and better on the holdout sections weighting hurts (decisions 0.661 → 0.702,
+hand-written 0.721 → 0.720). On holdout the gain comes from repo-doc questions (identifiers 0.492
+→ 0.573, headings 0.453 → 0.542 against plain fusion); the hand-written questions are slightly
+lower (13 cases, not significant). A per-source cap of 1 or 2 added +0.005 on tune and +0.009 on
+holdout.
 
 ## Timelines
 
@@ -216,14 +258,21 @@ the hand-off unit, as a `session_record` like any session.
 
 - `web`: GET (≤ 5 MiB), strip HTML, redact, store under the URL. Errors keep the old chunks.
 - `repo` (absolute path) and `owner` (`<known_root>/<owner>/*`): every `*.md` found by `mdwalk`
-  (skipping `.git` and `ingest.exclude_dirs`), stored as `repo://<owner|local>/<repo>/<path>`,
-  type `repo_doc`, tagged `repo:<name>` and `owner:<owner>`, dated by its last commit.
-- **Removed files:** after walking a repo, stored `repo://` sources under its prefix that the walk
-  did not find are deleted, except those the docs registry has a hash for (the GitHub sync owns
-  those; a local checkout missing one may just be behind), and nothing under a prefix two sources
-  share (two repo sources with the same directory name, or a repo source inside an owner source's
-  directory). A walk that found no markdown, or could not read a directory, deletes nothing, and a
-  failed listing disables the step.
+  (skipping `.git` and `ingest.exclude_dirs`), stored as `checkout://<resolved absolute path>`,
+  type `repo_doc`, tagged `repo:<name>` and `owner:<owner>`, dated by its last commit, written as
+  `sources`. A local checkout is not the GitHub repo (it may be behind, ahead or on a branch), so it
+  never shares the docs sync's `repo://<owner>/<repo>` names, and two checkouts of the same name
+  never share one. Earlier versions stored these under `repo://<owner|local>/<repo>/`; those stay
+  until purged.
+- **Default branch only:** a git checkout is indexed only on its origin's default branch (from
+  `refs/remotes/origin/HEAD`; `main` or `master` when none is recorded), read from `.git` files.
+  On another branch or a detached HEAD it is left as last indexed, neither stored nor pruned, so a
+  PR checked out there never becomes the repo's docs. A plain directory is indexed as it is.
+- **Removed files:** after a complete walk, the sources this refresh wrote under the repo's
+  `checkout://` prefix (listed by `writer = sources` in the store) that the walk did not find are
+  deleted. An agent's note under the prefix is never a candidate. A walk that found no markdown,
+  could not read a directory, or would delete more than half of what is stored (beyond 5 docs)
+  deletes nothing, and a failed listing disables the step.
 - **Validation** (`sources.Validate`, used by `orch source add` and the `SaveSource` RPC):
   - a `web` URI is an `http`/`https` URL with a host and no credentials;
   - a `repo` URI is an absolute path, cleaned;
@@ -249,7 +298,8 @@ the hand-off unit, as a `session_record` like any session.
 unchanged, `gh repo clone --depth 1` into `<data>/repos`, and store each markdown file whose
 SHA-256 changed (hash saved only after a successful store), dated by the clone's commit. Docs with
 a hash under the repo's `repo://` prefix that the clone no longer has are deleted, with their
-hashes (not when the clone has no markdown at all or a directory could not be read). Clones use
+hashes (not when the clone has no markdown at all, a directory could not be read, or more than
+half of its docs, beyond 5, would go at once). Commit dates are read only when a doc changed. Clones use
 whatever protocol the user's gh is configured for (SSH or HTTPS).
 
 - **One sync at a time:** every docs sync runs in orchd: its scheduled scan, and `orch docs sync`
@@ -337,31 +387,35 @@ Until it runs, queries tokenized with v2 still match v1 vectors on every term th
 
 ## Duplicate clean-up
 
-`orch rag dedupe` (dry-run unless `--apply`; deletes through `DeleteSource` with `confirm`) lists
-`file://` and `claude://` sources that repeat a `repo://` doc:
+`orch rag dedupe` (dry-run unless `--apply`; deletes through `DeleteSource` with `confirm`) lists a
+`file://` or `claude://` source only when all of these hold:
 
-- the file's canonical URI (`sources.Canonical`: a registered repo or owner source, or the
-  file's git checkout, linked worktrees included, whose `origin` is a GitHub repo) is stored;
-- the file is gone and a `repo://` doc has the same in-repo path under a directory named for the
-  repo (`<repo>`, `<repo>.worktrees/...`, an editor workspace), a bare file name only directly
-  under it;
-- its rebuilt text is byte-identical to a `repo://` doc's.
+- its file exists, and its real path (after symlinks) sits in a registered source: a repo or
+  owner source, or a checkout of a repo the docs sync tracks (the checkout's own `origin` is
+  believed only for a tracked repo);
+- that source's own URI for the file (`sources.Canonical`: `checkout://` or `repo://`) is stored,
+  written by the docs or sources sync, not by a client;
+- the two stored copies are identical (by content hash, else rebuilt text), or the file as it is
+  now has the synced copy's content hash (the stored copy is an older version of it).
 
-A path-keyed doc with no canonical copy (an untracked plan) is kept. Checkouts are found by reading
-`.git`, `commondir` and `config` files, never by running git.
+Text alone never makes a duplicate, so a boilerplate file in another project or `~/.claude`'s own
+config is never listed, and a copy that differs from the synced one (an unmerged edit) is kept.
+The synced copies need their content hash, which docs stored before this release lack until
+`orch docs refresh` re-stores them, so run that first.
 
 ## Retrieval evaluation
 
 `internal/rageval` with `orch rag eval`:
 
 - **Set:** `<data>/eval/golden.jsonl`, one case per line,
-  `{query, expect: [uri|prefix*], span?, scope?, source_type?, tags?, section?, note?}` (unknown
+  `{query, expect: [uri|prefix*], span?, scope?, source_type?, tags?, section?, note?, split?}` (unknown
   fields rejected; `#` lines skipped; at most 1,000 cases, 4 MiB). While it does not exist the
   legacy `<config>/rag-eval.yaml` is used, and the first `orch rag eval seed` imports it as the
   `legacy` section. `--set` takes either format.
 - **Seed** (`orch rag eval seed`, no model calls): up to 3 decisions per session record (bullets
   under `## Decisions`, cut at the first clause and to 10 words, asked as "what did we decide about
-  ..."), labelled with that record; and per `repo://` doc one heading (level 2–3, 3–12 words, not
+  ..."), labelled with every source of that session (`session://<id>/*`, so the transcript the
+  record was written from answers too); and per `repo://` doc one heading (level 2–3, 3–12 words, not
   generic) and one backticked identifier that no other doc or record names, labelled with that doc.
   Sources are sampled in FNV-64 order of their URI. A reseed replaces only `seed-*` sections.
 - **Scoring** (report version 2): a case's rank is the chunk position of the first hit from an
@@ -371,7 +425,11 @@ A path-keyed doc with no canonical copy (an untracked plan) is kept. Checkouts a
   injected tokens (the pointer, or `--inject-format full`, rendering of the top three distinct
   sources at 2,000 characters, at 4 characters a token), and latency p50/p95, overall and per
   section.
+- **Splits:** every case is in `tune` or `holdout` (its `split`, else a hash of its query), so
+  settings are chosen on one half and judged on the other; `--split` scores one half, and reports
+  give each section's halves.
 - **Compare:** `--compare <run>` prints deltas, cases that moved, and a paired bootstrap over the
   shared queries for MRR, recall@3 and nDCG@10 (10,000 resamples, fixed seed): the mean delta, its
-  95% interval and the share of resamples where it was not positive. Runs of another version are
+  95% interval and the share of resamples where it was not positive. Cases pair by query and
+filters, once each; a comparison over fewer than 10 cases is never called significant. Runs of another version are
   not compared. `--mode`, `--ranking` and `--per-source` score other settings on the same daemon.
