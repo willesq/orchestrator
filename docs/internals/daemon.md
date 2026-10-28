@@ -54,7 +54,7 @@ Unary and stream interceptors allow a queued caller only the RPCs that read stat
 GitHub reads (`GetGitHubIdentity`, `ListGitHubScopes`, `ListGitHubRepos`, `ListGitHubItems`),
 `TailLogs`, `GetSystemMetrics`, `ListDocs`, `GetDocument`, `GetDocsSync` and
 `ListRegisteredSources`. Every other RPC (`Dispatch`, `RateTask`, `Ingest`, `DeleteSource`,
-`SummarizeSession`, the migration, source, docs-sync, GitHub-scope and `Restart` calls, and any
+`SummarizeSession`, the migration calls (`MigrateHybrid`, `DropBackup`, `ReindexKeywords`), the source, docs-sync, GitHub-scope and `Restart` calls, and any
 RPC added later) is refused with `PermissionDenied`, and the refusal is logged. A test fails
 when an RPC is in neither list. A queued session's own transcript is still
 stored: its session-end hook's `Ingest` and `SummarizeSession` are refused, so the hand-off unit
@@ -83,7 +83,7 @@ Times are Unix seconds with 0 meaning unknown or open.
 |---|---|---|
 | `Ping` | → version, uptime | — |
 | `Ingest` | text, source_uri, source_type, scope, tags, started_at, ended_at, timeline → chunks | type defaults to `manual` |
-| `Search` | query, top_k, scope, source_type, tags (any), mode, since, until → hits, fallback | top_k 0–100; mode `hybrid`/`dense`/empty; since ≤ until, neither negative; explicit hybrid that cannot run → `FailedPrecondition` |
+| `Search` | query, top_k, scope, source_type, tags (any), mode, since, until, per_source, ranking → hits (with heading), fallback | top_k 0–100; mode `hybrid`/`dense`/empty; ranking `weighted`/`plain`/empty; per_source at most 100 (0 = `rag.search.per_source`, negative = no cap); since ≤ until, neither negative; explicit hybrid that cannot run → `FailedPrecondition` |
 | `ListSources` | source_type, scope, uri_prefix, limit, since, until → sources, totals | same range rules; limit 0 = all |
 | `DeleteSource` | source_uri, confirm → deleted | `confirm` required server-side (`FailedPrecondition`), so no client can skip it; logged before and after |
 | `Dispatch` | agent, body, cwd, task_kind, model → id, worker_enabled, route | agent default `dev`; body ≤ 64 KiB; cwd absolute; routing below; queue full → `ResourceExhausted` |
@@ -95,6 +95,7 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `RateTask` | id, rating (`good`/`rework`/`bad`) → — | sets the task's rating; with the PR-outcome sweep, the only ledger writes outside the queue |
 | `MigrateHybrid` | target, apply → report, error | one at a time (`Aborted` if busy); see [memory.md](memory.md) |
 | `DropBackup` | apply → collection, points, dropped | collection name only from config, never the caller; shares the migration lock |
+| `ReindexKeywords` | apply → collection, tokenizer_version, total, stale, updated, applied, error | shares the migration lock (`Aborted` if busy); a refused plan → `FailedPrecondition`; an applied run that stops reports what it did in `error`; see [memory.md](memory.md#keyword-re-index) |
 | `GetGitHubIdentity` | refresh → login, orgs, teams | through `gh`; cached 10 minutes unless `refresh`; GitHub unreachable → `Unavailable` |
 | `ListGitHubScopes` | refresh → scopes, warning | creates a scope for each newly discovered account (the user's own enabled, orgs disabled) and never overwrites one; GitHub unreachable → the stored scopes plus a `warning` |
 | `SetGitHubScope` | scope → scope | only a discovered scope (`NotFound` otherwise); its kind cannot change; enabled, items (`involving`/`all`), repo mode (`all`/`include`/`exclude`) and repo names are validated (`InvalidArgument`) |

@@ -14,10 +14,12 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | `install [--apply] [--target] [--home] [--bin-dir]` | wire harnesses, and for Claude Code the pinned cc-safety-net and its guard rules ([install.md](install.md)) |
 | `mcp rag\|queue` | stdio MCP servers |
 | `ingest text --source-uri <uri> [--type] [--scope] [--tag]` | store stdin |
-| `search <query> [--top-k] [--scope] [--type] [--tag] [--mode] [--since] [--until]` | search memory |
+| `search <query> [--top-k] [--scope] [--type] [--tag] [--require-tag] [--uri] [--mode] [--ranking] [--per-source] [--since] [--until]` | search memory |
 | `rag sources [--type] [--scope] [--prefix] [--limit] [--since] [--until]` | list stored sources |
 | `rag forget <uri> --yes` | delete one source |
-| `rag eval [add …]` | retrieval golden set and scoring |
+| `rag eval [--set] [--top-k] [--save] [--compare] [--mode] [--ranking] [--per-source] [--section] [--inject-format] [--cases] [--json]`, `rag eval add <query> <uri>… [--span] [--section]`, `rag eval seed` | retrieval golden set, scoring and paired-bootstrap comparison ([memory.md](memory.md#retrieval-evaluation)) |
+| `rag dedupe [--apply]` | delete path-keyed copies of repo docs (*operator-only*) |
+| `rag reindex-keywords [--apply]` | rebuild keyword vectors for the current tokenizer, in place (*operator-only*) |
 | `rag migrate-hybrid [--target] [--apply] [--rollback] [--drop-backup]` | layout migration (*operator-only*) |
 | `rag backfill-sessions [--apply]` | date older sessions (*operator-only*) |
 | `source add\|list\|remove\|refresh`, `repo add\|list` | cadence-refreshed sources |
@@ -35,7 +37,7 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 
 | Server | Tool | Parameters |
 |---|---|---|
-| `rag` | `rag_search` | query, top_k (5), scope, source_type, since, until |
+| `rag` | `rag_search` | query, top_k (5), scope, source_type, tags (any), all_tags, source_uri, mode, per_source, since, until |
 | `rag` | `rag_ingest_text` | text, source_uri, source_type (`manual`), scope; same URI replaces |
 | `rag` | `rag_list_sources` | source_type, scope, uri_prefix, limit (50), since, until |
 | `rag` | `rag_delete_source` | source_uri, confirm (must be true) |
@@ -45,4 +47,6 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 
 Numeric arguments are clamped (negative → default, above 10000 → 10000); orchd still rejects a
 search `top_k` above 100. Results are plain text;
-search hits read `N. [score] <uri> (<type>) · <when>` followed by the chunk text.
+search hits read `N. [score] <uri> (<type>) · <when>` followed by the chunk text; a hit not from
+the user's sessions or repos adds its trust label and shows its text fenced as quoted data, with
+instruction-like text flagged ([hooks.md](hooks.md#prompt-context)).

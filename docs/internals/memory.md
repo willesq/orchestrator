@@ -88,21 +88,50 @@ refuse a filter with no `must` condition, since Qdrant reads an empty filter as 
 | `source_uri`, `source_type`, `scope`, `tags` | provenance; `source_uri` required |
 | `chunk_index`, `chunk_total` | position |
 | `heading` | shared heading path, if any |
-| `started_at`, `ended_at` | Unix seconds the chunk describes, if known |
+| `started_at`, `ended_at` | Unix seconds the chunk describes (see below) |
 | `ingested_at` | Unix seconds stored |
+| `bm25_v` | tokenizer version that made the keyword vector |
+
+**Dates.** Every chunk is dated, so date-range searches and recency see all content:
+
+- transcript chunks by their own turns, within the session's span;
+- session records by the session's span;
+- repo docs (docs and sources syncs) by the file's last commit (`git log --name-only` over the
+  repo's markdown, read once per repo; a `--depth 1` clone lists every file under its one commit,
+  so docs synced from GitHub carry the default branch's HEAD commit date). A local repo's
+  `.git/config` is untrusted, so git runs with every transport disabled (`protocol.*.allow=never`,
+  `GIT_NO_LAZY_FETCH=1`, which stops a partial clone's lazy fetch from running an `ext::` remote),
+  no fsmonitor, hooks, pager, signature program or `core.sshCommand`, no system config, in its own
+  process group, with 16 MiB of output and 30 s at most. Future commit dates count as now;
+- anything else (web pages, notes, config files) by when it was stored, so a re-fetched page is
+  dated by its fetch.
+
+Only a migration's copy keeps undated content undated (`Meta.KeepUndated`): copying old content is
+not new content. Chunks stored before this release stay undated until their source is stored
+again.
+
+**Duplicates within a source.** A chunk whose text (SHA-256) repeats an earlier chunk of the same
+source is dropped before embedding, and the remaining chunks keep contiguous indices.
 
 Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<path>`,
 `file://<path>`, `claude://<path under ~/.claude>`, web URLs, and anything given to `orch ingest`.
 
 ## BM25 keyword vectors
 
-`TokenizerVersion = 1`; changing tokenization requires bumping it and re-indexing.
+`TokenizerVersion = 2`; changing tokenization requires bumping it and re-indexing
+(`orch rag reindex-keywords`, below).
 
 - **Tokens:** NFC-normalize; match `[\pL\pM\pN_]+(?:[./:\-][\pL\pM\pN_]+)*`; split each match
   into script runs. Han, kana, Hangul and Thai runs become overlapping 2-rune bigrams. Other runs
   split into parts at `. / : - _` and camelCase boundaries (`HTTPServer` → `http`, `server`),
   lowercased; emit the whole identifier (≤ 64 bytes) when it has several parts, and each part of at
   least 2 runes that is not a stopword. Caps: 8192 tokens, 64 parts, 64-byte terms.
+- **Version 2 additions:** a capital after a digit starts a part (`OAuth2Token` → `auth2`,
+  `token`); each `. / : -` separated piece that is itself compound is emitted whole
+  (`rag.search.keyword_weight` → `keyword_weight`; `parse_HTTPRequest` → `httprequest`); and a
+  path's last element with a dot (`internal/rag/search.go` → `search.go`). On the golden set this
+  measured neutral (MRR 0.668 before and after the re-index); it is kept because it costs a
+  27-second re-index and never lowered a score.
 - **Term id:** FNV-1a 32-bit of the term.
 - **Document weight:** per distinct term `tf·(k1+1) / (tf + k1·(1 − b + b·len/avgLen))`, with
   k1 1.2, b 0.75, avgLen 55 (measured: a 110-token chunk is about 50 words), `len ≥ avgLen/4`. At
@@ -121,19 +150,37 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
    `min(2n, 400)`, returning each hit's dense vector). Keyword hits are capped at 2 per source. A
    query with no BM25 terms (only stopwords or single characters) skips keyword search silently.
 3. **Fuse** by reciprocal rank: each hit's score is `Σ weight/(k + rank)` with k = 60, weight 1 for
-   dense and 0.5 for keyword (`rag.search.keyword_weight`). Sort by fused score, then cosine.
-4. Every hit reports its **cosine** (computed from the returned vector for keyword-only hits), its
+   dense and 0.5 for keyword (`rag.search.keyword_weight`).
+4. **Weight** (ranking `weighted`, the default; `plain` skips it): multiply each candidate's fused
+   score by its source type's weight and by recency, `floor + (1 − floor) · 2^(−age / half-life)`.
+   Age is from `ended_at`, else `started_at`, else `ingested_at`; undated content counts as one
+   half-life old; future dates count as now. Defaults: half-life 180 days, floor 0.7, weights
+   `session_transcript` 0.7, `web` 0.9, all else 1 (`rag.search.recency_half_life_days`,
+   `recency_floor`, `source_weights`). This runs client-side, after fusion, because fusion is
+   client-side; Qdrant's formula queries would need fusion moved into the server.
+5. **Diversify:** keep at most `per_source` hits from one source (request field, else
+   `rag.search.per_source`, default 2; negative lifts it; never applied to a search filtered to one
+   source). Prompt context asks for 1. Sort by weighted score, then cosine; cut to TopK. Dense-only
+   searches fetch the same candidate depth as hybrid ones when they weight or cap.
+6. Every hit reports its **cosine** (computed from the returned vector for keyword-only hits), its
    BM25 score, and `Exact`: whether it contains, as a whole token, a code identifier from the
    query. Identifiers come from the first 8 KiB of the query, at most 16, each 5–128 characters:
    camelCase, snake_case, a dotted name of 2+ parts (each 2+ characters) not ending in a domain or
    file suffix (`com`, `io`, `md`, `json`, `yaml`, …), or a path with three parts or one part of 8+
    characters. Versions, numbers and a stop list (`e.g`, `i.e`, `a.k.a`, `go.mod`, `makefile`, …)
    are excluded.
-5. **Fallback:** if the collection has no keyword index or keyword search fails, configured hybrid
+7. **Fallback:** if the collection has no keyword index or keyword search fails, configured hybrid
    answers by meaning and returns a note; an explicitly requested hybrid fails instead. Fallback
    logs are limited to one a minute.
 
-Scores keep cosine meaning in both modes, so relevance floors (prompt context) work unchanged.
+Scores keep cosine meaning in both modes, so relevance floors (prompt context) work unchanged:
+weighting and the cap change the order, never a hit's score. Hits also carry their `heading`.
+
+Tuning on the golden set (162 cases, MRR, against fusion alone at 0.603): the transcript weight
+gave most of the gain (1.0 → 0.630, 0.85 → 0.663, 0.7 → 0.666, 0.6 → 0.665); without recency it
+was 0.631; half-lives of 90 to 365 days and floors of 0.5 to 0.85 all scored 0.662 to 0.666. A
+30-day half-life scored 0.673 but was not taken, since every case is from the last three months
+and a short half-life is what buries old decisions.
 
 ## Timelines
 
@@ -170,7 +217,13 @@ the hand-off unit, as a `session_record` like any session.
 - `web`: GET (≤ 5 MiB), strip HTML, redact, store under the URL. Errors keep the old chunks.
 - `repo` (absolute path) and `owner` (`<known_root>/<owner>/*`): every `*.md` found by `mdwalk`
   (skipping `.git` and `ingest.exclude_dirs`), stored as `repo://<owner|local>/<repo>/<path>`,
-  type `repo_doc`, tagged `repo:<name>` and `owner:<owner>`.
+  type `repo_doc`, tagged `repo:<name>` and `owner:<owner>`, dated by its last commit.
+- **Removed files:** after walking a repo, stored `repo://` sources under its prefix that the walk
+  did not find are deleted, except those the docs registry has a hash for (the GitHub sync owns
+  those; a local checkout missing one may just be behind), and nothing under a prefix two sources
+  share (two repo sources with the same directory name, or a repo source inside an owner source's
+  directory). A walk that found no markdown, or could not read a directory, deletes nothing, and a
+  failed listing disables the step.
 - **Validation** (`sources.Validate`, used by `orch source add` and the `SaveSource` RPC):
   - a `web` URI is an `http`/`https` URL with a host and no credentials;
   - a `repo` URI is an absolute path, cleaned;
@@ -194,8 +247,10 @@ the hand-off unit, as a `session_record` like any session.
 **Docs registry** (`orch docs add <owner>`, every 6 h): list the owner's repos with
 `gh api graphql` (skipping archived and forks by default), skip repos whose default-branch HEAD is
 unchanged, `gh repo clone --depth 1` into `<data>/repos`, and store each markdown file whose
-SHA-256 changed (hash saved only after a successful store). Clones use whatever protocol the
-user's gh is configured for (SSH or HTTPS).
+SHA-256 changed (hash saved only after a successful store), dated by the clone's commit. Docs with
+a hash under the repo's `repo://` prefix that the clone no longer has are deleted, with their
+hashes (not when the clone has no markdown at all or a directory could not be read). Clones use
+whatever protocol the user's gh is configured for (SSH or HTTPS).
 
 - **One sync at a time:** every docs sync runs in orchd: its scheduled scan, and `orch docs sync`
   and `refresh` through the `SyncDocs` RPC. While one runs, another request is refused, not
@@ -262,9 +317,61 @@ copies into a new one:
 
 Lock order: write gate (shared for writes) → source stripe → state mutex.
 
+## Keyword re-index
+
+`orch rag reindex-keywords` (RPC `ReindexKeywords`, operator-only, under the migration lock)
+brings keyword vectors up to the current `TokenizerVersion` in place, without re-embedding:
+
+1. Refuse unless the collection is hybrid and no migration shadow is installed. Count all chunks
+   and the stale ones (`must_not bm25_v = TokenizerVersion`, which also matches chunks with no
+   stamp). Without `--apply`, stop there.
+2. Scroll stale chunks 256 at a time (payload `source_uri` only; the offset is a point id, so the
+   shrinking filter does not skip any). Group the page by source; for each, under that source's
+   write lock, re-read the chunks' text and stamp (`POST /points`), skip any a live write already
+   stamped, recompute BM25, `PUT /points/vectors` (the `bm25` vector only) and
+   `POST /points/payload` with `bm25_v`.
+3. Every write stamps `bm25_v`, so a crashed or cancelled run resumes with what is left. Memory
+   stays at one page of text; on the 45,563-chunk store it took 27 s with orchd at about 250 MB.
+
+Until it runs, queries tokenized with v2 still match v1 vectors on every term the two share.
+
+## Duplicate clean-up
+
+`orch rag dedupe` (dry-run unless `--apply`; deletes through `DeleteSource` with `confirm`) lists
+`file://` and `claude://` sources that repeat a `repo://` doc:
+
+- the file's canonical URI (`sources.Canonical`: a registered repo or owner source, or the
+  file's git checkout, linked worktrees included, whose `origin` is a GitHub repo) is stored;
+- the file is gone and a `repo://` doc has the same in-repo path under a directory named for the
+  repo (`<repo>`, `<repo>.worktrees/...`, an editor workspace), a bare file name only directly
+  under it;
+- its rebuilt text is byte-identical to a `repo://` doc's.
+
+A path-keyed doc with no canonical copy (an untracked plan) is kept. Checkouts are found by reading
+`.git`, `commondir` and `config` files, never by running git.
+
 ## Retrieval evaluation
 
-`orch rag eval` runs each case of `<config>/rag-eval.yaml` (`cases: [{query, expect: [uri|prefix*],
-scope?, source_type?, tags?}]`) through normal search, counting hits by distinct source. Metrics:
-hit@1, recall@k (`--top-k`, default 10), MRR. Runs are saved as JSON under `<data>/eval/` and can
-be compared case by case.
+`internal/rageval` with `orch rag eval`:
+
+- **Set:** `<data>/eval/golden.jsonl`, one case per line,
+  `{query, expect: [uri|prefix*], span?, scope?, source_type?, tags?, section?, note?}` (unknown
+  fields rejected; `#` lines skipped; at most 1,000 cases, 4 MiB). While it does not exist the
+  legacy `<config>/rag-eval.yaml` is used, and the first `orch rag eval seed` imports it as the
+  `legacy` section. `--set` takes either format.
+- **Seed** (`orch rag eval seed`, no model calls): up to 3 decisions per session record (bullets
+  under `## Decisions`, cut at the first clause and to 10 words, asked as "what did we decide about
+  ..."), labelled with that record; and per `repo://` doc one heading (level 2–3, 3–12 words, not
+  generic) and one backticked identifier that no other doc or record names, labelled with that doc.
+  Sources are sampled in FNV-64 order of their URI. A reseed replaces only `seed-*` sections.
+- **Scoring** (report version 2): a case's rank is the chunk position of the first hit from an
+  expected source whose text contains the span, if any (chunk position, not distinct source,
+  since the top three chunks are what is injected); the source rank ignores the span. Metrics:
+  recall@1/3/5/10, MRR, nDCG@10 (one relevant item: expected URIs are alternatives), source hit@k,
+  injected tokens (the pointer, or `--inject-format full`, rendering of the top three distinct
+  sources at 2,000 characters, at 4 characters a token), and latency p50/p95, overall and per
+  section.
+- **Compare:** `--compare <run>` prints deltas, cases that moved, and a paired bootstrap over the
+  shared queries for MRR, recall@3 and nDCG@10 (10,000 resamples, fixed seed): the mean delta, its
+  95% interval and the share of resamples where it was not positive. Runs of another version are
+  not compared. `--mode`, `--ranking` and `--per-source` score other settings on the same daemon.
