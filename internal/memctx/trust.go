@@ -164,9 +164,20 @@ const maxScan = 4 << 10
 // maxSqueeze is how many bytes of a text squeeze reads.
 const maxSqueeze = 1 << 20
 
+// invisible reports whether r carries no visible word: a format or control
+// character, a nonspacing mark (combining marks, variation selectors), or a
+// blank filler letter.
+func invisible(r rune) bool {
+	switch r {
+	case '\u115F', '\u1160', '\u3164', '\uFFA0', '\u2800':
+		return true
+	}
+	return unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Cc, r) || unicode.Is(unicode.Mn, r)
+}
+
 // squeeze returns up to maxScan bytes of text read from its first maxSqueeze
-// bytes, without format characters or markup and with each whitespace run
-// cut to one space.
+// bytes, without invisible characters or markup and with each whitespace
+// run cut to one space.
 func squeeze(text string) string {
 	if len(text) > maxSqueeze {
 		text = text[:maxSqueeze]
@@ -175,13 +186,13 @@ func squeeze(text string) string {
 	space := false
 	for _, r := range text {
 		switch {
-		case unicode.Is(unicode.Cf, r) || strings.ContainsRune("*_`~>#|", r):
-			continue
 		case unicode.IsSpace(r):
 			if space {
 				continue
 			}
 			space, r = true, ' '
+		case invisible(r) || strings.ContainsRune("*_`~>#|", r):
+			continue
 		default:
 			space = false
 		}

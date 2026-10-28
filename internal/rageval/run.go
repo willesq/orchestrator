@@ -270,21 +270,35 @@ func pairResults(before, after Report) [][2]Result {
 			byQuery[r.Query] = i
 		}
 	}
-	// A before-result pairs at most once, whether matched by key or by
-	// query, so one baseline row cannot stand in for two after-rows.
+	// Key matches first, for every after-row, then the query fallback for
+	// rows left over, taken in (key, position) order: the pairs do not depend
+	// on how either run ordered its rows, and a before-result pairs once.
 	used := map[int]bool{}
+	match := make([]int, len(after.Results))
+	for i, r := range after.Results {
+		match[i] = -1
+		if b, ok := byKey[r.Key]; ok && r.Key != "" && !used[b] {
+			match[i], used[b] = b, true
+		}
+	}
+	rest := make([]int, 0, len(after.Results))
+	for i := range after.Results {
+		if match[i] < 0 {
+			rest = append(rest, i)
+		}
+	}
+	sort.SliceStable(rest, func(x, y int) bool { return after.Results[rest[x]].Key < after.Results[rest[y]].Key })
+	for _, i := range rest {
+		r := after.Results[i]
+		if b, ok := byQuery[r.Query]; ok && queries[r.Query] == 1 && !used[b] {
+			match[i], used[b] = b, true
+		}
+	}
 	var out [][2]Result
-	for _, r := range after.Results {
-		b, ok := byKey[r.Key]
-		if !ok || r.Key == "" {
-			b, ok = byQuery[r.Query]
-			ok = ok && queries[r.Query] == 1
+	for i, b := range match {
+		if b >= 0 {
+			out = append(out, [2]Result{before.Results[b], after.Results[i]})
 		}
-		if !ok || used[b] {
-			continue
-		}
-		used[b] = true
-		out = append(out, [2]Result{before.Results[b], r})
 	}
 	return out
 }

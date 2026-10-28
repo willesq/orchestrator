@@ -1,8 +1,6 @@
 package handoff
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -32,6 +30,9 @@ type Checkout struct {
 	Linked, Anonymous, Unreadable bool
 	// AnonymousWhy says why an anonymous checkout's .git was not believed.
 	AnonymousWhy string
+	// TrackWhy says why a branch named like the default is not taken as
+	// the origin's default branch (see upstreamWhy); "" when it is.
+	TrackWhy string
 }
 
 // OnDefaultBranch reports whether the checkout is on its default branch.
@@ -57,6 +58,8 @@ func (c Checkout) DefaultBranchState() (bool, string) {
 		return false, "on branch " + c.Branch + ", and the default branch is unknown (run: git remote set-head origin --auto)"
 	case c.Branch != c.DefaultBranch:
 		return false, "on branch " + c.Branch + ", not the default branch " + c.DefaultBranch
+	case c.TrackWhy != "":
+		return false, c.TrackWhy
 	}
 	return true, ""
 }
@@ -113,6 +116,9 @@ func CheckoutAt(dir string) (Checkout, bool) {
 	head, readable := headRef(gitDir)
 	c.Branch, c.Unreadable = head, !readable
 	c.DefaultBranch = defaultBranch(common)
+	if c.Branch != "" && c.Branch == c.DefaultBranch {
+		c.TrackWhy = upstreamWhy(common, c.Branch)
+	}
 	return c, true
 }
 
@@ -187,14 +193,34 @@ func gitDirAt(dir string) (gitDir string, linked, found bool, why string) {
 	return real, true, true, ""
 }
 
-// within reports whether path p is dir or below it, after resolving symlinks.
+// within reports whether path p is dir or below it, comparing cleaned paths
+// with symlinks resolved on both sides, at a separator boundary: /a/proj.git
+// and /a/proj2 are not within /a/proj. Each existing ancestor of p is also
+// compared with dir as a file, so a path spelled in another case on a
+// case-insensitive volume is still inside.
 func within(p, dir string) bool {
-	rd, err := filepath.EvalSymlinks(dir)
-	if err != nil {
-		rd = filepath.Clean(dir)
+	resolve := func(x string) string {
+		if r, err := filepath.EvalSymlinks(x); err == nil {
+			return r
+		}
+		return filepath.Clean(x)
 	}
-	rel, err := filepath.Rel(rd, p)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	rp, rd := resolve(p), resolve(dir)
+	if rp == rd || strings.HasPrefix(rp, strings.TrimSuffix(rd, string(filepath.Separator))+string(filepath.Separator)) {
+		return true
+	}
+	di, err := os.Stat(rd)
+	if err != nil {
+		return false
+	}
+	for a := rp; ; a = filepath.Dir(a) {
+		if ai, err := os.Stat(a); err == nil && os.SameFile(ai, di) {
+			return true
+		}
+		if filepath.Dir(a) == a {
+			return false
+		}
+	}
 }
 
 // samePath compares two paths after cleaning and resolving symlinks.
@@ -241,7 +267,7 @@ func headRef(gitDir string) (string, bool) {
 		return "", true // a commit id: detached
 	}
 	name, ok := strings.CutPrefix(strings.TrimSpace(ref), "refs/heads/")
-	if !ok || name == "" || name == ".invalid" || len(name) > 255 || strings.IndexFunc(name, badRefRune) >= 0 {
+	if !ok || !validRefName(name) {
 		return "", false
 	}
 	return name, true
@@ -302,43 +328,6 @@ func localBranches(common string) map[string]bool {
 	return out
 }
 
-// configValue reads one key from a git config file's section (both
-// lowercased, no subsection).
-func configValue(gitDir, section, key string) string {
-	b, err := readSmall(filepath.Join(gitDir, "config"), maxGitConfig)
-	if err != nil {
-		return ""
-	}
-	in := false
-	for _, raw := range strings.Split(string(b), "\n") {
-		line := strings.TrimSpace(raw)
-		if strings.HasPrefix(line, "[") {
-			in = strings.EqualFold(strings.Trim(line, "[] "), section)
-			continue
-		}
-		if k, v, ok := strings.Cut(line, "="); in && ok && strings.EqualFold(strings.TrimSpace(k), key) {
-			return configScalar(v)
-		}
-	}
-	return ""
-}
-
-// configScalar reads a git config value: an inline comment (# or ;) outside
-// quotes ends it, and surrounding quotes are dropped.
-func configScalar(v string) string {
-	quoted := false
-	for i, r := range v {
-		switch {
-		case r == '"':
-			quoted = !quoted
-		case (r == '#' || r == ';') && !quoted:
-			v = v[:i]
-			return strings.Trim(strings.TrimSpace(v), `"`)
-		}
-	}
-	return strings.Trim(strings.TrimSpace(v), `"`)
-}
-
 // symref reads a symbolic ref file ("ref: <prefix><name>") and returns name.
 func symref(path, prefix string) string {
 	b, err := readSmall(path, maxGitPointer)
@@ -350,34 +339,10 @@ func symref(path, prefix string) string {
 		return ""
 	}
 	name, ok := strings.CutPrefix(strings.TrimSpace(ref), prefix)
-	if !ok || name == "" {
+	if !ok || !validRefName(name) {
 		return ""
 	}
 	return name
-}
-
-// originURL reads remote.origin.url from a git directory's config.
-func originURL(gitDir string) string {
-	b, err := readSmall(filepath.Join(gitDir, "config"), maxGitConfig)
-	if err != nil {
-		return ""
-	}
-	in := false
-	sc := bufio.NewScanner(bytes.NewReader(b))
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if strings.HasPrefix(line, "[") {
-			in = strings.EqualFold(strings.Join(strings.Fields(line), " "), `[remote "origin"]`)
-			continue
-		}
-		if !in {
-			continue
-		}
-		if k, v, ok := strings.Cut(line, "="); ok && strings.EqualFold(strings.TrimSpace(k), "url") {
-			return configScalar(v)
-		}
-	}
-	return ""
 }
 
 // githubURL matches the forms a GitHub remote takes: scp-like SSH, ssh://
@@ -411,6 +376,25 @@ func readSmall(path string, limit int64) ([]byte, error) {
 // badRefRune reports a rune git never allows in a branch name: whitespace,
 // control and format characters. HEAD is the repository's to write, so a
 // name that breaks this is not used (it ends up in status lines).
+// validRefName reports whether a branch name read from a ref file is one git
+// could have written and a status line can show: no whitespace, control or
+// format characters, none of ~^:, at most 255 bytes, and not the
+// placeholder a reftable repository leaves.
+func validRefName(name string) bool {
+	if name == "" || name == ".invalid" || len(name) > 255 || strings.IndexFunc(name, badRefRune) >= 0 {
+		return false
+	}
+	// git check-ref-format's path rules, so a name can never lead a ref
+	// lookup out of the git directory.
+	for _, bad := range []string{"..", "//", "@{", "\\"} {
+		if strings.Contains(name, bad) {
+			return false
+		}
+	}
+	return !strings.HasPrefix(name, "/") && !strings.HasSuffix(name, "/") && !strings.HasSuffix(name, ".lock") &&
+		!strings.HasPrefix(name, ".") && !strings.Contains(name, "/.")
+}
+
 func badRefRune(r rune) bool {
 	return unicode.IsSpace(r) || unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '~' || r == '^' || r == ':'
 }

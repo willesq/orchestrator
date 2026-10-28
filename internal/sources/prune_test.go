@@ -58,9 +58,12 @@ func gitRepo(t *testing.T, dir, branch, defaultBranch string) {
 	t.Helper()
 	write(t, filepath.Join(dir, ".git", "HEAD"), "ref: refs/heads/"+branch+"\n")
 	if branch != "" {
-		write(t, filepath.Join(dir, ".git", "refs", "heads", branch), "0123\n")
+		oid := strings.Repeat("ab", 20) + "\n"
+		write(t, filepath.Join(dir, ".git", "refs", "heads", branch), oid)
+		write(t, filepath.Join(dir, ".git", "refs", "remotes", "origin", branch), oid)
 	}
-	write(t, filepath.Join(dir, ".git", "config"), "[remote \"origin\"]\n\turl = git@github.com:acme/widget.git\n")
+	write(t, filepath.Join(dir, ".git", "config"), "[remote \"origin\"]\n\turl = git@github.com:acme/widget.git\n"+
+		"[branch \""+branch+"\"]\n\tremote = origin\n\tmerge = refs/heads/"+branch+"\n")
 	if defaultBranch != "" {
 		write(t, filepath.Join(dir, ".git", "refs", "remotes", "origin", "HEAD"), "ref: refs/remotes/origin/"+defaultBranch+"\n")
 	}
@@ -257,6 +260,7 @@ type fakeGuard struct {
 	allow   bool
 	keys    []string
 	settled []int
+	forgot  []string
 }
 
 func (g *fakeGuard) Decide(_ context.Context, key, _ string, _, _ int) (bool, string, error) {
@@ -269,6 +273,11 @@ func (g *fakeGuard) Decide(_ context.Context, key, _ string, _, _ int) (bool, st
 
 func (g *fakeGuard) Settled(_ context.Context, _ string, n int) error {
 	g.settled = append(g.settled, n)
+	return nil
+}
+
+func (g *fakeGuard) Forget(_ context.Context, key string, current []string) error {
+	g.forgot = append(g.forgot, key+"="+strings.Join(current, ","))
 	return nil
 }
 
@@ -287,9 +296,13 @@ func TestGuardedPruneAndAttention(t *testing.T) {
 	}
 	g.allow = true
 	status, _ = Refresh(context.Background(), src, ing, RefreshOpts{Guard: g})
-	// The prune settles the baseline at what it left: 2 stored, 1 removed.
-	if status != "ok" || len(ing.deleted) != 1 || !slices.Equal(g.settled, []int{1}) {
+	// The guard records an allowed prune itself; only a clean walk settles,
+	// and every refresh forgets refusals it did not make again.
+	if status != "ok" || len(ing.deleted) != 1 || len(g.settled) != 0 {
 		t.Fatalf("allowed: %q, deleted %v, settled %v", status, ing.deleted, g.settled)
+	}
+	if want := []string{"source|repo|" + repo + "=" + pre, "source|repo|" + repo + "="}; !slices.Equal(g.forgot, want) {
+		t.Fatalf("forgot %v, want %v", g.forgot, want)
 	}
 	// A walk with nothing gone settles at what is stored.
 	g.settled = nil
@@ -303,8 +316,10 @@ func TestGuardedPruneAndAttention(t *testing.T) {
 	ip := CheckoutURI(filepath.Join(root, "acme", "proj")) + "/"
 	ing = &pruningIngester{stored: map[string]string{ip + "README.md": rag.WriterSources, ip + "B.md": rag.WriterSources}}
 	status, _ = Refresh(context.Background(), Source{ID: "owner|acme", Kind: KindOwner, URI: "acme"}, ing, RefreshOpts{KnownRoots: []string{root}, Guard: &fakeGuard{}})
-	if !strings.HasPrefix(status, "attention: proj: 3 docs are gone") {
-		t.Fatalf("owner refused: %q", status)
+	og := &fakeGuard{}
+	status, _ = Refresh(context.Background(), Source{ID: "owner|acme", Kind: KindOwner, URI: "acme"}, ing, RefreshOpts{KnownRoots: []string{root}, Guard: og})
+	if !strings.HasPrefix(status, "attention: proj: 3 docs are gone") || !slices.Equal(og.forgot, []string{"source|owner|acme=" + ip}) {
+		t.Fatalf("owner refused: %q, forgot %v", status, og.forgot)
 	}
 }
 

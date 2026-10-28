@@ -127,6 +127,9 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 	}
 	res := Result{Repos: len(todo)}
 	networkRun := 0
+	// Refusals this sync still stands by: those it made, and those of repos
+	// skipped as unchanged (the same tree would be refused again).
+	var current []string
 	for i, rp := range todo {
 		if ctx.Err() != nil {
 			res.NotTried = len(todo) - i
@@ -136,6 +139,7 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 		prev, _ := reg.RepoSHA(ctx, o.Owner, rp.Name)
 		if !opts.Force && rp.HeadSHA != "" && prev == rp.HeadSHA && !overwritten(ctx, reg, ing, o.Owner, rp.Name) {
 			res.Unchanged++ // repo unchanged → skip entirely (no clone, no re-ingest)
+			current = append(current, "repo://"+o.Owner+"/"+rp.Name+"/")
 			report(opts, i+1, len(todo), rp.Name)
 			continue
 		}
@@ -171,6 +175,7 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 		networkRun = 0
 		files, refused := ingestRepoMarkdown(ctx, reg, dest, o, rp.Name, ing, opts)
 		if refused != "" {
+			current = append(current, "repo://"+o.Owner+"/"+rp.Name+"/")
 			// The repo records its new HEAD, so it is not cloned again until
 			// HEAD moves or the operator confirms the prune (which clears it),
 			// and shows as failing meanwhile.
@@ -188,6 +193,11 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 		})
 		res.Synced++
 		report(opts, i+1, len(todo), rp.Name)
+	}
+	if opts.Guard != nil {
+		if err := opts.Guard.Forget(ctx, prunecap.DocsKey(o.Owner), current); err != nil {
+			log.Printf("docs: %s: prune guard: %v", o.Owner, err)
+		}
 	}
 	res.Status = "ok"
 	if res.Failed > 0 {
@@ -386,6 +396,9 @@ func overwritten(ctx context.Context, reg *Registry, ing Ingester, owner, repo s
 type PruneGuard interface {
 	Decide(ctx context.Context, key, prefix string, stored, gone int) (bool, string, error)
 	Settled(ctx context.Context, prefix string, count int) error
+	// Forget clears key's refusals outside current, the prefixes the
+	// latest complete walk refused again.
+	Forget(ctx context.Context, key string, current []string) error
 }
 
 // minPruneCap is how many docs a sync may always remove at once.
@@ -432,19 +445,13 @@ func pruneRemoved(ctx context.Context, reg *Registry, ing Ingester, opts SyncOpt
 	} else if len(gone) > max(minPruneCap, len(known)/2) {
 		return fmt.Sprintf("%d of %d docs are gone at once; none were removed", len(gone), len(known))
 	}
-	removed := 0
-	defer func() {
-		if opts.Guard != nil {
-			_ = opts.Guard.Settled(ctx, prefix, len(known)-removed)
-		}
-	}()
+	// The guard recorded the prune as made; only a clean walk settles it.
 	for _, uri := range gone {
 		if _, err := rm.DeleteSource(ctx, uri); err != nil {
 			log.Printf("docs: removing %s, gone from its repo: %v", uri, err)
 			continue
 		}
 		_ = reg.DeleteHash(ctx, uri)
-		removed++
 		log.Printf("docs: removed %s, gone from its repo", uri)
 	}
 	return ""

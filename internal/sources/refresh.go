@@ -111,6 +111,7 @@ type repoResult struct {
 	found   bool   // it had markdown to index
 	skipped string // why it was left as last indexed, if it was
 	refused string // why a prune was refused, if it was
+	prefix  string // the repo's checkout:// prefix, when walked
 }
 
 // refreshOwner ingests markdown from every repo directory under <root>/<owner>.
@@ -133,7 +134,7 @@ func refreshOwner(ctx context.Context, s Source, ing Ingester, opts RefreshOpts)
 		return "missing", nil
 	}
 	found := false
-	var skipped, refused []string
+	var skipped, refused, refusedPrefixes []string
 	// One listing of what this refresh stored under the owner serves every
 	// repo in it, rather than one scan of the store per repo.
 	listing := &storedListing{prefix: CheckoutURI(resolve(base)) + "/"}
@@ -152,8 +153,10 @@ func refreshOwner(ctx context.Context, s Source, ing Ingester, opts RefreshOpts)
 		}
 		if r.refused != "" {
 			refused = append(refused, statusSafe(e.Name())+": "+r.refused)
+			refusedPrefixes = append(refusedPrefixes, r.prefix)
 		}
 	}
+	forgetRefusals(ctx, s, opts, refusedPrefixes)
 	switch {
 	case len(refused) > 0:
 		return attention(s, refused), nil
@@ -170,6 +173,11 @@ func refreshRepo(ctx context.Context, s Source, repoPath, owner string, ing Inge
 		return "missing", nil
 	}
 	r := ingestRepoMarkdown(ctx, repoPath, owner, s, ing, opts, nil)
+	var current []string
+	if r.refused != "" {
+		current = []string{r.prefix}
+	}
+	forgetRefusals(ctx, s, opts, current)
 	switch {
 	case r.refused != "":
 		return attention(s, []string{r.refused}), nil
@@ -179,6 +187,17 @@ func refreshRepo(ctx context.Context, s Source, repoPath, owner string, ing Inge
 		return "missing", nil
 	}
 	return "ok", nil
+}
+
+// forgetRefusals clears the source's refused prunes this refresh did not
+// refuse again, so a confirmation grants exactly what its status shows.
+func forgetRefusals(ctx context.Context, s Source, opts RefreshOpts, current []string) {
+	if opts.Guard == nil || ctx.Err() != nil {
+		return
+	}
+	if err := opts.Guard.Forget(ctx, prunecap.SourceKey(s.ID), current); err != nil {
+		log.Printf("sources: %s: prune guard: %v", s.ID, err)
+	}
 }
 
 // statusSafe keeps text that came from a repository (a directory or branch
@@ -235,7 +254,7 @@ func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, i
 	var dates *gitdates.Dates
 	prefix := CheckoutURI(repoPath) + "/"
 	seen := map[string]bool{}
-	r := repoResult{}
+	r := repoResult{prefix: prefix}
 	complete := mdwalk.OwnFiles(repoPath, opts.ExcludeDirs, func(p string) {
 		rel, _ := filepath.Rel(repoPath, p)
 		seen[CheckoutURI(p)] = true
@@ -283,6 +302,9 @@ func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, i
 type PruneGuard interface {
 	Decide(ctx context.Context, key, prefix string, stored, gone int) (bool, string, error)
 	Settled(ctx context.Context, prefix string, count int) error
+	// Forget clears key's refusals outside current, the prefixes the
+	// latest complete walk refused again.
+	Forget(ctx context.Context, key string, current []string) error
 }
 
 // pruneRemoved deletes the docs this refresh stored under prefix that the
@@ -329,17 +351,13 @@ func pruneRemoved(ctx context.Context, ing Ingester, opts RefreshOpts, s Source,
 	} else if len(gone) > max(minPruneCap, len(stored)/2) {
 		return fmt.Sprintf("%d of %d stored docs are gone at once; none were removed", len(gone), len(stored))
 	}
-	removed := 0
+	// The guard recorded the prune as made; only a clean walk settles it.
 	for _, uri := range gone {
 		if _, err := p.DeleteSource(ctx, uri); err != nil {
 			log.Printf("sources: removing %s, gone from its repo: %v", uri, err)
 			continue
 		}
-		removed++
 		log.Printf("sources: removed %s, gone from its repo", uri)
-	}
-	if opts.Guard != nil {
-		_ = opts.Guard.Settled(ctx, prefix, len(stored)-removed)
 	}
 	return ""
 }

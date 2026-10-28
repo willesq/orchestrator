@@ -115,7 +115,10 @@ func reachable(p, root string, exclude []string, ownOnly bool) bool {
 			continue
 		}
 		dir = filepath.Join(dir, name)
-		if name == ".git" || slices.Contains(exclude, name) || (ownOnly && (IsWorktreesDir(name) || hasGit(dir))) {
+		// Case-folded: the link's text keeps its own case, which on a
+		// case-insensitive volume (APFS) still names .git or vendor.
+		excluded := strings.EqualFold(name, ".git") || slices.ContainsFunc(exclude, func(e string) bool { return strings.EqualFold(e, name) })
+		if excluded || (ownOnly && (IsWorktreesDir(strings.ToLower(name)) || hasGit(dir))) {
 			return false
 		}
 	}

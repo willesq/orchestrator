@@ -114,9 +114,12 @@ func TestFindCheckoutDoesNotBlockOnAFIFO(t *testing.T) {
 func TestCheckoutBranchesAndCommondirLayout(t *testing.T) {
 	root := t.TempDir()
 	main := filepath.Join(root, "widget")
-	writeFile(t, filepath.Join(main, ".git", "config"), "[remote \"origin\"]\n\turl = git@github.com:acme/widget.git\n")
+	writeFile(t, filepath.Join(main, ".git", "config"), "[remote \"origin\"]\n\turl = git@github.com:acme/widget.git\n[branch \"main\"]\n\tremote = origin\n\tmerge = refs/heads/main\n")
 	writeFile(t, filepath.Join(main, ".git", "HEAD"), "ref: refs/heads/main\n")
 	writeFile(t, filepath.Join(main, ".git", "refs", "remotes", "origin", "HEAD"), "ref: refs/remotes/origin/main\n")
+	oid := strings.Repeat("ab", 20) + "\n"
+	writeFile(t, filepath.Join(main, ".git", "refs", "heads", "main"), oid)
+	writeFile(t, filepath.Join(main, ".git", "refs", "remotes", "origin", "main"), oid)
 	co, _ := FindCheckout(filepath.Join(main, "a.md"))
 	if co.Branch != "main" || co.DefaultBranch != "main" || !co.OnDefaultBranch() {
 		t.Fatalf("main = %+v", co)
@@ -267,6 +270,115 @@ func TestRealGitLayouts(t *testing.T) {
 	if ok, why := co.DefaultBranchState(); ok {
 		t.Fatalf("a single-branch clone of feat counted as the default (%+v, %q)", co, why)
 	}
+
+	// An ordinary clone is on its default branch.
+	clone := filepath.Join(root, "clone")
+	gitCmd(t, root, "clone", "-q", up, clone)
+	if co, _ := CheckoutAt(clone); !co.OnDefaultBranch() {
+		t.Fatalf("clone = %+v", co)
+	}
+
+	// QA r4-3: a PR checked out as a local main, with no origin/HEAD.
+	writeFile(t, filepath.Join(rel, "pr.md"), "pr") // feat is checked out there
+	gitCmd(t, rel, "add", "-A")
+	gitCmd(t, rel, "commit", "-q", "--no-gpg-sign", "-m", "pr")
+	// The same clone with a PR reset onto its main keeps main's tracking
+	// config, so only the commit gives it away.
+	gitCmd(t, clone, "fetch", "-q", "origin", "feat")
+	gitCmd(t, clone, "checkout", "-q", "-B", "main", "FETCH_HEAD")
+	if ok, why := func() (bool, string) { co, _ := CheckoutAt(clone); return co.DefaultBranchState() }(); ok || !strings.Contains(why, "not at origin/main") {
+		t.Fatalf("PR reset onto a clone's main = %v, %q", ok, why)
+	}
+	pr := filepath.Join(root, "pr")
+	_ = os.MkdirAll(pr, 0o755)
+	gitCmd(t, pr, "init", "-q", "-b", "main")
+	gitCmd(t, pr, "remote", "add", "origin", "git@github.com:acme/widget.git")
+	gitCmd(t, pr, "fetch", "-q", up, "feat")
+	gitCmd(t, pr, "checkout", "-q", "-B", "main", "FETCH_HEAD")
+	co, _ = CheckoutAt(pr)
+	if ok, why := co.DefaultBranchState(); ok || !strings.Contains(why, "origin/main is not fetched") {
+		t.Fatalf("PR as local main = %+v, %q", co, why)
+	}
+	// Once origin/main is fetched it must match.
+	gitCmd(t, pr, "fetch", "-q", up, "main:refs/remotes/origin/main")
+	co, _ = CheckoutAt(pr)
+	if ok, why := co.DefaultBranchState(); ok || !strings.Contains(why, "not at origin/main") {
+		t.Fatalf("PR as local main, origin/main fetched = %+v, %q", co, why)
+	}
+	// Tracking another remote's branch is not tracking origin's default.
+	gitCmd(t, pr, "remote", "add", "fork", up)
+	gitCmd(t, pr, "fetch", "-q", "fork")
+	gitCmd(t, pr, "branch", "-q", "-u", "fork/feat", "main")
+	co, _ = CheckoutAt(pr)
+	if ok, why := co.DefaultBranchState(); ok || !strings.Contains(why, "tracks fork feat") {
+		t.Fatalf("main tracking fork/feat = %+v, %q", co, why)
+	}
+	// At origin/main with no upstream: the default.
+	gitCmd(t, pr, "branch", "-q", "--unset-upstream", "main")
+	gitCmd(t, pr, "reset", "-q", "--hard", "origin/main")
+	if co, _ := CheckoutAt(pr); !co.OnDefaultBranch() {
+		t.Fatalf("main at origin/main = %+v", co)
+	}
+	// A repository with no origin is its own default.
+	local := filepath.Join(root, "local")
+	_ = os.MkdirAll(local, 0o755)
+	gitCmd(t, local, "init", "-q", "-b", "main")
+	writeFile(t, filepath.Join(local, "a.md"), "a")
+	gitCmd(t, local, "add", "-A")
+	gitCmd(t, local, "commit", "-q", "--no-gpg-sign", "-m", "1")
+	if co, _ := CheckoutAt(local); !co.OnDefaultBranch() {
+		t.Fatalf("local repo = %+v", co)
+	}
+}
+
+// QA r4-9 and r4-4: header-line keys, comments after a header, quoted
+// subsections, and a symref naming a bad branch.
+func TestConfigParsing(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "config"), strings.Join([]string{
+		"# leading comment",
+		"[init] defaultBranch = trunk",
+		`[remote "origin"] # the main remote`,
+		"\turl = git@github.com:acme/widget.git ; mirror",
+		`[branch "Main"]`,
+		"\tremote = origin",
+		"[core]",
+		"\tbare",
+		"[remote.legacy]",
+		"\turl = x",
+		"[broken",
+		"\turl = ignored",
+	}, "\n"))
+	cfg := readGitConfig(dir)
+	for k, want := range map[string]string{
+		"init.defaultbranch": "trunk", "remote.origin.url": "git@github.com:acme/widget.git",
+		"branch.Main.remote": "origin", "core.bare": "true", "remote.legacy.url": "x",
+	} {
+		if cfg[k] != want {
+			t.Errorf("%s = %q, want %q (all: %v)", k, cfg[k], want, cfg)
+		}
+	}
+	if cfg["branch.main.remote"] != "" || len(cfg) != 5 {
+		t.Errorf("unexpected keys: %v", cfg)
+	}
+	if configValue(dir, "INIT", "DefaultBranch") != "trunk" || originURL(dir) != "git@github.com:acme/widget.git" {
+		t.Error("configValue / originURL")
+	}
+	writeFile(t, filepath.Join(dir, "HEAD"), "ref: refs/remotes/origin/ma\x1bin\n")
+	if symref(filepath.Join(dir, "HEAD"), "refs/remotes/origin/") != "" {
+		t.Error("symref accepted a control character")
+	}
+	if refOID(dir, "refs/remotes/origin/none") != "" || isOID("xyz") {
+		t.Error("refOID / isOID")
+	}
+	writeFile(t, filepath.Join(dir, "packed-refs"), "# pack-refs\n"+strings.Repeat("a", 40)+" refs/remotes/origin/main\n")
+	if refOID(dir, "refs/remotes/origin/main") != strings.Repeat("a", 40) {
+		t.Error("packed ref")
+	}
+	writeFile(t, filepath.Join(dir, "refs", "heads", "bad"), "not an oid\n")
+	if refOID(dir, "refs/heads/bad") != "" {
+		t.Error("loose ref that is not an oid")
+	}
 }
 
 func TestConfigInlineComments(t *testing.T) {
@@ -275,5 +387,48 @@ func TestConfigInlineComments(t *testing.T) {
 	}
 	if got := configScalar(` "a # not a comment" ; c`); got != "a # not a comment" {
 		t.Fatalf("%q", got)
+	}
+}
+
+func TestWithinIsBoundedBySeparators(t *testing.T) {
+	root := t.TempDir()
+	proj := filepath.Join(root, "proj")
+	for _, d := range []string{"proj/.gitdir", "proj.git", "proj2"} {
+		_ = os.MkdirAll(filepath.Join(root, d), 0o755)
+	}
+	_ = os.Symlink(filepath.Join(root, "proj.git"), filepath.Join(proj, "link"))
+	for p, want := range map[string]bool{
+		proj: true, filepath.Join(proj, ".gitdir"): true, filepath.Join(proj, "missing", ".."): true,
+		filepath.Join(root, "proj.git"): false, filepath.Join(root, "proj2"): false, root: false,
+		filepath.Join(proj, "link"): false, // resolves to the sibling
+	} {
+		if got := within(p, proj); got != want {
+			t.Errorf("within(%s) = %v, want %v", p, got, want)
+		}
+	}
+}
+
+func TestWithinOnACaseInsensitiveVolume(t *testing.T) {
+	root := t.TempDir()
+	proj := filepath.Join(root, "proj")
+	_ = os.MkdirAll(filepath.Join(proj, "gd"), 0o755)
+	upper := filepath.Join(root, "PROJ", "gd")
+	if _, err := os.Stat(upper); err != nil {
+		t.Skip("case-sensitive volume")
+	}
+	if !within(upper, proj) {
+		t.Fatal("a path in another case escaped within")
+	}
+}
+
+func TestValidRefName(t *testing.T) {
+	for name, want := range map[string]bool{
+		"main": true, "feat/x": true, "release-1.2": true,
+		"": false, ".invalid": false, "a..b": false, "../../etc": false, "/abs": false, "a/": false,
+		"a//b": false, "x.lock": false, "a@{1}": false, ".hidden": false, "a/.b": false, "a b": false, "a\x1bb": false,
+	} {
+		if got := validRefName(name); got != want {
+			t.Errorf("validRefName(%q) = %v, want %v", name, got, want)
+		}
 	}
 }

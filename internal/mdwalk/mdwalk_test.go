@@ -167,6 +167,9 @@ func TestSymlinksOutOfTheTreeAreNotFollowed(t *testing.T) {
 	_ = os.Symlink(filepath.Join(root, ".git", "config.md"), filepath.Join(root, "gitcfg.md"))
 	_ = os.WriteFile(filepath.Join(root, "node_modules", "pkg.md"), []byte("x"), 0o600)
 	_ = os.Symlink(filepath.Join(root, "node_modules", "pkg.md"), filepath.Join(root, "dep.md"))
+	// QA r4-5: a link spelling an excluded directory in another case.
+	_ = os.Symlink(filepath.Join(root, "NODE_MODULES", "pkg.md"), filepath.Join(root, "dep-case.md"))
+	_ = os.Symlink(filepath.Join(root, ".GIT", "config.md"), filepath.Join(root, "git-case.md"))
 	_ = os.WriteFile(filepath.Join(root, "nested", "other.md"), []byte("x"), 0o600)
 	_ = os.Symlink(filepath.Join(root, "nested", "other.md"), filepath.Join(root, "other-link.md"))
 	for name, c := range map[string]struct {

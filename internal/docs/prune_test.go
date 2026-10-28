@@ -142,13 +142,17 @@ func TestSyncRestoresADocAClientOverwrote(t *testing.T) {
 }
 
 // refusingGuard refuses every prune.
-type refusingGuard struct{ keys []string }
+type refusingGuard struct{ keys, forgot []string }
 
 func (g *refusingGuard) Decide(_ context.Context, key, _ string, _, _ int) (bool, string, error) {
 	g.keys = append(g.keys, key)
 	return false, "2 docs are gone", nil
 }
 func (g *refusingGuard) Settled(context.Context, string, int) error { return nil }
+func (g *refusingGuard) Forget(_ context.Context, key string, current []string) error {
+	g.forgot = append(g.forgot, key+"="+strings.Join(current, ","))
+	return nil
+}
 
 func TestRefusedPruneShowsOnTheRepo(t *testing.T) {
 	git := &fakeGit{layout: map[string]map[string]string{"docs": {"A.md": "a", "B.md": "b", "C.md": "c"}}}
@@ -174,6 +178,11 @@ func TestRefusedPruneShowsOnTheRepo(t *testing.T) {
 	SyncOwner(ctx, reg, o, ing, opts)
 	if len(git.synced) != 0 || len(g.keys) != 1 {
 		t.Fatalf("refused repo re-synced: %v, decisions %v", git.synced, g.keys)
+	}
+	// Both syncs keep its refusal current: one made it, one skipped the
+	// unchanged repo that would be refused again.
+	if want := "docs|acme=repo://acme/docs/"; len(g.forgot) != 2 || g.forgot[0] != want || g.forgot[1] != want {
+		t.Fatalf("forgot %v", g.forgot)
 	}
 	// Confirming forgets the HEAD, so the next sync walks it again.
 	if err := reg.ForgetRepoSHA(ctx, "acme", "docs"); err != nil {

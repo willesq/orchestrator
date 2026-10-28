@@ -120,8 +120,9 @@ func newSourceRefreshCmd(cf clientFactory) *cobra.Command {
 		Short: "Mark a source (or all) due for refresh on the next scan",
 		Long: `Mark a source (or all) due for refresh on the next scan.
 
-A refresh removes the docs of files gone from a repo, but no more than half of what the
-last complete refresh left: past that it stops and the source's status says "attention".
+A refresh removes the docs of files gone from a repo, but refreshes together remove no
+more than half of what was stored at the last clean one (nothing gone) until a prune is
+confirmed: past that it stops and the source's status says "attention".
 --confirm-prune lets the refused prune through on the next refresh, within the hour, and
 fails when nothing was refused (asks orchd, so it is refused inside a queued task).`,
 		Args: cobra.MaximumNArgs(1),

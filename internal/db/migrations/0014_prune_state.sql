@@ -1,4 +1,6 @@
 -- +goose Up
+-- Superseded by 0015, which replaces both tables (draft builds of this
+-- branch shipped other shapes of them under this version).
 -- The prune cap's state per repo prefix: what a complete walk last found
 -- stored there, and a refused prune waiting for the operator.
 CREATE TABLE prune_state (
@@ -14,5 +16,5 @@ CREATE TABLE prune_confirm (
 );
 
 -- +goose Down
-DROP TABLE prune_confirm;
-DROP TABLE prune_state;
+DROP TABLE IF EXISTS prune_confirm;
+DROP TABLE IF EXISTS prune_state;
