@@ -67,8 +67,8 @@ they name a file.
    the text, heading or URI matches `memctx.InstructionLike` (overrides of earlier instructions,
    role claims, "you must run …", `curl … | sh`, requests to send secrets); the detector is a
    pattern list and only ever adds the flag. It reads the first 4 KiB of each field as given, and
-   4 KiB of it normalized (NFKC, format characters and markdown emphasis removed, whitespace runs
-   collapsed) taken from its first 1 MiB, so padding cannot push a payload out of view and a huge
+   4 KiB of it normalized (NFKC; format and control characters, nonspacing marks, blank fillers and
+   markdown emphasis removed; whitespace runs collapsed) taken from its first 1 MiB, so padding cannot push a payload out of view and a huge
    hit costs milliseconds. A payload past 4 KiB of words, or past 1 MiB, is not flagged. Header fields have control, format, Unicode tag and
    line-separator characters replaced. `format: full` prints each hit's text instead, fenced in
    every tier in a code fence longer than any backtick run in it, after the same replacement, with

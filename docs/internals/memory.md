@@ -154,7 +154,10 @@ and `\\host` UNC paths also read as `web`.
 What a tier does and does not promise:
 
 - **`repo` means where, not who.** It says the text came from a path you registered (or a GitHub
-  owner you added), on its default branch; it does not say you wrote it. A dependency's README, a
+  owner you added): from a checkout that appeared to be on its default branch (see the default-branch
+  gate, which is protection against indexing a feature or PR branch by accident, not proof of where
+  the files came from), or from a directory that is not a git checkout at all, which is indexed
+  without any gate. It does not say you wrote it. A dependency's README, a
   vendored file or a teammate's commit in a registered repo is `repo` too. The tier is for telling
   your registered repos apart from pages, tool output and clients' notes, not for vouching for
   every line in them.
@@ -307,38 +310,58 @@ the hand-off unit, as a `session_record` like any session.
   running git. The default is, in order: `refs/remotes/origin/HEAD`; `init.defaultBranch` from the
   repo's config when such a branch exists locally; `main` or `master` when one exists. A lone local
   branch is not taken as the default, so a single-branch clone of a PR or feature branch is skipped
-  (`default branch is unknown`) rather than indexed. On another branch, a detached HEAD, an unknown default, an unreadable HEAD (a reftable
+  (`default branch is unknown`) rather than indexed. When the repo has an origin, the checked-out
+  branch named like the default must also be origin's: an upstream, if set, must be
+  `origin/<default>`, else it is skipped with the reason. Tracking config alone is not enough, since `git checkout -B main
+  FETCH_HEAD` or a reset onto a PR keeps it, so with or without an upstream the branch must be at
+  `refs/remotes/origin/<default>` as last fetched. So a PR checked out as a local `main` is not
+  indexed. Limits: a default branch behind or ahead of origin (fetched but not pulled, or commits not
+  yet pushed) is skipped, left as last indexed, until it is level again; a repo with no origin is
+  taken as its own default; and every signal is read from files the checkout's owner can write,
+  so the gate stops accidents, not someone forging a `.git`. On another branch, a detached HEAD, an unknown default, an unreadable HEAD (a reftable
   repository) or a `.git` that does not follow git's layout, the repo is left as last indexed,
   neither stored nor pruned, and the source's status says so (`skipped: on branch X, not the
   default branch Y`; an owner source lists them after `ok; skipped N:`). A plain directory is
   indexed as it is. A `.git` file is believed only when it points at `<common>/worktrees/<name>`
   whose `gitdir` file points back at it, or at a git directory whose `core.worktree` names this
   directory, and only when that git directory is outside the checkout (git keeps it there; one
-  inside came with the files, from an archive or a copy). Relative pointers (`git worktree add
+  inside came with the files, from an archive or a copy; inside is decided on resolved paths at a
+  separator boundary). A sibling git directory with `core.worktree` pointing back is git's own
+  layout and is believed. Relative pointers (`git worktree add
   --relative-paths`) are resolved against the directory holding them. A `.git` file that points anywhere else, as `git init --separate-git-dir`
   leaves it, is skipped with that reason and how to index it (set `core.worktree` there). Directory
   names and reasons in a status have control and format characters replaced and are cut to 120
   characters, since a repo's name is whatever its owner chose.
-- **Symlinks:** a `*.md` symlink is read only when it resolves to a regular file inside the repo
-  root, so a link to `~/.ssh/config.md` or another repo is never stored under this repo's name.
+- **Symlinks:** a `*.md` symlink is read only when it resolves to a regular `*.md` file inside the
+  repo root that the walk would read itself: not under `.git`, an excluded directory (compared
+  case-insensitively, for case-insensitive volumes) or, for repo sources, another checkout. A
+  committed `docs/x.md -> ../.env` or a link to `~/.ssh/config.md` is never stored.
 - **Removed files:** after a complete walk, the sources this refresh wrote under the repo's
   `checkout://` prefix (listed once per refresh by `writer = sources`, which has a payload index)
   that the walk did not find are deleted. An agent's note under the prefix is never a candidate. A
   walk that found no markdown or could not read a directory deletes nothing, and a failed listing
   disables the step.
-- **Prune cap** (`internal/prunecap`, tables `prune_state` and `prune_confirm`): one prune under a
-  repo prefix may delete at most half (at least 2) of the baseline, which is what the last complete
-  walk left stored there (what is stored now, before the first one). Every complete walk resets the
-  baseline to what it left, so a prune within the cap and a confirmed one both start the next count
-  afresh; there is no window. Past the cap nothing is deleted, the refusal is recorded for the
-  prefix, and the status turns `attention: ...; the operator can confirm it with orch source refresh
-  <id> --confirm-prune` (counted in `orch status`, red in the app). The confirmation (RPC
-  `RefreshSource.confirm_prune`, operator-only) grants each prefix of that source with a refused
-  prune; it fails with `FailedPrecondition` when none is refused, so it cannot wait for a later,
-  broken walk. A grant is used once, by that exact prefix's next prune past the cap and no larger
-  than the one refused, and expires after an hour. A prune within the cap never uses it, but any
-  complete walk that settles the prefix (nothing gone, or a prune within the cap) clears the
-  refusal and drops the grant, so it cannot wait for a later, broken walk.
+- **Prune cap** (`internal/prunecap`, tables `prune_state` and `prune_confirm`, migration 0015):
+  - **Baseline:** per repo prefix, what was stored at its last confirmed prune, or at a clean walk
+    (nothing gone) with no unconfirmed prune still counted; what is stored now before the first one,
+    and raised to what is stored when the repo grows (growing back to it also clears the count).
+    The clean walk right after a prune finds nothing more gone, so it does not reset what was
+    removed; only a confirmed prune lowers the baseline. There is no time window.
+  - **Cap:** prunes without a confirmation may remove, added up since the baseline, at most half
+    (at least 2) of it, and one prune at most half of what is stored now. So repeated half-prunes
+    cannot walk a repo down (1000 docs stop at 500 until a confirmation or a clean walk), and a
+    legitimate gradual shrink asks for one confirmation now and then.
+  - **Refusal:** past the cap nothing is deleted, the refusal is recorded for the prefix, and the
+    status turns `attention: ...; the operator can confirm it with orch source refresh <id>
+    --confirm-prune` (counted in `orch status`, red in the app). Each complete refresh of a source
+    (sync of an owner) clears that key's refusals it did not refuse again, or for docs did not skip
+    as unchanged, so a refusal for a repo since moved, removed, skipped or recovered is not granted.
+  - **Grant:** the confirmation (RPC `RefreshSource.confirm_prune`, operator-only) grants each
+    current refusal of that source, for that refusal's size; it fails with `FailedPrecondition`
+    when none is refused. A grant is used by that exact prefix's next prune past the cap if that
+    prune is no larger, and expires after an hour (one dated in the future is ignored). Any prune
+    past the cap ends it, used or not, so a larger refusal recorded later needs its own
+    confirmation; a prune within the cap or a clean walk drops it too.
 - **Validation** (`sources.Validate`, used by `orch source add` and the `SaveSource` RPC):
   - a `web` URI is an `http`/`https` URL with a host and no credentials;
   - a `repo` URI is an absolute path, cleaned;
@@ -371,7 +394,7 @@ a client's overwrite is restored. Docs with a hash under the repo's `repo://` pr
 no longer has are deleted, with their hashes (not when the clone has no markdown or a directory
 could not be read), under the same prune cap: a refused prune leaves the repo `error` with the
 reason and `orch docs sync <owner> --confirm-prune` (RPC `SyncDocs.confirm_prune`), which grants
-every refused repo of that owner. The refused repo records its new HEAD, so it is not cloned again
+every current refusal of that owner. The refused repo records its new HEAD, so it is not cloned again
 on every sync while it waits; confirming forgets that HEAD, so the confirmed sync walks it again. Commit dates are read only when a doc changed. Clones use
 whatever protocol the user's gh is configured for (SSH or HTTPS).
 
