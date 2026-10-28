@@ -19,7 +19,9 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/willesq/orchestrator/internal/gitdates"
 	"github.com/willesq/orchestrator/internal/mdwalk"
+	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/redact"
 )
@@ -48,6 +50,13 @@ type Ingester interface {
 	IngestText(ctx context.Context, text string, m rag.Meta) (int, error)
 }
 
+// Remover deletes a source's chunks (implemented by *rag.Service). An
+// Ingester that is also a Remover has the chunks of docs removed from a repo
+// deleted on the next sync.
+type Remover interface {
+	DeleteSource(ctx context.Context, uri string) (int, error)
+}
+
 // SyncOpts carries the dependencies + policy for a sync.
 type SyncOpts struct {
 	RepoCache       string
@@ -62,6 +71,10 @@ type SyncOpts struct {
 	// Progress, when set, hears after each repo is handled: how many of the
 	// owner's repos are done, of how many, and which one was last.
 	Progress func(done, total int, repo string)
+	// Dates reads when each file in a clone last changed; nil is gitdates.Read.
+	Dates func(ctx context.Context, dir string) gitdates.Dates
+	// Guard caps deletions across syncs; nil caps each sync on its own.
+	Guard PruneGuard
 }
 
 // Result is how one owner's sync went.
@@ -114,6 +127,9 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 	}
 	res := Result{Repos: len(todo)}
 	networkRun := 0
+	// Refusals this sync still stands by: those it made, and those of repos
+	// skipped as unchanged (the same tree would be refused again).
+	var current []string
 	for i, rp := range todo {
 		if ctx.Err() != nil {
 			res.NotTried = len(todo) - i
@@ -121,8 +137,9 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 			return res
 		}
 		prev, _ := reg.RepoSHA(ctx, o.Owner, rp.Name)
-		if !opts.Force && rp.HeadSHA != "" && prev == rp.HeadSHA {
+		if !opts.Force && rp.HeadSHA != "" && prev == rp.HeadSHA && !overwritten(ctx, reg, ing, o.Owner, rp.Name) {
 			res.Unchanged++ // repo unchanged → skip entirely (no clone, no re-ingest)
+			current = append(current, "repo://"+o.Owner+"/"+rp.Name+"/")
 			report(opts, i+1, len(todo), rp.Name)
 			continue
 		}
@@ -156,13 +173,31 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 			continue
 		}
 		networkRun = 0
-		files := ingestRepoMarkdown(ctx, reg, dest, o, rp.Name, ing, opts)
+		files, refused := ingestRepoMarkdown(ctx, reg, dest, o, rp.Name, ing, opts)
+		if refused != "" {
+			current = append(current, "repo://"+o.Owner+"/"+rp.Name+"/")
+			// The repo records its new HEAD, so it is not cloned again until
+			// HEAD moves or the operator confirms the prune (which clears it),
+			// and shows as failing meanwhile.
+			_ = reg.SetRepoState(ctx, RepoState{
+				Owner: o.Owner, Repo: rp.Name, HeadSHA: rp.HeadSHA, LastSynced: now(), Files: files, Status: "error",
+				Error: "prune refused: " + refused + "; the operator can confirm it with orch docs sync " + o.Owner + " --confirm-prune",
+			})
+			res.Failed++
+			report(opts, i+1, len(todo), rp.Name)
+			continue
+		}
 		_ = reg.SetRepoState(ctx, RepoState{
 			Owner: o.Owner, Repo: rp.Name, HeadSHA: rp.HeadSHA,
 			LastSynced: now(), Files: files, Status: "ok",
 		})
 		res.Synced++
 		report(opts, i+1, len(todo), rp.Name)
+	}
+	if opts.Guard != nil {
+		if err := opts.Guard.Forget(ctx, prunecap.DocsKey(o.Owner), current); err != nil {
+			log.Printf("docs: %s: prune guard: %v", o.Owner, err)
+		}
 	}
 	res.Status = "ok"
 	if res.Failed > 0 {
@@ -256,42 +291,170 @@ func classify(err error) failure {
 
 // ingestRepoMarkdown walks a cloned repo for *.md and ingests each file, skipping
 // files whose content hash is unchanged (unless opts.Force). Returns file count.
-func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o Owner, repo string, ing Ingester, opts SyncOpts) int {
+func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o Owner, repo string, ing Ingester, opts SyncOpts) (int, string) {
 	now := opts.Now
 	if now == nil {
 		now = func() int64 { return 0 }
 	}
+	readDates := opts.Dates
+	if readDates == nil {
+		readDates = gitdates.Read
+	}
+	var dates *gitdates.Dates
+	prefix := fmt.Sprintf("repo://%s/%s/", o.Owner, repo)
+	seen := map[string]bool{}
 	n := 0
-	mdwalk.Files(repoPath, opts.ExcludeDirs, func(p string) {
+	complete := mdwalk.FilesComplete(repoPath, opts.ExcludeDirs, func(p string) {
+		rel, _ := filepath.Rel(repoPath, p)
+		uri := prefix + rel
+		seen[uri] = true
 		raw, err := os.ReadFile(p)
 		if err != nil {
 			return
 		}
-		rel, _ := filepath.Rel(repoPath, p)
-		uri := fmt.Sprintf("repo://%s/%s/%s", o.Owner, repo, rel)
 		h := sha256Hex(raw)
-		if !opts.Force {
-			if prev, _ := reg.Hash(ctx, uri); prev == h {
-				return // content unchanged → skip embed + upsert
-			}
-		}
 		content, redactions := redact.Redact(string(raw))
 		if redactions > redact.Threshold {
 			return // keystore-like: skip entirely
 		}
+		if !opts.Force {
+			if prev, _ := reg.Hash(ctx, uri); prev == h && storedAsSynced(ctx, ing, uri, content) {
+				return // content unchanged and still ours → skip embed + upsert
+			}
+		}
 		tags := append([]string{}, o.Tags...)
 		tags = append(tags, "owner:"+o.Owner, "repo:"+repo)
+		if dates == nil { // read once, and only when a doc changed
+			d := readDates(ctx, repoPath)
+			dates = &d
+		}
+		changed := dates.For(rel)
 		if _, err := ing.IngestText(ctx, content, rag.Meta{
 			SourceURI:  uri,
 			SourceType: "repo_doc",
 			Scope:      o.Scope,
 			Tags:       tags,
+			StartedAt:  changed,
+			EndedAt:    changed,
+			Writer:     rag.WriterDocs,
 		}); err == nil {
 			_ = reg.SetHash(ctx, uri, h, now())
 			n++
 		}
 	})
-	return n
+	refused := ""
+	if complete {
+		refused = pruneRemoved(ctx, reg, ing, opts, o, prefix, seen)
+	}
+	return n, refused
+}
+
+// Copier reads what is stored for a source (implemented by *rag.Service).
+// With one, an unchanged file is skipped only while its stored copy is still
+// this sync's: a client that overwrote the doc's URI is overwritten back.
+type Copier interface {
+	Copy(ctx context.Context, uri string) (rag.StoredCopy, bool, error)
+}
+
+// storedAsSynced reports whether uri still holds this sync's copy of text.
+// Without a Copier it trusts the registry.
+func storedAsSynced(ctx context.Context, ing Ingester, uri, text string) bool {
+	c, ok := ing.(Copier)
+	if !ok {
+		return true
+	}
+	cp, found, err := c.Copy(ctx, uri)
+	if err != nil {
+		return true // a store error is not a reason to rewrite every doc
+	}
+	return found && cp.Writer == rag.WriterDocs && cp.ContentHash == rag.ContentHash(text)
+}
+
+// overwritten reports whether another writer (a client) has replaced any of
+// a repo's synced docs, so an unchanged repo is synced again to restore them.
+// Docs stored before writers were recorded do not count; a doc deleted on
+// purpose is not restored.
+func overwritten(ctx context.Context, reg *Registry, ing Ingester, owner, repo string) bool {
+	c, ok := ing.(Copier)
+	if !ok {
+		return false
+	}
+	uris, err := reg.HashURIs(ctx, fmt.Sprintf("repo://%s/%s/", owner, repo))
+	if err != nil {
+		return false
+	}
+	for _, uri := range uris {
+		if cp, found, err := c.Copy(ctx, uri); err == nil && found && cp.Writer != "" && cp.Writer != rag.WriterDocs {
+			log.Printf("docs: %s was overwritten by a %s write; syncing %s/%s again to restore it", uri, cp.Writer, owner, repo)
+			return true
+		}
+	}
+	return false
+}
+
+// PruneGuard bounds deletions (implemented by *prunecap.Guard).
+type PruneGuard interface {
+	Decide(ctx context.Context, key, prefix string, stored, gone int) (bool, string, error)
+	Settled(ctx context.Context, prefix string, count int) error
+	// Forget clears key's refusals outside current, the prefixes the
+	// latest complete walk refused again.
+	Forget(ctx context.Context, key string, current []string) error
+}
+
+// minPruneCap is how many docs a sync may always remove at once.
+const minPruneCap = 5
+
+// pruneRemoved deletes the chunks of docs this repo's earlier syncs stored
+// that its clone no longer has, and forgets their hashes. A walk that found
+// nothing deletes nothing: an empty or unreadable clone is not a repo whose
+// docs were all removed.
+func pruneRemoved(ctx context.Context, reg *Registry, ing Ingester, opts SyncOpts, o Owner, prefix string, seen map[string]bool) string {
+	rm, ok := ing.(Remover)
+	if !ok || len(seen) == 0 || ctx.Err() != nil {
+		return ""
+	}
+	known, err := reg.HashURIs(ctx, prefix)
+	if err != nil {
+		log.Printf("docs: listing %s docs: %v", prefix, err)
+		return ""
+	}
+	var gone []string
+	for _, uri := range known {
+		if !seen[uri] {
+			gone = append(gone, uri)
+		}
+	}
+	if len(gone) == 0 {
+		if opts.Guard != nil {
+			_ = opts.Guard.Settled(ctx, prefix, len(known))
+		}
+		return ""
+	}
+	// A clone that suddenly lacks many of its docs is more likely broken
+	// than a repo that lost them.
+	if opts.Guard != nil {
+		allowed, why, err := opts.Guard.Decide(ctx, prunecap.DocsKey(o.Owner), prefix, len(known), len(gone))
+		if err != nil {
+			log.Printf("docs: %s: prune guard: %v; not pruning", prefix, err)
+			return ""
+		}
+		if !allowed {
+			log.Printf("docs: %s: %s", prefix, why)
+			return why
+		}
+	} else if len(gone) > max(minPruneCap, len(known)/2) {
+		return fmt.Sprintf("%d of %d docs are gone at once; none were removed", len(gone), len(known))
+	}
+	// The guard recorded the prune as made; only a clean walk settles it.
+	for _, uri := range gone {
+		if _, err := rm.DeleteSource(ctx, uri); err != nil {
+			log.Printf("docs: removing %s, gone from its repo: %v", uri, err)
+			continue
+		}
+		_ = reg.DeleteHash(ctx, uri)
+		log.Printf("docs: removed %s, gone from its repo", uri)
+	}
+	return ""
 }
 
 func sha256Hex(b []byte) string {

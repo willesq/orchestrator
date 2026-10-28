@@ -1,6 +1,7 @@
 package rag
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -99,7 +100,11 @@ func TestServiceCountsWithTheEmbeddersTokenizer(t *testing.T) {
 	store, payloads := payloadStub(t)
 	svc := NewService(countingEmbedder{fakeEmbedder{dim: 2, vec: []float32{1, 0}}, &calls}, store, 10, 0)
 	svc.MarkdownSections = false
-	n, err := svc.IngestText(t.Context(), strings.Repeat("w ", 20), Meta{SourceURI: "manual://x"})
+	words := make([]string, 20)
+	for i := range words {
+		words[i] = fmt.Sprintf("w%d", i) // distinct, so no window repeats another
+	}
+	n, err := svc.IngestText(t.Context(), strings.Join(words, " "), Meta{SourceURI: "manual://x"})
 	if err != nil {
 		t.Fatal(err)
 	}

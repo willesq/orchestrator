@@ -421,13 +421,17 @@ func sourcesLine(ctx context.Context, conn *sql.DB, now int64) Line {
 	if err != nil {
 		return Line{Name: "sources", Value: "unreadable", Detail: err.Error(), Level: LevelWarn}
 	}
-	due, unhealthy := 0, 0
+	due, unhealthy, attention := 0, 0, 0
 	for _, s := range list {
 		if now >= s.LastFetched+s.RefreshSecs {
 			due++
 		}
-		if s.Status == "stale" || s.Status == "missing" || s.Status == "error" {
+		switch {
+		case s.Status == "stale" || s.Status == "missing" || s.Status == "error":
 			unhealthy++
+		case strings.HasPrefix(s.Status, "attention"):
+			// A prune refused past its cap waits for the operator.
+			attention++
 		}
 	}
 	l := Line{
@@ -435,7 +439,10 @@ func sourcesLine(ctx context.Context, conn *sql.DB, now int64) Line {
 		Value:  fmt.Sprintf("%d registered", len(list)),
 		Detail: fmt.Sprintf("%d due, %d stale/missing", due, unhealthy),
 	}
-	if unhealthy > 0 {
+	if attention > 0 {
+		l.Detail += fmt.Sprintf(", %d need attention (orch source list)", attention)
+	}
+	if unhealthy > 0 || attention > 0 {
 		l.Level = LevelWarn
 	}
 	return l

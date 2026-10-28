@@ -262,7 +262,7 @@ func TestUserPromptSubmitScopesToCwdProject(t *testing.T) {
 	if len(fc.searchReqs) == 0 || !slices.Equal(fc.searchReqs[0].GetTags(), want) {
 		t.Fatalf("first search not scoped to %v: %v", want, fc.searchReqs)
 	}
-	if !bytes.Contains(out.Bytes(), []byte("### [1] repo://acme/widget/README.md")) {
+	if !bytes.Contains(out.Bytes(), []byte("[1] \"README.md\" · undated · \"repo://acme/widget/README.md\"")) {
 		t.Errorf("project hit not injected first:\n%s", out.String())
 	}
 }

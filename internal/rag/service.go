@@ -5,6 +5,7 @@ package rag
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -39,6 +40,17 @@ type Meta struct {
 	// transcript carries them. StartedAt and EndedAt, when set, then bound
 	// those times, so no chunk is dated outside its session.
 	Timeline bool
+	// KeepUndated stores content that has no date of its own undated, instead
+	// of dating it by when it is stored: a migration's copy is not new content.
+	KeepUndated bool
+	// Writer names the part of orchd storing the source (WriterDocs, ...). It
+	// decides the trust tier stored with every chunk; only orchd's own code
+	// sets it, so a client cannot claim a tier by its choice of type or URI.
+	Writer string
+	// ContentHash identifies the original text. IngestText computes it; a
+	// migration's copy passes the original's along, since its rebuilt text
+	// can differ in whitespace.
+	ContentHash string
 }
 
 // Service ties the embedder and vector store together.
@@ -75,6 +87,18 @@ type Service struct {
 	// (rag.search.keyword_weight); 1 weighs both lists alike, the default 0.5
 	// gives meaning the larger share.
 	KeywordWeight float64
+	// Ranking weights fused candidates by source type and recency
+	// (rag.search.ranking and its weights).
+	Ranking RankingParams
+	// PerSource caps the hits one source may return to a search that does not
+	// set its own cap (rag.search.per_source); 0 leaves them uncapped.
+	PerSource int
+	// now is the clock ranking measures age by; nil is time.Now.
+	now func() time.Time
+	// writerIndexed records that the writer payload index was added to an
+	// older collection; writerMu guards it so a failure is retried.
+	writerMu      sync.Mutex
+	writerIndexed bool
 
 	fallbackLog rateLog
 	// progress is set while a migration copies sources.
@@ -91,7 +115,7 @@ type Service struct {
 // tokens; chunkTokens is capped at what the model embeds.
 func NewService(emb Embedder, store *QdrantStore, chunkTokens, overlap int) *Service {
 	return &Service{emb: emb, store: store, chunkTokens: chunkTokens, overlap: overlap, MarkdownSections: true,
-		BM25: bm25.DefaultParams, SearchMode: ModeHybrid, RRFK: 60, KeywordWeight: 0.5}
+		BM25: bm25.DefaultParams, SearchMode: ModeHybrid, RRFK: 60, KeywordWeight: 0.5, Ranking: DefaultRanking()}
 }
 
 // active returns the store reads go to.
@@ -214,6 +238,14 @@ func (s *Service) split(text string) []chunk {
 // IngestText chunks, embeds, and upserts text. Chunks for the same source_uri
 // are replaced via deterministic point IDs (uri#index).
 func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, error) {
+	// An unchanged write is skipped before embedding, so re-fetching an
+	// unchanged page neither costs an embed nor makes it look new. During a
+	// migration every write goes through, so the shadow gets it too.
+	if m.SourceURI != "" {
+		if n, same := s.skipUnchanged(ctx, text, m); same {
+			return n, nil
+		}
+	}
 	points, dim, err := s.prepare(ctx, text, m)
 	if err != nil || len(points) == 0 {
 		return 0, err
@@ -232,6 +264,17 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 	return len(points), nil
 }
 
+// skipUnchanged checks, under the source's write lock so no write is half
+// done meanwhile, whether the store already holds this exact write.
+func (s *Service) skipUnchanged(ctx context.Context, text string, m Meta) (int, bool) {
+	defer s.lockSource(m.SourceURI)()
+	active, shadow := s.stores()
+	if shadow != nil {
+		return 0, false
+	}
+	return s.unchanged(ctx, active, m.SourceURI, s.ingestHash(text, m))
+}
+
 // prepare chunks, embeds and weights text into points, without writing them.
 func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, int, error) {
 	// Required here, not just in the callers: the prune below deletes by
@@ -240,7 +283,7 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 	if m.SourceURI == "" {
 		return nil, 0, fmt.Errorf("source_uri is required")
 	}
-	pieces := s.split(text)
+	pieces := dedupeChunks(s.split(text))
 	if len(pieces) == 0 {
 		return nil, 0, nil
 	}
@@ -258,6 +301,10 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 	}
 	points := make([]Point, len(chunks))
 	ingested := time.Now()
+	contentHash, writeHash, trust := ContentHash(text), s.ingestHash(text, m), TrustFor(m.Writer, m.SourceType)
+	if m.ContentHash != "" {
+		contentHash = m.ContentHash
+	}
 	// A transcript chunk cut from the middle of a long turn has no marker of its
 	// own; it belongs to the last turn dated before it.
 	var carried time.Time
@@ -270,6 +317,14 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 			"tags":        m.Tags,
 			"chunk_index": i,
 			"chunk_total": len(chunks),
+			// Which tokenizer made the keyword vector, for ReindexKeywords.
+			fieldBM25Version: bm25.TokenizerVersion,
+			fieldContentHash: contentHash,
+			fieldIngestHash:  writeHash,
+		}
+		if m.Writer != "" {
+			payload[fieldWriter] = m.Writer
+			payload[fieldTrust] = trust
 		}
 		if h := pieces[i].heading; h != "" {
 			payload["heading"] = h
@@ -279,12 +334,38 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 			start, end = chunkSpan(c, &carried)
 			start, end = clamp(start, end, m.StartedAt, m.EndedAt)
 		}
+		if start.IsZero() && end.IsZero() {
+			// Every chunk is dated, so date-range searches find it: by its
+			// source's own span when it has one (a commit date, a session),
+			// otherwise by when it was stored (a fetch, a note).
+			start, end = m.StartedAt, m.EndedAt
+			if start.IsZero() && end.IsZero() && !m.KeepUndated {
+				start, end = ingested, ingested
+			}
+		}
 		setTime(payload, fieldStartedAt, start)
 		setTime(payload, fieldEndedAt, end)
 		setTime(payload, fieldIngestedAt, ingested)
 		points[i] = Point{ID: pointID(m.SourceURI, i), Vector: vecs[i], Sparse: bm25.Document(c, s.BM25), Payload: payload}
 	}
 	return points, dim, nil
+}
+
+// dedupeChunks drops a chunk whose text repeats an earlier chunk of the same
+// source: a repeated block (boilerplate, a pasted log) would otherwise be
+// stored, and returned, twice.
+func dedupeChunks(pieces []chunk) []chunk {
+	seen := make(map[[sha256.Size]byte]bool, len(pieces))
+	out := pieces[:0:0]
+	for _, p := range pieces {
+		h := sha256.Sum256([]byte(p.text))
+		if seen[h] {
+			continue
+		}
+		seen[h] = true
+		out = append(out, p)
+	}
+	return out
 }
 
 // writePoints stores one source's chunks in st and prunes what is left of an
@@ -335,6 +416,8 @@ type SourceSummary struct {
 	Scope      string
 	Tags       []string
 	Chunks     int
+	// Writer is the part of orchd that stored it ("" before writers were recorded).
+	Writer string
 	// StartedAt and EndedAt span the source's dated chunks; IngestedAt is the
 	// latest store of any of them. Zero when unknown.
 	StartedAt, EndedAt, IngestedAt time.Time
@@ -367,7 +450,7 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 		must["source_type"] = opts.SourceType
 	}
 	filter := buildFilter(must, nil, nil, opts.Range)
-	fields := []string{"source_uri", "source_type", "scope", "tags", fieldStartedAt, fieldEndedAt, fieldIngestedAt}
+	fields := []string{"source_uri", "source_type", "scope", "tags", fieldStartedAt, fieldEndedAt, fieldIngestedAt, fieldWriter}
 
 	agg := map[string]*SourceSummary{}
 	total := 0
@@ -395,6 +478,7 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 					SourceType: str(p.Payload["source_type"]),
 					Scope:      str(p.Payload["scope"]),
 					Tags:       strSlice(p.Payload["tags"]),
+					Writer:     str(p.Payload[fieldWriter]),
 				}
 				agg[uri] = cur
 			}
@@ -457,6 +541,15 @@ func (s *Service) DeleteSource(ctx context.Context, uri string) (int, error) {
 		s.shadowResult(uri, err)
 	}
 	return n, nil
+}
+
+// HasSource reports whether any chunk is stored under uri.
+func (s *Service) HasSource(ctx context.Context, uri string) (bool, error) {
+	if uri == "" {
+		return false, nil
+	}
+	n, err := s.active().Count(ctx, EqFilter("source_uri", uri))
+	return n > 0, err
 }
 
 // pointID is a deterministic UUIDv5 so re-ingesting a source overwrites prior chunks.

@@ -88,21 +88,105 @@ refuse a filter with no `must` condition, since Qdrant reads an empty filter as 
 | `source_uri`, `source_type`, `scope`, `tags` | provenance; `source_uri` required |
 | `chunk_index`, `chunk_total` | position |
 | `heading` | shared heading path, if any |
-| `started_at`, `ended_at` | Unix seconds the chunk describes, if known |
+| `started_at`, `ended_at` | Unix seconds the chunk describes (see below) |
 | `ingested_at` | Unix seconds stored |
+| `bm25_v` | tokenizer version that made the keyword vector |
+
+**Dates.** Every chunk is dated, so date-range searches and recency see all content:
+
+- transcript chunks by their own turns, within the session's span;
+- session records by the session's span;
+- repo docs (docs and sources syncs) by the file's last commit (`git log --name-only` over the
+  repo's markdown, read once per repo; a `--depth 1` clone lists every file under its one commit,
+  so docs synced from GitHub carry the default branch's HEAD commit date). A local repo's
+  `.git/config` is untrusted, so git runs with every transport disabled (`protocol.*.allow=never`,
+  `GIT_NO_LAZY_FETCH=1`, which stops a partial clone's lazy fetch from running an `ext::` remote),
+  no fsmonitor, hooks, pager, signature program or `core.sshCommand`, no system config, in its own
+  process group, with 16 MiB of output and 30 s at most. Future commit dates count as now;
+- anything else (web pages, notes, config files) by when it was stored, so a re-fetched page is
+  dated by its fetch.
+
+Only a migration's copy keeps undated content undated (`Meta.KeepUndated`): copying old content is
+not new content. Chunks stored before this release stay undated until their source is stored
+again.
+
+**Duplicates within a source.** A chunk whose text (SHA-256) repeats an earlier chunk of the same
+source is dropped before embedding, and the remaining chunks keep contiguous indices.
+
+**Unchanged writes.** Each chunk stores `ingest_hash`, over the text and everything stored with it
+(type, scope, tags, dates, writer) and the settings that shape it (chunk size and overlap, markdown
+sections, the BM25 tokenizer version and constants). Under the source's write lock, a write is
+skipped before embedding (outside a migration) only when the source is whole: its first and last
+chunks carry the write's hash and it holds exactly the recorded chunk count. So a re-fetched page or
+re-walked doc that did not change keeps its date and costs nothing, while a write that failed
+part-way (a later batch, or the prune of an older version's surplus) is done again next time, and a
+chunker change is applied at each source's next write.
+
+### Provenance
+
+Every write names its **writer**, set by orchd's own code, never by a client:
+
+| Writer | Who | Stored `trust` |
+|---|---|---|
+| `docs` | the GitHub docs sync | `repo` |
+| `sources` | the sources refresh | `repo` (repo and owner sources), `web` (web sources) |
+| `session` | orchd's session storage (hand-off, summaries) | `session` |
+| `file` | the edit hand-off | `file` |
+| `client` | the Ingest RPC, so the CLI, hooks and MCP `rag_ingest_text` | `client` |
+
+`writer`, `trust` and `content_hash` (the first 16 bytes of SHA-256 of the text as given, kept
+through a migration) are stored on every chunk. A client cannot claim a tier: whatever type or URI
+it declares, an Ingest RPC write is `client`, and the Ingest RPC refuses (`FailedPrecondition`) to
+replace a source the docs or sources sync stored, so a client cannot hide a synced doc behind its
+own text. That refusal matches the exact URI only: a client can still store the same text under a
+different spelling of a URI (another case, a trailing slash), which is a separate `client` source
+and labelled as one, so the refusal is advisory, not what makes a tier. Hits return `trust`, and `GetDocument` returns
+`writer`, `content_hash` and `trust`. Chunks stored before this have none, and readers treat them
+as unverified. A `client`, `file` or `session` chunk whose type or URI says it is a web page or tool
+output (an `http(s)`/`ftp` scheme, `//` or `www.`, after NFKC folding; type `web` or `tool_output`
+and the like) is read as `web` or `tool`: the type and URI can lower a tier, never raise it, so
+`untrusted: exclude` still drops a page a client stored. Only `repo` is shown without a "data" caution, and even it is fenced in full-text
+output (see [hooks.md](hooks.md#prompt-context)). Session content is fenced because transcripts
+carry the tool output and web pages the agent read. Before the scheme is read, the URI loses its
+whitespace and format characters, and `ws`, `wss`, `data`, `javascript`, `smb` and `gopher` schemes
+and `\\host` UNC paths also read as `web`.
+
+What a tier does and does not promise:
+
+- **`repo` means where, not who.** It says the text came from a path you registered (or a GitHub
+  owner you added): from a checkout that appeared to be on its default branch (see the default-branch
+  gate, which is protection against indexing a feature or PR branch by accident, not proof of where
+  the files came from), or from a directory that is not a git checkout at all, which is indexed
+  without any gate. It does not say you wrote it. A dependency's README, a
+  vendored file or a teammate's commit in a registered repo is `repo` too. The tier is for telling
+  your registered repos apart from pages, tool output and clients' notes, not for vouching for
+  every line in them.
+- **`untrusted: exclude` only drops what is labelled.** It removes `web` and `tool` chunks, and a
+  client's write whose type or URI says web; a client that stores a page as an ordinary note is
+  `client`, shown with a "data" caution, not excluded.
+- **A prune confirmation is the operator's.** `confirm_prune` is accepted only from a caller that is
+  not a queued task (by process lineage, like the other operator-only RPCs), so an agent in a queued
+  task cannot approve deleting a repo's docs.
 
 Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<path>`,
 `file://<path>`, `claude://<path under ~/.claude>`, web URLs, and anything given to `orch ingest`.
 
 ## BM25 keyword vectors
 
-`TokenizerVersion = 1`; changing tokenization requires bumping it and re-indexing.
+`TokenizerVersion = 2`; changing tokenization requires bumping it and re-indexing
+(`orch rag reindex-keywords`, below).
 
 - **Tokens:** NFC-normalize; match `[\pL\pM\pN_]+(?:[./:\-][\pL\pM\pN_]+)*`; split each match
   into script runs. Han, kana, Hangul and Thai runs become overlapping 2-rune bigrams. Other runs
   split into parts at `. / : - _` and camelCase boundaries (`HTTPServer` → `http`, `server`),
   lowercased; emit the whole identifier (≤ 64 bytes) when it has several parts, and each part of at
   least 2 runes that is not a stopword. Caps: 8192 tokens, 64 parts, 64-byte terms.
+- **Version 2 additions:** a capital after a digit starts a part (`OAuth2Token` → `auth2`,
+  `token`); each `. / : -` separated piece that is itself compound is emitted whole
+  (`rag.search.keyword_weight` → `keyword_weight`; `parse_HTTPRequest` → `httprequest`); and a
+  path's last element with a dot (`internal/rag/search.go` → `search.go`). On the golden set this
+  measured neutral (MRR 0.666 before and 0.662 after the re-index, 95% CI −0.011 to +0.002); it is kept because the change is within
+  noise and the re-index takes 27 seconds.
 - **Term id:** FNV-1a 32-bit of the term.
 - **Document weight:** per distinct term `tf·(k1+1) / (tf + k1·(1 − b + b·len/avgLen))`, with
   k1 1.2, b 0.75, avgLen 55 (measured: a 110-token chunk is about 50 words), `len ≥ avgLen/4`. At
@@ -121,19 +205,61 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
    `min(2n, 400)`, returning each hit's dense vector). Keyword hits are capped at 2 per source. A
    query with no BM25 terms (only stopwords or single characters) skips keyword search silently.
 3. **Fuse** by reciprocal rank: each hit's score is `Σ weight/(k + rank)` with k = 60, weight 1 for
-   dense and 0.5 for keyword (`rag.search.keyword_weight`). Sort by fused score, then cosine.
-4. Every hit reports its **cosine** (computed from the returned vector for keyword-only hits), its
+   dense and 0.5 for keyword (`rag.search.keyword_weight`).
+4. **Weight** (ranking `weighted`, the default; `plain` skips it): multiply each candidate's fused
+   score by its source type's weight and by recency, `floor + (1 − floor) · 2^(−age / half-life)`.
+   Age is from `ended_at`, else `started_at`, else `ingested_at`; undated content counts as one
+   half-life old; future dates count as now; a negative score is taken as 0 first. Defaults:
+   half-life 180 days, floor 0.85, weights `session_transcript` 0.85, `web` 0.9, all else 1
+   (`rag.search.recency_half_life_days`,
+   `recency_floor`, `source_weights`). This runs client-side, after fusion, because fusion is
+   client-side; Qdrant's formula queries would need fusion moved into the server.
+5. **Diversify:** keep at most `per_source` hits from one source (request field, else
+   `rag.search.per_source`, default 2; negative lifts it; never applied to a search filtered to one
+   source). Prompt context asks for 1. Sort by weighted score, then cosine; cut to TopK. Dense-only
+   searches fetch the same candidate depth as hybrid ones when they weight or cap.
+6. Every hit reports its **cosine** (computed from the returned vector for keyword-only hits), its
    BM25 score, and `Exact`: whether it contains, as a whole token, a code identifier from the
    query. Identifiers come from the first 8 KiB of the query, at most 16, each 5–128 characters:
    camelCase, snake_case, a dotted name of 2+ parts (each 2+ characters) not ending in a domain or
    file suffix (`com`, `io`, `md`, `json`, `yaml`, …), or a path with three parts or one part of 8+
    characters. Versions, numbers and a stop list (`e.g`, `i.e`, `a.k.a`, `go.mod`, `makefile`, …)
    are excluded.
-5. **Fallback:** if the collection has no keyword index or keyword search fails, configured hybrid
+7. **Fallback:** if the collection has no keyword index or keyword search fails, configured hybrid
    answers by meaning and returns a note; an explicitly requested hybrid fails instead. Fallback
    logs are limited to one a minute.
 
-Scores keep cosine meaning in both modes, so relevance floors (prompt context) work unchanged.
+Scores keep cosine meaning in both modes, so relevance floors (prompt context) work unchanged:
+weighting and the cap change the order, never a hit's score. Hits also carry their `heading`.
+
+**Tuning** used the golden set's `tune` split only (70 cases), on a read-only copy of the store,
+and the defaults were judged on the `holdout` split (92 cases). Decision cases accept any source
+of their session, so favouring records over transcripts cannot score by construction. MRR, tune /
+holdout, against fusion alone (0.702 / 0.571):
+
+| half-life | floor | transcript | web | tune | holdout |
+|---|---|---|---|---|---|
+| off | | 1 | 1 | 0.702 | 0.571 |
+| 180 | 0.7 | 1 | 1 | 0.730 | 0.588 |
+| off | | 0.7 | 1 | 0.708 | 0.592 |
+| 180 | 0.7 | 0.85 | 0.9 | 0.742 | 0.617 |
+| 90 / 365 | 0.7 | 0.85 | 0.9 | 0.742 | 0.618 / 0.617 |
+| 180 | 0.5 | 0.85 | 0.9 | 0.740 | 0.603 |
+| 180 | 0.85 | 0.85 | 0.9 | 0.723 | 0.617 |
+
+The best tune score was floor 0.7. The default is the softer floor 0.85, a choice made after
+looking at holdout sections, so the holdout split no longer judges that one choice blind: within 0.02 on tune, equal
+on holdout overall, and better on the holdout sections weighting hurts (decisions 0.661 → 0.702,
+hand-written 0.721 → 0.720). On holdout the gain comes from repo-doc questions (identifiers 0.492
+→ 0.573, headings 0.453 → 0.542 against plain fusion); the hand-written questions are slightly
+lower (13 cases, not significant). A per-source cap of 1 or 2 added +0.005 on tune and +0.009 on
+holdout.
+
+**Limits of the set.** Heading and identifier cases ask for the heading or identifier verbatim, so
+they measure lexical self-retrieval more than understanding; decision cases are cut from the
+record's own text. The hand-written sections are small (22 hard, 20 legacy), too small to show a
+change of a few points. Treat the numbers as directional, and add hand-written cases (`orch rag eval
+add --section hard`) before trusting a small difference.
 
 ## Timelines
 
@@ -169,8 +295,73 @@ the hand-off unit, as a `session_record` like any session.
 
 - `web`: GET (≤ 5 MiB), strip HTML, redact, store under the URL. Errors keep the old chunks.
 - `repo` (absolute path) and `owner` (`<known_root>/<owner>/*`): every `*.md` found by `mdwalk`
-  (skipping `.git` and `ingest.exclude_dirs`), stored as `repo://<owner|local>/<repo>/<path>`,
-  type `repo_doc`, tagged `repo:<name>` and `owner:<owner>`.
+  (skipping `.git` and `ingest.exclude_dirs`), stored as `checkout://<resolved absolute path>`,
+  type `repo_doc`, tagged `repo:<name>` and `owner:<owner>`, dated by its last commit, written as
+  `sources`. A local checkout is not the GitHub repo (it may be behind, ahead or on a branch), so it
+  never shares the docs sync's `repo://<owner>/<repo>` names, and two checkouts of the same name
+  never share one. Earlier versions stored these under `repo://<owner|local>/<repo>/`; `orch rag
+  dedupe` lists those leftovers.
+- **Other checkouts are not walked:** an owner scan skips `<repo>.worktrees` containers (gittree's
+  layout) and linked worktrees, and every walk skips a directory below the repo that has a `.git`
+  entry of its own (a nested repository or worktree) or is named `*.worktrees`. Each checkout is
+  judged on its own branch.
+- **Default branch only:** a working tree is indexed only on its default branch, judged from the
+  `.git` at the repo directory itself (never an enclosing repository's), read from files without
+  running git. The default is, in order: `refs/remotes/origin/HEAD`; `init.defaultBranch` from the
+  repo's config when such a branch exists locally; `main` or `master` when one exists. A lone local
+  branch is not taken as the default, so a single-branch clone of a PR or feature branch is skipped
+  (`default branch is unknown`) rather than indexed. When the repo has an origin, the checked-out
+  branch named like the default must also be origin's: an upstream, if set, must be
+  `origin/<default>`, else it is skipped with the reason. Tracking config alone is not enough, since `git checkout -B main
+  FETCH_HEAD` or a reset onto a PR keeps it, so with or without an upstream the branch must be at
+  `refs/remotes/origin/<default>` as last fetched. So a PR checked out as a local `main` is not
+  indexed. Limits: a default branch behind or ahead of origin (fetched but not pulled, or commits not
+  yet pushed) is skipped, left as last indexed, until it is level again; a repo with no origin is
+  taken as its own default; and every signal is read from files the checkout's owner can write,
+  so the gate stops accidents, not someone forging a `.git`. On another branch, a detached HEAD, an unknown default, an unreadable HEAD (a reftable
+  repository) or a `.git` that does not follow git's layout, the repo is left as last indexed,
+  neither stored nor pruned, and the source's status says so (`skipped: on branch X, not the
+  default branch Y`; an owner source lists them after `ok; skipped N:`). A plain directory is
+  indexed as it is. A `.git` file is believed only when it points at `<common>/worktrees/<name>`
+  whose `gitdir` file points back at it, or at a git directory whose `core.worktree` names this
+  directory, and only when that git directory is outside the checkout (git keeps it there; one
+  inside came with the files, from an archive or a copy; inside is decided on resolved paths at a
+  separator boundary). A sibling git directory with `core.worktree` pointing back is git's own
+  layout and is believed. Relative pointers (`git worktree add
+  --relative-paths`) are resolved against the directory holding them. A `.git` file that points anywhere else, as `git init --separate-git-dir`
+  leaves it, is skipped with that reason and how to index it (set `core.worktree` there). Directory
+  names and reasons in a status have control and format characters replaced and are cut to 120
+  characters, since a repo's name is whatever its owner chose.
+- **Symlinks:** a `*.md` symlink is read only when it resolves to a regular `*.md` file inside the
+  repo root that the walk would read itself: not under `.git`, an excluded directory (compared
+  case-insensitively, for case-insensitive volumes) or, for repo sources, another checkout. A
+  committed `docs/x.md -> ../.env` or a link to `~/.ssh/config.md` is never stored.
+- **Removed files:** after a complete walk, the sources this refresh wrote under the repo's
+  `checkout://` prefix (listed once per refresh by `writer = sources`, which has a payload index)
+  that the walk did not find are deleted. An agent's note under the prefix is never a candidate. A
+  walk that found no markdown or could not read a directory deletes nothing, and a failed listing
+  disables the step.
+- **Prune cap** (`internal/prunecap`, tables `prune_state` and `prune_confirm`, migration 0015):
+  - **Baseline:** per repo prefix, what was stored at its last confirmed prune, or at a clean walk
+    (nothing gone) with no unconfirmed prune still counted; what is stored now before the first one,
+    and raised to what is stored when the repo grows (growing back to it also clears the count).
+    The clean walk right after a prune finds nothing more gone, so it does not reset what was
+    removed; only a confirmed prune lowers the baseline. There is no time window.
+  - **Cap:** prunes without a confirmation may remove, added up since the baseline, at most half
+    (at least 2) of it, and one prune at most half of what is stored now. So repeated half-prunes
+    cannot walk a repo down (1000 docs stop at 500 until a confirmation or a clean walk), and a
+    legitimate gradual shrink asks for one confirmation now and then.
+  - **Refusal:** past the cap nothing is deleted, the refusal is recorded for the prefix, and the
+    status turns `attention: ...; the operator can confirm it with orch source refresh <id>
+    --confirm-prune` (counted in `orch status`, red in the app). Each complete refresh of a source
+    (sync of an owner) clears that key's refusals it did not refuse again, or for docs did not skip
+    as unchanged, so a refusal for a repo since moved, removed, skipped or recovered is not granted.
+  - **Grant:** the confirmation (RPC `RefreshSource.confirm_prune`, operator-only) grants each
+    current refusal of that source, for that refusal's size; it fails with `FailedPrecondition`
+    when none is refused. A grant is used by that exact prefix's next prune past the cap if that
+    prune is no larger, and expires after an hour (one dated in the future is ignored). Any prune
+    past the cap ends it, used or not, so a larger refusal recorded later needs its own
+    confirmation; a prune within the cap or a clean walk drops it too.
 - **Validation** (`sources.Validate`, used by `orch source add` and the `SaveSource` RPC):
   - a `web` URI is an `http`/`https` URL with a host and no credentials;
   - a `repo` URI is an absolute path, cleaned;
@@ -184,9 +375,11 @@ the hand-off unit, as a `session_record` like any session.
 - **Removal** unregisters the source and keeps what it indexed. `RemoveSource` with `purge` (and
   `confirm`) also deletes that content, before unregistering so a failed purge can be retried:
   - `web`: the URL's content.
-  - `repo` and `owner`: `repo_doc` content under the source's `repo://` prefix that carries its
-    `repo:<name>` or `owner:<name>` tag. Content of an owner the docs registry tracks, or with a
-    row in `doc_hashes`, is kept.
+  - `repo` and `owner`: `checkout://` docs written by the sources refresh that carry the source's
+    tag, under the repo's resolved path (a repo source) or in a `/<owner>/<repo>/` segment pair
+    matching the doc's repo tag (an owner source); plus `repo_doc` content earlier versions stored
+    under the source's `repo://` prefix with its tag. Content of an owner the docs registry tracks,
+    or with a row in `doc_hashes`, is kept.
   - It is refused for a repo source that shares its directory name with another (they share
     content), and for a stored row that fails validation (from before it existed).
   - A refresh running during the purge can store a source's docs again; purge again to remove them.
@@ -194,8 +387,16 @@ the hand-off unit, as a `session_record` like any session.
 **Docs registry** (`orch docs add <owner>`, every 6 h): list the owner's repos with
 `gh api graphql` (skipping archived and forks by default), skip repos whose default-branch HEAD is
 unchanged, `gh repo clone --depth 1` into `<data>/repos`, and store each markdown file whose
-SHA-256 changed (hash saved only after a successful store). Clones use whatever protocol the
-user's gh is configured for (SSH or HTTPS).
+SHA-256 changed (hash saved only after a successful store), dated by the clone's commit. A file is
+skipped as unchanged only while its stored copy is still this sync's (writer `docs`, same content
+hash), and an unchanged repo is synced again when another writer has replaced one of its docs, so
+a client's overwrite is restored. Docs with a hash under the repo's `repo://` prefix that the clone
+no longer has are deleted, with their hashes (not when the clone has no markdown or a directory
+could not be read), under the same prune cap: a refused prune leaves the repo `error` with the
+reason and `orch docs sync <owner> --confirm-prune` (RPC `SyncDocs.confirm_prune`), which grants
+every current refusal of that owner. The refused repo records its new HEAD, so it is not cloned again
+on every sync while it waits; confirming forgets that HEAD, so the confirmed sync walks it again. Commit dates are read only when a doc changed. Clones use
+whatever protocol the user's gh is configured for (SSH or HTTPS).
 
 - **One sync at a time:** every docs sync runs in orchd: its scheduled scan, and `orch docs sync`
   and `refresh` through the `SyncDocs` RPC. While one runs, another request is refused, not
@@ -262,9 +463,77 @@ copies into a new one:
 
 Lock order: write gate (shared for writes) → source stripe → state mutex.
 
+## Keyword re-index
+
+`orch rag reindex-keywords` (RPC `ReindexKeywords`, operator-only, under the migration lock)
+brings keyword vectors up to the current `TokenizerVersion` in place, without re-embedding:
+
+1. Refuse unless the collection is hybrid and no migration shadow is installed. Count all chunks
+   and the stale ones (`must_not bm25_v = TokenizerVersion`, which also matches chunks with no
+   stamp). Without `--apply`, stop there.
+2. Scroll stale chunks 256 at a time (payload `source_uri` only; the offset is a point id, so the
+   shrinking filter does not skip any). Group the page by source; for each, under that source's
+   write lock, re-read the chunks' text and stamp (`POST /points`), skip any a live write already
+   stamped, recompute BM25, `PUT /points/vectors` (the `bm25` vector only) and
+   `POST /points/payload` with `bm25_v`.
+3. Every write stamps `bm25_v`, so a crashed or cancelled run resumes with what is left. Memory
+   stays at one page of text; on the 45,563-chunk store it took 27 s with orchd at about 250 MB.
+
+Until it runs, queries tokenized with v2 still match v1 vectors on every term the two share.
+
+## Duplicate clean-up
+
+`orch rag dedupe` (dry-run unless `--apply`; deletes through `DeleteSource` with `confirm`) lists a
+`file://` or `claude://` source only when all of these hold:
+
+- its file exists, and its real path (after symlinks) sits in a registered source: a repo or
+  owner source, or a checkout of a repo the docs sync tracks (the checkout's own `origin` is
+  believed only for a tracked repo);
+- that source's own URI for the file (`sources.Canonical`: `checkout://` or `repo://`) is stored,
+  written by the docs or sources sync, not by a client;
+- the two stored copies are identical (by content hash, else rebuilt text), or the file as it is
+  now has the synced copy's content hash (the stored copy is an older version of it).
+
+Text alone never makes a duplicate, so a boilerplate file in another project or `~/.claude`'s own
+config is never listed, and a copy that differs from the synced one (an unmerged edit) is kept.
+The synced copies need their content hash, which docs stored before this release lack until
+`orch docs refresh` re-stores them, so run that first.
+
+It also lists `repo://local/<repo>/<path>` and `repo://<owner>/<repo>/<path>` docs an earlier
+sources refresh stored (no writer, no docs-sync hash, the owner not tracked by the docs sync), but
+only once their replacement exists: the `checkout://` URI the refresh now gives that file (under the
+registered repo source with that directory name, or `<known_root>/<owner>/<repo>` for an owner
+source), stored by the sources refresh. A repo whose refresh is skipped, moved or unregistered keeps
+its old copy, since it may be the only one, and so does one whose old URI two registered repos
+share (same directory name), or whose path has a dot segment.
+
 ## Retrieval evaluation
 
-`orch rag eval` runs each case of `<config>/rag-eval.yaml` (`cases: [{query, expect: [uri|prefix*],
-scope?, source_type?, tags?}]`) through normal search, counting hits by distinct source. Metrics:
-hit@1, recall@k (`--top-k`, default 10), MRR. Runs are saved as JSON under `<data>/eval/` and can
-be compared case by case.
+`internal/rageval` with `orch rag eval`:
+
+- **Set:** `<data>/eval/golden.jsonl`, one case per line,
+  `{query, expect: [uri|prefix*], span?, scope?, source_type?, tags?, section?, note?, split?}` (unknown
+  fields rejected; `#` lines skipped; at most 1,000 cases, 4 MiB). While it does not exist the
+  legacy `<config>/rag-eval.yaml` is used, and the first `orch rag eval seed` imports it as the
+  `legacy` section. `--set` takes either format.
+- **Seed** (`orch rag eval seed`, no model calls): up to 3 decisions per session record (bullets
+  under `## Decisions`, cut at the first clause and to 10 words, asked as "what did we decide about
+  ..."), labelled with every source of that session (`session://<id>/*`, so the transcript the
+  record was written from answers too); and per `repo://` doc one heading (level 2–3, 3–12 words, not
+  generic) and one backticked identifier that no other doc or record names, labelled with that doc.
+  Sources are sampled in FNV-64 order of their URI. A reseed replaces only `seed-*` sections.
+- **Scoring** (report version 2): a case's rank is the chunk position of the first hit from an
+  expected source whose text contains the span, if any (chunk position, not distinct source,
+  since the top three chunks are what is injected); the source rank ignores the span. Metrics:
+  recall@1/3/5/10, MRR, nDCG@10 (one relevant item: expected URIs are alternatives), source hit@k,
+  injected tokens (the pointer, or `--inject-format full`, rendering of the top three distinct
+  sources at 2,000 characters, at 4 characters a token), and latency p50/p95, overall and per
+  section.
+- **Splits:** every case is in `tune` or `holdout` (its `split`, else a hash of its query), so
+  settings are chosen on one half and judged on the other; `--split` scores one half, and reports
+  give each section's halves.
+- **Compare:** `--compare <run>` prints deltas, cases that moved, and a paired bootstrap over the
+  shared queries for MRR, recall@3 and nDCG@10 (10,000 resamples, fixed seed): the mean delta, its
+  95% interval and the share of resamples where it was not positive. Cases pair by query and
+filters, once each; a comparison over fewer than 10 cases is never called significant. Runs of another version are
+  not compared. `--mode`, `--ranking` and `--per-source` score other settings on the same daemon.

@@ -17,6 +17,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/willesq/orchestrator/internal/github"
+	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/sources"
@@ -148,7 +149,10 @@ func (s *server) GetDocument(ctx context.Context, req *orchdv1.GetDocumentReques
 	return &orchdv1.Document{
 		SourceUri: uri, SourceType: doc.Meta.SourceType, Scope: doc.Meta.Scope, Tags: doc.Meta.Tags,
 		Text: doc.Text, Chunks: clampInt32(doc.Chunks), Malformed: doc.Malformed, Oversize: doc.Oversize,
-		WebUrl: s.webURLFor(ctx, uri, doc.Meta.SourceType),
+		WebUrl:      s.webURLFor(ctx, uri, doc.Meta.SourceType),
+		Writer:      doc.Meta.Writer,
+		ContentHash: doc.Meta.ContentHash,
+		Trust:       rag.TrustFor(doc.Meta.Writer, doc.Meta.SourceType),
 	}, nil
 }
 
@@ -273,9 +277,25 @@ func (s *server) RefreshSource(ctx context.Context, req *orchdv1.RefreshSourceRe
 		return nil, grpcstatus.Error(codes.Unavailable, "sources registry unavailable")
 	}
 	marked := 1
+	if req.GetConfirmPrune() && req.GetId() == "" {
+		return nil, grpcstatus.Error(codes.InvalidArgument, "confirm_prune needs a source id")
+	}
 	if id := req.GetId(); id != "" {
 		if _, err := s.findSource(ctx, id); err != nil {
 			return nil, err
+		}
+		if req.GetConfirmPrune() {
+			if s.prune == nil {
+				return nil, grpcstatus.Error(codes.Unavailable, "prune guard unavailable")
+			}
+			granted, err := s.prune.Confirm(ctx, prunecap.SourceKey(id))
+			if errors.Is(err, prunecap.ErrNothingRefused) {
+				return nil, grpcstatus.Errorf(codes.FailedPrecondition, "%s has no refused prune to confirm", id)
+			}
+			if err != nil {
+				return nil, err
+			}
+			log.Printf("orchd: confirmed for an hour, by the operator: the refused prunes of %s (%s)", id, strings.Join(granted, ", "))
 		}
 	} else {
 		list, err := s.sourcesReg.List(ctx)
@@ -354,16 +374,30 @@ func (s *server) indexedBy(ctx context.Context, src sources.Source) ([]string, e
 			}
 		}
 	}
-	synced, err := s.docsOwners(ctx)
-	if err != nil {
-		return nil, err
-	}
 	tag := searchTag(src)
-	list, _, _, err := s.rag.ListSources(ctx, rag.ListSourcesOpts{URIPrefix: sourcePrefix(src)})
+	// Docs this source's refresh stored under checkout://: carrying its tag
+	// and written by the sources refresh, so an agent's note is never purged.
+	current, _, _, err := s.rag.ListSources(ctx, rag.ListSourcesOpts{URIPrefix: "checkout://"})
 	if err != nil {
 		return nil, err
 	}
 	var uris []string
+	for _, sum := range current {
+		if sum.Writer == rag.WriterSources && sum.SourceType == "repo_doc" && slices.Contains(sum.Tags, tag) &&
+			(src.Kind == sources.KindOwner && ownerDoc(sum, src.URI) ||
+				src.Kind == sources.KindRepo && strings.HasPrefix(sum.SourceURI, sources.CheckoutURI(sources.ResolvePath(src.URI))+"/")) {
+			uris = append(uris, sum.SourceURI)
+		}
+	}
+	// Docs stored by earlier versions under repo://.
+	synced, err := s.docsOwners(ctx)
+	if err != nil {
+		return nil, err
+	}
+	list, _, _, err := s.rag.ListSources(ctx, rag.ListSourcesOpts{URIPrefix: sourcePrefix(src)})
+	if err != nil {
+		return nil, err
+	}
 	for _, sum := range list {
 		// Only what this source's refresh stores: markdown carrying its tag.
 		if sum.SourceType != "repo_doc" || !slices.Contains(sum.Tags, tag) {
@@ -384,6 +418,25 @@ func (s *server) indexedBy(ctx context.Context, src sources.Source) ([]string, e
 		uris = append(uris, sum.SourceURI)
 	}
 	return uris, nil
+}
+
+// ownerDoc reports whether a checkout:// doc sits in a repo directory of an
+// owner source: under a .../<owner>/<repo>/ segment pair whose repo is the
+// doc's own repo tag, as the owner refresh stores them.
+func ownerDoc(sum rag.SourceSummary, owner string) bool {
+	path := strings.TrimPrefix(sum.SourceURI, "checkout://")
+	for i := strings.Index(path, "/"+owner+"/"); i >= 0; {
+		rest := path[i+len(owner)+2:]
+		if repo, _, ok := strings.Cut(rest, "/"); ok && slices.Contains(sum.Tags, "repo:"+repo) {
+			return true
+		}
+		j := strings.Index(path[i+1:], "/"+owner+"/")
+		if j < 0 {
+			break
+		}
+		i += j + 1
+	}
+	return false
 }
 
 // docsOwners is the set of owners the GitHub docs sync tracks.
@@ -411,8 +464,9 @@ func searchTag(src sources.Source) string {
 	return "repo:" + filepath.Base(src.URI)
 }
 
-// sourcePrefix is the repo:// prefix a repo or owner source's docs are
-// indexed under (see sources.ingestRepoMarkdown).
+// sourcePrefix is the repo:// prefix earlier versions indexed a repo or
+// owner source's docs under; they now go under checkout:// (see
+// sources.CheckoutURI).
 func sourcePrefix(src sources.Source) string {
 	if src.Kind == sources.KindOwner {
 		return "repo://" + src.URI + "/"

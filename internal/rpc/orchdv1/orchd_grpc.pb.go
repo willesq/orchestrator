@@ -34,6 +34,7 @@ const (
 	Orchd_RateTask_FullMethodName              = "/orchd.v1.Orchd/RateTask"
 	Orchd_MigrateHybrid_FullMethodName         = "/orchd.v1.Orchd/MigrateHybrid"
 	Orchd_DropBackup_FullMethodName            = "/orchd.v1.Orchd/DropBackup"
+	Orchd_ReindexKeywords_FullMethodName       = "/orchd.v1.Orchd/ReindexKeywords"
 	Orchd_ListPRs_FullMethodName               = "/orchd.v1.Orchd/ListPRs"
 	Orchd_GetGitHubIdentity_FullMethodName     = "/orchd.v1.Orchd/GetGitHubIdentity"
 	Orchd_ListGitHubScopes_FullMethodName      = "/orchd.v1.Orchd/ListGitHubScopes"
@@ -102,6 +103,10 @@ type OrchdClient interface {
 	MigrateHybrid(ctx context.Context, in *MigrateHybridRequest, opts ...grpc.CallOption) (*MigrateHybridResponse, error)
 	// DropBackup deletes the backup collection a migration kept; plans unless apply.
 	DropBackup(ctx context.Context, in *DropBackupRequest, opts ...grpc.CallOption) (*DropBackupResponse, error)
+	// ReindexKeywords recomputes, in place, the BM25 keyword vectors an older
+	// tokenizer made, from each chunk's stored text; counts unless apply.
+	// Resumable: chunks already re-indexed are skipped.
+	ReindexKeywords(ctx context.Context, in *ReindexKeywordsRequest, opts ...grpc.CallOption) (*ReindexKeywordsResponse, error)
 	// ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
 	// awaiting their review, each with why it needs attention. Never calls gh.
 	ListPRs(ctx context.Context, in *ListPRsRequest, opts ...grpc.CallOption) (*ListPRsResponse, error)
@@ -321,6 +326,16 @@ func (c *orchdClient) DropBackup(ctx context.Context, in *DropBackupRequest, opt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DropBackupResponse)
 	err := c.cc.Invoke(ctx, Orchd_DropBackup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ReindexKeywords(ctx context.Context, in *ReindexKeywordsRequest, opts ...grpc.CallOption) (*ReindexKeywordsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReindexKeywordsResponse)
+	err := c.cc.Invoke(ctx, Orchd_ReindexKeywords_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -591,6 +606,10 @@ type OrchdServer interface {
 	MigrateHybrid(context.Context, *MigrateHybridRequest) (*MigrateHybridResponse, error)
 	// DropBackup deletes the backup collection a migration kept; plans unless apply.
 	DropBackup(context.Context, *DropBackupRequest) (*DropBackupResponse, error)
+	// ReindexKeywords recomputes, in place, the BM25 keyword vectors an older
+	// tokenizer made, from each chunk's stored text; counts unless apply.
+	// Resumable: chunks already re-indexed are skipped.
+	ReindexKeywords(context.Context, *ReindexKeywordsRequest) (*ReindexKeywordsResponse, error)
 	// ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
 	// awaiting their review, each with why it needs attention. Never calls gh.
 	ListPRs(context.Context, *ListPRsRequest) (*ListPRsResponse, error)
@@ -710,6 +729,9 @@ func (UnimplementedOrchdServer) MigrateHybrid(context.Context, *MigrateHybridReq
 }
 func (UnimplementedOrchdServer) DropBackup(context.Context, *DropBackupRequest) (*DropBackupResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DropBackup not implemented")
+}
+func (UnimplementedOrchdServer) ReindexKeywords(context.Context, *ReindexKeywordsRequest) (*ReindexKeywordsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReindexKeywords not implemented")
 }
 func (UnimplementedOrchdServer) ListPRs(context.Context, *ListPRsRequest) (*ListPRsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPRs not implemented")
@@ -1064,6 +1086,24 @@ func _Orchd_DropBackup_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).DropBackup(ctx, req.(*DropBackupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ReindexKeywords_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReindexKeywordsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ReindexKeywords(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ReindexKeywords_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ReindexKeywords(ctx, req.(*ReindexKeywordsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1530,6 +1570,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DropBackup",
 			Handler:    _Orchd_DropBackup_Handler,
+		},
+		{
+			MethodName: "ReindexKeywords",
+			Handler:    _Orchd_ReindexKeywords_Handler,
 		},
 		{
 			MethodName: "ListPRs",

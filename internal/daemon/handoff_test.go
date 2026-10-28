@@ -187,7 +187,7 @@ func TestStoreFiles(t *testing.T) {
 		}
 	}
 	st := &storeRecorder{}
-	storeFiles(context.Background(), st, dir, afterAll)
+	storeFiles(context.Background(), st, dir, afterAll, nil)
 	text, ok := st.stored("file://" + doc)
 	if !ok || !strings.Contains(text, "# Guide") || strings.Contains(text, secret) {
 		t.Fatalf("doc = %q, %v", text, ok)
@@ -205,12 +205,12 @@ func TestStoreFiles(t *testing.T) {
 	if err := handoff.PutFile(dir, handoff.File{Path: doc}); err != nil {
 		t.Fatal(err)
 	}
-	storeFiles(context.Background(), &storeRecorder{err: errors.New("down")}, dir, afterAll)
+	storeFiles(context.Background(), &storeRecorder{err: errors.New("down")}, dir, afterAll, nil)
 	if left, _ := handoff.Files(dir, afterAll); len(left) != 1 || left[0].Attempts != 1 {
 		t.Fatalf("after a failure: %+v", left)
 	}
 	// Within the backoff it waits.
-	storeFiles(context.Background(), &storeRecorder{}, dir, afterAll)
+	storeFiles(context.Background(), &storeRecorder{}, dir, afterAll, nil)
 	if left, _ := handoff.Files(dir, afterAll); len(left) != 1 || left[0].Attempts != 1 {
 		t.Fatalf("after a failure: %+v", left)
 	}
@@ -228,7 +228,7 @@ func TestHandoffUnitStoresOnStart(t *testing.T) {
 	st := &storeRecorder{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	u := handoffUnit(st, nil, dir)
+	u := handoffUnit(st, nil, dir, nil)
 	if u.Name != UnitHandoff {
 		t.Fatalf("name = %s", u.Name)
 	}

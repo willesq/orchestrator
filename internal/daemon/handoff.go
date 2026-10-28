@@ -18,6 +18,7 @@ import (
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/redact"
 	"github.com/willesq/orchestrator/internal/session"
+	"github.com/willesq/orchestrator/internal/sources"
 	"github.com/willesq/orchestrator/internal/supervisor"
 )
 
@@ -73,7 +74,7 @@ func lockSession(id string) func() {
 
 // handoffUnit does hand-offs as they appear, including any left from before
 // orchd last started. summaries is nil when summaries are off.
-func handoffUnit(ing summaryIngester, summaries *summaryQueue, dir string) supervisor.Unit {
+func handoffUnit(ing summaryIngester, summaries *summaryQueue, dir string, canonical sources.CanonicalFunc) supervisor.Unit {
 	return supervisor.Unit{
 		Name:   UnitHandoff,
 		Detail: "stores transcripts and documents that hooks hand off",
@@ -85,7 +86,7 @@ func handoffUnit(ing summaryIngester, summaries *summaryQueue, dir string) super
 				for {
 					cutoff := time.Now().Add(-handoffSettle)
 					storeSessions(ctx, ing, summaries, dir, cutoff)
-					storeFiles(ctx, ing, dir, cutoff)
+					storeFiles(ctx, ing, dir, cutoff, canonical)
 					beat()
 					select {
 					case <-ctx.Done():
@@ -163,7 +164,7 @@ func storeSession(ctx context.Context, ing summaryIngester, s handoff.Session) e
 	// Each chunk is dated by the turns it holds, so a session spanning days is
 	// found under the day each part happened.
 	_, err = ing.IngestText(ctx, session.TranscriptText(msgs), rag.Meta{
-		SourceURI: "session://" + s.ID + "/transcript", SourceType: "session_transcript", Tags: s.Tags,
+		SourceURI: "session://" + s.ID + "/transcript", SourceType: "session_transcript", Tags: s.Tags, Writer: rag.WriterSession,
 		Timeline: true, StartedAt: start, EndedAt: end,
 	})
 	return err
@@ -186,14 +187,15 @@ func storeRecord(ctx context.Context, ing summaryIngester, s handoff.Session, st
 	}
 	recStart, recEnd := rec.Span()
 	_, err = ing.IngestText(ctx, rec.Text(), rag.Meta{
-		SourceURI: "session://" + s.ID + "/record", SourceType: "session_record", Tags: s.Tags,
+		SourceURI: "session://" + s.ID + "/record", SourceType: "session_record", Tags: s.Tags, Writer: rag.WriterSession,
 		StartedAt: recStart, EndedAt: recEnd,
 	})
 	return err
 }
 
 // storeFiles stores the handed-off documents older than cutoff that are due.
-func storeFiles(ctx context.Context, ing summaryIngester, dir string, cutoff time.Time) {
+// canonical, when set, names the repo:// URIs a file's doc is synced under.
+func storeFiles(ctx context.Context, ing summaryIngester, dir string, cutoff time.Time, canonical sources.CanonicalFunc) {
 	pending, err := handoff.Files(dir, cutoff)
 	if err != nil {
 		log.Printf("handoff: list files: %v", err)
@@ -209,7 +211,7 @@ func storeFiles(ctx context.Context, ing summaryIngester, dir string, cutoff tim
 			continue
 		}
 		done++
-		err := storeFile(ctx, ing, f, home)
+		err := storeFile(ctx, ing, f, home, canonical)
 		switch {
 		case err == nil:
 			_ = handoff.DoneFile(dir, f)
@@ -226,7 +228,7 @@ func storeFiles(ctx context.Context, ing summaryIngester, dir string, cutoff tim
 // storeFile stores an edited document as it is now. The entry names only a
 // path, so what it may be is decided again here, after resolving symlinks, and
 // the file read is the one that was checked.
-func storeFile(ctx context.Context, ing summaryIngester, f handoff.File, home string) error {
+func storeFile(ctx context.Context, ing summaryIngester, f handoff.File, home string, canonical sources.CanonicalFunc) error {
 	sourceType, uri, ok := handoff.Classify(f.Path, home)
 	if !ok {
 		return nil
@@ -249,8 +251,45 @@ func storeFile(ctx context.Context, ing summaryIngester, f handoff.File, home st
 	}
 	ctx, cancel := context.WithTimeout(ctx, handoffTimeout)
 	defer cancel()
-	_, err = ing.IngestText(ctx, text, rag.Meta{SourceURI: uri, SourceType: sourceType})
+	// Mapped from the resolved path: a link inside a repo to a note outside
+	// it is that note, not a repo doc.
+	if synced, err := canonicalStored(ctx, ing, canonical, uri, resolved, rag.ContentHash(text)); synced || err != nil {
+		return err
+	}
+	_, err = ing.IngestText(ctx, text, rag.Meta{SourceURI: uri, SourceType: sourceType, Writer: rag.WriterFile})
 	return err
+}
+
+// canonicalStore reads what is stored for a source and removes one
+// (implemented by *rag.Service).
+type canonicalStore interface {
+	Copy(ctx context.Context, uri string) (rag.StoredCopy, bool, error)
+	DeleteSource(ctx context.Context, uri string) (int, error)
+}
+
+// canonicalStored reports whether an edited doc is already stored, with the
+// same content, by the docs or sources sync under the URI that sync gives
+// the registered source it sits in. Then storing it again under its path
+// (uri) would only duplicate it, and an earlier path-keyed copy is removed.
+// A doc whose content differs from the synced copy (an edit on a branch not
+// yet merged), or one no sync stores (an untracked plan), is stored under its
+// path as before.
+func canonicalStored(ctx context.Context, ing summaryIngester, canonical sources.CanonicalFunc, uri, resolved, hash string) (bool, error) {
+	cs, ok := ing.(canonicalStore)
+	if canonical == nil || !ok {
+		return false, nil
+	}
+	for _, c := range canonical(ctx, resolved) {
+		cp, found, err := cs.Copy(ctx, c)
+		if err != nil {
+			return false, err
+		}
+		if found && (cp.Writer == rag.WriterDocs || cp.Writer == rag.WriterSources) && cp.ContentHash == hash {
+			_, err := cs.DeleteSource(ctx, uri)
+			return true, err
+		}
+	}
+	return false, nil
 }
 
 // readRegular reads path if it is a regular file of at most limit bytes,

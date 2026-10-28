@@ -20,6 +20,11 @@ runs background agent tasks that survive restarts.
   hooks, permissions, plugins and cc-safety-net rules on or off (per machine, kept in `orch.db`,
   honored by `orch install`). Like
   the CLI, it talks to `orchd` and never opens the databases directly.
+- **Memory** is hybrid (meaning plus keyword) search over your sessions, repo docs, notes and
+  fetched pages, ranked by source type and recency. Each prompt gets a few dated pointers, one per
+  source and labelled by how far their origin is trusted, that the agent can follow with
+  `rag_search`; `orch rag eval` measures retrieval on a golden set
+  ([docs/MEMORY.md](docs/MEMORY.md)).
 - **`orch install`** wires the hooks, MCP servers and a shared agent policy into each harness,
   and for Claude Code installs [cc-safety-net](docs/INSTALL.md#safety-net) pinned to a reviewed
   release with orch's guard rules.

@@ -206,6 +206,12 @@ type AutoRAGSettings struct {
 	MinScoreStatement float64 `mapstructure:"min_score_statement"`
 	MaxChars          int     `mapstructure:"max_chars"`
 	MinPromptChars    int     `mapstructure:"min_prompt_chars"`
+	// Format is "pointers" (a title, date, source and the most relevant line
+	// per hit) or "full" (each hit's whole text).
+	Format string `mapstructure:"format"`
+	// Untrusted is "mark" (inject web pages and tool output labelled as
+	// untrusted, their text quoted) or "exclude" (never inject them).
+	Untrusted string `mapstructure:"untrusted"`
 }
 
 // SessionsSettings controls what orchd does with finished sessions.
@@ -255,6 +261,20 @@ type SearchSettings struct {
 	// favors meaning, above 1 favors exact words. The default, 0.5, kept the
 	// identifier wins without costing prose recall on the golden-set eval.
 	KeywordWeight float64 `mapstructure:"keyword_weight"`
+	// Ranking is "weighted" (scale fused scores by source type and recency)
+	// or "plain" (fusion alone).
+	Ranking string `mapstructure:"ranking"`
+	// RecencyHalfLifeDays is how many days recency takes to fall halfway to
+	// RecencyFloor; 0 turns recency off.
+	RecencyHalfLifeDays float64 `mapstructure:"recency_half_life_days"`
+	// RecencyFloor is the least recency scales a score by (0 to 1), so an old
+	// decision that still matches is not buried.
+	RecencyFloor float64 `mapstructure:"recency_floor"`
+	// SourceWeights scale scores by source type; unlisted types weigh 1.
+	SourceWeights map[string]float64 `mapstructure:"source_weights"`
+	// PerSource caps the hits one source may return to a search that sets no
+	// cap of its own; 0 leaves them uncapped.
+	PerSource int `mapstructure:"per_source"`
 }
 
 // QdrantSettings selects how the Qdrant vector store is provided and, for
@@ -291,6 +311,15 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("rag.search.mode", "hybrid")
 	v.SetDefault("rag.search.rrf_k", 60)
 	v.SetDefault("rag.search.keyword_weight", 0.5)
+	// Ranking after fusion: weighted by source type and recency, with a floor
+	// so an old decision is not buried (tuned on the golden-set eval).
+	v.SetDefault("rag.search.ranking", "weighted")
+	v.SetDefault("rag.search.recency_half_life_days", 180)
+	v.SetDefault("rag.search.recency_floor", 0.85)
+	v.SetDefault("rag.search.source_weights", map[string]float64{
+		"session_record": 1.0, "decision": 1.0, "session_transcript": 0.85, "web": 0.9,
+	})
+	v.SetDefault("rag.search.per_source", 2)
 	v.SetDefault("rag.qdrant.api_key_env", "QDRANT_API_KEY")
 	// Pinned to match the Python system's engine for storage compatibility at cutover.
 	v.SetDefault("rag.qdrant.version", "v1.17.1")
@@ -304,6 +333,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("hooks.auto_rag.min_score_statement", 0.45)
 	v.SetDefault("hooks.auto_rag.max_chars", 2000)
 	v.SetDefault("hooks.auto_rag.min_prompt_chars", 12)
+	v.SetDefault("hooks.auto_rag.format", "pointers")
+	v.SetDefault("hooks.auto_rag.untrusted", "mark")
 	// Source registry + freshness scheduler.
 	v.SetDefault("sources.known_roots", []string{"~/code"})
 	// Third-party and generated trees whose READMEs would crowd out real project docs.

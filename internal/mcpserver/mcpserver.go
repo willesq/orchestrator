@@ -17,6 +17,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
+	"github.com/willesq/orchestrator/internal/memctx"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/routing"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
@@ -37,11 +38,20 @@ func (r ragTools) search(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+	mode := req.GetString("mode", "")
+	if mode != "" && mode != rag.ModeHybrid && mode != rag.ModeDense {
+		return mcp.NewToolResultError("mode must be hybrid or dense"), nil
+	}
 	resp, err := r.client.Search(ctx, &orchdv1.SearchRequest{
 		Query:      query,
 		TopK:       getInt(req, "top_k", 5),
 		Scope:      req.GetString("scope", ""),
 		SourceType: req.GetString("source_type", ""),
+		Tags:       req.GetStringSlice("tags", nil),
+		AllTags:    req.GetStringSlice("all_tags", nil),
+		SourceUri:  req.GetString("source_uri", ""),
+		Mode:       mode,
+		PerSource:  getInt(req, "per_source", 0),
 		Since:      since,
 		Until:      until,
 	})
@@ -165,6 +175,11 @@ func NewRAG(client orchdv1.OrchdClient) *server.MCPServer {
 		mcp.WithNumber("top_k", mcp.Description("max results (default 5)")),
 		mcp.WithString("scope", mcp.Description("filter by scope, e.g. work|personal|project:x")),
 		mcp.WithString("source_type", mcp.Description("filter by source type")),
+		mcp.WithArray("tags", mcp.WithStringItems(), mcp.Description("only content carrying any of these tags, e.g. repo:orchestrator")),
+		mcp.WithArray("all_tags", mcp.WithStringItems(), mcp.Description("only content carrying every one of these tags")),
+		mcp.WithString("source_uri", mcp.Description("only this source's content (an exact source URI), e.g. to read an auto-injected pointer in full")),
+		mcp.WithString("mode", mcp.Description("hybrid (keyword + semantic) or dense (semantic only); default rag.search.mode")),
+		mcp.WithNumber("per_source", mcp.Description("most results one source may return (default rag.search.per_source)")),
 		mcp.WithString("since", mcp.Description(sinceHelp)),
 		mcp.WithString("until", mcp.Description(untilHelp)),
 	), rt.search)
@@ -364,11 +379,15 @@ func formatHits(hits []*orchdv1.SearchHit) string {
 	}
 	var b strings.Builder
 	for i, h := range hits {
-		fmt.Fprintf(&b, "%d. [%.3f] %s (%s)", i+1, h.GetScore(), h.GetSourceUri(), h.GetSourceType())
+		// The URI and type are the writer's choice, so they are quoted; the
+		// text is fenced in every tier, so a line in it can neither read as
+		// an instruction nor pass itself off as another result.
+		t := memctx.TrustOf(h.GetTrust(), h.GetSourceType(), h.GetSourceUri())
+		fmt.Fprintf(&b, "%d. [%.3f] %s (%s)", i+1, h.GetScore(), memctx.QuoteField(h.GetSourceUri()), memctx.QuoteField(h.GetSourceType()))
 		if when := timeline.Describe(h.GetStartedAt(), h.GetEndedAt(), h.GetSourceType()); when != "" {
 			fmt.Fprintf(&b, " · %s", when)
 		}
-		fmt.Fprintf(&b, "\n   %s\n", h.GetText())
+		fmt.Fprintf(&b, " · %s\n%s", t.Label(), memctx.Fence(h.GetText(), t, memctx.Flagged(h)))
 	}
 	return b.String()
 }
@@ -385,13 +404,19 @@ func formatSources(resp *orchdv1.ListSourcesResponse) string {
 		fmt.Fprintf(&b, " — showing %d", len(srcs))
 	}
 	b.WriteString("\n\n")
+	// Every field is the writer's choice, so each is quoted: a newline or a
+	// fake label in one cannot pass for another line of the listing.
 	for _, s := range srcs {
-		fmt.Fprintf(&b, "%6d  %-20s %s", s.GetChunks(), s.GetSourceType(), s.GetSourceUri())
+		fmt.Fprintf(&b, "%6d  %-20s %s", s.GetChunks(), memctx.QuoteField(s.GetSourceType()), memctx.QuoteField(s.GetSourceUri()))
 		if s.GetScope() != "" {
-			fmt.Fprintf(&b, "  scope=%s", s.GetScope())
+			fmt.Fprintf(&b, "  scope=%s", memctx.QuoteField(s.GetScope()))
 		}
 		if len(s.GetTags()) > 0 {
-			fmt.Fprintf(&b, "  tags=%s", strings.Join(s.GetTags(), ","))
+			tags := make([]string, len(s.GetTags()))
+			for i, t := range s.GetTags() {
+				tags[i] = memctx.QuoteField(t)
+			}
+			fmt.Fprintf(&b, "  tags=%s", strings.Join(tags, ","))
 		}
 		if when := timeline.Describe(s.GetStartedAt(), s.GetEndedAt(), s.GetSourceType()); when != "" {
 			fmt.Fprintf(&b, "  when=%s", when)

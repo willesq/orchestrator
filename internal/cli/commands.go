@@ -19,6 +19,7 @@ import (
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/install"
 	"github.com/willesq/orchestrator/internal/mcpserver"
+	"github.com/willesq/orchestrator/internal/memctx"
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/qdrant"
@@ -594,6 +595,8 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 		allTags    []string
 		uri        string
 		mode       string
+		ranking    string
+		perSource  int
 		since      string
 		until      string
 	)
@@ -626,6 +629,8 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 				AllTags:    allTags,
 				SourceUri:  uri,
 				Mode:       mode,
+				Ranking:    ranking,
+				PerSource:  int32(perSource),
 				Since:      from,
 				Until:      to,
 			})
@@ -656,8 +661,11 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 				if when != "" {
 					when = " · " + when
 				}
+				// Stored fields are the writer's choice: the URI and type are
+				// quoted and the text kept on one line, so neither can pass for
+				// another result when an agent reads this output.
 				fmt.Fprintf(c.OutOrStdout(), "%d. [%.3f%s] %s (%s)%s\n   %s\n",
-					i+1, h.GetScore(), match, h.GetSourceUri(), h.GetSourceType(), when, text)
+					i+1, h.GetScore(), match, memctx.QuoteField(h.GetSourceUri()), memctx.QuoteField(h.GetSourceType()), when, memctx.OneLine(text))
 			}
 			return nil
 		},
@@ -669,6 +677,8 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringSliceVar(&allTags, "require-tag", nil, "filter: every one of these tags (e.g. owner:willesq,repo:orchestrator)")
 	cmd.Flags().StringVar(&uri, "uri", "", "filter: only this source (exact source URI)")
 	cmd.Flags().StringVar(&mode, "mode", "", "hybrid (keyword + semantic) or dense; default rag.search.mode")
+	cmd.Flags().StringVar(&ranking, "ranking", "", "weighted (source type and recency) or plain; default rag.search.ranking")
+	cmd.Flags().IntVar(&perSource, "per-source", 0, "most results one source may return (default rag.search.per_source; -1 for no cap)")
 	addBoundFlags(cmd, &since, &until)
 	return cmd
 }

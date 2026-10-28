@@ -223,6 +223,10 @@ private struct StatusChip: View {
         case "ok": .good
         case "missing": .warning
         case "error": .bad
+        // A prune refused past its cap waits for the operator; a checkout
+        // off its default branch was left as last indexed.
+        case _ where status.hasPrefix("attention"): .bad
+        case _ where status.hasPrefix("skipped") || status.hasPrefix("ok;"): .warning
         default: .neutral
         }
     }

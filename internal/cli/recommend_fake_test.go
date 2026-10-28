@@ -46,6 +46,15 @@ func (f *fakeClient) DropBackup(_ context.Context, req *orchdv1.DropBackupReques
 	return fakeDropBackup(req)
 }
 
+// fakeReindex answers ReindexKeywords for every fakeClient.
+var fakeReindex = func(*orchdv1.ReindexKeywordsRequest) (*orchdv1.ReindexKeywordsResponse, error) {
+	return &orchdv1.ReindexKeywordsResponse{}, nil
+}
+
+func (f *fakeClient) ReindexKeywords(_ context.Context, req *orchdv1.ReindexKeywordsRequest, _ ...grpc.CallOption) (*orchdv1.ReindexKeywordsResponse, error) {
+	return fakeReindex(req)
+}
+
 func (f *fakeClient) ListPRs(context.Context, *orchdv1.ListPRsRequest, ...grpc.CallOption) (*orchdv1.ListPRsResponse, error) {
 	return &orchdv1.ListPRsResponse{}, nil
 }
@@ -126,7 +135,8 @@ func (f *fakeClient) RemoveSource(context.Context, *orchdv1.RemoveSourceRequest,
 	return &orchdv1.RemoveSourceResponse{}, f.err
 }
 
-func (f *fakeClient) RefreshSource(context.Context, *orchdv1.RefreshSourceRequest, ...grpc.CallOption) (*orchdv1.RefreshSourceResponse, error) {
+func (f *fakeClient) RefreshSource(_ context.Context, req *orchdv1.RefreshSourceRequest, _ ...grpc.CallOption) (*orchdv1.RefreshSourceResponse, error) {
+	f.refreshReq = req
 	return &orchdv1.RefreshSourceResponse{}, f.err
 }
 

@@ -26,7 +26,7 @@ func TestSearchAndSourcesShowDates(t *testing.T) {
 	}
 	cf := factory(fc, nil)
 	out, err := run(cf, "", "search", "--since", "yesterday", "--until", "today", "what", "happened")
-	if err != nil || !strings.Contains(out, "(session_transcript) · 2026-10-21 14:02 UTC") || fc.searchReq.GetSince() == 0 || fc.searchReq.GetUntil() <= fc.searchReq.GetSince() {
+	if err != nil || !strings.Contains(out, `("session_transcript") · 2026-10-21 14:02 UTC`) || fc.searchReq.GetSince() == 0 || fc.searchReq.GetUntil() <= fc.searchReq.GetSince() {
 		t.Fatalf("search: %q, %v, req %+v", out, err, fc.searchReq)
 	}
 	if _, err := run(cf, "", "search", "--since", "someday", "q"); err == nil || !strings.Contains(err.Error(), "--since") {

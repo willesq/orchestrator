@@ -697,6 +697,7 @@ func TestModelFetchAlreadyPresent(t *testing.T) {
 
 // fakeClient implements orchdv1.OrchdClient with canned responses.
 type fakeClient struct {
+	refreshReq   *orchdv1.RefreshSourceRequest
 	searchReq    *orchdv1.SearchRequest
 	listReq      *orchdv1.ListSourcesRequest
 	ping         *orchdv1.PingResponse

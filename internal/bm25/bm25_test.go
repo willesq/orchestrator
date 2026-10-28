@@ -164,17 +164,47 @@ func TestUnicode(t *testing.T) {
 	}
 }
 
-// Golden tokens for TokenizerVersion 1: if this changes, bump the version and
+// Golden tokens for TokenizerVersion 2: if this changes, bump the version and
 // re-index, since stored vectors no longer match queries.
 func TestTokenizerVersionGolden(t *testing.T) {
-	if TokenizerVersion != 1 {
+	if TokenizerVersion != 2 {
 		t.Fatal("update the golden list with the new version")
 	}
-	got := Tokens("Run queue.worker.codex.enabled via ProcessActivity — café 天気です")
+	got := Tokens("Run queue.worker.codex.enabled via ProcessActivity — café 天気です " +
+		"rag.search.keyword_weight internal/rag/search.go OAuth2Token parse_HTTPRequest")
 	want := []string{"run", "queue.worker.codex.enabled", "queue", "worker", "codex", "enabled", "via",
-		"processactivity", "process", "activity", "café", "天気", "気で", "です"}
+		"processactivity", "process", "activity", "café", "天気", "気で", "です",
+		"rag.search.keyword_weight", "keyword_weight", "rag", "search", "keyword", "weight",
+		"internal/rag/search.go", "search.go", "internal", "rag", "search", "go",
+		"oauth2token", "auth2", "token",
+		"parse_httprequest", "httprequest", "parse", "http", "request"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("tokens = %q", got)
+	}
+}
+
+func TestCompoundPartsMatchAsWholes(t *testing.T) {
+	cases := []struct{ doc, query string }{
+		{"set rag.search.keyword_weight to 0.5", "keyword_weight"},
+		{"see internal/rag/search.go", "search.go"},
+		{"the my_ProcessActivity hook", "ProcessActivity"},
+		{"refresh the OAuth2Token", "token"},
+		{"an HTTP2Server", "server"},
+		{"decode a utf8String", "string"},
+	}
+	for _, c := range cases {
+		doc := Document(c.doc, DefaultParams)
+		for _, id := range Query(c.query).Indices {
+			if !slices.Contains(doc.Indices, id) {
+				t.Errorf("%q: query %q term %d not in the document", c.doc, c.query, id)
+			}
+		}
+	}
+	if got := Tokens("x86_64 config"); !slices.Equal(got, []string{"x86_64", "x86", "64", "config"}) {
+		t.Fatalf("digits = %q", got)
+	}
+	if got := Tokens("README"); !slices.Equal(got, []string{"readme"}) {
+		t.Fatalf("plain word = %q", got)
 	}
 }
 

@@ -27,12 +27,19 @@ change together in one write. orchd itself writes config only to record a migrat
 | `rag.search.mode` | `hybrid` | or `dense` |
 | `rag.search.rrf_k` | `60` | reciprocal rank fusion constant |
 | `rag.search.keyword_weight` | `0.5` | keyword list's share of the fusion |
+| `rag.search.ranking` | `weighted` | scale fused scores by source type and recency, or `plain` |
+| `rag.search.recency_half_life_days` | `180` | days for recency to fall halfway to the floor; 0 turns recency off |
+| `rag.search.recency_floor` | `0.85` | least recency scales a score by (0–1) |
+| `rag.search.source_weights` | `session_transcript: 0.85`, `web: 0.9`, `session_record`/`decision: 1` | per source type; set types override these defaults, other types weigh 1; values outside (0, 10] are ignored |
+| `rag.search.per_source` | `2` | most hits one source returns to a search that sets no cap (every search: MCP, CLI and prompt context, which asks for 1); 0 = no cap |
 | `hooks.auto_rag.enabled` | `true` | inject memory into prompts |
 | `hooks.auto_rag.top_k` | `3` | hits injected |
 | `hooks.auto_rag.min_score` | `0.25` | cosine floor for questions |
 | `hooks.auto_rag.min_score_statement` | `0.45` | cosine floor for other prompts |
 | `hooks.auto_rag.max_chars` | `2000` | injection size cap |
 | `hooks.auto_rag.min_prompt_chars` | `12` | shorter prompts get nothing |
+| `hooks.auto_rag.format` | `pointers` | one line per hit with its source, or `full` text |
+| `hooks.auto_rag.untrusted` | `mark` | inject web pages and tool output labelled untrusted, or `exclude` them |
 | `ingest.exclude_dirs` | vendor, node_modules, bower_components, third_party, Pods, .venv, venv, \_\_pycache\_\_, .tox, .terraform, .next, dist, build, target | never walked; `.git` always skipped |
 | `sources.known_roots` | `[~/code]` | where `<owner>/<repo>` checkouts live |
 | `sources.scan_interval` | `5m` | sources scheduler tick |

@@ -347,7 +347,7 @@ func TestDataSectionCounts(t *testing.T) {
 		wantTasks string
 		wantSrc   string
 	}{
-		{name: "counts rows from a live store", wantTasks: "2 recorded", wantSrc: "1 registered"},
+		{name: "counts rows from a live store", wantTasks: "2 recorded", wantSrc: "2 registered"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -370,6 +370,11 @@ func TestDataSectionCounts(t *testing.T) {
 				t.Fatalf("seed source: %v", err)
 			}
 			if _, err := conn.ExecContext(ctx,
+				`INSERT INTO sources (id, kind, uri, refresh_secs, last_fetched, status) VALUES (?,?,?,?,?,?)`,
+				"repo|/r", "repo", "/r", 60, testNow.Unix(), "attention: 9 docs are gone"); err != nil {
+				t.Fatalf("seed source: %v", err)
+			}
+			if _, err := conn.ExecContext(ctx,
 				`INSERT INTO docs_owners (owner, refresh_secs, last_synced, status) VALUES (?,?,?,?)`,
 				"willesq", 3600, testNow.Unix()-1800, "ok"); err != nil {
 				t.Fatalf("seed owner: %v", err)
@@ -382,7 +387,7 @@ func TestDataSectionCounts(t *testing.T) {
 				t.Errorf("tasks = %q, want %q", got.Value, tt.wantTasks)
 			}
 			src := line(t, sec, "sources")
-			if src.Value != tt.wantSrc || src.Level != LevelWarn {
+			if src.Value != tt.wantSrc || src.Level != LevelWarn || !strings.Contains(src.Detail, "1 need attention") {
 				t.Errorf("sources = %+v, want %q/warn", src, tt.wantSrc)
 			}
 			if !strings.Contains(src.Detail, "1 due") || !strings.Contains(src.Detail, "1 stale") {
