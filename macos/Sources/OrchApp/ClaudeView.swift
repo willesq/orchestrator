@@ -2,7 +2,9 @@ import OrchKit
 import SwiftUI
 
 /// The Claude tab: Claude Code's hooks, permission rules and plugins from
-/// ~/.claude/settings.json, and cc-safety-net's rules, each with a toggle.
+/// ~/.claude/settings.json, cc-safety-net's rules, and orch's instruction
+/// modules (the pieces of CLAUDE.md, GEMINI.md and Codex's AGENTS.md that
+/// orch manages), each with a toggle.
 /// A change is written to the file at once and kept in this machine's
 /// orch.db; edits made to the files elsewhere show up within seconds.
 struct ClaudeView: View {
@@ -10,7 +12,7 @@ struct ClaudeView: View {
 
     /// One section of the tab: a provider's kind.
     enum Section: String, CaseIterable, Identifiable {
-        case hooks, permissions, plugins, rules
+        case hooks, permissions, plugins, rules, instructions
 
         var id: String { rawValue }
 
@@ -20,10 +22,17 @@ struct ClaudeView: View {
             case .permissions: "Permissions"
             case .plugins: "Plugins"
             case .rules: "Safety Net rules"
+            case .instructions: "Instructions"
             }
         }
 
-        var provider: String { self == .rules ? "cc-safety-net" : "claude-code" }
+        var provider: String {
+            switch self {
+            case .rules: "cc-safety-net"
+            case .instructions: "orch-instructions"
+            default: "claude-code"
+            }
+        }
 
         var kind: String {
             switch self {
@@ -31,7 +40,20 @@ struct ClaudeView: View {
             case .permissions: "permission"
             case .plugins: "plugin"
             case .rules: "rule"
+            case .instructions: "module"
             }
+        }
+
+        /// How wide the list may be. Instruction rows are a title and a
+        /// sentence, so they cede room to the module text beside them.
+        var listWidth: (min: CGFloat, ideal: CGFloat) {
+            self == .instructions ? (340, 420) : (420, 560)
+        }
+
+        /// How wide the detail pane may be. A module's rendered text needs
+        /// room to read; other items show a command and a few fields.
+        var detailWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) {
+            self == .instructions ? (400, 560, 960) : (280, 340, 520)
         }
 
         var emptyText: String {
@@ -40,6 +62,7 @@ struct ClaudeView: View {
             case .permissions: "No permission rules in ~/.claude/settings.json."
             case .plugins: "No plugins in enabledPlugins."
             case .rules: "No cc-safety-net rulebooks are listed in rule.json."
+            case .instructions: "No instruction modules. Run orch install --apply to wire your agents."
             }
         }
     }
@@ -57,9 +80,10 @@ struct ClaudeView: View {
             HSplitView {
                 SettingsKindList(model: model, provider: section.provider, kind: section.kind, emptyText: section.emptyText,
                                  query: query)
-                    .frame(minWidth: 420, idealWidth: 560, maxWidth: .infinity)
+                    .frame(minWidth: section.listWidth.min, idealWidth: section.listWidth.ideal, maxWidth: .infinity)
                 SettingDetail(model: model)
-                    .frame(minWidth: 280, idealWidth: 340, maxWidth: 520, maxHeight: .infinity)
+                    .frame(minWidth: section.detailWidth.min, idealWidth: section.detailWidth.ideal,
+                           maxWidth: section.detailWidth.max, maxHeight: .infinity)
             }
         }
         .navigationTitle("Claude")

@@ -59,11 +59,26 @@ struct SettingToggle: View {
     /// What VoiceOver calls the switch.
     let label: String
 
+    @State private var confirmOff = false
+
     var body: some View {
         Toggle(label, isOn: Binding(
             get: { item.isOn },
-            set: { on in Task { await model.setEnabled(item, on) } }
+            set: { on in
+                // Reason: a security module is the agents' own policy; one
+                // stray click should not drop it from every session.
+                if !on, item.module?.sensitive == true {
+                    confirmOff = true
+                } else {
+                    Task { await model.setEnabled(item, on) }
+                }
+            }
         ))
+        .confirmationDialog("Turn off \(label)?", isPresented: $confirmOff) {
+            Button("Turn Off", role: .destructive) { Task { await model.setEnabled(item, false) } }
+        } message: {
+            Text("This is part of your agents' security policy. Every new session on this Mac will start without it, until you turn it back on.")
+        }
         .labelsHidden()
         .toggleStyle(.switch)
         .controlSize(.mini)
@@ -98,7 +113,7 @@ struct SettingRow: View {
                 }
                 if !display.detail.isEmpty && display.detail != display.title {
                     Text(verbatim: display.detail)
-                        .textStyle(.codeCaption)
+                        .textStyle(display.proseDetail ? .supporting : .codeCaption)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .help(display.detail)
@@ -147,7 +162,9 @@ struct SettingDetail: View {
     @State private var confirmRemove = false
 
     var body: some View {
-        if let item = model.selected {
+        if let item = model.selected, let module = item.module {
+            ModuleDetail(item: item, module: module)
+        } else if let item = model.selected {
             let kind = model.kind(of: item.ref)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
@@ -218,6 +235,64 @@ struct SettingDetail: View {
             Text(label).foregroundStyle(Color.secondaryText)
             Text(verbatim: displaySafe(value)).textSelection(.enabled).lineLimit(3)
         }
+    }
+}
+
+/// An instruction module: what it is, where it installs, and its full text
+/// rendered, so a module can be read here instead of opening its file.
+struct ModuleDetail: View {
+    let item: SettingItem
+    let module: ModulePayload
+
+    @State private var text: NSAttributedString?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(verbatim: displaySafe(module.title)).font(TextStyle.title.font).textSelection(.enabled)
+                    Spacer()
+                    OriginBadge(origin: item.origin)
+                }
+                if !module.description.isEmpty {
+                    Text(verbatim: displaySafe(module.description)).textStyle(.supporting)
+                }
+                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                    GridRow {
+                        Text("State").foregroundStyle(Color.secondaryText)
+                        Text(item.isOn ? "Loaded by agents on this Mac" : "Off on this Mac")
+                    }
+                    GridRow {
+                        Text("Topic").foregroundStyle(Color.secondaryText)
+                        Text(verbatim: displaySafe(item.group))
+                    }
+                    GridRow {
+                        Text("File").foregroundStyle(Color.secondaryText)
+                        Text(verbatim: displaySafe(module.path)).textStyle(.codeCaption).textSelection(.enabled)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
+                }
+                .font(.callout)
+            }
+            .padding()
+            Divider()
+            Group {
+                if let text {
+                    RichTextView(text: text)
+                } else {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+        }
+        .task(id: module.body) {
+            text = nil
+            let made = await MarkdownRenderer().renderInBackground(module.body)
+            guard !Task.isCancelled else { return }
+            text = made?.text ?? NSAttributedString(string: module.body)
+        }
+        // Reason: the rendered text has almost no ideal width of its own, so
+        // without this the split view collapses the pane to its minimum.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

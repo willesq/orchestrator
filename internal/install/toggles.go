@@ -84,13 +84,35 @@ func SetToggleLoader(f func() (settings.Toggles, error)) (restore func()) {
 }
 
 // DisabledCount is how many Claude Code items (settings.json and
-// cc-safety-net rules) the user turned off in orch, for orch status.
+// cc-safety-net rules) and instruction modules the user turned off in orch,
+// for orch status.
 func DisabledCount() (int, error) {
 	t, err := loadToggles()
 	if err != nil {
 		return 0, err
 	}
-	return t.Count(ProviderClaudeCode) + t.Count(SafetyNetRulesProvider), nil
+	return t.Count(ProviderClaudeCode) + t.Count(SafetyNetRulesProvider) + t.Count(InstructionsProvider), nil
+}
+
+// SensitiveModulesOff names the sensitive instruction modules (the agents'
+// security policy) turned off on this machine, for orch status.
+func SensitiveModulesOff() ([]string, error) {
+	t, err := loadToggles()
+	if err != nil {
+		return nil, err
+	}
+	mods, err := Modules()
+	if err != nil {
+		return nil, err
+	}
+	on := ModuleOn(t)
+	var off []string
+	for _, m := range mods {
+		if m.Sensitive && !on(m) {
+			off = append(off, m.Slug)
+		}
+	}
+	return off, nil
 }
 
 // SafetyNetRulesProvider is the settings provider for cc-safety-net rules.
@@ -102,5 +124,16 @@ func BackupFunc(backupDir string) func(path string, content []byte) error {
 	return func(path string, content []byte) error {
 		stamp := time.Now().UTC().Format("20060102-150405")
 		return backup(filepath.Join(backupDir, stamp), path, content)
+	}
+}
+
+// ModuleOn reads a module's state from the toggles: the choice stored for
+// this machine, or the module's default when it was never toggled.
+func ModuleOn(t settings.Toggles) ModuleEnabled {
+	return func(m Module) bool {
+		if on, known := t.State(InstructionsProvider, KindModule, m.Slug); known {
+			return on
+		}
+		return m.Default
 	}
 }

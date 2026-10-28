@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/willesq/orchestrator/internal/settings"
 )
 
 // Footprint is the instruction text a harness loads into every session: its
@@ -27,7 +29,7 @@ var importRef = regexp.MustCompile(`(?m)(?:^|\s)@((?:[^\s\\]|\\ )+\.md)\b`)
 
 // InstructionFootprints measures each harness whose entry file exists under
 // home. Claude Code and Gemini expand @imports; Codex does not, but its entry
-// tells it to read the shared policy, so that file is counted for it too.
+// tells it to read the shared policy and each enabled module, so those count too.
 func InstructionFootprints(home string) []Footprint {
 	shared := filepath.Join(home, ".config", "orch", "AGENTS.md")
 	var out []Footprint
@@ -48,8 +50,16 @@ func InstructionFootprints(home string) []Footprint {
 			f.load(h.entry, home, 0, seen)
 		} else {
 			f.load(h.entry, home, maxImportDepth, seen) // the entry alone
-			if body, err := os.ReadFile(h.entry); err == nil && strings.Contains(string(body), shared) {
+			body, _ := os.ReadFile(h.entry)
+			if strings.Contains(string(body), shared) {
 				f.load(shared, home, maxImportDepth, seen)
+			}
+			// Codex is told to read each enabled module by path.
+			for _, line := range strings.Split(string(body), "\n") {
+				p, ok := strings.CutPrefix(line, "- ")
+				if p = filepath.Clean(p); ok && filepath.Dir(p) == ModuleDir(home) {
+					f.load(p, home, maxImportDepth, seen)
+				}
 			}
 		}
 		out = append(out, f)
@@ -71,8 +81,10 @@ func (f *Footprint) load(path, home string, depth int, seen map[string]bool) {
 	if seen[path] {
 		return
 	}
-	body, err := os.ReadFile(path)
-	if err != nil {
+	// Reason: settings.ReadFile refuses FIFOs and devices and caps the size,
+	// so a planted import cannot hang orch status.
+	body, err := settings.ReadFile(path)
+	if err != nil || body == nil {
 		return
 	}
 	seen[path] = true

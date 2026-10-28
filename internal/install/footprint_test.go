@@ -103,7 +103,15 @@ func TestPolicyFilesInstall(t *testing.T) {
 }
 
 func TestSharedPolicyPointsOnlyAtShippedFiles(t *testing.T) {
-	refs := regexp.MustCompile("`(?:policy/)?([a-z-]+\\.md)`").FindAllStringSubmatch(memoryInstructions, -1)
+	text := memoryInstructions
+	mods, err := Modules()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range mods {
+		text += m.Body
+	}
+	refs := regexp.MustCompile("`(?:policy/)?([a-z-]+\\.md)`").FindAllStringSubmatch(text, -1)
 	var pointed []string
 	for _, m := range refs {
 		if m[1] != "AGENTS.md" {

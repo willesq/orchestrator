@@ -68,7 +68,7 @@ final class AppModel {
         docs = DocsModel(api: api)
         registeredSources = RegisteredSourcesModel(api: api)
         safetyNet = SafetyNetModel(api: api)
-        claude = SettingsModel(api: api, providers: ["claude-code", "cc-safety-net"])
+        claude = SettingsModel(api: api, providers: ["claude-code", "cc-safety-net", "orch-instructions"])
     }
 
     /// Starts polling; called once the app has finished launching, and not

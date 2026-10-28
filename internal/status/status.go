@@ -74,8 +74,11 @@ type HarnessInfo struct {
 	Pending int    `json:"pending"` // edits `orch install --apply` would make
 	// Disabled counts the items the user turned off in orch, which install
 	// leaves out and drift ignores.
-	Disabled int    `json:"disabled,omitempty"`
-	Err      string `json:"error,omitempty"`
+	Disabled int `json:"disabled,omitempty"`
+	// SecurityOff names the security instruction modules turned off on
+	// this machine; any is a warning, since agents then lack that policy.
+	SecurityOff []string `json:"security_off,omitempty"`
+	Err         string   `json:"error,omitempty"`
 }
 
 // Deps are the seams Collect reads the world through; the CLI wires the real ones
@@ -264,13 +267,19 @@ func harnessSection(d Deps) Section {
 			l.Value, l.Level = "drifted", LevelWarn
 			l.Detail = fmt.Sprintf("%d edit(s) pending — run: orch install --target %s --apply", h.Pending, h.Name)
 		}
-		if h.Err == "" && h.Disabled > 0 {
-			off := fmt.Sprintf("%d disabled by you (orch settings list)", h.Disabled)
+		addDetail := func(s string) {
 			if l.Detail == "" {
-				l.Detail = off
+				l.Detail = s
 			} else {
-				l.Detail += "; " + off
+				l.Detail += "; " + s
 			}
+		}
+		if h.Err == "" && h.Disabled > 0 {
+			addDetail(fmt.Sprintf("%d disabled by you (orch settings list)", h.Disabled))
+		}
+		if h.Err == "" && len(h.SecurityOff) > 0 {
+			l.Level = LevelWarn
+			addDetail("security instructions off: " + strings.Join(h.SecurityOff, ", "))
 		}
 		sec.Lines = append(sec.Lines, l)
 	}

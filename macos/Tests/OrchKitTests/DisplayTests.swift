@@ -96,6 +96,23 @@ if [ -z "${HOME-}" ]; then case "${OSTYPE-}" in msys*) printf '{}\\n' ;; esac; e
         #expect(item.display == SettingDisplay(title: "sum", detail: "sum"))
     }
 
+    @Test func modulesShowTitleDescriptionAndBody() {
+        let json = ##"{"title":"Commit signing","group":"Git","description":"Sign commits.","body":"Use git commit -S.\n","path":"/h/m.md"}"##
+        let item = SettingItem(ref: SettingRef(provider: "orch-instructions", kind: "module", identity: "gpg-signing"),
+                               summary: "s", payloadJSON: json)
+        #expect(item.display == SettingDisplay(title: "Commit signing", detail: "Sign commits.", proseDetail: true))
+        #expect(item.module?.body == "Use git commit -S.\n" && item.module?.path == "/h/m.md")
+        let broken = SettingItem(ref: SettingRef(provider: "orch-instructions", kind: "module", identity: "x"),
+                                 summary: "fallback", payloadJSON: "nope")
+        #expect(broken.display.title == "fallback" && broken.module == nil)
+        let hookItem = SettingItem(ref: SettingRef(provider: "p", kind: "hook", identity: "h"), payloadJSON: json)
+        #expect(hookItem.module == nil)
+        #expect(item.module?.sensitive == false)
+        let guarded = SettingItem(ref: SettingRef(provider: "orch-instructions", kind: "module", identity: "credential-rules"),
+                                  payloadJSON: #"{"title":"Credential rules","sensitive":true}"#)
+        #expect(guarded.module?.sensitive == true)
+    }
+
     @Test func permissionsAreLiteralAndPluginsPlain() {
         let perm = SettingItem(ref: SettingRef(provider: "p", kind: "permission", identity: "a"), summary: "Bash(git *)")
         #expect(perm.display.literalTitle && perm.display.title == "Bash(git *)")

@@ -14,12 +14,17 @@ public struct SettingDisplay: Sendable, Equatable {
     /// The title is itself a literal (a permission rule such as
     /// `Bash(git *)`), so it is shown in monospace.
     public let literalTitle: Bool
+    /// The detail is a sentence (an instruction module's description), not
+    /// a command or rule, so it is shown as prose rather than code.
+    public let proseDetail: Bool
 
-    public init(title: String, detail: String = "", matcher: String = "", literalTitle: Bool = false) {
+    public init(title: String, detail: String = "", matcher: String = "", literalTitle: Bool = false,
+                proseDetail: Bool = false) {
         self.title = title
         self.detail = detail
         self.matcher = matcher
         self.literalTitle = literalTitle
+        self.proseDetail = proseDetail
     }
 
     /// Whether the item matches a filter typed by the user. An empty filter
@@ -39,6 +44,7 @@ extension SettingItem {
         case "hook": break
         case "permission": return SettingDisplay(title: fallback, literalTitle: true)
         case "rule": return RulePayload(json: payloadJSON)?.display ?? SettingDisplay(title: fallback)
+        case "module": return ModulePayload(json: payloadJSON)?.display ?? SettingDisplay(title: fallback)
         default: return SettingDisplay(title: fallback)
         }
         guard let hook = HookPayload(json: payloadJSON) else { return SettingDisplay(title: fallback, detail: fallback) }
@@ -48,6 +54,37 @@ extension SettingItem {
             detail: displaySafe(hook.what + condition),
             matcher: displaySafe(hook.matcher == "*" ? "" : hook.matcher)
         )
+    }
+}
+
+extension SettingItem {
+    /// The instruction module this item is, or nil for any other kind.
+    public var module: ModulePayload? { ref.kind == "module" ? ModulePayload(json: payloadJSON) : nil }
+}
+
+/// An instruction module's payload: what it is, where it installs, and the
+/// full markdown agents read, so the detail pane can show it.
+public struct ModulePayload: Sendable, Equatable {
+    public let title: String
+    public let description: String
+    public let body: String
+    public let path: String
+    /// Part of the agents' security policy; the app confirms turning it off.
+    public let sensitive: Bool
+
+    public init?(json: String) {
+        guard let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let title = object["title"] as? String, !title.isEmpty else { return nil }
+        self.title = title
+        description = object["description"] as? String ?? ""
+        body = object["body"] as? String ?? ""
+        path = object["path"] as? String ?? ""
+        sensitive = object["sensitive"] as? Bool ?? false
+    }
+
+    var display: SettingDisplay {
+        SettingDisplay(title: displaySafe(title), detail: displaySafe(description), proseDetail: true)
     }
 }
 

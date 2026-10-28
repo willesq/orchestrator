@@ -170,3 +170,29 @@ func TestSettingsToggleRefusedToTasks(t *testing.T) {
 		t.Error("expected the list error")
 	}
 }
+
+func TestSettingsDisableSensitiveModuleNeedsYes(t *testing.T) {
+	withFakeSettings(t)
+	fakeSettings.list.Items = append(fakeSettings.list.Items,
+		&orchdv1.SettingItem{Provider: "orch-instructions", Kind: "module", Identity: "credential-rules", Status: "active",
+			PayloadJson: `{"title":"Credential handling hard rules","sensitive":true}`},
+		&orchdv1.SettingItem{Provider: "orch-instructions", Kind: "module", Identity: "gpg-signing", Status: "active",
+			PayloadJson: `{"title":"Commit signing"}`})
+
+	_, err := run(factory(&fakeClient{}, nil), "", "settings", "disable", "module", "credential-rules")
+	if err == nil || !strings.Contains(err.Error(), "--yes") || len(fakeSettings.set) != 0 {
+		t.Fatalf("a sensitive module was turned off without --yes: err=%v sent=%d", err, len(fakeSettings.set))
+	}
+	if _, err := run(factory(&fakeClient{}, nil), "", "settings", "disable", "module", "credential-rules", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(factory(&fakeClient{}, nil), "", "settings", "disable", "module", "gpg-signing"); err != nil {
+		t.Fatalf("an ordinary module needed --yes: %v", err)
+	}
+	if _, err := run(factory(&fakeClient{}, nil), "", "settings", "enable", "module", "credential-rules"); err != nil {
+		t.Fatalf("turning a sensitive module on needed confirmation: %v", err)
+	}
+	if len(fakeSettings.set) != 3 {
+		t.Errorf("sent %d requests, want 3", len(fakeSettings.set))
+	}
+}

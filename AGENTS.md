@@ -1,7 +1,8 @@
 # Repository guidance
 
 Before editing, read and follow the complete shared coding expectations in
-`internal/install/agent-instructions.md`. That version-controlled policy covers
+`internal/install/agent-instructions.md` and the instruction modules in
+`internal/install/modules/`. That version-controlled policy covers
 project exploration, modularity, testing and coverage, scope discipline, security
 and credentials, Git/GitHub delivery, reviews, documentation, and durable memory.
 These repository conventions supplement that policy. Keep shared expectations
@@ -28,7 +29,9 @@ policies and isolate harness-specific behavior in adapters.
   configuration formats, event payloads, or instruction-loading behavior.
 - Read and follow `internal/install/agent-instructions.md`, the version-controlled
   cross-agent policy embedded in the CLI and installed at
-  `~/.config/orch/AGENTS.md`. Its on-demand sections live in
+  `~/.config/orch/AGENTS.md`, and its sections in `internal/install/modules/`
+  (one file per intent, each toggled per machine in orch's settings and
+  installed to `~/.config/orch/modules/`). Its on-demand sections live in
   `internal/install/policy/` and install to `~/.config/orch/policy/`. Keep policy edits in that source; personal rules stay
   in harness entry files. This file holds repository editing conventions. Use
   native imports or explicit read directives in harness entry files.
