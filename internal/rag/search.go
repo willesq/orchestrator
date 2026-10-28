@@ -36,6 +36,9 @@ type Hit struct {
 	StartedAt, EndedAt, IngestedAt time.Time
 	// Heading is the markdown section the chunk came from, when it has one.
 	Heading string
+	// Trust is the tier its writer gave it (TrustRepo, ...); empty for content
+	// stored before writers were recorded, which readers treat as unverified.
+	Trust string
 }
 
 // Search modes.
@@ -314,6 +317,7 @@ func toHit(r SearchHit, cosine, keyword float32, idents []string) Hit {
 		EndedAt:    unixTime(r.Payload[fieldEndedAt]),
 		IngestedAt: unixTime(r.Payload[fieldIngestedAt]),
 		Heading:    str(r.Payload["heading"]),
+		Trust:      str(r.Payload[fieldTrust]),
 	}
 }
 

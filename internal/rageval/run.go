@@ -34,6 +34,9 @@ type Injector func(c Case, hits []Hit) int
 type Result struct {
 	Query   string `json:"query"`
 	Section string `json:"section,omitempty"`
+	Split   string `json:"split,omitempty"`
+	// Key identifies the case (query and filters), for pairing two runs.
+	Key string `json:"key,omitempty"`
 	// Rank is the 1-based position, among the hits returned, of the first hit
 	// from an expected source (whose text holds the case's span, when it has
 	// one); 0 means none was returned.
@@ -72,7 +75,11 @@ type Report struct {
 	Label   string `json:"label,omitempty"`
 	Metrics
 	Sections map[string]Metrics `json:"sections,omitempty"`
-	Results  []Result           `json:"results"`
+	// Splits are the tuning and held-out halves; SectionSplits each section's
+	// halves, keyed "<section>/<split>".
+	Splits        map[string]Metrics `json:"splits,omitempty"`
+	SectionSplits map[string]Metrics `json:"section_splits,omitempty"`
+	Results       []Result           `json:"results"`
 }
 
 // Run scores every case. A case whose search fails counts as a miss and
@@ -96,24 +103,36 @@ func Run(ctx context.Context, s Set, topK int, search Searcher, inject Injector)
 		r.Results = append(r.Results, res)
 	}
 	r.Metrics = Summarize(r.Results, topK)
-	bySection := map[string][]Result{}
-	for _, res := range r.Results {
-		if res.Section != "" {
-			bySection[res.Section] = append(bySection[res.Section], res)
+	group := func(key func(Result) string) map[string]Metrics {
+		by := map[string][]Result{}
+		for _, res := range r.Results {
+			if k := key(res); k != "" {
+				by[k] = append(by[k], res)
+			}
 		}
-	}
-	if len(bySection) > 0 {
-		r.Sections = map[string]Metrics{}
-		for name, rs := range bySection {
-			r.Sections[name] = Summarize(rs, topK)
+		if len(by) == 0 {
+			return nil
 		}
+		out := map[string]Metrics{}
+		for name, rs := range by {
+			out[name] = Summarize(rs, topK)
+		}
+		return out
 	}
+	r.Sections = group(func(res Result) string { return res.Section })
+	r.Splits = group(func(res Result) string { return res.Split })
+	r.SectionSplits = group(func(res Result) string {
+		if res.Section == "" {
+			return ""
+		}
+		return res.Section + "/" + res.Split
+	})
 	return r
 }
 
 // score ranks one case's hits.
 func score(c Case, hits []Hit) Result {
-	res := Result{Query: c.Query, Section: c.Section}
+	res := Result{Query: c.Query, Section: c.Section, Split: SplitOf(c), Key: c.Key()}
 	seen := map[string]bool{}
 	span := strings.ToLower(strings.TrimSpace(c.Span))
 	for i, h := range hits {
@@ -165,7 +184,7 @@ func Summarize(results []Result, topK int) Metrics {
 }
 
 func within(rank, k int) float64 {
-	if rank > 0 && rank <= k {
+	if rank >= 1 && rank <= k {
 		return 1
 	}
 	return 0
@@ -173,7 +192,7 @@ func within(rank, k int) float64 {
 
 // RR is a result's reciprocal rank.
 func RR(r Result) float64 {
-	if r.Rank == 0 {
+	if r.Rank < 1 {
 		return 0
 	}
 	return 1 / float64(r.Rank)
@@ -182,7 +201,7 @@ func RR(r Result) float64 {
 // NDCG10 is a result's nDCG@10. Expected sources are alternatives, so there
 // is one relevant item and the ideal ranking puts it first.
 func NDCG10(r Result) float64 {
-	if r.Rank == 0 || r.Rank > 10 {
+	if r.Rank < 1 || r.Rank > 10 {
 		return 0
 	}
 	return 1 / math.Log2(float64(r.Rank)+1)
@@ -227,14 +246,23 @@ func (c Change) Better() bool { return c.To != 0 && (c.From == 0 || c.To < c.Fro
 func Compare(before, after Report) []Change {
 	prev := map[string]int{}
 	for _, r := range before.Results {
-		prev[r.Query] = r.Rank
+		prev[resultKey(r)] = r.Rank
 	}
 	var out []Change
 	for _, r := range after.Results {
-		from, ok := prev[r.Query]
+		from, ok := prev[resultKey(r)]
 		if ok && from != r.Rank {
 			out = append(out, Change{Query: r.Query, From: from, To: r.Rank})
 		}
 	}
 	return out
+}
+
+// resultKey pairs a result across runs: by case key, or by query for runs
+// saved before keys were recorded.
+func resultKey(r Result) string {
+	if r.Key != "" {
+		return r.Key
+	}
+	return r.Query
 }

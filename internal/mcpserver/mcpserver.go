@@ -379,19 +379,15 @@ func formatHits(hits []*orchdv1.SearchHit) string {
 	}
 	var b strings.Builder
 	for i, h := range hits {
-		fmt.Fprintf(&b, "%d. [%.3f] %s (%s)", i+1, h.GetScore(), memctx.OneLine(h.GetSourceUri()), memctx.OneLine(h.GetSourceType()))
+		// The URI and type are the writer's choice, so they are quoted; the
+		// text is fenced in every tier, so a line in it can neither read as
+		// an instruction nor pass itself off as another result.
+		t := memctx.TrustOf(h.GetTrust(), h.GetSourceType(), h.GetSourceUri())
+		fmt.Fprintf(&b, "%d. [%.3f] %s (%s)", i+1, h.GetScore(), memctx.QuoteField(h.GetSourceUri()), memctx.QuoteField(h.GetSourceType()))
 		if when := timeline.Describe(h.GetStartedAt(), h.GetEndedAt(), h.GetSourceType()); when != "" {
 			fmt.Fprintf(&b, " · %s", when)
 		}
-		// Text not from the user's own sessions or repos is labelled and
-		// fenced, so it can neither read as an instruction nor, with a
-		// newline, pass itself off as another (trusted) result.
-		t := memctx.TrustOf(h.GetSourceType(), h.GetSourceUri())
-		if !t.Fenced() {
-			fmt.Fprintf(&b, "\n   %s\n", h.GetText())
-			continue
-		}
-		fmt.Fprintf(&b, " · %s\n%s", t.Label(), memctx.Fence(h.GetText(), t))
+		fmt.Fprintf(&b, " · %s\n%s", t.Label(), memctx.Fence(h.GetText(), t, memctx.Flagged(h)))
 	}
 	return b.String()
 }

@@ -246,15 +246,8 @@ func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []str
 
 // sourcesUnit refreshes registered web/repo/owner sources on a cadence.
 func sourcesUnit(s config.Settings, store *sql.DB, ing sources.Ingester) supervisor.Unit {
-	docReg := docs.NewRegistry(store)
 	sched := sources.NewScheduler(sources.NewRegistry(store), ing,
-		sources.RefreshOpts{KnownRoots: expandRoots(s.Sources.KnownRoots), ExcludeDirs: s.Ingest.ExcludeDirs,
-			// A doc the GitHub sync stored is its to remove, when it leaves
-			// the default branch; a local checkout missing it may be behind.
-			Owned: func(ctx context.Context, uri string) bool {
-				h, err := docReg.Hash(ctx, uri)
-				return err != nil || h != ""
-			}})
+		sources.RefreshOpts{KnownRoots: expandRoots(s.Sources.KnownRoots), ExcludeDirs: s.Ingest.ExcludeDirs})
 	return supervisor.Unit{
 		Name:     UnitSources,
 		Detail:   "web/repo/owner source freshness",

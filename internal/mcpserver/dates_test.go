@@ -26,7 +26,7 @@ func TestSearchDatesAndRanges(t *testing.T) {
 		t.Fatalf("range = %d..%d", fc.searchReq.GetSince(), fc.searchReq.GetUntil())
 	}
 	out := resultText(res)
-	for _, want := range []string{"session://a/transcript (session_transcript) · 2026-10-21 14:02 to 15:02 UTC", "session://b/record (session_record) · date unknown", "repo://x/README.md (repo_doc)\n"} {
+	for _, want := range []string{`"session://a/transcript" ("session_transcript") · 2026-10-21 14:02 to 15:02 UTC`, `"session://b/record" ("session_record") · date unknown`, `"repo://x/README.md" ("repo_doc") · unverified`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}

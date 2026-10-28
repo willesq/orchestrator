@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"os"
@@ -15,12 +14,11 @@ import (
 
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
+	"github.com/willesq/orchestrator/internal/rag"
+	"github.com/willesq/orchestrator/internal/redact"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/sources"
 )
-
-// repoDoc is a repo:// doc's repo name and in-repo path.
-type repoDoc struct{ repo, rel string }
 
 // duplicate is a stored source that repeats a canonical one.
 type duplicate struct {
@@ -36,10 +34,14 @@ func newRAGDedupeCmd(cf clientFactory) *cobra.Command {
 		Long: `Finds documents stored under a file:// or claude:// URI that repeat what the docs or
 sources sync already stores under a repo:// URI, and with --apply deletes them:
 
-  - the file sits in a checkout (a worktree included) of a GitHub repo, or in a registered
-    repo or owner source, and the store holds that repo's repo:// copy of it;
-  - the file is gone, and a repo:// doc of the same repo has its path (an old worktree's copy);
-  - its stored text is identical to a repo:// doc's.
+  - the file exists, and its real path sits in a registered repo or owner source, or in a
+    checkout (a worktree included) of a repo the docs sync tracks;
+  - that source's own URI for the file is stored by the docs or sources sync;
+  - the two stored copies are identical, or the file as it is now is identical to the
+    synced copy (the stored copy is an older version).
+
+Text alone never makes a duplicate. A copy whose content differs (an edit not yet
+merged) is kept.
 
 Without --apply it lists them and changes nothing. Edits made after this release no longer
 create such copies; this cleans up those made before.`,
@@ -113,112 +115,98 @@ func pathOf(uri, home string) string {
 	return ""
 }
 
-// planDedupe lists the path-keyed sources that repeat a repo:// doc.
+// planDedupe lists the path-keyed sources that repeat a synced doc. A copy
+// is listed only when all of these hold:
+//
+//   - its file still exists, and its real path (after symlinks) sits in a
+//     registered source: a repo or owner source, or a checkout of a repo the
+//     docs sync tracks;
+//   - that source's own URI for the file is stored, by the docs or sources
+//     sync (not by a client);
+//   - the two stored copies are identical.
+//
+// Text alone never makes a duplicate, so a boilerplate file or ~/.claude's
+// own config is never listed.
 func planDedupe(ctx context.Context, client orchdv1.OrchdClient, canonical sources.CanonicalFunc, home string, exists func(string) bool) ([]duplicate, error) {
-	list := func(prefix string) ([]*orchdv1.SourceSummary, error) {
+	var candidates []*orchdv1.SourceSummary
+	for _, prefix := range []string{"file://", "claude://"} {
 		resp, err := client.ListSources(ctx, &orchdv1.ListSourcesRequest{UriPrefix: prefix})
 		if err != nil {
 			return nil, err
 		}
-		return resp.GetSources(), nil
+		candidates = append(candidates, resp.GetSources()...)
 	}
-	repos, err := list("repo://")
-	if err != nil {
-		return nil, err
-	}
-	var candidates []*orchdv1.SourceSummary
-	for _, prefix := range []string{"file://", "claude://"} {
-		srcs, err := list(prefix)
-		if err != nil {
-			return nil, err
+	doc := func(uri string) *orchdv1.Document {
+		d, err := client.GetDocument(ctx, &orchdv1.GetDocumentRequest{SourceUri: uri})
+		if err != nil || d.GetOversize() {
+			return nil
 		}
-		candidates = append(candidates, srcs...)
-	}
-	// repo:// docs by in-repo path, for matching stale copies.
-	byRel := map[string][]repoDoc{}
-	stored := map[string]bool{}
-	for _, r := range repos {
-		stored[r.GetSourceUri()] = true
-		parts := strings.SplitN(strings.TrimPrefix(r.GetSourceUri(), "repo://"), "/", 3)
-		if len(parts) == 3 && parts[1] != "" && parts[2] != "" {
-			byRel[parts[2]] = append(byRel[parts[2]], repoDoc{repo: parts[1], rel: parts[2]})
-		}
-	}
-	var repoHashes map[[sha256.Size]byte]string
-	text := func(uri string) (string, bool) {
-		doc, err := client.GetDocument(ctx, &orchdv1.GetDocumentRequest{SourceUri: uri})
-		if err != nil || doc.GetOversize() {
-			return "", false
-		}
-		return doc.GetText(), true
+		return d
 	}
 	var out []duplicate
 	for _, c := range candidates {
 		uri := c.GetSourceUri()
 		p := pathOf(uri, home)
-		if p == "" {
+		if p == "" || canonical == nil || !exists(p) {
 			continue
 		}
-		reason := ""
-		if canonical != nil {
-			for _, cu := range canonical(ctx, p) {
-				if stored[cu] {
-					reason = "in a checkout of the repo; " + cu + " holds the doc"
+		real, err := filepath.EvalSymlinks(p)
+		if err != nil {
+			continue
+		}
+		var mine *orchdv1.Document
+		for _, cu := range canonical(ctx, real) {
+			synced := doc(cu)
+			if synced == nil || (synced.GetWriter() != rag.WriterDocs && synced.GetWriter() != rag.WriterSources) {
+				continue
+			}
+			if mine == nil {
+				if mine = doc(uri); mine == nil {
 					break
 				}
 			}
-		}
-		switch {
-		case reason != "":
-		case !exists(p):
-			if r := staleCopyOf(p, byRel); r != "" {
-				reason = "file is gone; repo://…/" + r + " holds the doc"
+			if sameContent(mine, synced) {
+				out = append(out, duplicate{URI: uri, Reason: "identical to " + cu + ", stored by the " + synced.GetWriter() + " sync", Chunks: c.GetChunks()})
+				break
 			}
-		}
-		if reason == "" {
-			if repoHashes == nil {
-				repoHashes = map[[sha256.Size]byte]string{}
-				for _, r := range repos {
-					if t, ok := text(r.GetSourceUri()); ok && strings.TrimSpace(t) != "" {
-						repoHashes[sha256.Sum256([]byte(t))] = r.GetSourceUri()
-					}
-				}
+			// The file as it is now matches the synced copy: the stored copy
+			// is an older version of a doc the sync now holds, as the edit
+			// hand-off would find on the next edit.
+			if h := synced.GetContentHash(); h != "" && fileHash(real) == h {
+				out = append(out, duplicate{URI: uri, Reason: "the file now matches " + cu + ", stored by the " + synced.GetWriter() +
+					" sync; the stored copy is an older version", Chunks: c.GetChunks()})
+				break
 			}
-			if t, ok := text(uri); ok {
-				if r, dup := repoHashes[sha256.Sum256([]byte(t))]; dup {
-					reason = "same text as " + r
-				}
-			}
-		}
-		if reason != "" {
-			out = append(out, duplicate{URI: uri, Reason: reason, Chunks: c.GetChunks()})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].URI < out[j].URI })
 	return out, nil
 }
 
-// staleCopyOf returns the in-repo path of a repo:// doc that a vanished file
-// was a copy of: the file's path ends with that doc's path, and a directory
-// above it is named for the repo (the checkout, "<repo>.worktrees" or an
-// editor's workspace for it).
-func staleCopyOf(p string, byRel map[string][]repoDoc) string {
-	segs := strings.Split(filepath.ToSlash(p), "/")
-	for i := len(segs) - 1; i > 0; i-- {
-		rel := strings.Join(segs[i:], "/")
-		// A bare file name (README.md) must sit right under the repo's
-		// directory; a longer path is distinctive enough anywhere below it.
-		above := segs[:i]
-		if i == len(segs)-1 {
-			above = segs[i-1 : i]
-		}
-		for _, d := range byRel[rel] {
-			for _, s := range above {
-				if strings.EqualFold(s, d.repo) || strings.HasPrefix(strings.ToLower(s), strings.ToLower(d.repo)+".") {
-					return d.rel
-				}
-			}
-		}
+// maxDedupeFile bounds a file read to compare it with its synced copy.
+const maxDedupeFile = 4 << 20
+
+// fileHash is the content hash the sync would store for a file: its text
+// redacted as every writer redacts it. Empty when it cannot be read.
+func fileHash(path string) string {
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxDedupeFile {
+		return ""
 	}
-	return ""
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	text, _ := redact.Redact(string(raw))
+	return rag.ContentHash(text)
+}
+
+// sameContent reports whether two stored copies hold the same text: by their
+// content hashes when both have one, else by their rebuilt text. Empty text
+// is never the same as anything.
+func sameContent(a, b *orchdv1.Document) bool {
+	if a.GetContentHash() != "" && b.GetContentHash() != "" {
+		return a.GetContentHash() == b.GetContentHash()
+	}
+	return strings.TrimSpace(a.GetText()) != "" && a.GetText() == b.GetText()
 }

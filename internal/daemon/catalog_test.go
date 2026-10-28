@@ -53,6 +53,7 @@ func catalogServer(t *testing.T) (*server, *recordingRag, *fakeSupervisor) {
 type indexedDoc struct {
 	uri, sourceType string
 	tags            []string
+	writer          string
 }
 
 // recordingRag lists indexed sources and records deletions.
@@ -71,7 +72,7 @@ func (r *recordingRag) ListSources(_ context.Context, opts rag.ListSourcesOpts) 
 	var out []rag.SourceSummary
 	for _, d := range r.indexed {
 		if strings.HasPrefix(d.uri, opts.URIPrefix) && (opts.SourceType == "" || opts.SourceType == d.sourceType) {
-			out = append(out, rag.SourceSummary{SourceURI: d.uri, SourceType: d.sourceType, Tags: d.tags, Chunks: 2})
+			out = append(out, rag.SourceSummary{SourceURI: d.uri, SourceType: d.sourceType, Tags: d.tags, Chunks: 2, Writer: d.writer})
 		}
 	}
 	return out, len(out), 2 * len(out), nil

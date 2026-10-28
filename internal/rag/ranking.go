@@ -39,14 +39,14 @@ func DefaultTypeWeights() map[string]float64 {
 	return map[string]float64{
 		"session_record":     1.0,
 		"decision":           1.0,
-		"session_transcript": 0.7,
+		"session_transcript": 0.85,
 		"web":                0.9,
 	}
 }
 
 // DefaultRanking is the ranking a new Service uses.
 func DefaultRanking() RankingParams {
-	return RankingParams{Profile: RankingWeighted, HalfLife: 180 * 24 * time.Hour, Floor: 0.7, TypeWeights: DefaultTypeWeights()}
+	return RankingParams{Profile: RankingWeighted, HalfLife: 180 * 24 * time.Hour, Floor: 0.85, TypeWeights: DefaultTypeWeights()}
 }
 
 // weight is the factor a candidate's score is scaled by.
@@ -58,7 +58,11 @@ func (p RankingParams) weight(sourceType string, date time.Time, now time.Time) 
 	if p.HalfLife <= 0 {
 		return w
 	}
-	floor := math.Min(math.Max(p.Floor, 0), 1)
+	floor := p.Floor
+	if math.IsNaN(floor) {
+		floor = DefaultRanking().Floor
+	}
+	floor = math.Min(math.Max(floor, 0), 1)
 	// Undated content is treated as one half-life old: neither favoured as new
 	// nor sunk as old.
 	age := p.HalfLife
@@ -99,6 +103,8 @@ func rank(cands []candidate, p RankingParams, profile string, perSource, topK in
 	}
 	if profile != RankingPlain {
 		for i := range cands {
+			// A weight below 1 would raise a negative (dense-only) score.
+			cands[i].score = max(cands[i].score, 0)
 			cands[i].score *= p.weight(str(cands[i].hit.Payload["source_type"]), cands[i].date(), now)
 		}
 	}

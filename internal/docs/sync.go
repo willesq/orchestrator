@@ -275,7 +275,7 @@ func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o O
 	if readDates == nil {
 		readDates = gitdates.Read
 	}
-	dates := readDates(ctx, repoPath)
+	var dates *gitdates.Dates
 	prefix := fmt.Sprintf("repo://%s/%s/", o.Owner, repo)
 	seen := map[string]bool{}
 	n := 0
@@ -299,6 +299,10 @@ func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o O
 		}
 		tags := append([]string{}, o.Tags...)
 		tags = append(tags, "owner:"+o.Owner, "repo:"+repo)
+		if dates == nil { // read once, and only when a doc changed
+			d := readDates(ctx, repoPath)
+			dates = &d
+		}
 		changed := dates.For(rel)
 		if _, err := ing.IngestText(ctx, content, rag.Meta{
 			SourceURI:  uri,
@@ -307,6 +311,7 @@ func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o O
 			Tags:       tags,
 			StartedAt:  changed,
 			EndedAt:    changed,
+			Writer:     rag.WriterDocs,
 		}); err == nil {
 			_ = reg.SetHash(ctx, uri, h, now())
 			n++
@@ -317,6 +322,9 @@ func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o O
 	}
 	return n
 }
+
+// minPruneCap is how many docs a sync may always remove at once.
+const minPruneCap = 5
 
 // pruneRemoved deletes the chunks of docs this repo's earlier syncs stored
 // that its clone no longer has, and forgets their hashes. A walk that found
@@ -332,10 +340,19 @@ func pruneRemoved(ctx context.Context, reg *Registry, ing Ingester, prefix strin
 		log.Printf("docs: listing %s docs: %v", prefix, err)
 		return
 	}
+	var gone []string
 	for _, uri := range known {
-		if seen[uri] {
-			continue
+		if !seen[uri] {
+			gone = append(gone, uri)
 		}
+	}
+	// A clone that suddenly lacks more than half its docs is more likely
+	// broken than a repo that lost them.
+	if len(gone) > max(minPruneCap, len(known)/2) {
+		log.Printf("docs: %s: %d of %d docs are gone at once; not pruning", prefix, len(gone), len(known))
+		return
+	}
+	for _, uri := range gone {
 		if _, err := rm.DeleteSource(ctx, uri); err != nil {
 			log.Printf("docs: removing %s, gone from its repo: %v", uri, err)
 			continue

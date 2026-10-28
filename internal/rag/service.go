@@ -43,6 +43,14 @@ type Meta struct {
 	// KeepUndated stores content that has no date of its own undated, instead
 	// of dating it by when it is stored: a migration's copy is not new content.
 	KeepUndated bool
+	// Writer names the part of orchd storing the source (WriterDocs, ...). It
+	// decides the trust tier stored with every chunk; only orchd's own code
+	// sets it, so a client cannot claim a tier by its choice of type or URI.
+	Writer string
+	// ContentHash identifies the original text. IngestText computes it; a
+	// migration's copy passes the original's along, since its rebuilt text
+	// can differ in whitespace.
+	ContentHash string
 }
 
 // Service ties the embedder and vector store together.
@@ -226,6 +234,14 @@ func (s *Service) split(text string) []chunk {
 // IngestText chunks, embeds, and upserts text. Chunks for the same source_uri
 // are replaced via deterministic point IDs (uri#index).
 func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, error) {
+	// An unchanged write is skipped before embedding, so re-fetching an
+	// unchanged page neither costs an embed nor makes it look new. During a
+	// migration every write goes through, so the shadow gets it too.
+	if _, shadow := s.stores(); shadow == nil && m.SourceURI != "" {
+		if n, same := s.unchanged(ctx, s.active(), m.SourceURI, ingestHash(text, m)); same {
+			return n, nil
+		}
+	}
 	points, dim, err := s.prepare(ctx, text, m)
 	if err != nil || len(points) == 0 {
 		return 0, err
@@ -270,6 +286,10 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 	}
 	points := make([]Point, len(chunks))
 	ingested := time.Now()
+	contentHash, writeHash, trust := ContentHash(text), ingestHash(text, m), TrustFor(m.Writer, m.SourceType)
+	if m.ContentHash != "" {
+		contentHash = m.ContentHash
+	}
 	// A transcript chunk cut from the middle of a long turn has no marker of its
 	// own; it belongs to the last turn dated before it.
 	var carried time.Time
@@ -284,6 +304,12 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 			"chunk_total": len(chunks),
 			// Which tokenizer made the keyword vector, for ReindexKeywords.
 			fieldBM25Version: bm25.TokenizerVersion,
+			fieldContentHash: contentHash,
+			fieldIngestHash:  writeHash,
+		}
+		if m.Writer != "" {
+			payload[fieldWriter] = m.Writer
+			payload[fieldTrust] = trust
 		}
 		if h := pieces[i].heading; h != "" {
 			payload["heading"] = h
@@ -375,6 +401,8 @@ type SourceSummary struct {
 	Scope      string
 	Tags       []string
 	Chunks     int
+	// Writer is the part of orchd that stored it ("" before writers were recorded).
+	Writer string
 	// StartedAt and EndedAt span the source's dated chunks; IngestedAt is the
 	// latest store of any of them. Zero when unknown.
 	StartedAt, EndedAt, IngestedAt time.Time
@@ -407,7 +435,7 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 		must["source_type"] = opts.SourceType
 	}
 	filter := buildFilter(must, nil, nil, opts.Range)
-	fields := []string{"source_uri", "source_type", "scope", "tags", fieldStartedAt, fieldEndedAt, fieldIngestedAt}
+	fields := []string{"source_uri", "source_type", "scope", "tags", fieldStartedAt, fieldEndedAt, fieldIngestedAt, fieldWriter}
 
 	agg := map[string]*SourceSummary{}
 	total := 0
@@ -435,6 +463,7 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 					SourceType: str(p.Payload["source_type"]),
 					Scope:      str(p.Payload["scope"]),
 					Tags:       strSlice(p.Payload["tags"]),
+					Writer:     str(p.Payload[fieldWriter]),
 				}
 				agg[uri] = cur
 			}

@@ -113,7 +113,7 @@ func projectFirstHits(ctx context.Context, client orchdv1.OrchdClient, prompt st
 			if len(kept) >= limit || seen[key] || skip[hitKey(h.GetSourceUri(), h.GetText())] {
 				continue
 			}
-			if cfg.Untrusted == memctx.UntrustedExclude && memctx.TrustOf(h.GetSourceType(), h.GetSourceUri()).Untrusted() {
+			if cfg.Untrusted == memctx.UntrustedExclude && memctx.TrustOf(h.GetTrust(), h.GetSourceType(), h.GetSourceUri()).Untrusted() {
 				continue
 			}
 			switch relevance(h, cfg.MinScore) {

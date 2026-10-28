@@ -99,3 +99,46 @@ func TestFindCheckoutDoesNotBlockOnAFIFO(t *testing.T) {
 		t.Fatal("dot owner accepted")
 	}
 }
+
+func TestCheckoutBranchesAndCommondirLayout(t *testing.T) {
+	root := t.TempDir()
+	main := filepath.Join(root, "widget")
+	writeFile(t, filepath.Join(main, ".git", "config"), "[remote \"origin\"]\n\turl = git@github.com:acme/widget.git\n")
+	writeFile(t, filepath.Join(main, ".git", "HEAD"), "ref: refs/heads/main\n")
+	writeFile(t, filepath.Join(main, ".git", "refs", "remotes", "origin", "HEAD"), "ref: refs/remotes/origin/main\n")
+	co, _ := FindCheckout(filepath.Join(main, "a.md"))
+	if co.Branch != "main" || co.DefaultBranch != "main" || !co.OnDefaultBranch() {
+		t.Fatalf("main = %+v", co)
+	}
+	// A linked worktree on a feature branch shares origin and default.
+	wtGit := filepath.Join(main, ".git", "worktrees", "feat")
+	writeFile(t, filepath.Join(wtGit, "commondir"), "../..\n")
+	writeFile(t, filepath.Join(wtGit, "HEAD"), "ref: refs/heads/feat/x\n")
+	wt := filepath.Join(root, "wt")
+	writeFile(t, filepath.Join(wt, ".git"), "gitdir: "+wtGit+"\n")
+	co, _ = FindCheckout(filepath.Join(wt, "a.md"))
+	if co.Owner != "acme" || co.Branch != "feat/x" || co.OnDefaultBranch() {
+		t.Fatalf("worktree = %+v", co)
+	}
+	// A commondir pointing outside the worktrees layout borrows no identity.
+	evil := filepath.Join(root, "evil")
+	writeFile(t, filepath.Join(evil, "config"), "[remote \"origin\"]\n\turl = https://github.com/victim/repo\n")
+	spoof := filepath.Join(root, "spoof")
+	writeFile(t, filepath.Join(spoof, "gd", "commondir"), "../../evil\n")
+	writeFile(t, filepath.Join(spoof, ".git"), "gitdir: gd\n")
+	co, ok := FindCheckout(filepath.Join(spoof, "a.md"))
+	if !ok || co.Owner != "" {
+		t.Fatalf("commondir spoof = %+v, %v", co, ok)
+	}
+	// Detached HEAD, and no recorded default.
+	if (Checkout{}).OnDefaultBranch() || !(Checkout{Branch: "master"}).OnDefaultBranch() || (Checkout{Branch: "dev"}).OnDefaultBranch() {
+		t.Fatal("OnDefaultBranch")
+	}
+	if symref(filepath.Join(root, "none"), "refs/") != "" {
+		t.Fatal("symref of a missing file")
+	}
+	writeFile(t, filepath.Join(root, "bad"), "ref: refs/tags/v1\n")
+	if symref(filepath.Join(root, "bad"), "refs/heads/") != "" {
+		t.Fatal("symref outside the prefix")
+	}
+}

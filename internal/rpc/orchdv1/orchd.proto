@@ -181,6 +181,9 @@ message SearchHit {
   int64 ended_at = 10;
   int64 ingested_at = 11;
   string heading = 12; // the markdown section the chunk came from, if any
+  // the trust tier orchd's writer gave it: repo, web, session, file or
+  // client; empty for content stored before writers were recorded
+  string trust = 13;
 }
 
 message ListSourcesRequest {
@@ -642,6 +645,9 @@ message Document {
   bool malformed = 7; // chunk order was incomplete; text is best effort
   bool oversize = 8;  // too large to return (over 3 MiB); text is empty
   string web_url = 9; // where the original lives, when known
+  string writer = 10;       // which part of orchd stored it (docs, sources, session, file, client)
+  string content_hash = 11; // identifies the stored text
+  string trust = 12;        // the tier its writer gave it
 }
 
 message ListRegisteredSourcesRequest {}

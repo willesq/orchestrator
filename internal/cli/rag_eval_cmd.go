@@ -40,9 +40,9 @@ func defaultEvalSet() string {
 
 // evalFlags are the knobs one eval run is scored with.
 type evalFlags struct {
-	set, save, compare, mode, ranking, label, section, format string
-	topK, perSource                                           int
-	asJSON, cases                                             bool
+	set, save, compare, mode, ranking, label, section, format, split string
+	topK, perSource                                                  int
+	asJSON, cases                                                    bool
 }
 
 func newRAGEvalCmd(cf clientFactory) *cobra.Command {
@@ -71,6 +71,7 @@ func newRAGEvalCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().IntVar(&f.perSource, "per-source", 0, "most hits per source (default rag.search.per_source; -1 for none)")
 	cmd.Flags().StringVar(&f.label, "label", "", "describe this run's configuration in the saved report")
 	cmd.Flags().StringVar(&f.section, "section", "", "score only the cases in this section")
+	cmd.Flags().StringVar(&f.split, "split", "", "score only one half of the set: tune (for choosing settings) or holdout (for judging them)")
 	cmd.Flags().StringVar(&f.format, "inject-format", memctx.FormatPointers, "injection to measure tokens for: pointers or full")
 	cmd.AddCommand(newRAGEvalAddCmd(), newRAGEvalSeedCmd(cf))
 	return cmd
@@ -93,10 +94,13 @@ func runEval(c *cobra.Command, cf clientFactory, f evalFlags) error {
 	if err != nil {
 		return err
 	}
-	if f.section != "" {
+	if f.split != "" && f.split != rageval.SplitTune && f.split != rageval.SplitHoldout {
+		return errors.New("--split must be tune or holdout")
+	}
+	if f.section != "" || f.split != "" {
 		var kept []rageval.Case
 		for _, cs := range s.Cases {
-			if cs.Section == f.section {
+			if (f.section == "" || cs.Section == f.section) && (f.split == "" || rageval.SplitOf(cs) == f.split) {
 				kept = append(kept, cs)
 			}
 		}
@@ -221,6 +225,16 @@ func printEvalReport(out io.Writer, r rageval.Report, before *rageval.Report, al
 	for _, name := range names {
 		m := r.Sections[name]
 		fmt.Fprintf(out, "  %-14s n=%-4d %s\n", termSafe(name), m.N, metricLine(m))
+		for _, sp := range []string{rageval.SplitTune, rageval.SplitHoldout} {
+			if m, ok := r.SectionSplits[name+"/"+sp]; ok && len(r.Splits) > 1 {
+				fmt.Fprintf(out, "    %-12s n=%-4d %s\n", sp, m.N, metricLine(m))
+			}
+		}
+	}
+	for _, sp := range []string{rageval.SplitTune, rageval.SplitHoldout} {
+		if m, ok := r.Splits[sp]; ok && len(r.Splits) > 1 {
+			fmt.Fprintf(out, "  %-14s n=%-4d %s\n", "all/"+sp, m.N, metricLine(m))
+		}
 	}
 	if before == nil {
 		return

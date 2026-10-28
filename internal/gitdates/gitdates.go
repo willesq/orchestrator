@@ -58,8 +58,9 @@ var safeArgs = []string{
 	"-c", "core.alternateRefsCommand=", "-c", "diff.external=", "--no-pager",
 }
 
-// safeEnv backs safeArgs: no lazy fetching, no system config, no prompts.
-var safeEnv = []string{"GIT_NO_LAZY_FETCH=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0",
+// safeEnv backs safeArgs: no lazy fetching, no system or global config, no
+// prompts.
+var safeEnv = []string{"GIT_NO_LAZY_FETCH=1", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_TERMINAL_PROMPT=0",
 	"GIT_PROTOCOL_FROM_USER=0", "GIT_ASKPASS=false", "SSH_ASKPASS=false"}
 
 // Read returns the commit times of the repository at dir. It never fails: a
@@ -109,15 +110,25 @@ func killGroup(cmd *exec.Cmd) error {
 	return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 }
 
+// maxPathLine bounds one path line; longer ones are skipped.
+const maxPathLine = 64 << 10
+
 // parse reads `git log --format=%x00%ct --name-only` output, newest commit
 // first: the first time a path appears is its last change.
 func parse(out []byte) map[string]time.Time {
 	files := map[string]time.Time{}
 	var cur time.Time
-	sc := bufio.NewScanner(bytes.NewReader(out))
-	sc.Buffer(make([]byte, 0, 64<<10), 1<<20)
-	for sc.Scan() {
-		line := sc.Text()
+	rd := bufio.NewReader(bytes.NewReader(out))
+	for {
+		raw, err := rd.ReadString('\n')
+		if raw == "" && err != nil {
+			break
+		}
+		line := strings.TrimSuffix(raw, "\n")
+		// An absurdly long line is no path git would print; skip it and go on.
+		if len(line) > maxPathLine {
+			continue
+		}
 		if strings.HasPrefix(line, "\x00") {
 			cur = parseUnix(strings.TrimPrefix(line, "\x00"))
 			continue

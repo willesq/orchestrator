@@ -56,7 +56,7 @@ func (s *server) ReindexKeywords(ctx context.Context, req *orchdv1.ReindexKeywor
 		return nil, grpcstatus.Error(codes.Unavailable, "re-indexing is unavailable")
 	}
 	if !migrating.TryLock() {
-		return nil, grpcstatus.Error(codes.Aborted, "a migration or re-index is already running")
+		return nil, grpcstatus.Error(codes.Aborted, "a hybrid migration, backup drop or keyword re-index is already running")
 	}
 	defer migrating.Unlock()
 	rep, err := s.migrator.ReindexKeywords(ctx, req.GetApply())

@@ -54,8 +54,8 @@ func Seed(records, docs []SeedDoc, opts SeedOpts) []Case {
 			if countSection(out, SectionDecision) >= opts.Decisions {
 				break
 			}
-			out = append(out, Case{Query: "what did we decide about " + d, Expect: []string{r.URI},
-				Section: SectionDecision, Note: "a decision from the session record"})
+			out = append(out, Case{Query: "what did we decide about " + d, Expect: []string{sessionPrefix(r.URI)},
+				Section: SectionDecision, Note: "a decision from the session record; any of the session's sources answers"})
 		}
 	}
 	headCount, identCount := map[string]int{}, map[string]int{}
@@ -284,4 +284,15 @@ func identifiers(text string) []string {
 		}
 	}
 	return out
+}
+
+// sessionPrefix widens a session record's URI to the whole session, so its
+// transcript answers a decision case as well as its record: the record is
+// written from the transcript, and labelling only the record would make any
+// ranking that favours records over transcripts look better by construction.
+func sessionPrefix(uri string) string {
+	if base, ok := strings.CutSuffix(uri, "/record"); ok && strings.HasPrefix(uri, "session://") {
+		return base + "/*"
+	}
+	return uri
 }

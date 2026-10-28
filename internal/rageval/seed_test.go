@@ -69,7 +69,7 @@ func TestSeed(t *testing.T) {
 	for _, c := range cases {
 		by[c.Section] = append(by[c.Section], c)
 	}
-	if len(by[SectionDecision]) != 2 || by[SectionDecision][0].Expect[0] != "session://a/record" ||
+	if len(by[SectionDecision]) != 2 || by[SectionDecision][0].Expect[0] != "session://a/*" ||
 		!strings.HasPrefix(by[SectionDecision][0].Query, "what did we decide about ") {
 		t.Fatalf("decision cases = %+v", by[SectionDecision])
 	}

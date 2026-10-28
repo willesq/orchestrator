@@ -124,7 +124,7 @@ func summarizeOne(ctx context.Context, s sessionSummarizer, ing summaryIngester,
 	start, end := rec.Span()
 	if _, err := ing.IngestText(jobCtx, rec.Text(), rag.Meta{
 		SourceURI: "session://" + j.SessionID + "/record", SourceType: "session_record", Tags: j.Tags,
-		StartedAt: start, EndedAt: end,
+		StartedAt: start, EndedAt: end, Writer: rag.WriterSession,
 	}); err != nil {
 		log.Printf("session-summarizer: session %s: store summary: %v", j.SessionID, err)
 	}

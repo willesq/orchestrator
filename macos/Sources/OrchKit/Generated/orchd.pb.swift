@@ -179,6 +179,10 @@ public nonisolated struct Orchd_V1_SearchHit: Sendable {
   /// the markdown section the chunk came from, if any
   public var heading: String = String()
 
+  /// the trust tier orchd's writer gave it: repo, web, session, file or
+  /// client; empty for content stored before writers were recorded
+  public var trust: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1557,6 +1561,15 @@ public nonisolated struct Orchd_V1_Document: Sendable {
   /// where the original lives, when known
   public var webURL: String = String()
 
+  /// which part of orchd stored it (docs, sources, session, file, client)
+  public var writer: String = String()
+
+  /// identifies the stored text
+  public var contentHash: String = String()
+
+  /// the tier its writer gave it
+  public var trust: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2431,7 +2444,7 @@ nonisolated extension Orchd_V1_SearchResponse: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Orchd_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchHit"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{3}source_uri\0\u{3}source_type\0\u{1}score\0\u{1}scope\0\u{1}tags\0\u{3}keyword_score\0\u{1}exact\0\u{3}started_at\0\u{3}ended_at\0\u{3}ingested_at\0\u{1}heading\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{3}source_uri\0\u{3}source_type\0\u{1}score\0\u{1}scope\0\u{1}tags\0\u{3}keyword_score\0\u{1}exact\0\u{3}started_at\0\u{3}ended_at\0\u{3}ingested_at\0\u{1}heading\0\u{1}trust\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2451,6 +2464,7 @@ nonisolated extension Orchd_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._
       case 10: try { try decoder.decodeSingularInt64Field(value: &self.endedAt) }()
       case 11: try { try decoder.decodeSingularInt64Field(value: &self.ingestedAt) }()
       case 12: try { try decoder.decodeSingularStringField(value: &self.heading) }()
+      case 13: try { try decoder.decodeSingularStringField(value: &self.trust) }()
       default: break
       }
     }
@@ -2493,6 +2507,9 @@ nonisolated extension Orchd_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._
     if !self.heading.isEmpty {
       try visitor.visitSingularStringField(value: self.heading, fieldNumber: 12)
     }
+    if !self.trust.isEmpty {
+      try visitor.visitSingularStringField(value: self.trust, fieldNumber: 13)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2509,6 +2526,7 @@ nonisolated extension Orchd_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.endedAt != rhs.endedAt {return false}
     if lhs.ingestedAt != rhs.ingestedAt {return false}
     if lhs.heading != rhs.heading {return false}
+    if lhs.trust != rhs.trust {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -5324,7 +5342,7 @@ nonisolated extension Orchd_V1_GetDocumentRequest: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Orchd_V1_Document: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Document"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_uri\0\u{3}source_type\0\u{1}scope\0\u{1}tags\0\u{1}text\0\u{1}chunks\0\u{1}malformed\0\u{1}oversize\0\u{3}web_url\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_uri\0\u{3}source_type\0\u{1}scope\0\u{1}tags\0\u{1}text\0\u{1}chunks\0\u{1}malformed\0\u{1}oversize\0\u{3}web_url\0\u{1}writer\0\u{3}content_hash\0\u{1}trust\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5341,6 +5359,9 @@ nonisolated extension Orchd_V1_Document: SwiftProtobuf.Message, SwiftProtobuf._M
       case 7: try { try decoder.decodeSingularBoolField(value: &self.malformed) }()
       case 8: try { try decoder.decodeSingularBoolField(value: &self.oversize) }()
       case 9: try { try decoder.decodeSingularStringField(value: &self.webURL) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.writer) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.contentHash) }()
+      case 12: try { try decoder.decodeSingularStringField(value: &self.trust) }()
       default: break
       }
     }
@@ -5374,6 +5395,15 @@ nonisolated extension Orchd_V1_Document: SwiftProtobuf.Message, SwiftProtobuf._M
     if !self.webURL.isEmpty {
       try visitor.visitSingularStringField(value: self.webURL, fieldNumber: 9)
     }
+    if !self.writer.isEmpty {
+      try visitor.visitSingularStringField(value: self.writer, fieldNumber: 10)
+    }
+    if !self.contentHash.isEmpty {
+      try visitor.visitSingularStringField(value: self.contentHash, fieldNumber: 11)
+    }
+    if !self.trust.isEmpty {
+      try visitor.visitSingularStringField(value: self.trust, fieldNumber: 12)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -5387,6 +5417,9 @@ nonisolated extension Orchd_V1_Document: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.malformed != rhs.malformed {return false}
     if lhs.oversize != rhs.oversize {return false}
     if lhs.webURL != rhs.webURL {return false}
+    if lhs.writer != rhs.writer {return false}
+    if lhs.contentHash != rhs.contentHash {return false}
+    if lhs.trust != rhs.trust {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

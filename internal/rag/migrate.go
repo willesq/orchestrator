@@ -387,7 +387,8 @@ type sourceRead struct {
 // once the text passes maxSourceBytes, so an enormous source is reported
 // rather than held.
 func (s *Service) readSource(ctx context.Context, st *QdrantStore, uri string) (sourceRead, error) {
-	fields := []string{"text", "source_uri", "source_type", "scope", "tags", "chunk_index", fieldStartedAt, fieldEndedAt}
+	fields := []string{"text", "source_uri", "source_type", "scope", "tags", "chunk_index", fieldStartedAt, fieldEndedAt,
+		fieldWriter, fieldContentHash}
 	sr := sourceRead{meta: Meta{SourceURI: uri}}
 	var chunks []storedChunk
 	var offset any
@@ -400,6 +401,8 @@ func (s *Service) readSource(ctx context.Context, st *QdrantStore, uri string) (
 		for _, p := range pts {
 			if len(chunks) == 0 {
 				sr.meta.SourceType, sr.meta.Scope, sr.meta.Tags = str(p.Payload["source_type"]), str(p.Payload["scope"]), strSlice(p.Payload["tags"])
+				// The writer travels with a migration's copy, and with it the tier.
+				sr.meta.Writer, sr.meta.ContentHash = str(p.Payload[fieldWriter]), str(p.Payload[fieldContentHash])
 			}
 			// The source's dates are the span of its chunks', so re-chunking
 			// keeps it dated. ingested_at is not kept: the copy is a new store.

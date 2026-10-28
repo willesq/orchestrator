@@ -1,87 +1,92 @@
 // Package memctx renders retrieved memory for an agent's prompt: compact
-// pointers (or full text) for auto-injection, each labelled with how far its
-// origin can be trusted, with instruction-like text from untrusted origins
-// shown only as quoted data.
+// pointers (or full text) for auto-injection, each labelled with the trust
+// tier orchd's writer gave it. Retrieved text is always shown as quoted data,
+// and instruction-like text is flagged in every tier.
 package memctx
 
 import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // Trust is how far a memory's origin can be trusted.
 type Trust string
 
-// Trust tiers, most trusted first.
+// Trust tiers. The first five are assigned by orchd's writer and stored with
+// each chunk (see rag.TrustFor); a client cannot choose them.
 const (
-	// TrustSession is the user's own sessions: their records, summaries and
-	// transcripts.
-	TrustSession Trust = "session"
-	// TrustRepo is documentation from the user's repositories and config.
+	// TrustRepo is a registered repo's docs, stored by the docs or sources sync.
 	TrustRepo Trust = "repo"
-	// TrustNote is a note an agent or the user stored by hand.
-	TrustNote Trust = "note"
+	// TrustSession is the user's sessions as orchd stored them. They carry the
+	// tool output and web pages the agent read, so they are fenced.
+	TrustSession Trust = "session"
+	// TrustFile is a document an agent edited, stored by the edit hand-off.
+	TrustFile Trust = "file"
+	// TrustClient is anything stored through the Ingest RPC or MCP
+	// rag_ingest_text, whatever type or URI it declared.
+	TrustClient Trust = "client"
 	// TrustWeb is a fetched web page: third-party text.
 	TrustWeb Trust = "web"
-	// TrustTool is captured tool output, such as PR or issue bodies.
+	// TrustTool is captured tool output (only derived, for older content).
 	TrustTool Trust = "tool"
+	// TrustUnverified is content stored before writers were recorded, whose
+	// tier cannot be known.
+	TrustUnverified Trust = "unverified"
 )
 
 var (
-	sessionTypes = map[string]bool{"session_record": true, "session_transcript": true, "session_summary": true}
-	repoTypes    = map[string]bool{"repo_doc": true, "claude_config": true, "file": true}
-	webTypes     = map[string]bool{"web": true, "webpage": true, "url": true}
-	toolTypes    = map[string]bool{"tool_output": true, "tool": true, "github": true, "pr": true, "issue": true}
+	webTypes  = map[string]bool{"web": true, "webpage": true, "url": true}
+	toolTypes = map[string]bool{"tool_output": true, "tool": true, "github": true, "pr": true, "issue": true}
 )
 
-// TrustOf derives a chunk's trust from its source type and URI. The URI's
-// scheme must agree with a trusted type: a "repo_doc" stored under an
-// https:// URI is still a web page. Unknown types are notes.
-//
-// Both fields are written by whoever stored the chunk, so this ranks honest
-// writers' content; it cannot unmask a writer that lies about both.
-func TrustOf(sourceType, uri string) Trust {
+// TrustOf is a chunk's tier: the one its writer stored when there is one.
+// Content stored before writers were recorded is unverified, or web or tool
+// output when its type or URI says so; its type and URI were the writer's
+// choice, so they can only lower the tier, never raise it.
+func TrustOf(stored, sourceType, uri string) Trust {
+	switch t := Trust(strings.TrimSpace(stored)); t {
+	case TrustRepo, TrustSession, TrustFile, TrustClient, TrustWeb:
+		return t
+	}
 	st := strings.ToLower(strings.TrimSpace(sourceType))
+	u := strings.ToLower(strings.TrimSpace(uri))
 	scheme := ""
-	if i := strings.Index(uri, "://"); i > 0 {
-		scheme = strings.ToLower(uri[:i])
+	if i := strings.Index(u, "://"); i > 0 {
+		scheme = u[:i]
 	}
 	switch {
-	case webTypes[st] || scheme == "http" || scheme == "https":
+	case webTypes[st] || strings.Contains(scheme, "http") || strings.HasPrefix(u, "www."):
 		return TrustWeb
 	case toolTypes[st]:
 		return TrustTool
-	case sessionTypes[st] && scheme == "session":
-		return TrustSession
-	case repoTypes[st] && (scheme == "repo" || scheme == "file" || scheme == "claude"):
-		return TrustRepo
 	}
-	return TrustNote
+	return TrustUnverified
 }
 
 // Untrusted reports whether content of this tier is third-party text: it is
 // labelled untrusted, and prompt context can leave it out.
 func (t Trust) Untrusted() bool { return t == TrustWeb || t == TrustTool }
 
-// Fenced reports whether this tier's text is shown only as quoted data, with
-// instruction-like text flagged: everything but the user's own sessions and
-// repo docs. A note may hold text an agent copied from anywhere.
-func (t Trust) Fenced() bool { return t != TrustSession && t != TrustRepo }
-
 // Label names the tier for a reader.
 func (t Trust) Label() string {
 	switch t {
-	case TrustSession:
-		return "own session"
 	case TrustRepo:
 		return "repo doc"
+	case TrustSession:
+		return "own session"
+	case TrustFile:
+		return "edited file"
+	case TrustClient:
+		return "stored by a client"
 	case TrustWeb:
 		return "web page, untrusted"
 	case TrustTool:
 		return "tool output, untrusted"
 	}
-	return "note"
+	return "unverified"
 }
 
 // instructionPatterns catch text addressed to an agent rather than about a
@@ -105,7 +110,34 @@ var instructionPatterns = regexp.MustCompile(`(?i)` + strings.Join([]string{
 // a pattern list that rewording, homoglyphs or another language get past, so
 // it only adds a warning; it must never be what decides whether content is
 // shown or trusted.
-func InstructionLike(text string) bool { return instructionPatterns.MatchString(text) }
+func InstructionLike(text string) bool {
+	return instructionPatterns.MatchString(text) || instructionPatterns.MatchString(normalize(text))
+}
+
+// markup is emphasis and quoting that can split an instruction's words.
+var markup = regexp.MustCompile("[*_`~>#|]+")
+
+// normalize folds compatibility forms (fullwidth and styled letters),
+// removes zero-width and format characters and markdown emphasis, and
+// collapses whitespace, so "**ignore** all *previous*\ninstructions" reads
+// as the sentence it is.
+func normalize(text string) string {
+	if len(text) > maxNormalize {
+		text = text[:maxNormalize]
+	}
+	t := norm.NFKC.String(text)
+	t = strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, t)
+	t = markup.ReplaceAllString(t, "")
+	return strings.Join(strings.Fields(t), " ")
+}
+
+// maxNormalize bounds the text normalized for matching.
+const maxNormalize = 64 << 10
 
 // Printable replaces control and format characters (bidi overrides,
 // zero-width and Unicode tag characters, which can hide text from a reader)
@@ -117,6 +149,9 @@ func Printable(s string) string {
 			return r
 		case unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || (r >= 0xE0000 && r <= 0xE007F):
 			return '?'
+		case r == '\u2028' || r == '\u2029':
+			// Line and paragraph separators can read as line breaks.
+			return ' '
 		}
 		return r
 	}, strings.ToValidUTF8(s, "?"))

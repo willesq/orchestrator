@@ -162,3 +162,5 @@ func TestSearchAppliesRankingAndCap(t *testing.T) {
 		t.Error("default profile")
 	}
 }
+
+func nanFloat() float64 { z := 0.0; return z / z }

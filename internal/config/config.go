@@ -315,9 +315,9 @@ func setDefaults(v *viper.Viper) {
 	// so an old decision is not buried (tuned on the golden-set eval).
 	v.SetDefault("rag.search.ranking", "weighted")
 	v.SetDefault("rag.search.recency_half_life_days", 180)
-	v.SetDefault("rag.search.recency_floor", 0.7)
+	v.SetDefault("rag.search.recency_floor", 0.85)
 	v.SetDefault("rag.search.source_weights", map[string]float64{
-		"session_record": 1.0, "decision": 1.0, "session_transcript": 0.7, "web": 0.9,
+		"session_record": 1.0, "decision": 1.0, "session_transcript": 0.85, "web": 0.9,
 	})
 	v.SetDefault("rag.search.per_source", 2)
 	v.SetDefault("rag.qdrant.api_key_env", "QDRANT_API_KEY")

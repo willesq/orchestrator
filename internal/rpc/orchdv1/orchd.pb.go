@@ -458,10 +458,13 @@ type SearchHit struct {
 	Exact        bool                   `protobuf:"varint,8,opt,name=exact,proto3" json:"exact,omitempty"`                                    // contains, verbatim, a code identifier from the query
 	// when what the hit describes happened, and when it was stored
 	// (Unix seconds; 0 = unknown)
-	StartedAt     int64  `protobuf:"varint,9,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
-	EndedAt       int64  `protobuf:"varint,10,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`
-	IngestedAt    int64  `protobuf:"varint,11,opt,name=ingested_at,json=ingestedAt,proto3" json:"ingested_at,omitempty"`
-	Heading       string `protobuf:"bytes,12,opt,name=heading,proto3" json:"heading,omitempty"` // the markdown section the chunk came from, if any
+	StartedAt  int64  `protobuf:"varint,9,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	EndedAt    int64  `protobuf:"varint,10,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`
+	IngestedAt int64  `protobuf:"varint,11,opt,name=ingested_at,json=ingestedAt,proto3" json:"ingested_at,omitempty"`
+	Heading    string `protobuf:"bytes,12,opt,name=heading,proto3" json:"heading,omitempty"` // the markdown section the chunk came from, if any
+	// the trust tier orchd's writer gave it: repo, web, session, file or
+	// client; empty for content stored before writers were recorded
+	Trust         string `protobuf:"bytes,13,opt,name=trust,proto3" json:"trust,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -576,6 +579,13 @@ func (x *SearchHit) GetIngestedAt() int64 {
 func (x *SearchHit) GetHeading() string {
 	if x != nil {
 		return x.Heading
+	}
+	return ""
+}
+
+func (x *SearchHit) GetTrust() string {
+	if x != nil {
+		return x.Trust
 	}
 	return ""
 }
@@ -4751,9 +4761,12 @@ type Document struct {
 	Tags          []string               `protobuf:"bytes,4,rep,name=tags,proto3" json:"tags,omitempty"`
 	Text          string                 `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
 	Chunks        int32                  `protobuf:"varint,6,opt,name=chunks,proto3" json:"chunks,omitempty"`
-	Malformed     bool                   `protobuf:"varint,7,opt,name=malformed,proto3" json:"malformed,omitempty"`        // chunk order was incomplete; text is best effort
-	Oversize      bool                   `protobuf:"varint,8,opt,name=oversize,proto3" json:"oversize,omitempty"`          // too large to return (over 3 MiB); text is empty
-	WebUrl        string                 `protobuf:"bytes,9,opt,name=web_url,json=webUrl,proto3" json:"web_url,omitempty"` // where the original lives, when known
+	Malformed     bool                   `protobuf:"varint,7,opt,name=malformed,proto3" json:"malformed,omitempty"`                        // chunk order was incomplete; text is best effort
+	Oversize      bool                   `protobuf:"varint,8,opt,name=oversize,proto3" json:"oversize,omitempty"`                          // too large to return (over 3 MiB); text is empty
+	WebUrl        string                 `protobuf:"bytes,9,opt,name=web_url,json=webUrl,proto3" json:"web_url,omitempty"`                 // where the original lives, when known
+	Writer        string                 `protobuf:"bytes,10,opt,name=writer,proto3" json:"writer,omitempty"`                              // which part of orchd stored it (docs, sources, session, file, client)
+	ContentHash   string                 `protobuf:"bytes,11,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"` // identifies the stored text
+	Trust         string                 `protobuf:"bytes,12,opt,name=trust,proto3" json:"trust,omitempty"`                                // the tier its writer gave it
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4847,6 +4860,27 @@ func (x *Document) GetOversize() bool {
 func (x *Document) GetWebUrl() string {
 	if x != nil {
 		return x.WebUrl
+	}
+	return ""
+}
+
+func (x *Document) GetWriter() string {
+	if x != nil {
+		return x.Writer
+	}
+	return ""
+}
+
+func (x *Document) GetContentHash() string {
+	if x != nil {
+		return x.ContentHash
+	}
+	return ""
+}
+
+func (x *Document) GetTrust() string {
+	if x != nil {
+		return x.Trust
 	}
 	return ""
 }
@@ -6745,7 +6779,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\aranking\x18\f \x01(\tR\aranking\"U\n" +
 	"\x0eSearchResponse\x12'\n" +
 	"\x04hits\x18\x01 \x03(\v2\x13.orchd.v1.SearchHitR\x04hits\x12\x1a\n" +
-	"\bfallback\x18\x02 \x01(\tR\bfallback\"\xcf\x02\n" +
+	"\bfallback\x18\x02 \x01(\tR\bfallback\"\xe5\x02\n" +
 	"\tSearchHit\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x1d\n" +
 	"\n" +
@@ -6763,7 +6797,8 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	" \x01(\x03R\aendedAt\x12\x1f\n" +
 	"\vingested_at\x18\v \x01(\x03R\n" +
 	"ingestedAt\x12\x18\n" +
-	"\aheading\x18\f \x01(\tR\aheading\"\xac\x01\n" +
+	"\aheading\x18\f \x01(\tR\aheading\x12\x14\n" +
+	"\x05trust\x18\r \x01(\tR\x05trust\"\xac\x01\n" +
 	"\x12ListSourcesRequest\x12\x1f\n" +
 	"\vsource_type\x18\x01 \x01(\tR\n" +
 	"sourceType\x12\x14\n" +
@@ -7111,7 +7146,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"ingestedAt\"3\n" +
 	"\x12GetDocumentRequest\x12\x1d\n" +
 	"\n" +
-	"source_uri\x18\x01 \x01(\tR\tsourceUri\"\xf3\x01\n" +
+	"source_uri\x18\x01 \x01(\tR\tsourceUri\"\xc4\x02\n" +
 	"\bDocument\x12\x1d\n" +
 	"\n" +
 	"source_uri\x18\x01 \x01(\tR\tsourceUri\x12\x1f\n" +
@@ -7123,7 +7158,11 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x06chunks\x18\x06 \x01(\x05R\x06chunks\x12\x1c\n" +
 	"\tmalformed\x18\a \x01(\bR\tmalformed\x12\x1a\n" +
 	"\boversize\x18\b \x01(\bR\boversize\x12\x17\n" +
-	"\aweb_url\x18\t \x01(\tR\x06webUrl\"\x1e\n" +
+	"\aweb_url\x18\t \x01(\tR\x06webUrl\x12\x16\n" +
+	"\x06writer\x18\n" +
+	" \x01(\tR\x06writer\x12!\n" +
+	"\fcontent_hash\x18\v \x01(\tR\vcontentHash\x12\x14\n" +
+	"\x05trust\x18\f \x01(\tR\x05trust\"\x1e\n" +
 	"\x1cListRegisteredSourcesRequest\"U\n" +
 	"\x1dListRegisteredSourcesResponse\x124\n" +
 	"\asources\x18\x01 \x03(\v2\x1a.orchd.v1.RegisteredSourceR\asources\"\xbd\x02\n" +

@@ -349,7 +349,7 @@ func TestStripHTML(t *testing.T) {
 }
 
 func TestRefreshSkipsExcludedDirs(t *testing.T) {
-	root := t.TempDir()
+	root := resolve(t.TempDir())
 	repo := filepath.Join(root, "willesq", "tui")
 	for _, rel := range []string{"README.md", "docs/arch.md", "vendor/github.com/charmbracelet/lipgloss/README.md", "node_modules/x/README.md"} {
 		p := filepath.Join(repo, rel)
@@ -375,7 +375,7 @@ func TestRefreshSkipsExcludedDirs(t *testing.T) {
 				t.Fatalf("Refresh: %v", err)
 			}
 			slices.Sort(ing.uris)
-			want := []string{"repo://willesq/tui/README.md", "repo://willesq/tui/docs/arch.md"}
+			want := []string{CheckoutURI(filepath.Join(repo, "README.md")), CheckoutURI(filepath.Join(repo, "docs", "arch.md"))}
 			if !slices.Equal(ing.uris, want) {
 				t.Errorf("ingested %v, want %v", ing.uris, want)
 			}

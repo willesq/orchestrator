@@ -148,6 +148,9 @@ func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchd
 		StartedAt:  fromUnix(req.GetStartedAt()),
 		EndedAt:    fromUnix(req.GetEndedAt()),
 		Timeline:   req.GetTimeline(),
+		// Whatever type or URI a client declares, what it stores is a
+		// client's: fenced as data wherever it is shown.
+		Writer: rag.WriterClient,
 	})
 	if err != nil {
 		return nil, err
@@ -211,6 +214,7 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 			EndedAt:      toUnix(h.EndedAt),
 			IngestedAt:   toUnix(h.IngestedAt),
 			Heading:      h.Heading,
+			Trust:        h.Trust,
 		})
 	}
 	return out, nil

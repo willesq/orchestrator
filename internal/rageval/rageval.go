@@ -11,11 +11,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -38,6 +40,37 @@ type Case struct {
 	Section string `yaml:"section,omitempty" json:"section,omitempty"`
 	// Note says why the case exists; it is not scored.
 	Note string `yaml:"note,omitempty" json:"note,omitempty"`
+	// Split is SplitTune or SplitHoldout: settings are tuned on the first and
+	// judged on the second. Unset, a case is assigned by a hash of its query.
+	Split string `yaml:"split,omitempty" json:"split,omitempty"`
+}
+
+// Splits of a golden set.
+const (
+	SplitTune    = "tune"
+	SplitHoldout = "holdout"
+)
+
+// SplitOf is a case's split: its own, or one fixed by a hash of its query,
+// so about half the cases of every section land in each.
+func SplitOf(c Case) string {
+	if c.Split == SplitTune || c.Split == SplitHoldout {
+		return c.Split
+	}
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(strings.ToLower(strings.TrimSpace(c.Query))))
+	if h.Sum32()%2 == 0 {
+		return SplitTune
+	}
+	return SplitHoldout
+}
+
+// Key identifies a case within a set: its query and its filters, since two
+// cases may ask the same question of different scopes.
+func (c Case) Key() string {
+	tags := append([]string(nil), c.Tags...)
+	sort.Strings(tags)
+	return strings.Join([]string{c.Query, c.Scope, c.SourceType, strings.Join(tags, ",")}, "\x00")
 }
 
 // Set is a golden set.

@@ -164,7 +164,7 @@ func storeSession(ctx context.Context, ing summaryIngester, s handoff.Session) e
 	// Each chunk is dated by the turns it holds, so a session spanning days is
 	// found under the day each part happened.
 	_, err = ing.IngestText(ctx, session.TranscriptText(msgs), rag.Meta{
-		SourceURI: "session://" + s.ID + "/transcript", SourceType: "session_transcript", Tags: s.Tags,
+		SourceURI: "session://" + s.ID + "/transcript", SourceType: "session_transcript", Tags: s.Tags, Writer: rag.WriterSession,
 		Timeline: true, StartedAt: start, EndedAt: end,
 	})
 	return err
@@ -187,7 +187,7 @@ func storeRecord(ctx context.Context, ing summaryIngester, s handoff.Session, st
 	}
 	recStart, recEnd := rec.Span()
 	_, err = ing.IngestText(ctx, rec.Text(), rag.Meta{
-		SourceURI: "session://" + s.ID + "/record", SourceType: "session_record", Tags: s.Tags,
+		SourceURI: "session://" + s.ID + "/record", SourceType: "session_record", Tags: s.Tags, Writer: rag.WriterSession,
 		StartedAt: recStart, EndedAt: recEnd,
 	})
 	return err
@@ -240,11 +240,6 @@ func storeFile(ctx context.Context, ing summaryIngester, f handoff.File, home st
 	if _, _, ok := handoff.Classify(resolved, home); !ok {
 		return nil
 	}
-	// Mapped from the resolved path: a link inside a repo to a note outside
-	// it is that note, not a repo doc.
-	if synced, err := canonicalStored(ctx, ing, canonical, uri, resolved); synced || err != nil {
-		return err
-	}
 	raw, ok, err := readRegular(resolved, maxHandoffDoc)
 	if err != nil || !ok {
 		return err
@@ -256,39 +251,42 @@ func storeFile(ctx context.Context, ing summaryIngester, f handoff.File, home st
 	}
 	ctx, cancel := context.WithTimeout(ctx, handoffTimeout)
 	defer cancel()
-	_, err = ing.IngestText(ctx, text, rag.Meta{SourceURI: uri, SourceType: sourceType})
+	// Mapped from the resolved path: a link inside a repo to a note outside
+	// it is that note, not a repo doc.
+	if synced, err := canonicalStored(ctx, ing, canonical, uri, resolved, rag.ContentHash(text)); synced || err != nil {
+		return err
+	}
+	_, err = ing.IngestText(ctx, text, rag.Meta{SourceURI: uri, SourceType: sourceType, Writer: rag.WriterFile})
 	return err
 }
 
-// canonicalStore tells whether a source is stored and removes one
+// canonicalStore reads what is stored for a source and removes one
 // (implemented by *rag.Service).
 type canonicalStore interface {
-	HasSource(ctx context.Context, uri string) (bool, error)
+	Copy(ctx context.Context, uri string) (rag.StoredCopy, bool, error)
 	DeleteSource(ctx context.Context, uri string) (int, error)
 }
 
-// canonicalStored reports whether an edited doc is already stored under the
-// repo:// URI the docs or sources sync gives it. Such a doc is not stored
-// again under its path (uri): the copy would duplicate it in every search,
-// and a worktree's would carry a branch's text beside the default branch's.
-// The edit reaches the store when it is merged and synced. A copy stored
-// before this check existed is removed. A doc no sync has stored, such as an
-// untracked plan, is still stored under its path.
-func canonicalStored(ctx context.Context, ing summaryIngester, canonical sources.CanonicalFunc, uri string, paths ...string) (bool, error) {
+// canonicalStored reports whether an edited doc is already stored, with the
+// same content, by the docs or sources sync under the URI that sync gives
+// the registered source it sits in. Then storing it again under its path
+// (uri) would only duplicate it, and an earlier path-keyed copy is removed.
+// A doc whose content differs from the synced copy (an edit on a branch not
+// yet merged), or one no sync stores (an untracked plan), is stored under its
+// path as before.
+func canonicalStored(ctx context.Context, ing summaryIngester, canonical sources.CanonicalFunc, uri, resolved, hash string) (bool, error) {
 	cs, ok := ing.(canonicalStore)
 	if canonical == nil || !ok {
 		return false, nil
 	}
-	for _, p := range paths {
-		for _, c := range canonical(ctx, p) {
-			has, err := cs.HasSource(ctx, c)
-			if err != nil {
-				return false, err
-			}
-			if has {
-				_, err := cs.DeleteSource(ctx, uri)
-				return true, err
-			}
+	for _, c := range canonical(ctx, resolved) {
+		cp, found, err := cs.Copy(ctx, c)
+		if err != nil {
+			return false, err
+		}
+		if found && (cp.Writer == rag.WriterDocs || cp.Writer == rag.WriterSources) && cp.ContentHash == hash {
+			_, err := cs.DeleteSource(ctx, uri)
+			return true, err
 		}
 	}
 	return false, nil

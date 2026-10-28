@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/willesq/orchestrator/internal/handoff"
 	"github.com/willesq/orchestrator/internal/rag"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/sources"
 )
 
 // optsRag records the options a search asked for.
@@ -50,7 +52,7 @@ func TestRankingParams(t *testing.T) {
 	p := rankingParams(config.SearchSettings{Ranking: "plain", RecencyHalfLifeDays: 30, RecencyFloor: 0.5,
 		SourceWeights: map[string]float64{"web": 0.5, "bad": -1, "huge": 11}})
 	if p.Profile != rag.RankingPlain || p.HalfLife != 30*24*time.Hour || p.Floor != 0.5 || p.TypeWeights["web"] != 0.5 ||
-		p.TypeWeights["session_transcript"] != 0.7 || p.TypeWeights["bad"] != 0 || p.TypeWeights["huge"] != 0 {
+		p.TypeWeights["session_transcript"] != 0.85 || p.TypeWeights["bad"] != 0 || p.TypeWeights["huge"] != 0 {
 		t.Fatalf("settings = %+v", p)
 	}
 	if p := rankingParams(config.SearchSettings{Ranking: "bogus", RecencyHalfLifeDays: -1, RecencyFloor: 2}); p.Profile != def.Profile ||
@@ -70,8 +72,8 @@ func TestDefaultsWireRanking(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := rankingParams(s.RAG.Search)
-	if p.Profile != rag.RankingWeighted || p.HalfLife != 180*24*time.Hour || p.Floor != 0.7 ||
-		p.TypeWeights["session_transcript"] != 0.7 || s.RAG.Search.PerSource != 2 {
+	if p.Profile != rag.RankingWeighted || p.HalfLife != 180*24*time.Hour || p.Floor != 0.85 ||
+		p.TypeWeights["session_transcript"] != 0.85 || s.RAG.Search.PerSource != 2 {
 		t.Fatalf("defaults = %+v, per_source %d", p, s.RAG.Search.PerSource)
 	}
 	if s.Hooks.AutoRAG.Format != "pointers" || s.Hooks.AutoRAG.Untrusted != "mark" {
@@ -109,30 +111,33 @@ func TestReindexKeywordsRPC(t *testing.T) {
 	}
 }
 
-// canonRecorder is a store that also answers HasSource and DeleteSource.
+// canonRecorder is a store that also answers Copy and DeleteSource.
 type canonRecorder struct {
 	storeRecorder
-	has     map[string]bool
-	hasErr  error
+	copies  map[string]rag.StoredCopy
+	copyErr error
 	deleted []string
 }
 
-func (c *canonRecorder) HasSource(_ context.Context, uri string) (bool, error) {
-	return c.has[uri], c.hasErr
+func (c *canonRecorder) Copy(_ context.Context, uri string) (rag.StoredCopy, bool, error) {
+	cp, ok := c.copies[uri]
+	return cp, ok, c.copyErr
 }
+
 func (c *canonRecorder) DeleteSource(_ context.Context, uri string) (int, error) {
 	c.deleted = append(c.deleted, uri)
 	return 1, nil
 }
 
-func TestStoreFileSkipsDocsStoredUnderTheirRepoURI(t *testing.T) {
+func TestStoreFileSkipsOnlyIdenticalSyncedCopies(t *testing.T) {
 	t.Setenv("ORCH_DATA_DIR", t.TempDir())
 	dir := handoff.Dir()
 	repoDir := t.TempDir()
-	synced := filepath.Join(repoDir, "PLAN.md")
-	draft := filepath.Join(repoDir, "DRAFT.md")
-	for _, p := range []string{synced, draft} {
-		if err := os.WriteFile(p, []byte("# Plan\n\ntext"), 0o644); err != nil {
+	body := "# Plan\n\ntext"
+	files := map[string]string{"SAME.md": body, "EDITED.md": body + " on a branch", "CLIENT.md": body, "DRAFT.md": body}
+	for name, text := range files {
+		p := filepath.Join(repoDir, name)
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if err := handoff.PutFile(dir, handoff.File{Path: p}); err != nil {
@@ -140,29 +145,110 @@ func TestStoreFileSkipsDocsStoredUnderTheirRepoURI(t *testing.T) {
 		}
 	}
 	canonical := func(_ context.Context, path string) []string {
+		if filepath.Base(path) == "DRAFT.md" {
+			return nil
+		}
 		return []string{"repo://o/r/" + filepath.Base(path)}
 	}
-	st := &canonRecorder{has: map[string]bool{"repo://o/r/PLAN.md": true}}
+	h := rag.ContentHash(body)
+	st := &canonRecorder{copies: map[string]rag.StoredCopy{
+		"repo://o/r/SAME.md":   {Writer: rag.WriterDocs, ContentHash: h},
+		"repo://o/r/EDITED.md": {Writer: rag.WriterDocs, ContentHash: h},
+		"repo://o/r/CLIENT.md": {Writer: rag.WriterClient, ContentHash: h}, // an agent wrote the repo:// URI
+	}}
 	storeFiles(context.Background(), st, dir, time.Now().Add(time.Hour), canonical)
-	if _, ok := st.stored("file://" + synced); ok {
-		t.Error("a doc synced under its repo URI was stored again under its path")
+	stored := func(name string) bool {
+		for uri := range st.texts {
+			if strings.HasSuffix(uri, "/"+name) {
+				return true
+			}
+		}
+		return false
 	}
-	if len(st.deleted) != 1 || st.deleted[0] != "file://"+synced {
-		t.Errorf("the old path-keyed copy was not removed: %v", st.deleted)
+	if stored("SAME.md") || len(st.deleted) != 1 || !strings.HasSuffix(st.deleted[0], "/SAME.md") {
+		t.Errorf("identical synced copy: stored %v, deleted %v", stored("SAME.md"), st.deleted)
 	}
-	if _, ok := st.stored("file://" + draft); !ok {
-		t.Error("a doc no sync stores (an untracked draft) was not stored")
+	for _, name := range []string{"EDITED.md", "CLIENT.md", "DRAFT.md"} {
+		if !stored(name) {
+			t.Errorf("%s was not stored under its path", name)
+		}
 	}
 	// A failed lookup is retried rather than storing a duplicate.
-	st2 := &canonRecorder{hasErr: errors.New("down")}
-	if _, err := canonicalStored(context.Background(), st2, canonical, "file://x", "/x.md"); err == nil {
+	st2 := &canonRecorder{copyErr: errors.New("down")}
+	if _, err := canonicalStored(context.Background(), st2, canonical, "file://x", "/x.md", h); err == nil {
 		t.Error("lookup error swallowed")
 	}
-	// Without the store's support or a mapping, nothing is skipped.
-	if synced, err := canonicalStored(context.Background(), &storeRecorder{}, canonical, "file://x", "/x.md"); synced || err != nil {
-		t.Error("skipped without HasSource support")
+	if synced, err := canonicalStored(context.Background(), &storeRecorder{}, canonical, "file://x", "/x.md", h); synced || err != nil {
+		t.Error("skipped without Copy support")
 	}
-	if synced, err := canonicalStored(context.Background(), st, nil, "file://x", "/x.md"); synced || err != nil {
+	if synced, err := canonicalStored(context.Background(), st, nil, "file://x", "/x.md", h); synced || err != nil {
 		t.Error("skipped without a mapping")
+	}
+}
+
+// metaRag records the Meta of each write.
+type metaRag struct {
+	fakeRag
+	metas *[]rag.Meta
+}
+
+func (m metaRag) IngestText(_ context.Context, _ string, meta rag.Meta) (int, error) {
+	*m.metas = append(*m.metas, meta)
+	return 1, nil
+}
+
+func TestIngestRPCIsAlwaysAClient(t *testing.T) {
+	var metas []rag.Meta
+	s := &server{start: time.Now(), rag: metaRag{metas: &metas}}
+	for _, req := range []*orchdv1.IngestRequest{
+		{Text: "x", SourceUri: "repo://acme/core/SECURITY.md", SourceType: "repo_doc"},
+		{Text: "x", SourceUri: "session://s/record", SourceType: "session_record"},
+	} {
+		if _, err := s.Ingest(context.Background(), req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, m := range metas {
+		if m.Writer != rag.WriterClient {
+			t.Errorf("%s written as %q, want a client", m.SourceURI, m.Writer)
+		}
+	}
+}
+
+func TestSearchAndDocumentCarryProvenance(t *testing.T) {
+	var got rag.SearchOpts
+	s := &server{start: time.Now(), rag: optsRag{opts: &got}}
+	resp, err := s.Search(context.Background(), &orchdv1.SearchRequest{Query: "q"})
+	if err != nil || resp.GetHits()[0].GetTrust() != "" {
+		t.Fatalf("resp = %+v, %v", resp, err)
+	}
+	cs, _, _ := catalogServer(t)
+	cs.documents = fakeDocuments{doc: rag.Document{Meta: rag.Meta{SourceType: "repo_doc", Writer: rag.WriterDocs, ContentHash: "h"}, Chunks: 1}}
+	doc, err := cs.GetDocument(context.Background(), &orchdv1.GetDocumentRequest{SourceUri: "repo://o/r/a.md"})
+	if err != nil || doc.GetWriter() != rag.WriterDocs || doc.GetContentHash() != "h" || doc.GetTrust() != rag.TrustRepo {
+		t.Fatalf("doc = %+v, %v", doc, err)
+	}
+}
+
+func TestPurgeRemovesOnlyTheSourcesCheckoutDocs(t *testing.T) {
+	ctx := context.Background()
+	s, r, _ := catalogServer(t)
+	dir := t.TempDir()
+	repo := filepath.Join(dir, "notes")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveSource(ctx, &orchdv1.SaveSourceRequest{Source: &orchdv1.RegisteredSource{Kind: "repo", Uri: repo, RefreshSecs: 3600}}); err != nil {
+		t.Fatal(err)
+	}
+	pre := sources.CheckoutURI(repo) + "/"
+	r.indexed = []indexedDoc{
+		{uri: pre + "README.md", sourceType: "repo_doc", tags: []string{"repo:notes"}, writer: rag.WriterSources},
+		{uri: pre + "AGENT.md", sourceType: "repo_doc", tags: []string{"repo:notes"}, writer: rag.WriterClient},
+		{uri: sources.CheckoutURI(repo+"2") + "/README.md", sourceType: "repo_doc", tags: []string{"repo:notes"}, writer: rag.WriterSources},
+	}
+	resp, err := s.RemoveSource(ctx, &orchdv1.RemoveSourceRequest{Id: "repo|" + repo, Purge: true, Confirm: true})
+	if err != nil || strings.Join(r.deleted, ",") != pre+"README.md" || resp.GetPurgedSources() != 1 {
+		t.Fatalf("purge = %v, %v, deleted %v", resp, err, r.deleted)
 	}
 }

@@ -3,35 +3,39 @@ package sources
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/gitdates"
 	"github.com/willesq/orchestrator/internal/rag"
 )
 
-// pruningIngester also lists and deletes stored sources.
+// pruningIngester also lists what a writer stored and deletes sources.
 type pruningIngester struct {
 	fakeIngester
-	stored  []string
+	stored  map[string]string // uri -> writer
 	deleted []string
 	listErr error
 }
 
-func (p *pruningIngester) ListSources(_ context.Context, opts rag.ListSourcesOpts) ([]rag.SourceSummary, int, int, error) {
+func (p *pruningIngester) SourcesWrittenBy(_ context.Context, prefix, writer string) ([]string, error) {
 	if p.listErr != nil {
-		return nil, 0, 0, p.listErr
+		return nil, p.listErr
 	}
-	var out []rag.SourceSummary
-	for _, u := range p.stored {
-		if len(u) >= len(opts.URIPrefix) && u[:len(opts.URIPrefix)] == opts.URIPrefix {
-			out = append(out, rag.SourceSummary{SourceURI: u})
+	var out []string
+	for u, w := range p.stored {
+		if w == writer && strings.HasPrefix(u, prefix) {
+			out = append(out, u)
 		}
 	}
-	return out, len(out), len(out), nil
+	slices.Sort(out)
+	return out, nil
 }
 
 func (p *pruningIngester) DeleteSource(_ context.Context, uri string) (int, error) {
@@ -39,127 +43,159 @@ func (p *pruningIngester) DeleteSource(_ context.Context, uri string) (int, erro
 	return 1, nil
 }
 
-func TestRefreshDatesDocsAndPrunesRemovedOnes(t *testing.T) {
-	root := t.TempDir()
-	repo := filepath.Join(root, "willesq", "proj")
-	if err := os.MkdirAll(filepath.Join(repo, "docs"), 0o755); err != nil {
+func write(t *testing.T, p, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{"README.md", "docs/KEEP.md"} {
-		if err := os.WriteFile(filepath.Join(repo, f), []byte("# doc"), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
 	}
+}
+
+// gitRepo makes dir look like a checkout on branch, with origin's default.
+func gitRepo(t *testing.T, dir, branch, defaultBranch string) {
+	t.Helper()
+	write(t, filepath.Join(dir, ".git", "HEAD"), "ref: refs/heads/"+branch+"\n")
+	write(t, filepath.Join(dir, ".git", "config"), "[remote \"origin\"]\n\turl = git@github.com:acme/widget.git\n")
+	if defaultBranch != "" {
+		write(t, filepath.Join(dir, ".git", "refs", "remotes", "origin", "HEAD"), "ref: refs/remotes/origin/"+defaultBranch+"\n")
+	}
+}
+
+func TestRefreshUsesCheckoutURIsDatesAndPrunesOwnDocs(t *testing.T) {
+	root := resolve(t.TempDir())
+	repo := filepath.Join(root, "willesq", "proj")
+	write(t, filepath.Join(repo, "README.md"), "# doc")
+	write(t, filepath.Join(repo, "docs", "KEEP.md"), "# keep")
+	gitRepo(t, repo, "main", "main")
 	commit := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
-	dates := func(_ context.Context, dir string) gitdates.Dates {
-		if dir != repo {
-			t.Errorf("dates read for %s", dir)
-		}
+	dates := func(context.Context, string) gitdates.Dates {
 		return gitdates.Dates{Head: commit, Files: map[string]time.Time{"README.md": commit.Add(-time.Hour)}}
 	}
-	pre := "repo://willesq/proj/"
-	ing := &pruningIngester{stored: []string{pre + "README.md", pre + "docs/KEEP.md", pre + "docs/GONE.md", pre + "docs/SYNCED.md",
-		"repo://willesq/projx/OTHER.md", "repo://other/proj/X.md"}}
-	owned := func(_ context.Context, uri string) bool { return uri == pre+"docs/SYNCED.md" }
+	pre := CheckoutURI(repo) + "/"
+	ing := &pruningIngester{stored: map[string]string{
+		pre + "README.md": rag.WriterSources, pre + "docs/KEEP.md": rag.WriterSources,
+		pre + "docs/GONE.md":            rag.WriterSources,
+		pre + "docs/NOTE.md":            rag.WriterClient, // an agent's note under the same prefix
+		CheckoutURI(repo+"x") + "/A.md": rag.WriterSources,
+	}}
 	for _, s := range []Source{{Kind: KindRepo, URI: repo, Owner: "willesq"}, {Kind: KindOwner, URI: "willesq"}} {
-		ing.deleted = nil
-		status, err := Refresh(context.Background(), s, ing, RefreshOpts{KnownRoots: []string{root}, Dates: dates, Owned: owned})
+		ing.deleted, ing.uris = nil, nil
+		status, err := Refresh(context.Background(), s, ing, RefreshOpts{KnownRoots: []string{root}, Dates: dates})
 		if err != nil || status != "ok" {
 			t.Fatalf("%s: %q, %v", s.Kind, status, err)
 		}
-		// Only the doc gone from this repo goes; another syncer's doc and other
-		// repos' docs stay.
 		if !slices.Equal(ing.deleted, []string{pre + "docs/GONE.md"}) {
 			t.Fatalf("%s deleted %v", s.Kind, ing.deleted)
 		}
+		for _, u := range ing.uris {
+			if !strings.HasPrefix(u, "checkout://") {
+				t.Fatalf("stored under %s, not checkout://", u)
+			}
+		}
 	}
-	if !ing.last.StartedAt.Equal(commit) && !ing.last.StartedAt.Equal(commit.Add(-time.Hour)) {
-		t.Fatalf("doc dated %v", ing.last.StartedAt)
+	if ing.last.Writer != rag.WriterSources || (!ing.last.StartedAt.Equal(commit) && !ing.last.StartedAt.Equal(commit.Add(-time.Hour))) {
+		t.Fatalf("last meta = %+v", ing.last)
 	}
 
 	// A failed listing disables pruning rather than deleting blindly.
 	ing.deleted, ing.listErr = nil, errors.New("down")
-	if _, err := Refresh(context.Background(), Source{Kind: KindRepo, URI: repo, Owner: "willesq"}, ing, RefreshOpts{Dates: dates}); err != nil {
-		t.Fatal(err)
-	}
+	_, _ = Refresh(context.Background(), Source{Kind: KindRepo, URI: repo}, ing, RefreshOpts{Dates: dates})
 	if len(ing.deleted) != 0 {
 		t.Fatalf("deleted %v without a listing", ing.deleted)
+	}
+}
+
+func TestRefreshSkipsCheckoutsOffTheDefaultBranch(t *testing.T) {
+	for _, tc := range []struct{ branch, def string }{{"feature/x", "main"}, {"", "main"}, {"pr-head", ""}} {
+		repo := filepath.Join(resolve(t.TempDir()), "proj")
+		write(t, filepath.Join(repo, "README.md"), "# a PR's readme")
+		gitRepo(t, repo, tc.branch, tc.def)
+		if tc.branch == "" { // detached HEAD
+			write(t, filepath.Join(repo, ".git", "HEAD"), "0123456789abcdef0123456789abcdef01234567\n")
+		}
+		ing := &pruningIngester{stored: map[string]string{CheckoutURI(repo) + "/OLD.md": rag.WriterSources}}
+		status, err := Refresh(context.Background(), Source{Kind: KindRepo, URI: repo}, ing, RefreshOpts{})
+		if err != nil || status != "ok" || ing.calls != 0 || len(ing.deleted) != 0 {
+			t.Fatalf("%+v: status %q, %d stored, deleted %v", tc, status, ing.calls, ing.deleted)
+		}
+	}
+	// master with no recorded default counts as default.
+	repo := filepath.Join(resolve(t.TempDir()), "proj")
+	write(t, filepath.Join(repo, "README.md"), "# readme")
+	gitRepo(t, repo, "master", "")
+	ing := &pruningIngester{}
+	if _, err := Refresh(context.Background(), Source{Kind: KindRepo, URI: repo}, ing, RefreshOpts{}); err != nil || ing.calls != 1 {
+		t.Fatalf("master: %d stored, %v", ing.calls, err)
+	}
+}
+
+func TestPruneRefusesAMassDeletion(t *testing.T) {
+	repo := filepath.Join(resolve(t.TempDir()), "proj")
+	write(t, filepath.Join(repo, "README.md"), "# only this is left")
+	stored := map[string]string{CheckoutURI(repo) + "/README.md": rag.WriterSources}
+	for i := range 10 {
+		stored[fmt.Sprintf("%s/docs/%d.md", CheckoutURI(repo), i)] = rag.WriterSources
+	}
+	ing := &pruningIngester{stored: stored}
+	_, _ = Refresh(context.Background(), Source{Kind: KindRepo, URI: repo}, ing, RefreshOpts{})
+	if len(ing.deleted) != 0 {
+		t.Fatalf("a walk missing 10 of 11 docs deleted %d", len(ing.deleted))
 	}
 }
 
 func TestCanonical(t *testing.T) {
 	reg := newRegistry(t)
 	ctx := context.Background()
-	root := t.TempDir()
+	root := resolve(t.TempDir())
 	local := filepath.Join(root, "local", "notes")
 	_ = reg.Add(ctx, Source{Kind: KindRepo, URI: local})
 	_ = reg.Add(ctx, Source{Kind: KindOwner, URI: "acme"})
+	dreg := docs.NewRegistry(reg.db)
+	_ = dreg.AddOwner(ctx, docs.Owner{Owner: "acme", RefreshSecs: 3600})
+	_ = dreg.SetRepoState(ctx, docs.RepoState{Owner: "acme", Repo: "widget", HeadSHA: "s", Status: "ok"})
 	checkout := filepath.Join(root, "elsewhere", "widget")
-	if err := os.MkdirAll(filepath.Join(checkout, ".git"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(checkout, ".git", "config"), []byte("[remote \"origin\"]\n\turl = git@github.com:acme/widget.git\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	gitRepo(t, checkout, "main", "main")
+	untracked := filepath.Join(root, "elsewhere", "other")
+	gitRepo(t, untracked, "main", "main")
+	write(t, filepath.Join(untracked, ".git", "config"), "[remote \"origin\"]\n\turl = git@github.com:acme/notsynced.git\n")
 	canon := Canonical(reg.db, []string{root})
 	cases := map[string][]string{
-		filepath.Join(local, "docs", "a.md"):             {"repo://local/notes/docs/a.md"},
-		filepath.Join(root, "acme", "tool", "README.md"): {"repo://acme/tool/README.md"},
-		filepath.Join(checkout, "docs", "PLAN.md"):       {"repo://acme/widget/docs/PLAN.md"},
-		filepath.Join(root, "acme", "README.md"):         nil, // the owner dir itself is no repo
-		filepath.Join(root, "unrelated", "x.md"):         nil,
+		filepath.Join(local, "docs", "a.md"):                    {CheckoutURI(filepath.Join(local, "docs", "a.md"))},
+		filepath.Join(root, "acme", "tool", "README.md"):        {CheckoutURI(filepath.Join(root, "acme", "tool", "README.md"))},
+		filepath.Join(checkout, "docs", "PLAN.md"):              {"repo://acme/widget/docs/PLAN.md"},
+		filepath.Join(untracked, "README.md"):                   nil, // origin names a repo no sync tracks
+		filepath.Join(root, "acme", "README.md"):                nil, // the owner dir itself is no repo
+		filepath.Join(root, "unrelated", "x.md"):                nil,
+		filepath.Join(root, "acme", "..", "other", "x.md"):      nil, // cleaned: not under acme
+		filepath.Join(root, "acme", "repo", "..", "..", "x.md"): nil,
+		"relative/x.md": nil,
 	}
 	for path, want := range cases {
-		if got := canon(ctx, path); !slices.Equal(got, want) {
+		got := canon(ctx, path)
+		if !slices.Equal(got, want) {
 			t.Errorf("Canonical(%s) = %v, want %v", path, got, want)
+		}
+		for _, u := range got {
+			if strings.Contains(u, "/../") || strings.Contains(u, "/./") {
+				t.Errorf("Canonical(%s) = %s has a dot segment", path, u)
+			}
 		}
 	}
 	// ~/.claude kept in git is live configuration, not a repo copy.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	claude := filepath.Join(home, ".claude")
-	if err := os.MkdirAll(filepath.Join(claude, ".git"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	_ = os.WriteFile(filepath.Join(claude, ".git", "config"), []byte("[remote \"origin\"]\n\turl = git@github.com:me/dotclaude.git\n"), 0o644)
-	if got := Canonical(nil, []string{"~/code"})(ctx, filepath.Join(claude, "CLAUDE.md")); got != nil {
+	gitRepo(t, claude, "main", "main")
+	write(t, filepath.Join(claude, ".git", "config"), "[remote \"origin\"]\n\turl = git@github.com:acme/widget.git\n")
+	if got := Canonical(reg.db, []string{"~/code"})(ctx, filepath.Join(claude, "CLAUDE.md")); got != nil {
 		t.Errorf("~/.claude mapped to %v", got)
 	}
 	if within("/a/b", "") || !within("/a/b", "/a") || within("/ab", "/a") {
 		t.Error("within")
 	}
-}
-
-func TestSharedPrefixesBlockPruning(t *testing.T) {
-	root := t.TempDir()
-	for _, d := range []string{"willesq/proj", "willesq/solo", "a/proj", "b/proj"} {
-		if err := os.MkdirAll(filepath.Join(root, d), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	srcs := []Source{
-		{Kind: KindRepo, URI: filepath.Join(root, "a", "proj")},                   // repo://local/proj/
-		{Kind: KindRepo, URI: filepath.Join(root, "b", "proj")},                   // repo://local/proj/ again
-		{Kind: KindRepo, URI: filepath.Join(root, "x", "proj"), Owner: "willesq"}, // repo://willesq/proj/
-		{Kind: KindOwner, URI: "willesq"},                                         // repo://willesq/{proj,solo}/
-		{Kind: KindWeb, URI: "https://x"},
-	}
-	got := sharedPrefixes(srcs, []string{root})
-	if !got["repo://local/proj/"] || !got["repo://willesq/proj/"] || got["repo://willesq/solo/"] || len(got) != 2 {
-		t.Fatalf("shared = %v", got)
-	}
-
-	// A refresh through the scheduler leaves a shared prefix unpruned.
-	reg := newRegistry(t)
-	ctx := context.Background()
-	repo := filepath.Join(root, "a", "proj")
-	_ = os.WriteFile(filepath.Join(repo, "README.md"), []byte("# a"), 0o644)
-	for _, s := range srcs[:2] {
-		_ = reg.Add(ctx, s)
-	}
-	ing := &pruningIngester{stored: []string{"repo://local/proj/README.md", "repo://local/proj/B-ONLY.md"}}
-	NewScheduler(reg, ing, RefreshOpts{}).Scan(ctx)
-	if len(ing.deleted) != 0 {
-		t.Fatalf("a shared prefix was pruned: %v", ing.deleted)
+	if !hasDotSegment("a/../b") || hasDotSegment("a/..b/c") || !hasDotSegment(".") {
+		t.Error("hasDotSegment")
 	}
 }

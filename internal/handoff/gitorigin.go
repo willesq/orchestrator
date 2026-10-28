@@ -17,8 +17,25 @@ type Checkout struct {
 	// Root is the working tree's top directory (a linked worktree's own).
 	Root string
 	// Owner and Repo name its origin on GitHub; empty when the origin is not
-	// a GitHub repository or there is none.
+	// a GitHub repository or there is none. The origin is whatever the
+	// repository's config says: callers trust it only when it names a repo
+	// they already know.
 	Owner, Repo string
+	// Branch is the checked-out branch ("" when HEAD is detached), and
+	// DefaultBranch the origin's default as last fetched ("" when unknown).
+	Branch, DefaultBranch string
+}
+
+// OnDefaultBranch reports whether the checkout is on its origin's default
+// branch, or, with no default recorded, on main or master.
+func (c Checkout) OnDefaultBranch() bool {
+	if c.Branch == "" {
+		return false
+	}
+	if c.DefaultBranch != "" {
+		return c.Branch == c.DefaultBranch
+	}
+	return c.Branch == "main" || c.Branch == "master"
 }
 
 // Bounds on what finding a checkout reads.
@@ -38,7 +55,15 @@ func FindCheckout(path string) (Checkout, bool) {
 	for i := 0; i < maxGitDepth; i++ {
 		if gitDir, ok := gitDirAt(dir); ok {
 			c := Checkout{Root: dir}
-			c.Owner, c.Repo = githubRepo(originURL(commonDir(gitDir)))
+			common, ok := commonDir(gitDir)
+			if !ok {
+				// A commondir outside the worktrees layout could borrow any
+				// repository's identity; the checkout is anonymous.
+				return c, true
+			}
+			c.Owner, c.Repo = githubRepo(originURL(common))
+			c.Branch = headBranch(gitDir)
+			c.DefaultBranch = symref(filepath.Join(common, "refs", "remotes", "origin", "HEAD"), "refs/remotes/origin/")
 			return c, true
 		}
 		parent := filepath.Dir(dir)
@@ -79,17 +104,45 @@ func gitDirAt(dir string) (string, bool) {
 }
 
 // commonDir is where a git directory's shared config lives: a linked
-// worktree's git directory names it in its commondir file.
-func commonDir(gitDir string) string {
+// worktree's git directory names it in its commondir file. Git lays linked
+// worktrees out as <common>/worktrees/<name>, so a commondir naming anything
+// else is refused (ok false) rather than followed.
+func commonDir(gitDir string) (string, bool) {
 	b, err := readSmall(filepath.Join(gitDir, "commondir"), maxGitPointer)
 	if err != nil {
-		return gitDir
+		return gitDir, true
 	}
 	c := strings.TrimSpace(string(b))
 	if !filepath.IsAbs(c) {
 		c = filepath.Join(gitDir, c)
 	}
-	return filepath.Clean(c)
+	c = filepath.Clean(c)
+	if filepath.Dir(filepath.Clean(gitDir)) != filepath.Join(c, "worktrees") {
+		return "", false
+	}
+	return c, true
+}
+
+// headBranch is the branch a git directory's HEAD names, "" when detached.
+func headBranch(gitDir string) string {
+	return symref(filepath.Join(gitDir, "HEAD"), "refs/heads/")
+}
+
+// symref reads a symbolic ref file ("ref: <prefix><name>") and returns name.
+func symref(path, prefix string) string {
+	b, err := readSmall(path, maxGitPointer)
+	if err != nil {
+		return ""
+	}
+	ref, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "ref:")
+	if !ok {
+		return ""
+	}
+	name, ok := strings.CutPrefix(strings.TrimSpace(ref), prefix)
+	if !ok || name == "" {
+		return ""
+	}
+	return name
 }
 
 // originURL reads remote.origin.url from a git directory's config.

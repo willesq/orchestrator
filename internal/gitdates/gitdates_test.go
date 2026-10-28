@@ -133,3 +133,11 @@ func TestFutureCommitsAreDatedNow(t *testing.T) {
 		t.Fatalf("future commit dated %v", got)
 	}
 }
+
+func TestParseSkipsAnOverlongLine(t *testing.T) {
+	out := "\x001700000000\nfirst.md\n" + strings.Repeat("x", 2<<20) + ".md\nlater.md\n\x001600000000\nearlier.md"
+	f := parse([]byte(out))
+	if len(f) != 3 || f["later.md"].Unix() != 1700000000 || f["earlier.md"].Unix() != 1600000000 {
+		t.Fatalf("parse = %v", f)
+	}
+}

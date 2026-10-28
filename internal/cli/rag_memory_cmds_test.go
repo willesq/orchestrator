@@ -10,6 +10,9 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/willesq/orchestrator/internal/db"
+	"github.com/willesq/orchestrator/internal/docs"
+	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/rageval"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
@@ -115,49 +118,72 @@ func TestRAGEvalSeed(t *testing.T) {
 func TestRAGDedupe(t *testing.T) {
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
 	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dreg := docs.NewRegistry(conn)
+	ctx := context.Background()
+	_ = dreg.AddOwner(ctx, docs.Owner{Owner: "acme", RefreshSecs: 3600})
+	_ = dreg.SetRepoState(ctx, docs.RepoState{Owner: "acme", Repo: "widget", HeadSHA: "s", Status: "ok"})
+	_ = conn.Close()
+
 	root := t.TempDir()
 	checkout := filepath.Join(root, "acme", "widget")
-	if err := os.MkdirAll(filepath.Join(checkout, ".git"), 0o755); err != nil {
-		t.Fatal(err)
+	writeGit := func(dir, origin string) {
+		_ = os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
+		_ = os.WriteFile(filepath.Join(dir, ".git", "config"), []byte("[remote \"origin\"]\n\turl = "+origin+"\n"), 0o644)
 	}
-	if err := os.WriteFile(filepath.Join(checkout, ".git", "config"), []byte("[remote \"origin\"]\n\turl = git@github.com:acme/widget.git\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	inCheckout := filepath.Join(checkout, "docs", "PLAN.md")
-	untracked := filepath.Join(checkout, "docs", "DRAFT.md")
-	unrelated := filepath.Join(root, "notes", "mine.md")
-	for _, p := range []string{inCheckout, untracked, unrelated} {
+	writeGit(checkout, "git@github.com:acme/widget.git")
+	writeGit(filepath.Join(home, ".claude"), "git@github.com:acme/widget.git")
+	file := func(p string) string {
 		_ = os.MkdirAll(filepath.Dir(p), 0o755)
 		_ = os.WriteFile(p, []byte("x"), 0o644)
+		return p
 	}
+	same := file(filepath.Join(checkout, "docs", "PLAN.md"))
+	older := file(filepath.Join(checkout, "docs", "OLDER.md")) // on disk "x", like the synced copy
+	edited := file(filepath.Join(checkout, "docs", "EDITED.md"))
+	byClient := file(filepath.Join(checkout, "docs", "NOTE.md"))
+	untracked := file(filepath.Join(checkout, "docs", "DRAFT.md"))
+	unrelated := file(filepath.Join(root, "notes", "PLAN.md"))
+	claudeMD := file(filepath.Join(home, ".claude", "CLAUDE.md"))
 	gone := filepath.Join(root, "widget.worktrees", "feat", "x", "docs", "PLAN.md")
-	goneOther := filepath.Join(root, "elsewhere", "README.md")
+	synced := func(uri, writer, hash string) *orchdv1.Document {
+		return &orchdv1.Document{SourceUri: uri, SourceType: "repo_doc", Writer: writer, ContentHash: hash, Text: "the plan"}
+	}
+	copyOf := func(uri, hash string) *orchdv1.Document {
+		return &orchdv1.Document{SourceUri: uri, SourceType: "repo_doc", ContentHash: hash, Text: "the plan"}
+	}
 	sc := &storeClient{fakeClient: &fakeClient{}, docs: map[string]*orchdv1.Document{
-		"repo://acme/widget/docs/PLAN.md": doc("repo://acme/widget/docs/PLAN.md", "repo_doc", "the plan"),
-		"repo://acme/widget/README.md":    doc("repo://acme/widget/README.md", "repo_doc", "readme"),
-		"file://" + inCheckout:            doc("file://"+inCheckout, "repo_doc", "an edited plan"),
-		"file://" + untracked:             doc("file://"+untracked, "repo_doc", "draft"),
-		"file://" + gone:                  doc("file://"+gone, "repo_doc", "branch plan"),
-		"file://" + goneOther:             doc("file://"+goneOther, "repo_doc", "other readme"),
-		"file://" + unrelated:             doc("file://"+unrelated, "repo_doc", "the plan"),
-		"claude://agents/x.md":            doc("claude://agents/x.md", "claude_config", "agent"),
+		"repo://acme/widget/docs/PLAN.md":   synced("repo://acme/widget/docs/PLAN.md", "docs", "h1"),
+		"repo://acme/widget/docs/EDITED.md": synced("repo://acme/widget/docs/EDITED.md", "docs", "h2"),
+		"repo://acme/widget/docs/NOTE.md":   synced("repo://acme/widget/docs/NOTE.md", "client", "h3"),
+		"repo://acme/widget/CLAUDE.md":      synced("repo://acme/widget/CLAUDE.md", "docs", "h4"),
+		"repo://acme/widget/docs/OLDER.md":  synced("repo://acme/widget/docs/OLDER.md", "docs", rag.ContentHash("x")),
+		"file://" + older:                   {SourceUri: "file://" + older, Text: "an older draft"},
+		"file://" + same:                    copyOf("file://"+same, "h1"),
+		"file://" + edited:                  copyOf("file://"+edited, "h2-branch"),
+		"file://" + byClient:                copyOf("file://"+byClient, "h3"),
+		"file://" + untracked:               copyOf("file://"+untracked, "h1"),
+		"file://" + unrelated:               copyOf("file://"+unrelated, "h1"), // same text, another project
+		"file://" + gone:                    copyOf("file://"+gone, "h1"),
+		"claude://CLAUDE.md":                copyOf("claude://CLAUDE.md", "h4"), // ~/.claude is not a repo copy
 	}}
+	_ = claudeMD
 	cf := func() (orchdv1.OrchdClient, func(), error) { return sc, func() {}, nil }
 	out, err := run(cf, "", "rag", "dedupe")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{
-		"file://" + inCheckout, "repo://acme/widget/docs/PLAN.md holds the doc",
-		"file://" + gone, "file is gone; repo://…/docs/PLAN.md holds the doc",
-		"file://" + unrelated, "same text as repo://acme/widget/docs/PLAN.md",
-		"3 duplicate source(s), 6 chunk(s); rerun with --apply",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("plan missing %q:\n%s", want, out)
-		}
+	if !strings.Contains(out, "file://"+same) || !strings.Contains(out, "identical to repo://acme/widget/docs/PLAN.md, stored by the docs sync") ||
+		!strings.Contains(out, "file://"+older) || !strings.Contains(out, "the stored copy is an older version") ||
+		!strings.Contains(out, "2 duplicate source(s), 4 chunk(s); rerun with --apply") {
+		t.Errorf("plan:\n%s", out)
 	}
-	for _, kept := range []string{untracked, goneOther, "claude://agents/x.md"} {
+	for _, kept := range []string{edited, byClient, untracked, unrelated, gone, "claude://CLAUDE.md"} {
 		if strings.Contains(out, kept) {
 			t.Errorf("%s planned for deletion:\n%s", kept, out)
 		}
@@ -165,12 +191,15 @@ func TestRAGDedupe(t *testing.T) {
 	if len(sc.deleted) != 0 {
 		t.Fatal("a plan deleted")
 	}
-	if out, err := run(cf, "", "rag", "dedupe", "--apply"); err != nil || len(sc.deleted) != 3 || !strings.Contains(out, "deleted 3 duplicate") {
+	if out, err := run(cf, "", "rag", "dedupe", "--apply"); err != nil || len(sc.deleted) != 2 || !strings.Contains(out, "deleted 2 duplicate") {
 		t.Fatalf("apply = %s, %v, deleted %v", out, err, sc.deleted)
 	}
 	if pathOf("claude://agents/x.md", "/home/me") != "/home/me/.claude/agents/x.md" || pathOf("claude://../../etc/passwd", "/h") != "/h/.claude/etc/passwd" ||
 		pathOf("repo://x", "/h") != "" || pathOf("file://relative", "/h") != "" {
 		t.Error("pathOf")
+	}
+	if sameContent(&orchdv1.Document{Text: " "}, &orchdv1.Document{Text: " "}) || !sameContent(&orchdv1.Document{Text: "a"}, &orchdv1.Document{Text: "a"}) {
+		t.Error("sameContent")
 	}
 }
 
