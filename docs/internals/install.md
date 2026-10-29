@@ -171,10 +171,20 @@ verified.
 ## Common
 
 - **Shared policy.** `internal/install/agent-instructions.md` is written to
-  `~/.config/orch/AGENTS.md`, and each `internal/install/policy/*.md` to `~/.config/orch/policy/`.
-  orch owns these files. Harness entry files get a block between `<!-- BEGIN orchestrator-managed -->`
-  and `<!-- END orchestrator-managed -->` containing `@<path>` (Claude, Gemini) or a read directive
-  (Codex). Only the block is ever replaced; mismatched markers abort.
+  `~/.config/orch/AGENTS.md`, each `internal/install/modules/<name>.md` to
+  `~/.config/orch/modules/<name>.md` (frontmatter stripped), and each
+  `internal/install/policy/*.md` to `~/.config/orch/policy/`. orch owns these files. Every module
+  file is written whether on or off; only the import decides whether agents load it. Harness
+  entry files get a block between `<!-- BEGIN orchestrator-managed -->` and
+  `<!-- END orchestrator-managed -->` containing `@<path>` for the shared policy and then each
+  enabled module in `order` (Claude, Gemini), or a read directive listing the same files (Codex).
+  Only the block is ever replaced; mismatched markers abort.
+- **Instruction modules.** `install.Modules` lists the embedded files at build time: the file name
+  is the ID, the frontmatter (`title`, `group`, `order`, `description`, optional `default`, strict
+  keys, optional `sensitive`) feeds the settings UI. A module is on when this machine's `orch.db` says so, else per its
+  `default` (on unless `default: false`). The block's edit reads the toggles the same way the
+  settings edit does, so a module turned off stays out, is not drift, and an unreadable store
+  stops the plan.
 - **Shell alias.** `~/.zprofile` gets a marked block `alias orch="<bin>/orch"`.
 - **LaunchAgent.** `~/Library/LaunchAgents/com.orchestrator.orchd.plist` (`RunAtLoad`,
   `KeepAlive`, logs under `~/Library/Logs/orchestrator/`), skipped when orchd is installed under
@@ -183,9 +193,9 @@ verified.
 ## Status checks
 
 - **Drift:** each adapter's pending edits. Items turned off in orch are not drift; the
-  `claude-code` line reports `N disabled by you`.
+  `claude-code` line reports `N disabled by you` (instruction modules included).
 - **Instruction footprint:** for each harness whose entry file exists, follow `@` imports (depth 5,
-  each file once) and report bytes and estimated tokens (`(bytes+3)/4`), the context cost of every
+  each file once; for Codex, the shared policy and each module path it lists) and report bytes and estimated tokens (`(bytes+3)/4`), the context cost of every
   session.
 - **Repository instructions:** inside this repo, `AGENTS.md`, `CLAUDE.md` and the shared policy
   are compared with `HEAD`, and `CLAUDE.md` must be exactly `@AGENTS.md`.

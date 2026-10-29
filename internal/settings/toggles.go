@@ -18,6 +18,9 @@ import (
 type Toggles struct {
 	disabled map[string]bool
 	count    map[string]int
+	// enabled is each listed item's stored on/off choice, for providers whose
+	// items install writes only when on (instruction modules).
+	enabled map[string]bool
 }
 
 func toggleKey(provider, kind, identity string) string {
@@ -27,8 +30,11 @@ func toggleKey(provider, kind, identity string) string {
 // NewToggles builds a set from rows; only rows turned off through orch count
 // (not ones removed from their file outside it).
 func NewToggles(rows []Row) Toggles {
-	t := Toggles{disabled: map[string]bool{}, count: map[string]int{}}
+	t := Toggles{disabled: map[string]bool{}, count: map[string]int{}, enabled: map[string]bool{}}
 	for _, r := range rows {
+		if r.RemovedAt.IsZero() {
+			t.enabled[toggleKey(r.Provider, r.Kind, r.Identity)] = r.Enabled
+		}
 		if r.Status() == StatusDisabled {
 			t.disabled[toggleKey(r.Provider, r.Kind, r.Identity)] = true
 			t.count[r.Provider]++
@@ -40,6 +46,12 @@ func NewToggles(rows []Row) Toggles {
 // Disabled reports whether an item was turned off through orch.
 func (t Toggles) Disabled(provider, kind, identity string) bool {
 	return t.disabled[toggleKey(provider, kind, identity)]
+}
+
+// State returns an item's stored choice, and whether one is stored.
+func (t Toggles) State(provider, kind, identity string) (enabled, known bool) {
+	enabled, known = t.enabled[toggleKey(provider, kind, identity)]
+	return enabled, known
 }
 
 // Count is how many of a provider's items are turned off.

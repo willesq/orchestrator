@@ -136,6 +136,24 @@ type Provider interface {
 	Describe(kind string, payload json.RawMessage) (group, summary string)
 }
 
+// Authoritative is a Provider whose files, or the parts of them it manages,
+// belong to orch alone, so orch.db is the source of truth rather than the
+// file: each poll rewrites what drifted from the stored state, and an edit
+// made to those parts outside orch is undone instead of imported. Its Apply
+// is not used; Enforce writes every change.
+type Authoritative interface {
+	Provider
+	// Enforce returns the new bytes of each file that differs from the
+	// stored state. enabled reports an item's stored choice and whether one
+	// is stored; with none, the provider uses the item's default.
+	//
+	// problems names files Enforce had to leave alone (broken markers, a
+	// file it refuses to write through). They do not stop the others: the
+	// changed files are written and the choice recorded, and problems is
+	// shown as the provider's error until the files are fixed.
+	Enforce(files map[string][]byte, enabled func(kind, identity string) (on, known bool)) (changed map[string][]byte, problems error)
+}
+
 // Registry holds the providers a Service manages, in registration order.
 type Registry struct {
 	providers []Provider

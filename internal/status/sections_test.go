@@ -553,6 +553,14 @@ func TestHarnessSection(t *testing.T) {
 			name: "drift and disabled items together", info: HarnessInfo{Name: "claude-code", Pending: 1, Disabled: 1},
 			wantValue: "drifted", wantLevel: LevelWarn, wantHas: "--apply; 1 disabled by you",
 		},
+		{
+			name: "security modules off warn by name", info: HarnessInfo{Name: "claude-code", Disabled: 2, SecurityOff: []string{"credential-rules", "security"}},
+			wantValue: "wired", wantLevel: LevelWarn, wantHas: "2 disabled by you (orch settings list); security instructions off: credential-rules, security",
+		},
+		{
+			name: "security modules off alone", info: HarnessInfo{Name: "claude-code", SecurityOff: []string{"security"}},
+			wantValue: "wired", wantLevel: LevelWarn, wantHas: "security instructions off: security",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

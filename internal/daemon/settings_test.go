@@ -149,7 +149,7 @@ func TestSettingsForAndUnit(t *testing.T) {
 	}
 	defer store.Close()
 	svc := settingsFor(store)
-	if svc == nil || len(svc.Registry().Providers()) != 2 {
+	if svc == nil || len(svc.Registry().Providers()) != 3 {
 		t.Fatalf("service = %v", svc)
 	}
 	u := settingsUnit(svc)

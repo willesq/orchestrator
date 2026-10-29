@@ -1,12 +1,14 @@
 # Managed settings
 
 orch keeps items it finds in other tools' configuration files as desired state in `orch.db`, and
-writes that state back to the files. The first two providers cover Claude Code
-(`~/.claude/settings.json`) and cc-safety-net's custom rules. The app's **Claude** tab, the
+writes that state back to the files. The providers cover Claude Code
+(`~/.claude/settings.json`), cc-safety-net's custom rules, and orch's own instruction modules
+(the managed block of each harness entry file). The app's **Claude** tab, the
 `orch settings` command and the settings RPCs are views over this one store.
 
 Code: `internal/settings` (store, reconciler, provider interface),
-`internal/settings/claudecode`, `internal/settings/safetynetrules`, `internal/daemon/settings.go`.
+`internal/settings/claudecode`, `internal/settings/safetynetrules`,
+`internal/settings/instructions`, `internal/daemon/settings.go`.
 
 ## Per machine
 
@@ -26,6 +28,13 @@ and timestamps (table `settings_items`, migration `0012`).
 | `claude-code` | `permission` | one rule string of `permissions.allow`, `ask` or `deny` | `<list>/<rule>` | taken out of the file (every copy) |
 | `claude-code` | `plugin` | one `enabledPlugins` entry (booleans only) | `<plugin>@<marketplace>` | set to `false` in the file, as `claude plugin disable` does |
 | `cc-safety-net` | `rule` | one rule of a rulebook listed in `~/.cc-safety-net/rules/rule.json` | `<rulebook>/<rule>` | `"overrides": {"<rulebook>/<rule>": "off"}` in rule.json |
+| `orch-instructions` | `module` | one instruction module shipped in the binary (`internal/install/modules/<name>.md`) | `<name>` | its import (Claude, Gemini) or read line (Codex) left out of every managed block |
+
+**Instruction modules** are listed whether imported or not, with origin `orch` and their
+frontmatter `default` (on unless `default: false`) until toggled. The payload carries the title,
+topic, description, installed path and the full text agents read, so clients show the module
+without opening its file. They are toggled, never added or removed here: a module is added by
+adding a file and rebuilding.
 
 Identical handlers (same event, matcher and fields) are one item, as a rule written twice in one
 permission list is: turning it off removes every copy, and turning it on writes one back. A hook
@@ -72,8 +81,29 @@ file; `orch install` restores it, or turning it on in orch does).
 files and a poll never interleaves with a write.
 
 - **Watching.** orchd's `settings-watcher` unit calls `Sync` every 2 s. A provider's files are
-  read and hashed; if the hash is unchanged nothing happens. It never writes a file.
-- **External edits: the file wins.** A new entry is imported as `orch` or `found`, enabled. An
+  read and hashed; if the hash is unchanged nothing is imported. It writes a file only to put an
+  authoritative provider's files back to the stored state (below).
+- **Authoritative providers: orch.db wins.** A provider implementing `settings.Authoritative`
+  owns its files (or the part it manages) outright; `orch-instructions` is the only one. After
+  each look, `Enforce` compares the files with the stored rows and returns what must change; the
+  watcher writes it with the same backup, re-read and atomic rename as any change. An import keeps
+  the stored choice of an existing row rather than the file's, so a hand edit inside the managed
+  block (an import added back, a module file deleted or edited) is undone within one poll instead
+  of imported. A toggle computes the files with the new state, writes them, then records the row,
+  so a failed write (a file changed underneath) records nothing. A file `Enforce` must leave alone
+  does not block the rest: an entry with broken markers, or a module path that is a symlink or
+  other non-regular file, is skipped, the other files are written and the choice recorded, and
+  the skipped files are the provider's error until fixed. Module files are never written through
+  a symlink, since the watcher writes without anyone acting and a planted link would aim it at
+  any file the user owns; entry files still follow links (dotfile managers). Text outside the
+  managed block is never touched; an entry file without the block (a harness `orch install` never
+  wired) is left alone, and module files are written only once some harness is wired.
+- **Sensitive modules.** A module with `sensitive: true` in its frontmatter (the agents' security
+  policy) carries `"sensitive": true` in its payload. Turning one off asks for confirmation in
+  the app and needs `--yes` with `orch settings disable`, and `orch status` warns with its name
+  while it is off. The RPC itself does not refuse: the confirmation guards against a stray click,
+  and queued tasks cannot call it at all.
+- **External edits: the file wins** (every other provider). A new entry is imported as `orch` or `found`, enabled. An
   entry turned back on in the file is on again (a disabled hook re-added by hand, a plugin
   enabled with `claude plugin enable`). An entry removed from the file is marked `removed` and not
   put back, except an enabled orch item, which stays enabled and `missing` for `orch install` to
@@ -152,6 +182,8 @@ model).
      rather than overwriting it, and validate anything from the item that becomes a path or key.
    - `Validate(kind, fields)`: build a new item from an add form, or `settings.Invalidf`.
    - `Describe(kind, payload)`: the group and one-line summary clients show.
+   - Optionally `Enforce` (`settings.Authoritative`), when orch owns the files outright and the
+     store, not the file, must win; its `Apply` is then never called.
    Every method but `Read` is a pure function of its arguments; test them on bytes.
 2. Register it in `settingsFor` in `internal/daemon/settings.go`.
 3. If `orch install` writes items of that tool, give them deterministic identities install can
@@ -176,6 +208,18 @@ model).
 - `orch install --home <dir>` still reads this machine's toggles from the real `orch.db`; it only
   ever leaves items out, so a test install against a temporary home may skip items turned off
   here.
-- A disabled item re-added to its file by another tool shows as on again: the file wins.
+- A disabled item re-added to its file by another tool shows as on again: the file wins. Not for
+  instruction modules, where orch.db wins and orchd removes the import again.
+- orchd's watcher rewrites the managed block of the real home's entry files, so a session started
+  in the seconds between a hand edit and the next poll may load the hand-edited block once.
+- A toggle writes each changed file in turn: if a later file fails, the earlier ones are already
+  written and the row is not recorded, so the next poll puts them back.
+- Two writers that disagree about the managed block (two orchd builds on one home, a dotfile
+  manager re-applying a template) rewrite it in turn every poll; nothing backs off.
+- A module path turned into a symlink between the watcher's look and its write is followed for
+  that one write; the look refuses it on every poll after.
+- Module text ships in the binary: every machine running a build gets every module's text in
+  `~/.config/orch/modules/`, on or off. Keep machine-specific secrets and absolute home paths out
+  of modules (a test rejects `/Users/` and `/home/`).
 - `orch install` restores a missing orch item the user removed by hand (not through orch), as it
   always has; turn it off in orch to keep it out.

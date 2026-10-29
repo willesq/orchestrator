@@ -17,6 +17,7 @@ import (
 	"github.com/willesq/orchestrator/internal/safetynet"
 	"github.com/willesq/orchestrator/internal/settings"
 	"github.com/willesq/orchestrator/internal/settings/claudecode"
+	"github.com/willesq/orchestrator/internal/settings/instructions"
 	"github.com/willesq/orchestrator/internal/settings/safetynetrules"
 	"github.com/willesq/orchestrator/internal/supervisor"
 )
@@ -30,14 +31,15 @@ const UnitSettings = "settings-watcher"
 var settingsPollInterval = 2 * time.Second
 
 // settingsFor builds the settings reconciler for the user's home: Claude
-// Code's settings.json and cc-safety-net's rules. nil when the home cannot
-// be resolved.
+// Code's settings.json, cc-safety-net's rules and orch's instruction
+// modules. nil when the home cannot be resolved.
 func settingsFor(store *sql.DB) *settings.Service {
 	home, err := os.UserHomeDir()
 	if err != nil || store == nil {
 		return nil
 	}
-	reg, err := settings.NewRegistry(claudecode.New(home), safetynetrules.New(safetynet.Locate(home)))
+	reg, err := settings.NewRegistry(claudecode.New(home), safetynetrules.New(safetynet.Locate(home)),
+		instructions.New(home))
 	if err != nil {
 		return nil
 	}
@@ -46,11 +48,13 @@ func settingsFor(store *sql.DB) *settings.Service {
 }
 
 // settingsUnit imports changes made to the managed files outside orch, so
-// the app reflects them without a restart. It never writes a file.
+// the app reflects them without a restart. It writes only to put an
+// authoritative provider's files (instruction modules) back to the stored
+// state.
 func settingsUnit(svc *settings.Service) supervisor.Unit {
 	return supervisor.Unit{
 		Name:     UnitSettings,
-		Detail:   "imports edits to Claude Code and cc-safety-net settings",
+		Detail:   "imports edits to Claude Code and cc-safety-net settings; enforces instruction modules",
 		Interval: settingsPollInterval,
 		Tick:     svc.Sync,
 	}

@@ -201,9 +201,9 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     text, shown verbatim.
   - **Refresh** asks GitHub for your orgs and teams again.
 - **Claude:** the managed settings ([settings.md](settings.md)): Claude Code's hooks, permission
-  rules and plugins, and cc-safety-net's rules, in four sections (Hooks grouped by event,
-  Permissions by list, Plugins by marketplace, Safety Net rules by rulebook), each with how many
-  are on.
+  rules and plugins, cc-safety-net's rules, and orch's instruction modules, in five sections
+  (Hooks grouped by event, Permissions by list, Plugins by marketplace, Safety Net rules by
+  rulebook, Instructions by topic), each with how many are on.
   - **Live:** `ListSettings` every 2 s while the tab is shown, so edits made to the files elsewhere
     appear within a few seconds; nothing is redrawn when the listing has not changed.
   - **Rows:** a switch, a readable name, the exact text under it, and an origin badge (`orch`,
@@ -216,7 +216,10 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     change in flight shows a spinner; a refusal (for example, the file changed underneath, or
     the file does not parse) is shown under that row.
   - **Detail:** the selected item's group, ID, origin, when it changed, and the exact JSON written
-    to the file, with **Remove…** (confirmed) for items you added or orch found.
+    to the file, with **Remove…** (confirmed) for items you added or orch found. An instruction
+    module instead shows its title, description, topic and installed path, and its full text
+    rendered as Markdown (`ModuleDetail`, with `MarkdownRenderer`), so it can be read without
+    opening the file.
   - **Add:** the toolbar's Add opens a form built from the kind's fields as orchd describes them
     (hooks and permission rules); required fields and whole numbers are checked before sending,
     and orchd's refusal is shown in the form.

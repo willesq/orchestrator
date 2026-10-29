@@ -121,15 +121,48 @@ Limitations:
 
 ## Shared agent policy
 
-[`internal/install/agent-instructions.md`](../internal/install/agent-instructions.md) holds the
-agent-neutral coding expectations: exploration, testing, security, credentials, Git, docs and
-memory. Guidance for specific work (PR review, Go and Python) is in
+[`internal/install/agent-instructions.md`](../internal/install/agent-instructions.md) is the
+short always-on header of the shared policy. Everything else is an **instruction module** in
+[`internal/install/modules/`](../internal/install/modules/), one file per intent: exploration,
+testing, security, credentials, Git, commit signing, memory, PR review, and personal workflow
+rules. Guidance for specific work (PR review, Go and Python) is in
 [`internal/install/policy/`](../internal/install/policy/), read only when that work starts.
 
-Both are embedded in the CLI. Install writes them to `~/.config/orch/AGENTS.md` and
-`~/.config/orch/policy/`, and points each harness at them: Claude Code and Gemini import the
-file; Codex's `AGENTS.md` (or a nonempty `AGENTS.override.md`) tells the agent to read it.
-Personal instructions stay in each harness's own entry file.
+All of it is embedded in the CLI. Install writes the header to `~/.config/orch/AGENTS.md`, each
+module to `~/.config/orch/modules/`, and the policy files to `~/.config/orch/policy/`, then points
+each harness at them: Claude Code and Gemini import the header and each enabled module; Codex's
+`AGENTS.md` (or a nonempty `AGENTS.override.md`) tells the agent to read them. Personal
+instructions stay in each harness's own entry file.
+
+**Turning modules on and off.** Every module is on by default. Turn one off for this machine in
+Orch.app (Claude tab, **Instructions**) or with `orch settings disable module
+<name>`; for example, turn off `gpg-signing` on a machine that does not sign commits. The choice
+lives in this machine's `orch.db`. orchd removes that module's import from each managed block
+within seconds and puts it back if the block is edited by hand; the next session loads the
+change. The app shows each module's full text.
+
+**Adding a module.** Add a Markdown file to `internal/install/modules/` with a frontmatter
+header, then rebuild:
+
+```markdown
+---
+title: "Commit signing"
+group: Git & GitHub
+order: 62
+description: "Sign commits with git commit -S."
+---
+
+## Commit signing
+
+- Sign commits with `git commit -S` through the configured signing integration.
+```
+
+The file name (lowercase letters, digits and dashes) is the module's ID. `order` places its
+import; `default: false` ships it off; `sensitive: true` marks part of the agents' security
+policy (`security`, `credential-rules`, `security-audit-agent`): turning one off asks for
+confirmation in the app, needs `--yes` with `orch settings disable`, and `orch status` names it
+while it is off. The header is stripped from the installed copy, so agents
+read only the body.
 
 To change the policy, edit the repo source, then upgrade or rebuild and rerun install.
 `orch status` reports when the installed copy differs from the one the CLI ships, and, inside

@@ -4,7 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -63,32 +62,33 @@ func managedInstructions(old []byte, body string) ([]byte, error) {
 	return []byte(s), nil
 }
 
-// instructionEdits installs the embedded repository policy, then wires native
-// imports (Claude/Gemini) or an explicit startup read directive (Codex).
-// Personal instructions stay in the harness entry files; the shared copy is
-// Orchestrator-owned and repaired to the policy shipped with this CLI build.
+// instructionEdits installs the embedded repository policy and modules, then
+// wires native imports (Claude/Gemini) or an explicit startup read directive
+// (Codex) for the shared policy and every module this machine has on.
+// Personal instructions stay in the harness entry files; the shared copy and
+// the modules are Orchestrator-owned and repaired to what this build ships.
 func instructionEdits(home, target string) []Edit {
-	shared := filepath.Join(home, ".config", "orch", "AGENTS.md")
+	shared := SharedPolicyPath(home)
 	canonical := Edit{Path: shared, Compute: func(old []byte) ([]byte, string, error) {
 		return []byte(memoryInstructions), "instructions: install version-controlled agent-instructions.md shipped with this CLI", nil
 	}}
-	dir, name := ".claude", "CLAUDE.md"
-	body := "@" + strings.ReplaceAll(shared, " ", "\\ ") + "\n"
-	if target == "codex" {
-		dir, name = ".codex", "AGENTS.md"
-		// Codex prefers the override if present. Wire the file it actually loads.
-		if info, err := os.Stat(filepath.Join(home, dir, "AGENTS.override.md")); err == nil && info.Size() > 0 {
-			name = "AGENTS.override.md"
+	entry := ""
+	for _, e := range InstructionEntries(home) {
+		if e.Target == target {
+			entry = e.Path
 		}
-		body = "At the start of every session, before beginning work, read and follow the shared\n" +
-			"user instructions at " + shared + ". Read the entire file; do not treat\n" +
-			"this path as an @ import. This is the canonical cross-agent instruction file.\n"
-	} else if target == "gemini" {
-		dir, name = ".gemini", "GEMINI.md"
 	}
-	bridge := Edit{Path: filepath.Join(home, dir, name), Compute: func(old []byte) ([]byte, string, error) {
-		next, err := managedInstructions(old, body)
-		return next, "instructions: load shared policy from " + shared, err
+	bridge := Edit{Path: entry, Compute: func(old []byte) ([]byte, string, error) {
+		// Reason: a module turned off in orch stays out of the block. A store
+		// that cannot be read stops the plan rather than being taken as
+		// "nothing is off", which would turn every module back on.
+		toggles, err := loadToggles()
+		if err != nil {
+			return nil, "", fmt.Errorf("%w — refusing to write %s, so instruction modules turned off in orch stay off", err, entry)
+		}
+		next, err := RenderManagedBlock(old, home, target, ModuleOn(toggles))
+		return next, "instructions: load shared policy and enabled modules from " + filepath.Dir(shared), err
 	}}
-	return append([]Edit{canonical, bridge}, policyEdits(home)...)
+	edits := append([]Edit{canonical, bridge}, moduleEdits(home)...)
+	return append(edits, policyEdits(home)...)
 }

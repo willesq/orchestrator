@@ -14,14 +14,15 @@ import (
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
-const settingsOperatorOnly = "queue tasks cannot change Claude Code or cc-safety-net settings"
+const settingsOperatorOnly = "queue tasks cannot change Claude Code, cc-safety-net or instruction-module settings"
 
 func newSettingsCmd(cf clientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
-		Short: "Turn Claude Code hooks, permissions, plugins and cc-safety-net rules on or off",
+		Short: "Turn Claude Code hooks, permissions, plugins, cc-safety-net rules and instruction modules on or off",
 		Long: `orch keeps the hooks, permission rules and plugins in ~/.claude/settings.json,
-and the rules of each cc-safety-net rulebook, as items you can turn on or off.
+the rules of each cc-safety-net rulebook, and orch's instruction modules (the
+sections of your agents' startup instructions), as items you can turn on or off.
 A change is written to the file at once and remembered in this machine's
 orch.db, so orch install does not undo it. Edits made to the files elsewhere
 are picked up within a few seconds. The app's Claude tab adds and removes
@@ -56,8 +57,8 @@ func newSettingsListCmd(cf clientFactory) *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().StringVar(&provider, "provider", "", "only this provider (claude-code, cc-safety-net)")
-	cmd.Flags().StringVar(&kind, "kind", "", "only this kind (hook, permission, plugin, rule)")
+	cmd.Flags().StringVar(&provider, "provider", "", "only this provider (claude-code, cc-safety-net, orch-instructions)")
+	cmd.Flags().StringVar(&kind, "kind", "", "only this kind (hook, permission, plugin, rule, module)")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "machine-readable output")
 	return cmd
 }
@@ -68,6 +69,7 @@ func newSettingsToggleCmd(cf clientFactory, enable bool) *cobra.Command {
 		verb, short = "enable", "Turn a setting on again, restoring it exactly"
 	}
 	var provider string
+	var yes bool
 	cmd := &cobra.Command{
 		Use:   verb + " <kind> <id>",
 		Short: short,
@@ -76,9 +78,12 @@ func newSettingsToggleCmd(cf clientFactory, enable bool) *cobra.Command {
 		RunE: func(c *cobra.Command, args []string) error {
 			kind, id := args[0], args[1]
 			return withOrchd(cf, func(ctx context.Context, client orchdv1.OrchdClient) error {
-				p, err := settingsProvider(ctx, client, provider, kind, id)
+				p, item, err := settingsProvider(ctx, client, provider, kind, id)
 				if err != nil {
 					return err
+				}
+				if !enable && !yes && sensitiveModule(item) {
+					return fmt.Errorf("%s %q carries your agents' security policy; turning it off removes it from every session on this machine — re-run with --yes to confirm", kind, id)
 				}
 				it, err := client.SetSettingEnabled(ctx, &orchdv1.SetSettingEnabledRequest{
 					Provider: p, Kind: kind, Identity: id, Enabled: enable,
@@ -93,33 +98,62 @@ func newSettingsToggleCmd(cf clientFactory, enable bool) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&provider, "provider", "", "the item's provider, when its kind and id are not enough")
+	if !enable {
+		cmd.Flags().BoolVar(&yes, "yes", false, "confirm turning off a security instruction module")
+	}
 	return cmd
 }
 
+// sensitiveModule reports whether an item is an instruction module marked
+// sensitive (the agents' security policy).
+func sensitiveModule(it *orchdv1.SettingItem) bool {
+	if it == nil || it.GetKind() != "module" {
+		return false
+	}
+	var p struct {
+		Sensitive bool `json:"sensitive"`
+	}
+	return json.Unmarshal([]byte(it.GetPayloadJson()), &p) == nil && p.Sensitive
+}
+
 // settingsProvider finds the provider holding kind and id, unless one is
-// given.
-func settingsProvider(ctx context.Context, client orchdv1.OrchdClient, provider, kind, id string) (string, error) {
-	if provider != "" {
-		return provider, nil
-	}
-	resp, err := client.ListSettings(ctx, &orchdv1.ListSettingsRequest{Kind: kind})
+// given, and the item itself.
+func settingsProvider(ctx context.Context, client orchdv1.OrchdClient, provider, kind, id string) (string, *orchdv1.SettingItem, error) {
+	resp, err := client.ListSettings(ctx, &orchdv1.ListSettingsRequest{Provider: provider, Kind: kind})
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	var found []string
+	var found []*orchdv1.SettingItem
 	for _, it := range resp.GetItems() {
 		if it.GetIdentity() == id {
-			found = append(found, it.GetProvider())
+			found = append(found, it)
 		}
 	}
-	switch len(found) {
-	case 0:
-		return "", fmt.Errorf("no %s %q — see orch settings list", kind, id)
-	case 1:
-		return found[0], nil
+	switch {
+	case len(found) == 1:
+		return found[0].GetProvider(), found[0], nil
+	case provider != "":
+		// The daemon reports an unknown item with its own message.
+		return provider, nil, nil
+	case len(found) == 0:
+		return "", nil, fmt.Errorf("no %s %q — see orch settings list", kind, id)
 	default:
-		return "", fmt.Errorf("%s %q exists in %s; pass --provider", kind, id, strings.Join(found, " and "))
+		names := make([]string, 0, len(found))
+		for _, it := range found {
+			names = append(names, it.GetProvider())
+		}
+		return "", nil, fmt.Errorf("%s %q exists in %s; pass --provider", kind, id, strings.Join(names, " and "))
 	}
+}
+
+// fileList names a provider's files, capped so a provider that reads many
+// (instruction modules read every module file) keeps a one-line header.
+func fileList(files []string) string {
+	const shown = 3
+	if len(files) <= shown {
+		return strings.Join(files, ", ")
+	}
+	return fmt.Sprintf("%s and %d more", strings.Join(files[:shown], ", "), len(files)-shown)
 }
 
 // settingState is the short state shown for an item.
@@ -140,7 +174,7 @@ func printSettings(w io.Writer, resp *orchdv1.ListSettingsResponse) {
 		return
 	}
 	for _, p := range resp.GetProviders() {
-		fmt.Fprintf(w, "%s (%s)\n", p.GetTitle(), strings.Join(p.GetFiles(), ", "))
+		fmt.Fprintf(w, "%s (%s)\n", p.GetTitle(), fileList(p.GetFiles()))
 		if p.GetError() != "" {
 			fmt.Fprintf(w, "  error: %s\n", oneLine(p.GetError(), 300))
 		}

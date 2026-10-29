@@ -61,8 +61,56 @@ func (s *Service) Sync(ctx context.Context) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, p := range s.reg.Providers() {
-		_, _ = s.syncLocked(ctx, p)
+		files, err := s.syncLocked(ctx, p)
+		if err != nil {
+			continue
+		}
+		if _, ok := p.(Authoritative); !ok {
+			continue
+		}
+		problems, err := s.enforceLocked(ctx, p, files, nil)
+		s.setState(p, files, errors.Join(problems, err))
 	}
+}
+
+// enforceLocked rewrites an authoritative provider's files to match the
+// stored rows, with override (when set) in place of its stored row, and
+// re-imports what it wrote. It returns the files Enforce left alone
+// (problems) apart from a failure to write (err). Other providers are left
+// alone: for them the file wins.
+func (s *Service) enforceLocked(ctx context.Context, p Provider, files map[string][]byte, override *Row) (problems, err error) {
+	a, ok := p.(Authoritative)
+	if !ok {
+		return nil, nil
+	}
+	rows, err := s.store.List(ctx, p.Name(), "")
+	if err != nil {
+		return nil, err
+	}
+	state := map[string]bool{}
+	for _, r := range rows {
+		if r.RemovedAt.IsZero() {
+			state[r.Kind+"\x00"+r.Identity] = r.Enabled
+		}
+	}
+	if override != nil {
+		state[override.Kind+"\x00"+override.Identity] = override.Enabled
+	}
+	changed, problems := a.Enforce(files, func(kind, identity string) (bool, bool) {
+		on, known := state[kind+"\x00"+identity]
+		return on, known
+	})
+	if len(changed) == 0 {
+		return problems, nil
+	}
+	var logRow Row
+	if override != nil {
+		logRow = *override
+	}
+	if err := s.writeFiles(p, files, changed, logRow, logRow.Enabled); err != nil {
+		return problems, err
+	}
+	return problems, s.reimportLocked(ctx, p)
 }
 
 // syncLocked reads a provider's files and imports them if they changed,
@@ -141,6 +189,7 @@ func (s *Service) importRows(ctx context.Context, st *Store, p Provider, observe
 	for _, r := range rows {
 		byKey[r.Kind+"\x00"+r.Identity] = r
 	}
+	_, authoritative := p.(Authoritative)
 	seen := map[string]bool{}
 	for _, it := range observed {
 		key := it.Kind + "\x00" + it.Identity
@@ -151,6 +200,11 @@ func (s *Service) importRows(ctx context.Context, st *Store, p Provider, observe
 			next = Row{Provider: p.Name(), Kind: it.Kind, Identity: it.Identity, Origin: it.Origin}
 		}
 		next.Payload, next.Enabled, next.Present, next.RemovedAt = it.Payload, it.Enabled, true, time.Time{}
+		if authoritative && ok && r.RemovedAt.IsZero() {
+			// Reason: orch.db is the truth for these items; what the file
+			// shows is drift for Enforce to undo, not a choice to import.
+			next.Enabled = r.Enabled
+		}
 		if ok && sameRow(r, next) {
 			continue
 		}
@@ -342,6 +396,23 @@ func (s *Service) prepare(ctx context.Context, provider, kind string) (Provider,
 // Reason: the row is recorded before the re-import, so the import sees an
 // item turned off through orch as intended rather than as removed outside it.
 func (s *Service) applyLocked(ctx context.Context, p Provider, files map[string][]byte, r Row) error {
+	if _, ok := p.(Authoritative); ok {
+		// Reason: a file Enforce must leave alone (problems) does not block
+		// the choice; the files it could write are written, the row is the
+		// truth, and the problem stays visible until fixed. A failed write
+		// records nothing.
+		problems, err := s.enforceLocked(ctx, p, files, &r)
+		if err != nil {
+			return err
+		}
+		if err := s.store.Put(ctx, r); err != nil {
+			return err
+		}
+		s.revision++
+		err = s.reimportLocked(ctx, p)
+		s.setState(p, files, problems)
+		return err
+	}
 	if err := s.writeLocked(p, files, r, r.Enabled); err != nil {
 		return err
 	}
@@ -358,6 +429,12 @@ func (s *Service) writeLocked(p Provider, files map[string][]byte, r Row, enable
 	if err != nil {
 		return err
 	}
+	return s.writeFiles(p, files, changed, r, enabled)
+}
+
+// writeFiles writes a provider's changed files: only files it read, each
+// backed up before this process first changes it, each replaced atomically.
+func (s *Service) writeFiles(p Provider, files, changed map[string][]byte, r Row, enabled bool) error {
 	for _, path := range sortedPaths(changed) {
 		old, known := files[path]
 		if !known {
@@ -377,6 +454,10 @@ func (s *Service) writeLocked(p Provider, files map[string][]byte, r Row, enable
 		// Reason: an identity can hold a whole permission rule, which may
 		// embed a secret, and orchd's log is readable by queued tasks; a
 		// short hash still ties log lines to one item.
+		if r.Identity == "" {
+			log.Printf("settings: %s: wrote %s (restored stored state)", p.Name(), path)
+			continue
+		}
 		sum := sha256.Sum256([]byte(r.Identity))
 		log.Printf("settings: %s: wrote %s (%s %s %x on=%v)", p.Name(), path, r.Origin, r.Kind, sum[:4], enabled)
 	}
