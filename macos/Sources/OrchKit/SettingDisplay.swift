@@ -44,7 +44,7 @@ extension SettingItem {
         case "hook": break
         case "permission": return SettingDisplay(title: fallback, literalTitle: true)
         case "rule": return RulePayload(json: payloadJSON)?.display ?? SettingDisplay(title: fallback)
-        case "module": return ModulePayload(json: payloadJSON)?.display ?? SettingDisplay(title: fallback)
+        case "module", "agent", "skill": return ModulePayload(json: payloadJSON)?.display ?? SettingDisplay(title: fallback)
         default: return SettingDisplay(title: fallback)
         }
         guard let hook = HookPayload(json: payloadJSON) else { return SettingDisplay(title: fallback, detail: fallback) }
@@ -58,8 +58,11 @@ extension SettingItem {
 }
 
 extension SettingItem {
-    /// The instruction module this item is, or nil for any other kind.
-    public var module: ModulePayload? { ref.kind == "module" ? ModulePayload(json: payloadJSON) : nil }
+    /// The instruction module, subagent or skill orch ships that this item
+    /// is, or nil for any other kind. All three show their full text.
+    public var module: ModulePayload? {
+        ["module", "agent", "skill"].contains(ref.kind) ? ModulePayload(json: payloadJSON) : nil
+    }
 }
 
 /// An instruction module's payload: what it is, where it installs, and the

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -96,21 +98,69 @@ func (s *Service) enforceLocked(ctx context.Context, p Provider, files map[strin
 	if override != nil {
 		state[override.Kind+"\x00"+override.Identity] = override.Enabled
 	}
-	changed, problems := a.Enforce(files, func(kind, identity string) (bool, bool) {
+	changes, problems := a.Enforce(files, func(kind, identity string) (bool, bool) {
 		on, known := state[kind+"\x00"+identity]
 		return on, known
 	})
-	if len(changed) == 0 {
+	if changes.Empty() {
 		return problems, nil
 	}
 	var logRow Row
 	if override != nil {
 		logRow = *override
 	}
-	if err := s.writeFiles(p, files, changed, logRow, logRow.Enabled); err != nil {
+	if err := s.writeFiles(p, files, changes.Write, logRow, logRow.Enabled); err != nil {
+		return problems, err
+	}
+	if err := s.deleteFiles(p, files, changes); err != nil {
 		return problems, err
 	}
 	return problems, s.reimportLocked(ctx, p)
+}
+
+// deleteFiles removes the files and then the emptied directories an
+// authoritative provider asked for, under the same rules as a write: only
+// paths it read, each backed up before this process first changes it.
+func (s *Service) deleteFiles(p Provider, files map[string][]byte, c Changes) error {
+	for _, path := range c.Delete {
+		old, known := files[path]
+		if !known {
+			return fmt.Errorf("settings provider %s tried to delete %s, which it did not read", p.Name(), path)
+		}
+		if old == nil {
+			continue
+		}
+		if s.backup != nil && len(old) > 0 && !s.backedUp[path] {
+			if err := s.backup(path, old); err != nil {
+				return fmt.Errorf("back up %s: %w", path, err)
+			}
+			s.backedUp[path] = true
+		}
+		if err := removeIfUnchanged(path, old); err != nil {
+			return err
+		}
+		log.Printf("settings: %s: removed %s", p.Name(), path)
+	}
+	for _, dir := range c.Prune {
+		if !holdsReadFile(dir, files) {
+			return fmt.Errorf("settings provider %s tried to remove %s, which holds no file it read", p.Name(), dir)
+		}
+		if removeEmptyDir(dir) {
+			log.Printf("settings: %s: removed empty %s", p.Name(), dir)
+		}
+	}
+	return nil
+}
+
+// holdsReadFile reports whether dir is an ancestor of a file in files.
+func holdsReadFile(dir string, files map[string][]byte) bool {
+	prefix := filepath.Clean(dir) + string(filepath.Separator)
+	for path := range files {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // syncLocked reads a provider's files and imports them if they changed,

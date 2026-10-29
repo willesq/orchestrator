@@ -29,6 +29,7 @@ and timestamps (table `settings_items`, migration `0012`).
 | `claude-code` | `plugin` | one `enabledPlugins` entry (booleans only) | `<plugin>@<marketplace>` | set to `false` in the file, as `claude plugin disable` does |
 | `cc-safety-net` | `rule` | one rule of a rulebook listed in `~/.cc-safety-net/rules/rule.json` | `<rulebook>/<rule>` | `"overrides": {"<rulebook>/<rule>": "off"}` in rule.json |
 | `orch-instructions` | `module` | one instruction module shipped in the binary (`internal/install/modules/<name>.md`) | `<name>` | its import (Claude, Gemini) or read line (Codex) left out of every managed block |
+| `orch-instructions` | `agent`, `skill` | one Claude Code subagent or skill orch ships, with all its files | `<name>` | every file orch installed for it removed from `~/.claude`, then its emptied directories |
 
 **Instruction modules** are listed whether imported or not, with origin `orch` and their
 frontmatter `default` (on unless `default: false`) until toggled. The payload carries the title,
@@ -98,6 +99,26 @@ files and a poll never interleaves with a write.
   any file the user owns; entry files still follow links (dotfile managers). Text outside the
   managed block is never touched; an entry file without the block (a harness `orch install` never
   wired) is left alone, and module files are written only once some harness is wired.
+- **Subagents and skills.** Enforced only once Claude Code is wired (its `CLAUDE.md` has the
+  managed block). On: each file is written when missing, marked or byte-identical to the shipped
+  copy without its marker (adopted). Off: each marked file is deleted, then the directories only
+  that item uses are removed if empty; a file the user added there keeps its directory. A file
+  without the marker that differs from the shipped copy is the user's: never overwritten or
+  deleted, reported until moved aside. An item's file or directory that is a symlink is neither
+  written nor deleted through. `Enforce` returns `settings.Changes` (`Write`, `Delete`, `Prune`).
+  Deletes follow the write rules: only paths the provider read, a backup before this process's
+  first change to the file, and removal only of a regular file still holding the bytes read.
+  `Prune` only removes an empty directory that holds a path the provider read, and only a real
+  directory: it uses `rmdir`, never `unlink`, so a symlink is never deleted, and an item with a
+  symlink anywhere in it queues no directory removals at all.
+  - **Pinned helpers:** an agent's helper script (`exploit-finder-sandbox.sh`) may be named by a
+    pre-authorized permission rule, so whatever sits at its path runs without a prompt. It is
+    never treated as the user's: on, any other content is replaced with the shipped copy; off,
+    anything there is removed. `orch install` adds the sandbox's allow rule only while
+    `exploit-finder` is on, and removes its own copy of the rule while it is off.
+  - **Sensitive agents:** `security-audit`, `adversarial-reviewer` and `exploit-finder` are
+    sensitive like the security modules: the app confirms turning one off, the CLI needs
+    `--yes`, and `orch status` names it while off.
 - **Sensitive modules.** A module with `sensitive: true` in its frontmatter (the agents' security
   policy) carries `"sensitive": true` in its payload. Turning one off asks for confirmation in
   the app and needs `--yes` with `orch settings disable`, and `orch status` warns with its name
@@ -218,6 +239,14 @@ model).
   manager re-applying a template) rewrite it in turn every poll; nothing backs off.
 - A module path turned into a symlink between the watcher's look and its write is followed for
   that one write; the look refuses it on every poll after.
+- The watcher takes over an unmarked agent or skill file byte-identical to the shipped copy
+  without asking; `orch install` lists the same takeover in its preview.
+- Marker detection matches the marker text anywhere in a file, so a file of the user's own that
+  keeps the marker line is treated as orch's.
+- A delete is backed up only before this process's first change to that file; a later edited
+  copy of an off item's marked file is removed without a new backup.
+- Writes and deletes follow a symlinked `~/.claude`, `agents/` or `skills/` directory (a dotfiles
+  setup) into its target; only the item's own files and directories are checked for links.
 - Module text ships in the binary: every machine running a build gets every module's text in
   `~/.config/orch/modules/`, on or off. Keep machine-specific secrets and absolute home paths out
   of modules (a test rejects `/Users/` and `/home/`).

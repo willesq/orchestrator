@@ -143,16 +143,32 @@ type Provider interface {
 // is not used; Enforce writes every change.
 type Authoritative interface {
 	Provider
-	// Enforce returns the new bytes of each file that differs from the
-	// stored state. enabled reports an item's stored choice and whether one
-	// is stored; with none, the provider uses the item's default.
+	// Enforce returns what must change for the files to match the stored
+	// state. enabled reports an item's stored choice and whether one is
+	// stored; with none, the provider uses the item's default.
 	//
 	// problems names files Enforce had to leave alone (broken markers, a
 	// file it refuses to write through). They do not stop the others: the
-	// changed files are written and the choice recorded, and problems is
-	// shown as the provider's error until the files are fixed.
-	Enforce(files map[string][]byte, enabled func(kind, identity string) (on, known bool)) (changed map[string][]byte, problems error)
+	// changes are made and the choice recorded, and problems is shown as the
+	// provider's error until the files are fixed.
+	Enforce(files map[string][]byte, enabled func(kind, identity string) (on, known bool)) (Changes, error)
 }
+
+// Changes is what an authoritative provider asks the service to do. Every
+// path must be one the provider read; a directory in Prune must hold one.
+type Changes struct {
+	// Write maps a file to its new bytes.
+	Write map[string][]byte
+	// Delete lists files to remove; each is backed up first and removed only
+	// if it is a regular file still holding the bytes that were read.
+	Delete []string
+	// Prune lists directories to remove once empty, deepest first; one that
+	// still holds anything is left alone.
+	Prune []string
+}
+
+// Empty reports whether nothing would change.
+func (c Changes) Empty() bool { return len(c.Write) == 0 && len(c.Delete) == 0 && len(c.Prune) == 0 }
 
 // Registry holds the providers a Service manages, in registration order.
 type Registry struct {

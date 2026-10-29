@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 )
 
 // MaxFileSize bounds how much of a managed file is read. Settings files are
@@ -61,6 +62,44 @@ func writeTarget(path string) (string, error) {
 		return "", fmt.Errorf("%s is a symlink to a missing file; refusing to write through it", path)
 	}
 	return path, nil
+}
+
+// removeIfUnchanged deletes path only if it is a regular file (never a
+// symlink, which would leave the link and remove nothing it names) still
+// holding want. A missing file is already gone.
+func removeIfUnchanged(path string, want []byte) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: %s is not a regular file; nothing was removed", ErrConflict, path)
+	}
+	current, err := ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(current, want) {
+		return fmt.Errorf("%w: %s changed on disk; nothing was removed — try again", ErrConflict, path)
+	}
+	return os.Remove(path)
+}
+
+// removeEmptyDir removes dir only if it is a real directory (not a symlink to
+// one) and empty, reporting whether it did. Anything the user added keeps it.
+//
+// Reason: os.Remove tries unlink first, which deletes a symlink; rmdir never
+// removes anything but an empty directory, so a link swapped in after the
+// Lstat is refused by the kernel rather than deleted.
+func removeEmptyDir(dir string) bool {
+	info, err := os.Lstat(dir)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	return syscall.Rmdir(dir) == nil
 }
 
 // writeAtomic replaces path's contents with next, refusing when the file no

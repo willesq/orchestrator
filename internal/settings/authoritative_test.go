@@ -34,9 +34,9 @@ func (*authProvider) Observe(map[string][]byte) ([]Item, error) {
 	}
 	return out, nil
 }
-func (p *authProvider) Enforce(files map[string][]byte, enabled func(kind, identity string) (bool, bool)) (map[string][]byte, error) {
+func (p *authProvider) Enforce(files map[string][]byte, enabled func(kind, identity string) (bool, bool)) (Changes, error) {
 	if strings.Contains(string(files[p.path]), "BROKEN") {
-		return nil, errors.New("broken file")
+		return Changes{}, errors.New("broken file")
 	}
 	var on []string
 	for _, id := range []string{"a", "b", "c"} {
@@ -47,9 +47,9 @@ func (p *authProvider) Enforce(files map[string][]byte, enabled func(kind, ident
 	sort.Strings(on)
 	want := strings.Join(on, "\n") + "\n"
 	if string(files[p.path]) == want {
-		return nil, nil
+		return Changes{}, nil
 	}
-	return map[string][]byte{p.path: []byte(want)}, nil
+	return Changes{Write: map[string][]byte{p.path: []byte(want)}}, nil
 }
 func (*authProvider) Apply(map[string][]byte, Item, bool) (map[string][]byte, error) {
 	return nil, errors.New("Apply must not run for an authoritative provider")
@@ -136,5 +136,105 @@ func TestAuthoritativeProviderStoreWins(t *testing.T) {
 	}
 	if read() != "a\nb\nc\n" {
 		t.Errorf("toggle on not written: %q", read())
+	}
+}
+
+func TestDeleteFilesGuards(t *testing.T) {
+	dir := t.TempDir()
+	read := filepath.Join(dir, "skill", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(read), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(read, []byte("orch's\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var backups []string
+	s := NewService(nil, nil, func(path string, _ []byte) error { backups = append(backups, path); return nil })
+	p := &authProvider{path: read}
+	files := map[string][]byte{read: []byte("orch's\n")}
+
+	if err := s.deleteFiles(p, files, Changes{Delete: []string{filepath.Join(dir, "other")}}); err == nil {
+		t.Error("deleted a path the provider never read")
+	}
+	if err := s.deleteFiles(p, files, Changes{Prune: []string{t.TempDir()}}); err == nil {
+		t.Error("pruned a directory holding no file the provider read")
+	}
+	// Changed underneath since it was read: refused, file kept.
+	if err := os.WriteFile(read, []byte("edited\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.deleteFiles(p, files, Changes{Delete: []string{read}}); !errors.Is(err, ErrConflict) {
+		t.Errorf("deleting a changed file = %v, want a conflict", err)
+	}
+	if _, err := os.Stat(read); err != nil {
+		t.Fatal("a changed file was removed")
+	}
+	// A symlink is never deleted through.
+	target := filepath.Join(t.TempDir(), "keep")
+	if err := os.WriteFile(target, []byte("orch's\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "skill", "link.md")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.deleteFiles(p, map[string][]byte{link: []byte("orch's\n")}, Changes{Delete: []string{link}}); !errors.Is(err, ErrConflict) {
+		t.Errorf("deleting through a symlink = %v, want a conflict", err)
+	}
+	if b, _ := os.ReadFile(target); string(b) != "orch's\n" {
+		t.Error("the link's target changed")
+	}
+	if err := os.Remove(link); err != nil {
+		t.Fatal(err)
+	}
+
+	// The happy path: backed up, removed, emptied directory pruned; a nil
+	// (missing) entry is skipped.
+	if err := os.WriteFile(read, []byte("orch's\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(dir, "skill", "gone.md")
+	files[missing] = nil
+	if err := s.deleteFiles(p, files, Changes{Delete: []string{missing, read}, Prune: []string{filepath.Dir(read)}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Dir(read)); !os.IsNotExist(err) {
+		t.Errorf("emptied directory kept: %v", err)
+	}
+	// Each file is backed up once, before orch's first attempt to change it,
+	// so the refused attempts above already saved both.
+	if len(backups) != 2 || backups[0] != read || backups[1] != link {
+		t.Errorf("backups = %v", backups)
+	}
+}
+
+func TestRemoveEmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	empty := filepath.Join(dir, "empty")
+	full := filepath.Join(dir, "full")
+	target := filepath.Join(dir, "target")
+	for _, d := range []string{empty, full, target} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(full, "x"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if !removeEmptyDir(empty) {
+		t.Error("an empty directory was kept")
+	}
+	if removeEmptyDir(full) || removeEmptyDir(filepath.Join(dir, "missing")) {
+		t.Error("a non-empty or missing directory was reported removed")
+	}
+	if removeEmptyDir(link) {
+		t.Error("a symlink to a directory was removed")
+	}
+	if _, err := os.Lstat(link); err != nil {
+		t.Error("the symlink is gone")
 	}
 }

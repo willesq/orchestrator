@@ -95,7 +95,8 @@ func DisabledCount() (int, error) {
 }
 
 // SensitiveModulesOff names the sensitive instruction modules (the agents'
-// security policy) turned off on this machine, for orch status.
+// security policy) and security review agents turned off on this machine,
+// for orch status.
 func SensitiveModulesOff() ([]string, error) {
 	t, err := loadToggles()
 	if err != nil {
@@ -110,6 +111,16 @@ func SensitiveModulesOff() ([]string, error) {
 	for _, m := range mods {
 		if m.Sensitive && !on(m) {
 			off = append(off, m.Slug)
+		}
+	}
+	assets, err := ClaudeAssets()
+	if err != nil {
+		return nil, err
+	}
+	assetOn := AssetEnabled(t)
+	for _, a := range assets {
+		if a.Sensitive && !assetOn(a) {
+			off = append(off, a.Kind+" "+a.Name)
 		}
 	}
 	return off, nil

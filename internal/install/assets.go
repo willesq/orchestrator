@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
-	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,7 +13,10 @@ import (
 // assets holds the subagents and skills shipped with the CLI, so
 // an install never depends on a separate checkout being present on disk.
 //
-//go:embed assets
+// Reason: all: keeps directories such as agents/_shared, which a plain
+// directory pattern silently leaves out for starting with "_".
+//
+//go:embed all:assets
 var assets embed.FS
 
 // managedMarker identifies a file orch install owns and may overwrite. Every
@@ -29,48 +31,52 @@ func legacyCheckout(home string) string {
 }
 
 // claudeAssetEdits installs the orchestrator's Claude Code subagents into
-// ~/.claude/agents and its skills into ~/.claude/skills.
+// ~/.claude/agents and its skills into ~/.claude/skills: every file of each
+// asset turned on in orch. An asset turned off is left as it is; orchd's
+// settings watcher removes its files.
 func claudeAssetEdits(home string) []Edit {
+	list, err := ClaudeAssets()
+	if err != nil {
+		return []Edit{{Path: filepath.Join(home, ".claude"), Compute: func([]byte) ([]byte, string, error) { return nil, "", err }}}
+	}
 	var edits []Edit
-	agents, _ := fs.Glob(assets, "assets/claude/agents/*.md")
-	for _, src := range agents {
-		dst := filepath.Join(home, ".claude", "agents", path.Base(src))
-		label := "agent " + strings.TrimSuffix(path.Base(src), ".md")
-		edits = append(edits, assetEdit(home, src, dst, []string{dst}, label))
-	}
-	// Some agents ship a companion script next to the agent file (e.g. the
-	// exploit-finder sandbox wrapper). Installing it to a fixed path, rather than
-	// having the agent write it out each run, is what lets the agent invoke a
-	// known-good wrapper that an injected run cannot quietly replace.
-	helpers, _ := fs.Glob(assets, "assets/claude/agents/*.sh")
-	for _, src := range helpers {
-		dst := filepath.Join(home, ".claude", "agents", path.Base(src))
-		label := "agent helper " + path.Base(src)
-		edits = append(edits, assetEdit(home, src, dst, []string{dst}, label))
-	}
-	skills, _ := fs.Glob(assets, "assets/claude/skills/*/SKILL.md")
-	for _, src := range skills {
-		name := path.Base(path.Dir(src))
-		dir := filepath.Join(home, ".claude", "skills", name)
-		dst := filepath.Join(dir, "SKILL.md")
-		// The legacy install linked the skill directory rather than the file.
-		edits = append(edits, assetEdit(home, src, dst, []string{dir, dst}, "skill "+name))
+	for _, a := range list {
+		for _, f := range a.Files {
+			dst := ClaudeAssetPath(home, f.Rel)
+			links := []string{dst}
+			if a.Kind == KindSkill {
+				// The legacy install linked the skill directory rather than the file.
+				links = []string{filepath.Join(home, ".claude", "skills", a.Name), dst}
+			}
+			label := a.Kind + " " + a.Name
+			if f.Rel != a.Main().Rel {
+				label += " (" + path.Base(f.Rel) + ")"
+			}
+			edits = append(edits, assetEdit(home, a, f.Body, dst, links, label))
+		}
 	}
 	return edits
 }
 
-// assetEdit installs one embedded asset at dst. It creates a missing file,
-// refreshes one carrying managedMarker, and replaces a symlink at any of links
-// that points into the legacy checkout. Anything else is the user's and fails the
-// whole plan rather than being overwritten.
-func assetEdit(home, src, dst string, links []string, label string) Edit {
+// assetEdit installs one asset file at dst. It creates a missing file,
+// refreshes one carrying managedMarker, adopts the user's own copy when it is
+// exactly the shipped file without the marker, and replaces a symlink at any
+// of links that points into the legacy checkout. Anything else is the user's
+// and fails the whole plan rather than being overwritten. An asset turned off
+// in orch is left as it is.
+func assetEdit(home string, a ClaudeAsset, body []byte, dst string, links []string, label string) Edit {
 	return Edit{
 		Path:   dst,
 		Unlink: links,
 		Compute: func(old []byte) ([]byte, string, error) {
-			body, err := assets.ReadFile(src)
+			// Reason: an unreadable store stops the plan rather than being
+			// taken as "nothing is off", which would put every asset back.
+			toggles, err := loadToggles()
 			if err != nil {
-				return nil, "", err
+				return nil, "", fmt.Errorf("%w — refusing to write %s, so agents and skills turned off in orch stay off", err, dst)
+			}
+			if !AssetEnabled(toggles)(a) {
+				return old, label + ": turned off in orch; left as it is", nil
 			}
 			legacy := false
 			for _, l := range links {
@@ -94,9 +100,11 @@ func assetEdit(home, src, dst string, links []string, label string) Edit {
 				return body, label + ": install the copy shipped with this CLI", nil
 			case bytes.Contains(old, []byte(managedMarker)):
 				return body, label + ": update to the copy shipped with this CLI", nil
+			case IsAdoptable(old, body):
+				return body, label + ": take over your identical copy (adds the orch marker)", nil
 			default:
-				return nil, "", fmt.Errorf("refusing to overwrite %s: it lacks the %q marker, so it is not orch-managed; move it aside and re-run",
-					dst, managedMarker)
+				return nil, "", fmt.Errorf("refusing to overwrite %s: it lacks the %q marker and differs from the shipped copy, so it is yours; move it aside or turn %s off in orch, and re-run",
+					dst, managedMarker, label)
 			}
 		},
 	}

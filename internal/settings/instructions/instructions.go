@@ -1,11 +1,15 @@
-// Package instructions is the settings provider for orch's instruction
-// modules: each module shipped in the binary is one item, on when the managed
-// block of each harness entry file imports it (or, for Codex, lists it).
+// Package instructions is the settings provider for what orch puts in front
+// of agents at startup: each instruction module shipped in the binary (on
+// when the managed block of each harness entry file imports it, or for Codex
+// lists it), and each Claude Code subagent and skill it ships (on when its
+// files are installed under ~/.claude).
 //
-// It is authoritative: the block and the module files are orch's, so orch.db
-// decides which modules load on this machine and every poll rewrites what
-// drifted. Text outside the managed block is never touched, and an entry file
-// without the block (a harness orch install never wired) is left alone.
+// It is authoritative: the block, the module files and the marked asset
+// files are orch's, so orch.db decides what loads on this machine and every
+// poll rewrites what drifted. Text outside the managed block is never
+// touched, a file of the user's own is never overwritten or removed, and an
+// entry file without the block (a harness orch install never wired) is left
+// alone.
 package instructions
 
 import (
@@ -22,6 +26,7 @@ import (
 type Provider struct {
 	home    string
 	modules func() ([]install.Module, error)
+	assets  func() ([]install.ClaudeAsset, error)
 	// notRegular holds the module paths the last Read found to be a
 	// symlink or other non-regular file. Enforce leaves them alone: the
 	// watcher writes without anyone acting, so following a planted link
@@ -30,7 +35,9 @@ type Provider struct {
 }
 
 // New returns the provider for a home and the modules this build ships.
-func New(home string) *Provider { return &Provider{home: home, modules: install.Modules} }
+func New(home string) *Provider {
+	return &Provider{home: home, modules: install.Modules, assets: install.ClaudeAssets}
+}
 
 // Payload is what a module is listed with: everything the settings UI shows,
 // including the full text an agent reads.
@@ -44,6 +51,8 @@ type Payload struct {
 	// Sensitive modules carry the agents' security policy; clients confirm
 	// before turning one off.
 	Sensitive bool `json:"sensitive,omitempty"`
+	// Files are every file a subagent or skill installs, the main one first.
+	Files []string `json:"files,omitempty"`
 }
 
 // Name implements settings.Provider.
@@ -55,7 +64,11 @@ func (*Provider) Title() string { return "Instructions" }
 // Kinds implements settings.Provider. StateInFile: a module is listed whether
 // or not it is imported, so it is toggled in place and never "removed".
 func (*Provider) Kinds() []settings.KindSpec {
-	return []settings.KindSpec{{Name: install.KindModule, Title: "Instruction modules", GroupTitle: "Topic", StateInFile: true}}
+	return []settings.KindSpec{
+		{Name: install.KindModule, Title: "Instruction modules", GroupTitle: "Topic", StateInFile: true},
+		{Name: install.KindAgent, Title: "Subagents", GroupTitle: "Kind", StateInFile: true},
+		{Name: install.KindSkill, Title: "Skills", GroupTitle: "Kind", StateInFile: true},
+	}
 }
 
 // Read implements settings.Provider: every harness entry file and every
@@ -87,6 +100,9 @@ func (p *Provider) Read() (map[string][]byte, error) {
 		}
 		files[path] = b
 	}
+	if err := p.readAssets(files); err != nil {
+		return nil, err
+	}
 	return files, nil
 }
 
@@ -107,7 +123,11 @@ func (p *Provider) Observe(map[string][]byte) ([]settings.Item, error) {
 		out = append(out, settings.Item{Kind: install.KindModule, Identity: m.Slug, Payload: payload,
 			Enabled: m.Default, Origin: settings.OriginOrch})
 	}
-	return out, nil
+	assets, err := p.observeAssets()
+	if err != nil {
+		return nil, err
+	}
+	return append(out, assets...), nil
 }
 
 // Enforce implements settings.Authoritative: each wired entry file's managed
@@ -115,10 +135,10 @@ func (p *Provider) Observe(map[string][]byte) ([]settings.Item, error) {
 // each module file matches what this build ships. An entry with broken
 // markers, or a module path that is not a regular file, is reported and
 // skipped without holding up the rest.
-func (p *Provider) Enforce(files map[string][]byte, enabled func(kind, identity string) (bool, bool)) (map[string][]byte, error) {
+func (p *Provider) Enforce(files map[string][]byte, enabled func(kind, identity string) (bool, bool)) (settings.Changes, error) {
 	mods, err := p.modules()
 	if err != nil {
-		return nil, err
+		return settings.Changes{}, err
 	}
 	on := func(m install.Module) bool {
 		if v, known := enabled(install.KindModule, m.Slug); known {
@@ -127,14 +147,16 @@ func (p *Provider) Enforce(files map[string][]byte, enabled func(kind, identity 
 		return m.Default
 	}
 	changed := map[string][]byte{}
+	c := settings.Changes{Write: changed}
 	var problems []error
-	wired := false
+	wired, claudeWired := false, false
 	for _, e := range install.InstructionEntries(p.home) {
 		old := files[e.Path]
 		if !install.HasManagedBlock(old) {
 			continue
 		}
 		wired = true
+		claudeWired = claudeWired || e.Target == "claude-code"
 		next, err := install.RenderManagedBlock(old, p.home, e.Target, on)
 		if err != nil {
 			problems = append(problems, fmt.Errorf("%s: %w — fix the orchestrator-managed markers by hand", e.Path, err))
@@ -147,7 +169,7 @@ func (p *Provider) Enforce(files map[string][]byte, enabled func(kind, identity 
 	if !wired {
 		// Reason: no harness was wired by orch install, so nothing would load
 		// the modules; writing them would only litter an unconfigured home.
-		return changed, errors.Join(problems...)
+		return c, errors.Join(problems...)
 	}
 	for _, m := range mods {
 		path := install.ModulePath(p.home, m.Slug)
@@ -159,18 +181,27 @@ func (p *Provider) Enforce(files map[string][]byte, enabled func(kind, identity 
 			changed[path] = []byte(m.Body)
 		}
 	}
-	return changed, errors.Join(problems...)
+	// Reason: only Claude Code loads ~/.claude agents and skills; a home
+	// where install never wired it gets none.
+	if claudeWired {
+		more, err := p.enforceAssets(files, enabled, &c)
+		if err != nil {
+			return settings.Changes{}, err
+		}
+		problems = append(problems, more...)
+	}
+	return c, errors.Join(problems...)
 }
 
 // Apply implements settings.Provider. The service writes an authoritative
 // provider's changes through Enforce, so Apply never runs.
 func (*Provider) Apply(map[string][]byte, settings.Item, bool) (map[string][]byte, error) {
-	return nil, fmt.Errorf("%w: instruction modules are written by Enforce", settings.ErrNotAllowed)
+	return nil, fmt.Errorf("%w: instruction modules, subagents and skills are written by Enforce", settings.ErrNotAllowed)
 }
 
 // Validate implements settings.Provider; modules ship with the binary.
 func (*Provider) Validate(kind string, _ map[string]string) (settings.Item, error) {
-	return settings.Item{}, settings.Invalidf("%s items cannot be added here; add a file under internal/install/modules", kind)
+	return settings.Item{}, settings.Invalidf("%s items cannot be added here; they ship with orch (internal/install/modules and internal/install/assets)", kind)
 }
 
 // Describe implements settings.Provider.
