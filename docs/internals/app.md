@@ -327,9 +327,10 @@ rebuild.
   is 15.2.
 - **Tests:** `make app-test` runs the tests, and `make app-cover` applies the 80%-per-file gate
   to `OrchKit` (generated code excluded).
-- **CI:** the `app` job in `ci.yml` checks codegen drift, runs the coverage gate, assembles the
-  app, and uploads it as the `Orch-app-<sha>` workflow artifact (kept 14 days). Every push therefore
-  has an installable, ad-hoc signed build.
+- **CI:** `app.yml` runs on pull requests to `main` that touch `macos/**`, `orchd.proto` or the
+  Makefile. It checks codegen drift and runs the coverage gate; it does not assemble or upload
+  the app, since the release builds its own. Nothing runs on `main`: the PR is the gate. To try
+  a branch's app, build it locally with `make app`.
 - **Release:** the `app` job in `release.yml` runs after the binaries are released and always
   attaches `Orch_<version>_darwin_arm64.zip` to the release. The build happens before any signing
   material is on the runner, and only versions pinned in `Package.resolved` are used.

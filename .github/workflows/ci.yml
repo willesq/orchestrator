@@ -1,14 +1,31 @@
-# Branch checks. The pure-Go tests and coverage gate run on Linux, the cheapest
-# runner. Only the cgo (-tags ORT) build needs macOS: it links a darwin static
-# library, which Linux has no linker for. It runs after the tests pass, so a
-# failing branch never spends macOS minutes. No release.
-# Push only: every branch is pushed here, and a PR shows its head commit's push
-# run, so a pull_request trigger would run the same suite twice.
+# Pull-request gate for the Go code. The PR is the gate: a change reaches main
+# only through a PR whose checks passed, so nothing runs on main itself, and the
+# release workflow rebuilds everything from its tag rather than reusing this.
+#
+# Runs only when Go code, embedded assets (internal/**, including the shipped
+# instruction modules) or build config change; a docs-only PR runs nothing. The
+# pure-Go tests and coverage gate run on Linux, the cheapest runner. Only the
+# cgo (-tags ORT) build needs macOS: it links a darwin static library, which
+# Linux has no linker for. It runs after the tests pass, so a failing PR never
+# spends macOS minutes. A new push cancels the PR's run still in progress.
 name: ci
 
 on:
-  push:
-    branches: ["**"]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "**.go"
+      - go.mod
+      - go.sum
+      - Makefile
+      - "cmd/**"
+      - "internal/**"
+      - ".github/workflows/ci.yml"
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -64,48 +81,3 @@ jobs:
             go build -tags ORT -o "build/bin/$b" "./cmd/$b"
           done
           build/bin/orch version
-
-  # The macOS app. Independent of the Go jobs: it only shares orchd.proto, and
-  # the drift check below catches a proto change without regenerated Swift.
-  # macos-26 because the Swift dependencies need Swift 6.2 (Xcode 26).
-  app:
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v4
-
-      # The Swift dependencies need Swift 6.2 (Xcode 26); pick the newest
-      # Xcode 26 the image has rather than trusting its default.
-      - name: Select Xcode 26
-        run: |
-          xcode="$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' | sort -V | tail -1)"
-          if [ -z "$xcode" ]; then
-            echo "::error::no Xcode 26 on this runner"
-            exit 1
-          fi
-          sudo xcode-select -s "$xcode/Contents/Developer"
-          swift --version
-
-      - name: Generated Swift matches orchd.proto
-        run: |
-          brew list protobuf >/dev/null 2>&1 || brew install protobuf
-          make proto-swift
-          git diff --exit-code -- macos/Sources/OrchKit/Generated
-
-      - name: Per-file coverage gate (tests included)
-        run: make app-cover
-
-      - name: Assemble Orch.app (ad-hoc signed)
-        run: make app
-
-      # Every push gets an installable build: Actions → this run → Artifacts.
-      # Ad-hoc signed, so macOS asks once before opening a downloaded copy.
-      - name: Package Orch.app
-        run: ditto -c -k --keepParent build/app.noindex/Orch.app "Orch-${GITHUB_SHA::12}.zip"
-
-      - name: Upload Orch.app
-        uses: actions/upload-artifact@v4
-        with:
-          name: Orch-app-${{ github.sha }}
-          path: Orch-*.zip
-          if-no-files-found: error
-          retention-days: 14
