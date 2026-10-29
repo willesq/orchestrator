@@ -1,0 +1,53 @@
+# Pull-request gate for the macOS app. Like ci.yml, nothing runs on main: the
+# PR is the gate, and the release workflow builds, signs and ships Orch.app
+# from its tag, so this job produces nothing for anyone to download.
+#
+# Runs only when the app or the RPC interface it shares with orchd changes.
+# macos-26 because the Swift dependencies need Swift 6.2 (Xcode 26). A new push
+# cancels the PR's run still in progress.
+name: app
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "macos/**"
+      - "internal/rpc/orchdv1/orchd.proto"
+      - Makefile
+      - ".github/workflows/app.yml"
+
+concurrency:
+  group: app-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  app:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Swift dependencies need Swift 6.2 (Xcode 26); pick the newest
+      # Xcode 26 the image has rather than trusting its default.
+      - name: Select Xcode 26
+        run: |
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' | sort -V | tail -1)"
+          if [ -z "$xcode" ]; then
+            echo "::error::no Xcode 26 on this runner"
+            exit 1
+          fi
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          swift --version
+
+      # A proto change without regenerated Swift fails here, not at runtime.
+      - name: Generated Swift matches orchd.proto
+        run: |
+          brew list protobuf >/dev/null 2>&1 || brew install protobuf
+          make proto-swift
+          git diff --exit-code -- macos/Sources/OrchKit/Generated
+
+      - name: Per-file coverage gate (tests included)
+        run: make app-cover

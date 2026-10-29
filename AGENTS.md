@@ -57,6 +57,9 @@ policies and isolate harness-specific behavior in adapters.
 - For code changes, run relevant package tests, then `go test ./...` and
   `go vet ./...` before delivery. CI also runs `make cover`, which requires at
   least 80% coverage per eligible file, and builds with the `ORT` tag on macOS.
+  CI runs only on pull requests to `main`, filtered by the paths each workflow
+  checks; nothing runs on `main` itself, so a change lands only through a PR
+  whose checks passed. Push a branch when it is ready for a PR run.
 - Native builds use `make build` and require the tokenizers static library and
   ONNX Runtime described in `docs/INSTALL.md`. Pure-Go tests do not require those
   native dependencies. Report any checks that could not run.
