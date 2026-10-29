@@ -481,6 +481,20 @@ brings keyword vectors up to the current `TokenizerVersion` in place, without re
 
 Until it runs, queries tokenized with v2 still match v1 vectors on every term the two share.
 
+**Connections (issue #98).** A long run on macOS once stopped every ~11k chunks with `connect:
+can't assign requested address`, which means the machine ran out of local ports. The cause was
+not reproduced; measured, Go reuses a connection whose small unread remainder it drains on close,
+and breaks reuse only past about 256 KiB left unread. The store now defends anyway:
+
+- **Drains bodies:** every response body is read to EOF (up to 4 MiB) before it is closed.
+- **Larger idle pool:** the client keeps up to 16 idle connections to Qdrant, not Go's default
+  of 2, so concurrent ingests reuse theirs.
+- **Retries port exhaustion:** a dial failing with `EADDRNOTAVAIL` is retried with backoff
+  (250 ms doubling to 10 s, eight times). That is longer than macOS's ~30 s `TIME_WAIT`, so one
+  run finishes instead of stopping. Nothing reached Qdrant, so this is safe for writes.
+- **Counts connections:** the progress line every 10 s reports how many Qdrant connections the
+  store has opened. A few means reuse; thousands is the #98 symptom, and the next place to look.
+
 ## Duplicate clean-up
 
 `orch rag dedupe` (dry-run unless `--apply`; deletes through `DeleteSource` with `confirm`) lists a
