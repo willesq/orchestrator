@@ -12,7 +12,7 @@ struct ClaudeView: View {
 
     /// One section of the tab: a provider's kind.
     enum Section: String, CaseIterable, Identifiable {
-        case hooks, permissions, plugins, rules, instructions
+        case hooks, permissions, plugins, rules, instructions, agents, skills
 
         var id: String { rawValue }
 
@@ -23,13 +23,15 @@ struct ClaudeView: View {
             case .plugins: "Plugins"
             case .rules: "Safety Net rules"
             case .instructions: "Instructions"
+            case .agents: "Subagents"
+            case .skills: "Skills"
             }
         }
 
         var provider: String {
             switch self {
             case .rules: "cc-safety-net"
-            case .instructions: "orch-instructions"
+            case .instructions, .agents, .skills: "orch-instructions"
             default: "claude-code"
             }
         }
@@ -41,20 +43,25 @@ struct ClaudeView: View {
             case .plugins: "plugin"
             case .rules: "rule"
             case .instructions: "module"
+            case .agents: "agent"
+            case .skills: "skill"
             }
         }
 
         /// How wide the list may be. Instruction rows are a title and a
         /// sentence, so they cede room to the module text beside them.
         var listWidth: (min: CGFloat, ideal: CGFloat) {
-            self == .instructions ? (340, 420) : (420, 560)
+            showsText ? (340, 420) : (420, 560)
         }
 
         /// How wide the detail pane may be. A module's rendered text needs
         /// room to read; other items show a command and a few fields.
         var detailWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) {
-            self == .instructions ? (400, 560, 960) : (280, 340, 520)
+            showsText ? (400, 560, 960) : (280, 340, 520)
         }
+
+        /// Sections whose items are text orch ships, shown in full.
+        var showsText: Bool { [.instructions, .agents, .skills].contains(self) }
 
         var emptyText: String {
             switch self {
@@ -63,6 +70,8 @@ struct ClaudeView: View {
             case .plugins: "No plugins in enabledPlugins."
             case .rules: "No cc-safety-net rulebooks are listed in rule.json."
             case .instructions: "No instruction modules. Run orch install --apply to wire your agents."
+            case .agents: "No subagents ship with this orch."
+            case .skills: "No skills ship with this orch."
             }
         }
     }

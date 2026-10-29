@@ -129,7 +129,7 @@ func TestGuardQueuedCallers(t *testing.T) {
 			wantCode: codes.PermissionDenied, wantMsg: "cannot rate tasks"},
 		{name: "a task may list settings", ctx: task, method: orchdv1.Orchd_ListSettings_FullMethodName},
 		{name: "a task cannot toggle a setting", ctx: task, method: orchdv1.Orchd_SetSettingEnabled_FullMethodName,
-			wantCode: codes.PermissionDenied, wantMsg: "cannot change Claude Code, cc-safety-net or instruction-module settings"},
+			wantCode: codes.PermissionDenied, wantMsg: "cannot change Claude Code, cc-safety-net or instruction, subagent and skill settings"},
 		{name: "a task cannot add a hook", ctx: task, method: orchdv1.Orchd_AddSetting_FullMethodName,
 			wantCode: codes.PermissionDenied, wantMsg: "cannot change Claude Code"},
 		{name: "a task cannot remove a setting", ctx: task, method: orchdv1.Orchd_RemoveSetting_FullMethodName,

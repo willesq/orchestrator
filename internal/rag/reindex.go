@@ -97,7 +97,10 @@ func (s *Service) ReindexKeywords(ctx context.Context, apply bool) (ReindexRepor
 			}
 		}
 		if time.Since(last) >= 10*time.Second {
-			log.Printf("rag: keyword re-index of %s: %d of %d chunks", st.Collection(), rep.Updated, rep.Stale)
+			// Reason: the connection count tells a reused keep-alive (a few)
+			// from a dial per request (thousands), the issue #98 symptom.
+			log.Printf("rag: keyword re-index of %s: %d of %d chunks, %d Qdrant connections opened so far",
+				st.Collection(), rep.Updated, rep.Stale, st.Dials())
 			last = time.Now()
 		}
 		if next == nil {

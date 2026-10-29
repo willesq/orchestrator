@@ -6,10 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/willesq/orchestrator/internal/bm25"
@@ -30,6 +34,9 @@ type QdrantStore struct {
 	collection string
 	apiKey     string
 	http       *http.Client
+	// dials counts the TCP connections the client opened, so a long job can
+	// report whether it is reusing them (issue #98).
+	dials *atomic.Int64
 
 	// layout caches the collection's vector layout once it is known.
 	mu     sync.Mutex
@@ -68,38 +75,80 @@ func (l Layout) String() string {
 // NewQdrantStore constructs a store. apiKey may be empty for an unauthenticated
 // local instance.
 func NewQdrantStore(baseURL, collection, apiKey string) *QdrantStore {
+	dials := &atomic.Int64{}
 	return &QdrantStore{
 		baseURL:    baseURL,
 		collection: collection,
 		apiKey:     apiKey,
-		http:       &http.Client{Timeout: 30 * time.Second},
+		http:       &http.Client{Timeout: 30 * time.Second, Transport: qdrantTransport(dials)},
+		dials:      dials,
 	}
 }
 
+// qdrantTransport keeps enough idle connections to the one Qdrant host for
+// concurrent ingests to reuse them, and counts every dial in dials. The
+// default keeps two per host, so a burst past that closes the extras, each
+// leaving a port in TIME_WAIT.
+func qdrantTransport(dials *atomic.Int64) *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.MaxIdleConnsPerHost = 16
+	dial := t.DialContext
+	t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		dials.Add(1)
+		return dial(ctx, network, addr)
+	}
+	return t
+}
+
+// Dials is how many TCP connections the store has opened to Qdrant.
+func (q *QdrantStore) Dials() int64 {
+	if q.dials == nil {
+		return 0
+	}
+	return q.dials.Load()
+}
+
+// maxDrain bounds how much of a response body is read just to reuse its
+// connection; past it, closing the connection is cheaper.
+const maxDrain = 4 << 20
+
+// dialRetries is how many times a request is retried when the dial fails
+// for want of a local port, with backoff starting at dialBackoff and capped
+// at dialBackoffMax. Together they wait out more than macOS keeps a closed
+// connection in TIME_WAIT (about 30 s), so one long run finishes rather than
+// stopping for a rerun.
+var (
+	dialRetries    = 8
+	dialBackoff    = 250 * time.Millisecond
+	dialBackoffMax = 10 * time.Second
+)
+
+// portExhausted reports a dial that failed for want of a local port
+// (EADDRNOTAVAIL, "can't assign requested address"). Nothing reached Qdrant,
+// so the request is safe to retry whatever its method.
+func portExhausted(err error) bool { return errors.Is(err, syscall.EADDRNOTAVAIL) }
+
 func (q *QdrantStore) do(ctx context.Context, method, path string, body, out any) error {
-	var reader *bytes.Reader
+	var payload []byte
 	if body != nil {
 		b, err := json.Marshal(body)
 		if err != nil {
 			return err
 		}
-		reader = bytes.NewReader(b)
-	} else {
-		reader = bytes.NewReader(nil)
+		payload = b
 	}
-	req, err := http.NewRequestWithContext(ctx, method, q.baseURL+path, reader)
+	resp, err := q.send(ctx, method, path, payload)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	if q.apiKey != "" {
-		req.Header.Set("api-key", q.apiKey)
-	}
-	resp, err := q.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
+	// Reason: the transport reuses a connection only once its body is read
+	// to EOF. Closing it unread (no out, or a decoder stopping before a
+	// trailing newline) opened a new connection per request, and a long
+	// re-index ran the machine out of ephemeral ports (issue #98).
+	defer func() {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxDrain))
+		_ = resp.Body.Close()
+	}()
 	if resp.StatusCode >= 300 {
 		var buf bytes.Buffer
 		_, _ = buf.ReadFrom(resp.Body)
@@ -115,6 +164,32 @@ func (q *QdrantStore) do(ctx context.Context, method, path string, body, out any
 		return json.NewDecoder(resp.Body).Decode(out)
 	}
 	return nil
+}
+
+// send issues one request, retrying with backoff while the dial fails for
+// want of a local port.
+func (q *QdrantStore) send(ctx context.Context, method, path string, payload []byte) (*http.Response, error) {
+	delay := dialBackoff
+	for attempt := 0; ; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, method, q.baseURL+path, bytes.NewReader(payload))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if q.apiKey != "" {
+			req.Header.Set("api-key", q.apiKey)
+		}
+		resp, err := q.http.Do(req)
+		if err == nil || !portExhausted(err) || attempt >= dialRetries {
+			return resp, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(delay):
+		}
+		delay = min(2*delay, dialBackoffMax)
+	}
 }
 
 // Collection names the collection the store reads and writes.

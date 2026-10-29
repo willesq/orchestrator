@@ -141,6 +141,16 @@ lives in this machine's `orch.db`. orchd removes that module's import from each 
 within seconds and puts it back if the block is edited by hand; the next session loads the
 change. The app shows each module's full text.
 
+**Subagents and skills.** The Claude Code subagents and skills orch ships (its own, plus the
+author's `adversarial-qa`, `adversarial-reviewer`, `security-audit` and other agents, and the
+`adversarial-qa`, `api-design` and `qa-fixer` skills) are toggled the same way: Claude tab,
+**Subagents** or **Skills**, or `orch settings disable agent <name>` / `disable skill <name>`.
+Off removes the files orch installed for it from `~/.claude` (backed up first); on puts them
+back. A copy of your own that is identical to the shipped one is taken over; one you changed is
+left alone and reported. To ship another one, add its files under
+`internal/install/assets/claude/agents/` or `skills/<name>/` with the `managed-by: orch` marker,
+and rebuild.
+
 **Adding a module.** Add a Markdown file to `internal/install/modules/` with a frontmatter
 header, then rebuild:
 

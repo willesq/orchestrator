@@ -472,13 +472,31 @@ func applyPermissionsWith(root map[string]any, t settings.Toggles) (string, erro
 	// Pre-authorize the exploit-finder sandbox wrapper so a PoC can run without a
 	// per-run confirmation the nested agent has no way to answer. A deny the user
 	// added outranks an allow in Claude Code, so an existing deny is left alone.
-	bashAdded := false
-	if !hasRule(deny, exploitFinderSandboxRule) && !hasRule(ask, exploitFinderSandboxRule) && !hasRule(allow, exploitFinderSandboxRule) {
+	//
+	// Reason: the rule is only as safe as the wrapper it names, so it follows
+	// the exploit-finder toggle: with the agent off its wrapper is removed,
+	// and a pre-authorized command naming a missing file would run whatever
+	// is put there next.
+	bashAdded, bashRemoved := false, false
+	finderOn := true
+	if on, known := t.State(InstructionsProvider, KindAgent, "exploit-finder"); known {
+		finderOn = on
+	}
+	switch {
+	case !finderOn && hasRule(allow, exploitFinderSandboxRule):
+		kept := allow[:0:0]
+		for _, r := range allow {
+			if s, ok := r.(string); !ok || s != exploitFinderSandboxRule {
+				kept = append(kept, r)
+			}
+		}
+		allow, bashRemoved = kept, true
+	case finderOn && !hasRule(deny, exploitFinderSandboxRule) && !hasRule(ask, exploitFinderSandboxRule) && !hasRule(allow, exploitFinderSandboxRule):
 		allow = append(allow, exploitFinderSandboxRule)
 		bashAdded = true
 	}
 
-	if len(added) > 0 || bashAdded {
+	if len(added) > 0 || bashAdded || bashRemoved {
 		perms["allow"] = allow
 		root["permissions"] = perms
 	}
@@ -486,6 +504,9 @@ func applyPermissionsWith(root map[string]any, t settings.Toggles) (string, erro
 	var notes []string
 	if bashAdded {
 		notes = append(notes, "added "+exploitFinderSandboxRule+" — exploit-finder PoCs run in its sandboxed container without prompting")
+	}
+	if bashRemoved {
+		notes = append(notes, "removed "+exploitFinderSandboxRule+" — exploit-finder is turned off in orch, so its wrapper is gone")
 	}
 	if len(added) > 0 {
 		rules := make([]string, len(added))

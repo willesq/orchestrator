@@ -65,14 +65,32 @@ Claude Code adds no co-author trailer, per the shared policy; other `attribution
 A `permissions.deny` or `attribution` of an unexpected JSON type aborts the install. No `ask`
 rule is ever written: guards deny narrowly and never prompt.
 
-**Agents and skills:** agents `dev`, `dispatcher`, `exploit-finder`, `ops`, `research`,
-`reviewer`, `triage`; the helper script `exploit-finder-sandbox.sh` (the PoC sandbox wrapper,
-installed via an `agents/*.sh` glob alongside the `*.md` agents); skills `orch-dispatch`,
-`orch-pr-status`, `orch-rag-ingest`, `orch-rag-query`, `orch-repo-onboard`, `orch-task-status`,
-embedded from
-`internal/install/assets/`. Each carries a `managed-by: orch` marker: missing files are created,
-marked files updated, symlinks into the retired `~/.claude/orchestrator` checkout replaced; any
-other file aborts the install rather than being overwritten.
+**Agents and skills:** everything under `internal/install/assets/claude/` (embedded with `all:`,
+so `agents/_shared` is included), grouped by `install.ClaudeAssets` into units a machine turns on
+or off:
+
+- **Agents:** `adversarial-qa`, `adversarial-reviewer`, `dev`, `dispatcher`,
+  `documentation-manager`, `exploit-finder`, `feature-coder`, `initializer`, `ops`, `research`,
+  `reviewer`, `security-audit`, `state-recovery`, `triage`, `validation`. An agent owns
+  `agents/<name>.md`, any `agents/<name>-*` helper (`exploit-finder-sandbox.sh`, the PoC sandbox
+  wrapper) and any `agents/_shared/<name>-*/` directory (`adversarial-qa-references/`).
+- **Skills:** `adversarial-qa`, `api-design`, `qa-fixer`, `orch-dispatch`, `orch-pr-status`,
+  `orch-rag-ingest`, `orch-rag-query`, `orch-repo-onboard`, `orch-task-status`. A skill owns
+  everything under `skills/<name>/`.
+- **Adding one:** add its files there and rebuild. A file no agent or skill owns, or one without
+  the marker, fails the build's tests.
+
+Each file carries a `managed-by: orch` marker:
+- **Created or updated:** missing files are created and marked files updated.
+- **Legacy links:** symlinks into the retired `~/.claude/orchestrator` checkout are replaced.
+- **Adopted:** an unmarked file is taken over when it is byte for byte the shipped copy without
+  its marker line (the user's own copy that orch now ships).
+- **Refused:** any other file aborts the install rather than being overwritten.
+
+An agent or skill turned off in orch is left as it is; orchd removes its files (see
+[settings.md](settings.md)). The `exploit-finder` sandbox allow rule follows that agent's toggle:
+added while it is on, removed while it is off. Third-party, unknown-origin and repo-specific skills stay out of the
+binary as plain files in `~/.claude`.
 
 **Items turned off in orch:** the settings edit reads the toggles from `orch.db` (read-only,
 works with orchd down) and leaves out each orch item the user turned off: a disabled orch-hook

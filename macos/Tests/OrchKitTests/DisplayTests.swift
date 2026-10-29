@@ -111,6 +111,12 @@ if [ -z "${HOME-}" ]; then case "${OSTYPE-}" in msys*) printf '{}\\n' ;; esac; e
         let guarded = SettingItem(ref: SettingRef(provider: "orch-instructions", kind: "module", identity: "credential-rules"),
                                   payloadJSON: #"{"title":"Credential rules","sensitive":true}"#)
         #expect(guarded.module?.sensitive == true)
+        for kind in ["agent", "skill"] {
+            let shipped = SettingItem(ref: SettingRef(provider: "orch-instructions", kind: kind, identity: "qa-fixer"),
+                                      payloadJSON: #"{"title":"qa-fixer","description":"Fix findings.","body":"Body","path":"/h/x"}"#)
+            #expect(shipped.module?.body == "Body")
+            #expect(shipped.display == SettingDisplay(title: "qa-fixer", detail: "Fix findings.", proseDetail: true))
+        }
     }
 
     @Test func permissionsAreLiteralAndPluginsPlain() {

@@ -201,9 +201,10 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     text, shown verbatim.
   - **Refresh** asks GitHub for your orgs and teams again.
 - **Claude:** the managed settings ([settings.md](settings.md)): Claude Code's hooks, permission
-  rules and plugins, cc-safety-net's rules, and orch's instruction modules, in five sections
+  rules and plugins, cc-safety-net's rules, and what orch ships for agents, in seven sections
   (Hooks grouped by event, Permissions by list, Plugins by marketplace, Safety Net rules by
-  rulebook, Instructions by topic), each with how many are on.
+  rulebook, Instructions by topic, Subagents, Skills), each with how many are on. Instructions,
+  Subagents and Skills show each item's full text, rendered, in the detail pane.
   - **Live:** `ListSettings` every 2 s while the tab is shown, so edits made to the files elsewhere
     appear within a few seconds; nothing is redrawn when the listing has not changed.
   - **Rows:** a switch, a readable name, the exact text under it, and an origin badge (`orch`,
