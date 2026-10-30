@@ -1,0 +1,72 @@
+# Restores a cache keyed <kind>-<scope>-<runner>-<hash>, where scope is the
+# literal word main or branch (never a branch name) and hash is the SHA of the
+# dependency files the cache depends on (go.sum, Package.resolved).
+#
+# Why two scopes: GitHub lets a pull request read caches saved on main and on
+# its own ref, but a cache a pull request saves is visible to that pull request
+# only. So branch caches speed up later pushes to the same PR, and main caches,
+# saved by cache-main.yml when the dependency files change on main, are the
+# shared starting point every PR falls back to.
+#
+# Restore order: this scope and hash; main and this hash; then the newest cache
+# of this scope, then of main, for this kind and runner (an older hash still
+# saves most of the work). Pair with actions/cache/save on outputs.key when
+# outputs.hit is not 'true', so each key is written once.
+name: Scoped cache restore
+description: Restore a <kind>-<main|branch>-<runner>-<hash> cache with a fallback to main.
+inputs:
+  kind:
+    description: What is cached (go, swift, tokenizers-<version>).
+    required: true
+  scope:
+    description: The literal word main or branch.
+    required: true
+  runner:
+    description: The runner type, as in runs-on (ubuntu-latest, macos-latest, macos-26).
+    required: true
+  hash:
+    description: SHA of the dependency files; must not be empty.
+    required: true
+  path:
+    description: Paths to cache, one per line.
+    required: true
+outputs:
+  key:
+    description: The exact key; save under it when hit is not 'true'.
+    value: ${{ steps.keys.outputs.key }}
+  hit:
+    description: "'true' when the exact key was restored."
+    value: ${{ steps.restore.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - id: keys
+      shell: bash
+      env:
+        KIND: ${{ inputs.kind }}
+        SCOPE: ${{ inputs.scope }}
+        RUNNER: ${{ inputs.runner }}
+        HASH: ${{ inputs.hash }}
+      run: |
+        case "$SCOPE" in
+          main|branch) ;;
+          *) echo "::error::scope must be main or branch, not '$SCOPE'"; exit 1 ;;
+        esac
+        if [ -z "$HASH" ]; then
+          echo "::error::empty hash for the $KIND cache (missing dependency file?)"
+          exit 1
+        fi
+        echo "key=$KIND-$SCOPE-$RUNNER-$HASH" >> "$GITHUB_OUTPUT"
+        {
+          echo "restore<<RESTORE_KEYS"
+          echo "$KIND-main-$RUNNER-$HASH"
+          echo "$KIND-$SCOPE-$RUNNER-"
+          echo "$KIND-main-$RUNNER-"
+          echo "RESTORE_KEYS"
+        } >> "$GITHUB_OUTPUT"
+    - id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ inputs.path }}
+        key: ${{ steps.keys.outputs.key }}
+        restore-keys: ${{ steps.keys.outputs.restore }}

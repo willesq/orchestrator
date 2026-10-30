@@ -28,6 +28,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # A release builds everything from its tag and restores no cache.
+          cache: false
 
       - name: Vet
         run: go vet ./...
@@ -51,6 +53,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # A release builds everything from its tag and restores no cache.
+          cache: false
 
       - name: Fetch libtokenizers static lib (darwin-arm64)
         env:

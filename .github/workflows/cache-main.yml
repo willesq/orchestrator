@@ -1,0 +1,199 @@
+# Fills the main-scoped caches every pull request falls back to. It is the one
+# thing that runs on main, and only because its output is consumed downstream:
+# a cache a pull request saves is visible to that pull request alone, so
+# without this each PR would start cold. It checks nothing (the PR was the
+# gate) and runs only when what the caches depend on changes, or by hand.
+#
+# Each job builds what the matching PR job builds, so the cache holds the same
+# artifacts, and saves it as <kind>-main-<runner>-<hash> (see
+# .github/actions/scoped-cache). A key that already exists is left alone.
+name: cache-main
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - go.mod
+      - go.sum
+      - macos/Package.resolved
+      - ".github/workflows/cache-main.yml"
+      - ".github/actions/scoped-cache/**"
+  workflow_dispatch:
+
+concurrency:
+  group: cache-main
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TOKENIZERS_VERSION: v1.27.0
+
+jobs:
+  go-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Go cache paths
+        id: gopaths
+        run: |
+          { echo "mod=$(go env GOMODCACHE)"; echo "build=$(go env GOCACHE)"; } >> "$GITHUB_OUTPUT"
+
+      - name: Restore Go cache
+        id: gocache
+        uses: ./.github/actions/scoped-cache
+        with:
+          kind: go
+          scope: main
+          runner: ubuntu-latest
+          hash: ${{ hashFiles('go.mod', 'go.sum') }}
+          path: |
+            ${{ steps.gopaths.outputs.mod }}
+            ${{ steps.gopaths.outputs.build }}
+
+      # What ci.yml's test job compiles: the packages, vet, and the test
+      # binaries (-run '^$' compiles them without running any test).
+      - name: Warm the Go caches
+        if: steps.gocache.outputs.hit != 'true'
+        run: |
+          go mod download
+          go build ./...
+          go vet ./...
+          go test -run '^$' ./... >/dev/null
+
+      - name: Save Go cache
+        if: steps.gocache.outputs.hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.gopaths.outputs.mod }}
+            ${{ steps.gopaths.outputs.build }}
+          key: ${{ steps.gocache.outputs.key }}
+
+  go-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Go cache paths
+        id: gopaths
+        run: |
+          { echo "mod=$(go env GOMODCACHE)"; echo "build=$(go env GOCACHE)"; } >> "$GITHUB_OUTPUT"
+
+      - name: Restore Go cache
+        id: gocache
+        uses: ./.github/actions/scoped-cache
+        with:
+          kind: go
+          scope: main
+          runner: macos-latest
+          hash: ${{ hashFiles('go.mod', 'go.sum') }}
+          path: |
+            ${{ steps.gopaths.outputs.mod }}
+            ${{ steps.gopaths.outputs.build }}
+
+      - name: Restore libtokenizers
+        id: tokcache
+        uses: ./.github/actions/scoped-cache
+        with:
+          kind: tokenizers-${{ env.TOKENIZERS_VERSION }}
+          scope: main
+          runner: macos-latest
+          hash: darwin-arm64
+          path: build/lib/darwin-arm64
+
+      - name: Fetch libtokenizers static lib (darwin-arm64)
+        if: hashFiles('build/lib/darwin-arm64/libtokenizers.a') == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build/lib/darwin-arm64
+          gh release download "$TOKENIZERS_VERSION" --repo daulet/tokenizers \
+            --pattern 'libtokenizers.darwin-arm64.tar.gz' --dir /tmp
+          tar xzf /tmp/libtokenizers.darwin-arm64.tar.gz -C build/lib/darwin-arm64
+
+      # What ci.yml's build job compiles.
+      - name: Warm the Go caches (cgo, -tags ORT)
+        if: steps.gocache.outputs.hit != 'true'
+        run: |
+          export CGO_ENABLED=1
+          export CGO_LDFLAGS="-Lbuild/lib/darwin-arm64"
+          export MACOSX_DEPLOYMENT_TARGET=14.0
+          go mod download
+          for b in orch orchd orch-hook; do
+            go build -tags ORT -o "build/bin/$b" "./cmd/$b"
+          done
+
+      - name: Save Go cache
+        if: steps.gocache.outputs.hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.gopaths.outputs.mod }}
+            ${{ steps.gopaths.outputs.build }}
+          key: ${{ steps.gocache.outputs.key }}
+
+      - name: Save libtokenizers
+        if: steps.tokcache.outputs.hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/lib/darwin-arm64
+          key: ${{ steps.tokcache.outputs.key }}
+
+  swift:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        id: xcode
+        run: |
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' | sort -V | tail -1)"
+          if [ -z "$xcode" ]; then
+            echo "::error::no Xcode 26 on this runner"
+            exit 1
+          fi
+          sudo xcode-select -s "$xcode/Contents/Developer"
+          echo "name=$(basename "$xcode" .app)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Swift build cache
+        id: swiftcache
+        uses: ./.github/actions/scoped-cache
+        with:
+          kind: swift
+          scope: main
+          runner: macos-26
+          hash: ${{ steps.xcode.outputs.name }}-${{ hashFiles('macos/Package.resolved') }}
+          path: |
+            macos/.build
+            ~/Library/Caches/org.swift.swiftpm
+
+      # What app.yml builds: the protoc plugins (release) and the package with
+      # its tests under coverage (debug).
+      - name: Warm the Swift build cache
+        if: steps.swiftcache.outputs.hit != 'true'
+        run: |
+          brew list protobuf >/dev/null 2>&1 || brew install protobuf
+          make proto-swift
+          make app-cover
+
+      - name: Save Swift build cache
+        if: steps.swiftcache.outputs.hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            macos/.build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ steps.swiftcache.outputs.key }}

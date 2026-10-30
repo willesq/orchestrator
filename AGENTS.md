@@ -61,8 +61,12 @@ policies and isolate harness-specific behavior in adapters.
   `go vet ./...` before delivery. CI also runs `make cover`, which requires at
   least 80% coverage per eligible file, and builds with the `ORT` tag on macOS.
   CI runs only on pull requests to `main`, filtered by the paths each workflow
-  checks; nothing runs on `main` itself, so a change lands only through a PR
-  whose checks passed. Push a branch when it is ready for a PR run.
+  checks; no checks run on `main` itself, so a change lands only through a PR
+  whose checks passed. Push a branch when it is ready for a PR run. The one
+  workflow on `main`, `cache-main.yml`, only refills the shared build caches
+  when `go.mod`, `go.sum` or `macos/Package.resolved` change; caches are keyed
+  `<kind>-<main|branch>-<runner>-<SHA of those files>`
+  (`.github/actions/scoped-cache`), and releases restore none.
 - Native builds use `make build` and require the tokenizers static library and
   ONNX Runtime described in `docs/INSTALL.md`. Pure-Go tests do not require those
   native dependencies. Report any checks that could not run.
