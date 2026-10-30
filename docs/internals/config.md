@@ -53,7 +53,7 @@ change together in one write. orchd itself writes config only to record a migrat
 | `sessions.summarize.model` | `haiku` | model for summaries |
 | `sessions.summarize.timeout` | `2m` | per summary |
 | `queue.max_active` | `20` | pending + running tasks; dispatch fails beyond (0 = no cap) |
-| `queue.worker.enabled` | `false` | run tasks (opt-in: it runs agents unattended) |
+| `queue.worker.enabled` | `true` | run dispatched tasks (never with `bypassPermissions`; sessions cannot dispatch more) |
 | `queue.worker.claude_bin` | found automatically | Claude Code binary |
 | `queue.worker.permission_mode` | `auto` | `auto`, `dontAsk`, `acceptEdits` or `plan` |
 | `queue.worker.timeout` | `60m` | per task |

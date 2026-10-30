@@ -38,6 +38,11 @@ service Orchd {
   rpc RecommendModel(RecommendModelRequest) returns (RecommendModelResponse);
   // RateTask records the user's verdict on a finished task, evidence for routing.
   rpc RateTask(RateTaskRequest) returns (RateTaskResponse);
+  // RetryTask runs a task again; the runner resumes its session when one
+  // exists. Refused while the task's run is still active.
+  rpc RetryTask(RetryTaskRequest) returns (RetryTaskResponse);
+  // CancelTask stops a pending or in-progress task.
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
   // MigrateHybrid copies the RAG collection into a new hybrid one (dense plus
   // BM25 keyword vectors), re-chunking and re-embedding its text, and switches
   // to it. Without apply it only plans. The old collection is kept.
@@ -283,6 +288,21 @@ message Task {
   Route route = 14;          // the model the task was dispatched to, if routed
   string rating = 15;        // good | rework | bad, set by the user
   string pr_outcome = 16;    // good | rework | bad, from the fate of the task's PRs
+  TaskRun run = 17;          // liveness; set by GetTask for a pending or in-progress task
+}
+
+// TaskRun is whether anything is working on a pending or in-progress task.
+message TaskRun {
+  // state is running (a session is live here), waiting (its workflow is
+  // queued for a worker, or will be handed out again), or stalled (nothing
+  // owns it; retry or cancel it).
+  string state = 1;
+  int64 pid = 2;            // the agent CLI process while running, else 0
+  int64 started_at = 3;     // unix seconds the current session started, else 0
+  int64 last_activity = 4;  // unix seconds the session transcript last changed, else 0
+  string session_id = 5;
+  string cwd = 6;
+  string resume_command = 7; // how to open the session yourself, when there is one
 }
 
 message StatusRequest {}
@@ -361,6 +381,22 @@ message RateTaskRequest {
 }
 
 message RateTaskResponse {}
+
+message RetryTaskRequest {
+  string id = 1;
+}
+
+message RetryTaskResponse {
+  string run_id = 1; // the new workflow run
+}
+
+message CancelTaskRequest {
+  string id = 1;
+}
+
+message CancelTaskResponse {
+  string outcome = 1; // what happened, for the user
+}
 
 message MigrateHybridRequest {
   string target = 1; // empty: <active collection>-hybrid

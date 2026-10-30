@@ -52,7 +52,8 @@ func (s *SQLTaskStore) SaveResult(ctx context.Context, in workflows.AgentTaskInp
 		   result=excluded.result, status=excluded.status, updated_at=datetime('now'),
 		   cost_usd=excluded.cost_usd, duration_ms=excluded.duration_ms, turns=excluded.turns,
 		   session_id=excluded.session_id, models=excluded.models, prs=excluded.prs,
-		   verification=excluded.verification`,
+		   verification=excluded.verification
+		 WHERE tasks.status <> 'cancelled'`,
 		in.ID, in.Agent, in.Body, out.Result, out.Status,
 		out.CostUSD, out.DurationMS, out.Turns, out.SessionID,
 		strings.Join(out.Models, ","), strings.Join(out.PRs, ","), out.Verification)
@@ -73,12 +74,24 @@ func (s *SQLTaskStore) Create(ctx context.Context, in workflows.AgentTaskInput) 
 	return err
 }
 
-// SetStatus moves a task to a new non-terminal status, leaving its result alone.
+// SetStatus moves a task to a new non-terminal status, leaving its result
+// alone. A cancelled task stays cancelled: a run that raced the cancel must not
+// revive it.
 func (s *SQLTaskStore) SetStatus(ctx context.Context, id, status string) error {
 	_, err := s.db.ExecContext(ctx,
-		`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=?`,
+		`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=? AND status <> 'cancelled'`,
 		status, id)
 	return err
+}
+
+// Status reads a task's ledger status, and false when it has no row.
+func (s *SQLTaskStore) Status(ctx context.Context, id string) (string, bool, error) {
+	var status string
+	err := s.db.QueryRowContext(ctx, `SELECT status FROM tasks WHERE id=?`, id).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return status, err == nil, err
 }
 
 // CountByStatus counts the tasks in each status.

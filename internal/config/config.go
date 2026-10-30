@@ -354,9 +354,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("sessions.summarize.enabled", true)
 	v.SetDefault("sessions.summarize.model", "haiku")
 	v.SetDefault("sessions.summarize.timeout", "2m")
-	// Queue worker: off until explicitly enabled, because it spawns agent sessions.
+	// Queue worker: on, so a dispatched task runs. It acts only on tasks that
+	// were dispatched, in a permission mode that keeps the guard rails
+	// (bypassPermissions is refused), with dispatch denied to its sessions.
 	v.SetDefault("queue.max_active", 20)
-	v.SetDefault("queue.worker.enabled", false)
+	v.SetDefault("queue.worker.enabled", true)
 	v.SetDefault("queue.worker.claude_bin", "")
 	v.SetDefault("queue.worker.permission_mode", "auto")
 	v.SetDefault("queue.worker.timeout", "60m")

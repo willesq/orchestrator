@@ -20,7 +20,7 @@ Read-only. Never mutates anything.
 ## How the queue works
 
 `queue_dispatch` (and `orch dispatch`) record a task as `pending` and start a durable
-workflow. When the queue worker is enabled (`queue.worker.enabled`, off by default), orchd
+workflow. When the queue worker is enabled (`queue.worker.enabled`, on by default), orchd
 runs the task as a headless Claude Code session (`claude -p --agent <agent>`) in the
 dispatch's working directory. The task moves to `in_progress`, then ends `complete`,
 `failed`, or `blocked` (the agent's final message began with `BLOCKED:`), and its result is
@@ -34,7 +34,10 @@ and a new session sees the latest in its SessionStart digest.
 When the worker is disabled, tasks stay `pending` indefinitely. Say so plainly instead of
 implying they are running; check with `orch config get queue.worker.enabled` (`orch status`
 lists a `workflow-worker` subsystem only when it is on). A task interrupted by an orchd
-restart is not lost: its session resumes once orchd is back.
+restart is not lost: its session resumes once orchd is back. `orch task <id>` says whether a
+pending or in-progress task is running, waiting for a worker, or stalled, with its session and
+the command to open it; for a stalled task, suggest `orch task <id> --retry` or `--cancel` and
+let the user choose.
 
 Subagents spawned with the **Agent tool** in a parent session are separate: their
 completions are in the per-session event log below.

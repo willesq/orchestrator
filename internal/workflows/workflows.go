@@ -8,6 +8,7 @@ package workflows
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/cschleiden/go-workflows/workflow"
 )
@@ -54,19 +55,45 @@ type Outcome struct {
 
 // runOptions disables retries. A failed agent run has already had side effects
 // (branches, pushes, PRs), so repeating it blindly could duplicate them; failure
-// is recorded and left to a human. A run interrupted by a worker shutdown is not
-// a failure: it is abandoned, handed out again after the restart, and resumes.
+// is recorded and left to a human. An interrupted run is not a failure; AgentTask
+// runs it again, and the runner resumes its session.
 var runOptions = workflow.ActivityOptions{RetryOptions: workflow.RetryOptions{MaxAttempts: 1}}
 
+// InterruptedMarker is in the error of a run cut off by a worker shutdown. It
+// is matched by text because an activity's error reaches the workflow
+// serialized, without its Go type.
+const InterruptedMarker = "interrupted by worker shutdown"
+
+// IsInterrupted reports whether err is a run cut off by a worker shutdown.
+func IsInterrupted(err error) bool {
+	return err != nil && strings.Contains(err.Error(), InterruptedMarker)
+}
+
+// maxResumes bounds how often one workflow runs an interrupted task again, so
+// a worker that keeps restarting cannot loop a task forever.
+const maxResumes = 20
+
 // AgentTask is the durable workflow for a dispatched task: mark it running, then
-// run it.
+// run it, running it again whenever a worker shutdown interrupted it.
+//
+// Reason: go-workflows records any error an activity returns, even one from a
+// stopping worker, as that activity's failure; with retries off, the workflow
+// then failed and the ledger kept the task in_progress with nothing running it
+// (issue #100). Catching the interruption here makes the next worker (after the
+// restart) run it again, and the runner resumes the same session.
 func AgentTask(ctx workflow.Context, in AgentTaskInput) (string, error) {
 	workflow.Logger(ctx).Info("agent task started", "id", in.ID, "agent", in.Agent)
 	if _, err := workflow.ExecuteActivity[string](
 		ctx, workflow.DefaultActivityOptions, StartActivity, in).Get(ctx); err != nil {
 		return "", err
 	}
-	return workflow.ExecuteActivity[string](ctx, runOptions, RunActivity, in).Get(ctx)
+	for resumes := 0; ; resumes++ {
+		result, err := workflow.ExecuteActivity[string](ctx, runOptions, RunActivity, in).Get(ctx)
+		if !IsInterrupted(err) || resumes >= maxResumes {
+			return result, err
+		}
+		workflow.Logger(ctx).Info("agent task interrupted by a worker shutdown; resuming", "id", in.ID, "resume", resumes+1)
+	}
 }
 
 // TaskStore persists task state.
@@ -110,11 +137,21 @@ func StartActivity(ctx context.Context, in AgentTaskInput) (string, error) {
 // is a wiring bug rather than something the task did.
 var errNoRunner = errors.New("no agent runner configured")
 
+// statusReader is a TaskStore that can also read a task's status.
+type statusReader interface {
+	Status(ctx context.Context, id string) (string, bool, error)
+}
+
 // RunActivity runs the task's agent session and records its terminal status
-// and result.
+// and result. A task cancelled before its session started is not run.
 func RunActivity(ctx context.Context, in AgentTaskInput) (string, error) {
 	if runner == nil {
 		return "", errNoRunner
+	}
+	if sr, ok := store.(statusReader); ok {
+		if status, found, err := sr.Status(ctx, in.ID); err == nil && found && status == "cancelled" {
+			return "cancelled by the user", nil
+		}
 	}
 	out, err := runner.Run(ctx, in)
 	if err != nil {

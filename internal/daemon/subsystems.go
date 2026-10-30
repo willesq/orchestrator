@@ -30,6 +30,7 @@ import (
 	"github.com/willesq/orchestrator/internal/prs"
 	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/qdrant"
+	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
 	"github.com/willesq/orchestrator/internal/selfupdate"
 	"github.com/willesq/orchestrator/internal/settings"
@@ -76,6 +77,10 @@ type deps struct {
 	// settingsSvc is the settings reconciler shared with the settings RPCs;
 	// nil drops the settings watcher.
 	settingsSvc *settings.Service
+	// taskCtl reconciles tasks when the worker starts, and live receives the
+	// worker's runner; either may be nil.
+	taskCtl *queue.Control
+	live    *liveRunner
 }
 
 // subsystems lists orchd's supervised units in start order (stopped in reverse).
@@ -91,7 +96,7 @@ func subsystems(d deps) []supervisor.Unit {
 		if d.store != nil {
 			reg = models.NewRegistry(d.store)
 		}
-		out = append(out, workerUnit(d.backend, d.settings.Queue.Worker, secretEnv(d.settings), reg))
+		out = append(out, workerUnit(d.backend, d.settings.Queue.Worker, secretEnv(d.settings), reg, d.taskCtl, d.live))
 	}
 	sched := d.docs
 	if sched == nil {
@@ -199,9 +204,11 @@ func qdrantUnit(s config.Settings, apiKey string, sys *systemProbe) (supervisor.
 
 // workerUnit drains durable agent-task workflows, running each as a headless
 // agent session. A restart builds a fresh worker over the same backend: a session
-// cut short by the restart is abandoned, handed out again once its lease lapses,
-// and resumed rather than started over (see agentrun).
-func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []string, reg *models.Registry) supervisor.Unit {
+// cut short by the restart is run again by its workflow and resumed rather than
+// started over (see workflows.AgentTask), and once the worker is up, ctl
+// settles any task a stopped worker left without an active run.
+func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []string, reg *models.Registry,
+	ctl *queue.Control, live *liveRunner) supervisor.Unit {
 	// Held across Run/Stop so the unit can join the worker it started: without
 	// that, a restart would leave the previous worker draining the same backend.
 	var current *worker.Worker
@@ -226,10 +233,16 @@ func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []str
 			if err := w.RegisterActivity(workflows.RunActivity); err != nil {
 				return err
 			}
+			// Reason: before Start, so a task too stale to run is stopped
+			// before this worker can pick it up.
+			reconcileTasks(ctx, ctl)
 			if err := w.Start(ctx); err != nil {
 				return err
 			}
 			current = w
+			if live != nil {
+				live.set(tr.r)
+			}
 			beat()
 			return nil
 		},

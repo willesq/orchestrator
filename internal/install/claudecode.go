@@ -323,7 +323,16 @@ func isOrchMCPServer(name string) bool {
 // a reinstall. Narrowing means replacing this with a per-server tool allowlist;
 // allowsServer already treats an existing wildcard as covering, so doing so
 // would not re-prompt anyone. Revisit if the store starts ingesting more
-// untrusted input, or when queue_dispatch stops being a stub.
+// untrusted input.
+//
+// Accepted risk (decided 2026-10-30, with the worker on by default): the
+// wildcard also pre-approves queue_dispatch, so a prompt injection in an
+// interactive session can dispatch a task that the worker then runs
+// unattended (permission mode auto, never bypassPermissions) in any directory.
+// Kept for frictionless dispatch; the bounds are that queued sessions cannot
+// dispatch, queue.max_active caps what is in flight, and a task sitting a day
+// without running is stopped rather than started. To close it, deny or ask
+// on mcp__queue__queue_dispatch, or turn the worker off.
 func mcpToolRule(server string) string { return "mcp__" + server + "__*" }
 
 // exploitFinderSandboxRule pre-authorizes the exploit-finder PoC sandbox wrapper,
