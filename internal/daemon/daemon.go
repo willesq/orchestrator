@@ -100,6 +100,12 @@ type server struct {
 	// workerEnabled reports whether queued tasks will run, so a caller can say
 	// plainly when a dispatch will sit pending instead.
 	workerEnabled bool
+	// ctl retries, cancels and reconciles tasks; live is the worker's current
+	// runner, for liveness and cancel; home is where transcripts live. Each
+	// is nil or empty when unavailable.
+	ctl  *queue.Control
+	live *liveRunner
+	home string
 	// summaries receives finished sessions for summarizing; nil when off.
 	summaries *summaryQueue
 	// router resolves dispatch routes and recommendations; nil, with routerErr
@@ -338,7 +344,9 @@ func (s *server) ListTasks(ctx context.Context, req *orchdv1.ListTasksRequest) (
 	}
 	out := &orchdv1.ListTasksResponse{Tasks: make([]*orchdv1.Task, 0, len(list))}
 	for _, t := range list {
-		out.Tasks = append(out.Tasks, taskPB(t))
+		pb := taskPB(t)
+		pb.Run = s.taskRun(ctx, t)
+		out.Tasks = append(out.Tasks, pb)
 	}
 	return out, nil
 }
@@ -354,7 +362,9 @@ func (s *server) GetTask(ctx context.Context, req *orchdv1.GetTaskRequest) (*orc
 	if !found {
 		return &orchdv1.GetTaskResponse{Found: false}, nil
 	}
-	return &orchdv1.GetTaskResponse{Task: taskPB(t), Found: true}, nil
+	pb := taskPB(t)
+	pb.Run = s.taskRun(ctx, t)
+	return &orchdv1.GetTaskResponse{Task: pb, Found: true}, nil
 }
 
 // count32 narrows a store count for the wire without wrapping. The counts are
@@ -560,6 +570,16 @@ func Run(ctx context.Context) error {
 	}
 	workflows.SetStore(tasks)
 	workflows.SetNotifier(notifyTaskDone)
+	// The run index backs retry, cancel, liveness and the worker's
+	// reconcile-on-start; without it those are unavailable, not fatal.
+	var ctl *queue.Control
+	live := &liveRunner{}
+	if runs, err := queue.OpenRuns(queue.BackendFile(), b); err != nil {
+		log.Printf("orchd: task run index unavailable: %v", err)
+	} else {
+		defer func() { _ = runs.Close() }()
+		ctl = &queue.Control{Store: tasks, Runs: runs, CancelLive: live.cancel, MaxActive: s.Queue.MaxActive}
+	}
 	disp := queue.NewDispatcher(b, tasks)
 	disp.MaxActive = s.Queue.MaxActive
 	disp.Snapshot = agentrun.Snapshot
@@ -593,7 +613,7 @@ func Run(ctx context.Context) error {
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
 		summaries: summaries, github: ghService, system: system, docs: docsSched,
-		settingsSvc: settingsSvc,
+		settingsSvc: settingsSvc, taskCtl: ctl, live: live,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return err
@@ -632,7 +652,7 @@ func Run(ctx context.Context) error {
 		grpc.StreamInterceptor(guardQueuedStreams),
 	)
 	orchdv1.RegisterOrchdServer(gs, &server{
-		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks,
+		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks, ctl: ctl, live: live, home: userHome(),
 		workerEnabled: s.Queue.Worker.Enabled,
 		summaries:     summaries,
 		router:        router, routerErr: routerErr,

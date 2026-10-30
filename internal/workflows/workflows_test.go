@@ -209,3 +209,61 @@ func TestStartActivityMarksTheTaskInProgress(t *testing.T) {
 		})
 	}
 }
+
+// TestAgentTaskResumesInterruptedRuns is the regression test for issue #100: a
+// run cut off by a worker shutdown is run again (the runner resumes its
+// session) instead of failing the workflow and stranding the ledger row.
+func TestAgentTaskResumesInterruptedRuns(t *testing.T) {
+	interrupted := fmt.Errorf("task id %s: %w", InterruptedMarker, context.Canceled)
+	wt := tester.NewWorkflowTester[string](AgentTask, tester.WithTestTimeout(5*time.Second))
+	wt.OnActivity(StartActivity, mock.Anything, mock.Anything).Return("id", nil)
+	wt.OnActivity(RunActivity, mock.Anything, mock.Anything).Return("", interrupted).Twice()
+	wt.OnActivity(RunActivity, mock.Anything, mock.Anything).Return("opened PR #9", nil).Once()
+	wt.Execute(context.Background(), AgentTaskInput{ID: "id", Agent: "dev", Body: "hi"})
+	if !wt.WorkflowFinished() {
+		t.Fatal("workflow did not finish")
+	}
+	got, err := wt.WorkflowResult()
+	if err != nil || got != "opened PR #9" {
+		t.Fatalf("result = %q, %v; want the resumed run's result", got, err)
+	}
+	wt.AssertExpectations(t)
+}
+
+func TestAgentTaskGivesUpAfterMaxResumes(t *testing.T) {
+	interrupted := fmt.Errorf("%s: %w", InterruptedMarker, context.Canceled)
+	wt := tester.NewWorkflowTester[string](AgentTask, tester.WithTestTimeout(5*time.Second))
+	wt.OnActivity(StartActivity, mock.Anything, mock.Anything).Return("id", nil)
+	wt.OnActivity(RunActivity, mock.Anything, mock.Anything).Return("", interrupted).Times(maxResumes + 1)
+	wt.Execute(context.Background(), AgentTaskInput{ID: "id", Agent: "dev", Body: "hi"})
+	if _, err := wt.WorkflowResult(); !IsInterrupted(err) {
+		t.Fatalf("after %d resumes the interruption should surface, got %v", maxResumes, err)
+	}
+	wt.AssertExpectations(t)
+}
+
+func TestIsInterrupted(t *testing.T) {
+	if IsInterrupted(nil) || IsInterrupted(errors.New("tests broke")) {
+		t.Error("an ordinary error counted as an interruption")
+	}
+	if !IsInterrupted(errors.New("task t interrupted by worker shutdown: context canceled")) {
+		t.Error("the runner's interruption message was not recognized")
+	}
+}
+
+type cancelledStore struct{ fakeStore }
+
+func (c *cancelledStore) Status(context.Context, string) (string, bool, error) {
+	return "cancelled", true, nil
+}
+
+func TestRunActivitySkipsACancelledTask(t *testing.T) {
+	r := &fakeRunner{out: Outcome{Status: "complete"}}
+	SetRunner(r)
+	SetStore(&cancelledStore{})
+	t.Cleanup(func() { SetRunner(nil); SetStore(nil) })
+	got, err := RunActivity(context.Background(), AgentTaskInput{ID: "t"})
+	if err != nil || got != "cancelled by the user" || r.got != nil {
+		t.Errorf("RunActivity on a cancelled task = %q %v, ran=%v", got, err, r.got != nil)
+	}
+}

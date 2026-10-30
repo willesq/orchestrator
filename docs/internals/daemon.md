@@ -53,7 +53,7 @@ Unary and stream interceptors allow a queued caller only the RPCs that read stat
 `Search`, `ListSources`, `ListTasks`, `GetTask`, `Status`, `RecommendModel`, `ListPRs`, the
 GitHub reads (`GetGitHubIdentity`, `ListGitHubScopes`, `ListGitHubRepos`, `ListGitHubItems`),
 `TailLogs`, `GetSystemMetrics`, `ListDocs`, `GetDocument`, `GetDocsSync` and
-`ListRegisteredSources`. Every other RPC (`Dispatch`, `RateTask`, `Ingest`, `DeleteSource`,
+`ListRegisteredSources`. Every other RPC (`Dispatch`, `RateTask`, `RetryTask`, `CancelTask`, `Ingest`, `DeleteSource`,
 `SummarizeSession`, the migration calls (`MigrateHybrid`, `DropBackup`, `ReindexKeywords`), the source, docs-sync, GitHub-scope and `Restart` calls, and any
 RPC added later) is refused with `PermissionDenied`, and the refusal is logged. A test fails
 when an RPC is in neither list. A queued session's own transcript is still
@@ -65,7 +65,7 @@ advisory, not a sandbox, because a task runs as the user. A task can leave the t
 command: `launchctl submit`, `open` (a `.command` file or an app), `osascript`, `at` or cron, or
 `systemd-run --user` all start a process launchd or systemd owns, and a process whose parent
 exits before orchd accepts its connection is reparented the same way. A task can also write the
-files orchd reads directly: hand-off entries, `orch.db` (the CLI writes routing and the model
+files orchd reads directly: hand-off entries, `workflows.db` (a retry or reconcile replays a task's input from its history), `orch.db` (the CLI writes routing and the model
 registry there, not over the socket) and the Qdrant API key file. The harness sandbox (Codex's,
 or Claude Code's permission rules) is the boundary for those. A PID can also be reused between
 connect and accept; audit tokens (`LOCAL_PEERTOKEN`) or pidfds would close that.
@@ -93,6 +93,8 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `SummarizeSession` | session_id, transcript_path, tags → accepted | ID `^[A-Za-z0-9_-]{1,128}$`; path absolute, `.jsonl`, regular file; enqueue only (backlog 32) |
 | `RecommendModel` | task_kind → route, from_table | see [tasks.md](tasks.md) |
 | `RateTask` | id, rating (`good`/`rework`/`bad`) → — | sets the task's rating; with the PR-outcome sweep, the only ledger writes outside the queue |
+| `RetryTask` | id → run_id | runs the task again from its recorded input, resuming its session; the newest run still active → `FailedPrecondition`, unknown → `NotFound` |
+| `CancelTask` | id → outcome | stops a running session, cancels a queued run, or marks a stranded task `cancelled`; already ended → `FailedPrecondition` |
 | `MigrateHybrid` | target, apply → report, error | one at a time (`Aborted` if busy); see [memory.md](memory.md) |
 | `DropBackup` | apply → collection, points, dropped | collection name only from config, never the caller; shares the migration lock |
 | `ReindexKeywords` | apply → collection, tokenizer_version, total, stale, updated, applied, error | shares the migration lock (`Aborted` if busy); a refused plan → `FailedPrecondition`; an applied run that stops reports what it did in `error`; see [memory.md](memory.md#keyword-re-index) |

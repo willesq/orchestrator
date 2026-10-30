@@ -60,6 +60,8 @@ var taskCallable = map[string]bool{
 var operatorActions = map[string]string{
 	orchdv1.Orchd_Dispatch_FullMethodName:         "dispatch further tasks",
 	orchdv1.Orchd_RateTask_FullMethodName:         "rate tasks",
+	orchdv1.Orchd_RetryTask_FullMethodName:        "retry tasks",
+	orchdv1.Orchd_CancelTask_FullMethodName:       "cancel tasks",
 	orchdv1.Orchd_Ingest_FullMethodName:           "write to the RAG store",
 	orchdv1.Orchd_DeleteSource_FullMethodName:     "delete from the RAG store",
 	orchdv1.Orchd_SummarizeSession_FullMethodName: "write to the RAG store",

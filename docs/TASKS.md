@@ -8,12 +8,37 @@ was dispatched from. The agent's final message is the result: `complete`, `faile
 if it starts with `BLOCKED:`. Read results with `orch tasks`, `orch task <id>`, or `queue_read`;
 `orch tasks --stats` summarizes cost, run time and success per agent.
 
-The worker is off by default, since it runs agents unattended:
+The worker is on by default. It runs only tasks that were dispatched, never with
+`bypassPermissions`, and its sessions cannot dispatch more. To turn it off:
 
 ```sh
-orch config set queue.worker.enabled true
+orch config set queue.worker.enabled false
 orch restart
 ```
+
+A config file written by an older orch may still say `enabled: false` (`orch config set` writes
+every key); set it to `true` to turn the worker on.
+
+**Accepted risk:** `orch install` pre-approves the queue MCP tools, `queue_dispatch` included. A
+prompt injection in an interactive session can therefore dispatch a task the worker runs
+unattended, in auto permission mode, in any directory. The bounds:
+- queued sessions cannot dispatch more;
+- `queue.max_active` caps what is in flight;
+- a task that sat a day without running is stopped rather than started.
+
+To require a prompt for each dispatch, add `mcp__queue__queue_dispatch` to your Claude Code
+`permissions.ask` list, or turn the worker off.
+
+Watching and steering a task:
+
+```sh
+orch task <id>            # for a pending or running task: running / waiting / ⚠ stalled,
+                          # its process, how long, last activity, session, and how to open it
+orch task <id> --retry    # run it again; its session resumes where it left off
+orch task <id> --cancel   # stop a pending or running task
+```
+
+`orch tasks` marks a task nothing is running as `⚠ stalled`.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -31,7 +56,12 @@ How tasks behave:
   `package.json` script) in a minimal environment. On failure the session is resumed once to fix
   it (`queue.worker.verify.retries`); if it still fails, so does the task.
 - **No retries.** A failed task may already have pushed or opened PRs, so it is not rerun.
-- **Restarts resume.** Interrupted tasks resume their own session once `orchd` is back.
+- **Restarts resume.** A task cut off by an orchd restart (or `orch restart worker`) is run again
+  by its workflow once the worker is back, and resumes its own session. When the worker starts it
+  also settles anything a stopped worker left behind: a task interrupted under an older orch is
+  resumed, one whose workflow failed is marked `failed` with the reason, and one with no run at
+  all is marked `interrupted` with how to retry it. A task is never left `in_progress` with
+  nothing running it.
 - **Bounded fan-out.** Queued sessions can't dispatch more tasks; `queue.max_active` is the
   hard limit.
 - **Isolation.** Sessions don't receive the vector store's API key. Task bodies and results are

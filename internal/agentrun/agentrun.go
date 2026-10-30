@@ -142,6 +142,8 @@ type Runner struct {
 	Stop context.Context
 	// Codex configures Codex runs; with no Bin, tasks routed to Codex fail.
 	Codex CodexOptions
+
+	live liveRuns
 }
 
 // Run executes t and reports its outcome. A run the agent itself fails, or that
@@ -188,6 +190,22 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 		defer cancel()
 	}
 
+	// Each run gets its own cancel, so `orch task --cancel` stops this task
+	// alone; Live exposes it for liveness.
+	ctx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+	sid := SessionID(t.ID)
+	if t.Provider == ProviderCodex {
+		sid = r.codexThread(t.ID)
+	}
+	entry := r.live.track(LiveRun{TaskID: t.ID, Provider: t.Provider, Model: t.Model, SessionID: sid,
+		Dir: dir, Started: time.Now()}, cancelRun)
+	if entry == nil {
+		return failed("task %s already has a session running in this worker; not starting a second", t.ID), nil
+	}
+	defer r.live.untrack(entry)
+	ctx = withPIDReport(ctx, func(pid int) { r.live.setPID(t.ID, pid) })
+
 	resume := r.canResume(t)
 	prompt := taskPrompt(t)
 	if resume {
@@ -196,6 +214,12 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 	o, err := r.session(ctx, t, dir, prompt, resume)
 	if err == nil && o.Status == StatusComplete && r.Verify.Enabled {
 		o, err = r.verifyAndFix(ctx, t, dir, o)
+	}
+	if r.live.wasCancelled(entry) {
+		// Reason: a cancelled run's session exited on a signal, which would
+		// otherwise read as a failure or, if the worker was stopping too, an
+		// interruption to resume.
+		o, err = Outcome{Status: StatusCancelled, Result: "cancelled by the user", Metrics: o.Metrics}, nil
 	}
 	// A finished Codex task has nothing left to resume; an interrupted one
 	// (err set) keeps its thread for the next run.
@@ -306,7 +330,14 @@ func (r *Runner) runCLI(ctx context.Context, bin string, args []string, dir, pro
 	cmd.WaitDelay = 10 * time.Second
 
 	started := time.Now()
-	runErr := cmd.Run()
+	runErr := cmd.Start()
+	if runErr == nil {
+		reportPID(ctx, cmd.Process.Pid)
+		runErr = cmd.Wait()
+		// Reason: a PID outlives its process; shown after exit it could
+		// name an unrelated process the user then signals.
+		reportPID(ctx, 0)
+	}
 	elapsed := time.Since(started).Milliseconds()
 	// Tools the session backgrounded can outlive a normal exit, and WaitDelay
 	// escalates only against the CLI itself. The group's ID stays reserved while

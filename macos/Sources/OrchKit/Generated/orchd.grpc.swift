@@ -189,6 +189,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "RetryTask" metadata.
+        public enum RetryTask: Sendable {
+            /// Request type for "RetryTask".
+            public typealias Input = Orchd_V1_RetryTaskRequest
+            /// Response type for "RetryTask".
+            public typealias Output = Orchd_V1_RetryTaskResponse
+            /// Descriptor for "RetryTask".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "RetryTask",
+                type: .unary
+            )
+        }
+        /// Namespace for "CancelTask" metadata.
+        public enum CancelTask: Sendable {
+            /// Request type for "CancelTask".
+            public typealias Input = Orchd_V1_CancelTaskRequest
+            /// Response type for "CancelTask".
+            public typealias Output = Orchd_V1_CancelTaskResponse
+            /// Descriptor for "CancelTask".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "CancelTask",
+                type: .unary
+            )
+        }
         /// Namespace for "MigrateHybrid" metadata.
         public enum MigrateHybrid: Sendable {
             /// Request type for "MigrateHybrid".
@@ -529,6 +555,8 @@ public enum Orchd_V1_Orchd: Sendable {
             SummarizeSession.descriptor,
             RecommendModel.descriptor,
             RateTask.descriptor,
+            RetryTask.descriptor,
+            CancelTask.descriptor,
             MigrateHybrid.descriptor,
             DropBackup.descriptor,
             ReindexKeywords.descriptor,
@@ -880,6 +908,53 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RateTaskResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RateTaskResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RetryTask" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RetryTask runs a task again; the runner resumes its session when one
+        /// > exists. Refused while the task's run is still active.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RetryTaskRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RetryTaskRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RetryTaskResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func retryTask<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RetryTaskRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RetryTaskRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RetryTaskResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RetryTaskResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "CancelTask" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > CancelTask stops a pending or in-progress task.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_CancelTaskRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_CancelTaskRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_CancelTaskResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func cancelTask<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_CancelTaskRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_CancelTaskRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_CancelTaskResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_CancelTaskResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "MigrateHybrid" method.
@@ -1944,6 +2019,75 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.RateTask.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "RetryTask" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RetryTask runs a task again; the runner resumes its session when one
+        /// > exists. Refused while the task's run is still active.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RetryTaskRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RetryTaskRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RetryTaskResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func retryTask<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RetryTaskRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RetryTaskRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RetryTaskResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RetryTaskResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.RetryTask.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "CancelTask" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > CancelTask stops a pending or in-progress task.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_CancelTaskRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_CancelTaskRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_CancelTaskResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func cancelTask<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_CancelTaskRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_CancelTaskRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_CancelTaskResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_CancelTaskResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.CancelTask.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -3213,6 +3357,65 @@ extension Orchd_V1_Orchd.ClientProtocol {
         )
     }
 
+    /// Call the "RetryTask" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RetryTask runs a task again; the runner resumes its session when one
+    /// > exists. Refused while the task's run is still active.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RetryTaskRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func retryTask<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RetryTaskRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RetryTaskResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.retryTask(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RetryTaskRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RetryTaskResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "CancelTask" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > CancelTask stops a pending or in-progress task.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_CancelTaskRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func cancelTask<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_CancelTaskRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_CancelTaskResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.cancelTask(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_CancelTaskRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_CancelTaskResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "MigrateHybrid" method.
     ///
     /// > Source IDL Documentation:
@@ -4395,6 +4598,73 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.rateTask(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RetryTask" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RetryTask runs a task again; the runner resumes its session when one
+    /// > exists. Refused while the task's run is still active.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func retryTask<Result>(
+        _ message: Orchd_V1_RetryTaskRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RetryTaskResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RetryTaskRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.retryTask(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "CancelTask" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > CancelTask stops a pending or in-progress task.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func cancelTask<Result>(
+        _ message: Orchd_V1_CancelTaskRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_CancelTaskResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_CancelTaskRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.cancelTask(
             request: request,
             options: options,
             onResponse: handleResponse

@@ -13,9 +13,60 @@ Packages: `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `pr
    is never retried), saves the outcome to the ledger, and appends a `queue` event naming the task
    and status, never its result. Inputs (including the route) are fixed at dispatch, so a resumed
    task keeps its model.
-3. **Worker:** runs only with `queue.worker.enabled`; `max_concurrent` parallel activities. Stopping
-   cancels sessions; after restart, an interrupted task's lease lapses and it resumes its own
-   session.
+   - **Interrupted runs:** go-workflows records any error an activity returns, even one from a
+     stopping worker, as that activity's failure. So `AgentTask` recognizes the runner's
+     interruption (`workflows.InterruptedMarker`, matched by text since the error arrives
+     serialized) and runs `RunActivity` again, up to 20 times. The next worker resumes the
+     session. Before this, the workflow failed and the ledger kept the task `in_progress` with
+     nothing running it (issue #100).
+3. **Worker:** runs only with `queue.worker.enabled` (default `true`); `max_concurrent` parallel
+   activities. Stopping cancels sessions.
+4. **Reconcile on start:** each time the worker starts, before it takes any work,
+   `queue.Control.Reconcile` checks every `pending` or `in_progress` task. Three guards apply:
+   - **New tasks:** a task dispatched under a minute ago is skipped, since its row is written
+     before its workflow.
+   - **Stale tasks:** a `pending` task over a day old whose run never started (dispatched while no
+     worker ran, say) is cancelled and marked `interrupted`, not run against today's repos.
+   - **Retry cap:** after 3 automatic retries an interrupted task is left `interrupted` for the
+     user, so a worker that keeps crashing cannot rerun it without end. A task whose newest run is still active is left alone. The rest
+   are settled by how their run ended:
+
+   | Run ended | Result |
+   |---|---|
+   | With the interruption error (a task stranded by an older orch) | Run again from its recorded input, as a retry |
+   | Failed with any other error | `failed`, with that error |
+   | Finished without recording a result | `interrupted`, with the retry command |
+   | No run at all | `interrupted`, with the retry command |
+5. **Runs:** a task's first run is the workflow instance named after it; a retry is
+   `<id>#retry-<8 hex>`. `queue.Runs` finds a task's runs in the backend's own `instances` table
+   (read-only), since every backend call needs an execution ID and there is no lookup by name;
+   tests run that query against the real backend of the pinned go-workflows version. A task's
+   input comes from the newest run whose history records its start (a run no worker has picked
+   up yet has none).
+6. **Control** (operator-only RPCs, refused to queued tasks):
+   - `RetryTask` starts another run from the recorded input, unless the newest run is active. It
+     counts against `queue.max_active` like a dispatch.
+   - `CancelTask` stops a session running here (the runner records the task `cancelled`). A run
+     still waiting for a worker is cancelled in the backend, and a task with no active run is
+     marked `cancelled`.
+   - **Ordering:** `Reconcile`, `Retry` and `Cancel` run one at a time, so two can never start
+     two runs of one session.
+   - **Cancelled is final:** the ledger never moves a `cancelled` task to another status. A run
+     that races the cancel checks the ledger before it starts, and the worker refuses a second
+     live session for a task.
+7. **Liveness:** `GetTask`/`ListTasks` attach a `TaskRun` to pending and in-progress tasks:
+
+   | State | Meaning | Also shows |
+   |---|---|---|
+   | `running` | a session is live in this worker | its PID and start time |
+   | `waiting` | its run is queued for a worker | |
+   | `stalled` | nothing owns it | |
+
+   Every state also carries the session ID, the working directory, the time the session
+   transcript last changed, and a `claude --resume` command to open the session yourself.
+   - **Safe to paste:** the command single-quotes the working directory for the shell and drops
+     the `cd` if the path holds control characters. The CLI strips control characters from what it
+     prints.
 
 ## Claude Code runner
 

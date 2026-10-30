@@ -61,8 +61,12 @@ func newTasksCmd(cf clientFactory) *cobra.Command {
 			}
 			fmt.Fprintf(out, "%-40s %-12s %-10s %s\n", "ID", "STATUS", "AGENT", "UPDATED")
 			for _, t := range tasks {
+				status := t.GetStatus()
+				if tag := taskfmt.RunTag(t); tag != "" {
+					status += " " + tag
+				}
 				fmt.Fprintf(out, "%-40s %-12s %-10s %s\n",
-					t.GetId(), t.GetStatus(), t.GetAgent(), t.GetUpdatedAt())
+					t.GetId(), status, t.GetAgent(), t.GetUpdatedAt())
 				if b := firstLine(t.GetBody()); b != "" {
 					fmt.Fprintf(out, "    %s\n", b)
 				}
@@ -70,7 +74,7 @@ func newTasksCmd(cf clientFactory) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&statusFilter, "status", "", "filter: pending | in_progress | complete | failed")
+	cmd.Flags().StringVar(&statusFilter, "status", "", "filter: pending | in_progress | complete | failed | blocked | interrupted | cancelled")
 	cmd.Flags().StringVar(&agentFilter, "agent", "", "filter by target agent")
 	cmd.Flags().IntVar(&limit, "limit", 20, "max tasks to show")
 	cmd.Flags().BoolVar(&stats, "stats", false, "summarize outcomes per agent: success rate, run time and cost")
@@ -82,11 +86,21 @@ const maxStatsTasks = 500
 
 func newTaskCmd(cf clientFactory) *cobra.Command {
 	var rate string
+	var retry, cancelTask bool
 	cmd := &cobra.Command{
 		Use:   "task <id>",
-		Short: "Show one dispatched agent task, or rate it with --rate",
-		Args:  cobra.ExactArgs(1),
+		Short: "Show one dispatched agent task, or rate, retry or cancel it",
+		Long: `Show one dispatched agent task. For a pending or in-progress task it also
+shows whether anything is running it: running (with its process and how long),
+waiting for a worker, or stalled, plus its session and the command to open it.
+
+--retry runs a task again; the session is resumed where it left off when one
+exists. --cancel stops a pending or in-progress task.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			if n := btoi(rate != "") + btoi(retry) + btoi(cancelTask); n > 1 {
+				return fmt.Errorf("use only one of --rate, --retry and --cancel")
+			}
 			// A rating is evidence routing acts on, so a queued session must not
 			// grade its own work.
 			if id := os.Getenv(agentrun.TaskIDEnv); rate != "" && id != "" {
@@ -106,6 +120,23 @@ func newTaskCmd(cf clientFactory) *cobra.Command {
 				fmt.Fprintf(c.OutOrStdout(), "rated %s %s\n", args[0], rate)
 				return nil
 			}
+			if retry {
+				resp, err := client.RetryTask(ctx, &orchdv1.RetryTaskRequest{Id: args[0]})
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(c.OutOrStdout(), "retrying %s as run %s; its session resumes where it left off when there is one\n",
+					args[0], resp.GetRunId())
+				return nil
+			}
+			if cancelTask {
+				resp, err := client.CancelTask(ctx, &orchdv1.CancelTaskRequest{Id: args[0]})
+				if err != nil {
+					return err
+				}
+				fmt.Fprintf(c.OutOrStdout(), "cancelled %s: %s\n", args[0], resp.GetOutcome())
+				return nil
+			}
 			resp, err := client.GetTask(ctx, &orchdv1.GetTaskRequest{Id: args[0]})
 			if err != nil {
 				return err
@@ -116,14 +147,23 @@ func newTaskCmd(cf clientFactory) *cobra.Command {
 				return nil
 			}
 			t := resp.GetTask()
-			fmt.Fprintf(out, "id:      %s\nstatus:  %s\nagent:   %s\nupdated: %s\n%s\nbody:\n%s\n\nresult:\n%s\n",
-				t.GetId(), t.GetStatus(), t.GetAgent(), t.GetUpdatedAt(), taskfmt.Outcome(t),
+			fmt.Fprintf(out, "id:      %s\nstatus:  %s\nagent:   %s\nupdated: %s\n%s%s\nbody:\n%s\n\nresult:\n%s\n",
+				t.GetId(), t.GetStatus(), t.GetAgent(), t.GetUpdatedAt(), taskfmt.Run(t, time.Now()), taskfmt.Outcome(t),
 				t.GetBody(), orNotYet(t.GetResult()))
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&rate, "rate", "", "record your verdict on a finished task: good, rework or bad")
+	cmd.Flags().BoolVar(&retry, "retry", false, "run the task again, resuming its session when there is one")
+	cmd.Flags().BoolVar(&cancelTask, "cancel", false, "stop a pending or in-progress task")
 	return cmd
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // firstLine trims a body to one readable line for list output.

@@ -32,6 +32,8 @@ const (
 	Orchd_SummarizeSession_FullMethodName      = "/orchd.v1.Orchd/SummarizeSession"
 	Orchd_RecommendModel_FullMethodName        = "/orchd.v1.Orchd/RecommendModel"
 	Orchd_RateTask_FullMethodName              = "/orchd.v1.Orchd/RateTask"
+	Orchd_RetryTask_FullMethodName             = "/orchd.v1.Orchd/RetryTask"
+	Orchd_CancelTask_FullMethodName            = "/orchd.v1.Orchd/CancelTask"
 	Orchd_MigrateHybrid_FullMethodName         = "/orchd.v1.Orchd/MigrateHybrid"
 	Orchd_DropBackup_FullMethodName            = "/orchd.v1.Orchd/DropBackup"
 	Orchd_ReindexKeywords_FullMethodName       = "/orchd.v1.Orchd/ReindexKeywords"
@@ -97,6 +99,11 @@ type OrchdClient interface {
 	RecommendModel(ctx context.Context, in *RecommendModelRequest, opts ...grpc.CallOption) (*RecommendModelResponse, error)
 	// RateTask records the user's verdict on a finished task, evidence for routing.
 	RateTask(ctx context.Context, in *RateTaskRequest, opts ...grpc.CallOption) (*RateTaskResponse, error)
+	// RetryTask runs a task again; the runner resumes its session when one
+	// exists. Refused while the task's run is still active.
+	RetryTask(ctx context.Context, in *RetryTaskRequest, opts ...grpc.CallOption) (*RetryTaskResponse, error)
+	// CancelTask stops a pending or in-progress task.
+	CancelTask(ctx context.Context, in *CancelTaskRequest, opts ...grpc.CallOption) (*CancelTaskResponse, error)
 	// MigrateHybrid copies the RAG collection into a new hybrid one (dense plus
 	// BM25 keyword vectors), re-chunking and re-embedding its text, and switches
 	// to it. Without apply it only plans. The old collection is kept.
@@ -306,6 +313,26 @@ func (c *orchdClient) RateTask(ctx context.Context, in *RateTaskRequest, opts ..
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RateTaskResponse)
 	err := c.cc.Invoke(ctx, Orchd_RateTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) RetryTask(ctx context.Context, in *RetryTaskRequest, opts ...grpc.CallOption) (*RetryTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RetryTaskResponse)
+	err := c.cc.Invoke(ctx, Orchd_RetryTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) CancelTask(ctx context.Context, in *CancelTaskRequest, opts ...grpc.CallOption) (*CancelTaskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CancelTaskResponse)
+	err := c.cc.Invoke(ctx, Orchd_CancelTask_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -600,6 +627,11 @@ type OrchdServer interface {
 	RecommendModel(context.Context, *RecommendModelRequest) (*RecommendModelResponse, error)
 	// RateTask records the user's verdict on a finished task, evidence for routing.
 	RateTask(context.Context, *RateTaskRequest) (*RateTaskResponse, error)
+	// RetryTask runs a task again; the runner resumes its session when one
+	// exists. Refused while the task's run is still active.
+	RetryTask(context.Context, *RetryTaskRequest) (*RetryTaskResponse, error)
+	// CancelTask stops a pending or in-progress task.
+	CancelTask(context.Context, *CancelTaskRequest) (*CancelTaskResponse, error)
 	// MigrateHybrid copies the RAG collection into a new hybrid one (dense plus
 	// BM25 keyword vectors), re-chunking and re-embedding its text, and switches
 	// to it. Without apply it only plans. The old collection is kept.
@@ -723,6 +755,12 @@ func (UnimplementedOrchdServer) RecommendModel(context.Context, *RecommendModelR
 }
 func (UnimplementedOrchdServer) RateTask(context.Context, *RateTaskRequest) (*RateTaskResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RateTask not implemented")
+}
+func (UnimplementedOrchdServer) RetryTask(context.Context, *RetryTaskRequest) (*RetryTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RetryTask not implemented")
+}
+func (UnimplementedOrchdServer) CancelTask(context.Context, *CancelTaskRequest) (*CancelTaskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelTask not implemented")
 }
 func (UnimplementedOrchdServer) MigrateHybrid(context.Context, *MigrateHybridRequest) (*MigrateHybridResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MigrateHybrid not implemented")
@@ -1050,6 +1088,42 @@ func _Orchd_RateTask_Handler(srv interface{}, ctx context.Context, dec func(inte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).RateTask(ctx, req.(*RateTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_RetryTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetryTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).RetryTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_RetryTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).RetryTask(ctx, req.(*RetryTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_CancelTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CancelTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).CancelTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_CancelTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).CancelTask(ctx, req.(*CancelTaskRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1562,6 +1636,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RateTask",
 			Handler:    _Orchd_RateTask_Handler,
+		},
+		{
+			MethodName: "RetryTask",
+			Handler:    _Orchd_RetryTask_Handler,
+		},
+		{
+			MethodName: "CancelTask",
+			Handler:    _Orchd_CancelTask_Handler,
 		},
 		{
 			MethodName: "MigrateHybrid",
