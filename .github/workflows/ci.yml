@@ -72,6 +72,12 @@ jobs:
 
       # Separate from the coverage gate, which discards a failing package's
       # output and would let a failed test through as long as coverage held.
+      #
+      # With the restored build cache, Go reuses a package's earlier test
+      # result when its test binary and the inputs Go tracks (files it opened,
+      # env it read) are unchanged; packages a change touches always re-run.
+      # Chosen for speed (2026-10-30); add -count=1 here and in `make cover`
+      # to re-run every test on every push.
       - name: Test (pure Go)
         run: go test ./...
 
