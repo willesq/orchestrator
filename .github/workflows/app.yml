@@ -5,6 +5,12 @@
 # Runs only when the app or the RPC interface it shares with orchd changes.
 # macos-26 because the Swift dependencies need Swift 6.2 (Xcode 26). A new push
 # cancels the PR's run still in progress.
+#
+# The Swift package build (.build: dependency checkouts, their compiled
+# products, the protoc plugins) is cached as swift-<main|branch>-macos-26-
+# <Xcode>-<SHA of Package.resolved> (see .github/actions/scoped-cache). The
+# Xcode version is in the key because Swift build products depend on the
+# compiler.
 name: app
 
 on:
@@ -33,6 +39,7 @@ jobs:
       # The Swift dependencies need Swift 6.2 (Xcode 26); pick the newest
       # Xcode 26 the image has rather than trusting its default.
       - name: Select Xcode 26
+        id: xcode
         run: |
           xcode="$(find /Applications -maxdepth 1 -name 'Xcode_26*.app' | sort -V | tail -1)"
           if [ -z "$xcode" ]; then
@@ -41,6 +48,19 @@ jobs:
           fi
           sudo xcode-select -s "$xcode/Contents/Developer"
           swift --version
+          echo "name=$(basename "$xcode" .app)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Swift build cache
+        id: swiftcache
+        uses: ./.github/actions/scoped-cache
+        with:
+          kind: swift
+          scope: branch
+          runner: macos-26
+          hash: ${{ steps.xcode.outputs.name }}-${{ hashFiles('macos/Package.resolved') }}
+          path: |
+            macos/.build
+            ~/Library/Caches/org.swift.swiftpm
 
       # A proto change without regenerated Swift fails here, not at runtime.
       - name: Generated Swift matches orchd.proto
@@ -51,3 +71,12 @@ jobs:
 
       - name: Per-file coverage gate (tests included)
         run: make app-cover
+
+      - name: Save Swift build cache
+        if: steps.swiftcache.outputs.hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            macos/.build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ steps.swiftcache.outputs.key }}

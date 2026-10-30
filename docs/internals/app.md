@@ -330,8 +330,12 @@ rebuild.
   to `OrchKit` (generated code excluded).
 - **CI:** `app.yml` runs on pull requests to `main` that touch `macos/**`, `orchd.proto` or the
   Makefile. It checks codegen drift and runs the coverage gate; it does not assemble or upload
-  the app, since the release builds its own. Nothing runs on `main`: the PR is the gate. To try
+  the app, since the release builds its own. No checks run on `main`: the PR is the gate. To try
   a branch's app, build it locally with `make app`.
+  - **Build cache:** the Swift package build (`macos/.build`, dependency checkouts, the protoc
+    plugins) is cached as `swift-<main|branch>-macos-26-<Xcode>-<SHA of Package.resolved>`. A PR
+    restores its own cache, else the one `cache-main.yml` saved on `main` when `Package.resolved`
+    last changed. The release workflow restores no cache.
 - **Release:** the `app` job in `release.yml` runs after the binaries are released and always
   attaches `Orch_<version>_darwin_arm64.zip` to the release. The build happens before any signing
   material is on the runner, and only versions pinned in `Package.resolved` are used.

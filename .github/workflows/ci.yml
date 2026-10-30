@@ -8,6 +8,11 @@
 # cgo (-tags ORT) build needs macOS: it links a darwin static library, which
 # Linux has no linker for. It runs after the tests pass, so a failing PR never
 # spends macOS minutes. A new push cancels the PR's run still in progress.
+#
+# Caches are keyed <kind>-<main|branch>-<runner>-<SHA of go.mod/go.sum> (see
+# .github/actions/scoped-cache): a PR restores its own branch cache, else the
+# one cache-main.yml saved on main, and saves a branch cache when it had no
+# exact hit.
 name: ci
 
 on:
@@ -42,6 +47,25 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # Caching is explicit and scoped (below), not setup-go's own.
+          cache: false
+
+      - name: Go cache paths
+        id: gopaths
+        run: |
+          { echo "mod=$(go env GOMODCACHE)"; echo "build=$(go env GOCACHE)"; } >> "$GITHUB_OUTPUT"
+
+      - name: Restore Go cache
+        id: gocache
+        uses: ./.github/actions/scoped-cache
+        with:
+          kind: go
+          scope: branch
+          runner: ubuntu-latest
+          hash: ${{ hashFiles('go.mod', 'go.sum') }}
+          path: |
+            ${{ steps.gopaths.outputs.mod }}
+            ${{ steps.gopaths.outputs.build }}
 
       - name: Vet
         run: go vet ./...
@@ -54,6 +78,15 @@ jobs:
       - name: Per-file coverage gate
         run: make cover
 
+      - name: Save Go cache
+        if: steps.gocache.outputs.hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.gopaths.outputs.mod }}
+            ${{ steps.gopaths.outputs.build }}
+          key: ${{ steps.gocache.outputs.key }}
+
   build:
     needs: test
     # Apple Silicon (arm64), the platform the release ships for; the same
@@ -65,8 +98,39 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: false
+
+      - name: Go cache paths
+        id: gopaths
+        run: |
+          { echo "mod=$(go env GOMODCACHE)"; echo "build=$(go env GOCACHE)"; } >> "$GITHUB_OUTPUT"
+
+      - name: Restore Go cache
+        id: gocache
+        uses: ./.github/actions/scoped-cache
+        with:
+          kind: go
+          scope: branch
+          runner: macos-latest
+          hash: ${{ hashFiles('go.mod', 'go.sum') }}
+          path: |
+            ${{ steps.gopaths.outputs.mod }}
+            ${{ steps.gopaths.outputs.build }}
+
+      # The version is in the kind, so a fallback never restores another
+      # version's library.
+      - name: Restore libtokenizers
+        id: tokcache
+        uses: ./.github/actions/scoped-cache
+        with:
+          kind: tokenizers-${{ env.TOKENIZERS_VERSION }}
+          scope: branch
+          runner: macos-latest
+          hash: darwin-arm64
+          path: build/lib/darwin-arm64
 
       - name: Fetch libtokenizers static lib (darwin-arm64)
+        if: hashFiles('build/lib/darwin-arm64/libtokenizers.a') == ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -84,3 +148,19 @@ jobs:
             go build -tags ORT -o "build/bin/$b" "./cmd/$b"
           done
           build/bin/orch version
+
+      - name: Save Go cache
+        if: steps.gocache.outputs.hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ steps.gopaths.outputs.mod }}
+            ${{ steps.gopaths.outputs.build }}
+          key: ${{ steps.gocache.outputs.key }}
+
+      - name: Save libtokenizers
+        if: steps.tokcache.outputs.hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/lib/darwin-arm64
+          key: ${{ steps.tokcache.outputs.key }}
