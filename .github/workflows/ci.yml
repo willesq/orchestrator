@@ -56,7 +56,9 @@ jobs:
 
   build:
     needs: test
-    runs-on: macos-14 # Apple Silicon (arm64), the platform the release ships for
+    # Apple Silicon (arm64), the platform the release ships for; the same
+    # runner and deployment target as release.yml (see there for why latest).
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -77,6 +79,7 @@ jobs:
         run: |
           export CGO_ENABLED=1
           export CGO_LDFLAGS="-Lbuild/lib/darwin-arm64"
+          export MACOSX_DEPLOYMENT_TARGET=14.0
           for b in orch orchd orch-hook; do
             go build -tags ORT -o "build/bin/$b" "./cmd/$b"
           done

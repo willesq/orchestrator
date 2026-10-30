@@ -37,7 +37,12 @@ jobs:
 
   release:
     needs: test
-    runs-on: macos-14 # Apple Silicon (arm64)
+    # Apple Silicon (arm64). latest, not a pinned image: pinned images are
+    # retired on GitHub's schedule (macos-14 on 2026-11-02,
+    # actions/runner-images#13518), and this job only compiles Go with cgo.
+    # The deployment target below keeps what users get fixed: binaries that
+    # run on macOS 14 and later, whatever image builds them.
+    runs-on: macos-latest
     outputs:
       version: ${{ steps.package.outputs.version }}
     steps:
@@ -62,6 +67,7 @@ jobs:
           mkdir -p dist
           export CGO_ENABLED=1
           export CGO_LDFLAGS="-Lbuild/lib/darwin-arm64"
+          export MACOSX_DEPLOYMENT_TARGET=14.0
           LDFLAGS="-s -w -X github.com/willesq/orchestrator/internal/version.Version=${VERSION} -X github.com/willesq/orchestrator/internal/version.Commit=${GITHUB_SHA::12}"
           for b in orch orchd orch-hook; do
             go build -tags ORT -ldflags "$LDFLAGS" -o "dist/$b" "./cmd/$b"
@@ -135,7 +141,7 @@ jobs:
 
   # Orch.app, attached to the same release. Separate from the binaries because
   # the Swift dependencies need Swift 6.2 (Xcode 26, macos-26) while the cgo
-  # build stays on macos-14.
+  # build runs on macos-latest.
   #
   # The release always carries Orch_<version>_darwin_arm64.zip. It is
   # Developer ID signed and notarized when all the Apple secrets are set:
