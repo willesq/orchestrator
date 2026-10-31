@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `SafetyNetView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `SafetyNetView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -247,6 +247,15 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     - **Filters:** a title or `#number` search; role (Any, Mine, Review requested, Involved); state
       (All open, Needs action, Drafts, CI failing, Watched for review, Has a verdict); repo. Each
       row carries its attention, Draft, and its review (Watching, Reviewing, or the verdict).
+    - **Layout:** a List/Board switch in the toolbar, kept across launches. Board lays the
+      filtered PRs out in lanes by where each stands (`PRBoard`): **Fix** (CI failing, changes
+      requested, conflicts, or a Changes needed verdict), **In flight** (drafts and running CI),
+      **Review** (waiting on a reviewer or orch's review), **Ship** (ready to merge, or an Approve
+      verdict), and **Cold** (untouched for 180 days and not waiting on your review), folded to a
+      strip until clicked. Verdicts count only for the current head; review requested beats Cold.
+      Lanes share the window's width, and the board scrolls sideways only when cards would get too
+      narrow. Each card shows its repo, age, title, attention, Draft, CI and review; clicking one
+      opens the same detail beside the board, closed with its × or Esc.
     - **Detail:** the selected PR from `GetPRDetail` (title, branches, size, head, CI with each
       check, review decision, requested reviewers, reviews, labels, files, description), with
       **Reload** and **Open on GitHub**. Text from GitHub is shown verbatim, never rendered.
