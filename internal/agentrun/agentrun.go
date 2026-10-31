@@ -142,8 +142,18 @@ type Runner struct {
 	Stop context.Context
 	// Codex configures Codex runs; with no Bin, tasks routed to Codex fail.
 	Codex CodexOptions
+	// OnLive, when set, is told the task ID whenever a run starts, its
+	// process starts or stops, or the run ends, so watchers see liveness
+	// change without polling. Set it before Run is called.
+	OnLive func(taskID string)
 
 	live liveRuns
+}
+
+func (r *Runner) liveChanged(taskID string) {
+	if r.OnLive != nil {
+		r.OnLive(taskID)
+	}
 }
 
 // Run executes t and reports its outcome. A run the agent itself fails, or that
@@ -203,8 +213,15 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 	if entry == nil {
 		return failed("task %s already has a session running in this worker; not starting a second", t.ID), nil
 	}
-	defer r.live.untrack(entry)
-	ctx = withPIDReport(ctx, func(pid int) { r.live.setPID(t.ID, pid) })
+	r.liveChanged(t.ID)
+	defer func() {
+		r.live.untrack(entry)
+		r.liveChanged(t.ID)
+	}()
+	ctx = withPIDReport(ctx, func(pid int) {
+		r.live.setPID(t.ID, pid)
+		r.liveChanged(t.ID)
+	})
 
 	resume := r.canResume(t)
 	prompt := taskPrompt(t)

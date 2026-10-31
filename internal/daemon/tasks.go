@@ -5,9 +5,9 @@ import (
 	"errors"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
-	"unicode"
 
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
@@ -99,20 +99,24 @@ func (s *server) taskRun(ctx context.Context, t queue.Task) *orchdv1.TaskRun {
 
 // resumeCommand opens a task's Claude Code session in the user's terminal.
 //
-// Reason: the user pastes this into a shell, and the cwd came from a dispatch
-// an agent may have made, so it is single-quoted for POSIX sh, where nothing
-// inside is expanded. A cwd with control characters gets no cd at all rather
-// than a line that could rewrite the terminal.
+// Reason: the user pastes this into whatever shell they use, and the cwd came
+// from a dispatch an agent may have made. Single quotes are inert in POSIX sh,
+// but fish reads \' and \\ inside them and csh expands ! there, so the cd is
+// included only for a path of plainly safe characters; any other path is
+// left out (the cwd is shown separately) rather than quoted cleverly.
 func resumeCommand(cwd, sessionID string) string {
 	if sessionID == "" {
 		return ""
 	}
 	cmd := "claude --resume " + sessionID
-	if cwd == "" || strings.IndexFunc(cwd, unicode.IsControl) >= 0 {
+	if !safePath.MatchString(cwd) {
 		return cmd
 	}
 	return "cd " + shellQuote(cwd) + " && " + cmd
 }
+
+// safePath is a path every common shell reads the same inside single quotes.
+var safePath = regexp.MustCompile(`^/[A-Za-z0-9 ._/+@:,=~-]*$`)
 
 // shellQuote quotes s for POSIX sh: inside single quotes nothing expands, and
 // a single quote is closed, escaped and reopened.

@@ -27,9 +27,9 @@ func Unsettled(status string) bool { return status == StatusPending || status ==
 // End records a terminal status and reason for a task whose run ended outside
 // a normal outcome (reconciled, cancelled before it ran), leaving its metrics.
 func (s *SQLTaskStore) End(ctx context.Context, id, status, result string) error {
-	_, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(ctx,
 		`UPDATE tasks SET status=?, result=?, updated_at=datetime('now') WHERE id=?`, status, result, id)
-	return err
+	return s.changed(id, res, err)
 }
 
 // unsettledTask is a task the ledger still shows pending or in progress.

@@ -215,6 +215,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "WatchTasks" metadata.
+        public enum WatchTasks: Sendable {
+            /// Request type for "WatchTasks".
+            public typealias Input = Orchd_V1_WatchTasksRequest
+            /// Response type for "WatchTasks".
+            public typealias Output = Orchd_V1_TaskEvent
+            /// Descriptor for "WatchTasks".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "WatchTasks",
+                type: .serverStreaming
+            )
+        }
         /// Namespace for "MigrateHybrid" metadata.
         public enum MigrateHybrid: Sendable {
             /// Request type for "MigrateHybrid".
@@ -557,6 +570,7 @@ public enum Orchd_V1_Orchd: Sendable {
             RateTask.descriptor,
             RetryTask.descriptor,
             CancelTask.descriptor,
+            WatchTasks.descriptor,
             MigrateHybrid.descriptor,
             DropBackup.descriptor,
             ReindexKeywords.descriptor,
@@ -955,6 +969,31 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_CancelTaskResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_CancelTaskResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "WatchTasks" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > WatchTasks streams task changes: a snapshot of the newest tasks, then
+        /// > each task whose ledger row or live run changes, and a periodic tick with
+        /// > the unsettled tasks so their liveness (last activity) stays current.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_WatchTasksRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_WatchTasksRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_TaskEvent` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func watchTasks<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_WatchTasksRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_WatchTasksRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_TaskEvent>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Orchd_V1_TaskEvent>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "MigrateHybrid" method.
@@ -2088,6 +2127,40 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.CancelTask.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "WatchTasks" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > WatchTasks streams task changes: a snapshot of the newest tasks, then
+        /// > each task whose ledger row or live run changes, and a periodic tick with
+        /// > the unsettled tasks so their liveness (last activity) stays current.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_WatchTasksRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_WatchTasksRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_TaskEvent` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func watchTasks<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_WatchTasksRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_WatchTasksRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_TaskEvent>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Orchd_V1_TaskEvent>) async throws -> Result
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.serverStreaming(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.WatchTasks.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -3416,6 +3489,35 @@ extension Orchd_V1_Orchd.ClientProtocol {
         )
     }
 
+    /// Call the "WatchTasks" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > WatchTasks streams task changes: a snapshot of the newest tasks, then
+    /// > each task whose ledger row or live run changes, and a periodic tick with
+    /// > the unsettled tasks so their liveness (last activity) stays current.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_WatchTasksRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func watchTasks<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_WatchTasksRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Orchd_V1_TaskEvent>) async throws -> Result
+    ) async throws -> Result where Result: Sendable {
+        try await self.watchTasks(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_WatchTasksRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_TaskEvent>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "MigrateHybrid" method.
     ///
     /// > Source IDL Documentation:
@@ -4665,6 +4767,39 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.cancelTask(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "WatchTasks" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > WatchTasks streams task changes: a snapshot of the newest tasks, then
+    /// > each task whose ledger row or live run changes, and a periodic tick with
+    /// > the unsettled tasks so their liveness (last activity) stays current.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func watchTasks<Result>(
+        _ message: Orchd_V1_WatchTasksRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.StreamingClientResponse<Orchd_V1_TaskEvent>) async throws -> Result
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_WatchTasksRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.watchTasks(
             request: request,
             options: options,
             onResponse: handleResponse

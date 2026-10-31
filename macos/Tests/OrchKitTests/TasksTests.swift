@@ -39,7 +39,7 @@ import Testing
         #expect(!TaskRecord(id: "t", status: "in_progress").isFinished)
         #expect(RouteInfo(provider: "claude-code", model: "opus", effort: "high").label == "claude-code/opus (high)")
         #expect(RouteInfo(model: "opus").label == "opus")
-        #expect(TaskStatusFilter.allCases.map(\.rawValue) == ["", "pending", "in_progress", "complete", "failed"])
+        #expect(TaskStatusFilter.allCases.map(\.rawValue) == ["", "pending", "in_progress", "complete", "failed", "blocked", "interrupted", "cancelled"])
         #expect(Set(TaskRating.allCases.map(\.label)).count == 3)
     }
 }
@@ -90,6 +90,34 @@ private final class FakeTasks: TasksAPI, @unchecked Sendable {
         recommended.append(taskKind)
         if fail { throw Boom() }
         return (RouteInfo(taskKind: taskKind, model: "sonnet"), true)
+    }
+
+    private(set) var retried: [String] = []
+    private(set) var cancelled: [String] = []
+
+    func retry(id: String) async throws -> String {
+        if fail { throw Boom() }
+        retried.append(id)
+        return id + "#retry-1"
+    }
+
+    func cancel(id: String) async throws -> String {
+        if fail { throw Boom() }
+        cancelled.append(id)
+        return "stopping its running session"
+    }
+
+    /// Events each watchTasks call delivers before ending, then the error
+    /// it ends with (nil: the stream ends normally).
+    var streams: [([TaskEvent], (any Error)?)] = []
+    private(set) var watched: [TaskStatusFilter] = []
+
+    func watchTasks(status: TaskStatusFilter, limit: Int, onEvent: @escaping @Sendable (TaskEvent) async -> Void) async throws {
+        watched.append(status)
+        guard !streams.isEmpty else { throw CancellationError() }
+        let (events, end) = streams.removeFirst()
+        for event in events { await onEvent(event) }
+        if let end { throw end }
     }
 }
 

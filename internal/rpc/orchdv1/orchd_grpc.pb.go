@@ -34,6 +34,7 @@ const (
 	Orchd_RateTask_FullMethodName              = "/orchd.v1.Orchd/RateTask"
 	Orchd_RetryTask_FullMethodName             = "/orchd.v1.Orchd/RetryTask"
 	Orchd_CancelTask_FullMethodName            = "/orchd.v1.Orchd/CancelTask"
+	Orchd_WatchTasks_FullMethodName            = "/orchd.v1.Orchd/WatchTasks"
 	Orchd_MigrateHybrid_FullMethodName         = "/orchd.v1.Orchd/MigrateHybrid"
 	Orchd_DropBackup_FullMethodName            = "/orchd.v1.Orchd/DropBackup"
 	Orchd_ReindexKeywords_FullMethodName       = "/orchd.v1.Orchd/ReindexKeywords"
@@ -104,6 +105,10 @@ type OrchdClient interface {
 	RetryTask(ctx context.Context, in *RetryTaskRequest, opts ...grpc.CallOption) (*RetryTaskResponse, error)
 	// CancelTask stops a pending or in-progress task.
 	CancelTask(ctx context.Context, in *CancelTaskRequest, opts ...grpc.CallOption) (*CancelTaskResponse, error)
+	// WatchTasks streams task changes: a snapshot of the newest tasks, then
+	// each task whose ledger row or live run changes, and a periodic tick with
+	// the unsettled tasks so their liveness (last activity) stays current.
+	WatchTasks(ctx context.Context, in *WatchTasksRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TaskEvent], error)
 	// MigrateHybrid copies the RAG collection into a new hybrid one (dense plus
 	// BM25 keyword vectors), re-chunking and re-embedding its text, and switches
 	// to it. Without apply it only plans. The old collection is kept.
@@ -338,6 +343,25 @@ func (c *orchdClient) CancelTask(ctx context.Context, in *CancelTaskRequest, opt
 	}
 	return out, nil
 }
+
+func (c *orchdClient) WatchTasks(ctx context.Context, in *WatchTasksRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[TaskEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Orchd_ServiceDesc.Streams[0], Orchd_WatchTasks_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchTasksRequest, TaskEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Orchd_WatchTasksClient = grpc.ServerStreamingClient[TaskEvent]
 
 func (c *orchdClient) MigrateHybrid(ctx context.Context, in *MigrateHybridRequest, opts ...grpc.CallOption) (*MigrateHybridResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -632,6 +656,10 @@ type OrchdServer interface {
 	RetryTask(context.Context, *RetryTaskRequest) (*RetryTaskResponse, error)
 	// CancelTask stops a pending or in-progress task.
 	CancelTask(context.Context, *CancelTaskRequest) (*CancelTaskResponse, error)
+	// WatchTasks streams task changes: a snapshot of the newest tasks, then
+	// each task whose ledger row or live run changes, and a periodic tick with
+	// the unsettled tasks so their liveness (last activity) stays current.
+	WatchTasks(*WatchTasksRequest, grpc.ServerStreamingServer[TaskEvent]) error
 	// MigrateHybrid copies the RAG collection into a new hybrid one (dense plus
 	// BM25 keyword vectors), re-chunking and re-embedding its text, and switches
 	// to it. Without apply it only plans. The old collection is kept.
@@ -761,6 +789,9 @@ func (UnimplementedOrchdServer) RetryTask(context.Context, *RetryTaskRequest) (*
 }
 func (UnimplementedOrchdServer) CancelTask(context.Context, *CancelTaskRequest) (*CancelTaskResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CancelTask not implemented")
+}
+func (UnimplementedOrchdServer) WatchTasks(*WatchTasksRequest, grpc.ServerStreamingServer[TaskEvent]) error {
+	return status.Error(codes.Unimplemented, "method WatchTasks not implemented")
 }
 func (UnimplementedOrchdServer) MigrateHybrid(context.Context, *MigrateHybridRequest) (*MigrateHybridResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MigrateHybrid not implemented")
@@ -1127,6 +1158,17 @@ func _Orchd_CancelTask_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _Orchd_WatchTasks_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchTasksRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(OrchdServer).WatchTasks(m, &grpc.GenericServerStream[WatchTasksRequest, TaskEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Orchd_WatchTasksServer = grpc.ServerStreamingServer[TaskEvent]
 
 func _Orchd_MigrateHybrid_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MigrateHybridRequest)
@@ -1746,6 +1788,12 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Orchd_RemoveSetting_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "WatchTasks",
+			Handler:       _Orchd_WatchTasks_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "internal/rpc/orchdv1/orchd.proto",
 }

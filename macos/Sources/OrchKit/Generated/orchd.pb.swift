@@ -840,6 +840,41 @@ public nonisolated struct Orchd_V1_CancelTaskResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Orchd_V1_WatchTasksRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// optional filter for the snapshot and changes, as ListTasks
+  public var status: String = String()
+
+  /// snapshot size; 0 defaults to 50, max 500
+  public var limit: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// TaskEvent is one message of a WatchTasks stream.
+public nonisolated struct Orchd_V1_TaskEvent: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// kind is snapshot (the newest tasks, replacing whatever the client
+  /// holds), changed (tasks whose state changed), or tick (the pending and
+  /// in-progress tasks' id, status, updated_at and run only: liveness to
+  /// merge into rows the client already has).
+  public var kind: String = String()
+
+  public var tasks: [Orchd_V1_Task] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Orchd_V1_MigrateHybridRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -3938,6 +3973,76 @@ nonisolated extension Orchd_V1_CancelTaskResponse: SwiftProtobuf.Message, SwiftP
 
   public static func ==(lhs: Orchd_V1_CancelTaskResponse, rhs: Orchd_V1_CancelTaskResponse) -> Bool {
     if lhs.outcome != rhs.outcome {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_WatchTasksRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WatchTasksRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}status\0\u{1}limit\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.limit) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.status.isEmpty {
+      try visitor.visitSingularStringField(value: self.status, fieldNumber: 1)
+    }
+    if self.limit != 0 {
+      try visitor.visitSingularInt32Field(value: self.limit, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_WatchTasksRequest, rhs: Orchd_V1_WatchTasksRequest) -> Bool {
+    if lhs.status != rhs.status {return false}
+    if lhs.limit != rhs.limit {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_TaskEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TaskEvent"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}tasks\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.tasks) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.tasks.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.tasks, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_TaskEvent, rhs: Orchd_V1_TaskEvent) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.tasks != rhs.tasks {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

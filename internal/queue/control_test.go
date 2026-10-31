@@ -414,3 +414,35 @@ func TestCancelledIsFinal(t *testing.T) {
 		t.Errorf("cancel with a late-starting session = %q %v", msg, err)
 	}
 }
+
+func TestOnChangeReportsRealWrites(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	var got []string
+	store.OnChange = func(id string) { got = append(got, id) }
+	in := task("task-n", "dev", "x")
+	if err := store.Create(ctx, in); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Create(ctx, in); err != nil { // already exists: nothing changed
+		t.Fatal(err)
+	}
+	if err := store.SetStatus(ctx, "task-n", StatusInProgress); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveResult(ctx, in, workflows.Outcome{Status: "complete"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.End(ctx, "task-n", StatusCancelled, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetStatus(ctx, "task-n", StatusPending); err != nil { // cancelled is final
+		t.Fatal(err)
+	}
+	if err := store.SetStatus(ctx, "task-missing", StatusPending); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, ",") != "task-n,task-n,task-n,task-n" {
+		t.Errorf("OnChange calls = %v; want create, status, result, end", got)
+	}
+}

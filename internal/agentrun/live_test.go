@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -126,5 +127,26 @@ func TestRunRefusesADuplicateSession(t *testing.T) {
 	o, err := f.runner.Run(context.Background(), Task{ID: "task-d", Agent: "dev", Body: "b", Cwd: t.TempDir()})
 	if err != nil || o.Status != StatusFailed || f.ran() {
 		t.Errorf("duplicate run = %+v %v, ran=%v", o, err, f.ran())
+	}
+}
+
+func TestOnLiveReportsRunStartPIDAndEnd(t *testing.T) {
+	f := newFixture(t)
+	f.reply(t, `{"result":"done","is_error":false}`)
+	var mu sync.Mutex
+	var got []string
+	f.runner.OnLive = func(id string) {
+		mu.Lock()
+		defer mu.Unlock()
+		got = append(got, id)
+	}
+	if _, err := f.runner.Run(context.Background(), Task{ID: "task-o", Agent: "dev", Body: "b", Cwd: t.TempDir()}); err != nil {
+		t.Fatal(err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	// started, pid up, pid cleared, ended
+	if len(got) != 4 {
+		t.Errorf("OnLive calls = %v; want 4 for task-o", got)
 	}
 }

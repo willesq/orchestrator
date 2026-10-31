@@ -50,6 +50,9 @@ public enum TaskStatusFilter: String, Sendable, CaseIterable, Identifiable {
     case inProgress = "in_progress"
     case complete
     case failed
+    case blocked
+    case interrupted
+    case cancelled
 
     public var id: String { rawValue }
 
@@ -60,7 +63,58 @@ public enum TaskStatusFilter: String, Sendable, CaseIterable, Identifiable {
         case .inProgress: "Running"
         case .complete: "Complete"
         case .failed: "Failed"
+        case .blocked: "Blocked"
+        case .interrupted: "Interrupted"
+        case .cancelled: "Cancelled"
         }
+    }
+}
+
+/// Whether anything is working on a pending or in-progress task.
+public struct TaskRunInfo: Sendable, Equatable {
+    /// running (a session is live), waiting (queued for a worker), or
+    /// stalled (nothing owns it: retry or cancel it).
+    public let state: String
+    public let pid: Int
+    public let startedAt: Date?
+    public let lastActivity: Date?
+    public let sessionID: String
+    public let cwd: String
+    /// The shell command that opens the session; already shell-quoted.
+    public let resumeCommand: String
+
+    public init(state: String, pid: Int = 0, startedAt: Date? = nil, lastActivity: Date? = nil, sessionID: String = "",
+                cwd: String = "", resumeCommand: String = "") {
+        self.state = state
+        self.pid = pid
+        self.startedAt = startedAt
+        self.lastActivity = lastActivity
+        self.sessionID = sessionID
+        self.cwd = cwd
+        self.resumeCommand = resumeCommand
+    }
+
+    public var isStalled: Bool { state == "stalled" }
+
+    public var label: String {
+        switch state {
+        case "running": pid > 0 ? "Running (pid \(pid))" : "Running"
+        case "waiting": "Waiting for a worker"
+        default: "Stalled: nothing is running it"
+        }
+    }
+}
+
+/// One message of the task stream: a snapshot replacing the list, the tasks
+/// that changed, or a tick refreshing the unsettled tasks' liveness.
+public struct TaskEvent: Sendable, Equatable {
+    public enum Kind: String, Sendable { case snapshot, changed, tick }
+    public let kind: Kind
+    public let tasks: [TaskRecord]
+
+    public init(kind: Kind, tasks: [TaskRecord]) {
+        self.kind = kind
+        self.tasks = tasks
     }
 }
 
@@ -83,12 +137,14 @@ public struct TaskRecord: Sendable, Equatable, Identifiable {
     public let route: RouteInfo?
     public let rating: TaskRating?
     public let prOutcome: String
+    /// Liveness, for a pending or in-progress task.
+    public let run: TaskRunInfo?
 
     public init(
         id: String, agent: String = "dev", body: String = "", result: String = "", status: String = "pending",
         updatedAt: String = "", costUSD: Double = 0, durationMS: Int64 = 0, turns: Int = 0, sessionID: String = "",
         models: [String] = [], prs: [String] = [], verification: String = "", route: RouteInfo? = nil,
-        rating: TaskRating? = nil, prOutcome: String = ""
+        rating: TaskRating? = nil, prOutcome: String = "", run: TaskRunInfo? = nil
     ) {
         self.id = id
         self.agent = agent
@@ -106,10 +162,28 @@ public struct TaskRecord: Sendable, Equatable, Identifiable {
         self.route = route
         self.rating = rating
         self.prOutcome = prOutcome
+        self.run = run
     }
 
     /// Only finished tasks can be rated.
     public var isFinished: Bool { status == "complete" || status == "failed" }
+
+    /// A task still waiting on a run: pending or in progress.
+    public var isUnsettled: Bool { status == "pending" || status == "in_progress" }
+
+    /// Retry runs an ended task again, or one nothing is running.
+    public var canRetry: Bool { !isUnsettled || run?.isStalled == true }
+
+    /// Cancel stops a pending or in-progress task.
+    public var canCancel: Bool { isUnsettled }
+
+    /// This record with a tick's liveness merged in; a tick carries no text.
+    public func merging(tick: TaskRecord) -> TaskRecord {
+        TaskRecord(id: id, agent: agent, body: body, result: result, status: tick.status,
+                   updatedAt: tick.updatedAt.isEmpty ? updatedAt : tick.updatedAt, costUSD: costUSD,
+                   durationMS: durationMS, turns: turns, sessionID: sessionID, models: models, prs: prs,
+                   verification: verification, route: route, rating: rating, prOutcome: prOutcome, run: tick.run)
+    }
 
     /// The body's first non-empty line, for lists.
     public var headline: String {
@@ -189,6 +263,12 @@ public protocol TasksAPI: Sendable {
     /// nil when no task has that id.
     func task(id: String) async throws -> TaskRecord?
     func rate(id: String, _ rating: TaskRating) async throws
+    /// Runs the task again, resuming its session; returns the new run's ID.
+    func retry(id: String) async throws -> String
+    /// Stops a pending or in-progress task; returns what happened.
+    func cancel(id: String) async throws -> String
+    /// Streams task events until the stream ends or the caller is cancelled.
+    func watchTasks(status: TaskStatusFilter, limit: Int, onEvent: @escaping @Sendable (TaskEvent) async -> Void) async throws
     func dispatch(_ draft: DispatchDraft) async throws -> DispatchOutcome
     /// The model routing would pick for a kind, and whether it came from the
     /// learned routing table rather than a live proposal.

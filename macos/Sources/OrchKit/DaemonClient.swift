@@ -143,6 +143,33 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
         _ = try await orchd.rateTask(request, options: callOptions)
     }
 
+    public func retry(id: String) async throws -> String {
+        var request = Orchd_V1_RetryTaskRequest()
+        request.id = id
+        return try await orchd.retryTask(request, options: callOptions).runID
+    }
+
+    public func cancel(id: String) async throws -> String {
+        var request = Orchd_V1_CancelTaskRequest()
+        request.id = id
+        return try await orchd.cancelTask(request, options: callOptions).outcome
+    }
+
+    /// Long-lived, so no timeout: it ends when orchd ends it (a restart, say)
+    /// or the caller's task is cancelled.
+    public func watchTasks(status: TaskStatusFilter, limit: Int,
+                           onEvent: @escaping @Sendable (TaskEvent) async -> Void) async throws {
+        var request = Orchd_V1_WatchTasksRequest()
+        request.status = status.rawValue
+        request.limit = Int32(clamping: max(limit, 0))
+        try await orchd.watchTasks(request) { response in
+            for try await message in response.messages {
+                guard let kind = TaskEvent.Kind(rawValue: message.kind) else { continue }
+                await onEvent(TaskEvent(kind: kind, tasks: message.tasks.map(Self.task)))
+            }
+        }
+    }
+
     public func dispatch(_ draft: DispatchDraft) async throws -> DispatchOutcome {
         var request = Orchd_V1_DispatchRequest()
         request.agent = draft.agent
@@ -172,8 +199,15 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
             id: t.id, agent: t.agent, body: t.body, result: t.result, status: t.status, updatedAt: t.updatedAt,
             costUSD: t.costUsd, durationMS: t.durationMs, turns: Int(t.turns), sessionID: t.sessionID,
             models: t.models, prs: t.prs, verification: t.verification,
-            route: t.hasRoute ? route(t.route) : nil, rating: TaskRating(rawValue: t.rating), prOutcome: t.prOutcome
+            route: t.hasRoute ? route(t.route) : nil, rating: TaskRating(rawValue: t.rating), prOutcome: t.prOutcome,
+            run: t.hasRun ? run(t.run) : nil
         )
+    }
+
+    static func run(_ r: Orchd_V1_TaskRun) -> TaskRunInfo {
+        TaskRunInfo(state: r.state, pid: Int(r.pid), startedAt: r.startedAt > 0 ? Date(timeIntervalSince1970: TimeInterval(r.startedAt)) : nil,
+                    lastActivity: r.lastActivity > 0 ? Date(timeIntervalSince1970: TimeInterval(r.lastActivity)) : nil,
+                    sessionID: r.sessionID, cwd: r.cwd, resumeCommand: r.resumeCommand)
     }
 
     static func route(_ r: Orchd_V1_Route) -> RouteInfo {

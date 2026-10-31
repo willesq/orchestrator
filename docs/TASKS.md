@@ -38,7 +38,9 @@ orch task <id> --retry    # run it again; its session resumes where it left off
 orch task <id> --cancel   # stop a pending or running task
 ```
 
-`orch tasks` marks a task nothing is running as `⚠ stalled`.
+`orch tasks` marks a task nothing is running as `⚠ stalled`. In Orch.app, the Tasks tab updates
+live as tasks change (orchd streams them; no refresh needed). It shows the same running, waiting or
+stalled state, with **Retry**, **Cancel…** and **Copy Resume Command**.
 
 | Setting | Default | Meaning |
 |---|---|---|

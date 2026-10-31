@@ -62,6 +62,7 @@ var operatorActions = map[string]string{
 	orchdv1.Orchd_RateTask_FullMethodName:         "rate tasks",
 	orchdv1.Orchd_RetryTask_FullMethodName:        "retry tasks",
 	orchdv1.Orchd_CancelTask_FullMethodName:       "cancel tasks",
+	orchdv1.Orchd_WatchTasks_FullMethodName:       "watch tasks (use ListTasks or GetTask)",
 	orchdv1.Orchd_Ingest_FullMethodName:           "write to the RAG store",
 	orchdv1.Orchd_DeleteSource_FullMethodName:     "delete from the RAG store",
 	orchdv1.Orchd_SummarizeSession_FullMethodName: "write to the RAG store",
@@ -109,8 +110,8 @@ func guardQueuedCallers(ctx context.Context, req any, info *grpc.UnaryServerInfo
 	return handler(ctx, req)
 }
 
-// guardQueuedStreams holds streaming RPCs, which Orchd has none of today, to
-// the same rule, so adding one cannot slip past the unary guard.
+// guardQueuedStreams holds streaming RPCs (WatchTasks) to the same rule as
+// unary ones, so a stream cannot slip past the guard.
 func guardQueuedStreams(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	if err := refuseQueued(ss.Context(), info.FullMethod); err != nil {
 		return err

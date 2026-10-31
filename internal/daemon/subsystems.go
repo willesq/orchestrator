@@ -81,6 +81,8 @@ type deps struct {
 	// worker's runner; either may be nil.
 	taskCtl *queue.Control
 	live    *liveRunner
+	// taskHub receives the runner's liveness changes; nil drops them.
+	taskHub *taskHub
 }
 
 // subsystems lists orchd's supervised units in start order (stopped in reverse).
@@ -96,7 +98,7 @@ func subsystems(d deps) []supervisor.Unit {
 		if d.store != nil {
 			reg = models.NewRegistry(d.store)
 		}
-		out = append(out, workerUnit(d.backend, d.settings.Queue.Worker, secretEnv(d.settings), reg, d.taskCtl, d.live))
+		out = append(out, workerUnit(d.backend, d.settings.Queue.Worker, secretEnv(d.settings), reg, d.taskCtl, d.live, d.taskHub))
 	}
 	sched := d.docs
 	if sched == nil {
@@ -208,7 +210,7 @@ func qdrantUnit(s config.Settings, apiKey string, sys *systemProbe) (supervisor.
 // started over (see workflows.AgentTask), and once the worker is up, ctl
 // settles any task a stopped worker left without an active run.
 func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []string, reg *models.Registry,
-	ctl *queue.Control, live *liveRunner) supervisor.Unit {
+	ctl *queue.Control, live *liveRunner, hub *taskHub) supervisor.Unit {
 	// Held across Run/Stop so the unit can join the worker it started: without
 	// that, a restart would leave the previous worker draining the same backend.
 	var current *worker.Worker
@@ -220,6 +222,7 @@ func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []str
 			// restart ends in-flight sessions instead of waiting them out.
 			tr := newTaskRunner(cfg, ctx, dropEnv)
 			tr.models = reg
+			tr.r.OnLive = hub.publish
 			workflows.SetRunner(tr)
 			opts := worker.DefaultOptions
 			opts.MaxParallelActivityTasks = maxConcurrent(cfg)

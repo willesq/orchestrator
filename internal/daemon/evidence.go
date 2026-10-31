@@ -40,5 +40,6 @@ func (s *server) RateTask(ctx context.Context, req *orchdv1.RateTaskRequest) (*o
 	if err != nil {
 		return nil, grpcstatus.Error(codes.FailedPrecondition, err.Error())
 	}
+	s.hub.publish(req.GetId())
 	return &orchdv1.RateTaskResponse{}, nil
 }

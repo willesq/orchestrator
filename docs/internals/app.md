@@ -175,10 +175,27 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     the embedding model.
 - **Memory → Indexed:** `ListSources`, every source in memory, up to 200 at a time with totals,
   filtered by type.
-- **Tasks:** `ListTasks`, up to 100 at a time, filtered by status. With no tasks, the tab shows
-  one empty state with **Dispatch task** (or **Show all tasks** under a filter) and no detail pane.
+- **Tasks:** follows `WatchTasks` while the tab is shown, so rows change the moment a task's status
+  or liveness changes; no polling.
+  - **Stream:** up to 100 tasks, filtered by status. Changing the filter restarts it. Each stream
+    opens with a snapshot that replaces the list, then sends changed tasks. A tick every 15 s
+    refreshes liveness.
+  - **Reconnects:** when orchd restarts the stream ends, and the app reopens it with backoff
+    (1 s, doubling to 30 s).
+  - **Older orchd:** one without `WatchTasks` (`unimplemented`) is polled with `ListTasks` every
+    10 s instead.
+  - **Empty:** with no tasks, the tab shows **Dispatch task** (or **Show all tasks** under a
+    filter) and no detail pane.
+  - **Stalled:** rows mark ⚠ stalled tasks.
   - **Detail:** the selected task's model, run models, duration, turns, cost, verification and PR
     outcome, plus its body and result, shown verbatim.
+    - **Liveness:** for a pending or in-progress task, running (with its PID), waiting or stalled,
+      when the session started, last activity, session ID and working directory.
+    - **Actions:**
+      - **Retry** (`RetryTask`) for an ended or stalled task.
+      - **Cancel…** (`CancelTask`), with a confirmation.
+      - **Copy Resume Command** copies orchd's shell-quoted `claude --resume` line to the
+        clipboard. Nothing is run on your behalf.
   - **PR links:** opened only through the same `github.com/<owner>/<repo>/pull/<n>` check.
   - **Rating:** a finished task can be rated good, needed rework or bad (`RateTask`), which feeds
     model routing.

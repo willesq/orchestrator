@@ -94,6 +94,7 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `RecommendModel` | task_kind → route, from_table | see [tasks.md](tasks.md) |
 | `RateTask` | id, rating (`good`/`rework`/`bad`) → — | sets the task's rating; with the PR-outcome sweep, the only ledger writes outside the queue |
 | `RetryTask` | id → run_id | runs the task again from its recorded input, resuming its session; the newest run still active → `FailedPrecondition`, unknown → `NotFound` |
+| `WatchTasks` | status filter, limit → stream of `TaskEvent` | operator-only (refused to queued tasks); snapshot, then changed tasks, then a 15 s tick (docs/internals/tasks.md) |
 | `CancelTask` | id → outcome | stops a running session, cancels a queued run, or marks a stranded task `cancelled`; already ended → `FailedPrecondition` |
 | `MigrateHybrid` | target, apply → report, error | one at a time (`Aborted` if busy); see [memory.md](memory.md) |
 | `DropBackup` | apply → collection, points, dropped | collection name only from config, never the caller; shares the migration lock |
