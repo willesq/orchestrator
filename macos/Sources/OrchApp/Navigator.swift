@@ -29,6 +29,10 @@ final class Navigator {
         didSet { UserDefaults.standard.set(gitHubSection.rawValue, forKey: "githubSection") }
     }
 
+    /// Set to open the dispatch sheet the next time the Tasks pane shows;
+    /// the pane clears it once the sheet is up.
+    var dispatchRequested = false
+
     init() {
         let defaults = UserDefaults.standard
         pane = defaults.string(forKey: "pane").flatMap(Pane.init(rawValue:)) ?? .dashboard

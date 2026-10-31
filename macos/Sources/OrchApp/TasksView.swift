@@ -5,6 +5,7 @@ import SwiftUI
 struct TasksView: View {
     @Bindable var model: TasksModel
     let dispatch: DispatchModel
+    let navigator: Navigator
 
     @State private var showDispatch = false
 
@@ -54,6 +55,11 @@ struct TasksView: View {
                 .help("Dispatch a task to a background agent")
         }
         .sheet(isPresented: $showDispatch) { DispatchSheet(model: dispatch) }
+        .task(id: navigator.dispatchRequested) {
+            guard navigator.dispatchRequested else { return }
+            navigator.dispatchRequested = false
+            showDispatch = true
+        }
         // Follows orchd's task stream while the tab is shown; a new filter
         // restarts it, and its first message replaces the list.
         .task(id: model.filter) { await model.follow() }
