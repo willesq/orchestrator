@@ -7,8 +7,13 @@ struct DashboardView: View {
     let restart: RestartModel
     let docs: DocsModel
     let safetyNet: SafetyNetModel
+    let tasks: TasksModel
+    let reviews: ReviewMonitor
+    let sources: RegisteredSourcesModel
     /// Shows another pane, for the summary chips.
     let open: (Pane) -> Void
+    /// Opens what a timeline entry records.
+    let follow: (ActivityTarget) -> Void
 
     @State private var confirmRestartAll = false
 
@@ -22,6 +27,7 @@ struct DashboardView: View {
                     .padding(Metrics.cardPadding)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .cardSurface()
+                ActivityTimeline(tasks: tasks, reviews: reviews, docs: docs, sources: sources, follow: follow)
                 subsystems
             }
             .padding(Metrics.pagePadding)
@@ -81,32 +87,78 @@ struct DashboardView: View {
         return n == 0 ? ("none need you", .good) : ("\(n) need\(n == 1 ? "s" : "") you", .accent)
     }
 
+    /// Every unit at a glance; the System tab has the detail. A failed unit
+    /// turns its chip red and says why on hover.
     @ViewBuilder private var subsystems: some View {
         if let status = monitor.health.status {
             Card("Subsystems") {
-                Button("Restart all…") { confirmRestartAll = true }
-                    .disabled(restart.restarting != nil)
-                    .confirmationDialog("Restart every subsystem?", isPresented: $confirmRestartAll) {
-                        Button("Restart all", role: .destructive) { Task { await restart.restart(nil) } }
-                    } message: {
-                        Text("In-flight indexing and queued work pause while each unit restarts.")
-                    }
+                HStack(spacing: 12) {
+                    Button("Details") { open(.system) }
+                        .buttonStyle(.link)
+                    Button("Restart all…") { confirmRestartAll = true }
+                        .disabled(restart.restarting != nil)
+                        .confirmationDialog("Restart every subsystem?", isPresented: $confirmRestartAll) {
+                            Button("Restart all", role: .destructive) { Task { await restart.restart(nil) } }
+                        } message: {
+                            Text("In-flight indexing and queued work pause while each unit restarts.")
+                        }
+                }
             } content: {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(status.subsystems.enumerated()), id: \.element.id) { index, unit in
-                        if index > 0 { Divider().padding(.leading, 18) }
-                        SubsystemRow(unit: unit, restart: restart)
-                            .padding(.vertical, 7)
+                VStack(alignment: .leading, spacing: 6) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 6, alignment: .leading)],
+                              alignment: .leading, spacing: 6) {
+                        ForEach(status.subsystems) { unit in
+                            SubsystemChip(unit: unit, restart: restart)
+                        }
                     }
                     if let message = restart.lastMessage {
                         Text(message)
                             .font(.caption)
                             .foregroundStyle(restart.lastFailed ? Color.red : Color.secondaryText)
-                            .padding(.top, 6)
                     }
                 }
             }
         }
+    }
+}
+
+/// One unit as a chip: its state dot and name, with Restart on right-click.
+private struct SubsystemChip: View {
+    let unit: Subsystem
+    let restart: RestartModel
+
+    var body: some View {
+        HStack(spacing: 7) {
+            if restart.restarting == unit.name {
+                ProgressView().controlSize(.mini).frame(width: 8, height: 8)
+            } else {
+                StatusDot(tone: tone, label: stateText)
+            }
+            Text(verbatim: unit.name)
+                .font(.callout)
+                .lineLimit(1)
+                .foregroundStyle(unit.isFailed ? Color.red : Color.primary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 6)
+        .background(unit.isFailed ? Color.red.opacity(0.1) : Color.primary.opacity(0.04),
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .help(unit.error.isEmpty ? "\(unit.detail) · \(stateText)" : unit.error)
+        .contextMenu {
+            Button { Task { await restart.restart(unit.name) } } label: { Text(verbatim: "Restart \(unit.name)") }
+                .disabled(restart.restarting != nil)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: "\(unit.name), \(stateText)"))
+        .accessibilityAction(named: "Restart") { Task { await restart.restart(unit.name) } }
+    }
+
+    private var stateText: String { unit.isFailed ? "failed" : unit.state }
+
+    private var tone: Tone {
+        if unit.isFailed { return .bad }
+        return unit.state == "running" ? .good : .neutral
     }
 }
 

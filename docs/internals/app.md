@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `SafetyNetView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `SafetyNetView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -109,9 +109,19 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
   own confirmation.
 
 - **Dashboard:** orchd's health, then summary chips for Docs, Safety Net and PRs that open their
-  tabs, the Needs you list, and every subsystem with its detail or last error and restart count.
-  Each unit has a menu (the ellipsis, or a right-click) with **Restart**; **Restart all** stays in
-  the card header (the `Restart` RPC, one at a time).
+  tabs, the Needs you list, the Activity timeline, and a chip per subsystem.
+  - **Activity:** what orch did on its own, newest first and grouped by day (`ActivityFeed`): each
+    task at its last update (status, agent, duration, cost, PR count), each watched PR's review
+    verdict or current review state, the last docs sync plus one entry per failing repo, and each
+    registered source's last refresh. orchd keeps no event log, so an entry is a record's latest
+    state, not its history: a task retried twice shows once. Filters (All, Tasks, Reviews, Docs,
+    Sources) are kept in user defaults; twelve entries show until **Show more**. Clicking an entry
+    opens its task, PR, Docs tab or source. While the timeline shows it reloads tasks (with the
+    Tasks tab's status filter) and sources every 15 s; reviews and docs come from the app-wide
+    polls. **Live** shows while any entry is still running.
+  - **Subsystems:** one chip per unit, red when failed with the error on hover, and **Restart** on
+    right-click; **Details** opens the System tab and **Restart all** stays in the card header (the
+    `Restart` RPC, one at a time).
 - **System:** an Overview/Logs switch in the toolbar. Both poll only while the tab is shown.
   - **Overview:**
     - **Process tiles:** CPU and memory for orchd and qdrant (`GetSystemMetrics` every 2 s), each
@@ -119,8 +129,8 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
       While the tab is hidden the app samples metrics every 10 s, so the lines open with history.
       A process that stops or comes back under a new PID starts a new line.
     - **Runtime:** orchd's goroutines and Go heap.
-    - **Subsystems:** each unit's heartbeat age, ticking every second, with the same menu as the
-      Dashboard.
+    - **Subsystems:** each unit's heartbeat age, ticking every second, with a menu (the ellipsis, or a
+      right-click) with **Restart**.
     - **Storage and tasks:** on-disk store sizes and task counts by status.
     - **Status report:** the full `orch status --json` report every 15 s. The header counts the
       lines that warn or fail ("2 need attention"), so a warning is never summed up as no problems. The app runs `orch`

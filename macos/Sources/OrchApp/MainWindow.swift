@@ -75,7 +75,8 @@ struct MainWindow: View {
             switch pane {
             case .dashboard:
                 DashboardView(monitor: monitor, prMonitor: prMonitor, restart: restart, docs: docs, safetyNet: safetyNet,
-                              open: { pane = $0 })
+                              tasks: tasks, reviews: prs.reviews, sources: registeredSources,
+                              open: { pane = $0 }, follow: follow)
             case .system:
                 SystemView(model: system, logs: logs, restart: restart)
             case .memory:
@@ -165,6 +166,22 @@ struct MainWindow: View {
             })
         }
         return commands
+    }
+
+    /// Opens what a Dashboard timeline entry records.
+    private func follow(_ target: ActivityTarget) {
+        switch target {
+        case .task(let id):
+            tasks.selectedID = id
+            pane = .tasks
+        case .pr(let url):
+            navigator.showPR(url, in: prs)
+        case .docs:
+            pane = .docs
+        case .source(let id):
+            registeredSources.select(id)
+            pane = .sources
+        }
     }
 
     private func refreshAll() {
