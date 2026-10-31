@@ -36,6 +36,7 @@ final class AppModel {
     let github: GitHubModel
     let reviews: ReviewMonitor
     let prs: PRsModel
+    let handoff: PRHandoffModel
     let navigator = Navigator()
     let windowControl = WindowControl()
     /// Brings the main window forward; set by the app delegate.
@@ -72,6 +73,7 @@ final class AppModel {
         let reviews = ReviewMonitor(api: api)
         self.reviews = reviews
         prs = PRsModel(api: api, reviews: reviews, taskLookup: { [api] id in try await api.task(id: id) })
+        handoff = PRHandoffModel(api: api)
         system = SystemModel(api: api, loadReport: { try await DaemonControl().statusReport() })
         logs = LogsModel(api: api)
         docs = DocsModel(api: api)

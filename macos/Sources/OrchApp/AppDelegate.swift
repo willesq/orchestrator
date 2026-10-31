@@ -53,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let root = MainWindow(
                 monitor: model.monitor, prMonitor: model.prMonitor, restart: model.restart,
                 search: model.search, sources: model.sources, tasks: model.tasks, dispatch: model.dispatch,
-                github: model.github, prs: model.prs, system: model.system, logs: model.logs,
+                github: model.github, prs: model.prs, handoff: model.handoff, system: model.system, logs: model.logs,
                 docs: model.docs, registeredSources: model.registeredSources,
                 safetyNet: model.safetyNet, claude: model.claude, navigator: model.navigator,
                 window: model.windowControl

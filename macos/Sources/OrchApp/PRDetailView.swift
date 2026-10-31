@@ -17,6 +17,7 @@ struct PRDetailView: View {
                 VStack(alignment: .leading, spacing: Metrics.stackSpacing) {
                     header(url)
                     ReviewCard(url: url, prs: prs, ownPR: isOwn(url))
+                    PRHandoffCard(url: url, detail: prs.details[url], review: prs.reviews.byURL[url], ownPR: isOwn(url))
                     if let detail = prs.details[url] {
                         MetadataCard(detail: detail)
                         if !detail.checks.isEmpty { ChecksCard(detail: detail) }

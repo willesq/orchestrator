@@ -212,6 +212,8 @@ private struct PRCard: View {
     let selected: Bool
     let select: () -> Void
 
+    @Environment(PRHandoffModel.self) private var handoff
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
@@ -264,7 +266,8 @@ private struct PRCard: View {
     /// What blocks or carries the PR; the attention chip already says when CI fails.
     @ViewBuilder private var chips: some View {
         let ci = ciChip
-        if item.attention != nil || item.isDraft || ci != nil || review != nil {
+        let agent = handoff.working(on: item.url)
+        if item.attention != nil || item.isDraft || ci != nil || review != nil || agent != nil {
             HStack(spacing: 4) {
                 if let attention = item.attention {
                     Chip(text: attention.label, tone: attention == .readyToMerge ? .good : .bad,
@@ -273,6 +276,7 @@ private struct PRCard: View {
                 if item.isDraft { Chip(text: "Draft") }
                 if let ci { ci }
                 if let review { ReviewBadge(review: review) }
+                if let agent { AgentChip(task: agent) }
             }
             .lineLimit(1)
         }
