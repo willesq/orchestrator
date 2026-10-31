@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the safety net (`SafetyNet`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `SafetyNetView`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `SafetyNetView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -97,6 +97,16 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
   Safety Net a dot in its state's color, and Claude an orange dot when items were removed or are
   missing from their files. They come from the models the tabs use; a `PeriodicRefresh` reloads
   docs, Safety Net and settings every five minutes, and the PR count follows `PRMonitor`.
+- **Command palette (⌘K):** one keyboard surface over the whole app, from any pane. It lists, most
+  pressing first, the PRs that need you, actions (New task…, which opens the dispatch sheet on the
+  Tasks pane; Refresh everything; Show PRs that need action; each appearance), every pane with its
+  sidebar status, the other cached PRs, and the 30 most recent tasks. Typing filters by fuzzy match
+  (`PaletteMatcher`: characters in order, word starts and unbroken runs score higher), and results
+  stay grouped under their section. ↑↓ move, ↩ runs, Esc or ⌘K closes, and clicking outside
+  dismisses it. It runs in its own floating panel (`PalettePanel`) so the pane behind cannot keep
+  the keyboard. It only navigates and opens what the panes already offer: a PR opens in the PRs
+  pane, never the browser, and nothing it runs dispatches, cancels or deletes without the pane's
+  own confirmation.
 
 - **Dashboard:** orchd's health, then summary chips for Docs, Safety Net and PRs that open their
   tabs, the Needs you list, and every subsystem with its detail or last error and restart count.
