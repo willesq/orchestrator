@@ -1,6 +1,6 @@
 # Tasks, routing and PRs
 
-Packages: `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `prs`, `taskfmt`.
+Packages: `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `prs`, `reviews`, `taskfmt`.
 
 ## Lifecycle
 
@@ -288,3 +288,80 @@ applies, in this order:
 
 Drafts never need attention. Cache entries written before reasons existed count as the user's
 own. `orch prs --needs-me`, `ListPRs` and the menu bar app all use this classification.
+
+## PR review watch
+
+`internal/reviews` reviews the PRs the user picks (from the app's PRs pane) once they are ready,
+and posts to GitHub only what the user opted each PR in to. Rows live in `pr_reviews` in `orch.db`.
+
+**Modes** (what orch may post once there is a verdict). The app shows the standing ones as two
+permissions, "approve" and "comment its suggestions":
+- `verdict`: nothing. The user decides on each verdict.
+- `approve`: approve when the verdict is `approve`, with the drafted comment as the body.
+- `feedback`: when the verdict is not `approve`, post the drafted comment so the author can fix
+  what it found, once per reviewed commit. The next push is reviewed again. It never approves.
+- `auto`: `approve` and `feedback` together.
+- `comment`: the user's own "Post comment": post the current draft once, whatever the verdict,
+  then fall back to `verdict`.
+
+Orch never requests changes.
+
+**Notes:** the user can give each PR notes for its reviews (`WatchPRReview` `instructions`,
+≤ 4000 bytes, control characters dropped). They are added to the task prompt, marked as the
+user's own instructions, unlike anything in the PR. New notes on a PR that already has a verdict
+or a failed review review its current commit again.
+
+**States:** `waiting` → (`held`) → `reviewing` → `verdict`, or `failed`; `closed` once the PR is merged or
+closed; `stopped` when the user stops watching. `StopPRReview` with `forget` deletes the row.
+
+**The `pr-reviews` unit** ticks every 15 s:
+- A `reviewing` row reads its task from the ledger (no `gh`). Each review gets a random token
+  (`nonce`, stored on the row and given only in the task prompt). The result must end with exactly
+  one `ORCH-VERDICT-BEGIN <token> … ORCH-VERDICT-END <token>` block holding JSON
+  `{verdict, reason, comment}`; a fence around it is allowed, nothing after it. A block quoted from
+  the PR cannot carry the token, and a result the runner cut at 64 KiB no longer ends with the
+  block, so neither counts. The verdict must be `approve`, `wait` or `changes` with a reason. Reason (≤ 2000 bytes) and comment (≤ 60000) have control and bidi
+  characters dropped. A failed, missing or unparseable review settles that head as `failed`: it is
+  not rerun on its own. A new commit, or the user changing the watch, retries it.
+- Other active rows read the PR with one `gh pr view` every 2 minutes, or right after the user
+  changes the watch. `ListPRReviews` reports when each was last read (since orchd started) and
+  when it is read next, for the app's progress row. When no CI ran, one
+  `gh api repos/<repo>/pulls/<n>` call adds the author's association, which `gh pr view` does
+  not offer. **Ready** means open, not a draft, CI green or absent, and no merge conflicts.
+  A review runs the PR's code (the runtime fuzz) with the user's credentials, so only PRs whose
+  author is the repo's owner, a member or a collaborator are reviewed unattended. Anyone else's
+  ready PR is `held` until the user gives the go-ahead (`WatchPRReview` `review_anyway`), which
+  covers one review: a later push is held again.
+  A ready PR whose head differs from the reviewed one is dispatched to the `pr-verdict` agent,
+  unrouted so it runs on Claude Code, which it needs for its subagents. A queue that is full leaves
+  it waiting, with the reason in `note`.
+- **Posting** happens only for a `verdict` row whose head is still the PR's head, and at most once
+  per head; a failed post is recorded and not retried until the user changes the watch.
+  - The review goes through `gh api POST repos/<repo>/pulls/<n>/reviews` with `commit_id` set to
+    the reviewed commit, so it cannot land on later commits. The body goes on stdin.
+  - Approving also requires the PR to be ready at that moment, and CI that actually ran and passed
+    unless the author is the repo's owner, a member or a collaborator: a fork PR whose workflows
+    wait for a maintainer shows no checks at all. It is skipped, with a note, on the user's own
+    PR, which GitHub refuses.
+  - Approve mode stays on across new commits: each new head is reviewed again, and approved if
+    that review says `approve`. That is the point of "approve when ready", and also its risk: the
+    verdict comes from a model reading the author's code. The user chooses it per PR.
+  - The comment is read when the post is made, not when it was planned. While a post is in
+    flight, `WatchPRReview` and `StopPRReview` for that PR answer `Aborted`, and the outcome is
+    recorded even if the row changed meanwhile, so the app never shows less than was posted.
+
+**The agent is read-only.** `pr-verdict` (shipped in `internal/install/assets`) runs the primary
+review plus the adversarial fan-out (`adversarial-reviewer`, `adversarial-qa`, then
+`exploit-finder` when findings could chain). Its prompt holds only orch-built values (URL, repo,
+number, head); it reads the PR's text from GitHub as untrusted data. The runner denies it every `gh`
+command that changes GitHub, `gh api`, `gh auth`, `git push`, `git -C`, `curl`, `wget`, `sqlite3`
+and WebFetch (`agentrun.readOnlyAgents`). Permission patterns match what the agent types, not what
+the programs it starts do. The runtime fuzz runs the PR's code with the user's credentials, and
+that code could reach GitHub or orch.db itself. So the patterns are a guard, not a sandbox, and
+untrusted authors' PRs are held for the user. Running reviews under a separate read-only GitHub
+credential is a follow-up. A verdict can also be steered by content in the PR itself, which
+is why approval is opt-in per PR, pinned to the reviewed commit, and gated on CI.
+
+**Who can call it:** `ListPRReviews`, `WatchPRReview`, `StopPRReview` and `GetPRDetail` are refused
+to queued tasks. `GetPRDetail` reads one PR's metadata (one `gh pr view`), cached a minute per PR
+(a forced refresh at most every 10 s, 64 PRs kept).

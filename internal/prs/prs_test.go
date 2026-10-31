@@ -112,8 +112,8 @@ func TestRollupCI(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := rollupCI(tt.checks); got != tt.want {
-				t.Errorf("rollupCI = %q, want %q", got, tt.want)
+			if got := RollupCI(tt.checks); got != tt.want {
+				t.Errorf("RollupCI = %q, want %q", got, tt.want)
 			}
 		})
 	}

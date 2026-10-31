@@ -95,7 +95,7 @@ Swift package in `macos/`.
 | Daemon and RPC | `daemon`, `rpc/orchdv1` (generated from `orchd.proto`), `orchdclient`, `supervisor`, `selfupdate` |
 | Memory | `rag` (chunk, embed, store, search, rank, migrate, re-index), `embed`, `bm25`, `qdrant`, `redact`, `rageval` (golden set, seed, bootstrap), `memctx` (prompt pointers, trust tiers) |
 | Sources | `sources` (registry, freshness, canonical URIs), `docs` (GitHub repos), `mdwalk`, `gitdates` (commit dates), `session`, `summarize`, `handoff` |
-| Tasks and routing | `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `taskfmt` |
+| Tasks and routing | `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `taskfmt`, `reviews` (PR review watch) |
 | Harness integration | `install` (adapters, shipped agents, skills and policy), `safetynet` (cc-safety-net pin, detection and guard rules), `settings` (managed Claude Code and cc-safety-net settings, their store and reconciler; [internals/settings.md](internals/settings.md)), `hook`, `mcpserver` |
 | CLI and status | `cli`, `status`, `check` |
 | Infrastructure | `config`, `paths`, `db`, `events`, `prs`, `model`, `version` |

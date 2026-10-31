@@ -7146,6 +7146,909 @@ func (*RemoveSettingResponse) Descriptor() ([]byte, []int) {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{104}
 }
 
+type ListPRReviewsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPRReviewsRequest) Reset() {
+	*x = ListPRReviewsRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[105]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPRReviewsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPRReviewsRequest) ProtoMessage() {}
+
+func (x *ListPRReviewsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[105]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPRReviewsRequest.ProtoReflect.Descriptor instead.
+func (*ListPRReviewsRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{105}
+}
+
+type ListPRReviewsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reviews       []*PRReview            `protobuf:"bytes,1,rep,name=reviews,proto3" json:"reviews,omitempty"` // most recently changed first
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPRReviewsResponse) Reset() {
+	*x = ListPRReviewsResponse{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[106]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPRReviewsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPRReviewsResponse) ProtoMessage() {}
+
+func (x *ListPRReviewsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[106]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPRReviewsResponse.ProtoReflect.Descriptor instead.
+func (*ListPRReviewsResponse) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{106}
+}
+
+func (x *ListPRReviewsResponse) GetReviews() []*PRReview {
+	if x != nil {
+		return x.Reviews
+	}
+	return nil
+}
+
+// PRReview is one PR orchd watches for review. Reason and comment come from a
+// review of other people's code, so clients show them verbatim, never rendered.
+type PRReview struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Url        string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Repo       string                 `protobuf:"bytes,2,opt,name=repo,proto3" json:"repo,omitempty"` // owner/name
+	Number     int32                  `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
+	Mode       string                 `protobuf:"bytes,4,opt,name=mode,proto3" json:"mode,omitempty"`                               // verdict | approve | comment | feedback | auto
+	State      string                 `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"`                             // waiting | held | reviewing | verdict | failed | closed | stopped
+	HeadSha    string                 `protobuf:"bytes,6,opt,name=head_sha,json=headSha,proto3" json:"head_sha,omitempty"`          // the commit the verdict covers
+	PendingSha string                 `protobuf:"bytes,7,opt,name=pending_sha,json=pendingSha,proto3" json:"pending_sha,omitempty"` // the commit under review
+	TaskId     string                 `protobuf:"bytes,8,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`             // the review task
+	Verdict    string                 `protobuf:"bytes,9,opt,name=verdict,proto3" json:"verdict,omitempty"`                         // approve | wait | changes; empty before the first
+	Reason     string                 `protobuf:"bytes,10,opt,name=reason,proto3" json:"reason,omitempty"`
+	Comment    string                 `protobuf:"bytes,11,opt,name=comment,proto3" json:"comment,omitempty"`                       // the drafted review comment
+	Posted     string                 `protobuf:"bytes,12,opt,name=posted,proto3" json:"posted,omitempty"`                         // approved | commented | failed, for head_sha; empty when nothing
+	Note       string                 `protobuf:"bytes,13,opt,name=note,proto3" json:"note,omitempty"`                             // the last problem, or why nothing was posted
+	CreatedAt  int64                  `protobuf:"varint,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // unix seconds
+	UpdatedAt  int64                  `protobuf:"varint,15,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	VerdictAt  int64                  `protobuf:"varint,16,opt,name=verdict_at,json=verdictAt,proto3" json:"verdict_at,omitempty"` // 0 before the first verdict
+	// when orchd last read the PR from GitHub (0 before its first read since it
+	// started) and when it reads it next (0 while reviewing or inactive); set by
+	// ListPRReviews
+	CheckedAt     int64  `protobuf:"varint,17,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
+	NextCheckAt   int64  `protobuf:"varint,18,opt,name=next_check_at,json=nextCheckAt,proto3" json:"next_check_at,omitempty"`
+	Instructions  string `protobuf:"bytes,19,opt,name=instructions,proto3" json:"instructions,omitempty"`       // the user's notes for this PR's reviews
+	GoAhead       bool   `protobuf:"varint,20,opt,name=go_ahead,json=goAhead,proto3" json:"go_ahead,omitempty"` // the next ready commit is reviewed despite an untrusted author
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PRReview) Reset() {
+	*x = PRReview{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[107]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PRReview) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PRReview) ProtoMessage() {}
+
+func (x *PRReview) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[107]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PRReview.ProtoReflect.Descriptor instead.
+func (*PRReview) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{107}
+}
+
+func (x *PRReview) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *PRReview) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *PRReview) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *PRReview) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *PRReview) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *PRReview) GetHeadSha() string {
+	if x != nil {
+		return x.HeadSha
+	}
+	return ""
+}
+
+func (x *PRReview) GetPendingSha() string {
+	if x != nil {
+		return x.PendingSha
+	}
+	return ""
+}
+
+func (x *PRReview) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *PRReview) GetVerdict() string {
+	if x != nil {
+		return x.Verdict
+	}
+	return ""
+}
+
+func (x *PRReview) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *PRReview) GetComment() string {
+	if x != nil {
+		return x.Comment
+	}
+	return ""
+}
+
+func (x *PRReview) GetPosted() string {
+	if x != nil {
+		return x.Posted
+	}
+	return ""
+}
+
+func (x *PRReview) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+func (x *PRReview) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *PRReview) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+func (x *PRReview) GetVerdictAt() int64 {
+	if x != nil {
+		return x.VerdictAt
+	}
+	return 0
+}
+
+func (x *PRReview) GetCheckedAt() int64 {
+	if x != nil {
+		return x.CheckedAt
+	}
+	return 0
+}
+
+func (x *PRReview) GetNextCheckAt() int64 {
+	if x != nil {
+		return x.NextCheckAt
+	}
+	return 0
+}
+
+func (x *PRReview) GetInstructions() string {
+	if x != nil {
+		return x.Instructions
+	}
+	return ""
+}
+
+func (x *PRReview) GetGoAhead() bool {
+	if x != nil {
+		return x.GoAhead
+	}
+	return false
+}
+
+type WatchPRReviewRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Url        string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`                                  // https://github.com/<owner>/<repo>/pull/<n>
+	Mode       string                 `protobuf:"bytes,2,opt,name=mode,proto3" json:"mode,omitempty"`                                // verdict | approve | comment | feedback | auto
+	SetComment bool                   `protobuf:"varint,3,opt,name=set_comment,json=setComment,proto3" json:"set_comment,omitempty"` // replace the drafted comment with comment
+	Comment    string                 `protobuf:"bytes,4,opt,name=comment,proto3" json:"comment,omitempty"`
+	// replace the user's notes for this PR's reviews (≤ 4000 bytes); new notes
+	// on a PR with a verdict review its current commit again
+	SetInstructions bool   `protobuf:"varint,5,opt,name=set_instructions,json=setInstructions,proto3" json:"set_instructions,omitempty"`
+	Instructions    string `protobuf:"bytes,6,opt,name=instructions,proto3" json:"instructions,omitempty"`
+	// review the next ready commit even though its author is not the repo's
+	// owner, a member or a collaborator (whose PRs are otherwise held)
+	ReviewAnyway  bool `protobuf:"varint,7,opt,name=review_anyway,json=reviewAnyway,proto3" json:"review_anyway,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchPRReviewRequest) Reset() {
+	*x = WatchPRReviewRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[108]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchPRReviewRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchPRReviewRequest) ProtoMessage() {}
+
+func (x *WatchPRReviewRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[108]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchPRReviewRequest.ProtoReflect.Descriptor instead.
+func (*WatchPRReviewRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{108}
+}
+
+func (x *WatchPRReviewRequest) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *WatchPRReviewRequest) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *WatchPRReviewRequest) GetSetComment() bool {
+	if x != nil {
+		return x.SetComment
+	}
+	return false
+}
+
+func (x *WatchPRReviewRequest) GetComment() string {
+	if x != nil {
+		return x.Comment
+	}
+	return ""
+}
+
+func (x *WatchPRReviewRequest) GetSetInstructions() bool {
+	if x != nil {
+		return x.SetInstructions
+	}
+	return false
+}
+
+func (x *WatchPRReviewRequest) GetInstructions() string {
+	if x != nil {
+		return x.Instructions
+	}
+	return ""
+}
+
+func (x *WatchPRReviewRequest) GetReviewAnyway() bool {
+	if x != nil {
+		return x.ReviewAnyway
+	}
+	return false
+}
+
+type StopPRReviewRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Forget        bool                   `protobuf:"varint,2,opt,name=forget,proto3" json:"forget,omitempty"` // delete the review and its verdict too
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopPRReviewRequest) Reset() {
+	*x = StopPRReviewRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[109]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopPRReviewRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopPRReviewRequest) ProtoMessage() {}
+
+func (x *StopPRReviewRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[109]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopPRReviewRequest.ProtoReflect.Descriptor instead.
+func (*StopPRReviewRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{109}
+}
+
+func (x *StopPRReviewRequest) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *StopPRReviewRequest) GetForget() bool {
+	if x != nil {
+		return x.Forget
+	}
+	return false
+}
+
+type StopPRReviewResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopPRReviewResponse) Reset() {
+	*x = StopPRReviewResponse{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[110]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopPRReviewResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopPRReviewResponse) ProtoMessage() {}
+
+func (x *StopPRReviewResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[110]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopPRReviewResponse.ProtoReflect.Descriptor instead.
+func (*StopPRReviewResponse) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{110}
+}
+
+type GetPRDetailRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Url           string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Refresh       bool                   `protobuf:"varint,2,opt,name=refresh,proto3" json:"refresh,omitempty"` // bypass the one-minute cache
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetPRDetailRequest) Reset() {
+	*x = GetPRDetailRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[111]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetPRDetailRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetPRDetailRequest) ProtoMessage() {}
+
+func (x *GetPRDetailRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[111]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetPRDetailRequest.ProtoReflect.Descriptor instead.
+func (*GetPRDetailRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{111}
+}
+
+func (x *GetPRDetailRequest) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *GetPRDetailRequest) GetRefresh() bool {
+	if x != nil {
+		return x.Refresh
+	}
+	return false
+}
+
+// PRDetail is a PR's metadata as gh reports it. Title, body, labels and paths
+// are other people's text: shown verbatim, never rendered.
+type PRDetail struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Url                string                 `protobuf:"bytes,1,opt,name=url,proto3" json:"url,omitempty"`
+	Title              string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Body               string                 `protobuf:"bytes,3,opt,name=body,proto3" json:"body,omitempty"` // cut to 8000 bytes
+	Author             string                 `protobuf:"bytes,4,opt,name=author,proto3" json:"author,omitempty"`
+	State              string                 `protobuf:"bytes,5,opt,name=state,proto3" json:"state,omitempty"` // OPEN | MERGED | CLOSED
+	IsDraft            bool                   `protobuf:"varint,6,opt,name=is_draft,json=isDraft,proto3" json:"is_draft,omitempty"`
+	BaseRef            string                 `protobuf:"bytes,7,opt,name=base_ref,json=baseRef,proto3" json:"base_ref,omitempty"`
+	HeadRef            string                 `protobuf:"bytes,8,opt,name=head_ref,json=headRef,proto3" json:"head_ref,omitempty"`
+	HeadSha            string                 `protobuf:"bytes,9,opt,name=head_sha,json=headSha,proto3" json:"head_sha,omitempty"`
+	Additions          int32                  `protobuf:"varint,10,opt,name=additions,proto3" json:"additions,omitempty"`
+	Deletions          int32                  `protobuf:"varint,11,opt,name=deletions,proto3" json:"deletions,omitempty"`
+	ChangedFiles       int32                  `protobuf:"varint,12,opt,name=changed_files,json=changedFiles,proto3" json:"changed_files,omitempty"`
+	CreatedAt          string                 `protobuf:"bytes,13,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // RFC 3339
+	UpdatedAt          string                 `protobuf:"bytes,14,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Mergeable          string                 `protobuf:"bytes,15,opt,name=mergeable,proto3" json:"mergeable,omitempty"` // MERGEABLE | CONFLICTING | UNKNOWN
+	ReviewDecision     string                 `protobuf:"bytes,16,opt,name=review_decision,json=reviewDecision,proto3" json:"review_decision,omitempty"`
+	CiState            string                 `protobuf:"bytes,17,opt,name=ci_state,json=ciState,proto3" json:"ci_state,omitempty"` // none | failure | pending | success
+	Labels             []string               `protobuf:"bytes,18,rep,name=labels,proto3" json:"labels,omitempty"`
+	RequestedReviewers []string               `protobuf:"bytes,19,rep,name=requested_reviewers,json=requestedReviewers,proto3" json:"requested_reviewers,omitempty"`
+	Reviews            []*PRReviewerState     `protobuf:"bytes,20,rep,name=reviews,proto3" json:"reviews,omitempty"`
+	Checks             []*PRCheck             `protobuf:"bytes,21,rep,name=checks,proto3" json:"checks,omitempty"`
+	Files              []*PRFile              `protobuf:"bytes,22,rep,name=files,proto3" json:"files,omitempty"`                           // at most 100
+	FetchedAt          int64                  `protobuf:"varint,23,opt,name=fetched_at,json=fetchedAt,proto3" json:"fetched_at,omitempty"` // unix seconds
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *PRDetail) Reset() {
+	*x = PRDetail{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[112]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PRDetail) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PRDetail) ProtoMessage() {}
+
+func (x *PRDetail) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[112]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PRDetail.ProtoReflect.Descriptor instead.
+func (*PRDetail) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{112}
+}
+
+func (x *PRDetail) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *PRDetail) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *PRDetail) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *PRDetail) GetAuthor() string {
+	if x != nil {
+		return x.Author
+	}
+	return ""
+}
+
+func (x *PRDetail) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *PRDetail) GetIsDraft() bool {
+	if x != nil {
+		return x.IsDraft
+	}
+	return false
+}
+
+func (x *PRDetail) GetBaseRef() string {
+	if x != nil {
+		return x.BaseRef
+	}
+	return ""
+}
+
+func (x *PRDetail) GetHeadRef() string {
+	if x != nil {
+		return x.HeadRef
+	}
+	return ""
+}
+
+func (x *PRDetail) GetHeadSha() string {
+	if x != nil {
+		return x.HeadSha
+	}
+	return ""
+}
+
+func (x *PRDetail) GetAdditions() int32 {
+	if x != nil {
+		return x.Additions
+	}
+	return 0
+}
+
+func (x *PRDetail) GetDeletions() int32 {
+	if x != nil {
+		return x.Deletions
+	}
+	return 0
+}
+
+func (x *PRDetail) GetChangedFiles() int32 {
+	if x != nil {
+		return x.ChangedFiles
+	}
+	return 0
+}
+
+func (x *PRDetail) GetCreatedAt() string {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return ""
+}
+
+func (x *PRDetail) GetUpdatedAt() string {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return ""
+}
+
+func (x *PRDetail) GetMergeable() string {
+	if x != nil {
+		return x.Mergeable
+	}
+	return ""
+}
+
+func (x *PRDetail) GetReviewDecision() string {
+	if x != nil {
+		return x.ReviewDecision
+	}
+	return ""
+}
+
+func (x *PRDetail) GetCiState() string {
+	if x != nil {
+		return x.CiState
+	}
+	return ""
+}
+
+func (x *PRDetail) GetLabels() []string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *PRDetail) GetRequestedReviewers() []string {
+	if x != nil {
+		return x.RequestedReviewers
+	}
+	return nil
+}
+
+func (x *PRDetail) GetReviews() []*PRReviewerState {
+	if x != nil {
+		return x.Reviews
+	}
+	return nil
+}
+
+func (x *PRDetail) GetChecks() []*PRCheck {
+	if x != nil {
+		return x.Checks
+	}
+	return nil
+}
+
+func (x *PRDetail) GetFiles() []*PRFile {
+	if x != nil {
+		return x.Files
+	}
+	return nil
+}
+
+func (x *PRDetail) GetFetchedAt() int64 {
+	if x != nil {
+		return x.FetchedAt
+	}
+	return 0
+}
+
+type PRReviewerState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Login         string                 `protobuf:"bytes,1,opt,name=login,proto3" json:"login,omitempty"`
+	State         string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"` // APPROVED | CHANGES_REQUESTED | COMMENTED | ...
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PRReviewerState) Reset() {
+	*x = PRReviewerState{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[113]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PRReviewerState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PRReviewerState) ProtoMessage() {}
+
+func (x *PRReviewerState) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[113]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PRReviewerState.ProtoReflect.Descriptor instead.
+func (*PRReviewerState) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{113}
+}
+
+func (x *PRReviewerState) GetLogin() string {
+	if x != nil {
+		return x.Login
+	}
+	return ""
+}
+
+func (x *PRReviewerState) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+type PRCheck struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Result        string                 `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"` // success | failure | pending | ... (lowercase)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PRCheck) Reset() {
+	*x = PRCheck{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[114]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PRCheck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PRCheck) ProtoMessage() {}
+
+func (x *PRCheck) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[114]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PRCheck.ProtoReflect.Descriptor instead.
+func (*PRCheck) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{114}
+}
+
+func (x *PRCheck) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PRCheck) GetResult() string {
+	if x != nil {
+		return x.Result
+	}
+	return ""
+}
+
+type PRFile struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Additions     int32                  `protobuf:"varint,2,opt,name=additions,proto3" json:"additions,omitempty"`
+	Deletions     int32                  `protobuf:"varint,3,opt,name=deletions,proto3" json:"deletions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PRFile) Reset() {
+	*x = PRFile{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[115]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PRFile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PRFile) ProtoMessage() {}
+
+func (x *PRFile) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[115]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PRFile.ProtoReflect.Descriptor instead.
+func (*PRFile) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{115}
+}
+
+func (x *PRFile) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *PRFile) GetAdditions() int32 {
+	if x != nil {
+		return x.Additions
+	}
+	return 0
+}
+
+func (x *PRFile) GetDeletions() int32 {
+	if x != nil {
+		return x.Deletions
+	}
+	return 0
+}
+
 var File_internal_rpc_orchdv1_orchd_proto protoreflect.FileDescriptor
 
 const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
@@ -7760,7 +8663,91 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1a\n" +
 	"\bidentity\x18\x03 \x01(\tR\bidentity\"\x17\n" +
-	"\x15RemoveSettingResponse2\xff\x17\n" +
+	"\x15RemoveSettingResponse\"\x16\n" +
+	"\x14ListPRReviewsRequest\"E\n" +
+	"\x15ListPRReviewsResponse\x12,\n" +
+	"\areviews\x18\x01 \x03(\v2\x12.orchd.v1.PRReviewR\areviews\"\x9e\x04\n" +
+	"\bPRReview\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\x12\x12\n" +
+	"\x04repo\x18\x02 \x01(\tR\x04repo\x12\x16\n" +
+	"\x06number\x18\x03 \x01(\x05R\x06number\x12\x12\n" +
+	"\x04mode\x18\x04 \x01(\tR\x04mode\x12\x14\n" +
+	"\x05state\x18\x05 \x01(\tR\x05state\x12\x19\n" +
+	"\bhead_sha\x18\x06 \x01(\tR\aheadSha\x12\x1f\n" +
+	"\vpending_sha\x18\a \x01(\tR\n" +
+	"pendingSha\x12\x17\n" +
+	"\atask_id\x18\b \x01(\tR\x06taskId\x12\x18\n" +
+	"\averdict\x18\t \x01(\tR\averdict\x12\x16\n" +
+	"\x06reason\x18\n" +
+	" \x01(\tR\x06reason\x12\x18\n" +
+	"\acomment\x18\v \x01(\tR\acomment\x12\x16\n" +
+	"\x06posted\x18\f \x01(\tR\x06posted\x12\x12\n" +
+	"\x04note\x18\r \x01(\tR\x04note\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x0e \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x0f \x01(\x03R\tupdatedAt\x12\x1d\n" +
+	"\n" +
+	"verdict_at\x18\x10 \x01(\x03R\tverdictAt\x12\x1d\n" +
+	"\n" +
+	"checked_at\x18\x11 \x01(\x03R\tcheckedAt\x12\"\n" +
+	"\rnext_check_at\x18\x12 \x01(\x03R\vnextCheckAt\x12\"\n" +
+	"\finstructions\x18\x13 \x01(\tR\finstructions\x12\x19\n" +
+	"\bgo_ahead\x18\x14 \x01(\bR\agoAhead\"\xeb\x01\n" +
+	"\x14WatchPRReviewRequest\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\x12\x12\n" +
+	"\x04mode\x18\x02 \x01(\tR\x04mode\x12\x1f\n" +
+	"\vset_comment\x18\x03 \x01(\bR\n" +
+	"setComment\x12\x18\n" +
+	"\acomment\x18\x04 \x01(\tR\acomment\x12)\n" +
+	"\x10set_instructions\x18\x05 \x01(\bR\x0fsetInstructions\x12\"\n" +
+	"\finstructions\x18\x06 \x01(\tR\finstructions\x12#\n" +
+	"\rreview_anyway\x18\a \x01(\bR\freviewAnyway\"?\n" +
+	"\x13StopPRReviewRequest\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\x12\x16\n" +
+	"\x06forget\x18\x02 \x01(\bR\x06forget\"\x16\n" +
+	"\x14StopPRReviewResponse\"@\n" +
+	"\x12GetPRDetailRequest\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\x12\x18\n" +
+	"\arefresh\x18\x02 \x01(\bR\arefresh\"\xd1\x05\n" +
+	"\bPRDetail\x12\x10\n" +
+	"\x03url\x18\x01 \x01(\tR\x03url\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x12\n" +
+	"\x04body\x18\x03 \x01(\tR\x04body\x12\x16\n" +
+	"\x06author\x18\x04 \x01(\tR\x06author\x12\x14\n" +
+	"\x05state\x18\x05 \x01(\tR\x05state\x12\x19\n" +
+	"\bis_draft\x18\x06 \x01(\bR\aisDraft\x12\x19\n" +
+	"\bbase_ref\x18\a \x01(\tR\abaseRef\x12\x19\n" +
+	"\bhead_ref\x18\b \x01(\tR\aheadRef\x12\x19\n" +
+	"\bhead_sha\x18\t \x01(\tR\aheadSha\x12\x1c\n" +
+	"\tadditions\x18\n" +
+	" \x01(\x05R\tadditions\x12\x1c\n" +
+	"\tdeletions\x18\v \x01(\x05R\tdeletions\x12#\n" +
+	"\rchanged_files\x18\f \x01(\x05R\fchangedFiles\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\r \x01(\tR\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x0e \x01(\tR\tupdatedAt\x12\x1c\n" +
+	"\tmergeable\x18\x0f \x01(\tR\tmergeable\x12'\n" +
+	"\x0freview_decision\x18\x10 \x01(\tR\x0ereviewDecision\x12\x19\n" +
+	"\bci_state\x18\x11 \x01(\tR\aciState\x12\x16\n" +
+	"\x06labels\x18\x12 \x03(\tR\x06labels\x12/\n" +
+	"\x13requested_reviewers\x18\x13 \x03(\tR\x12requestedReviewers\x123\n" +
+	"\areviews\x18\x14 \x03(\v2\x19.orchd.v1.PRReviewerStateR\areviews\x12)\n" +
+	"\x06checks\x18\x15 \x03(\v2\x11.orchd.v1.PRCheckR\x06checks\x12&\n" +
+	"\x05files\x18\x16 \x03(\v2\x10.orchd.v1.PRFileR\x05files\x12\x1d\n" +
+	"\n" +
+	"fetched_at\x18\x17 \x01(\x03R\tfetchedAt\"=\n" +
+	"\x0fPRReviewerState\x12\x14\n" +
+	"\x05login\x18\x01 \x01(\tR\x05login\x12\x14\n" +
+	"\x05state\x18\x02 \x01(\tR\x05state\"5\n" +
+	"\aPRCheck\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06result\x18\x02 \x01(\tR\x06result\"X\n" +
+	"\x06PRFile\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1c\n" +
+	"\tadditions\x18\x02 \x01(\x05R\tadditions\x12\x1c\n" +
+	"\tdeletions\x18\x03 \x01(\x05R\tdeletions2\xa6\x1a\n" +
 	"\x05Orchd\x125\n" +
 	"\x04Ping\x12\x15.orchd.v1.PingRequest\x1a\x16.orchd.v1.PingResponse\x12;\n" +
 	"\x06Ingest\x12\x17.orchd.v1.IngestRequest\x1a\x18.orchd.v1.IngestResponse\x12;\n" +
@@ -7789,7 +8776,11 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x10ListGitHubScopes\x12!.orchd.v1.ListGitHubScopesRequest\x1a\".orchd.v1.ListGitHubScopesResponse\x12S\n" +
 	"\x0eSetGitHubScope\x12\x1f.orchd.v1.SetGitHubScopeRequest\x1a .orchd.v1.SetGitHubScopeResponse\x12V\n" +
 	"\x0fListGitHubRepos\x12 .orchd.v1.ListGitHubReposRequest\x1a!.orchd.v1.ListGitHubReposResponse\x12V\n" +
-	"\x0fListGitHubItems\x12 .orchd.v1.ListGitHubItemsRequest\x1a!.orchd.v1.ListGitHubItemsResponse\x12A\n" +
+	"\x0fListGitHubItems\x12 .orchd.v1.ListGitHubItemsRequest\x1a!.orchd.v1.ListGitHubItemsResponse\x12P\n" +
+	"\rListPRReviews\x12\x1e.orchd.v1.ListPRReviewsRequest\x1a\x1f.orchd.v1.ListPRReviewsResponse\x12C\n" +
+	"\rWatchPRReview\x12\x1e.orchd.v1.WatchPRReviewRequest\x1a\x12.orchd.v1.PRReview\x12M\n" +
+	"\fStopPRReview\x12\x1d.orchd.v1.StopPRReviewRequest\x1a\x1e.orchd.v1.StopPRReviewResponse\x12?\n" +
+	"\vGetPRDetail\x12\x1c.orchd.v1.GetPRDetailRequest\x1a\x12.orchd.v1.PRDetail\x12A\n" +
 	"\bTailLogs\x12\x19.orchd.v1.TailLogsRequest\x1a\x1a.orchd.v1.TailLogsResponse\x12N\n" +
 	"\x10GetSystemMetrics\x12!.orchd.v1.GetSystemMetricsRequest\x1a\x17.orchd.v1.SystemMetrics\x12A\n" +
 	"\bListDocs\x12\x19.orchd.v1.ListDocsRequest\x1a\x1a.orchd.v1.ListDocsResponse\x12?\n" +
@@ -7821,7 +8812,7 @@ func file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP() []byte {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescData
 }
 
-var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 107)
+var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 118)
 var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*PingRequest)(nil),                   // 0: orchd.v1.PingRequest
 	(*PingResponse)(nil),                  // 1: orchd.v1.PingResponse
@@ -7928,8 +8919,19 @@ var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*AddSettingRequest)(nil),             // 102: orchd.v1.AddSettingRequest
 	(*RemoveSettingRequest)(nil),          // 103: orchd.v1.RemoveSettingRequest
 	(*RemoveSettingResponse)(nil),         // 104: orchd.v1.RemoveSettingResponse
-	nil,                                   // 105: orchd.v1.SystemMetrics.TasksEntry
-	nil,                                   // 106: orchd.v1.AddSettingRequest.FieldsEntry
+	(*ListPRReviewsRequest)(nil),          // 105: orchd.v1.ListPRReviewsRequest
+	(*ListPRReviewsResponse)(nil),         // 106: orchd.v1.ListPRReviewsResponse
+	(*PRReview)(nil),                      // 107: orchd.v1.PRReview
+	(*WatchPRReviewRequest)(nil),          // 108: orchd.v1.WatchPRReviewRequest
+	(*StopPRReviewRequest)(nil),           // 109: orchd.v1.StopPRReviewRequest
+	(*StopPRReviewResponse)(nil),          // 110: orchd.v1.StopPRReviewResponse
+	(*GetPRDetailRequest)(nil),            // 111: orchd.v1.GetPRDetailRequest
+	(*PRDetail)(nil),                      // 112: orchd.v1.PRDetail
+	(*PRReviewerState)(nil),               // 113: orchd.v1.PRReviewerState
+	(*PRCheck)(nil),                       // 114: orchd.v1.PRCheck
+	(*PRFile)(nil),                        // 115: orchd.v1.PRFile
+	nil,                                   // 116: orchd.v1.SystemMetrics.TasksEntry
+	nil,                                   // 117: orchd.v1.AddSettingRequest.FieldsEntry
 }
 var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	6,   // 0: orchd.v1.SearchResponse.hits:type_name -> orchd.v1.SearchHit
@@ -7953,7 +8955,7 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	64,  // 18: orchd.v1.TailLogsResponse.entries:type_name -> orchd.v1.LogEntry
 	67,  // 19: orchd.v1.SystemMetrics.processes:type_name -> orchd.v1.ProcessMetrics
 	68,  // 20: orchd.v1.SystemMetrics.data:type_name -> orchd.v1.DataSize
-	105, // 21: orchd.v1.SystemMetrics.tasks:type_name -> orchd.v1.SystemMetrics.TasksEntry
+	116, // 21: orchd.v1.SystemMetrics.tasks:type_name -> orchd.v1.SystemMetrics.TasksEntry
 	74,  // 22: orchd.v1.ListDocsResponse.owners:type_name -> orchd.v1.DocOwner
 	76,  // 23: orchd.v1.ListDocsResponse.files:type_name -> orchd.v1.DocFile
 	73,  // 24: orchd.v1.ListDocsResponse.sync:type_name -> orchd.v1.DocsSyncState
@@ -7969,94 +8971,106 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	100, // 34: orchd.v1.ListSettingsResponse.items:type_name -> orchd.v1.SettingItem
 	98,  // 35: orchd.v1.SettingsProvider.kinds:type_name -> orchd.v1.SettingKind
 	99,  // 36: orchd.v1.SettingKind.fields:type_name -> orchd.v1.SettingField
-	106, // 37: orchd.v1.AddSettingRequest.fields:type_name -> orchd.v1.AddSettingRequest.FieldsEntry
-	0,   // 38: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
-	2,   // 39: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
-	4,   // 40: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
-	7,   // 41: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
-	10,  // 42: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
-	12,  // 43: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
-	14,  // 44: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
-	16,  // 45: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
-	20,  // 46: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
-	24,  // 47: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
-	26,  // 48: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
-	29,  // 49: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
-	31,  // 50: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
-	33,  // 51: orchd.v1.Orchd.RetryTask:input_type -> orchd.v1.RetryTaskRequest
-	35,  // 52: orchd.v1.Orchd.CancelTask:input_type -> orchd.v1.CancelTaskRequest
-	37,  // 53: orchd.v1.Orchd.WatchTasks:input_type -> orchd.v1.WatchTasksRequest
-	39,  // 54: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
-	41,  // 55: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
-	43,  // 56: orchd.v1.Orchd.ReindexKeywords:input_type -> orchd.v1.ReindexKeywordsRequest
-	45,  // 57: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
-	48,  // 58: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
-	51,  // 59: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
-	54,  // 60: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
-	56,  // 61: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
-	59,  // 62: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
-	62,  // 63: orchd.v1.Orchd.TailLogs:input_type -> orchd.v1.TailLogsRequest
-	65,  // 64: orchd.v1.Orchd.GetSystemMetrics:input_type -> orchd.v1.GetSystemMetricsRequest
-	69,  // 65: orchd.v1.Orchd.ListDocs:input_type -> orchd.v1.ListDocsRequest
-	77,  // 66: orchd.v1.Orchd.GetDocument:input_type -> orchd.v1.GetDocumentRequest
-	71,  // 67: orchd.v1.Orchd.SyncDocs:input_type -> orchd.v1.SyncDocsRequest
-	72,  // 68: orchd.v1.Orchd.GetDocsSync:input_type -> orchd.v1.GetDocsSyncRequest
-	79,  // 69: orchd.v1.Orchd.ListRegisteredSources:input_type -> orchd.v1.ListRegisteredSourcesRequest
-	82,  // 70: orchd.v1.Orchd.SaveSource:input_type -> orchd.v1.SaveSourceRequest
-	83,  // 71: orchd.v1.Orchd.RemoveSource:input_type -> orchd.v1.RemoveSourceRequest
-	85,  // 72: orchd.v1.Orchd.RefreshSource:input_type -> orchd.v1.RefreshSourceRequest
-	87,  // 73: orchd.v1.Orchd.GetSafetyNet:input_type -> orchd.v1.GetSafetyNetRequest
-	88,  // 74: orchd.v1.Orchd.InstallSafetyNet:input_type -> orchd.v1.InstallSafetyNetRequest
-	95,  // 75: orchd.v1.Orchd.ListSettings:input_type -> orchd.v1.ListSettingsRequest
-	101, // 76: orchd.v1.Orchd.SetSettingEnabled:input_type -> orchd.v1.SetSettingEnabledRequest
-	102, // 77: orchd.v1.Orchd.AddSetting:input_type -> orchd.v1.AddSettingRequest
-	103, // 78: orchd.v1.Orchd.RemoveSetting:input_type -> orchd.v1.RemoveSettingRequest
-	1,   // 79: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
-	3,   // 80: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
-	5,   // 81: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
-	8,   // 82: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
-	11,  // 83: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
-	13,  // 84: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
-	15,  // 85: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
-	17,  // 86: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
-	21,  // 87: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
-	25,  // 88: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
-	27,  // 89: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
-	30,  // 90: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
-	32,  // 91: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
-	34,  // 92: orchd.v1.Orchd.RetryTask:output_type -> orchd.v1.RetryTaskResponse
-	36,  // 93: orchd.v1.Orchd.CancelTask:output_type -> orchd.v1.CancelTaskResponse
-	38,  // 94: orchd.v1.Orchd.WatchTasks:output_type -> orchd.v1.TaskEvent
-	40,  // 95: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
-	42,  // 96: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
-	44,  // 97: orchd.v1.Orchd.ReindexKeywords:output_type -> orchd.v1.ReindexKeywordsResponse
-	46,  // 98: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
-	49,  // 99: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
-	52,  // 100: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
-	55,  // 101: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
-	57,  // 102: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
-	60,  // 103: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
-	63,  // 104: orchd.v1.Orchd.TailLogs:output_type -> orchd.v1.TailLogsResponse
-	66,  // 105: orchd.v1.Orchd.GetSystemMetrics:output_type -> orchd.v1.SystemMetrics
-	70,  // 106: orchd.v1.Orchd.ListDocs:output_type -> orchd.v1.ListDocsResponse
-	78,  // 107: orchd.v1.Orchd.GetDocument:output_type -> orchd.v1.Document
-	73,  // 108: orchd.v1.Orchd.SyncDocs:output_type -> orchd.v1.DocsSyncState
-	73,  // 109: orchd.v1.Orchd.GetDocsSync:output_type -> orchd.v1.DocsSyncState
-	80,  // 110: orchd.v1.Orchd.ListRegisteredSources:output_type -> orchd.v1.ListRegisteredSourcesResponse
-	81,  // 111: orchd.v1.Orchd.SaveSource:output_type -> orchd.v1.RegisteredSource
-	84,  // 112: orchd.v1.Orchd.RemoveSource:output_type -> orchd.v1.RemoveSourceResponse
-	86,  // 113: orchd.v1.Orchd.RefreshSource:output_type -> orchd.v1.RefreshSourceResponse
-	89,  // 114: orchd.v1.Orchd.GetSafetyNet:output_type -> orchd.v1.SafetyNetState
-	89,  // 115: orchd.v1.Orchd.InstallSafetyNet:output_type -> orchd.v1.SafetyNetState
-	96,  // 116: orchd.v1.Orchd.ListSettings:output_type -> orchd.v1.ListSettingsResponse
-	100, // 117: orchd.v1.Orchd.SetSettingEnabled:output_type -> orchd.v1.SettingItem
-	100, // 118: orchd.v1.Orchd.AddSetting:output_type -> orchd.v1.SettingItem
-	104, // 119: orchd.v1.Orchd.RemoveSetting:output_type -> orchd.v1.RemoveSettingResponse
-	79,  // [79:120] is the sub-list for method output_type
-	38,  // [38:79] is the sub-list for method input_type
-	38,  // [38:38] is the sub-list for extension type_name
-	38,  // [38:38] is the sub-list for extension extendee
-	0,   // [0:38] is the sub-list for field type_name
+	117, // 37: orchd.v1.AddSettingRequest.fields:type_name -> orchd.v1.AddSettingRequest.FieldsEntry
+	107, // 38: orchd.v1.ListPRReviewsResponse.reviews:type_name -> orchd.v1.PRReview
+	113, // 39: orchd.v1.PRDetail.reviews:type_name -> orchd.v1.PRReviewerState
+	114, // 40: orchd.v1.PRDetail.checks:type_name -> orchd.v1.PRCheck
+	115, // 41: orchd.v1.PRDetail.files:type_name -> orchd.v1.PRFile
+	0,   // 42: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
+	2,   // 43: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
+	4,   // 44: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
+	7,   // 45: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
+	10,  // 46: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
+	12,  // 47: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
+	14,  // 48: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
+	16,  // 49: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
+	20,  // 50: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
+	24,  // 51: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
+	26,  // 52: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
+	29,  // 53: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
+	31,  // 54: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
+	33,  // 55: orchd.v1.Orchd.RetryTask:input_type -> orchd.v1.RetryTaskRequest
+	35,  // 56: orchd.v1.Orchd.CancelTask:input_type -> orchd.v1.CancelTaskRequest
+	37,  // 57: orchd.v1.Orchd.WatchTasks:input_type -> orchd.v1.WatchTasksRequest
+	39,  // 58: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
+	41,  // 59: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
+	43,  // 60: orchd.v1.Orchd.ReindexKeywords:input_type -> orchd.v1.ReindexKeywordsRequest
+	45,  // 61: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
+	48,  // 62: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
+	51,  // 63: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
+	54,  // 64: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
+	56,  // 65: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
+	59,  // 66: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
+	105, // 67: orchd.v1.Orchd.ListPRReviews:input_type -> orchd.v1.ListPRReviewsRequest
+	108, // 68: orchd.v1.Orchd.WatchPRReview:input_type -> orchd.v1.WatchPRReviewRequest
+	109, // 69: orchd.v1.Orchd.StopPRReview:input_type -> orchd.v1.StopPRReviewRequest
+	111, // 70: orchd.v1.Orchd.GetPRDetail:input_type -> orchd.v1.GetPRDetailRequest
+	62,  // 71: orchd.v1.Orchd.TailLogs:input_type -> orchd.v1.TailLogsRequest
+	65,  // 72: orchd.v1.Orchd.GetSystemMetrics:input_type -> orchd.v1.GetSystemMetricsRequest
+	69,  // 73: orchd.v1.Orchd.ListDocs:input_type -> orchd.v1.ListDocsRequest
+	77,  // 74: orchd.v1.Orchd.GetDocument:input_type -> orchd.v1.GetDocumentRequest
+	71,  // 75: orchd.v1.Orchd.SyncDocs:input_type -> orchd.v1.SyncDocsRequest
+	72,  // 76: orchd.v1.Orchd.GetDocsSync:input_type -> orchd.v1.GetDocsSyncRequest
+	79,  // 77: orchd.v1.Orchd.ListRegisteredSources:input_type -> orchd.v1.ListRegisteredSourcesRequest
+	82,  // 78: orchd.v1.Orchd.SaveSource:input_type -> orchd.v1.SaveSourceRequest
+	83,  // 79: orchd.v1.Orchd.RemoveSource:input_type -> orchd.v1.RemoveSourceRequest
+	85,  // 80: orchd.v1.Orchd.RefreshSource:input_type -> orchd.v1.RefreshSourceRequest
+	87,  // 81: orchd.v1.Orchd.GetSafetyNet:input_type -> orchd.v1.GetSafetyNetRequest
+	88,  // 82: orchd.v1.Orchd.InstallSafetyNet:input_type -> orchd.v1.InstallSafetyNetRequest
+	95,  // 83: orchd.v1.Orchd.ListSettings:input_type -> orchd.v1.ListSettingsRequest
+	101, // 84: orchd.v1.Orchd.SetSettingEnabled:input_type -> orchd.v1.SetSettingEnabledRequest
+	102, // 85: orchd.v1.Orchd.AddSetting:input_type -> orchd.v1.AddSettingRequest
+	103, // 86: orchd.v1.Orchd.RemoveSetting:input_type -> orchd.v1.RemoveSettingRequest
+	1,   // 87: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
+	3,   // 88: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
+	5,   // 89: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
+	8,   // 90: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
+	11,  // 91: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
+	13,  // 92: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
+	15,  // 93: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
+	17,  // 94: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
+	21,  // 95: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
+	25,  // 96: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
+	27,  // 97: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
+	30,  // 98: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
+	32,  // 99: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
+	34,  // 100: orchd.v1.Orchd.RetryTask:output_type -> orchd.v1.RetryTaskResponse
+	36,  // 101: orchd.v1.Orchd.CancelTask:output_type -> orchd.v1.CancelTaskResponse
+	38,  // 102: orchd.v1.Orchd.WatchTasks:output_type -> orchd.v1.TaskEvent
+	40,  // 103: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
+	42,  // 104: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
+	44,  // 105: orchd.v1.Orchd.ReindexKeywords:output_type -> orchd.v1.ReindexKeywordsResponse
+	46,  // 106: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
+	49,  // 107: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
+	52,  // 108: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
+	55,  // 109: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
+	57,  // 110: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
+	60,  // 111: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
+	106, // 112: orchd.v1.Orchd.ListPRReviews:output_type -> orchd.v1.ListPRReviewsResponse
+	107, // 113: orchd.v1.Orchd.WatchPRReview:output_type -> orchd.v1.PRReview
+	110, // 114: orchd.v1.Orchd.StopPRReview:output_type -> orchd.v1.StopPRReviewResponse
+	112, // 115: orchd.v1.Orchd.GetPRDetail:output_type -> orchd.v1.PRDetail
+	63,  // 116: orchd.v1.Orchd.TailLogs:output_type -> orchd.v1.TailLogsResponse
+	66,  // 117: orchd.v1.Orchd.GetSystemMetrics:output_type -> orchd.v1.SystemMetrics
+	70,  // 118: orchd.v1.Orchd.ListDocs:output_type -> orchd.v1.ListDocsResponse
+	78,  // 119: orchd.v1.Orchd.GetDocument:output_type -> orchd.v1.Document
+	73,  // 120: orchd.v1.Orchd.SyncDocs:output_type -> orchd.v1.DocsSyncState
+	73,  // 121: orchd.v1.Orchd.GetDocsSync:output_type -> orchd.v1.DocsSyncState
+	80,  // 122: orchd.v1.Orchd.ListRegisteredSources:output_type -> orchd.v1.ListRegisteredSourcesResponse
+	81,  // 123: orchd.v1.Orchd.SaveSource:output_type -> orchd.v1.RegisteredSource
+	84,  // 124: orchd.v1.Orchd.RemoveSource:output_type -> orchd.v1.RemoveSourceResponse
+	86,  // 125: orchd.v1.Orchd.RefreshSource:output_type -> orchd.v1.RefreshSourceResponse
+	89,  // 126: orchd.v1.Orchd.GetSafetyNet:output_type -> orchd.v1.SafetyNetState
+	89,  // 127: orchd.v1.Orchd.InstallSafetyNet:output_type -> orchd.v1.SafetyNetState
+	96,  // 128: orchd.v1.Orchd.ListSettings:output_type -> orchd.v1.ListSettingsResponse
+	100, // 129: orchd.v1.Orchd.SetSettingEnabled:output_type -> orchd.v1.SettingItem
+	100, // 130: orchd.v1.Orchd.AddSetting:output_type -> orchd.v1.SettingItem
+	104, // 131: orchd.v1.Orchd.RemoveSetting:output_type -> orchd.v1.RemoveSettingResponse
+	87,  // [87:132] is the sub-list for method output_type
+	42,  // [42:87] is the sub-list for method input_type
+	42,  // [42:42] is the sub-list for extension type_name
+	42,  // [42:42] is the sub-list for extension extendee
+	0,   // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_internal_rpc_orchdv1_orchd_proto_init() }
@@ -8070,7 +9084,7 @@ func file_internal_rpc_orchdv1_orchd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_rpc_orchdv1_orchd_proto_rawDesc), len(file_internal_rpc_orchdv1_orchd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   107,
+			NumMessages:   118,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

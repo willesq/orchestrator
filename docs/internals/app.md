@@ -51,7 +51,11 @@ first, each with its reason (see the PR babysitter in [tasks.md](tasks.md)). Cli
   the count, because the list would be stale.
 - **Notifications:** one per PR that newly needs the user, or now needs them for a different
   reason. Nothing is posted for what is already waiting at launch. More than three at once become a
-  single "N PRs need you" summary. Clicking a PR's notification opens it. A failed poll keeps the
+  single "N PRs need you" summary. Clicking a PR's notification shows that PR in the GitHub tab's
+  PRs pane; the summary shows the PRs pane narrowed to Needs action. A new review verdict posts its
+  own notification ("Review verdict: Approve", the repo and number, the reason cut to 240
+  characters), polled by `ReviewMonitor` from `ListPRReviews` every 20 s for the whole app; none is
+  posted for verdicts that already existed at launch. A failed poll keeps the
   last good list, so a briefly unreadable cache cannot make every PR look new. Notifications need the app bundle, so a bare `swift run` binary skips them.
 
 ## Launching
@@ -217,6 +221,38 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     `https://github.com/<owner>/<repo>/pull|issues/<n>` URLs. Titles and authors are other people's
     text, shown verbatim.
   - **Refresh** asks GitHub for your orgs and teams again.
+  - **Sections:** an Overview/PRs switch in the toolbar, kept across launches. Overview is the
+    above. PRs shows "PRs (n)" while n verdicts wait on you.
+  - **PRs:** the PRs from `ListGitHubItems`, needing-you first, then newest.
+    - **Filters:** a title or `#number` search; role (Any, Mine, Review requested, Involved); state
+      (All open, Needs action, Drafts, CI failing, Watched for review, Has a verdict); repo. Each
+      row carries its attention, Draft, and its review (Watching, Reviewing, or the verdict).
+    - **Detail:** the selected PR from `GetPRDetail` (title, branches, size, head, CI with each
+      check, review decision, requested reviewers, reviews, labels, files, description), with
+      **Reload** and **Open on GitHub**. Text from GitHub is shown verbatim, never rendered.
+    - **Description:** rendered as Markdown with the Docs renderer: inert (no images loaded, raw
+      HTML shown as text, links opened only after the same checks), and shown as its source when
+      nested too deeply to render safely.
+    - **Review:** two permissions, "approve the PR, with its comment if it has one" (unavailable on
+      your own PR) and "comment its suggestions when it does not approve"; both off means orch
+      asks you each time. **Notes for the reviewer** are added to the review prompt. **Review when
+      ready** starts the watch (`WatchPRReview`).
+    - **Held:** a PR by someone who is not the repo's owner, a member or a collaborator waits for
+      **Review anyway…** (after a confirmation that it runs their code with your sign-in), and a
+      notification says so. The list marks it Held.
+    - **Progress:** while watched, a row of stages (Waiting until ready, Reviewing, Verdict,
+      Posted), orchd's note on what it is waiting for, and "Checked … ago · next check in …",
+      ticking every second, with **Check now**. While reviewing, the card follows the review task
+      every 10 s (`GetTask`): running, waiting or stalled, how long it has run, and its last
+      activity.
+    - **Verdict:** the verdict for its commit, the reason, and the draft comment with
+      **Preview** (rendered Markdown) and **Edit**. **Post comment** has orchd post the draft
+      once. Widening the permissions or posting asks first, and posts the draft as it was when you
+      confirmed; narrowing them never asks. Saving changed notes reviews the commit again. The
+      menu stops watching, or stops and forgets the verdict (`StopPRReview`). What orch posted, or
+      why it could not, is shown with the verdict.
+      stops watching, or stops and forgets the verdict (`StopPRReview`). What orch has posted, or
+      why it could not, is shown with the verdict.
 - **Claude:** the managed settings ([settings.md](settings.md)): Claude Code's hooks, permission
   rules and plugins, cc-safety-net's rules, and what orch ships for agents, in seven sections
   (Hooks grouped by event, Permissions by list, Plugins by marketplace, Safety Net rules by

@@ -34,6 +34,11 @@ final class AppModel {
     let tasks: TasksModel
     let dispatch: DispatchModel
     let github: GitHubModel
+    let reviews: ReviewMonitor
+    let prs: PRsModel
+    let navigator = Navigator()
+    /// Brings the main window forward; set by the app delegate.
+    var showWindow: (@MainActor () -> Void)?
     let system: SystemModel
     let logs: LogsModel
     let docs: DocsModel
@@ -44,8 +49,8 @@ final class AppModel {
     private(set) var badges: PeriodicRefresh?
 
     init() {
-        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & SystemAPI & CatalogAPI & SafetyNetAPI
-            & SettingsAPI
+        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & PRReviewAPI & SystemAPI & CatalogAPI
+            & SafetyNetAPI & SettingsAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -63,6 +68,9 @@ final class AppModel {
         restart = RestartModel(api: api) { await monitor.refresh() }
         prMonitor = PRMonitor(api: api)
         github = GitHubModel(api: api)
+        let reviews = ReviewMonitor(api: api)
+        self.reviews = reviews
+        prs = PRsModel(api: api, reviews: reviews, taskLookup: { [api] id in try await api.task(id: id) })
         system = SystemModel(api: api, loadReport: { try await DaemonControl().statusReport() })
         logs = LogsModel(api: api)
         docs = DocsModel(api: api)
@@ -77,6 +85,20 @@ final class AppModel {
         monitor.start()
         prMonitor.onNewlyNeedingYou = { [notifier] prs in notifier.post(prs) }
         prMonitor.start()
+        reviews.onNewVerdicts = { [notifier] reviews in notifier.post(verdicts: reviews) }
+        reviews.onNewlyHeld = { [notifier] reviews in notifier.post(held: reviews) }
+        reviews.start()
+        // A click on a notification opens that PR in the app, not the browser.
+        notifier.onOpenPR = { [weak self] url in
+            guard let self else { return }
+            navigator.showPR(url, in: prs)
+            showWindow?()
+        }
+        notifier.onOpenNeedsYou = { [weak self] in
+            guard let self else { return }
+            navigator.showNeedsAction(in: prs)
+            showWindow?()
+        }
         system.startSampling()
         // Docs, Safety Net and Claude change rarely; every few minutes is
         // plenty for a badge, and each tab reloads itself when opened.
@@ -130,8 +152,8 @@ enum BrandGlyph {
 
 /// Stands in when the gRPC transport cannot even be built, so the tray still
 /// shows the daemon as down instead of the app failing to launch.
-private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI, CatalogAPI, SafetyNetAPI,
-    SettingsAPI {
+private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, PRReviewAPI, SystemAPI, CatalogAPI,
+    SafetyNetAPI, SettingsAPI {
     let reason: String
 
     private var failure: DaemonControl.ControlError { .failed(status: -1, output: reason) }
@@ -156,6 +178,13 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
     func setGitHubScope(_ scope: GitHubScope) async throws -> GitHubScope { throw failure }
     func gitHubRepos(owner: String) async throws -> [GitHubRepo] { throw failure }
     func gitHubItems() async throws -> GitHubItemList { throw failure }
+    func prReviews() async throws -> [PRReview] { throw failure }
+    func watchPRReview(url: String, mode: PRReviewMode, comment: String?, instructions: String?,
+                       reviewAnyway: Bool) async throws -> PRReview {
+        throw failure
+    }
+    func stopPRReview(url: String, forget: Bool) async throws { throw failure }
+    func prDetail(url: String, refresh: Bool) async throws -> PRDetail { throw failure }
     func tailLogs(after: UInt64, limit: Int) async throws -> LogPage { throw failure }
     func systemMetrics() async throws -> SystemMetrics { throw failure }
     func listDocs() async throws -> DocCatalog { throw failure }

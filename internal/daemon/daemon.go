@@ -45,6 +45,7 @@ import (
 	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
+	"github.com/willesq/orchestrator/internal/reviews"
 	"github.com/willesq/orchestrator/internal/routing"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/selfupdate"
@@ -128,6 +129,10 @@ type server struct {
 	prStateFile string
 	// github holds the GitHub scopes and identity; nil when unavailable.
 	github *github.Service
+	// reviews watches PRs for review and details reads PR metadata; each is
+	// nil when unavailable.
+	reviews *reviews.Watcher
+	details *detailCache
 	// handoffDir is where SetGitHubScope asks the PR watcher to sweep now.
 	handoffDir string
 	// system serves TailLogs and GetSystemMetrics; nil when unavailable.
@@ -607,6 +612,7 @@ func Run(ctx context.Context) error {
 	// One GitHub service, so the server and the PR watcher share the identity
 	// cache.
 	ghService := github.NewService(github.NewStore(store), github.GH)
+	reviewWatcher := newReviewWatcher(reviews.NewStore(store), disp, tasks, ghService)
 
 	docsSched := newDocsScheduler(s, store, svc)
 	settingsSvc := settingsFor(store)
@@ -615,7 +621,7 @@ func Run(ctx context.Context) error {
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
 		summaries: summaries, github: ghService, system: system, docs: docsSched,
-		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub,
+		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub, reviews: reviewWatcher,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return err
@@ -664,6 +670,8 @@ func Run(ctx context.Context) error {
 		codexEnabled: codexRunnable(s.Queue.Worker),
 		prStateFile:  paths.PRStateFile(),
 		github:       ghService,
+		reviews:      reviewWatcher,
+		details:      newDetailCache(github.GH),
 		handoffDir:   handoff.Dir(),
 		system:       system,
 		docsReg:      docs.NewRegistry(store),

@@ -1,0 +1,452 @@
+package reviews
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/willesq/orchestrator/internal/github"
+)
+
+// Task statuses the watcher reads from the dispatch ledger.
+const (
+	taskComplete = "complete"
+	taskPending  = "pending"
+	taskRunning  = "in_progress"
+)
+
+// DefaultPoll is how often each watched PR's readiness is checked.
+const DefaultPoll = 2 * time.Minute
+
+// Dispatcher queues a review task with body and returns its ID.
+type Dispatcher func(ctx context.Context, body string) (string, error)
+
+// TaskLookup reads a task's status and result from the dispatch ledger.
+type TaskLookup func(ctx context.Context, id string) (status, result string, found bool, err error)
+
+// ErrNotFound is returned for a PR that is not watched.
+var ErrNotFound = errors.New("that PR is not watched")
+
+// ErrPosting is returned for a change to a PR that orch is posting to
+// GitHub for right now: the post is already on its way and cannot be undone.
+var ErrPosting = errors.New("orch is posting to GitHub for this PR; try again in a moment")
+
+// Watcher reviews watched PRs once they are ready. Its RPC-facing methods and
+// Tick share one lock, held around reading and writing rows and queueing a
+// review (a local write), never across a gh call.
+type Watcher struct {
+	Store    *Store
+	GH       github.Runner
+	Post     Poster
+	Dispatch Dispatcher
+	Task     TaskLookup
+	// Login is the user's GitHub login; GitHub refuses to let them approve
+	// their own PRs.
+	Login func(ctx context.Context) (string, error)
+	// Poll is how often each PR is checked; zero uses DefaultPoll.
+	Poll time.Duration
+
+	mu      sync.Mutex
+	checked map[string]time.Time
+	due     map[string]bool
+	// posting holds PRs with a review on its way to GitHub; changes to them
+	// are refused until it lands, so what the user sees is what was posted.
+	posting map[string]bool
+	now     func() time.Time
+}
+
+func (w *Watcher) clock() time.Time {
+	if w.now != nil {
+		return w.now()
+	}
+	return time.Now()
+}
+
+func (w *Watcher) poll() time.Duration {
+	if w.Poll > 0 {
+		return w.Poll
+	}
+	return DefaultPoll
+}
+
+// List returns every watched PR.
+func (w *Watcher) List(ctx context.Context) ([]Review, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.Store.List(ctx)
+}
+
+// Watch starts watching url, or changes what orch may post for it. A nil
+// comment keeps the drafted one; a stopped, closed or failed review starts
+// over. The PR is checked on the next tick.
+func (w *Watcher) Watch(ctx context.Context, url, mode string, comment *string) (Review, error) {
+	return w.WatchWith(ctx, url, mode, comment, nil)
+}
+
+// WatchWith is Watch that can also set the user's notes for the PR's
+// reviews; nil keeps them. New notes on a PR that has a verdict or a failed
+// review review its current commit again with them.
+func (w *Watcher) WatchWith(ctx context.Context, url, mode string, comment, instructions *string) (Review, error) {
+	return w.WatchOpts(ctx, url, mode, comment, instructions, false)
+}
+
+// WatchOpts is WatchWith that can also give the go-ahead to review the next
+// ready commit although its author is not trusted.
+func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, instructions *string, goAhead bool) (Review, error) {
+	if !ValidMode(mode) {
+		return Review{}, fmt.Errorf("mode must be %s, %s, %s, %s or %s", ModeVerdict, ModeApprove, ModeComment, ModeFeedback, ModeAuto)
+	}
+	repo, number, err := ParseURL(url)
+	if err != nil {
+		return Review{}, err
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.posting[url] {
+		return Review{}, ErrPosting
+	}
+	r, found, err := w.Store.Get(ctx, url)
+	if err != nil {
+		return Review{}, err
+	}
+	if !found {
+		r = Review{URL: url, Repo: repo, Number: number, State: StateWaiting}
+	}
+	if goAhead {
+		r.GoAhead = true
+	}
+	switch r.State {
+	case StateStopped, StateClosed, StateHeld:
+		r.State = StateWaiting
+	case StateFailed:
+		// A failed head is not retried on its own; asking again retries it.
+		r.State, r.HeadSHA = StateWaiting, ""
+	}
+	if r.Posted == PostedFailed || (mode == ModeComment && r.Posted == PostedCommented) {
+		// Asking again is another attempt; a comment is posted once per ask.
+		r.Posted = ""
+	}
+	r.Mode = mode
+	if comment != nil {
+		r.Comment = clean(*comment, maxComment, true)
+	}
+	if instructions != nil {
+		next := clean(*instructions, MaxInstructions, true)
+		if next != r.Instructions && (r.State == StateVerdict || r.State == StateFailed || r.Verdict != "") &&
+			r.State != StateReviewing {
+			r.State, r.HeadSHA = StateWaiting, ""
+		}
+		r.Instructions = next
+	}
+	r.Note = ""
+	if err := w.Store.Put(ctx, &r); err != nil {
+		return Review{}, err
+	}
+	w.markDue(url)
+	return r, nil
+}
+
+// Stop stops watching url; forget also deletes its verdict.
+func (w *Watcher) Stop(ctx context.Context, url string, forget bool) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.posting[url] {
+		return ErrPosting
+	}
+	r, found, err := w.Store.Get(ctx, url)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return ErrNotFound
+	}
+	if forget {
+		return w.Store.Delete(ctx, url)
+	}
+	r.State = StateStopped
+	return w.Store.Put(ctx, &r)
+}
+
+func (w *Watcher) markDue(url string) {
+	if w.due == nil {
+		w.due = map[string]bool{}
+	}
+	w.due[url] = true
+}
+
+// Tick moves every active review along: it collects finished review tasks,
+// checks PRs that are due, starts reviews of ready PRs, and posts what the
+// user opted in to.
+func (w *Watcher) Tick(ctx context.Context) {
+	list, err := w.List(ctx)
+	if err != nil {
+		log.Printf("pr-reviews: list: %v", err)
+		return
+	}
+	for _, r := range list {
+		if ctx.Err() != nil {
+			return
+		}
+		if !r.Active() {
+			continue
+		}
+		if r.State == StateReviewing {
+			w.collect(ctx, r.URL)
+			continue
+		}
+		if w.isDue(r.URL) {
+			w.check(ctx, r.URL)
+		}
+	}
+}
+
+func (w *Watcher) isDue(url string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.due[url] {
+		return true
+	}
+	last, ok := w.checked[url]
+	return !ok || w.clock().Sub(last) >= w.poll()
+}
+
+// Schedule reports when orchd last read url's PR from GitHub and when it reads
+// it next; both are zero for a review it no longer checks, and checked is zero
+// before the first read since orchd started. A review under way is not read
+// from GitHub, so next is zero for it too.
+func (w *Watcher) Schedule(r Review) (checked, next time.Time) {
+	if !r.Active() {
+		return time.Time{}, time.Time{}
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	checked = w.checked[r.URL]
+	if r.State == StateReviewing {
+		return checked, time.Time{}
+	}
+	if w.due[r.URL] || checked.IsZero() {
+		return checked, w.clock()
+	}
+	return checked, checked.Add(w.poll())
+}
+
+func (w *Watcher) checkedNow(url string) {
+	if w.checked == nil {
+		w.checked = map[string]time.Time{}
+	}
+	w.checked[url] = w.clock()
+	delete(w.due, url)
+}
+
+// update applies change to the stored review of url under the lock, and
+// writes it when change reports a change. A review that went away or stopped
+// in the meantime is left alone.
+func (w *Watcher) update(ctx context.Context, url string, change func(r *Review) bool) (Review, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	r, found, err := w.Store.Get(ctx, url)
+	if err != nil || !found || !r.Active() {
+		return r, false
+	}
+	if !change(&r) {
+		return r, true
+	}
+	if err := w.Store.Put(ctx, &r); err != nil {
+		log.Printf("pr-reviews: save %s: %v", url, err)
+		return r, false
+	}
+	return r, true
+}
+
+// collect records a finished review task's verdict.
+func (w *Watcher) collect(ctx context.Context, url string) {
+	r, _ := w.update(ctx, url, func(*Review) bool { return false })
+	status, result, found, err := w.Task(ctx, r.TaskID)
+	if err != nil {
+		log.Printf("pr-reviews: read task %s: %v", r.TaskID, err)
+		return
+	}
+	if found && (status == taskPending || status == taskRunning) {
+		return
+	}
+	var v Verdict
+	var failure string
+	switch {
+	case !found:
+		failure = "the review task is gone from the queue"
+	case status != taskComplete:
+		failure = "the review task ended " + status
+	default:
+		if v, err = ParseVerdict(result, r.Nonce); err != nil {
+			failure = github.Printable(err.Error(), 300)
+		}
+	}
+	w.update(ctx, url, func(r *Review) bool {
+		if r.State != StateReviewing {
+			return false
+		}
+		// Settled for this head either way, so a broken review is not rerun
+		// on its own; a new commit or the user asking again retries.
+		r.HeadSHA, r.PendingSHA = r.PendingSHA, ""
+		if failure != "" {
+			r.State, r.Note = StateFailed, failure
+			r.Verdict, r.Reason, r.Comment, r.Posted = "", "", "", ""
+			return true
+		}
+		r.State, r.Note, r.Posted = StateVerdict, "", ""
+		r.Verdict, r.Reason, r.Comment = v.Verdict, v.Reason, v.Comment
+		r.VerdictAt = w.clock().UTC().Truncate(time.Second)
+		return true
+	})
+	w.mu.Lock()
+	w.markDue(url)
+	w.mu.Unlock()
+}
+
+// check reads the PR's status and acts on it.
+func (w *Watcher) check(ctx context.Context, url string) {
+	st, err := FetchStatus(ctx, w.GH, url)
+	w.mu.Lock()
+	w.checkedNow(url)
+	w.mu.Unlock()
+	if err != nil {
+		w.update(ctx, url, func(r *Review) bool {
+			r.Note = "could not read the PR: " + github.Printable(err.Error(), 300)
+			return true
+		})
+		return
+	}
+	// Read before taking the lock: it may call gh.
+	me := ""
+	if w.Login != nil {
+		me, _ = w.Login(ctx)
+	}
+	var post *posting
+	w.update(ctx, url, func(r *Review) bool {
+		if st.State != "OPEN" {
+			r.State, r.Note = StateClosed, "the PR is "+strings.ToLower(st.State)
+			return true
+		}
+		if st.Head != r.HeadSHA {
+			if !st.Ready() {
+				r.State, r.Note = StateWaiting, st.Waiting()
+				if r.HeadSHA != "" && r.Verdict != "" {
+					r.Note = "new commits since the verdict; " + r.Note
+				}
+				return true
+			}
+			if !st.Trusted() && !r.GoAhead {
+				// A review runs the PR's code with the user's credentials, so
+				// an untrusted author's waits for the user to look first.
+				r.State = StateHeld
+				r.Note = "held: the author is not a member or collaborator, so orch does not run their code until you choose Review anyway"
+				return true
+			}
+			nonce := NewNonce()
+			id, err := w.Dispatch(ctx, Prompt(r.URL, r.Repo, r.Number, st.Head, nonce, r.Instructions))
+			if err != nil {
+				r.State, r.Note = StateWaiting, "could not start the review: "+github.Printable(err.Error(), 300)
+				return true
+			}
+			r.State, r.TaskID, r.PendingSHA, r.Nonce, r.Note, r.GoAhead = StateReviewing, id, st.Head, nonce, "", false
+			return true
+		}
+		changed := false
+		if r.State == StateWaiting && r.Verdict != "" {
+			// Watching again after a stop: the verdict still covers this head.
+			r.State, r.Note, changed = StateVerdict, "", true
+		}
+		if r.State == StateVerdict {
+			post = plan(*r, st, me)
+			if post != nil && post.note != "" {
+				changed = changed || r.Note != post.note
+				r.Note = post.note
+				post = nil
+			}
+		}
+		return changed
+	})
+	if post != nil {
+		w.send(ctx, url, *post)
+	}
+}
+
+// posting is a review orch is about to submit, or why it will not.
+type posting struct {
+	event, commit, posted string
+	note                  string
+}
+
+// plan decides what to post for r's verdict now that the PR's head is still
+// the one reviewed; me is the user's login, if known. nil posts nothing.
+func plan(r Review, st Status, me string) *posting {
+	switch {
+	case r.Posted == PostedFailed:
+		return nil
+	case approves(r.Mode) && r.Verdict == VerdictApprove && r.Posted != PostedApproved:
+		if !st.Ready() {
+			return &posting{note: "not approving yet: " + st.Waiting()}
+		}
+		if !st.ApproveReady() {
+			return &posting{note: "not approving: no CI has run, and the author is not a member or collaborator"}
+		}
+		if me != "" && strings.EqualFold(me, st.Author) {
+			return &posting{note: "GitHub does not let you approve your own PR; the verdict is yours to act on"}
+		}
+		return &posting{event: "APPROVE", commit: r.HeadSHA, posted: PostedApproved}
+	case r.Mode == ModeComment && r.Posted == "" && r.Comment != "":
+		return &posting{event: "COMMENT", commit: r.HeadSHA, posted: PostedCommented}
+	case (r.Mode == ModeFeedback || r.Mode == ModeAuto) && r.Verdict != VerdictApprove && r.Posted == "" && r.Comment != "":
+		// Findings for the author to fix; the next push is reviewed again.
+		return &posting{event: "COMMENT", commit: r.HeadSHA, posted: PostedCommented}
+	}
+	return nil
+}
+
+// send submits p with the comment as stored now, unless the user changed
+// their choice or new commits arrived meanwhile. While it posts, the user's
+// changes to the PR are refused (ErrPosting), and the outcome is recorded
+// whatever state the row is in, so the app never shows less than was posted.
+func (w *Watcher) send(ctx context.Context, url string, p posting) {
+	w.mu.Lock()
+	r, found, err := w.Store.Get(ctx, url)
+	if err != nil || !found || r.HeadSHA != p.commit || r.State != StateVerdict ||
+		(p.event == "APPROVE" && !approves(r.Mode)) || (p.event == "COMMENT" && !comments(r.Mode)) {
+		w.mu.Unlock()
+		return
+	}
+	if w.posting == nil {
+		w.posting = map[string]bool{}
+	}
+	w.posting[url] = true
+	w.mu.Unlock()
+
+	err = w.Post(ctx, r.Repo, r.Number, p.event, p.commit, r.Comment)
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.posting, url)
+	r, found, gerr := w.Store.Get(ctx, url)
+	if gerr != nil || !found {
+		log.Printf("pr-reviews: %s posted to %s but the row is gone: %v", p.event, url, gerr)
+		return
+	}
+	if err != nil {
+		r.Posted, r.Note = PostedFailed, "could not post to GitHub: "+github.Printable(err.Error(), 300)
+	} else {
+		r.Posted, r.Note = p.posted, ""
+		if r.Mode == ModeComment {
+			// An asked-for comment is one-shot: later verdicts post nothing
+			// until asked again.
+			r.Mode = ModeVerdict
+			r.Note = "comment posted; nothing more is posted unless you ask"
+		}
+	}
+	if err := w.Store.Put(ctx, &r); err != nil {
+		log.Printf("pr-reviews: record %s on %s: %v", p.event, url, err)
+	}
+}

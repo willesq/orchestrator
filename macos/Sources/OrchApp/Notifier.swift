@@ -2,11 +2,16 @@ import AppKit
 import OrchKit
 import UserNotifications
 
-/// Posts a notification for each PR that newly needs the user; clicking one
-/// opens the PR.
+/// Posts a notification for each PR that newly needs the user and each new
+/// review verdict; clicking one shows that PR in the app's PRs pane.
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     private let center: UNUserNotificationCenter?
+
+    /// Shows a PR in the app; given only exact github.com pull URLs.
+    var onOpenPR: (@MainActor (String) -> Void)?
+    /// Shows the PRs that need the user, for the summary notification.
+    var onOpenNeedsYou: (@MainActor () -> Void)?
 
     override init() {
         // UNUserNotificationCenter traps when the binary runs outside an app
@@ -23,7 +28,8 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         case .summary(let count):
             let content = UNMutableNotificationContent()
             content.title = "\(count) PRs need you"
-            content.body = "Open the Orchestrator menu to see them."
+            content.body = "Click to see them in Orchestrator."
+            content.userInfo = ["open": "needs-you"]
             center.add(UNNotificationRequest(identifier: "summary", content: content, trigger: nil))
         case .each(let prs):
             postEach(prs, to: center)
@@ -47,13 +53,55 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// One notification per new verdict; the reason is the body, cut short.
+    func post(verdicts: [PRReview]) {
+        guard let center else { return }
+        for review in verdicts {
+            guard let verdict = review.verdict, let url = PullRequest(url: review.url, title: "", repo: "").webURL else { continue }
+            let content = UNMutableNotificationContent()
+            content.title = "Review verdict: \(verdict.label)"
+            content.subtitle = "\(review.repo)#\(review.number)"
+            content.body = String(displaySafeLines(review.reason).prefix(240))
+            content.threadIdentifier = "reviews"
+            content.userInfo = ["url": url.absoluteString]
+            // One per PR, so a newer verdict replaces the last.
+            center.add(UNNotificationRequest(identifier: "verdict|\(review.url)", content: content, trigger: nil))
+        }
+    }
+
+    /// One notification per PR newly held for the user's go-ahead.
+    func post(held: [PRReview]) {
+        guard let center else { return }
+        for review in held {
+            guard let url = PullRequest(url: review.url, title: "", repo: "").webURL else { continue }
+            let content = UNMutableNotificationContent()
+            content.title = "Review waiting for your go-ahead"
+            content.subtitle = "\(review.repo)#\(review.number)"
+            content.body = "Its author is not a member or collaborator, so orch does not run their code until you look."
+            content.threadIdentifier = "reviews"
+            content.userInfo = ["url": url.absoluteString]
+            center.add(UNNotificationRequest(identifier: "held|\(review.url)", content: content, trigger: nil))
+        }
+    }
+
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
     ) async {
-        guard let raw = response.notification.request.content.userInfo["url"] as? String,
+        let info = response.notification.request.content.userInfo
+        if info["open"] as? String == "needs-you" {
+            await MainActor.run { onOpenNeedsYou?() }
+            return
+        }
+        guard let raw = info["url"] as? String,
               let url = PullRequest(url: raw, title: "", repo: "").webURL
         else { return }
-        await MainActor.run { _ = NSWorkspace.shared.open(url) }
+        await MainActor.run {
+            if let onOpenPR {
+                onOpenPR(url.absoluteString)
+            } else {
+                _ = NSWorkspace.shared.open(url)
+            }
+        }
     }
 
     nonisolated func userNotificationCenter(

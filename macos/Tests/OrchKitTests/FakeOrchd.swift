@@ -19,6 +19,9 @@ struct FakeOrchdService: RegistrableRPCService {
     var ghScopes = Orchd_V1_ListGitHubScopesResponse()
     var ghRepos = Orchd_V1_ListGitHubReposResponse()
     var ghItems = Orchd_V1_ListGitHubItemsResponse()
+    var prReviews = Orchd_V1_ListPRReviewsResponse()
+    var prReview = Orchd_V1_PRReview()
+    var prDetail = Orchd_V1_PRDetail()
     var logs = Orchd_V1_TailLogsResponse()
     var metrics = Orchd_V1_SystemMetrics()
     var docs = Orchd_V1_ListDocsResponse()
@@ -35,6 +38,7 @@ struct FakeOrchdService: RegistrableRPCService {
         let recorder = self.recorder
         let tasks = self.tasks, dispatch = self.dispatch, recommend = self.recommend
         let ghIdentity = self.ghIdentity, ghScopes = self.ghScopes, ghRepos = self.ghRepos, ghItems = self.ghItems
+        let prReviews = self.prReviews, prReview = self.prReview, prDetail = self.prDetail
         let logs = self.logs, metrics = self.metrics
         let docs = self.docs, document = self.document, registered = self.registered
         let safetyNet = self.safetyNet
@@ -225,6 +229,38 @@ struct FakeOrchdService: RegistrableRPCService {
         ) { request, _ in
             for try await message in request.messages { recorder.record(message) }
             return StreamingServerResponse(single: ServerResponse(message: ghItems))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListPRReviews.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListPRReviewsRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListPRReviewsResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: prReviews))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.WatchPRReview.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_WatchPRReviewRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_PRReview>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: prReview))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.StopPRReview.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_StopPRReviewRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_StopPRReviewResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: Orchd_V1_StopPRReviewResponse()))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.GetPRDetail.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_GetPRDetailRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_PRDetail>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: prDetail))
         }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.ListTasks.descriptor,

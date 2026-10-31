@@ -13,7 +13,8 @@ public protocol DaemonAPI: Sendable {
 /// Talks to orchd over its Unix socket. One long-lived HTTP/2 connection is
 /// shared by every call; the transport reconnects on its own when orchd
 /// restarts and recreates the socket.
-public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, SystemAPI, CatalogAPI, Sendable {
+public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, PRReviewAPI, SystemAPI, CatalogAPI,
+    Sendable {
     private let client: GRPCClient<HTTP2ClientTransport.Posix>
     private let orchd: Orchd_V1_Orchd.Client<HTTP2ClientTransport.Posix>
     private let callTimeout: Duration
@@ -271,6 +272,67 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
                 )
             },
             updatedAt: date(fromUnix: r.updatedAt)
+        )
+    }
+
+    public func prReviews() async throws -> [PRReview] {
+        try await orchd.listPRReviews(Orchd_V1_ListPRReviewsRequest(), options: callOptions).reviews.map(Self.review)
+    }
+
+    public func watchPRReview(url: String, mode: PRReviewMode, comment: String?, instructions: String?,
+                              reviewAnyway: Bool) async throws -> PRReview {
+        var request = Orchd_V1_WatchPRReviewRequest()
+        request.url = url
+        request.mode = mode.rawValue
+        if let comment {
+            request.setComment = true
+            request.comment = comment
+        }
+        if let instructions {
+            request.setInstructions = true
+            request.instructions = instructions
+        }
+        request.reviewAnyway = reviewAnyway
+        return Self.review(try await orchd.watchPRReview(request, options: callOptions))
+    }
+
+    public func stopPRReview(url: String, forget: Bool) async throws {
+        var request = Orchd_V1_StopPRReviewRequest()
+        request.url = url
+        request.forget = forget
+        _ = try await orchd.stopPRReview(request, options: callOptions)
+    }
+
+    public func prDetail(url: String, refresh: Bool) async throws -> PRDetail {
+        var request = Orchd_V1_GetPRDetailRequest()
+        request.url = url
+        request.refresh = refresh
+        return Self.detail(try await orchd.getPRDetail(request, options: gitHubOptions))
+    }
+
+    static func review(_ r: Orchd_V1_PRReview) -> PRReview {
+        PRReview(
+            url: r.url, repo: r.repo, number: Int(r.number), mode: PRReviewMode(rawValue: r.mode) ?? .verdict,
+            state: PRReviewState(rawValue: r.state), headSHA: r.headSha, pendingSHA: r.pendingSha, taskID: r.taskID,
+            verdict: PRVerdict(rawValue: r.verdict), reason: r.reason, comment: r.comment, instructions: r.instructions, goAhead: r.goAhead,
+            posted: r.posted,
+            note: r.note, verdictAt: date(fromUnix: r.verdictAt), updatedAt: date(fromUnix: r.updatedAt),
+            checkedAt: date(fromUnix: r.checkedAt), nextCheckAt: date(fromUnix: r.nextCheckAt)
+        )
+    }
+
+    static func detail(_ d: Orchd_V1_PRDetail) -> PRDetail {
+        let iso = ISO8601DateFormatter()
+        return PRDetail(
+            url: d.url, title: d.title, body: d.body, author: d.author, state: d.state, isDraft: d.isDraft,
+            baseRef: d.baseRef, headRef: d.headRef, headSHA: d.headSha, additions: Int(d.additions),
+            deletions: Int(d.deletions), changedFiles: Int(d.changedFiles), createdAt: iso.date(from: d.createdAt),
+            updatedAt: iso.date(from: d.updatedAt), mergeable: d.mergeable, reviewDecision: d.reviewDecision,
+            ciState: d.ciState, labels: d.labels, requestedReviewers: d.requestedReviewers,
+            reviews: d.reviews.map { PRDetail.Reviewer(login: $0.login, state: $0.state) },
+            checks: d.checks.map { PRDetail.Check(name: $0.name, result: $0.result) },
+            files: d.files.map { PRDetail.File(path: $0.path, additions: Int($0.additions), deletions: Int($0.deletions)) },
+            fetchedAt: date(fromUnix: d.fetchedAt)
         )
     }
 

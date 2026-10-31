@@ -44,6 +44,10 @@ const (
 	Orchd_SetGitHubScope_FullMethodName        = "/orchd.v1.Orchd/SetGitHubScope"
 	Orchd_ListGitHubRepos_FullMethodName       = "/orchd.v1.Orchd/ListGitHubRepos"
 	Orchd_ListGitHubItems_FullMethodName       = "/orchd.v1.Orchd/ListGitHubItems"
+	Orchd_ListPRReviews_FullMethodName         = "/orchd.v1.Orchd/ListPRReviews"
+	Orchd_WatchPRReview_FullMethodName         = "/orchd.v1.Orchd/WatchPRReview"
+	Orchd_StopPRReview_FullMethodName          = "/orchd.v1.Orchd/StopPRReview"
+	Orchd_GetPRDetail_FullMethodName           = "/orchd.v1.Orchd/GetPRDetail"
 	Orchd_TailLogs_FullMethodName              = "/orchd.v1.Orchd/TailLogs"
 	Orchd_GetSystemMetrics_FullMethodName      = "/orchd.v1.Orchd/GetSystemMetrics"
 	Orchd_ListDocs_FullMethodName              = "/orchd.v1.Orchd/ListDocs"
@@ -135,6 +139,20 @@ type OrchdClient interface {
 	// ListGitHubItems serves the watcher's cache: open PRs and issues in the
 	// enabled scopes, each with why it is watched. Never calls gh.
 	ListGitHubItems(ctx context.Context, in *ListGitHubItemsRequest, opts ...grpc.CallOption) (*ListGitHubItemsResponse, error)
+	// ListPRReviews lists the PRs the user asked orchd to review once ready,
+	// each with where its review stands and the last verdict. Never calls gh.
+	ListPRReviews(ctx context.Context, in *ListPRReviewsRequest, opts ...grpc.CallOption) (*ListPRReviewsResponse, error)
+	// WatchPRReview starts watching a PR for review, or changes what orchd may
+	// post for it: nothing (verdict), an approval on an approve verdict
+	// (approve), the drafted comment on any other verdict (feedback), both
+	// (auto), or the drafted comment once, now (comment). The PR is checked
+	// within seconds.
+	WatchPRReview(ctx context.Context, in *WatchPRReviewRequest, opts ...grpc.CallOption) (*PRReview, error)
+	// StopPRReview stops watching a PR; forget also deletes its verdict.
+	StopPRReview(ctx context.Context, in *StopPRReviewRequest, opts ...grpc.CallOption) (*StopPRReviewResponse, error)
+	// GetPRDetail reads one PR's metadata from GitHub (one gh call), cached for
+	// a minute unless refresh is set.
+	GetPRDetail(ctx context.Context, in *GetPRDetailRequest, opts ...grpc.CallOption) (*PRDetail, error)
 	// TailLogs returns orchd's recent log lines, kept in memory, after a
 	// sequence number, so a caller can poll for new lines.
 	TailLogs(ctx context.Context, in *TailLogsRequest, opts ...grpc.CallOption) (*TailLogsResponse, error)
@@ -453,6 +471,46 @@ func (c *orchdClient) ListGitHubItems(ctx context.Context, in *ListGitHubItemsRe
 	return out, nil
 }
 
+func (c *orchdClient) ListPRReviews(ctx context.Context, in *ListPRReviewsRequest, opts ...grpc.CallOption) (*ListPRReviewsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPRReviewsResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListPRReviews_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) WatchPRReview(ctx context.Context, in *WatchPRReviewRequest, opts ...grpc.CallOption) (*PRReview, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PRReview)
+	err := c.cc.Invoke(ctx, Orchd_WatchPRReview_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) StopPRReview(ctx context.Context, in *StopPRReviewRequest, opts ...grpc.CallOption) (*StopPRReviewResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StopPRReviewResponse)
+	err := c.cc.Invoke(ctx, Orchd_StopPRReview_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) GetPRDetail(ctx context.Context, in *GetPRDetailRequest, opts ...grpc.CallOption) (*PRDetail, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PRDetail)
+	err := c.cc.Invoke(ctx, Orchd_GetPRDetail_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) TailLogs(ctx context.Context, in *TailLogsRequest, opts ...grpc.CallOption) (*TailLogsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(TailLogsResponse)
@@ -686,6 +744,20 @@ type OrchdServer interface {
 	// ListGitHubItems serves the watcher's cache: open PRs and issues in the
 	// enabled scopes, each with why it is watched. Never calls gh.
 	ListGitHubItems(context.Context, *ListGitHubItemsRequest) (*ListGitHubItemsResponse, error)
+	// ListPRReviews lists the PRs the user asked orchd to review once ready,
+	// each with where its review stands and the last verdict. Never calls gh.
+	ListPRReviews(context.Context, *ListPRReviewsRequest) (*ListPRReviewsResponse, error)
+	// WatchPRReview starts watching a PR for review, or changes what orchd may
+	// post for it: nothing (verdict), an approval on an approve verdict
+	// (approve), the drafted comment on any other verdict (feedback), both
+	// (auto), or the drafted comment once, now (comment). The PR is checked
+	// within seconds.
+	WatchPRReview(context.Context, *WatchPRReviewRequest) (*PRReview, error)
+	// StopPRReview stops watching a PR; forget also deletes its verdict.
+	StopPRReview(context.Context, *StopPRReviewRequest) (*StopPRReviewResponse, error)
+	// GetPRDetail reads one PR's metadata from GitHub (one gh call), cached for
+	// a minute unless refresh is set.
+	GetPRDetail(context.Context, *GetPRDetailRequest) (*PRDetail, error)
 	// TailLogs returns orchd's recent log lines, kept in memory, after a
 	// sequence number, so a caller can poll for new lines.
 	TailLogs(context.Context, *TailLogsRequest) (*TailLogsResponse, error)
@@ -819,6 +891,18 @@ func (UnimplementedOrchdServer) ListGitHubRepos(context.Context, *ListGitHubRepo
 }
 func (UnimplementedOrchdServer) ListGitHubItems(context.Context, *ListGitHubItemsRequest) (*ListGitHubItemsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListGitHubItems not implemented")
+}
+func (UnimplementedOrchdServer) ListPRReviews(context.Context, *ListPRReviewsRequest) (*ListPRReviewsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPRReviews not implemented")
+}
+func (UnimplementedOrchdServer) WatchPRReview(context.Context, *WatchPRReviewRequest) (*PRReview, error) {
+	return nil, status.Error(codes.Unimplemented, "method WatchPRReview not implemented")
+}
+func (UnimplementedOrchdServer) StopPRReview(context.Context, *StopPRReviewRequest) (*StopPRReviewResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopPRReview not implemented")
+}
+func (UnimplementedOrchdServer) GetPRDetail(context.Context, *GetPRDetailRequest) (*PRDetail, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPRDetail not implemented")
 }
 func (UnimplementedOrchdServer) TailLogs(context.Context, *TailLogsRequest) (*TailLogsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method TailLogs not implemented")
@@ -1332,6 +1416,78 @@ func _Orchd_ListGitHubItems_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_ListPRReviews_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPRReviewsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListPRReviews(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListPRReviews_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListPRReviews(ctx, req.(*ListPRReviewsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_WatchPRReview_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WatchPRReviewRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).WatchPRReview(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_WatchPRReview_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).WatchPRReview(ctx, req.(*WatchPRReviewRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_StopPRReview_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopPRReviewRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).StopPRReview(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_StopPRReview_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).StopPRReview(ctx, req.(*StopPRReviewRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_GetPRDetail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPRDetailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetPRDetail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetPRDetail_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetPRDetail(ctx, req.(*GetPRDetailRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_TailLogs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(TailLogsRequest)
 	if err := dec(in); err != nil {
@@ -1722,6 +1878,22 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListGitHubItems",
 			Handler:    _Orchd_ListGitHubItems_Handler,
+		},
+		{
+			MethodName: "ListPRReviews",
+			Handler:    _Orchd_ListPRReviews_Handler,
+		},
+		{
+			MethodName: "WatchPRReview",
+			Handler:    _Orchd_WatchPRReview_Handler,
+		},
+		{
+			MethodName: "StopPRReview",
+			Handler:    _Orchd_StopPRReview_Handler,
+		},
+		{
+			MethodName: "GetPRDetail",
+			Handler:    _Orchd_GetPRDetail_Handler,
 		},
 		{
 			MethodName: "TailLogs",

@@ -44,14 +44,19 @@ struct MainWindow: View {
     let tasks: TasksModel
     let dispatch: DispatchModel
     let github: GitHubModel
+    let prs: PRsModel
     let system: SystemModel
     let logs: LogsModel
     let docs: DocsModel
     let registeredSources: RegisteredSourcesModel
     let safetyNet: SafetyNetModel
     let claude: SettingsModel
+    @Bindable var navigator: Navigator
 
-    @AppStorage("pane") private var pane: Pane = .dashboard
+    private var pane: Pane {
+        get { navigator.pane }
+        nonmutating set { navigator.pane = newValue }
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -82,7 +87,7 @@ struct MainWindow: View {
             case .tasks:
                 TasksView(model: tasks, dispatch: dispatch)
             case .github:
-                GitHubView(model: github)
+                GitHubView(model: github, prs: prs, navigator: navigator)
             case .claude:
                 ClaudeView(model: claude)
             case .safetyNet:

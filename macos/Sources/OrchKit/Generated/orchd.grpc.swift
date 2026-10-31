@@ -345,6 +345,58 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ListPRReviews" metadata.
+        public enum ListPRReviews: Sendable {
+            /// Request type for "ListPRReviews".
+            public typealias Input = Orchd_V1_ListPRReviewsRequest
+            /// Response type for "ListPRReviews".
+            public typealias Output = Orchd_V1_ListPRReviewsResponse
+            /// Descriptor for "ListPRReviews".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListPRReviews",
+                type: .unary
+            )
+        }
+        /// Namespace for "WatchPRReview" metadata.
+        public enum WatchPRReview: Sendable {
+            /// Request type for "WatchPRReview".
+            public typealias Input = Orchd_V1_WatchPRReviewRequest
+            /// Response type for "WatchPRReview".
+            public typealias Output = Orchd_V1_PRReview
+            /// Descriptor for "WatchPRReview".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "WatchPRReview",
+                type: .unary
+            )
+        }
+        /// Namespace for "StopPRReview" metadata.
+        public enum StopPRReview: Sendable {
+            /// Request type for "StopPRReview".
+            public typealias Input = Orchd_V1_StopPRReviewRequest
+            /// Response type for "StopPRReview".
+            public typealias Output = Orchd_V1_StopPRReviewResponse
+            /// Descriptor for "StopPRReview".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "StopPRReview",
+                type: .unary
+            )
+        }
+        /// Namespace for "GetPRDetail" metadata.
+        public enum GetPRDetail: Sendable {
+            /// Request type for "GetPRDetail".
+            public typealias Input = Orchd_V1_GetPRDetailRequest
+            /// Response type for "GetPRDetail".
+            public typealias Output = Orchd_V1_PRDetail
+            /// Descriptor for "GetPRDetail".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetPRDetail",
+                type: .unary
+            )
+        }
         /// Namespace for "TailLogs" metadata.
         public enum TailLogs: Sendable {
             /// Request type for "TailLogs".
@@ -580,6 +632,10 @@ public enum Orchd_V1_Orchd: Sendable {
             SetGitHubScope.descriptor,
             ListGitHubRepos.descriptor,
             ListGitHubItems.descriptor,
+            ListPRReviews.descriptor,
+            WatchPRReview.descriptor,
+            StopPRReview.descriptor,
+            GetPRDetail.descriptor,
             TailLogs.descriptor,
             GetSystemMetrics.descriptor,
             ListDocs.descriptor,
@@ -1209,6 +1265,104 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListGitHubItemsResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListGitHubItemsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListPRReviews" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListPRReviews lists the PRs the user asked orchd to review once ready,
+        /// > each with where its review stands and the last verdict. Never calls gh.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListPRReviewsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListPRReviewsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListPRReviewsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listPRReviews<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListPRReviewsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListPRReviewsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListPRReviewsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListPRReviewsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "WatchPRReview" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > WatchPRReview starts watching a PR for review, or changes what orchd may
+        /// > post for it: nothing (verdict), an approval on an approve verdict
+        /// > (approve), the drafted comment on any other verdict (feedback), both
+        /// > (auto), or the drafted comment once, now (comment). The PR is checked
+        /// > within seconds.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_WatchPRReviewRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_WatchPRReviewRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRReview` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func watchPRReview<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_WatchPRReviewRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_WatchPRReviewRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRReview>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRReview>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "StopPRReview" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > StopPRReview stops watching a PR; forget also deletes its verdict.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_StopPRReviewRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_StopPRReviewRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_StopPRReviewResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func stopPRReview<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_StopPRReviewRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_StopPRReviewRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_StopPRReviewResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_StopPRReviewResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetPRDetail" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetPRDetail reads one PR's metadata from GitHub (one gh call), cached for
+        /// > a minute unless refresh is set.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetPRDetailRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetPRDetailRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRDetail` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getPRDetail<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetPRDetailRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetPRDetailRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRDetail>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRDetail>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "TailLogs" method.
@@ -2475,6 +2629,148 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.ListGitHubItems.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListPRReviews" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListPRReviews lists the PRs the user asked orchd to review once ready,
+        /// > each with where its review stands and the last verdict. Never calls gh.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListPRReviewsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListPRReviewsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListPRReviewsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listPRReviews<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListPRReviewsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListPRReviewsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListPRReviewsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListPRReviewsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListPRReviews.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "WatchPRReview" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > WatchPRReview starts watching a PR for review, or changes what orchd may
+        /// > post for it: nothing (verdict), an approval on an approve verdict
+        /// > (approve), the drafted comment on any other verdict (feedback), both
+        /// > (auto), or the drafted comment once, now (comment). The PR is checked
+        /// > within seconds.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_WatchPRReviewRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_WatchPRReviewRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRReview` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func watchPRReview<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_WatchPRReviewRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_WatchPRReviewRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRReview>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRReview>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.WatchPRReview.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "StopPRReview" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > StopPRReview stops watching a PR; forget also deletes its verdict.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_StopPRReviewRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_StopPRReviewRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_StopPRReviewResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func stopPRReview<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_StopPRReviewRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_StopPRReviewRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_StopPRReviewResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_StopPRReviewResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.StopPRReview.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetPRDetail" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetPRDetail reads one PR's metadata from GitHub (one gh call), cached for
+        /// > a minute unless refresh is set.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetPRDetailRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetPRDetailRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRDetail` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getPRDetail<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetPRDetailRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetPRDetailRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRDetail>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRDetail>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetPRDetail.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -3782,6 +4078,128 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListGitHubItemsRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListGitHubItemsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListPRReviews" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListPRReviews lists the PRs the user asked orchd to review once ready,
+    /// > each with where its review stands and the last verdict. Never calls gh.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListPRReviewsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listPRReviews<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListPRReviewsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListPRReviewsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listPRReviews(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListPRReviewsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListPRReviewsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "WatchPRReview" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > WatchPRReview starts watching a PR for review, or changes what orchd may
+    /// > post for it: nothing (verdict), an approval on an approve verdict
+    /// > (approve), the drafted comment on any other verdict (feedback), both
+    /// > (auto), or the drafted comment once, now (comment). The PR is checked
+    /// > within seconds.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_WatchPRReviewRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func watchPRReview<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_WatchPRReviewRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRReview>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.watchPRReview(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_WatchPRReviewRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PRReview>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "StopPRReview" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > StopPRReview stops watching a PR; forget also deletes its verdict.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_StopPRReviewRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func stopPRReview<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_StopPRReviewRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_StopPRReviewResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.stopPRReview(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_StopPRReviewRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_StopPRReviewResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetPRDetail" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetPRDetail reads one PR's metadata from GitHub (one gh call), cached for
+    /// > a minute unless refresh is set.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetPRDetailRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getPRDetail<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetPRDetailRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRDetail>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getPRDetail(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetPRDetailRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PRDetail>(),
             options: options,
             onResponse: handleResponse
         )
@@ -5105,6 +5523,144 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.listGitHubItems(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListPRReviews" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListPRReviews lists the PRs the user asked orchd to review once ready,
+    /// > each with where its review stands and the last verdict. Never calls gh.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listPRReviews<Result>(
+        _ message: Orchd_V1_ListPRReviewsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListPRReviewsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListPRReviewsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listPRReviews(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "WatchPRReview" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > WatchPRReview starts watching a PR for review, or changes what orchd may
+    /// > post for it: nothing (verdict), an approval on an approve verdict
+    /// > (approve), the drafted comment on any other verdict (feedback), both
+    /// > (auto), or the drafted comment once, now (comment). The PR is checked
+    /// > within seconds.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func watchPRReview<Result>(
+        _ message: Orchd_V1_WatchPRReviewRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRReview>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_WatchPRReviewRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.watchPRReview(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "StopPRReview" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > StopPRReview stops watching a PR; forget also deletes its verdict.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func stopPRReview<Result>(
+        _ message: Orchd_V1_StopPRReviewRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_StopPRReviewResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_StopPRReviewRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.stopPRReview(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetPRDetail" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetPRDetail reads one PR's metadata from GitHub (one gh call), cached for
+    /// > a minute unless refresh is set.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getPRDetail<Result>(
+        _ message: Orchd_V1_GetPRDetailRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRDetail>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetPRDetailRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getPRDetail(
             request: request,
             options: options,
             onResponse: handleResponse

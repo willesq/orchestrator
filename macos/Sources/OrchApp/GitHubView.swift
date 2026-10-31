@@ -4,34 +4,67 @@ import SwiftUI
 
 struct GitHubView: View {
     @Bindable var model: GitHubModel
+    let prs: PRsModel
+    @Bindable var navigator: Navigator
 
     var body: some View {
-        HSplitView {
-            ScopesColumn(model: model)
-                .frame(minWidth: 300, idealWidth: 340, maxWidth: 440)
-            ActivityColumn(model: model)
-                .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+        Group {
+            switch navigator.gitHubSection {
+            case .overview:
+                HSplitView {
+                    ScopesColumn(model: model)
+                        .frame(minWidth: 300, idealWidth: 340, maxWidth: 440)
+                    ActivityColumn(model: model)
+                        .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
+                }
+            case .prs:
+                PRsView(github: model, prs: prs)
+            }
         }
         .navigationTitle("GitHub")
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("Show", selection: $model.filter) {
-                    ForEach(GitHubModel.Filter.allCases) { Text($0.rawValue).tag($0) }
+            ToolbarItem(placement: .navigation) {
+                Picker("Section", selection: $navigator.gitHubSection) {
+                    ForEach(GitHubSection.allCases) { section in
+                        Text(sectionLabel(section)).tag(section)
+                    }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .fixedSize()
             }
+            if navigator.gitHubSection == .overview {
+                ToolbarItem(placement: .principal) {
+                    Picker("Show", selection: $model.filter) {
+                        ForEach(GitHubModel.Filter.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                }
+            }
             ToolbarItem {
-                Button { Task { await model.refresh(rediscover: true) } } label: {
+                Button {
+                    Task {
+                        await model.refresh(rediscover: navigator.gitHubSection == .overview)
+                        await prs.reviews.refresh()
+                    }
+                } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .disabled(model.isRefreshing)
-                .help("Ask GitHub for your orgs and teams again, and reload activity")
+                .help(navigator.gitHubSection == .overview ? "Ask GitHub for your orgs and teams again, and reload activity"
+                    : "Reload PRs and reviews")
             }
         }
         .onAppear { model.start() }
         .onDisappear { model.stop() }
+    }
+
+    /// PRs carries how many verdicts wait on the user.
+    private func sectionLabel(_ section: GitHubSection) -> String {
+        let verdicts = prs.reviews.verdictCount
+        return section == .prs && verdicts > 0 ? "PRs (\(verdicts))" : section.title
     }
 }
 

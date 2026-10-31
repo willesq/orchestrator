@@ -106,6 +106,31 @@ func ValidPermissionMode(mode string) bool { return slices.Contains(allowedModes
 // its cap on active tasks bounds what slips past both.
 const dispatchTools = "mcp__queue__queue_dispatch,Bash(orch dispatch:*)"
 
+// readOnlyAgents may read GitHub but never change it: orchd alone posts what
+// they conclude, and only what the user opted in to. Denying the writing
+// commands enforces in the runner what their instructions already say.
+var readOnlyAgents = map[string]bool{"pr-verdict": true}
+
+// gitHubWriteTools are the commands readOnlyAgents are denied: every gh
+// command that changes GitHub, gh api whole (a pattern cannot tell its reads
+// from its writes), the token itself, raw HTTP clients, pushes, and orch's own
+// database, which holds what orchd may post. Patterns match what the agent
+// types, not what programs it starts do, so they are a guard rather than a
+// sandbox.
+const gitHubWriteTools = "Bash(gh pr review:*),Bash(gh pr comment:*),Bash(gh pr merge:*),Bash(gh pr close:*)," +
+	"Bash(gh pr edit:*),Bash(gh pr ready:*),Bash(gh pr reopen:*),Bash(gh pr create:*),Bash(gh pr lock:*)," +
+	"Bash(gh issue:*),Bash(gh api:*),Bash(gh auth:*),Bash(gh release:*),Bash(gh workflow:*),Bash(gh run:*)," +
+	"Bash(gh repo edit:*),Bash(gh repo delete:*),Bash(gh secret:*),Bash(gh variable:*),Bash(gh label:*)," +
+	"Bash(gh gist:*),Bash(git push:*),Bash(git -C:*),Bash(curl:*),Bash(wget:*),Bash(sqlite3:*),WebFetch"
+
+// deniedTools lists what agent may not use in a run.
+func deniedTools(agent string) string {
+	if readOnlyAgents[agent] {
+		return dispatchTools + "," + gitHubWriteTools
+	}
+	return dispatchTools
+}
+
 // ValidAgent reports whether name can be passed to --agent.
 func ValidAgent(name string) bool { return agentName.MatchString(name) }
 
@@ -267,7 +292,7 @@ func (r *Runner) canResume(t Task) bool {
 func (r *Runner) claudeSession(ctx context.Context, t Task, dir, prompt string, resume bool) (Outcome, error) {
 	sid := SessionID(t.ID)
 	args := []string{"-p", "--output-format", "json", "--permission-mode", r.PermissionMode,
-		"--disallowedTools", dispatchTools}
+		"--disallowedTools", deniedTools(t.Agent)}
 	if rules := allowedRules(r.AllowedTools); rules != "" {
 		// One token: the CLI's variadic parsing would otherwise read a following
 		// value that begins with "-" as a flag of its own.
