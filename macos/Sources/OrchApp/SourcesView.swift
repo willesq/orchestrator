@@ -28,11 +28,12 @@ struct SourcesView: View {
             } else if !model.loaded && model.lastError == nil {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                HSplitView {
+                AdaptiveSplit(primaryWidth: .init(min: 380, ideal: 520), secondaryWidth: .init(min: 320, ideal: 380, max: 560),
+                              stacking: .detail(shown: model.selected != nil, backTitle: "Sources",
+                                                back: { model.select(nil) })) {
                     SourceTable(model: model)
-                        .frame(minWidth: 380, idealWidth: 520, maxWidth: .infinity)
+                } secondary: {
                     SourceDetail(model: model, onEdit: { editing = Editing(source: $0) })
-                        .frame(minWidth: 320, idealWidth: 380, maxWidth: 560, maxHeight: .infinity)
                 }
             }
         }

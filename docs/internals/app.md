@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `SafetyNetView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `SafetyNetView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -99,7 +99,7 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
   docs, Safety Net and settings every five minutes, and the PR count follows `PRMonitor`.
 - **Command palette (⌘K):** one keyboard surface over the whole app, from any pane. It lists, most
   pressing first, the PRs that need you, actions (New task…, which opens the dispatch sheet on the
-  Tasks pane; Refresh everything; Show PRs that need action; each appearance), every pane with its
+  Tasks pane; Dock as companion or Expand; Keep Orch on top; Refresh everything; Show PRs that need action; each appearance), every pane with its
   sidebar status, the other cached PRs, and the 30 most recent tasks. Typing filters by fuzzy match
   (`PaletteMatcher`: characters in order, word starts and unbroken runs score higher), and results
   stay grouped under their section. ↑↓ move, ↩ runs, Esc or ⌘K closes, and clicking outside
@@ -107,6 +107,31 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
   the keyboard. It only navigates and opens what the panes already offer: a PR opens in the PRs
   pane, never the browser, and nothing it runs dispatches, cancels or deletes without the pane's
   own confirmation.
+- **Companion mode (⌘⇧D):** the window is built to sit beside the terminal the agents run in.
+  Narrower than 600pt (`CompanionLayout.compactWidth`), whether the user dragged it there or a
+  window manager tiled it (they resize through Accessibility, which ignores the minimum size, so
+  the sidebar layout used to clip), it shows one column instead of the sidebar and a pane:
+  orchd's health, the PRs that need you (a click opens the PR in the PRs pane), the agents at work
+  with Cancel (confirmed first) plus the three most recent finished tasks, and a strip of every
+  pane with its sidebar badge. A click on a PR, task or pane widens the window and shows it. The
+  window goes down to 320×420. ⌘⇧D, the toolbar's Companion button, the column's dock button or
+  the palette docks it: a full-height 380pt column at its screen's right edge, kept above other
+  windows and on every Space. ⌘⇧D again (or Expand) restores the frame it had before docking; a
+  window the user narrowed by hand widens to at least 980×640 toward the screen's centre, kept on
+  screen. The pin keeps an undocked window above others too. A pinned window shows on every Space,
+  so its PR titles and task headlines appear in screen shares there too. Docking and pinning
+  last until the app quits.
+
+- **Fitting the window:** no pane reaches past the window's edge. Every list-and-detail pane (Docs,
+  Sources, Tasks, Claude, the PRs list and board) is an `AdaptiveSplit`: side by side while both
+  columns' minimum widths fit, otherwise one at a time, the detail replacing the list under a Back
+  bar (⌘[) while something is selected. GitHub's Overview switches between Scopes and Activity with
+  a segmented control instead. Rows of filters and chips (Memory's search filters, the PR filters,
+  the Dashboard's summary chips) wrap with `FlowLayout`; System's tiles flow in an adaptive grid;
+  Claude's section picker turns into a menu when its segments do not fit. If something still cannot
+  fit, the window cuts it at the trailing edge, so the sidebar always stays whole. The window's
+  content starts at the window's size, so a launch does not lay out the companion column first and
+  rebuild every pane; a load cancelled because its pane went away is not reported as an error.
 
 - **Dashboard:** orchd's health, then summary chips for Docs, Safety Net and PRs that open their
   tabs, the Needs you list, the Activity timeline, and a chip per subsystem.

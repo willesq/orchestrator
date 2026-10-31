@@ -5,11 +5,12 @@ struct DocsView: View {
     @Bindable var model: DocsModel
 
     var body: some View {
-        HSplitView {
+        AdaptiveSplit(primaryWidth: .init(min: 260, ideal: 320, max: 460), secondaryWidth: .init(min: 380),
+                      stacking: .detail(shown: model.selected != nil, backTitle: "Docs",
+                                        back: { Task { await model.select(nil) } })) {
             DocList(model: model)
-                .frame(minWidth: 260, idealWidth: 320, maxWidth: 460)
+        } secondary: {
             DocDetail(model: model)
-                .frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle("Docs")
         .toolbar {

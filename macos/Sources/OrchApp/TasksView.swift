@@ -29,17 +29,17 @@ struct TasksView: View {
                     }
                 }
             } else {
-                HSplitView {
-                    list.frame(minWidth: 280, idealWidth: 320)
-                    Group {
-                        if let task = model.selected {
-                            TaskDetail(task: task, model: model)
-                        } else {
-                            EmptyState(symbol: "list.bullet.rectangle", title: "No task selected",
-                                       message: "Select a task to see its body, result and outcome.")
-                        }
+                AdaptiveSplit(primaryWidth: .init(min: 280, ideal: 320), secondaryWidth: .init(min: 360),
+                              stacking: .detail(shown: model.selected != nil, backTitle: "Tasks",
+                                                back: { model.selectedID = nil })) {
+                    list
+                } secondary: {
+                    if let task = model.selected {
+                        TaskDetail(task: task, model: model)
+                    } else {
+                        EmptyState(symbol: "list.bullet.rectangle", title: "No task selected",
+                                   message: "Select a task to see its body, result and outcome.")
                     }
-                    .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
         }
@@ -93,7 +93,8 @@ struct TasksView: View {
     }
 }
 
-private struct StatusBadge: View {
+/// A task status as a colored chip.
+struct StatusBadge: View {
     let status: String
 
     var body: some View {

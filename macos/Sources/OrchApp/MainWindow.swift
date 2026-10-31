@@ -52,6 +52,11 @@ struct MainWindow: View {
     let safetyNet: SafetyNetModel
     let claude: SettingsModel
     @Bindable var navigator: Navigator
+    let window: WindowControl
+
+    /// Whether the window is too narrow for the sidebar and a pane, so it
+    /// shows the companion column instead.
+    @State private var compact = false
 
     private var pane: Pane {
         get { navigator.pane }
@@ -59,6 +64,51 @@ struct MainWindow: View {
     }
 
     var body: some View {
+        Group {
+            if compact {
+                CompanionView(monitor: monitor, prMonitor: prMonitor, tasks: tasks, window: window,
+                              status: sidebarStatus, open: { show($0) },
+                              openPR: { url in
+                                  navigator.showPR(url, in: prs)
+                                  window.expand()
+                              },
+                              openTask: { id in
+                                  tasks.selectedID = id
+                                  show(.tasks)
+                              },
+                              newTask: {
+                                  navigator.dispatchRequested = true
+                                  show(.tasks)
+                              })
+            } else {
+                splitView
+            }
+        }
+        // Anything a pane cannot fit is cut at the trailing edge, not split
+        // around the centre, so the sidebar always stays in the window.
+        .frame(minWidth: CompanionLayout.minimumSize.width, maxWidth: .infinity,
+               minHeight: CompanionLayout.minimumSize.height, maxHeight: .infinity, alignment: .topLeading)
+        .onGeometryChange(for: Bool.self) { CompanionLayout.isCompact(width: $0.size.width) } action: { compact = $0 }
+        .background {
+            // Hidden buttons, so the shortcuts work from any pane without a menu bar.
+            Button("Command palette") {
+                PalettePanel.shared.toggle(over: NSApp.keyWindow, commands: paletteCommands)
+            }
+            .keyboardShortcut("k", modifiers: .command)
+            .hidden()
+            Button("Companion") { window.toggleDock() }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .hidden()
+        }
+    }
+
+    /// Shows a pane, widening the window first when it is a companion column.
+    private func show(_ target: Pane) {
+        pane = target
+        if compact { window.expand() }
+    }
+
+    private var splitView: some View {
         NavigationSplitView {
             List(Pane.allCases, selection: Binding(get: { pane }, set: { pane = $0 ?? .dashboard })) { item in
                 SidebarRow(pane: item, status: sidebarStatus(item), selected: item == pane).tag(item)
@@ -95,14 +145,15 @@ struct MainWindow: View {
                 SafetyNetView(model: safetyNet, settings: claude)
             }
         }
-        .frame(minWidth: 760, minHeight: 480)
-        .background {
-            // A hidden button, so ⌘K works from any pane without a menu bar.
-            Button("Command palette") {
-                PalettePanel.shared.toggle(over: NSApp.keyWindow, commands: paletteCommands)
+        .toolbar {
+            // Trailing: a navigation item would take the sidebar's slot by
+            // the traffic lights and pull the floating sidebar to the edge.
+            ToolbarItem(placement: .primaryAction) {
+                Button { window.dock() } label: {
+                    Label("Companion", systemImage: "pip.enter")
+                }
+                .help("Dock as a companion column at the screen's edge, above other windows (⌘⇧D)")
             }
-            .keyboardShortcut("k", modifiers: .command)
-            .hidden()
         }
     }
 
@@ -122,6 +173,18 @@ struct MainWindow: View {
                                        subtitle: "Dispatch work to a background agent", symbol: "paperplane") {
             navigator.dispatchRequested = true
             pane = .tasks
+        })
+        commands.append(PaletteCommand(id: "action:companion", section: "Actions",
+                                       title: window.isDocked ? "Expand the window" : "Dock as companion",
+                                       subtitle: window.isDocked ? "Back to the full layout"
+                                           : "A column at the screen's edge, above other windows",
+                                       symbol: window.isDocked ? "pip.exit" : "pip.enter") {
+            window.toggleDock()
+        })
+        commands.append(PaletteCommand(id: "action:pin", section: "Actions",
+                                       title: window.isPinned ? "Stop keeping Orch on top" : "Keep Orch on top",
+                                       symbol: window.isPinned ? "pin.slash" : "pin") {
+            window.togglePinned()
         })
         commands.append(PaletteCommand(id: "action:refresh", section: "Actions", title: "Refresh everything",
                                        subtitle: "Reload status, PRs, tasks, docs and settings", symbol: "arrow.clockwise") {

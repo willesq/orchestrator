@@ -86,13 +86,15 @@ struct ClaudeView: View {
                 .padding([.horizontal, .top])
                 .padding(.bottom, 8)
             Divider()
-            HSplitView {
+            AdaptiveSplit(primaryWidth: .init(min: section.listWidth.min, ideal: section.listWidth.ideal),
+                          secondaryWidth: .init(min: section.detailWidth.min, ideal: section.detailWidth.ideal,
+                                                max: section.detailWidth.max),
+                          stacking: .detail(shown: model.selection != nil, backTitle: section.title,
+                                            back: { model.selection = nil })) {
                 SettingsKindList(model: model, provider: section.provider, kind: section.kind, emptyText: section.emptyText,
                                  query: query)
-                    .frame(minWidth: section.listWidth.min, idealWidth: section.listWidth.ideal, maxWidth: .infinity)
+            } secondary: {
                 SettingDetail(model: model)
-                    .frame(minWidth: section.detailWidth.min, idealWidth: section.detailWidth.ideal,
-                           maxWidth: section.detailWidth.max, maxHeight: .infinity)
             }
         }
         .navigationTitle("Claude")
@@ -133,14 +135,22 @@ private struct ClaudeHeader: View {
     let model: SettingsModel
     @Binding var section: ClaudeView.Section
 
+    private var sectionPicker: some View {
+        Picker("Section", selection: $section) {
+            ForEach(ClaudeView.Section.allCases) { s in
+                Text(model.countLabel(s.title, provider: s.provider, kind: s.kind)).tag(s)
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Section", selection: $section) {
-                ForEach(ClaudeView.Section.allCases) { s in
-                    Text(model.countLabel(s.title, provider: s.provider, kind: s.kind)).tag(s)
-                }
+            // Every section as a segment while they fit, otherwise a menu,
+            // so the row never pushes the pane past the window's edge.
+            ViewThatFits(in: .horizontal) {
+                sectionPicker.pickerStyle(.segmented)
+                sectionPicker.pickerStyle(.menu).fixedSize()
             }
-            .pickerStyle(.segmented)
             .labelsHidden()
             if let provider = model.listing?.provider(section.provider) {
                 HStack(spacing: 6) {

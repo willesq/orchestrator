@@ -14,7 +14,9 @@ struct PRBoardView: View {
 
     var body: some View {
         let all = github.items?.items ?? []
-        HSplitView {
+        AdaptiveSplit(primaryWidth: .init(min: 380), secondaryWidth: .init(min: 340, ideal: 440, max: 620),
+                      stacking: .detail(shown: prs.selection != nil, backTitle: "Board", back: { prs.select(nil) }),
+                      secondaryPresent: prs.selection != nil) {
             VStack(spacing: 0) {
                 PRFilterBar(github: github, prs: prs, repos: prRepos(all))
                 Divider()
@@ -35,21 +37,18 @@ struct PRBoardView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity)
-            if prs.selection != nil {
-                PRDetailView(prs: prs, login: github.identity?.login)
-                    .frame(minWidth: 340, idealWidth: 440, maxWidth: 620, maxHeight: .infinity)
-                    .overlay(alignment: .topTrailing) {
-                        Button { prs.select(nil) } label: {
-                            Image(systemName: "xmark.circle.fill").imageScale(.large)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Color.secondaryText)
-                        .padding(10)
-                        .help("Close the PR (Esc)")
-                        .accessibilityLabel("Close PR details")
+        } secondary: {
+            PRDetailView(prs: prs, login: github.identity?.login)
+                .overlay(alignment: .topTrailing) {
+                    Button { prs.select(nil) } label: {
+                        Image(systemName: "xmark.circle.fill").imageScale(.large)
                     }
-            }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.secondaryText)
+                    .padding(10)
+                    .help("Close the PR (Esc)")
+                    .accessibilityLabel("Close PR details")
+                }
         }
         .onExitCommand { prs.select(nil) }
     }

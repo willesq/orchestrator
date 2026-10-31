@@ -37,11 +37,11 @@ struct PRsView: View {
     var body: some View {
         switch layout {
         case .list:
-            HSplitView {
+            AdaptiveSplit(primaryWidth: .init(min: 320, ideal: 380, max: 520), secondaryWidth: .init(min: 420),
+                          stacking: .detail(shown: prs.selection != nil, backTitle: "PRs", back: { prs.select(nil) })) {
                 PRListColumn(github: github, prs: prs)
-                    .frame(minWidth: 320, idealWidth: 380, maxWidth: 520)
+            } secondary: {
                 PRDetailView(prs: prs, login: github.identity?.login)
-                    .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
             }
         case .board:
             PRBoardView(github: github, prs: prs)
@@ -90,7 +90,7 @@ struct PRFilterBar: View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("Search titles or #number", text: $prs.search)
                 .textFieldStyle(.roundedBorder)
-            HStack(spacing: 6) {
+            FlowLayout(spacing: 6) {
                 Picker("Role", selection: $prs.role) {
                     ForEach(PRRoleFilter.allCases) { Text($0.label).tag($0) }
                 }
