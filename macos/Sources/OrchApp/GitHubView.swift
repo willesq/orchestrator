@@ -7,6 +7,8 @@ struct GitHubView: View {
     let prs: PRsModel
     @Bindable var navigator: Navigator
 
+    @AppStorage(PRsLayout.storageKey) private var prsLayout = PRsLayout.list
+
     var body: some View {
         Group {
             switch navigator.gitHubSection {
@@ -41,6 +43,20 @@ struct GitHubView: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .fixedSize()
+                }
+            }
+            if navigator.gitHubSection == .prs {
+                ToolbarItem(placement: .principal) {
+                    Picker("Layout", selection: $prsLayout) {
+                        ForEach(PRsLayout.allCases) { layout in
+                            Label(layout.title, systemImage: layout.symbolName).tag(layout)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelStyle(.titleAndIcon)
+                    .labelsHidden()
+                    .fixedSize()
+                    .help("Show PRs as a list, or as a board of lanes by where each stands")
                 }
             }
             ToolbarItem {

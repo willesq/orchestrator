@@ -2,18 +2,49 @@ import AppKit
 import OrchKit
 import SwiftUI
 
+/// How the PRs pane lays PRs out, kept across launches.
+enum PRsLayout: String, CaseIterable, Identifiable {
+    case list, board
+
+    static let storageKey = "prsLayout"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .list: "List"
+        case .board: "Board"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .list: "list.bullet"
+        case .board: "rectangle.split.3x1"
+        }
+    }
+}
+
 /// The GitHub tab's PRs pane: PRs from the accounts the user watches, narrowed
-/// by role, state and repo, with the selected PR's detail and review beside.
+/// by role, state and repo, as a list or a board of lanes, with the selected
+/// PR's detail and review beside.
 struct PRsView: View {
     let github: GitHubModel
     @Bindable var prs: PRsModel
 
+    @AppStorage(PRsLayout.storageKey) private var layout = PRsLayout.list
+
     var body: some View {
-        HSplitView {
-            PRListColumn(github: github, prs: prs)
-                .frame(minWidth: 320, idealWidth: 380, maxWidth: 520)
-            PRDetailView(prs: prs, login: github.identity?.login)
-                .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+        switch layout {
+        case .list:
+            HSplitView {
+                PRListColumn(github: github, prs: prs)
+                    .frame(minWidth: 320, idealWidth: 380, maxWidth: 520)
+                PRDetailView(prs: prs, login: github.identity?.login)
+                    .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+            }
+        case .board:
+            PRBoardView(github: github, prs: prs)
         }
     }
 }
@@ -26,7 +57,7 @@ private struct PRListColumn: View {
         let all = github.items?.items ?? []
         let visible = prs.visible(all)
         VStack(spacing: 0) {
-            filters(repos: prRepos(all))
+            PRFilterBar(github: github, prs: prs, repos: prRepos(all))
             Divider()
             Group {
                 if github.items == nil, let error = github.lastError {
@@ -35,7 +66,7 @@ private struct PRListColumn: View {
                 } else if github.items == nil {
                     ProgressView()
                 } else if visible.isEmpty {
-                    empty
+                    PRsEmptyState(prs: prs)
                 } else {
                     let reviews = prs.reviews.byURL
                     List(visible, selection: Binding(get: { prs.selection }, set: { prs.select($0) })) { item in
@@ -47,8 +78,15 @@ private struct PRListColumn: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
+}
 
-    private func filters(repos: [String]) -> some View {
+/// Search and the role, state and repo filters, shared by the list and the board.
+struct PRFilterBar: View {
+    let github: GitHubModel
+    @Bindable var prs: PRsModel
+    let repos: [String]
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("Search titles or #number", text: $prs.search)
                 .textFieldStyle(.roundedBorder)
@@ -84,8 +122,13 @@ private struct PRListColumn: View {
         }
         .padding(12)
     }
+}
 
-    @ViewBuilder private var empty: some View {
+/// What the PRs pane says when no PR is left to show.
+struct PRsEmptyState: View {
+    let prs: PRsModel
+
+    var body: some View {
         if prs.isFiltered {
             EmptyState(symbol: "line.3.horizontal.decrease.circle", title: "No PRs match",
                        message: "None of the open PRs in the accounts you watch pass these filters.",
@@ -93,6 +136,21 @@ private struct PRListColumn: View {
         } else {
             EmptyState(symbol: "arrow.triangle.pull", title: "No open PRs",
                        message: "Open PRs in the accounts you watch show up here. Choose accounts in Overview.")
+        }
+    }
+}
+
+/// Opening and copying a PR's link, for its context menu.
+struct PRLinkMenu: View {
+    let item: GitHubItem
+
+    var body: some View {
+        if let url = item.webURL {
+            Button("Open on GitHub") { NSWorkspace.shared.open(url) }
+            Button("Copy link") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(url.absoluteString, forType: .string)
+            }
         }
     }
 }
@@ -132,15 +190,7 @@ private struct PRRow: View {
         }
         .padding(.vertical, 3)
         .contentShape(Rectangle())
-        .contextMenu {
-            if let url = item.webURL {
-                Button("Open on GitHub") { NSWorkspace.shared.open(url) }
-                Button("Copy link") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(url.absoluteString, forType: .string)
-                }
-            }
-        }
+        .contextMenu { PRLinkMenu(item: item) }
     }
 }
 
