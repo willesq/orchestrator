@@ -106,6 +106,12 @@ type server struct {
 	ctl  *queue.Control
 	live *liveRunner
 	home string
+	// hub fans task changes out to WatchTasks streams; nil when unavailable.
+	hub *taskHub
+	// stopping closes when orchd begins shutting down, ending open streams:
+	// GracefulStop waits for every in-flight RPC, so a stream the app holds
+	// open would otherwise keep orchd from exiting. nil never closes.
+	stopping <-chan struct{}
 	// summaries receives finished sessions for summarizing; nil when off.
 	summaries *summaryQueue
 	// router resolves dispatch routes and recommendations; nil, with routerErr
@@ -342,13 +348,7 @@ func (s *server) ListTasks(ctx context.Context, req *orchdv1.ListTasksRequest) (
 	if err != nil {
 		return nil, err
 	}
-	out := &orchdv1.ListTasksResponse{Tasks: make([]*orchdv1.Task, 0, len(list))}
-	for _, t := range list {
-		pb := taskPB(t)
-		pb.Run = s.taskRun(ctx, t)
-		out.Tasks = append(out.Tasks, pb)
-	}
-	return out, nil
+	return &orchdv1.ListTasksResponse{Tasks: s.tasksPB(ctx, list)}, nil
 }
 
 func (s *server) GetTask(ctx context.Context, req *orchdv1.GetTaskRequest) (*orchdv1.GetTaskResponse, error) {
@@ -561,6 +561,8 @@ func Run(ctx context.Context) error {
 	}
 	defer func() { _ = b.Close() }()
 	tasks := queue.NewSQLTaskStore(store)
+	hub := newTaskHub()
+	tasks.OnChange = hub.publish
 	system.tasks = tasks.CountByStatus
 	system.data = []dataPath{
 		{name: "database", path: paths.DBFile()},
@@ -613,7 +615,7 @@ func Run(ctx context.Context) error {
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
 		summaries: summaries, github: ghService, system: system, docs: docsSched,
-		settingsSvc: settingsSvc, taskCtl: ctl, live: live,
+		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return err
@@ -652,7 +654,8 @@ func Run(ctx context.Context) error {
 		grpc.StreamInterceptor(guardQueuedStreams),
 	)
 	orchdv1.RegisterOrchdServer(gs, &server{
-		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks, ctl: ctl, live: live, home: userHome(),
+		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks, ctl: ctl, live: live, home: userHome(), hub: hub,
+		stopping:      runCtx.Done(),
 		workerEnabled: s.Queue.Worker.Enabled,
 		summaries:     summaries,
 		router:        router, routerErr: routerErr,
@@ -673,7 +676,7 @@ func Run(ctx context.Context) error {
 	})
 	go func() {
 		<-runCtx.Done()
-		gs.GracefulStop()
+		stopGracefully(gs, gracefulStopTimeout)
 	}()
 
 	log.Printf("orchd %s listening on %s (subsystems: %s)",
@@ -836,4 +839,31 @@ func newPruneGuard(store *sql.DB) *prunecap.Guard {
 		return nil
 	}
 	return prunecap.New(store)
+}
+
+// gracefulStopTimeout bounds how long shutdown waits for in-flight RPCs.
+const gracefulStopTimeout = 5 * time.Second
+
+// stopGracefully lets in-flight RPCs finish, then stops the server outright
+// if they have not within timeout.
+//
+// Reason: GracefulStop waits for every RPC and cancels none, so one a client
+// keeps open (a stream that missed the shutdown signal, a stuck handler)
+// would otherwise keep orchd from exiting and stall a self-update.
+func stopGracefully(gs interface {
+	GracefulStop()
+	Stop()
+}, timeout time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		gs.GracefulStop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		log.Printf("orchd: RPCs still open %s after shutdown began; stopping them", timeout)
+		gs.Stop()
+		<-done
+	}
 }

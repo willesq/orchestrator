@@ -64,9 +64,28 @@ Packages: `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `pr
 
    Every state also carries the session ID, the working directory, the time the session
    transcript last changed, and a `claude --resume` command to open the session yourself.
-   - **Safe to paste:** the command single-quotes the working directory for the shell and drops
-     the `cd` if the path holds control characters. The CLI strips control characters from what it
+   - **Safe to paste:** the command includes `cd '<dir>'` only when the path is plainly safe
+     (`/` followed by letters, digits, spaces and `._/+@:,=~-`). Any other directory is left out,
+     since fish reads `\'` inside single quotes and csh expands `!` there. The directory is shown
+     on its own line either way. The CLI strips control characters from what it
      prints.
+8. **Live updates (`WatchTasks`):**
+   - **Sources:** the ledger (`SQLTaskStore.OnChange`, after any write that changed a row:
+     dispatch, status, result, end) and the runner (`Runner.OnLive`, when a session starts, its
+     process starts or stops, or it ends) publish the task's ID to orchd's `taskHub`. So does a
+     user's rating. The PR-outcome sweep does not, so its label shows on the next snapshot or
+     refresh.
+   - **Stream:** a snapshot, the same as `ListTasks`, is sent first. Each later message is either
+     the changed tasks (IDs arriving within 100 ms are batched) or a `tick` every 15 s. A tick
+     carries only each pending and in-progress task's ID, status, `updated_at` and run, and no
+     text, so it stays small however many tasks are open. Clients merge it into rows they hold.
+   - **Slow clients:** each stream buffers 256 IDs. One that falls further behind gets a fresh
+     snapshot rather than silently missing changes.
+   - **Limits:** at most 16 streams are open (`ResourceExhausted` beyond). Streams end with
+     `Unavailable` when orchd begins shutting down, since gRPC's graceful stop waits for every open
+     RPC and an app holding a stream would otherwise keep orchd from exiting. Shutdown also forces
+     a stop of anything still open after 5 s.
+   - **Access:** operator-only. Queued tasks are refused it and use `ListTasks` and `GetTask`.
 
 ## Claude Code runner
 

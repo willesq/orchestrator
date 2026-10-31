@@ -152,10 +152,15 @@ func TestLiveRunnerAndHelpers(t *testing.T) {
 	if resumeCommand("", "") != "" || resumeCommand("/a b", "sid") != `cd '/a b' && claude --resume sid` {
 		t.Errorf("resumeCommand = %q", resumeCommand("/a b", "sid"))
 	}
-	// A hostile directory name stays inert when the user pastes the line.
-	evil := "/tmp/x$(id)`whoami`!'q"
-	if got := resumeCommand(evil, "sid"); got != `cd '/tmp/x$(id)`+"`whoami`"+`!'\''q' && claude --resume sid` {
-		t.Errorf("resumeCommand(evil) = %q", got)
+	// A directory name any shell might read differently gets no cd at all:
+	// command substitution, fish's \' escape, csh's ! history, a quote.
+	for _, evil := range []string{"/tmp/x$(id)", "/tmp/x`whoami`", "/tmp/a\\'; touch /tmp/p; #", "/tmp/a!b", "/tmp/a'b", "relative/path"} {
+		if got := resumeCommand(evil, "sid"); got != "claude --resume sid" {
+			t.Errorf("resumeCommand(%q) = %q; want no cd", evil, got)
+		}
+	}
+	if got := resumeCommand("/Users/me/code/my-repo_2.0", "sid"); got != "cd '/Users/me/code/my-repo_2.0' && claude --resume sid" {
+		t.Errorf("a plain path should keep its cd: %q", got)
 	}
 	if got := resumeCommand("/tmp/a\x1b]52;c;x\x07b", "sid"); got != "claude --resume sid" {
 		t.Errorf("a cwd with control characters should get no cd: %q", got)

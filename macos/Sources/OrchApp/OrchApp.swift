@@ -144,6 +144,11 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
     func listTasks(status: TaskStatusFilter, limit: Int) async throws -> [TaskRecord] { throw failure }
     func task(id: String) async throws -> TaskRecord? { throw failure }
     func rate(id: String, _ rating: TaskRating) async throws { throw failure }
+    func retry(id: String) async throws -> String { throw failure }
+    func cancel(id: String) async throws -> String { throw failure }
+    func watchTasks(status: TaskStatusFilter, limit: Int, onEvent: @escaping @Sendable (TaskEvent) async -> Void) async throws {
+        throw failure
+    }
     func dispatch(_ draft: DispatchDraft) async throws -> DispatchOutcome { throw failure }
     func recommend(taskKind: String) async throws -> (route: RouteInfo?, fromTable: Bool) { throw failure }
     func gitHubIdentity(refresh: Bool) async throws -> GitHubIdentity { throw failure }

@@ -36,6 +36,21 @@ func NewBackend() (backend.Backend, error) {
 // SQLTaskStore persists task results into orch.db (satisfies workflows.TaskStore).
 type SQLTaskStore struct {
 	db *sql.DB
+	// OnChange, when set, is told the ID of each task whose row a write
+	// changed, so watchers learn of it without polling. Set it before use.
+	OnChange func(id string)
+}
+
+// changed reports a successful write of id's row to OnChange.
+func (s *SQLTaskStore) changed(id string, res sql.Result, err error) error {
+	if err != nil || s.OnChange == nil {
+		return err
+	}
+	if n, nerr := res.RowsAffected(); nerr == nil && n == 0 {
+		return nil
+	}
+	s.OnChange(id)
+	return nil
 }
 
 // NewSQLTaskStore constructs a task store over an open orch.db handle.
@@ -44,7 +59,7 @@ func NewSQLTaskStore(db *sql.DB) *SQLTaskStore { return &SQLTaskStore{db: db} }
 // SaveResult upserts the terminal status, result and outcome metrics of a task
 // (idempotent by id).
 func (s *SQLTaskStore) SaveResult(ctx context.Context, in workflows.AgentTaskInput, out workflows.Outcome) error {
-	_, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO tasks (id, agent, body, result, status, updated_at,
 		                    cost_usd, duration_ms, turns, session_id, models, prs, verification)
 		 VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?)
@@ -57,7 +72,7 @@ func (s *SQLTaskStore) SaveResult(ctx context.Context, in workflows.AgentTaskInp
 		in.ID, in.Agent, in.Body, out.Result, out.Status,
 		out.CostUSD, out.DurationMS, out.Turns, out.SessionID,
 		strings.Join(out.Models, ","), strings.Join(out.PRs, ","), out.Verification)
-	return err
+	return s.changed(in.ID, res, err)
 }
 
 // Create records a task as pending at dispatch time.
@@ -66,22 +81,22 @@ func (s *SQLTaskStore) SaveResult(ctx context.Context, in workflows.AgentTaskInp
 // ledger saw nothing at all while work was outstanding — the queue looked empty
 // whether or not something was in flight.
 func (s *SQLTaskStore) Create(ctx context.Context, in workflows.AgentTaskInput) error {
-	_, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO tasks (id, agent, body, result, status, updated_at, task_kind, provider, model, effort, created_at)
 		 VALUES (?, ?, ?, '', 'pending', datetime('now'), ?, ?, ?, ?, unixepoch('now'))
 		 ON CONFLICT(id) DO NOTHING`,
 		in.ID, in.Agent, in.Body, in.Route.Kind, in.Route.Provider, in.Route.Model, in.Route.Effort)
-	return err
+	return s.changed(in.ID, res, err)
 }
 
 // SetStatus moves a task to a new non-terminal status, leaving its result
 // alone. A cancelled task stays cancelled: a run that raced the cancel must not
 // revive it.
 func (s *SQLTaskStore) SetStatus(ctx context.Context, id, status string) error {
-	_, err := s.db.ExecContext(ctx,
+	res, err := s.db.ExecContext(ctx,
 		`UPDATE tasks SET status=?, updated_at=datetime('now') WHERE id=? AND status <> 'cancelled'`,
 		status, id)
-	return err
+	return s.changed(id, res, err)
 }
 
 // Status reads a task's ledger status, and false when it has no row.

@@ -18,3 +18,8 @@ func (f *fakeClient) RetryTask(context.Context, *orchdv1.RetryTaskRequest, ...gr
 func (f *fakeClient) CancelTask(context.Context, *orchdv1.CancelTaskRequest, ...grpc.CallOption) (*orchdv1.CancelTaskResponse, error) {
 	return nil, errors.New("not used")
 }
+
+// WatchTasks completes the client interface; these tests never stream.
+func (f *fakeClient) WatchTasks(context.Context, *orchdv1.WatchTasksRequest, ...grpc.CallOption) (grpc.ServerStreamingClient[orchdv1.TaskEvent], error) {
+	return nil, errors.New("not used")
+}

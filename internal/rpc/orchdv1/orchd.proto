@@ -43,6 +43,10 @@ service Orchd {
   rpc RetryTask(RetryTaskRequest) returns (RetryTaskResponse);
   // CancelTask stops a pending or in-progress task.
   rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
+  // WatchTasks streams task changes: a snapshot of the newest tasks, then
+  // each task whose ledger row or live run changes, and a periodic tick with
+  // the unsettled tasks so their liveness (last activity) stays current.
+  rpc WatchTasks(WatchTasksRequest) returns (stream TaskEvent);
   // MigrateHybrid copies the RAG collection into a new hybrid one (dense plus
   // BM25 keyword vectors), re-chunking and re-embedding its text, and switches
   // to it. Without apply it only plans. The old collection is kept.
@@ -396,6 +400,21 @@ message CancelTaskRequest {
 
 message CancelTaskResponse {
   string outcome = 1; // what happened, for the user
+}
+
+message WatchTasksRequest {
+  string status = 1; // optional filter for the snapshot and changes, as ListTasks
+  int32 limit = 2;   // snapshot size; 0 defaults to 50, max 500
+}
+
+// TaskEvent is one message of a WatchTasks stream.
+message TaskEvent {
+  // kind is snapshot (the newest tasks, replacing whatever the client
+  // holds), changed (tasks whose state changed), or tick (the pending and
+  // in-progress tasks' id, status, updated_at and run only: liveness to
+  // merge into rows the client already has).
+  string kind = 1;
+  repeated Task tasks = 2;
 }
 
 message MigrateHybridRequest {

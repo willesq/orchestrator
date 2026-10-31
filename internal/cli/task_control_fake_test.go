@@ -77,3 +77,8 @@ func TestTaskShowsLiveness(t *testing.T) {
 		t.Errorf("tasks output = %q, %v", out, err)
 	}
 }
+
+// WatchTasks completes the client interface; these tests never stream.
+func (f *fakeClient) WatchTasks(context.Context, *orchdv1.WatchTasksRequest, ...grpc.CallOption) (grpc.ServerStreamingClient[orchdv1.TaskEvent], error) {
+	return nil, errors.New("not used")
+}
