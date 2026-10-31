@@ -308,6 +308,8 @@ private final class Counter: @unchecked Sendable {
         r.nextCheckAt = 1_800_000_170
         r.instructions = "notes"
         r.goAhead = true
+        r.forUser = "deps fine"
+        r.report = "## Review"
         service.prReviews.reviews = [r]
         service.prReview = r
         service.prDetail.url = url1
@@ -341,6 +343,7 @@ private final class Counter: @unchecked Sendable {
             #expect(got.mode == .approve && got.state == .verdict && got.verdict == .approve && got.number == 1)
             #expect(got.verdictAt == Date(timeIntervalSince1970: 1_800_000_000) && got.posted == "approved")
             #expect(got.checkedAt == Date(timeIntervalSince1970: 1_800_000_050) && got.instructions == "notes" && got.goAhead)
+            #expect(got.forUser == "deps fine" && got.report == "## Review")
             #expect(got.nextCheckAt == Date(timeIntervalSince1970: 1_800_000_170))
 
             _ = try await client.watchPRReview(url: url1, mode: .comment, comment: "edited", instructions: "focus", reviewAnyway: true)

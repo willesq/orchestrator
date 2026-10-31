@@ -119,6 +119,9 @@ public struct PRReview: Sendable, Equatable, Identifiable {
     public let instructions: String
     /// The next ready commit is reviewed although its author is not trusted.
     public let goAhead: Bool
+    /// The review's answer to the notes, and its full text; never posted.
+    public let forUser: String
+    public let report: String
     /// approved | commented | failed, for headSHA; empty when nothing.
     public let posted: String
     public let note: String
@@ -131,7 +134,7 @@ public struct PRReview: Sendable, Equatable, Identifiable {
     public init(url: String, repo: String = "", number: Int = 0, mode: PRReviewMode = .verdict,
                 state: PRReviewState? = .waiting, headSHA: String = "", pendingSHA: String = "", taskID: String = "",
                 verdict: PRVerdict? = nil, reason: String = "", comment: String = "", instructions: String = "",
-                goAhead: Bool = false, posted: String = "",
+                goAhead: Bool = false, forUser: String = "", report: String = "", posted: String = "",
                 note: String = "", verdictAt: Date? = nil, updatedAt: Date? = nil, checkedAt: Date? = nil,
                 nextCheckAt: Date? = nil) {
         self.url = url
@@ -147,6 +150,8 @@ public struct PRReview: Sendable, Equatable, Identifiable {
         self.comment = comment
         self.instructions = instructions
         self.goAhead = goAhead
+        self.forUser = forUser
+        self.report = report
         self.posted = posted
         self.note = note
         self.verdictAt = verdictAt

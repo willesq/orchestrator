@@ -957,6 +957,10 @@ message PRReview {
   int64 next_check_at = 18;
   string instructions = 19; // the user's notes for this PR's reviews
   bool go_ahead = 20;       // the next ready commit is reviewed despite an untrusted author
+  // the review's answer to the user's notes, and its full text; for the user
+  // only, never posted
+  string for_user = 21;
+  string report = 22;
 }
 
 message WatchPRReviewRequest {

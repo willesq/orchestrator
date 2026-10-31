@@ -119,6 +119,10 @@ func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, inst
 	if goAhead {
 		r.GoAhead = true
 	}
+	if r.Mode != mode {
+		// Who changed what orch may post, and when, is worth keeping.
+		log.Printf("pr-reviews: %s may now post as %q (was %q)", url, mode, r.Mode)
+	}
 	switch r.State {
 	case StateStopped, StateClosed, StateHeld:
 		r.State = StateWaiting
@@ -294,11 +298,16 @@ func (w *Watcher) collect(ctx context.Context, url string) {
 		r.HeadSHA, r.PendingSHA = r.PendingSHA, ""
 		if failure != "" {
 			r.State, r.Note = StateFailed, failure
-			r.Verdict, r.Reason, r.Comment, r.Posted = "", "", "", ""
+			r.Verdict, r.Reason, r.Comment, r.ForUser, r.Report, r.Posted = "", "", "", "", "", ""
 			return true
 		}
 		r.State, r.Note, r.Posted = StateVerdict, "", ""
-		r.Verdict, r.Reason, r.Comment = v.Verdict, v.Reason, v.Comment
+		r.Verdict, r.Reason, r.Comment, r.ForUser, r.Report = v.Verdict, v.Reason, v.Comment, v.ForUser, v.Report
+		if r.Mode == ModeComment {
+			// "Post comment" was for the verdict the user read; a new one
+			// waits for the user's own call.
+			r.Mode = ModeVerdict
+		}
 		r.VerdictAt = w.clock().UTC().Truncate(time.Second)
 		return true
 	})

@@ -13,6 +13,7 @@ struct ReviewCard: View {
     @State private var mayComment = false
     @State private var draft = ""
     @State private var editingDraft = false
+    @State private var showReport = false
     @State private var instructions = ""
     @State private var confirming: PRReviewMode?
     @State private var confirmingAnyway = false
@@ -73,7 +74,7 @@ struct ReviewCard: View {
         .disabled(saving)
         .onAppear { sync(review) }
         .onChange(of: review?.comment) { _, _ in draft = review?.comment ?? "" }
-        .onChange(of: review?.mode) { _, _ in sync(review) }
+        .onChange(of: review?.instructions) { _, _ in instructions = review?.instructions ?? "" }
         .task(id: review?.taskID) {
             // While a review runs, follow its task so the card can say how it goes.
             while !Task.isCancelled, prs.reviews.byURL[url]?.state == .reviewing {
@@ -104,8 +105,6 @@ struct ReviewCard: View {
     private func sync(_ review: PRReview?) {
         draft = review?.comment ?? ""
         instructions = review?.instructions ?? ""
-        mayApprove = review?.mode.mayApprove ?? false
-        mayComment = review?.mode.mayComment ?? false
     }
 
     private func confirm(_ mode: PRReviewMode) {
@@ -126,21 +125,23 @@ struct ReviewCard: View {
     }
 
     /// What orch may post on its own. Not watched, these set what "Review when
-    /// ready" starts with; watched, a change asks first when it widens what is
-    /// posted.
+    /// ready" starts with. Watched, they show what orchd holds, never a local
+    /// copy, so the card cannot say less than orchd may post; a change asks
+    /// first when it widens what is posted.
     @ViewBuilder private func permissions(watching review: PRReview?) -> some View {
+        let current = review.map(\.mode) ?? PRReviewMode(mayApprove: mayApprove && !ownPR, mayComment: mayComment)
         VStack(alignment: .leading, spacing: 4) {
             Text("When the verdict is in, orch may:").textStyle(.caption)
-            Toggle(isOn: Binding(get: { mayApprove && !ownPR }, set: { set(approve: $0, comment: mayComment, review) })) {
+            Toggle(isOn: Binding(get: { current.mayApprove && !ownPR },
+                                 set: { set(approve: $0, comment: current.mayComment, review) })) {
                 Text("Approve the PR, with its comment if it has one")
             }
             .disabled(ownPR)
             .help(ownPR ? "GitHub does not let you approve your own PR" : "Approves only a commit a review said approve to")
-            Toggle(isOn: Binding(get: { mayComment }, set: { set(approve: mayApprove, comment: $0, review) })) {
+            Toggle(isOn: Binding(get: { current.mayComment }, set: { set(approve: current.mayApprove, comment: $0, review) })) {
                 Text("Comment its suggestions when it does not approve")
             }
-            Text(verbatim: PRReviewMode(mayApprove: mayApprove && !ownPR, mayComment: mayComment).explanation)
-                .textStyle(.caption)
+            Text(verbatim: "Orch will: \(current.explanation)").textStyle(.caption)
         }
         .toggleStyle(.checkbox)
     }
@@ -179,7 +180,7 @@ struct ReviewCard: View {
         let active = review?.state?.isActive == true
         let changed = instructions != (review?.instructions ?? "")
         VStack(alignment: .leading, spacing: 4) {
-            Text("Notes for the reviewer").textStyle(.caption)
+            Text("Notes for the reviewer: only the reviewing agent and you see them; they are never posted").textStyle(.caption)
             TextField("Optional: what to focus on, context, or what to ignore", text: $instructions, axis: .vertical)
                 .lineLimit(2...6)
                 .textFieldStyle(.roundedBorder)
@@ -220,6 +221,31 @@ struct ReviewCard: View {
             Text(verbatim: displaySafeLines(review.reason))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if !review.forUser.isEmpty || !review.instructions.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("For you", systemImage: "person.crop.circle").font(.headline)
+                    if !review.instructions.isEmpty {
+                        Text(verbatim: "Your notes: \(displaySafe(review.instructions))")
+                            .textStyle(.caption)
+                            .lineLimit(3)
+                    }
+                    if review.forUser.isEmpty {
+                        Text("The review did not answer your notes. Its full text is below.").textStyle(.caption)
+                    } else {
+                        MarkdownBlock(source: review.forUser, base: githubItemURL(url), maxHeight: 280)
+                    }
+                    Text("Never posted on the PR.").textStyle(.caption)
+                }
+                .padding(10)
+                .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            }
+            if !review.report.isEmpty {
+                DisclosureGroup(isExpanded: $showReport) {
+                    MarkdownBlock(source: review.report, base: githubItemURL(url), maxHeight: 480)
+                } label: {
+                    Text("Full review (for you; never posted)").textStyle(.section)
+                }
+            }
             HStack {
                 Text("Draft comment").textStyle(.section)
                 Spacer()

@@ -204,7 +204,7 @@ func reviewPB(r reviews.Review) *orchdv1.PRReview {
 	return &orchdv1.PRReview{
 		Url: r.URL, Repo: r.Repo, Number: clampInt32(r.Number), Mode: r.Mode, State: r.State,
 		HeadSha: r.HeadSHA, PendingSha: r.PendingSHA, TaskId: r.TaskID, Verdict: r.Verdict,
-		Reason: r.Reason, Comment: r.Comment, Instructions: r.Instructions, GoAhead: r.GoAhead, Posted: r.Posted, Note: r.Note,
+		Reason: r.Reason, Comment: r.Comment, Instructions: r.Instructions, ForUser: r.ForUser, Report: r.Report, GoAhead: r.GoAhead, Posted: r.Posted, Note: r.Note,
 		CreatedAt: unixOrZero(r.CreatedAt), UpdatedAt: unixOrZero(r.UpdatedAt), VerdictAt: unixOrZero(r.VerdictAt),
 	}
 }

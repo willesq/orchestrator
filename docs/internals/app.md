@@ -233,9 +233,10 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     - **Description:** rendered as Markdown with the Docs renderer: inert (no images loaded, raw
       HTML shown as text, links opened only after the same checks), and shown as its source when
       nested too deeply to render safely.
-    - **Review:** two permissions, "approve the PR, with its comment if it has one" (unavailable on
+    - **Review:** two permissions, which for a watched PR always show the mode orchd holds, "approve the PR, with its comment if it has one" (unavailable on
       your own PR) and "comment its suggestions when it does not approve"; both off means orch
-      asks you each time. **Notes for the reviewer** are added to the review prompt. **Review when
+      asks you each time. **Notes for the reviewer** are added to the review prompt and never
+      posted. **Review when
       ready** starts the watch (`WatchPRReview`).
     - **Held:** a PR by someone who is not the repo's owner, a member or a collaborator waits for
       **Review anyway…** (after a confirmation that it runs their code with your sign-in), and a
@@ -245,7 +246,8 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
       ticking every second, with **Check now**. While reviewing, the card follows the review task
       every 10 s (`GetTask`): running, waiting or stalled, how long it has run, and its last
       activity.
-    - **Verdict:** the verdict for its commit, the reason, and the draft comment with
+    - **Verdict:** the verdict for its commit, the reason, a **For you** box with your notes and
+      the review's answer to them, the **Full review** (rendered, collapsed), and the draft comment with
       **Preview** (rendered Markdown) and **Edit**. **Post comment** has orchd post the draft
       once. Widening the permissions or posting asks first, and posts the draft as it was when you
       confirmed; narrowing them never asks. Saving changed notes reviews the commit again. The

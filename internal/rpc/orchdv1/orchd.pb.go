@@ -7249,10 +7249,14 @@ type PRReview struct {
 	// when orchd last read the PR from GitHub (0 before its first read since it
 	// started) and when it reads it next (0 while reviewing or inactive); set by
 	// ListPRReviews
-	CheckedAt     int64  `protobuf:"varint,17,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
-	NextCheckAt   int64  `protobuf:"varint,18,opt,name=next_check_at,json=nextCheckAt,proto3" json:"next_check_at,omitempty"`
-	Instructions  string `protobuf:"bytes,19,opt,name=instructions,proto3" json:"instructions,omitempty"`       // the user's notes for this PR's reviews
-	GoAhead       bool   `protobuf:"varint,20,opt,name=go_ahead,json=goAhead,proto3" json:"go_ahead,omitempty"` // the next ready commit is reviewed despite an untrusted author
+	CheckedAt    int64  `protobuf:"varint,17,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"`
+	NextCheckAt  int64  `protobuf:"varint,18,opt,name=next_check_at,json=nextCheckAt,proto3" json:"next_check_at,omitempty"`
+	Instructions string `protobuf:"bytes,19,opt,name=instructions,proto3" json:"instructions,omitempty"`       // the user's notes for this PR's reviews
+	GoAhead      bool   `protobuf:"varint,20,opt,name=go_ahead,json=goAhead,proto3" json:"go_ahead,omitempty"` // the next ready commit is reviewed despite an untrusted author
+	// the review's answer to the user's notes, and its full text; for the user
+	// only, never posted
+	ForUser       string `protobuf:"bytes,21,opt,name=for_user,json=forUser,proto3" json:"for_user,omitempty"`
+	Report        string `protobuf:"bytes,22,opt,name=report,proto3" json:"report,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7425,6 +7429,20 @@ func (x *PRReview) GetGoAhead() bool {
 		return x.GoAhead
 	}
 	return false
+}
+
+func (x *PRReview) GetForUser() string {
+	if x != nil {
+		return x.ForUser
+	}
+	return ""
+}
+
+func (x *PRReview) GetReport() string {
+	if x != nil {
+		return x.Report
+	}
+	return ""
 }
 
 type WatchPRReviewRequest struct {
@@ -8666,7 +8684,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x15RemoveSettingResponse\"\x16\n" +
 	"\x14ListPRReviewsRequest\"E\n" +
 	"\x15ListPRReviewsResponse\x12,\n" +
-	"\areviews\x18\x01 \x03(\v2\x12.orchd.v1.PRReviewR\areviews\"\x9e\x04\n" +
+	"\areviews\x18\x01 \x03(\v2\x12.orchd.v1.PRReviewR\areviews\"\xd1\x04\n" +
 	"\bPRReview\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12\x12\n" +
 	"\x04repo\x18\x02 \x01(\tR\x04repo\x12\x16\n" +
@@ -8693,7 +8711,9 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"checked_at\x18\x11 \x01(\x03R\tcheckedAt\x12\"\n" +
 	"\rnext_check_at\x18\x12 \x01(\x03R\vnextCheckAt\x12\"\n" +
 	"\finstructions\x18\x13 \x01(\tR\finstructions\x12\x19\n" +
-	"\bgo_ahead\x18\x14 \x01(\bR\agoAhead\"\xeb\x01\n" +
+	"\bgo_ahead\x18\x14 \x01(\bR\agoAhead\x12\x19\n" +
+	"\bfor_user\x18\x15 \x01(\tR\aforUser\x12\x16\n" +
+	"\x06report\x18\x16 \x01(\tR\x06report\"\xeb\x01\n" +
 	"\x14WatchPRReviewRequest\x12\x10\n" +
 	"\x03url\x18\x01 \x01(\tR\x03url\x12\x12\n" +
 	"\x04mode\x18\x02 \x01(\tR\x04mode\x12\x1f\n" +

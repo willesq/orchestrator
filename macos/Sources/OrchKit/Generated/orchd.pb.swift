@@ -2451,6 +2451,18 @@ public nonisolated struct Orchd_V1_PRReview: @unchecked Sendable {
     set {_uniqueStorage()._goAhead = newValue}
   }
 
+  /// the review's answer to the user's notes, and its full text; for the user
+  /// only, never posted
+  public var forUser: String {
+    get {_storage._forUser}
+    set {_uniqueStorage()._forUser = newValue}
+  }
+
+  public var report: String {
+    get {_storage._report}
+    set {_uniqueStorage()._report = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -7546,7 +7558,7 @@ nonisolated extension Orchd_V1_ListPRReviewsResponse: SwiftProtobuf.Message, Swi
 
 nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PRReview"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}repo\0\u{1}number\0\u{1}mode\0\u{1}state\0\u{3}head_sha\0\u{3}pending_sha\0\u{3}task_id\0\u{1}verdict\0\u{1}reason\0\u{1}comment\0\u{1}posted\0\u{1}note\0\u{3}created_at\0\u{3}updated_at\0\u{3}verdict_at\0\u{3}checked_at\0\u{3}next_check_at\0\u{1}instructions\0\u{3}go_ahead\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}repo\0\u{1}number\0\u{1}mode\0\u{1}state\0\u{3}head_sha\0\u{3}pending_sha\0\u{3}task_id\0\u{1}verdict\0\u{1}reason\0\u{1}comment\0\u{1}posted\0\u{1}note\0\u{3}created_at\0\u{3}updated_at\0\u{3}verdict_at\0\u{3}checked_at\0\u{3}next_check_at\0\u{1}instructions\0\u{3}go_ahead\0\u{3}for_user\0\u{1}report\0")
 
   fileprivate class _StorageClass {
     var _url: String = String()
@@ -7569,6 +7581,8 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
     var _nextCheckAt: Int64 = 0
     var _instructions: String = String()
     var _goAhead: Bool = false
+    var _forUser: String = String()
+    var _report: String = String()
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -7599,6 +7613,8 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
       _nextCheckAt = source._nextCheckAt
       _instructions = source._instructions
       _goAhead = source._goAhead
+      _forUser = source._forUser
+      _report = source._report
     }
   }
 
@@ -7637,6 +7653,8 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
         case 18: try { try decoder.decodeSingularInt64Field(value: &_storage._nextCheckAt) }()
         case 19: try { try decoder.decodeSingularStringField(value: &_storage._instructions) }()
         case 20: try { try decoder.decodeSingularBoolField(value: &_storage._goAhead) }()
+        case 21: try { try decoder.decodeSingularStringField(value: &_storage._forUser) }()
+        case 22: try { try decoder.decodeSingularStringField(value: &_storage._report) }()
         default: break
         }
       }
@@ -7705,6 +7723,12 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
       if _storage._goAhead != false {
         try visitor.visitSingularBoolField(value: _storage._goAhead, fieldNumber: 20)
       }
+      if !_storage._forUser.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._forUser, fieldNumber: 21)
+      }
+      if !_storage._report.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._report, fieldNumber: 22)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -7734,6 +7758,8 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._nextCheckAt != rhs_storage._nextCheckAt {return false}
         if _storage._instructions != rhs_storage._instructions {return false}
         if _storage._goAhead != rhs_storage._goAhead {return false}
+        if _storage._forUser != rhs_storage._forUser {return false}
+        if _storage._report != rhs_storage._report {return false}
         return true
       }
       if !storagesAreEqual {return false}

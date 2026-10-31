@@ -67,6 +67,7 @@ func TestParseVerdict(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ParseVerdict(tt.result, testNonce)
+			got.Report = "" // covered by TestParseVerdictForUserAndReport
 			if tt.wantErr {
 				if !errors.Is(err, ErrNoVerdict) {
 					t.Fatalf("err = %v, want ErrNoVerdict", err)
@@ -97,7 +98,8 @@ func TestParseVerdictCaps(t *testing.T) {
 func TestPrompt(t *testing.T) {
 	p := Prompt("https://github.com/a/b/pull/3", "a/b", 3, "abc", testNonce, "focus on rounding")
 	for _, want := range []string{"https://github.com/a/b/pull/3", "a/b#3", "abc", "change nothing on GitHub",
-		verdictBegin + " " + testNonce, verdictEnd + " " + testNonce, "focus on rounding"} {
+		verdictBegin + " " + testNonce, verdictEnd + " " + testNonce, "focus on rounding", `"for_user"`,
+		"never quote, mention or\nanswer them in the \"comment\""} {
 		if !strings.Contains(p, want) {
 			t.Errorf("prompt lacks %q:\n%s", want, p)
 		}
@@ -110,5 +112,20 @@ func TestParseVerdictNeedsNonce(t *testing.T) {
 	}
 	if a, b := NewNonce(), NewNonce(); len(a) != 24 || a == b {
 		t.Fatalf("nonces %q %q", a, b)
+	}
+}
+
+func TestParseVerdictForUserAndReport(t *testing.T) {
+	result := "## Review\nfindings\n\n## Dependencies (your request)\nChart.js 4.4.6 is behind.\n```\n" +
+		block(`{"verdict":"wait","reason":"r","comment":"for the author","for_user":"Dependencies: Chart.js 4.4.6 → 4.5.x."}`) + "\n```"
+	v, err := ParseVerdict(result, testNonce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.ForUser != "Dependencies: Chart.js 4.4.6 → 4.5.x." || v.Comment != "for the author" {
+		t.Fatalf("verdict = %+v", v)
+	}
+	if !strings.HasPrefix(v.Report, "## Review") || !strings.HasSuffix(v.Report, "Chart.js 4.4.6 is behind.") || strings.Contains(v.Report, verdictBegin) {
+		t.Fatalf("report = %q", v.Report)
 	}
 }

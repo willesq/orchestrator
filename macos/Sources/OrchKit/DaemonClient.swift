@@ -315,6 +315,7 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
             url: r.url, repo: r.repo, number: Int(r.number), mode: PRReviewMode(rawValue: r.mode) ?? .verdict,
             state: PRReviewState(rawValue: r.state), headSHA: r.headSha, pendingSHA: r.pendingSha, taskID: r.taskID,
             verdict: PRVerdict(rawValue: r.verdict), reason: r.reason, comment: r.comment, instructions: r.instructions, goAhead: r.goAhead,
+            forUser: r.forUser, report: r.report,
             posted: r.posted,
             note: r.note, verdictAt: date(fromUnix: r.verdictAt), updatedAt: date(fromUnix: r.updatedAt),
             checkedAt: date(fromUnix: r.checkedAt), nextCheckAt: date(fromUnix: r.nextCheckAt)

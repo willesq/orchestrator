@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS pr_reviews (
     reason      TEXT NOT NULL DEFAULT '',
     comment     TEXT NOT NULL DEFAULT '',          -- the drafted review comment
     instructions TEXT NOT NULL DEFAULT '',         -- the user's notes for this PR's reviews
+    for_user    TEXT NOT NULL DEFAULT '',          -- the review's answer to the notes, for the user only
+    report      TEXT NOT NULL DEFAULT '',          -- the full review, for the user only
     go_ahead    INTEGER NOT NULL DEFAULT 0,        -- 1: review the next ready commit even from an untrusted author
     posted      TEXT NOT NULL DEFAULT '',          -- approved | commented | failed, for head_sha
     note        TEXT NOT NULL DEFAULT '',          -- the last problem, or why nothing was posted

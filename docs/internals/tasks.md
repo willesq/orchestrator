@@ -302,13 +302,19 @@ permissions, "approve" and "comment its suggestions":
   what it found, once per reviewed commit. The next push is reviewed again. It never approves.
 - `auto`: `approve` and `feedback` together.
 - `comment`: the user's own "Post comment": post the current draft once, whatever the verdict,
-  then fall back to `verdict`.
+  then fall back to `verdict`. It is for the verdict the user read: if a new verdict lands first
+  (new notes or a new commit), it falls back to `verdict` without posting.
+
+Every change of mode is logged (`pr-reviews: <url> may now post as …`), so what orch was allowed
+to post, and when that changed, can be traced.
 
 Orch never requests changes.
 
 **Notes:** the user can give each PR notes for its reviews (`WatchPRReview` `instructions`,
 ≤ 4000 bytes, control characters dropped). They are added to the task prompt, marked as the
-user's own instructions, unlike anything in the PR. New notes on a PR that already has a verdict
+user's own instructions, unlike anything in the PR. The agent answers them in the verdict's
+`for_user` field, never in the comment that may be posted. orchd keeps that answer and the full
+review text before the verdict block (`report`, ≤ 60000 bytes); neither is ever posted. New notes on a PR that already has a verdict
 or a failed review review its current commit again.
 
 **States:** `waiting` → (`held`) → `reviewing` → `verdict`, or `failed`; `closed` once the PR is merged or
@@ -318,7 +324,7 @@ closed; `stopped` when the user stops watching. `StopPRReview` with `forget` del
 - A `reviewing` row reads its task from the ledger (no `gh`). Each review gets a random token
   (`nonce`, stored on the row and given only in the task prompt). The result must end with exactly
   one `ORCH-VERDICT-BEGIN <token> … ORCH-VERDICT-END <token>` block holding JSON
-  `{verdict, reason, comment}`; a fence around it is allowed, nothing after it. A block quoted from
+  `{verdict, reason, comment, for_user}`; a fence around it is allowed, nothing after it. A block quoted from
   the PR cannot carry the token, and a result the runner cut at 64 KiB no longer ends with the
   block, so neither counts. The verdict must be `approve`, `wait` or `changes` with a reason. Reason (≤ 2000 bytes) and comment (≤ 60000) have control and bidi
   characters dropped. A failed, missing or unparseable review settles that head as `failed`: it is

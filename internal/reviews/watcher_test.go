@@ -299,7 +299,7 @@ func TestPostFailureIsRecordedAndRetriedOnRequest(t *testing.T) {
 	e, w := newEnv(t)
 	ctx := context.Background()
 	e.postErr = errors.New("HTTP 422: \x1b[31mnope")
-	_, _ = w.Watch(ctx, testURL, ModeComment, nil)
+	_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)
 	w.Tick(ctx)
 	finish(t, w, e, "task-1", VerdictWait, "note")
 	w.Tick(ctx)
@@ -505,10 +505,11 @@ func TestWatcherDefaults(t *testing.T) {
 func TestCommentIsOneShotAcrossHeads(t *testing.T) {
 	e, w := newEnv(t)
 	ctx := context.Background()
-	_, _ = w.Watch(ctx, testURL, ModeComment, nil)
+	_, _ = w.Watch(ctx, testURL, ModeVerdict, nil)
 	w.Tick(ctx)
 	finish(t, w, e, "task-1", VerdictWait, "first")
 	w.Tick(ctx)
+	_, _ = w.Watch(ctx, testURL, ModeComment, nil)
 	w.Tick(ctx)
 	e.pr.head = shaB
 	w.markDue(testURL)
@@ -744,5 +745,45 @@ func TestUntrustedAuthorIsHeldUntilGoAhead(t *testing.T) {
 	w.Tick(ctx)
 	if len(e.dispatched) != 1 || get(t, w).State != StateHeld {
 		t.Fatal("a new push from an untrusted author ran without a new go-ahead")
+	}
+}
+
+func TestOneShotCommentDoesNotCarryToANewVerdict(t *testing.T) {
+	e, w := newEnv(t)
+	ctx := context.Background()
+	_, _ = w.Watch(ctx, testURL, ModeVerdict, nil)
+	w.Tick(ctx)
+	finish(t, w, e, "task-1", VerdictChanges, "first")
+	w.Tick(ctx)
+	// The user asks for "Post comment", but before orchd gets to it, new
+	// notes start another review of the same commit.
+	notes := "also check dependencies"
+	w.Post = func(context.Context, string, int, string, string, string) error { t.Fatal("posted"); return nil }
+	_, _ = w.WatchWith(ctx, testURL, ModeComment, nil, &notes)
+	w.Tick(ctx)
+	finish(t, w, e, "task-2", VerdictChanges, "second")
+	w.Tick(ctx)
+	w.Tick(ctx)
+	if r := get(t, w); r.Mode != ModeVerdict || r.Posted != "" {
+		t.Fatalf("one-shot comment carried over: %+v", r)
+	}
+}
+
+func TestNotesAnswerAndReportAreKeptButNeverPosted(t *testing.T) {
+	e, w := newEnv(t)
+	ctx := context.Background()
+	_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)
+	w.Tick(ctx)
+	nonce := get(t, w).Nonce
+	e.tasks["task-1"] = [2]string{"complete", "## Review\nall of it\n" +
+		blockWith(nonce, `{"verdict":"changes","reason":"r","comment":"fix it","for_user":"deps are fine"}`)}
+	w.Tick(ctx)
+	w.Tick(ctx)
+	r := get(t, w)
+	if r.ForUser != "deps are fine" || r.Report != "## Review\nall of it" {
+		t.Fatalf("stored = %+v", r)
+	}
+	if len(e.posts) != 1 || e.posts[0].body != "fix it" {
+		t.Fatalf("posted = %+v", e.posts)
 	}
 }
