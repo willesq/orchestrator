@@ -88,6 +88,22 @@ func (f *fakeClient) ListGitHubItems(context.Context, *orchdv1.ListGitHubItemsRe
 	return &orchdv1.ListGitHubItemsResponse{}, nil
 }
 
+func (f *fakeClient) ListPRReviews(context.Context, *orchdv1.ListPRReviewsRequest, ...grpc.CallOption) (*orchdv1.ListPRReviewsResponse, error) {
+	return &orchdv1.ListPRReviewsResponse{}, nil
+}
+
+func (f *fakeClient) WatchPRReview(context.Context, *orchdv1.WatchPRReviewRequest, ...grpc.CallOption) (*orchdv1.PRReview, error) {
+	return &orchdv1.PRReview{}, nil
+}
+
+func (f *fakeClient) StopPRReview(context.Context, *orchdv1.StopPRReviewRequest, ...grpc.CallOption) (*orchdv1.StopPRReviewResponse, error) {
+	return &orchdv1.StopPRReviewResponse{}, nil
+}
+
+func (f *fakeClient) GetPRDetail(context.Context, *orchdv1.GetPRDetailRequest, ...grpc.CallOption) (*orchdv1.PRDetail, error) {
+	return &orchdv1.PRDetail{}, nil
+}
+
 func (f *fakeClient) TailLogs(context.Context, *orchdv1.TailLogsRequest, ...grpc.CallOption) (*orchdv1.TailLogsResponse, error) {
 	return &orchdv1.TailLogsResponse{}, nil
 }

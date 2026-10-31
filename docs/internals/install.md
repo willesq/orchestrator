@@ -70,7 +70,7 @@ so `agents/_shared` is included), grouped by `install.ClaudeAssets` into units a
 or off:
 
 - **Agents:** `adversarial-qa`, `adversarial-reviewer`, `dev`, `dispatcher`,
-  `documentation-manager`, `exploit-finder`, `feature-coder`, `initializer`, `ops`, `research`,
+  `documentation-manager`, `exploit-finder`, `feature-coder`, `initializer`, `ops`, `pr-verdict`, `research`,
   `reviewer`, `security-audit`, `state-recovery`, `triage`, `validation`. An agent owns
   `agents/<name>.md`, any `agents/<name>-*` helper (`exploit-finder-sandbox.sh`, the PoC sandbox
   wrapper) and any `agents/_shared/<name>-*/` directory (`adversarial-qa-references/`).

@@ -32,6 +32,7 @@ import (
 	"github.com/willesq/orchestrator/internal/qdrant"
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
+	"github.com/willesq/orchestrator/internal/reviews"
 	"github.com/willesq/orchestrator/internal/selfupdate"
 	"github.com/willesq/orchestrator/internal/settings"
 	"github.com/willesq/orchestrator/internal/sources"
@@ -83,6 +84,8 @@ type deps struct {
 	live    *liveRunner
 	// taskHub receives the runner's liveness changes; nil drops them.
 	taskHub *taskHub
+	// reviews is the PR review watcher shared with its RPCs; nil drops its unit.
+	reviews *reviews.Watcher
 }
 
 // subsystems lists orchd's supervised units in start order (stopped in reverse).
@@ -110,6 +113,9 @@ func subsystems(d deps) []supervisor.Unit {
 	}
 	if d.settings.PRBabysitter.Enabled {
 		out = append(out, prsUnit(d.settings, d.store, d.github))
+	}
+	if d.reviews != nil {
+		out = append(out, reviewsUnit(d.reviews))
 	}
 	if u, ok := routingEvaluatorUnit(d.settings, d.store); ok {
 		out = append(out, u)

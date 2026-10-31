@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
         if handOffToRunningCopy() { return }
         AppearanceChoice.stored().apply()
+        model.showWindow = { [weak self] in self?.showMainWindow() }
         model.start()
         if LaunchPolicy.opensWindowAtLaunch(launchedAsLoginItem: launchedAsLoginItem) {
             showMainWindow()
@@ -52,9 +53,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let root = MainWindow(
                 monitor: model.monitor, prMonitor: model.prMonitor, restart: model.restart,
                 search: model.search, sources: model.sources, tasks: model.tasks, dispatch: model.dispatch,
-                github: model.github, system: model.system, logs: model.logs,
+                github: model.github, prs: model.prs, system: model.system, logs: model.logs,
                 docs: model.docs, registeredSources: model.registeredSources,
-                safetyNet: model.safetyNet, claude: model.claude
+                safetyNet: model.safetyNet, claude: model.claude, navigator: model.navigator
             )
             let hosting = NSHostingController(rootView: root)
             // The window keeps the size the user gives it. By default the

@@ -73,6 +73,20 @@ service Orchd {
   // ListGitHubItems serves the watcher's cache: open PRs and issues in the
   // enabled scopes, each with why it is watched. Never calls gh.
   rpc ListGitHubItems(ListGitHubItemsRequest) returns (ListGitHubItemsResponse);
+  // ListPRReviews lists the PRs the user asked orchd to review once ready,
+  // each with where its review stands and the last verdict. Never calls gh.
+  rpc ListPRReviews(ListPRReviewsRequest) returns (ListPRReviewsResponse);
+  // WatchPRReview starts watching a PR for review, or changes what orchd may
+  // post for it: nothing (verdict), an approval on an approve verdict
+  // (approve), the drafted comment on any other verdict (feedback), both
+  // (auto), or the drafted comment once, now (comment). The PR is checked
+  // within seconds.
+  rpc WatchPRReview(WatchPRReviewRequest) returns (PRReview);
+  // StopPRReview stops watching a PR; forget also deletes its verdict.
+  rpc StopPRReview(StopPRReviewRequest) returns (StopPRReviewResponse);
+  // GetPRDetail reads one PR's metadata from GitHub (one gh call), cached for
+  // a minute unless refresh is set.
+  rpc GetPRDetail(GetPRDetailRequest) returns (PRDetail);
   // TailLogs returns orchd's recent log lines, kept in memory, after a
   // sequence number, so a caller can poll for new lines.
   rpc TailLogs(TailLogsRequest) returns (TailLogsResponse);
@@ -910,3 +924,111 @@ message RemoveSettingRequest {
 }
 
 message RemoveSettingResponse {}
+
+message ListPRReviewsRequest {}
+
+message ListPRReviewsResponse {
+  repeated PRReview reviews = 1; // most recently changed first
+}
+
+// PRReview is one PR orchd watches for review. Reason and comment come from a
+// review of other people's code, so clients show them verbatim, never rendered.
+message PRReview {
+  string url = 1;
+  string repo = 2;          // owner/name
+  int32 number = 3;
+  string mode = 4;          // verdict | approve | comment | feedback | auto
+  string state = 5;         // waiting | held | reviewing | verdict | failed | closed | stopped
+  string head_sha = 6;      // the commit the verdict covers
+  string pending_sha = 7;   // the commit under review
+  string task_id = 8;       // the review task
+  string verdict = 9;       // approve | wait | changes; empty before the first
+  string reason = 10;
+  string comment = 11;      // the drafted review comment
+  string posted = 12;       // approved | commented | failed, for head_sha; empty when nothing
+  string note = 13;         // the last problem, or why nothing was posted
+  int64 created_at = 14;    // unix seconds
+  int64 updated_at = 15;
+  int64 verdict_at = 16;    // 0 before the first verdict
+  // when orchd last read the PR from GitHub (0 before its first read since it
+  // started) and when it reads it next (0 while reviewing or inactive); set by
+  // ListPRReviews
+  int64 checked_at = 17;
+  int64 next_check_at = 18;
+  string instructions = 19; // the user's notes for this PR's reviews
+  bool go_ahead = 20;       // the next ready commit is reviewed despite an untrusted author
+  // the review's answer to the user's notes, and its full text; for the user
+  // only, never posted
+  string for_user = 21;
+  string report = 22;
+}
+
+message WatchPRReviewRequest {
+  string url = 1;           // https://github.com/<owner>/<repo>/pull/<n>
+  string mode = 2;          // verdict | approve | comment | feedback | auto
+  bool set_comment = 3;     // replace the drafted comment with comment
+  string comment = 4;
+  // replace the user's notes for this PR's reviews (≤ 4000 bytes); new notes
+  // on a PR with a verdict review its current commit again
+  bool set_instructions = 5;
+  string instructions = 6;
+  // review the next ready commit even though its author is not the repo's
+  // owner, a member or a collaborator (whose PRs are otherwise held)
+  bool review_anyway = 7;
+}
+
+message StopPRReviewRequest {
+  string url = 1;
+  bool forget = 2;          // delete the review and its verdict too
+}
+
+message StopPRReviewResponse {}
+
+message GetPRDetailRequest {
+  string url = 1;
+  bool refresh = 2;         // bypass the one-minute cache
+}
+
+// PRDetail is a PR's metadata as gh reports it. Title, body, labels and paths
+// are other people's text: shown verbatim, never rendered.
+message PRDetail {
+  string url = 1;
+  string title = 2;
+  string body = 3;          // cut to 8000 bytes
+  string author = 4;
+  string state = 5;         // OPEN | MERGED | CLOSED
+  bool is_draft = 6;
+  string base_ref = 7;
+  string head_ref = 8;
+  string head_sha = 9;
+  int32 additions = 10;
+  int32 deletions = 11;
+  int32 changed_files = 12;
+  string created_at = 13;   // RFC 3339
+  string updated_at = 14;
+  string mergeable = 15;    // MERGEABLE | CONFLICTING | UNKNOWN
+  string review_decision = 16;
+  string ci_state = 17;     // none | failure | pending | success
+  repeated string labels = 18;
+  repeated string requested_reviewers = 19;
+  repeated PRReviewerState reviews = 20;
+  repeated PRCheck checks = 21;
+  repeated PRFile files = 22; // at most 100
+  int64 fetched_at = 23;    // unix seconds
+}
+
+message PRReviewerState {
+  string login = 1;
+  string state = 2;         // APPROVED | CHANGES_REQUESTED | COMMENTED | ...
+}
+
+message PRCheck {
+  string name = 1;
+  string result = 2;        // success | failure | pending | ... (lowercase)
+}
+
+message PRFile {
+  string path = 1;
+  int32 additions = 2;
+  int32 deletions = 3;
+}

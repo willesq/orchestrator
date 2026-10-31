@@ -235,27 +235,29 @@ func enrich(ctx context.Context, gh ghRunner, pr *PR) {
 		return
 	}
 	var v struct {
-		StatusCheckRollup []struct {
-			Status     string `json:"status"`
-			Conclusion string `json:"conclusion"`
-			State      string `json:"state"`
-		} `json:"statusCheckRollup"`
-		ReviewDecision string `json:"reviewDecision"`
-		Mergeable      string `json:"mergeable"`
+		StatusCheckRollup []Check `json:"statusCheckRollup"`
+		ReviewDecision    string  `json:"reviewDecision"`
+		Mergeable         string  `json:"mergeable"`
 	}
 	if json.Unmarshal(out, &v) != nil {
 		return
 	}
 	pr.ReviewDecision = v.ReviewDecision
 	pr.Mergeable = v.Mergeable
-	pr.CIState = rollupCI(v.StatusCheckRollup)
+	pr.CIState = RollupCI(v.StatusCheckRollup)
 }
 
-func rollupCI(checks []struct {
+// Check is one entry of gh's statusCheckRollup: a check run (status and
+// conclusion) or a commit status (state). An alias, so a literal of the same
+// shape is one.
+type Check = struct {
 	Status     string `json:"status"`
 	Conclusion string `json:"conclusion"`
 	State      string `json:"state"`
-}) string {
+}
+
+// RollupCI sums checks up as none, failure, pending or success.
+func RollupCI(checks []Check) string {
 	if len(checks) == 0 {
 		return "none"
 	}

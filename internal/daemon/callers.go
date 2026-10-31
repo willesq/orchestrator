@@ -74,6 +74,12 @@ var operatorActions = map[string]string{
 	orchdv1.Orchd_RefreshSource_FullMethodName:    "refresh registered sources",
 	orchdv1.Orchd_SyncDocs_FullMethodName:         "sync docs",
 	orchdv1.Orchd_SetGitHubScope_FullMethodName:   "change GitHub monitoring",
+	// Reason: a watch can approve PRs, and verdicts carry text drawn from
+	// other people's code, so neither belongs in a task's reach.
+	orchdv1.Orchd_WatchPRReview_FullMethodName:    "change PR review watches",
+	orchdv1.Orchd_StopPRReview_FullMethodName:     "change PR review watches",
+	orchdv1.Orchd_ListPRReviews_FullMethodName:    "read PR review verdicts",
+	orchdv1.Orchd_GetPRDetail_FullMethodName:      "read PR details through orchd (use gh)",
 	orchdv1.Orchd_Restart_FullMethodName:          "restart orchd subsystems",
 	orchdv1.Orchd_InstallSafetyNet_FullMethodName: "install or upgrade cc-safety-net",
 	// Reason: a hook is a command Claude Code runs and a permission rule

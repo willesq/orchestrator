@@ -523,3 +523,15 @@ func TestRunMeasuresFailedRuns(t *testing.T) {
 		t.Errorf("a timed-out run must still record how long it took: %+v", got)
 	}
 }
+
+func TestDeniedTools(t *testing.T) {
+	if got := deniedTools("dev"); got != dispatchTools {
+		t.Errorf("dev denied %q", got)
+	}
+	got := deniedTools("pr-verdict")
+	for _, want := range []string{dispatchTools, "Bash(gh pr review:*)", "Bash(gh pr merge:*)", "Bash(gh api:*)", "Bash(git push:*)"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("pr-verdict denied %q, missing %q", got, want)
+		}
+	}
+}
