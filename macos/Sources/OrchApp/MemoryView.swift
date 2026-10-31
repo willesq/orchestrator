@@ -67,7 +67,7 @@ private struct SearchPane: View {
 
     /// Plainly labelled menus in place of free text and a stepper.
     private var filters: some View {
-        HStack(spacing: 14) {
+        FlowLayout(spacing: 14) {
             Picker("Match", selection: $model.query.mode) {
                 ForEach(SearchMode.allCases) { Text($0.label).tag($0).help($0.help) }
             }
@@ -84,7 +84,6 @@ private struct SearchPane: View {
                 ForEach(limitChoices, id: \.self) { Text("\($0) results").tag($0) }
             }
             .fixedSize()
-            Spacer()
         }
         .controlSize(.small)
     }

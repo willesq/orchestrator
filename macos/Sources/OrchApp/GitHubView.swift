@@ -13,11 +13,11 @@ struct GitHubView: View {
         Group {
             switch navigator.gitHubSection {
             case .overview:
-                HSplitView {
+                AdaptiveSplit(primaryWidth: .init(min: 300, ideal: 340, max: 440), secondaryWidth: .init(min: 360),
+                              stacking: .tabs(primary: "Scopes", secondary: "Activity")) {
                     ScopesColumn(model: model)
-                        .frame(minWidth: 300, idealWidth: 340, maxWidth: 440)
+                } secondary: {
                     ActivityColumn(model: model)
-                        .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
                 }
             case .prs:
                 PRsView(github: model, prs: prs)

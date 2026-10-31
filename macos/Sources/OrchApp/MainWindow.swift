@@ -84,7 +84,10 @@ struct MainWindow: View {
                 splitView
             }
         }
-        .frame(minWidth: CompanionLayout.minimumSize.width, minHeight: CompanionLayout.minimumSize.height)
+        // Anything a pane cannot fit is cut at the trailing edge, not split
+        // around the centre, so the sidebar always stays in the window.
+        .frame(minWidth: CompanionLayout.minimumSize.width, maxWidth: .infinity,
+               minHeight: CompanionLayout.minimumSize.height, maxHeight: .infinity, alignment: .topLeading)
         .onGeometryChange(for: Bool.self) { CompanionLayout.isCompact(width: $0.size.width) } action: { compact = $0 }
         .background {
             // Hidden buttons, so the shortcuts work from any pane without a menu bar.

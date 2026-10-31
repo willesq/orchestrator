@@ -59,13 +59,12 @@ struct DashboardView: View {
 
     /// One chip per area that can need the user, each opening its tab.
     private var summary: some View {
-        HStack(spacing: 10) {
+        FlowLayout(spacing: 10) {
             SummaryChip(symbol: Pane.docs.symbol, title: "Docs", value: docsValue.text, tone: docsValue.tone) { open(.docs) }
             SummaryChip(symbol: Pane.safetyNet.symbol, title: "Safety Net", value: safetyValue.text, tone: safetyValue.tone) {
                 open(.safetyNet)
             }
             SummaryChip(symbol: "arrow.triangle.pull", title: "PRs", value: prValue.text, tone: prValue.tone) { open(.github) }
-            Spacer(minLength: 0)
         }
     }
 

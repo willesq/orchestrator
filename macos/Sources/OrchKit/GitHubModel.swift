@@ -78,6 +78,9 @@ public final class GitHubModel {
             identity = try await api.gitHubIdentity(refresh: false)
             scopesError = nil
         } catch {
+            // Leaving the tab cancels the poll; the failure that follows is
+            // that, not something orchd said.
+            if Task.isCancelled { return }
             scopesError = DaemonMonitor.describe(error)
         }
         await refreshItems()
@@ -88,6 +91,7 @@ public final class GitHubModel {
             items = try await api.gitHubItems()
             lastError = nil
         } catch {
+            if Task.isCancelled { return }
             lastError = DaemonMonitor.describe(error)
         }
     }

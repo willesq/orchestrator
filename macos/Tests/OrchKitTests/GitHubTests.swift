@@ -119,6 +119,23 @@ private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: T
         #expect(!model.needsScopes)
     }
 
+    @Test func aCancelledRefreshIsNotAnError() async {
+        // Leaving the tab cancels the poll mid-request; the transport then
+        // fails, and that failure is the cancellation, not orchd's answer.
+        let api = FakeGitHub()
+        api.failScopes = true
+        api.failItems = true
+        let model = GitHubModel(api: api)
+        await Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            await model.refresh()
+        }.value
+        #expect(model.scopesError == nil && model.lastError == nil)
+        #expect(!model.isRefreshing, "a later refresh must not be skipped")
+        await model.refresh()
+        #expect(model.scopesError == "unavailable" && model.lastError == "unavailable")
+    }
+
     @Test func pollingRetriesScopesUntilTheyLoad() async throws {
         let api = FakeGitHub()
         api.failScopes = true

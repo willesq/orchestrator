@@ -68,7 +68,7 @@ private struct SystemOverview: View {
                 }
                 processes
                 SubsystemsBox(status: model.status, restart: restart)
-                HStack(alignment: .top, spacing: 16) {
+                LazyVGrid(columns: Self.tileColumns, alignment: .leading, spacing: 16) {
                     StorageBox(metrics: model.metrics)
                     TasksBox(metrics: model.metrics)
                 }
@@ -78,8 +78,12 @@ private struct SystemOverview: View {
         }
     }
 
+    /// Tiles share a row while each gets this much room, then wrap, so a
+    /// narrow window stacks them instead of squeezing their text.
+    private static let tileColumns = [GridItem(.adaptive(minimum: 260), spacing: 16, alignment: .top)]
+
     private var processes: some View {
-        HStack(alignment: .top, spacing: 16) {
+        LazyVGrid(columns: Self.tileColumns, alignment: .leading, spacing: 16) {
             ForEach(["orchd", "qdrant"], id: \.self) { name in
                 ProcessTile(name: name, stats: model.metrics?.process(name), history: model.history[name] ?? [])
             }
@@ -189,7 +193,7 @@ private struct RuntimeTile: View {
             Gauge(title: "Goroutines", value: metrics.map { "\($0.goroutines)" } ?? "–") { EmptyView() }
             Gauge(title: "Go heap", value: metrics.map { formatBytes($0.heapBytes) } ?? "–") { EmptyView() }
         }
-        .frame(width: 170)
+        .frame(maxWidth: .infinity)
     }
 }
 

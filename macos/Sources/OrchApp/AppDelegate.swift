@@ -63,6 +63,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             // hosting controller resizes the window to each pane's ideal size,
             // so switching panes made it jump.
             hosting.sizingOptions = []
+            // The window takes its first size from the view. A zero-sized view
+            // would be clamped to the minimum, laying out the narrow companion
+            // column before the saved frame applies, and rebuilding the panes
+            // (cancelling what they were loading) once it does.
+            hosting.view.setFrameSize(NSSize(width: 980, height: 640))
             let window = NSWindow(contentViewController: hosting)
             window.title = "Orchestrator"
             window.styleMask.insert([.resizable, .miniaturizable, .closable, .titled])
