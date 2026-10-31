@@ -37,6 +37,7 @@ final class AppModel {
     let reviews: ReviewMonitor
     let prs: PRsModel
     let navigator = Navigator()
+    let windowControl = WindowControl()
     /// Brings the main window forward; set by the app delegate.
     var showWindow: (@MainActor () -> Void)?
     let system: SystemModel

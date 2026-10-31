@@ -55,7 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 search: model.search, sources: model.sources, tasks: model.tasks, dispatch: model.dispatch,
                 github: model.github, prs: model.prs, system: model.system, logs: model.logs,
                 docs: model.docs, registeredSources: model.registeredSources,
-                safetyNet: model.safetyNet, claude: model.claude, navigator: model.navigator
+                safetyNet: model.safetyNet, claude: model.claude, navigator: model.navigator,
+                window: model.windowControl
             )
             let hosting = NSHostingController(rootView: root)
             // The window keeps the size the user gives it. By default the
@@ -65,12 +66,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let window = NSWindow(contentViewController: hosting)
             window.title = "Orchestrator"
             window.styleMask.insert([.resizable, .miniaturizable, .closable, .titled])
-            window.contentMinSize = NSSize(width: 760, height: 480)
+            // Narrow enough for the companion column the layout turns into.
+            window.contentMinSize = CompanionLayout.minimumSize
             window.isReleasedWhenClosed = false
             window.setContentSize(NSSize(width: 980, height: 640))
             if !window.setFrameUsingName("OrchMainWindow") { window.center() }
             window.setFrameAutosaveName("OrchMainWindow")
             window.delegate = self
+            model.windowControl.window = window
             self.window = window
         }
         window?.makeKeyAndOrderFront(nil)

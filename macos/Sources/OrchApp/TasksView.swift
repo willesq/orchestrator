@@ -93,7 +93,8 @@ struct TasksView: View {
     }
 }
 
-private struct StatusBadge: View {
+/// A task status as a colored chip.
+struct StatusBadge: View {
     let status: String
 
     var body: some View {
