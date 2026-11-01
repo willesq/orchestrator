@@ -64,6 +64,12 @@ const (
 	Orchd_SetSettingEnabled_FullMethodName     = "/orchd.v1.Orchd/SetSettingEnabled"
 	Orchd_AddSetting_FullMethodName            = "/orchd.v1.Orchd/AddSetting"
 	Orchd_RemoveSetting_FullMethodName         = "/orchd.v1.Orchd/RemoveSetting"
+	Orchd_GetTaskActivity_FullMethodName       = "/orchd.v1.Orchd/GetTaskActivity"
+	Orchd_GetPRLanding_FullMethodName          = "/orchd.v1.Orchd/GetPRLanding"
+	Orchd_ListPRLandings_FullMethodName        = "/orchd.v1.Orchd/ListPRLandings"
+	Orchd_LandPR_FullMethodName                = "/orchd.v1.Orchd/LandPR"
+	Orchd_UndoPRLanding_FullMethodName         = "/orchd.v1.Orchd/UndoPRLanding"
+	Orchd_DiscardPRLanding_FullMethodName      = "/orchd.v1.Orchd/DiscardPRLanding"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -202,6 +208,22 @@ type OrchdClient interface {
 	// RemoveSetting deletes an item you added or orch found from its file and
 	// forgets it. Items orch install writes can only be turned off.
 	RemoveSetting(ctx context.Context, in *RemoveSettingRequest, opts ...grpc.CallOption) (*RemoveSettingResponse, error)
+	// GetTaskActivity reads what a task's session has done so far from its
+	// transcript: commands, edits and reads, with risky commands marked.
+	GetTaskActivity(ctx context.Context, in *GetTaskActivityRequest, opts ...grpc.CallOption) (*TaskActivity, error)
+	// GetPRLanding shows the commit a task proposed for its PR, checked against
+	// the PR's current head, and what the user decided about it.
+	GetPRLanding(ctx context.Context, in *PRLandingRequest, opts ...grpc.CallOption) (*PRLanding, error)
+	// ListPRLandings lists the decided landings, without calling GitHub, so the
+	// app can tell which proposals still wait on the user.
+	ListPRLandings(ctx context.Context, in *ListPRLandingsRequest, opts ...grpc.CallOption) (*ListPRLandingsResponse, error)
+	// LandPR pushes the proposed commit to the PR's branch, fast-forward only.
+	LandPR(ctx context.Context, in *LandPRRequest, opts ...grpc.CallOption) (*PRLanding, error)
+	// UndoPRLanding pushes a new commit restoring the tree the PR had before
+	// the landing. It never rewrites history.
+	UndoPRLanding(ctx context.Context, in *PRLandingRequest, opts ...grpc.CallOption) (*PRLanding, error)
+	// DiscardPRLanding sets a proposal aside, or with restore brings it back.
+	DiscardPRLanding(ctx context.Context, in *DiscardPRLandingRequest, opts ...grpc.CallOption) (*PRLanding, error)
 }
 
 type orchdClient struct {
@@ -671,6 +693,66 @@ func (c *orchdClient) RemoveSetting(ctx context.Context, in *RemoveSettingReques
 	return out, nil
 }
 
+func (c *orchdClient) GetTaskActivity(ctx context.Context, in *GetTaskActivityRequest, opts ...grpc.CallOption) (*TaskActivity, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TaskActivity)
+	err := c.cc.Invoke(ctx, Orchd_GetTaskActivity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) GetPRLanding(ctx context.Context, in *PRLandingRequest, opts ...grpc.CallOption) (*PRLanding, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PRLanding)
+	err := c.cc.Invoke(ctx, Orchd_GetPRLanding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ListPRLandings(ctx context.Context, in *ListPRLandingsRequest, opts ...grpc.CallOption) (*ListPRLandingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPRLandingsResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListPRLandings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) LandPR(ctx context.Context, in *LandPRRequest, opts ...grpc.CallOption) (*PRLanding, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PRLanding)
+	err := c.cc.Invoke(ctx, Orchd_LandPR_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) UndoPRLanding(ctx context.Context, in *PRLandingRequest, opts ...grpc.CallOption) (*PRLanding, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PRLanding)
+	err := c.cc.Invoke(ctx, Orchd_UndoPRLanding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) DiscardPRLanding(ctx context.Context, in *DiscardPRLandingRequest, opts ...grpc.CallOption) (*PRLanding, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PRLanding)
+	err := c.cc.Invoke(ctx, Orchd_DiscardPRLanding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrchdServer is the server API for Orchd service.
 // All implementations must embed UnimplementedOrchdServer
 // for forward compatibility.
@@ -807,6 +889,22 @@ type OrchdServer interface {
 	// RemoveSetting deletes an item you added or orch found from its file and
 	// forgets it. Items orch install writes can only be turned off.
 	RemoveSetting(context.Context, *RemoveSettingRequest) (*RemoveSettingResponse, error)
+	// GetTaskActivity reads what a task's session has done so far from its
+	// transcript: commands, edits and reads, with risky commands marked.
+	GetTaskActivity(context.Context, *GetTaskActivityRequest) (*TaskActivity, error)
+	// GetPRLanding shows the commit a task proposed for its PR, checked against
+	// the PR's current head, and what the user decided about it.
+	GetPRLanding(context.Context, *PRLandingRequest) (*PRLanding, error)
+	// ListPRLandings lists the decided landings, without calling GitHub, so the
+	// app can tell which proposals still wait on the user.
+	ListPRLandings(context.Context, *ListPRLandingsRequest) (*ListPRLandingsResponse, error)
+	// LandPR pushes the proposed commit to the PR's branch, fast-forward only.
+	LandPR(context.Context, *LandPRRequest) (*PRLanding, error)
+	// UndoPRLanding pushes a new commit restoring the tree the PR had before
+	// the landing. It never rewrites history.
+	UndoPRLanding(context.Context, *PRLandingRequest) (*PRLanding, error)
+	// DiscardPRLanding sets a proposal aside, or with restore brings it back.
+	DiscardPRLanding(context.Context, *DiscardPRLandingRequest) (*PRLanding, error)
 	mustEmbedUnimplementedOrchdServer()
 }
 
@@ -951,6 +1049,24 @@ func (UnimplementedOrchdServer) AddSetting(context.Context, *AddSettingRequest) 
 }
 func (UnimplementedOrchdServer) RemoveSetting(context.Context, *RemoveSettingRequest) (*RemoveSettingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveSetting not implemented")
+}
+func (UnimplementedOrchdServer) GetTaskActivity(context.Context, *GetTaskActivityRequest) (*TaskActivity, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTaskActivity not implemented")
+}
+func (UnimplementedOrchdServer) GetPRLanding(context.Context, *PRLandingRequest) (*PRLanding, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPRLanding not implemented")
+}
+func (UnimplementedOrchdServer) ListPRLandings(context.Context, *ListPRLandingsRequest) (*ListPRLandingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPRLandings not implemented")
+}
+func (UnimplementedOrchdServer) LandPR(context.Context, *LandPRRequest) (*PRLanding, error) {
+	return nil, status.Error(codes.Unimplemented, "method LandPR not implemented")
+}
+func (UnimplementedOrchdServer) UndoPRLanding(context.Context, *PRLandingRequest) (*PRLanding, error) {
+	return nil, status.Error(codes.Unimplemented, "method UndoPRLanding not implemented")
+}
+func (UnimplementedOrchdServer) DiscardPRLanding(context.Context, *DiscardPRLandingRequest) (*PRLanding, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiscardPRLanding not implemented")
 }
 func (UnimplementedOrchdServer) mustEmbedUnimplementedOrchdServer() {}
 func (UnimplementedOrchdServer) testEmbeddedByValue()               {}
@@ -1776,6 +1892,114 @@ func _Orchd_RemoveSetting_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_GetTaskActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTaskActivityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetTaskActivity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetTaskActivity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetTaskActivity(ctx, req.(*GetTaskActivityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_GetPRLanding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PRLandingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetPRLanding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetPRLanding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetPRLanding(ctx, req.(*PRLandingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ListPRLandings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPRLandingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListPRLandings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListPRLandings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListPRLandings(ctx, req.(*ListPRLandingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_LandPR_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LandPRRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).LandPR(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_LandPR_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).LandPR(ctx, req.(*LandPRRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_UndoPRLanding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PRLandingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).UndoPRLanding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_UndoPRLanding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).UndoPRLanding(ctx, req.(*PRLandingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_DiscardPRLanding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiscardPRLandingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).DiscardPRLanding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_DiscardPRLanding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).DiscardPRLanding(ctx, req.(*DiscardPRLandingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Orchd_ServiceDesc is the grpc.ServiceDesc for Orchd service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1958,6 +2182,30 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveSetting",
 			Handler:    _Orchd_RemoveSetting_Handler,
+		},
+		{
+			MethodName: "GetTaskActivity",
+			Handler:    _Orchd_GetTaskActivity_Handler,
+		},
+		{
+			MethodName: "GetPRLanding",
+			Handler:    _Orchd_GetPRLanding_Handler,
+		},
+		{
+			MethodName: "ListPRLandings",
+			Handler:    _Orchd_ListPRLandings_Handler,
+		},
+		{
+			MethodName: "LandPR",
+			Handler:    _Orchd_LandPR_Handler,
+		},
+		{
+			MethodName: "UndoPRLanding",
+			Handler:    _Orchd_UndoPRLanding_Handler,
+		},
+		{
+			MethodName: "DiscardPRLanding",
+			Handler:    _Orchd_DiscardPRLanding_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

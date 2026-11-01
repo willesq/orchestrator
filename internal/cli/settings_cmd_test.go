@@ -50,6 +50,30 @@ func (f *fakeClient) RemoveSetting(context.Context, *orchdv1.RemoveSettingReques
 	return &orchdv1.RemoveSettingResponse{}, nil
 }
 
+func (f *fakeClient) GetTaskActivity(context.Context, *orchdv1.GetTaskActivityRequest, ...grpc.CallOption) (*orchdv1.TaskActivity, error) {
+	return &orchdv1.TaskActivity{}, nil
+}
+
+func (f *fakeClient) GetPRLanding(context.Context, *orchdv1.PRLandingRequest, ...grpc.CallOption) (*orchdv1.PRLanding, error) {
+	return &orchdv1.PRLanding{}, nil
+}
+
+func (f *fakeClient) ListPRLandings(context.Context, *orchdv1.ListPRLandingsRequest, ...grpc.CallOption) (*orchdv1.ListPRLandingsResponse, error) {
+	return &orchdv1.ListPRLandingsResponse{}, nil
+}
+
+func (f *fakeClient) LandPR(context.Context, *orchdv1.LandPRRequest, ...grpc.CallOption) (*orchdv1.PRLanding, error) {
+	return &orchdv1.PRLanding{}, nil
+}
+
+func (f *fakeClient) UndoPRLanding(context.Context, *orchdv1.PRLandingRequest, ...grpc.CallOption) (*orchdv1.PRLanding, error) {
+	return &orchdv1.PRLanding{}, nil
+}
+
+func (f *fakeClient) DiscardPRLanding(context.Context, *orchdv1.DiscardPRLandingRequest, ...grpc.CallOption) (*orchdv1.PRLanding, error) {
+	return &orchdv1.PRLanding{}, nil
+}
+
 func withFakeSettings(t *testing.T) {
 	t.Helper()
 	saved := fakeSettings

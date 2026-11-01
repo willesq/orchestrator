@@ -309,7 +309,39 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
         `main`, `master`, `develop` or `trunk` (in any case), names a fork could use to land on a
         protected branch.
       - **On the list and board:** while a task works on a PR, its row and card show **Agent
-        working** (or **Agent stalled**) with a pulsing dot (steady under Reduce Motion).
+        working** (or **Agent stalled**) with a pulsing dot (steady under Reduce Motion), then
+        **Ready to land** while a proposal waits on the user (`PRLandingModel`, from
+        `ListPRLandings` every 5 s), or **Proposal out of date** once the card has found it cannot land.
+      - **Task rows:** also say **local only** or **may push**, and what the run cost, so two
+        runs on one PR can be told apart.
+        A blocked or failed run also shows the first line of why it stopped.
+      - **Activity:** each run's tool calls (`GetTaskActivity`, every 3 s while it runs), opened
+        while it runs. Its line says how many commands ran, files were edited and read, and steps
+        failed or looked risky. Opened, it adds the run's time, turns and models, a chip per tool with
+        its count, the files edited with their lines, and **All / Commands / Files / Attention**.
+        - **Steps:** one line each, showing the main command rather than the `cd` before it, with
+          **failed**, the risk, the lines an edit wrote and how long a slow step took. A click opens
+          its commands one per line, what it returned, and **Copy**. A closed line is not selectable,
+          since selecting text lays it out past its limit, over the rows below.
+        - **Commands, never descriptions:** a shell step shows the command, never the agent's account
+          of it. Risky commands carry a red chip and stay listed however long the run gets. A run told
+          not to push that ran `git push` shows a warning. Without a transcript (not started, or Codex)
+          it says so.
+      - **Landing:** a finished run whose result ends with a proposal (see
+        [tasks.md](tasks.md#pr-landings)) shows a panel, reloaded when the PR's head changes:
+        - **Ready to land:** the commits, the change's size, **Review diff** (the real diff,
+          coloured line by line, shown verbatim), **Push to `<branch>`…** (disabled until that diff
+          has been opened; confirmed, naming the commit and size), **Send back…** and **Discard**.
+          Why it cannot land, a diff cut off at its limit and any binary files all show here.
+        - **Send back:** the user's feedback and the exact brief for a new local-only run;
+          queuing it discards this proposal. ⌘↩ sends.
+        - **The PR moved on / cannot land:** orchd's reason, with Send back and Discard.
+        - **Already on the PR:** the commit reached GitHub some other way than Push here.
+        - **Pushed:** **Undo…** (confirmed) while the commit is still the branch's head; otherwise why not.
+        - **Undone**, or **Discarded** with **Restore**. The agent's worktree is never removed.
+        - **Failures:** what orchd or GitHub said, with **Check again**.
+      - **Something else:** needs notes or an edited brief before it sends, since an agent sent
+        off with no instructions can only stop and ask.
     - **Description:** rendered as Markdown with the Docs renderer: inert (no images loaded, raw
       HTML shown as text, links opened only after the same checks), and shown as its source when
       nested too deeply to render safely.

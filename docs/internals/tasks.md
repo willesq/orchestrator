@@ -199,6 +199,95 @@ dispatched. Merged as left → `good`; merged after further commits (other than 
 → `rework`; closed → `bad`; any still open → undecided. A task takes its worst PR's outcome; a task
 with more than 10 PR URLs stays undecided.
 
+## PR landings
+
+Package `landing`. A hand-off that may not push ends with a proposal rather than a command for the
+user to paste. Its brief asks for a commit on the PR's current head, left checked out in a worktree
+under the home directory, and for the result's last non-empty line to be
+`PROPOSED: <absolute worktree path> <40-hex commit>`. Nothing else about a task changes: it finishes
+`complete` like any other, and a result without the line proposes nothing.
+
+1. **Reading (`GetPRLanding`):** needs a `complete` task with a `PR: <url>` line and a proposal. orchd
+   copies the commit once into `<data>/landings/<task>.git`, a bare repository with no hooks and none
+   of the worktree's config, by fetching the worktree's `HEAD` and checking it is the reported commit.
+   Later commands run there, with replacement refs off. An agent runs as the same user and could write
+   there too, so a repository with any other config, or with a planted `.git`, hooks, replacement refs,
+   grafts or a commit graph, is thrown away and rebuilt on reading, and refused on pushing. Pushing also
+   runs a full `git fsck` first, so a replaced object cannot show one change and send another. Commands
+   name the repository with `--git-dir`. The fetch needs git 2.45.1 or newer,
+   whose `upload-pack` refuses a lazy fetch that a hostile source could use to run a command. orchd
+   then reads the PR with `gh pr view` and compares:
+
+   | State | Meaning |
+   |---|---|
+   | `proposed` | descends from the PR's head; carries the commits (≤ 50), files (≤ 300), diff (≤ 256 KiB), and counts of all files, lines and binary files |
+   | `stale` | the head moved, so it would not fast-forward |
+   | `invalid` | path not a clean directory under home, worktree gone before the first read, or `HEAD` moved |
+   | `on_pr` | it already is the PR's head: it reached GitHub some other way |
+   | `landed`, `undone`, `discarded` | what the user decided (`pr_landings`) |
+
+2. **Pushing (`LandPR`):** takes the commit the user reviewed and repeats every check, so a head that
+   moved meanwhile refuses. It also needs an open PR the user wrote, not from a fork, on a head other
+   than the base, `main`, `master`, `develop` or `trunk`. The push names
+   `https://github.com/<owner>/<repo>.git` and `gh auth git-credential` itself, with a plain refspec,
+   so GitHub refuses anything but a fast-forward. One action runs at a time.
+3. **Undo (`UndoPRLanding`):** only while the landed commit is still the branch's head. It pushes one
+   new commit on top with the earlier head's tree, signed if `commit.gpgsign` is on (`commit-tree`, so
+   it works for a merge and needs no working tree). History is never rewritten, so nothing a push
+   brought is lost: the landed commit stays in the branch's history.
+4. **Discard (`DiscardPRLanding`):** records the decision, and `restore` forgets it. Neither touches
+   GitHub or the worktree.
+
+Bare repositories untouched for 30 days are pruned when orchd starts. Decisions stay; they only lose
+their commit list. These RPCs are operator-only, so an agent cannot land its own proposal.
+
+The app keeps Push disabled until the user has opened the diff, and says when a diff was cut off or
+a binary file changed.
+
+**Limits:**
+- The rule against pushing is an instruction, not a sandbox. An agent that pushes anyway is caught by
+  the activity feed and the `on_pr` state, not prevented. The feed is evidence, not proof: a same-user
+  agent can flood or forge its own transcript.
+- `fsck` runs before each push, so a slow repository takes longer to push, and a change made between
+  the check and the push is not caught. A worktree's `.git` file may point outside home; only the
+  commit is copied from it.
+- A process that outlives its task's process tree counts as the operator, as for every operator-only
+  RPC ([daemon.md](daemon.md)), so it could call `LandPR`. A same-user agent could equally run `git
+  push` itself: landing is a review gate for honest and prompt-injected runs, not a containment
+  boundary. The user's global git config is still read, since commit signing needs it.
+- Protected heads are matched by name (the base, `main`, `master`, `develop`, `trunk`), not by GitHub's
+  branch protection.
+- A proposal on a PR that has moved must be sent back; orch does not rebase it.
+- A commit needs signing to work without anyone there. With 1Password approving each signature, a
+  background run can stop `BLOCKED` at `git commit -S`; the card shows why.
+
+## Session activity
+
+`GetTaskActivity` reads a task's tool calls and their results from the last 4 MiB of its Claude Code
+transcript (`agentrun.ReadActivity`): the newest 200 steps, plus the newest 200 risky ones before them.
+Counts of tools, commands, files, failures and risky steps, and whether it pushed, cover every step in
+that tail. Nothing is stored: each request reads the file again. A transcript is written by an agent, so
+times must parse and tool names are capped.
+
+- **Each step:** the tool, a one-line title, the full command or pattern (≤ 2 KiB, keeping its lines),
+  and for a shell step its commands (≤ 8), split at `;`, `&&`, `||` and newlines outside quotes,
+  parentheses and here-documents. The title is the first command that does something, skipping `cd`,
+  `echo`, assignments and the like. This is for reading only, and is not a shell parser.
+- **Results:** matched by tool-use ID, giving whether it failed, how long it took, and the end of what
+  it returned (≤ 1.5 KiB). Only the newest 100 steps and failures carry output, to bound a poll.
+- **Edits:** lines written and replaced, counted from the tool's input, not from git. An edit that
+  replaces a line counts it both ways, so this is a sense of size, not a diff.
+- **Redaction:** commands and output lose control characters, then pass through `redact`, before they
+  are split or capped. Redaction matches known secret shapes, so a secret in any other form (a truncated
+  private key, an `Authorization` header) is shown. Operator-only for that reason.
+- **Copy** takes what the step shows, without a here-document's body, so pasting cannot run lines nobody read.
+- **Risky** means, where a shell command starts: `git push` (and force), `git reset --hard`,
+  `gh pr merge|close|comment|review|edit|ready|create`, `gh issue comment|edit`, a writing `gh api`, or
+  a recursive force `rm`. A command hidden in a script or `sh -c` is not seen, so this reports what
+  happened and prevents nothing.
+
+Codex runs have no such transcript, and show as unavailable.
+
 ## GitHub scopes
 
 `github_scopes` in `orch.db` (`internal/github`) records what orch monitors on GitHub:
