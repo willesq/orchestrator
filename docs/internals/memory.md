@@ -271,6 +271,29 @@ inside messages is rewritten `[..]` → `(..)` before storing, so quoted content
 Date bounds accept `2026-10-21` (UTC day), RFC 3339, `today`, `yesterday`, or ages up to 36500 days
 (`7d`, `12h`).
 
+## Transcripts and harness text
+
+`session.ParseTranscript` keeps what was said. Claude Code also logs what it sent the model, as
+`api-request-blob` lines holding the whole context with the role `user` (instruction files, skill and
+tool lists, MCP instructions, git status, earlier hook output); these were once stored as turns, more
+than half of a transcript's text, repeating across sessions and matching each other. Now those lines
+are skipped, and `<system-reminder>`, `<task-notification>`, `<agent-message>` and
+`<local-command-*>` blocks and the background-task notice are cut from a user's turn (an assistant may
+be discussing them). The session record, its summary input
+and the stored transcript all come from this parse.
+
+`orch rag backfill-sessions --all` hands every stored transcript whose file is still on disk to orchd
+to store again (plans unless `--apply`; refused in a queued task, by the same client-side check as
+plain backfill). Transcripts only: records and summaries stay, a transcript forgotten on purpose is
+not brought back, and a session already waiting on orchd is left to it. Repeating it is safe, since a
+transcript that comes out the same is skipped as an unchanged write, and a session whose file is gone
+keeps what it has, with the prompt gate ([hooks.md](hooks.md#prompt-context)) keeping its harness
+text out of prompts. It rewrites chunks in
+place, so to be able to go back, copy `<data>/qdrant` first with orchd stopped. On a copy of a real
+store (50,047 chunks, 104 sessions, 52 with their file) it took about four minutes: transcript chunks
+went from 21,446 to 12,861, those with harness markers from 4,365 to 11, and chunks repeated verbatim
+across sources from 7,922 to 622.
+
 ## Redaction
 
 `redact.Redact` replaces matches with `[REDACTED:<label>]`: PEM private keys, AWS access keys,

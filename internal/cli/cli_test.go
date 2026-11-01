@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -703,6 +704,7 @@ type fakeClient struct {
 	ping         *orchdv1.PingResponse
 	ingest       *orchdv1.IngestResponse
 	search       *orchdv1.SearchResponse
+	searchMu     sync.Mutex
 	dispatch     *orchdv1.DispatchResponse
 	dispatchReq  *orchdv1.DispatchRequest
 	listSources  *orchdv1.ListSourcesResponse
@@ -741,6 +743,8 @@ func (f *fakeClient) Ingest(context.Context, *orchdv1.IngestRequest, ...grpc.Cal
 }
 
 func (f *fakeClient) Search(_ context.Context, req *orchdv1.SearchRequest, _ ...grpc.CallOption) (*orchdv1.SearchResponse, error) {
+	f.searchMu.Lock() // prompt context runs its searches together
+	defer f.searchMu.Unlock()
 	f.searchReq = req
 	return f.search, f.err
 }

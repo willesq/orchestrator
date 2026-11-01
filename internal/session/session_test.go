@@ -3,6 +3,7 @@ package session
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -218,5 +219,71 @@ func TestReadCheckpoint(t *testing.T) {
 	}
 	if _, err := ReadCheckpoint(dir, "bad"); err == nil {
 		t.Errorf("corrupt checkpoint read without error")
+	}
+}
+
+// Harness context logged next to the turns must not read as something the user
+// said: it is most of a transcript's text and repeats in every session.
+func TestParseTranscriptKeepsOnlySpokenText(t *testing.T) {
+	lines := []string{
+		`{"type":"api-request-blob","message":{"role":"user","content":[{"type":"text","text":"Contents of CLAUDE.md: always use tabs"}]}}`,
+		`{"type":"system","message":{"role":"system","content":"hook success"}}`,
+		`{"type":"attachment","message":{"role":"user","content":"attached context"}}`,
+		`{"type":"user","isMeta":true,"message":{"role":"user","content":"Caveat: local commands below"}}`,
+		`{"type":"user","isCompactSummary":true,"message":{"role":"user","content":"This session is being continued"}}`,
+		`{"type":"user","message":{"role":"user","content":"<system-reminder>\ngitStatus: clean\n</system-reminder>"}}`,
+		`{"type":"user","message":{"role":"user","content":[{"type":"text","text":"<system-reminder>skills</system-reminder>\nfix the flaky socket test"}]}}`,
+		`{"type":"user","message":{"role":"user","content":"<task-notification>done</task-notification>"}}`,
+		`{"type":"user","message":{"role":"user","content":"[SYSTEM NOTIFICATION - NOT USER INPUT]\\nA task ended."}}`,
+		`{"type":"user","message":{"role":"user","content":"<agent-message from=\\"a1\\">[Subagent hand-back] report</agent-message>"}}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"fixed it"}]}}`,
+		`{"message":{"role":"user","content":"a line with no type is still a turn"}}`,
+	}
+	path := filepath.Join(t.TempDir(), "t.jsonl")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := ParseTranscript(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, m := range msgs {
+		got = append(got, m.Role+": "+m.Text)
+	}
+	want := []string{"user: fix the flaky socket test", "assistant: fixed it", "user: a line with no type is still a turn"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("turns = %q, want %q", got, want)
+	}
+}
+
+func TestStripHarnessTextLeavesOrdinaryAngleBrackets(t *testing.T) {
+	const s = "compare a<b and <T> generics; <system-reminder> never closed"
+	if got := stripHarnessText(s); got != s {
+		t.Fatalf("stripHarnessText(%q) = %q", s, got)
+	}
+}
+
+func TestStripHarnessTextPairsTags(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"a<system-reminder>x</system-reminder>b", "ab"},
+		{"a<agent-message from=\"z\">x</agent-message>b", "ab"},
+		{"keep <system-reminder>x</agent-message> this", "keep <system-reminder>x</agent-message> this"},
+		{"<system-reminder-x>kept</system-reminder-x>", "<system-reminder-x>kept</system-reminder-x>"},
+		{"one<task-notification>x</task-notification>two<task-notification>y</task-notification>three", "onetwothree"},
+		{"[SYSTEM NOTIFICATION about the kiln", "[SYSTEM NOTIFICATION about the kiln"},
+	}
+	for _, tt := range tests {
+		if got := stripHarnessText(tt.in); got != tt.want {
+			t.Errorf("stripHarnessText(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestAssistantTurnsKeepTagsTheyDiscuss(t *testing.T) {
+	path := writeTranscript(t, `{"type":"assistant","message":{"role":"assistant","content":"the <system-reminder>x</system-reminder> block"}}`+"\n")
+	msgs, err := ParseTranscript(path)
+	if err != nil || len(msgs) != 1 || !strings.Contains(msgs[0].Text, "<system-reminder>") {
+		t.Fatalf("%+v, %v", msgs, err)
 	}
 }

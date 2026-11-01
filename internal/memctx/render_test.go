@@ -30,7 +30,7 @@ func TestRenderPointers(t *testing.T) {
 	}
 	for _, want := range []string{
 		"call rag_search with its source_uri",
-		"[1] \"session record\" · 2026-10-27 · \"session://abc/record\" · own session\n    \"Author trust comes from authorAssociation, not PR text.\"",
+		"[1] \"session record\" · 2026-10-27 · \"session://abc/record\" · past session\n    \"Author trust comes from authorAssociation, not PR text.\"",
 		"[2] \"Search\" · 2026-10-20 · \"repo://o/r/docs/memory.md\" · repo doc\n    \"Dense and BM25 run in parallel.\"",
 		"[3] \"page\" · 2026-10-01 · \"https://evil.example/page\" · web page, untrusted",
 		// A client that wrote under a repo:// URI as a repo_doc is still a client.
@@ -145,7 +145,7 @@ func TestTitleDateAndBestLine(t *testing.T) {
 	if got := BestLine("keyword weight", text, "repo_doc"); got != "the keyword weight is 0.5" {
 		t.Errorf("BestLine = %q", got)
 	}
-	if got := BestLine("nothing matches", text, "repo_doc"); got != "Heading" {
+	if got := BestLine("nothing matches", text, "repo_doc"); got != "first bullet" {
 		t.Errorf("fallback = %q", got)
 	}
 	if got := BestLine("q", "", "repo_doc"); got != "" {

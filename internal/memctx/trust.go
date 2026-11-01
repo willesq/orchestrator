@@ -109,7 +109,7 @@ func (t Trust) Label() string {
 	case TrustRepo:
 		return "repo doc"
 	case TrustSession:
-		return "own session"
+		return "past session"
 	case TrustFile:
 		return "edited file"
 	case TrustClient:

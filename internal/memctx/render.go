@@ -181,14 +181,15 @@ var recordTypes = map[string]bool{"session_record": true, "decision": true}
 
 // BestLine picks the line of text most relevant to query: the one sharing
 // the most query terms, bullets in records breaking ties toward the decision
-// itself. Section context lines and code fences are skipped. With no term in
-// common it is the first line of content.
+// itself. A heading is passed over, since the title already says it, and section
+// context lines and fenced code are read only when nothing else is there. With
+// no term in common it is the first line of content.
 func BestLine(query, text, sourceType string) string {
 	terms := map[string]bool{}
 	for _, t := range bm25.Tokens(query) {
 		terms[t] = true
 	}
-	best, bestScore, first := "", 0.0, ""
+	best, bestScore, first, firstCode, firstHeading := "", 0.0, "", "", ""
 	fence := false
 	for _, raw := range strings.Split(text, "\n") {
 		line := strings.TrimSpace(raw)
@@ -196,12 +197,25 @@ func BestLine(query, text, sourceType string) string {
 			fence = !fence
 			continue
 		}
-		if fence || line == "" || strings.HasPrefix(line, "[section:") {
+		if line == "" || strings.HasPrefix(line, "[section:") {
 			continue
 		}
+		if fence {
+			if firstCode == "" {
+				firstCode = line
+			}
+			continue
+		}
+		isHeading := strings.HasPrefix(line, "#")
 		bullet := strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ")
 		line = strings.TrimSpace(strings.TrimLeft(line, "#-*> "))
 		if line == "" {
+			continue
+		}
+		if isHeading {
+			if firstHeading == "" {
+				firstHeading = line
+			}
 			continue
 		}
 		if first == "" {
@@ -222,10 +236,39 @@ func BestLine(query, text, sourceType string) string {
 			best, bestScore = line, score
 		}
 	}
-	if best == "" {
-		best = first
+	for _, l := range []string{best, first, firstCode, firstHeading} {
+		if l != "" {
+			return around(l, terms, maxLine)
+		}
 	}
-	return truncate(best, maxLine)
+	return ""
+}
+
+// around cuts a line to n runes keeping the first query term in view: a whole
+// transcript turn can be one long line, and its opening rarely says why it matched.
+func around(line string, terms map[string]bool, n int) string {
+	if utf8.RuneCountInString(line) <= n {
+		return line
+	}
+	r := []rune(strings.ToLower(line))
+	if len(r) != utf8.RuneCountInString(line) {
+		return truncate(line, n)
+	}
+	low := string(r)
+	at := -1
+	for t := range terms {
+		if i := strings.Index(low, t); i >= 0 && (at < 0 || i < at) {
+			at = i
+		}
+	}
+	start := 0
+	if at > 0 {
+		start = max(0, utf8.RuneCountInString(low[:at])-n/4)
+	}
+	if start == 0 {
+		return truncate(line, n)
+	}
+	return truncate("…"+strings.TrimSpace(string([]rune(line)[start:])), n)
 }
 
 func truncate(s string, n int) string {

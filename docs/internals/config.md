@@ -38,6 +38,7 @@ change together in one write. orchd itself writes config only to record a migrat
 | `hooks.auto_rag.min_score_statement` | `0.45` | cosine floor for other prompts |
 | `hooks.auto_rag.max_chars` | `2000` | injection size cap |
 | `hooks.auto_rag.min_prompt_chars` | `12` | shorter prompts get nothing |
+| `hooks.auto_rag.gate` | `evidence` | a prompt must name a topic and a hit must show evidence for it ([hooks.md](hooks.md#prompt-context)); `off` leaves the score floors alone |
 | `hooks.auto_rag.format` | `pointers` | one line per hit with its source, or `full` text |
 | `hooks.auto_rag.untrusted` | `mark` | inject web pages and tool output labelled untrusted, or `exclude` them |
 | `ingest.exclude_dirs` | vendor, node_modules, bower_components, third_party, Pods, .venv, venv, \_\_pycache\_\_, .tox, .terraform, .next, dist, build, target | never walked; `.git` always skipped |
