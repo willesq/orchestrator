@@ -42,7 +42,7 @@ func LoadAutoRAG() config.AutoRAGSettings { return loadAutoRAG() }
 // session's state: same gate, same searches, same rendering as the hook, with
 // nothing marked as injected.
 func Explain(ctx context.Context, cfg config.AutoRAGSettings, client orchdv1.OrchdClient, prompt, cwd string) Explanation {
-	ex := Explanation{Gated: cfg.Gate == GateEvidence, Disabled: !cfg.Enabled, Floor: promptFloor(cfg, prompt)}
+	ex := Explanation{Gated: gateOn(cfg.Gate), Disabled: !cfg.Enabled, Floor: promptFloor(cfg, prompt)}
 	if len(prompt) < cfg.MinPromptChars {
 		ex.Skipped = "shorter than hooks.auto_rag.min_prompt_chars"
 		return ex

@@ -262,8 +262,9 @@ func (q *QdrantStore) EnsureCollection(ctx context.Context, dim int) error {
 		}
 		return err
 	}
-	// Reads and deletes filter by source, and prunes by writer, so index both.
-	for _, field := range []string{"source_uri", fieldWriter} {
+	// Reads and deletes filter by source, prunes by writer and searches by tag and
+	// type, so index them all.
+	for _, field := range append([]string{"source_uri", fieldWriter}, searchIndexFields...) {
 		if err := q.EnsureIndex(ctx, field); err != nil {
 			return err
 		}
@@ -278,6 +279,13 @@ func (q *QdrantStore) EnsureCollection(ctx context.Context, dim int) error {
 // changes nothing.
 func (q *QdrantStore) EnsureIndex(ctx context.Context, field string) error {
 	return q.do(ctx, http.MethodPut, q.path("/index")+"?wait=true",
+		map[string]any{"field_name": field, "field_schema": "keyword"}, nil)
+}
+
+// startIndex asks for a keyword payload index and returns without waiting for it
+// to be built, which on a large store takes longer than a request may.
+func (q *QdrantStore) startIndex(ctx context.Context, field string) error {
+	return q.do(ctx, http.MethodPut, q.path("/index"),
 		map[string]any{"field_name": field, "field_schema": "keyword"}, nil)
 }
 

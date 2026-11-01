@@ -46,6 +46,7 @@ import (
 	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
+	"github.com/willesq/orchestrator/internal/redact"
 	"github.com/willesq/orchestrator/internal/reviews"
 	"github.com/willesq/orchestrator/internal/routing"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
@@ -180,7 +181,20 @@ func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchd
 				"%s is kept by the %s sync; store the note under another source_uri", req.GetSourceUri(), cp.Writer)
 		}
 	}
-	n, err := s.rag.IngestText(ctx, req.GetText(), rag.Meta{
+	// A URI, scope or tag is shown in every pointer and log line, and rewriting one
+	// would change which source it names, so one holding a key is refused.
+	for _, field := range append([]string{req.GetSourceUri(), req.GetScope(), req.GetSourceType()}, req.GetTags()...) {
+		if _, n := redact.Redact(field); n > 0 {
+			return nil, grpcstatus.Error(codes.InvalidArgument, "source_uri, scope, type and tags must not hold a secret")
+		}
+	}
+	// Whatever a client was given to remember, a key in it is not worth keeping:
+	// memory is replayed into later sessions' context.
+	text, redacted := redact.Redact(req.GetText())
+	if redacted > 0 {
+		log.Printf("ingest: %d secret-shaped string(s) redacted from %s", redacted, logs.Clean(req.GetSourceUri()))
+	}
+	n, err := s.rag.IngestText(ctx, text, rag.Meta{
 		SourceURI:  req.GetSourceUri(),
 		SourceType: orDefault(req.GetSourceType(), "manual"),
 		Scope:      req.GetScope(),

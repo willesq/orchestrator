@@ -95,6 +95,9 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	if opts.TopK == 0 {
 		opts.TopK = 5
 	}
+	if len(opts.Tags) > 0 || len(opts.AllTags) > 0 || opts.SourceType != "" {
+		s.ensureSearchIndexes()
+	}
 	vecs, err := s.emb.Embed(ctx, []string{query})
 	if err != nil {
 		return nil, "", err

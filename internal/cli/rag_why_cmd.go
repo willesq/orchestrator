@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -26,13 +27,18 @@ func newRAGWhyCmd(cf clientFactory) *cobra.Command {
 		jsonOut bool
 	)
 	cmd := &cobra.Command{
-		Use:   "why <prompt>",
+		Use:   "why [prompt]",
 		Short: "Show what a prompt would get as context, and why each hit was kept or dropped",
 		Long: "Replays the prompt-context decision the hook makes for this prompt: whether to search at\n" +
 			"all, each candidate's score and verdict, and the exact block an agent would receive. It changes\n" +
-			"nothing, and marks nothing as injected. --cwd says which project to act as (default: here).",
-		Args: cobra.ExactArgs(1),
+			"nothing, and marks nothing as injected. --cwd says which project to act as (default: here).\n" +
+			"With no prompt, or -, it reads the prompt from stdin, which keeps a pasted log out of shell history.",
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			prompt, err := whyPrompt(args, c.InOrStdin())
+			if err != nil {
+				return err
+			}
 			if cwd == "" {
 				cwd, _ = os.Getwd()
 			}
@@ -44,7 +50,7 @@ func newRAGWhyCmd(cf clientFactory) *cobra.Command {
 			ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
 			defer cancel()
 			start := time.Now()
-			ex := hook.Explain(ctx, hook.LoadAutoRAG(), client, strings.TrimSpace(args[0]), cwd)
+			ex := hook.Explain(ctx, hook.LoadAutoRAG(), client, prompt, cwd)
 			if jsonOut {
 				return writeWhyJSON(c.OutOrStdout(), ex)
 			}
@@ -55,6 +61,24 @@ func newRAGWhyCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringVar(&cwd, "cwd", "", "project directory to act as")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "print as JSON")
 	return cmd
+}
+
+// maxWhyPrompt bounds a prompt read from stdin, well past what the hook reads of one.
+const maxWhyPrompt = 4 << 20
+
+func whyPrompt(args []string, in io.Reader) (string, error) {
+	if len(args) == 1 && args[0] != "-" {
+		return strings.TrimSpace(args[0]), nil
+	}
+	raw, err := io.ReadAll(io.LimitReader(in, maxWhyPrompt))
+	if err != nil {
+		return "", fmt.Errorf("read prompt: %w", err)
+	}
+	prompt := strings.TrimSpace(string(raw))
+	if prompt == "" {
+		return "", errors.New("no prompt: pass one, or send it on stdin")
+	}
+	return prompt, nil
 }
 
 func writeWhy(out io.Writer, ex hook.Explanation, took time.Duration) {

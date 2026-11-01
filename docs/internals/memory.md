@@ -68,7 +68,9 @@ PUT /collections/<name>
  "sparse_vectors": {"bm25": {"modifier": "idf"}}}
 ```
 
-plus a keyword payload index on `source_uri`. A 409 "already exists" (a concurrent first write) is
+plus keyword payload indexes on `source_uri`, `writer`, `tags` and `source_type`. A collection made
+before the last two is asked for them at the first search that filters on them, once per process:
+this changes no stored data, and searches carry on, slower, until Qdrant has built them. A 409 "already exists" (a concurrent first write) is
 treated as success. A legacy collection with one unnamed dense vector is the `dense` layout.
 
 **Points:** ID = UUIDv5(URL namespace, `<source_uri>#<chunk_index>`), so re-ingesting a source
@@ -282,10 +284,14 @@ are skipped, and `<system-reminder>`, `<task-notification>`, `<agent-message>` a
 be discussing them). The session record, its summary input
 and the stored transcript all come from this parse.
 
-`orch rag backfill-sessions --all` hands every stored transcript whose file is still on disk to orchd
-to store again (plans unless `--apply`; refused in a queued task, by the same client-side check as
-plain backfill). Transcripts only: records and summaries stay, a transcript forgotten on purpose is
-not brought back, and a session already waiting on orchd is left to it. Repeating it is safe, since a
+`orch rag backfill-sessions --all` (RPC `BackfillSessions`, operator-only, so orchd itself refuses a
+queued task) hands every stored transcript whose file is still on disk to orchd to store again (plans
+unless `--apply`). Transcripts only: records and summaries stay unless `--summaries` asks for them to
+be written again from the clean transcript, at one model call per session. A transcript forgotten on
+purpose is not brought back (plain backfill still restores one with a record left), a session already
+waiting on orchd is left to it, and a record naming a file other than `<id>.jsonl` counts as no
+transcript. Session records and hand-offs are files, so a process running as the user can forge them:
+the operator-only check covers the RPC, not those files. Repeating it is safe, since a
 transcript that comes out the same is skipped as an unchanged write, and a session whose file is gone
 keeps what it has, with the prompt gate ([hooks.md](hooks.md#prompt-context)) keeping its harness
 text out of prompts. It rewrites chunks in
@@ -299,7 +305,8 @@ across sources from 7,922 to 622.
 `redact.Redact` replaces matches with `[REDACTED:<label>]`: PEM private keys, AWS access keys,
 GitHub tokens (`gh?_`, `github_pat_`), Slack tokens, Anthropic and OpenAI keys, and JWTs. Hooks and
 schedulers redact before storing; a file with more than 25 matches is skipped as a likely keystore.
-Text sent with `orch ingest` or `rag_ingest_text` is stored as given.
+Text sent with `orch ingest` or `rag_ingest_text` is redacted by the Ingest RPC, which logs the count
+and never the text, and refuses a URI, scope, type or tag holding a secret, since those are shown as they are. Memory stored before this keeps what it was given until it is stored again.
 
 **Queued tasks cannot write.** `rag_ingest_text`, `rag_delete_source`, `orch ingest text` and
 `orch rag forget` refuse inside a queued task, and orchd refuses `Ingest`, `DeleteSource` and

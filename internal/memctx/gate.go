@@ -2,6 +2,7 @@ package memctx
 
 import (
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -46,8 +47,11 @@ const maxGateChars = 8192
 // terms a hit needs evidence from.
 type PromptCheck struct {
 	Search bool
-	Reason string // why not, when Search is false
-	Terms  map[string]bool
+	// RecallOnly marks a prompt asking what happened lately without saying about
+	// what. It has no topic to find evidence of, so recent session records answer it.
+	RecallOnly bool
+	Reason     string // why not, when Search is false
+	Terms      map[string]bool
 	// Query is the prompt as read, cut to maxGateChars: the text hit lines are
 	// picked against, so the line checked is the line shown.
 	Query  string
@@ -67,6 +71,20 @@ var recallPhrases = []string{
 	"do we have", "don't we have", "what have we", "have we already", "remember when", "earlier session",
 }
 
+// activityPhrases ask what happened, which a topicless prompt can still ask.
+var activityPhrases = []string{"left off", "leave off", "worked on", "working on", "been doing", "last session", "last time"}
+
+// asksWhatHappened tells "what was I working on" from "keep working on it" and
+// "same as last time please", which get their meaning from the live session.
+func asksWhatHappened(low string) bool {
+	for _, w := range []string{"what ", "where ", "when ", "which ", "remind me", "recap", "tell me", "show me", "did i ", "did we "} {
+		if strings.HasPrefix(low, w) || strings.Contains(low, " "+w) {
+			return true
+		}
+	}
+	return false
+}
+
 // CheckPrompt decides whether a prompt can use memory at all. A follow-up like
 // "let's merge it" gets its meaning from the live session, so anything a search
 // returned would only resemble its words.
@@ -83,6 +101,13 @@ func CheckPrompt(prompt string) PromptCheck {
 		}
 	}
 	terms := topicTerms(p)
+	if countStems(terms) < minTopicTerms && !hasIdentifier(p) && asksWhatHappened(low) {
+		for _, w := range activityPhrases {
+			if strings.Contains(low, w) {
+				return PromptCheck{Search: true, RecallOnly: true, Terms: terms, Query: p, prompt: low}
+			}
+		}
+	}
 	if countStems(terms) >= minTopicTerms || hasIdentifier(p) {
 		return PromptCheck{Search: true, Terms: terms, Query: p, prompt: low}
 	}
@@ -120,6 +145,12 @@ func stem(t string) string {
 // An empty reason means it did.
 func (p PromptCheck) CheckHit(h *orchdv1.SearchHit) string {
 	uri := h.GetSourceUri()
+	if p.RecallOnly {
+		if !RecallRecord(h) || recordHeader.MatchString(BestLine(p.Query, h.GetText(), h.GetSourceType())) {
+			return ReasonNoEvidence
+		}
+		return ""
+	}
 	switch {
 	case harnessText(h):
 		return ReasonHarnessText
@@ -157,6 +188,26 @@ func (p PromptCheck) CheckHit(h *orchdv1.SearchHit) string {
 	}
 	return ""
 }
+
+// QueuedTaskTag marks what a queued task's session stored, so that a session an
+// untrusted repository steered is not offered to later prompts as the user's work.
+const QueuedTaskTag = "queued-task"
+
+// RecallRecord reports a hit fit to answer a recall prompt, which has no topic to
+// demand evidence of and no score floor: a session's own record and nothing that
+// reads like an instruction or came from a queued task. Records still reach the
+// store through the Ingest RPC, so a client can write one under a session:// URI;
+// it stays quoted and labelled as stored by a client.
+func RecallRecord(h *orchdv1.SearchHit) bool {
+	if h.GetSourceType() != "session_record" || !strings.HasPrefix(h.GetSourceUri(), "session://") ||
+		TrustOf(h.GetTrust(), h.GetSourceType(), h.GetSourceUri()).Untrusted() || harnessText(h) || Flagged(h) {
+		return false
+	}
+	return !slices.Contains(h.GetTags(), QueuedTaskTag)
+}
+
+// recordHeader matches the date line a session record opens with.
+var recordHeader = regexp.MustCompile(`^Session \d{4}-`)
 
 // userTurn matches a transcript line opening a turn by the user, dated or not.
 var userTurn = regexp.MustCompile(`^(?:\[[^\]]*\]\s*)?\[?user\]?:?\s`)
@@ -383,7 +434,8 @@ var genericTerms = func() map[string]bool {
 		created cut deploy failed failing fail fails file files finish fix fixed issue issues job jobs lgtm make
 		makes making merge merged merges merging open passed passes pr prs proceed progress pull push pushed ready
 		release released remove removed repo repository review reviewed reviews run running runs ship test tests
-		update updated work worked working works`) {
+		update updated work worked working works
+		ago day days month months past recent recently lately week weeks year years yesterday`) {
 		m[w] = true
 	}
 	return m

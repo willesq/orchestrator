@@ -7,8 +7,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/handoff"
+	"github.com/willesq/orchestrator/internal/memctx"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/redact"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
@@ -60,6 +62,9 @@ func sessionEnd(p Payload, cf clientFactory) error {
 	// Tagged with the checkout so a later prompt in the same project ranks this
 	// session's work alongside the project's documentation.
 	tags := detectProject(p.Cwd).sessionTags()
+	if os.Getenv(agentrun.TaskIDEnv) != "" {
+		tags = append(tags, memctx.QueuedTaskTag)
+	}
 	// Until orchd confirms them, orchd is asked to store the record and queue
 	// the summary itself when it takes the transcript.
 	pending := handoff.Session{ID: p.SessionID, TranscriptPath: p.TranscriptPath, Tags: tags, Record: true, Summarize: true}

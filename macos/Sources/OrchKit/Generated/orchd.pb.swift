@@ -963,6 +963,53 @@ public nonisolated struct Orchd_V1_DropBackupResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Orchd_V1_BackfillSessionsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// every stored transcript, not only undated sessions; leaves records alone
+  public var all: Bool = false
+
+  /// with all, also write each session's summary again (a model call each)
+  public var summaries: Bool = false
+
+  /// false only reports the plan
+  public var apply: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_BackfillSessionsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// sessions in the store
+  public var total: Int32 = 0
+
+  /// sessions to store again
+  public var todo: Int32 = 0
+
+  /// already dated, so left alone
+  public var dated: Int32 = 0
+
+  /// no transcript on disk
+  public var missing: Int32 = 0
+
+  /// handed to orchd by this call
+  public var handed: Int32 = 0
+
+  /// already waiting on orchd, so left to it
+  public var waiting: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Orchd_V1_ReindexKeywordsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -5031,6 +5078,101 @@ nonisolated extension Orchd_V1_DropBackupResponse: SwiftProtobuf.Message, SwiftP
     if lhs.collection != rhs.collection {return false}
     if lhs.points != rhs.points {return false}
     if lhs.dropped != rhs.dropped {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_BackfillSessionsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".BackfillSessionsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}all\0\u{1}summaries\0\u{1}apply\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.all) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.summaries) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.apply) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.all != false {
+      try visitor.visitSingularBoolField(value: self.all, fieldNumber: 1)
+    }
+    if self.summaries != false {
+      try visitor.visitSingularBoolField(value: self.summaries, fieldNumber: 2)
+    }
+    if self.apply != false {
+      try visitor.visitSingularBoolField(value: self.apply, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_BackfillSessionsRequest, rhs: Orchd_V1_BackfillSessionsRequest) -> Bool {
+    if lhs.all != rhs.all {return false}
+    if lhs.summaries != rhs.summaries {return false}
+    if lhs.apply != rhs.apply {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_BackfillSessionsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".BackfillSessionsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}total\0\u{1}todo\0\u{1}dated\0\u{1}missing\0\u{1}handed\0\u{1}waiting\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.total) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.todo) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.dated) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.missing) }()
+      case 5: try { try decoder.decodeSingularInt32Field(value: &self.handed) }()
+      case 6: try { try decoder.decodeSingularInt32Field(value: &self.waiting) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.total != 0 {
+      try visitor.visitSingularInt32Field(value: self.total, fieldNumber: 1)
+    }
+    if self.todo != 0 {
+      try visitor.visitSingularInt32Field(value: self.todo, fieldNumber: 2)
+    }
+    if self.dated != 0 {
+      try visitor.visitSingularInt32Field(value: self.dated, fieldNumber: 3)
+    }
+    if self.missing != 0 {
+      try visitor.visitSingularInt32Field(value: self.missing, fieldNumber: 4)
+    }
+    if self.handed != 0 {
+      try visitor.visitSingularInt32Field(value: self.handed, fieldNumber: 5)
+    }
+    if self.waiting != 0 {
+      try visitor.visitSingularInt32Field(value: self.waiting, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_BackfillSessionsResponse, rhs: Orchd_V1_BackfillSessionsResponse) -> Bool {
+    if lhs.total != rhs.total {return false}
+    if lhs.todo != rhs.todo {return false}
+    if lhs.dated != rhs.dated {return false}
+    if lhs.missing != rhs.missing {return false}
+    if lhs.handed != rhs.handed {return false}
+    if lhs.waiting != rhs.waiting {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

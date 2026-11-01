@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/willesq/orchestrator/internal/bm25"
 )
@@ -126,6 +128,38 @@ func (s *Service) ensureWriterIndex(ctx context.Context) {
 	}
 	s.writerIndexed = true
 }
+
+// searchIndexTimeout bounds asking for the filter indexes; Qdrant builds them after.
+const searchIndexTimeout = 30 * time.Second
+
+// ensureSearchIndexes adds the payload indexes filtered searches need, once per
+// process. Without one Qdrant reads every chunk's payload: on a 40,000-chunk store
+// a search for one project's tags took 740 ms against 35 ms unfiltered, on every
+// prompt. Building one takes seconds on a store that size, longer than a prompt
+// waits, so it is only asked for while searches carry on unindexed. Adding an index
+// changes no stored data and repeats harmlessly; a failure is retried next time.
+func (s *Service) ensureSearchIndexes() {
+	if !s.searchIndexed.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), searchIndexTimeout)
+		defer cancel()
+		for _, field := range searchIndexFields {
+			if err := s.active().startIndex(ctx, field); err != nil {
+				// A store with nothing in it yet gets them with its collection.
+				if !errors.Is(err, errCollectionMissing) {
+					log.Printf("rag: indexing %s: %v", field, err)
+				}
+				s.searchIndexed.Store(false)
+				return
+			}
+		}
+	}()
+}
+
+// searchIndexFields are the payload fields filtered searches read.
+var searchIndexFields = []string{"tags", "source_type"}
 
 // SourcesWrittenBy lists the source URIs under prefix that writer stored.
 // The writer is matched in the store, so the scan returns only its chunks.

@@ -57,6 +57,8 @@ service Orchd {
   // tokenizer made, from each chunk's stored text; counts unless apply.
   // Resumable: chunks already re-indexed are skipped.
   rpc ReindexKeywords(ReindexKeywordsRequest) returns (ReindexKeywordsResponse);
+  // BackfillSessions stores sessions again from their transcripts on disk.
+  rpc BackfillSessions(BackfillSessionsRequest) returns (BackfillSessionsResponse);
   // ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
   // awaiting their review, each with why it needs attention. Never calls gh.
   rpc ListPRs(ListPRsRequest) returns (ListPRsResponse);
@@ -478,6 +480,20 @@ message DropBackupResponse {
   string collection = 1;
   int64 points = 2;
   bool dropped = 3;
+}
+
+message BackfillSessionsRequest {
+  bool all = 1;       // every stored transcript, not only undated sessions; leaves records alone
+  bool summaries = 2; // with all, also write each session's summary again (a model call each)
+  bool apply = 3;     // false only reports the plan
+}
+message BackfillSessionsResponse {
+  int32 total = 1;   // sessions in the store
+  int32 todo = 2;    // sessions to store again
+  int32 dated = 3;   // already dated, so left alone
+  int32 missing = 4; // no transcript on disk
+  int32 handed = 5;  // handed to orchd by this call
+  int32 waiting = 6; // already waiting on orchd, so left to it
 }
 
 message ReindexKeywordsRequest {

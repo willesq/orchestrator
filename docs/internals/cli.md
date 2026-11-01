@@ -18,8 +18,8 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | `rag sources [--type] [--scope] [--prefix] [--limit] [--since] [--until]` | list stored sources |
 | `rag forget <uri> --yes` | delete one source |
 | `rag eval [--set] [--top-k] [--save] [--compare] [--mode] [--ranking] [--per-source] [--section] [--split] [--inject-format] [--cases] [--json]`, `rag eval add <query> <uri>… [--span] [--section]`, `rag eval seed` | retrieval golden set, scoring and paired-bootstrap comparison ([memory.md](memory.md#retrieval-evaluation)) |
-| `rag why <prompt> [--cwd] [--json]` | replay prompt context for a prompt: whether it would search, each candidate's score and verdict, the exact block; changes nothing ([hooks.md](hooks.md#prompt-context)) |
-| `rag backfill-sessions [--all] [--apply]` | store undated sessions again, or with `--all` every transcript still on disk, without harness text ([memory.md](memory.md#transcripts-and-harness-text)) |
+| `rag why [prompt] [--cwd] [--json]` | the prompt from stdin when omitted or `-`; replay prompt context for a prompt: whether it would search, each candidate's score and verdict, the exact block; changes nothing ([hooks.md](hooks.md#prompt-context)) |
+| `rag backfill-sessions [--all [--summaries]] [--apply]` | store undated sessions again, or with `--all` every transcript still on disk, without harness text, and with `--summaries` their summaries too ([memory.md](memory.md#transcripts-and-harness-text)) |
 | `rag dedupe [--apply]` | delete path-keyed copies identical to a synced doc of a registered source (*operator-only*) |
 | `rag reindex-keywords [--apply]` | rebuild keyword vectors for the current tokenizer, in place (*operator-only*) |
 | `rag migrate-hybrid [--target] [--apply] [--rollback] [--drop-backup]` | layout migration (*operator-only*) |

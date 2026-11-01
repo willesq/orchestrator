@@ -10,8 +10,10 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // fixedEmbedder embeds every text as the same unit vector.
@@ -321,5 +323,61 @@ func TestHybridSearchLeavesDenseUncapped(t *testing.T) {
 	hits, _, err := svc.Search(context.Background(), "chunk", SearchOpts{TopK: 5})
 	if err != nil || len(hits) != 5 {
 		t.Fatalf("hits=%d err=%v", len(hits), err)
+	}
+}
+
+// indexRecorder fails the first attempt to add an index, then records them.
+type indexRecorder struct {
+	mu     sync.Mutex
+	fail   bool
+	fields []string
+	done   chan struct{}
+}
+
+func (r *indexRecorder) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	var body struct {
+		Field string `json:"field_name"`
+	}
+	_ = json.NewDecoder(req.Body).Decode(&body)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.fail {
+		r.fail = false
+		w.WriteHeader(http.StatusInternalServerError)
+		r.done <- struct{}{}
+		return
+	}
+	r.fields = append(r.fields, body.Field)
+	_, _ = w.Write([]byte(`{"status":"ok","result":{}}`))
+	if len(r.fields) == len(searchIndexFields) {
+		r.done <- struct{}{}
+	}
+}
+
+func TestEnsureSearchIndexesRunsOnceAndRetriesAFailure(t *testing.T) {
+	rec := &indexRecorder{fail: true, done: make(chan struct{}, 4)}
+	srv := httptest.NewServer(rec)
+	defer srv.Close()
+	s := &Service{store: NewQdrantStore(srv.URL, "c", "")}
+	wait := func() {
+		t.Helper()
+		select {
+		case <-rec.done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("no index request")
+		}
+	}
+	s.ensureSearchIndexes()
+	wait()
+	for s.searchIndexed.Load() {
+		time.Sleep(time.Millisecond) // the failure resets it
+	}
+	s.ensureSearchIndexes()
+	s.ensureSearchIndexes() // already under way: no second run
+	wait()
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if !slices.Equal(rec.fields, searchIndexFields) {
+		t.Fatalf("indexed %v", rec.fields)
 	}
 }
