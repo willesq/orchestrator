@@ -3,7 +3,8 @@
 `orch-hook <event>` is the single binary every harness runs on lifecycle events. It reads the
 event JSON from stdin and writes context for the agent to stdout as plain Markdown.
 
-**Contract:** a hook never fails and never blocks the agent. Every handler returns success; slow
+**Contract:** a hook never fails and never blocks the agent. Every handler returns success, a
+panic is recovered and exits zero; slow
 work is handed to orchd ([hand-offs](#hand-offs)); each orchd call has a short deadline (0.5 s for
 writes, 3 s for prompt search). Unknown events, empty input and read errors are no-ops.
 
@@ -26,7 +27,16 @@ they name a file.
 
 ## Prompt context
 
-1. Skip if disabled or the prompt is shorter than `min_prompt_chars`.
+1. Skip if disabled or the prompt is shorter than `min_prompt_chars`. With `gate: evidence` (the
+   default), also skip without searching, or dialing orchd, when the prompt cannot use memory:
+   - it opens as a harness message, not the user: `<agent-message`, `<task-notification`,
+     `<system-reminder`, `[Subagent hand-back]`, `[SYSTEM NOTIFICATION`, `<local-command-`, or a
+     compaction summary. Their wrappers match earlier copies of themselves;
+   - it names no topic. Topic terms are the prompt's BM25 terms, minus `user@host` shell prompts and
+     a fixed list of conversational words and the verbs of the work (`merge`, `release`, `push`,
+     `fix`, `ci`, ...). Fewer than two, counting `cache` and `caching` as one, is no topic, unless it
+     has an identifier-shaped token or a recall phrase (`left off`, `worked on`, `we decided`, ...).
+     "Let's merge it" gets its meaning from the live session.
 2. **Question or statement.** A prompt is a question if it ends in `?`, starts with
    who/what/when/where/why/how/which/can/could/did/do/does/is/are/should/would/will, or contains
    `find `, `show me`, `search for`, `look up`, `remind me`. Questions use `min_score` (0.25);
@@ -35,11 +45,44 @@ they name a file.
    worktrees map to their repo) and name it from `origin` (else the folder). Search with tags
    `repo:<name>` and `checkout:<path>`, then top up unscoped, both with `per_source: 1`. Git runs with a 0.5 s timeout and
    without the location overrides `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_INDEX_FILE`,
-   `GIT_NAMESPACE`, `GIT_CEILING_DIRECTORIES` and `GIT_DISCOVERY_ACROSS_FILESYSTEM`.
+   `GIT_NAMESPACE`, `GIT_CEILING_DIRECTORIES` and `GIT_DISCOVERY_ACROSS_FILESYSTEM`. Under the gate
+   both searches always run, together, each asking for four candidates per slot, since the gate turns
+   some away. Candidates are considered curated notes first (they carry no project tag, so a full
+   project pass would otherwise hide them), then the project's, then the whole store's, each by how
+   many of the prompt's topics it shows, then search order, with web pages and tool output last
+   whatever they show, so a stuffed page cannot displace or shadow the user's own memory. A failed search loses only its own hits.
 4. **Gate.** Keep a hit if its cosine ≥ floor, or if it contains a code identifier from the
    prompt as a whole token and its cosine ≥ floor/2 (at most one such hit per prompt). Keyword
    matches alone never pass. Skip hits already injected this session, and keep one hit per source
-   across both searches. With `untrusted: exclude`, skip web pages and tool output.
+   across both searches. With `untrusted: exclude`, skip web pages and tool output. Then the
+   **evidence gate** (`memctx.CheckHit`) drops a hit that is:
+   - harness text: a `session_transcript` or `session_record` whose heading or text is context a
+     harness assembled. Only these types are read for it, since a repo doc may describe it. New
+     transcripts leave it out when stored ([memory.md](memory.md#transcripts-and-harness-text));
+     this covers those stored before that;
+   - a temporary copy: a `file://` source under a temp directory, a `*.worktrees/` checkout or an
+     Orca workspace;
+   - agent instructions: `claude_config`, `SKILL.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` or under
+     `internal/install/`, unless the prompt names the file. The agent has these or loads them on
+     demand, and their trigger phrases match prompts that are not about them;
+   - short on evidence: it shares fewer than two of the prompt's topics in its text or heading (not
+     its URI, which the writer chooses; one for a curated note, three for a web page or a prompt of
+     more than 40 topics), unless it shares one and its cosine ≥ 0.6, or contains an identifier from
+     the prompt (a web page must show evidence regardless);
+   - off topic where it shows: the line the agent would see has none of the prompt's topics;
+   - quoting a request: a transcript whose line is a user's turn, since what was asked last time is
+     not what came of it, and a re-pasted brief matches its earlier copies best;
+   - weaker than the best: under half the topics the best kept hit showed, unless curated or
+     holding an identifier;
+   - a repeat: its line says what a kept hit's line says, once letters and digits are compared.
+
+   A curated note (`decision://`, `feedback://`, `project://`, `user://`, or type `decision` or
+   `auto_memory`; never one labelled untrusted or flagged as reading like an instruction) may pass
+   below the floor at cosine ≥ 0.35 with one topic, because a statement of what to do scores low
+   against the note that decided it; at most one per prompt gets in that way. "Curated" is the
+   writer's claim, so an agent can name its note `decision://`. It widens what can surface, under
+   its honest `stored by a client` label, and never its trust. Injecting nothing is the expected
+   result when nothing qualifies.
 5. **Trust** (`memctx.TrustOf`) is the tier orchd's writer stored with each chunk (payload
    `trust`, see [memory.md](memory.md#provenance)), returned on every hit: `repo` (the docs or
    sources sync, for a registered source), `web` (a registered web source), `session` (orchd's own
@@ -63,7 +106,8 @@ they name a file.
    pointer or label. The date is `ended_at`, else `started_at`, else `ingested_at`, between 2000 and
    two days ahead (otherwise `undated`). The line is the one sharing the most BM25 terms with the
    prompt (a bullet in a session record wins ties, so a decision shows the decision), skipping
-   section context lines and code fences, cut to 200 runes. The flag is added, in every tier, when
+   section context lines, fenced code and headings (the title already says those; they are used
+   only when nothing else is there), cut to 200 runes around the first matching term. The flag is added, in every tier, when
    the text, heading or URI matches `memctx.InstructionLike` (overrides of earlier instructions,
    role claims, "you must run …", `curl … | sh`, requests to send secrets); the detector is a
    pattern list and only ever adds the flag. It reads the first 4 KiB of each field as given, and
@@ -74,6 +118,20 @@ they name a file.
    every tier in a code fence longer than any backtick run in it, after the same replacement, with
    the header's URI and type quoted. A hit too large for what is left of `max_chars` is passed
    over and smaller ones after it still go in; nothing is printed if nothing passes.
+
+**Measured** on a copy of a real store, replaying 75 real prompts through the hook, with each pointer
+graded blind: on 25 held-out prompts, pointers an agent would use went from 8% to 24% (95% interval of
+the change +6 to +26 points), prompts with one from 3 to 6 (none lost), injections on prompts needing no
+memory from 9 of 13 to 4 of 13, and tokens per prompt from 194 to 125. A prompt that does search runs two
+searches and costs more: the median went from about 470 to 810 ms, on a copy whose transcripts had just
+been rewritten. The list of generic words and the thresholds were tuned on 35 of those prompts; treat
+small differences as noise, and a prompt with no topic of its own (`what have I worked on`) gets nothing.
+
+`orch rag why "<prompt>" [--cwd <dir>] [--json]` runs the same decision for a prompt and prints each
+candidate's cosine, verdict and shared topics, any failed search, and the exact block, changing
+nothing and marking nothing as injected. Correct what it shows with `orch rag forget <uri>` or by
+ingesting under the same URI. If orchd is down, a search fails or the 3 s deadline passes, the prompt
+gets less or nothing and the session carries on.
 
 Per-session state `sessions/<id>.hook.json` (`{"injected": [...], "seen": {stream: count}}`) holds
 injected-hit keys (first 12 bytes of SHA-256 of `uri\0text`, newest 500) and event cursors. It is
@@ -109,7 +167,9 @@ which also raises Claude Code's shared 1.5 s SessionEnd budget; per-event timeou
 ### Transcript format
 
 Claude Code JSONL: one object per line, `{type, message: {role, content}, timestamp}`. `content`
-is a string or an array of blocks; only `text` blocks count. Empty and malformed lines are skipped;
+is a string or an array of blocks; only `text` blocks count. Only turns count: a line whose type is
+not `user`, `assistant` or `message` (or none) is skipped, as is `isMeta` or `isCompactSummary`, and
+harness blocks are cut from a turn ([memory.md](memory.md#transcripts-and-harness-text)). Empty and malformed lines are skipped;
 a bad timestamp leaves a turn undated. Stored text is
 `[2026-10-21T14:02Z] role: text` per turn; marker-shaped strings inside a message are rewritten
 `[..]` → `(..)` so quoted text cannot date a chunk ([memory.md](memory.md#timelines)).

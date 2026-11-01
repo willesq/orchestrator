@@ -212,6 +212,9 @@ type AutoRAGSettings struct {
 	// Untrusted is "mark" (inject web pages and tool output labelled as
 	// untrusted, their text quoted) or "exclude" (never inject them).
 	Untrusted string `mapstructure:"untrusted"`
+	// Gate is "evidence" (a prompt must name a topic and a hit must show evidence
+	// it bears on it, not only score well) or "off" (the score floors alone).
+	Gate string `mapstructure:"gate"`
 }
 
 // SessionsSettings controls what orchd does with finished sessions.
@@ -335,6 +338,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("hooks.auto_rag.min_prompt_chars", 12)
 	v.SetDefault("hooks.auto_rag.format", "pointers")
 	v.SetDefault("hooks.auto_rag.untrusted", "mark")
+	v.SetDefault("hooks.auto_rag.gate", "evidence")
 	// Source registry + freshness scheduler.
 	v.SetDefault("sources.known_roots", []string{"~/code"})
 	// Third-party and generated trees whose READMEs would crowd out real project docs.

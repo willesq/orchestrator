@@ -53,6 +53,71 @@ type rawLine struct {
 	Type      string          `json:"type"`
 	Message   json.RawMessage `json:"message"`
 	Timestamp string          `json:"timestamp"`
+	// IsMeta and IsCompactSummary mark turns the harness wrote in the user's name.
+	IsMeta           bool `json:"isMeta"`
+	IsCompactSummary bool `json:"isCompactSummary"`
+}
+
+// spokenLine reports whether a transcript line is a turn someone said. Harnesses
+// also log what they sent the model: Claude Code's api-request-blob lines carry
+// a message holding the whole context (instruction files, skill and tool lists,
+// earlier hook output) with the role "user". Stored as turns, those made up more
+// than half of a transcript's text and matched each other across sessions.
+func spokenLine(rl rawLine) bool {
+	if rl.IsMeta || rl.IsCompactSummary {
+		return false
+	}
+	switch rl.Type {
+	case "", "user", "assistant", "message":
+		return true
+	}
+	return false
+}
+
+// harnessTags are the blocks a harness puts inside a user turn.
+var harnessTags = []string{"system-reminder", "task-notification", "agent-message", "local-command-stdout", "local-command-stderr", "local-command-caveat"}
+
+// stripHarnessText removes harness-written blocks from a user's turn, each from
+// its opening tag to its own closing tag, leaving a tag that is never closed alone.
+func stripHarnessText(text string) string {
+	for _, tag := range harnessTags {
+		text = cutBlocks(text, tag)
+	}
+	// The notice a harness prints above a background-task event is the whole turn.
+	if strings.HasPrefix(strings.TrimSpace(text), "[SYSTEM NOTIFICATION - NOT USER INPUT]") {
+		return ""
+	}
+	return text
+}
+
+// cutBlocks removes <tag ...>...</tag> spans in one linear pass.
+func cutBlocks(text, tag string) string {
+	open, closer := "<"+tag, "</"+tag+">"
+	if !strings.Contains(text, open) {
+		return text
+	}
+	var b strings.Builder
+	for {
+		i := strings.Index(text, open)
+		if i < 0 {
+			break
+		}
+		// "<system-reminder-x" is some other tag.
+		rest := text[i+len(open):]
+		if rest == "" || !strings.ContainsRune("> \t\n", rune(rest[0])) {
+			b.WriteString(text[:i+len(open)])
+			text = rest
+			continue
+		}
+		end := strings.Index(rest, closer)
+		if end < 0 {
+			break
+		}
+		b.WriteString(text[:i])
+		text = rest[end+len(closer):]
+	}
+	b.WriteString(text)
+	return b.String()
 }
 
 type rawMessage struct {
@@ -65,7 +130,8 @@ type contentBlock struct {
 	Text string `json:"text"`
 }
 
-// ParseTranscript reads a transcript JSONL file and extracts user/assistant text.
+// ParseTranscript reads a transcript JSONL file and extracts the text of the
+// user and assistant turns, leaving out what the harness itself wrote.
 func ParseTranscript(path string) ([]Message, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -82,20 +148,25 @@ func ParseTranscript(path string) ([]Message, error) {
 			continue
 		}
 		var rl rawLine
-		if json.Unmarshal(line, &rl) != nil || len(rl.Message) == 0 {
+		if json.Unmarshal(line, &rl) != nil || len(rl.Message) == 0 || !spokenLine(rl) {
 			continue
 		}
 		var rm rawMessage
 		if json.Unmarshal(rl.Message, &rm) != nil {
 			continue
 		}
-		text := extractText(rm.Content)
-		if strings.TrimSpace(text) == "" {
-			continue
-		}
 		role := rm.Role
 		if role == "" {
 			role = rl.Type
+		}
+		text := extractText(rm.Content)
+		// Only a user's turn carries harness blocks; an assistant may be discussing them.
+		if role == "user" {
+			text = stripHarnessText(text)
+		}
+		text = strings.TrimSpace(text)
+		if text == "" {
+			continue
 		}
 		// A missing or malformed time leaves the turn undated, not dropped.
 		ts, _ := time.Parse(time.RFC3339Nano, rl.Timestamp)

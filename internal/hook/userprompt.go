@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
@@ -51,23 +54,29 @@ func enrichPrompt(cfg config.AutoRAGSettings, p Payload, out io.Writer, cf clien
 	if len(prompt) < cfg.MinPromptChars {
 		return
 	}
-	if !looksLikeQuestion(prompt) {
-		cfg.MinScore = math.Max(cfg.MinScore, cfg.MinScoreStatement)
+	gate := promptGate(cfg, prompt)
+	if gate != nil && !gate.Search {
+		return
 	}
+	shown := prompt
+	if gate != nil {
+		shown = gate.Query
+	}
+	cfg.MinScore = promptFloor(cfg, prompt)
 	client, cleanup, err := cf()
 	if err != nil {
 		return
 	}
 	defer cleanup()
 
-	shown := make(map[string]bool, len(st.Injected))
+	injected := make(map[string]bool, len(st.Injected))
 	for _, k := range st.Injected {
-		shown[k] = true
+		injected[k] = true
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	kept := projectFirstHits(ctx, client, prompt, detectProject(p.Cwd).searchTags(), cfg, shown)
-	text, written := memctx.Render(prompt, kept, injectOptions(cfg))
+	kept := selectHits(ctx, client, prompt, detectProject(p.Cwd).searchTags(), cfg, injected, gate, nil)
+	text, written := memctx.Render(shown, kept, injectOptions(cfg))
 	if len(written) == 0 {
 		return
 	}
@@ -83,6 +92,31 @@ const defaultTopK = 5
 // maxAutoRAGTopK mirrors the daemon's largest accepted search size.
 const maxAutoRAGTopK = 100
 
+// gateDepth is how many candidates per slot a gated search asks for, since the
+// gate turns away hits a plain top_k would have stopped at.
+const gateDepth = 4
+
+// promptGate is the prompt's verdict under the evidence gate, or nil when the
+// gate is off.
+func promptGate(cfg config.AutoRAGSettings, prompt string) *memctx.PromptCheck {
+	if cfg.Gate != GateEvidence {
+		return nil
+	}
+	check := memctx.CheckPrompt(prompt)
+	return &check
+}
+
+// promptFloor is the score a hit must clear for this prompt.
+func promptFloor(cfg config.AutoRAGSettings, prompt string) float64 {
+	if looksLikeQuestion(prompt) {
+		return cfg.MinScore
+	}
+	return math.Max(cfg.MinScore, cfg.MinScoreStatement)
+}
+
+// GateEvidence is the hooks.auto_rag.gate value that turns the gate on.
+const GateEvidence = "evidence"
+
 // projectFirstHits fills up to top_k slots with hits above min_score, taking the
 // current project's own hits first and topping up from the whole store. An
 // unscoped search ranks every repo and vendored README by similarity alone, so
@@ -91,51 +125,162 @@ const maxAutoRAGTopK = 100
 // Hits whose key is in skip were already injected this session and are passed
 // over. A failed search contributes nothing; the hook still never blocks.
 func projectFirstHits(ctx context.Context, client orchdv1.OrchdClient, prompt string, projectTags []string, cfg config.AutoRAGSettings, skip map[string]bool) []*orchdv1.SearchHit {
+	return selectHits(ctx, client, prompt, projectTags, cfg, skip, nil, nil)
+}
+
+// tracer hears what became of each candidate: an empty reason means it was kept.
+// A nil hit reports a failed search, with the error as the reason.
+type tracer func(h *orchdv1.SearchHit, reason string)
+
+// Why a candidate was passed over before the gate saw it.
+const (
+	reasonBelowFloor = "scores below the floor"
+	reasonInjected   = "already injected this session"
+	reasonSameSource = "another chunk of a source already kept"
+	reasonUntrusted  = "untrusted, and hooks.auto_rag.untrusted is exclude"
+	reasonIdentifier = "only an identifier match, and one is already kept"
+	reasonDuplicate  = "says what a kept hit says"
+	reasonFull       = "all slots taken"
+)
+
+// selectHits is projectFirstHits with the evidence gate, when gate is set, and a
+// trace of every decision for `orch rag why`.
+func selectHits(ctx context.Context, client orchdv1.OrchdClient, prompt string, projectTags []string, cfg config.AutoRAGSettings, skip map[string]bool, gate *memctx.PromptCheck, trace tracer) []*orchdv1.SearchHit {
 	limit := cfg.TopK
 	if limit <= 0 {
 		limit = defaultTopK
 	}
 	// The daemon rejects larger requests, which would silently inject nothing.
 	limit = min(limit, maxAutoRAGTopK)
+	depth := limit
+	if gate != nil {
+		depth = min(limit*gateDepth, maxAutoRAGTopK)
+	}
+	if trace == nil {
+		trace = func(*orchdv1.SearchHit, string) {}
+	}
 	var kept []*orchdv1.SearchHit
 	// One hit per source: only a few are injected, and a second chunk of the
 	// same document would take a slot another source could fill. The pointer
 	// leads to the rest of it.
 	seen := map[string]bool{}
+	lines := map[string]bool{}
 	exactOnly := 0
+	topEvidence := 0
+	lowFloorKept := 0 // at most one note gets in below the floor
+	consider := func(h *orchdv1.SearchHit) string {
+		key := h.GetSourceUri()
+		switch {
+		case seen[key]:
+			return reasonSameSource
+		case len(kept) >= limit:
+			return reasonFull
+		case skip[hitKey(h.GetSourceUri(), h.GetText())]:
+			return reasonInjected
+		case cfg.Untrusted == memctx.UntrustedExclude && memctx.TrustOf(h.GetTrust(), h.GetSourceType(), h.GetSourceUri()).Untrusted():
+			return reasonUntrusted
+		}
+		how := relevance(h, cfg.MinScore)
+		belowFloor := false
+		if how == notRelevant && gate != nil && lowFloorKept == 0 && gate.PassesLowerFloor(h) {
+			how, belowFloor = byMeaning, true
+		}
+		if how == notRelevant {
+			return reasonBelowFloor
+		}
+		if how == byIdentifier && exactOnly >= maxExactOnly {
+			return reasonIdentifier
+		}
+		if gate != nil {
+			if why := gate.CheckHit(h); why != "" {
+				return why
+			}
+			if !memctx.Curated(h) && !h.GetExact() && gate.Weak(h, topEvidence) {
+				return memctx.ReasonWeakerThanTop
+			}
+			// The same text under several sources, such as a pasted brief, is one
+			// piece of knowledge however many sessions repeated it.
+			line := memctx.NormalLine(memctx.BestLine(gate.Query, h.GetText(), h.GetSourceType()))
+			if lines[line] {
+				return reasonDuplicate
+			}
+			lines[line] = true
+		}
+		if how == byIdentifier {
+			exactOnly++
+		}
+		if belowFloor {
+			lowFloorKept++
+		}
+		seen[key] = true
+		kept = append(kept, h)
+		return ""
+	}
 	take := func(req *orchdv1.SearchRequest) {
 		resp, err := client.Search(ctx, req)
 		if err != nil {
+			trace(nil, err.Error())
 			return
 		}
 		for _, h := range resp.GetHits() {
-			key := h.GetSourceUri()
-			if len(kept) >= limit || seen[key] || skip[hitKey(h.GetSourceUri(), h.GetText())] {
-				continue
-			}
-			if cfg.Untrusted == memctx.UntrustedExclude && memctx.TrustOf(h.GetTrust(), h.GetSourceType(), h.GetSourceUri()).Untrusted() {
-				continue
-			}
-			switch relevance(h, cfg.MinScore) {
-			case notRelevant:
-				continue
-			case byIdentifier:
-				if exactOnly >= maxExactOnly {
-					continue
-				}
-				exactOnly++
-			}
-			seen[key] = true
-			kept = append(kept, h)
+			trace(h, consider(h))
 		}
 	}
+	project := &orchdv1.SearchRequest{Query: prompt, TopK: int32(depth), Tags: projectTags, PerSource: 1}
+	global := &orchdv1.SearchRequest{Query: prompt, TopK: int32(depth), PerSource: 1}
+	if gate != nil {
+		evidence := map[*orchdv1.SearchHit]int{}
+		for _, h := range gatedCandidates(ctx, client, gate, project, global, len(projectTags) > 0, evidence, trace) {
+			why := consider(h)
+			trace(h, why)
+			// Everything after the first kept hit must hold up against it.
+			if why == "" {
+				topEvidence = max(topEvidence, evidence[h])
+			}
+		}
+		return kept
+	}
 	if len(projectTags) > 0 {
-		take(&orchdv1.SearchRequest{Query: prompt, TopK: int32(limit), Tags: projectTags, PerSource: 1})
+		take(project)
 	}
 	if len(kept) < limit {
-		take(&orchdv1.SearchRequest{Query: prompt, TopK: int32(limit), PerSource: 1})
+		take(global)
 	}
 	return kept
+}
+
+// gatedCandidates runs both searches and orders what they found: notes someone
+// chose to remember first, then the project's hits, then the whole store's, each
+// by evidence, and untrusted pages last. Notes carry no project tag, so a project pass that filled every
+// slot would otherwise hide the decision a prompt most needs. Running the two
+// together keeps that from costing a second search's time on the hook's path.
+func gatedCandidates(ctx context.Context, client orchdv1.OrchdClient, gate *memctx.PromptCheck, project, global *orchdv1.SearchRequest, scoped bool, evidence map[*orchdv1.SearchHit]int, trace tracer) []*orchdv1.SearchHit {
+	var hits [2][]*orchdv1.SearchHit
+	var errs [2]error
+	var wg sync.WaitGroup
+	for i, req := range []*orchdv1.SearchRequest{project, global} {
+		if i == 0 && !scoped {
+			continue
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			resp, err := client.Search(ctx, req)
+			hits[i], errs[i] = resp.GetHits(), err
+		}()
+	}
+	wg.Wait()
+	var all []*orchdv1.SearchHit
+	for i := range hits {
+		if errs[i] != nil {
+			trace(nil, errs[i].Error())
+			continue
+		}
+		maps.Copy(evidence, gate.ByEvidence(hits[i]))
+		all = append(all, hits[i]...)
+	}
+	sort.SliceStable(all, func(a, b int) bool { return memctx.Rank(all[a]) < memctx.Rank(all[b]) })
+	return all
 }
 
 // injectOptions reads the injection settings, defaulting anything unset or

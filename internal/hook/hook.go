@@ -39,7 +39,13 @@ type clientFactory func() (orchdv1.OrchdClient, func(), error)
 
 // Run dispatches the hook event named by args[0], reading the payload from in and
 // writing any injected context to out. It never returns a session-blocking error.
-func Run(args []string, in io.Reader, out io.Writer) error {
+func Run(args []string, in io.Reader, out io.Writer) (err error) {
+	// A panic would exit with a status harnesses can read as blocking the prompt.
+	defer func() {
+		if r := recover(); r != nil {
+			err = nil
+		}
+	}()
 	if len(args) == 0 {
 		return nil
 	}

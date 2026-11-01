@@ -201,7 +201,10 @@ func TestDispatchUserPromptSubmit(t *testing.T) {
 		client     *fakeClient
 		wantInject bool
 	}{
-		{name: "routes to auto-rag and injects", prompt: "what did we decide?", client: &fakeClient{search: hitsResp(0.9)}, wantInject: true},
+		{name: "routes to auto-rag and injects", prompt: "what did we decide about the widget cache?", client: &fakeClient{search: &orchdv1.SearchResponse{Hits: []*orchdv1.SearchHit{
+			{Text: "the widget cache flushes hourly", SourceUri: "manual://x", SourceType: "manual", Score: 0.9},
+		}}}, wantInject: true},
+		{name: "a follow-up with no topic gets nothing and no search", prompt: "Let's merge it and cut a release.", client: &fakeClient{search: hitsResp(0.9)}, wantInject: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

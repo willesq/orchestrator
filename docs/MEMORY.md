@@ -28,18 +28,22 @@ not catch every secret shape.
 - **Prompt context.** On each prompt, `orch-hook` searches memory and prepends up to three
   pointers: the current project's docs and sessions first, then the whole store, one per
   source. Questions need a score of `hooks.auto_rag.min_score` (0.25); instructions need
-  `min_score_statement` (0.45). A chunk is injected at most once per session. Each pointer is a
+  `min_score_statement` (0.45). A score only says a chunk resembles the prompt, so a hit must also
+  show evidence (`hooks.auto_rag.gate: evidence`): it must share the prompt's topics, including in
+  the line shown, and not be harness text, a temporary copy or agent instructions. A prompt with no
+  topic, like "let's merge it", gets no search and nothing injected. Run `orch rag why "<prompt>"`
+  to see what a prompt would get, and why each candidate was kept or dropped. A chunk is injected at most once per session. Each pointer is a
   title, date, source URI, how far its origin is trusted, and the single most relevant line (for
   a session record, usually the decision itself); the agent reads the rest with `rag_search` and
   that `source_uri`. `hooks.auto_rag.format: full` injects whole chunks instead. Pointers cost
   about a third fewer tokens than whole chunks on the golden set (253 against 383).
 
   ```
-  [1] "session record" · 2026-10-27 · "session://…/record" · own session
+  [1] "session record" · 2026-10-27 · "session://…/record" · past session
       "Author trust comes from GitHub's authorAssociation, not from PR text."
   ```
 - **Trust.** Each memory is labelled by which part of orchd stored it: a registered repo's docs
-  (`repo doc`), a registered web page (untrusted), your sessions (`own session`), a file an agent
+  (`repo doc`), a registered web page (untrusted), your sessions (`past session`), a file an agent
   edited, or something stored through `orch ingest` or the MCP `rag_ingest_text` tool (`stored by
   a client`, whatever type or URI it claimed). Everything retrieved is shown quoted, as data;
   text in any of them that reads like an instruction to the agent ("ignore previous

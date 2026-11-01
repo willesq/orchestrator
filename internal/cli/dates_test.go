@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,8 +87,118 @@ func TestBackfillSessions(t *testing.T) {
 		len(left[0].Tags) != 1 || left[0].Tags[0] != "checkout:/x" {
 		t.Fatalf("handed off %+v", left)
 	}
+	if err := handoff.DoneSession(handoff.Dir(), left[0]); err != nil {
+		t.Fatal(err)
+	}
+	// --all takes every stored transcript, dated or not, and leaves the records
+	// alone. A session whose transcript was forgotten stays forgotten, and one
+	// already waiting on orchd keeps what it asked for.
+	if err := handoff.PutSession(handoff.Dir(), handoff.Session{ID: "pending", TranscriptPath: tr, Record: true, Summarize: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.WriteRecord(paths.SessionsDir(), &session.Record{SessionID: "pending", TranscriptPath: tr}); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.WriteRecord(paths.SessionsDir(), &session.Record{SessionID: "forgotten", TranscriptPath: tr}); err != nil {
+		t.Fatal(err)
+	}
+	fc.listSources.Sources = append(fc.listSources.Sources,
+		&orchdv1.SourceSummary{SourceUri: "session://pending/transcript"}, &orchdv1.SourceSummary{SourceUri: "session://forgotten/record"})
+	out, err = run(cf, "", "rag", "backfill-sessions", "--all", "--apply")
+	if err != nil || !strings.Contains(out, "6 session(s) in memory: 3 transcript(s) to store again, 0 without a transcript on disk") || !strings.Contains(out, "handed 2 session(s)") {
+		t.Fatalf("all: %q, %v", out, err)
+	}
+	left, _ = handoff.Sessions(handoff.Dir(), time.Now().Add(time.Hour))
+	got := map[string]handoff.Session{}
+	for _, s := range left {
+		got[s.ID] = s
+	}
+	if len(left) != 3 || got["todo"].Record || got["dated"].Record || !got["pending"].Record || !got["pending"].Summarize {
+		t.Fatalf("--all handed off %+v", left)
+	}
 	t.Setenv(agentrun.TaskIDEnv, "task-1")
 	if _, err := run(cf, "", "rag", "backfill-sessions", "--apply"); err == nil {
 		t.Fatal("a queue task backfilled")
+	}
+}
+
+func TestRAGWhy(t *testing.T) {
+	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Run("a follow-up is not searched", func(t *testing.T) {
+		fc := &fakeClient{}
+		out, err := run(factory(fc, nil), "", "rag", "why", "Let's merge it.")
+		if err != nil || !strings.Contains(out, "no search: names no topic") || !strings.Contains(out, "topic terms: none") {
+			t.Fatalf("%q, %v", out, err)
+		}
+	})
+	hits := &orchdv1.SearchResponse{Hits: []*orchdv1.SearchHit{
+		{SourceUri: "repo://a/one.md", SourceType: "repo_doc", Text: "the socket reconnect loop backs off", Score: 0.5},
+		{SourceUri: "repo://a/noise.md", SourceType: "repo_doc", Text: "kiln firing", Score: 0.8},
+	}}
+	t.Run("candidates and the block", func(t *testing.T) {
+		out, err := run(factory(&fakeClient{search: hits}, nil), "", "rag", "why", "fix the socket reconnect loop", "--cwd", t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{`"repo://a/one.md"  unverified  kept`, `"repo://a/noise.md"  unverified  dropped: shares too little`, "injected: 1 pointer(s)", "## Auto-injected RAG context"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("missing %q in:\n%s", want, out)
+			}
+		}
+	})
+	t.Run("nothing qualifies", func(t *testing.T) {
+		out, err := run(factory(&fakeClient{search: &orchdv1.SearchResponse{}}, nil), "", "rag", "why", "fix the socket reconnect loop")
+		if err != nil || !strings.Contains(out, "injected: nothing") {
+			t.Fatalf("%q, %v", out, err)
+		}
+	})
+	t.Run("a failed search says so", func(t *testing.T) {
+		out, err := run(factory(&fakeClient{err: errors.New("qdrant is down")}, nil), "", "rag", "why", "fix the socket reconnect loop")
+		if err != nil || !strings.Contains(out, "search failed: qdrant is down") {
+			t.Fatalf("%q, %v", out, err)
+		}
+	})
+	t.Run("json", func(t *testing.T) {
+		out, err := run(factory(&fakeClient{search: hits}, nil), "", "rag", "why", "fix the socket reconnect loop", "--json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v struct {
+			Gated      bool `json:"gated"`
+			Candidates []struct {
+				URI    string `json:"uri"`
+				Kept   bool   `json:"kept"`
+				Reason string `json:"reason"`
+			} `json:"candidates"`
+			Block string `json:"block"`
+		}
+		if err := json.Unmarshal([]byte(out), &v); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+		if !v.Gated || len(v.Candidates) < 2 || !v.Candidates[0].Kept || v.Candidates[1].Reason == "" || v.Block == "" {
+			t.Fatalf("%+v", v)
+		}
+	})
+	t.Run("gate off and disabled are stated", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Setenv("ORCH_CONFIG_DIR", dir)
+		cfg := "hooks:\n  auto_rag:\n    enabled: false\n    gate: off\n"
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		out, err := run(factory(&fakeClient{search: &orchdv1.SearchResponse{}}, nil), "", "rag", "why", "Let's merge it right now.")
+		if err != nil || !strings.Contains(out, "gate: off") || !strings.Contains(out, "enabled is off") {
+			t.Fatalf("%q, %v", out, err)
+		}
+	})
+}
+
+func TestTermListCaps(t *testing.T) {
+	var terms []string
+	for i := range 15 {
+		terms = append(terms, fmt.Sprintf("t%02d", i))
+	}
+	if got := termList(terms); !strings.HasSuffix(got, "+3 more") {
+		t.Fatal(got)
 	}
 }
