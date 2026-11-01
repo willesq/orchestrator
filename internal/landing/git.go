@@ -41,6 +41,14 @@ type File struct {
 // from running.
 var baseConfig = []string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "protocol.ext.allow=never"}
 
+// gitEnvKept is what passes through of orchd's GIT_ environment: which user
+// config to read, and who the user is. The rest could point a command at another
+// repository.
+var gitEnvKept = map[string]bool{
+	"GIT_CONFIG_GLOBAL": true, "GIT_CONFIG_SYSTEM": true, "GIT_CONFIG_NOSYSTEM": true,
+	"GIT_AUTHOR_NAME": true, "GIT_AUTHOR_EMAIL": true, "GIT_COMMITTER_NAME": true, "GIT_COMMITTER_EMAIL": true,
+}
+
 // Git runs the real git with no terminal prompts and no inherited repository
 // environment.
 func Git(ctx context.Context, dir string, args ...string) ([]byte, error) {
@@ -53,7 +61,8 @@ func Git(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", append(all, args...)...)
 	cmd.Dir = dir
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "GIT_") {
+		name, _, _ := strings.Cut(kv, "=")
+		if !strings.HasPrefix(name, "GIT_") || gitEnvKept[name] {
 			cmd.Env = append(cmd.Env, kv)
 		}
 	}

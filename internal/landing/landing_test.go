@@ -66,6 +66,11 @@ func newWorld(t *testing.T) *world {
 	t.Helper()
 	// Commands must not read the developer's git config.
 	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+	t.Setenv("GIT_AUTHOR_NAME", "a")
+	t.Setenv("GIT_AUTHOR_EMAIL", "a@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "a")
+	t.Setenv("GIT_COMMITTER_EMAIL", "a@example.com")
 	home, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -504,6 +509,43 @@ func TestLandedStateIsNotDiscardable(t *testing.T) {
 	}
 	if _, err := w.svc.Discard(ctx, "task-1", true); !errors.Is(err, ErrRefused) {
 		t.Errorf("restore got %v", err)
+	}
+}
+
+func TestGitIgnoresARepositoryNamedInItsEnvironment(t *testing.T) {
+	w := newWorld(t)
+	t.Setenv("GIT_DIR", w.remote)
+	out, err := Git(context.Background(), w.worktree, "rev-parse", "--git-dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), "remote.git") {
+		t.Errorf("GIT_DIR was obeyed: %s", out)
+	}
+}
+
+// Undo signs when the user signs commits, and a signer that fails stops it
+// before anything is pushed.
+func TestUndoSignsWhenTheUserDoes(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	if _, err := w.svc.Land(ctx, "task-1", w.sha); err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(w.home, "gitconfig")
+	if err := os.WriteFile(config, []byte("[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = /usr/bin/false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", config)
+	if _, err := w.svc.Undo(ctx, "task-1"); err == nil {
+		t.Fatal("undo went ahead without a signature")
+	}
+	if w.remoteHead() != w.sha {
+		t.Error("the failed undo moved the branch")
+	}
+	l, err := w.svc.Get(ctx, "task-1")
+	if err != nil || l.State != StateLanded || !l.CanUndo {
+		t.Errorf("got %+v, %v", l, err)
 	}
 }
 
