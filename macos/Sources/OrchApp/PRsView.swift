@@ -160,6 +160,8 @@ private struct PRRow: View {
     let item: GitHubItem
     let review: PRReview?
 
+    @Environment(PRHandoffModel.self) private var handoff
+
     var body: some View {
         let stale = item.isStale()
         HStack(alignment: .top, spacing: 10) {
@@ -184,6 +186,7 @@ private struct PRRow: View {
                     }
                     if item.isDraft { Chip(text: "Draft") }
                     if let review { ReviewBadge(review: review) }
+                    if let task = handoff.working(on: item.url) { AgentChip(task: task) }
                 }
             }
             Spacer(minLength: 0)
