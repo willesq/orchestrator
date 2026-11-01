@@ -8,13 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
-	"github.com/willesq/orchestrator/internal/handoff"
-	"github.com/willesq/orchestrator/internal/paths"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
-	"github.com/willesq/orchestrator/internal/session"
 )
 
 func TestSearchAndSourcesShowDates(t *testing.T) {
@@ -45,76 +43,31 @@ func TestSearchAndSourcesShowDates(t *testing.T) {
 }
 
 func TestBackfillSessions(t *testing.T) {
-	t.Setenv("ORCH_DATA_DIR", t.TempDir())
 	t.Setenv(agentrun.TaskIDEnv, "")
-	tr := filepath.Join(t.TempDir(), "t.jsonl")
-	if err := os.WriteFile(tr, []byte("{}\n"), 0o644); err != nil {
-		t.Fatal(err)
+	var got []*orchdv1.BackfillSessionsRequest
+	old := fakeBackfill
+	t.Cleanup(func() { fakeBackfill = old })
+	fakeBackfill = func(req *orchdv1.BackfillSessionsRequest) (*orchdv1.BackfillSessionsResponse, error) {
+		got = append(got, req)
+		return &orchdv1.BackfillSessionsResponse{Total: 4, Todo: 1, Dated: 1, Missing: 2, Handed: 1}, nil
 	}
-	for _, r := range []*session.Record{
-		{SessionID: "todo", TranscriptPath: tr},
-		{SessionID: "gone", TranscriptPath: "/nonexistent/t.jsonl"},
-		{SessionID: "dated", TranscriptPath: tr},
-	} {
-		if err := session.WriteRecord(paths.SessionsDir(), r); err != nil {
-			t.Fatal(err)
-		}
-	}
-	fc := &fakeClient{listSources: &orchdv1.ListSourcesResponse{Sources: []*orchdv1.SourceSummary{
-		{SourceUri: "session://todo/transcript", Tags: []string{"other"}},
-		{SourceUri: "session://todo/record", Tags: []string{"checkout:/x"}},
-		{SourceUri: "session://gone/record"},
-		{SourceUri: "session://norecord/record"},
-		{SourceUri: "session://dated/transcript", StartedAt: 100},
-		{SourceUri: "session://../evil/record"},
-		{SourceUri: "manual://x"},
-	}}}
-	cf := factory(fc, nil)
+	cf := factory(&fakeClient{}, nil)
 	out, err := run(cf, "", "rag", "backfill-sessions")
 	if err != nil || !strings.Contains(out, "4 session(s) in memory: 1 to store again with dates, 1 already dated, 2 without a transcript on disk") ||
-		!strings.Contains(out, "plan only") || fc.listReq.GetUriPrefix() != "session://" {
+		!strings.Contains(out, "plan only") || got[0].GetApply() {
 		t.Fatalf("plan: %q, %v", out, err)
 	}
-	if left, _ := handoff.Sessions(handoff.Dir(), time.Now().Add(time.Hour)); len(left) != 0 {
-		t.Fatal("a plan handed sessions off")
-	}
 	out, err = run(cf, "", "rag", "backfill-sessions", "--apply")
-	if err != nil || !strings.Contains(out, "handed 1 session(s) to orchd") {
+	if err != nil || !strings.Contains(out, "handed 1 session(s) to orchd") || !got[1].GetApply() || got[1].GetAll() {
 		t.Fatalf("apply: %q, %v", out, err)
 	}
-	left, _ := handoff.Sessions(handoff.Dir(), time.Now().Add(time.Hour))
-	if len(left) != 1 || left[0].ID != "todo" || left[0].TranscriptPath != tr || !left[0].Record || left[0].Summarize ||
-		len(left[0].Tags) != 1 || left[0].Tags[0] != "checkout:/x" {
-		t.Fatalf("handed off %+v", left)
-	}
-	if err := handoff.DoneSession(handoff.Dir(), left[0]); err != nil {
-		t.Fatal(err)
-	}
-	// --all takes every stored transcript, dated or not, and leaves the records
-	// alone. A session whose transcript was forgotten stays forgotten, and one
-	// already waiting on orchd keeps what it asked for.
-	if err := handoff.PutSession(handoff.Dir(), handoff.Session{ID: "pending", TranscriptPath: tr, Record: true, Summarize: true}); err != nil {
-		t.Fatal(err)
-	}
-	if err := session.WriteRecord(paths.SessionsDir(), &session.Record{SessionID: "pending", TranscriptPath: tr}); err != nil {
-		t.Fatal(err)
-	}
-	if err := session.WriteRecord(paths.SessionsDir(), &session.Record{SessionID: "forgotten", TranscriptPath: tr}); err != nil {
-		t.Fatal(err)
-	}
-	fc.listSources.Sources = append(fc.listSources.Sources,
-		&orchdv1.SourceSummary{SourceUri: "session://pending/transcript"}, &orchdv1.SourceSummary{SourceUri: "session://forgotten/record"})
-	out, err = run(cf, "", "rag", "backfill-sessions", "--all", "--apply")
-	if err != nil || !strings.Contains(out, "6 session(s) in memory: 3 transcript(s) to store again, 0 without a transcript on disk") || !strings.Contains(out, "handed 2 session(s)") {
+	out, err = run(cf, "", "rag", "backfill-sessions", "--all", "--summaries")
+	if err != nil || !strings.Contains(out, "1 transcript(s) to store again") || !strings.Contains(out, "up to 1 model call") ||
+		!got[2].GetAll() || !got[2].GetSummaries() || got[2].GetApply() {
 		t.Fatalf("all: %q, %v", out, err)
 	}
-	left, _ = handoff.Sessions(handoff.Dir(), time.Now().Add(time.Hour))
-	got := map[string]handoff.Session{}
-	for _, s := range left {
-		got[s.ID] = s
-	}
-	if len(left) != 3 || got["todo"].Record || got["dated"].Record || !got["pending"].Record || !got["pending"].Summarize {
-		t.Fatalf("--all handed off %+v", left)
+	if _, err := run(cf, "", "rag", "backfill-sessions", "--summaries"); err == nil {
+		t.Fatal("--summaries without --all")
 	}
 	t.Setenv(agentrun.TaskIDEnv, "task-1")
 	if _, err := run(cf, "", "rag", "backfill-sessions", "--apply"); err == nil {
@@ -177,6 +130,23 @@ func TestRAGWhy(t *testing.T) {
 		}
 		if !v.Gated || len(v.Candidates) < 2 || !v.Candidates[0].Kept || v.Candidates[1].Reason == "" || v.Block == "" {
 			t.Fatalf("%+v", v)
+		}
+	})
+	t.Run("reads the prompt from stdin", func(t *testing.T) {
+		if got, err := whyPrompt([]string{"-"}, strings.NewReader("  a pasted log\n")); err != nil || got != "a pasted log" {
+			t.Fatalf("%q, %v", got, err)
+		}
+		if got, err := whyPrompt(nil, strings.NewReader("from stdin")); err != nil || got != "from stdin" {
+			t.Fatalf("%q, %v", got, err)
+		}
+		if got, err := whyPrompt([]string{" an arg "}, nil); err != nil || got != "an arg" {
+			t.Fatalf("%q, %v", got, err)
+		}
+		if _, err := whyPrompt(nil, strings.NewReader("  ")); err == nil {
+			t.Fatal("empty stdin")
+		}
+		if _, err := whyPrompt(nil, iotest.ErrReader(errors.New("broken"))); err == nil {
+			t.Fatal("failed read")
 		}
 	})
 	t.Run("gate off and disabled are stated", func(t *testing.T) {

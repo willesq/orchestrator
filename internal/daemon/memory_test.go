@@ -384,3 +384,44 @@ func TestOwnerDocMatchesOnlyItsRepoSegment(t *testing.T) {
 		t.Fatal("a later owner segment was missed")
 	}
 }
+
+func TestIngestRedactsSecrets(t *testing.T) {
+	r := &textRag{}
+	s := &server{rag: r}
+	const token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789AB"
+	if _, err := s.Ingest(context.Background(), &orchdv1.IngestRequest{Text: "use " + token + " to deploy", SourceUri: "note://x"}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(r.text, token) || !strings.Contains(r.text, "[REDACTED") {
+		t.Fatalf("stored %q", r.text)
+	}
+}
+
+func TestIngestRefusesASecretInItsNames(t *testing.T) {
+	const token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789AB"
+	r := &textRag{}
+	s := &server{rag: r}
+	for _, req := range []*orchdv1.IngestRequest{
+		{Text: "x", SourceUri: "https://x:" + token + "@github.com/a"},
+		{Text: "x", SourceUri: "note://a", Tags: []string{token}},
+		{Text: "x", SourceUri: "note://a", Scope: token},
+	} {
+		if _, err := s.Ingest(context.Background(), req); code(err) != codes.InvalidArgument || strings.Contains(err.Error(), token) {
+			t.Errorf("%+v: %v", req, err)
+		}
+	}
+	if r.text != "" {
+		t.Fatalf("stored %q", r.text)
+	}
+}
+
+// textRag records the text it is asked to store.
+type textRag struct {
+	fakeRag
+	text string
+}
+
+func (r *textRag) IngestText(_ context.Context, text string, _ rag.Meta) (int, error) {
+	r.text = text
+	return 1, nil
+}

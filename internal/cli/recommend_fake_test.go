@@ -185,3 +185,12 @@ func (f *fakeClient) GetSafetyNet(context.Context, *orchdv1.GetSafetyNetRequest,
 func (f *fakeClient) InstallSafetyNet(context.Context, *orchdv1.InstallSafetyNetRequest, ...grpc.CallOption) (*orchdv1.SafetyNetState, error) {
 	return &orchdv1.SafetyNetState{}, nil
 }
+
+// fakeBackfill answers BackfillSessions for every fakeClient.
+var fakeBackfill = func(*orchdv1.BackfillSessionsRequest) (*orchdv1.BackfillSessionsResponse, error) {
+	return &orchdv1.BackfillSessionsResponse{}, nil
+}
+
+func (f *fakeClient) BackfillSessions(_ context.Context, req *orchdv1.BackfillSessionsRequest, _ ...grpc.CallOption) (*orchdv1.BackfillSessionsResponse, error) {
+	return fakeBackfill(req)
+}

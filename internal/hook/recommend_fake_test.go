@@ -191,3 +191,7 @@ func (f *fakeClient) UndoPRLanding(context.Context, *orchdv1.PRLandingRequest, .
 func (f *fakeClient) DiscardPRLanding(context.Context, *orchdv1.DiscardPRLandingRequest, ...grpc.CallOption) (*orchdv1.PRLanding, error) {
 	return &orchdv1.PRLanding{}, nil
 }
+
+func (f *fakeClient) BackfillSessions(context.Context, *orchdv1.BackfillSessionsRequest, ...grpc.CallOption) (*orchdv1.BackfillSessionsResponse, error) {
+	return &orchdv1.BackfillSessionsResponse{}, nil
+}

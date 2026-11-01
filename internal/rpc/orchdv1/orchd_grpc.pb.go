@@ -38,6 +38,7 @@ const (
 	Orchd_MigrateHybrid_FullMethodName         = "/orchd.v1.Orchd/MigrateHybrid"
 	Orchd_DropBackup_FullMethodName            = "/orchd.v1.Orchd/DropBackup"
 	Orchd_ReindexKeywords_FullMethodName       = "/orchd.v1.Orchd/ReindexKeywords"
+	Orchd_BackfillSessions_FullMethodName      = "/orchd.v1.Orchd/BackfillSessions"
 	Orchd_ListPRs_FullMethodName               = "/orchd.v1.Orchd/ListPRs"
 	Orchd_GetGitHubIdentity_FullMethodName     = "/orchd.v1.Orchd/GetGitHubIdentity"
 	Orchd_ListGitHubScopes_FullMethodName      = "/orchd.v1.Orchd/ListGitHubScopes"
@@ -129,6 +130,8 @@ type OrchdClient interface {
 	// tokenizer made, from each chunk's stored text; counts unless apply.
 	// Resumable: chunks already re-indexed are skipped.
 	ReindexKeywords(ctx context.Context, in *ReindexKeywordsRequest, opts ...grpc.CallOption) (*ReindexKeywordsResponse, error)
+	// BackfillSessions stores sessions again from their transcripts on disk.
+	BackfillSessions(ctx context.Context, in *BackfillSessionsRequest, opts ...grpc.CallOption) (*BackfillSessionsResponse, error)
 	// ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
 	// awaiting their review, each with why it needs attention. Never calls gh.
 	ListPRs(ctx context.Context, in *ListPRsRequest, opts ...grpc.CallOption) (*ListPRsResponse, error)
@@ -427,6 +430,16 @@ func (c *orchdClient) ReindexKeywords(ctx context.Context, in *ReindexKeywordsRe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReindexKeywordsResponse)
 	err := c.cc.Invoke(ctx, Orchd_ReindexKeywords_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) BackfillSessions(ctx context.Context, in *BackfillSessionsRequest, opts ...grpc.CallOption) (*BackfillSessionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BackfillSessionsResponse)
+	err := c.cc.Invoke(ctx, Orchd_BackfillSessions_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -810,6 +823,8 @@ type OrchdServer interface {
 	// tokenizer made, from each chunk's stored text; counts unless apply.
 	// Resumable: chunks already re-indexed are skipped.
 	ReindexKeywords(context.Context, *ReindexKeywordsRequest) (*ReindexKeywordsResponse, error)
+	// BackfillSessions stores sessions again from their transcripts on disk.
+	BackfillSessions(context.Context, *BackfillSessionsRequest) (*BackfillSessionsResponse, error)
 	// ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
 	// awaiting their review, each with why it needs attention. Never calls gh.
 	ListPRs(context.Context, *ListPRsRequest) (*ListPRsResponse, error)
@@ -971,6 +986,9 @@ func (UnimplementedOrchdServer) DropBackup(context.Context, *DropBackupRequest) 
 }
 func (UnimplementedOrchdServer) ReindexKeywords(context.Context, *ReindexKeywordsRequest) (*ReindexKeywordsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReindexKeywords not implemented")
+}
+func (UnimplementedOrchdServer) BackfillSessions(context.Context, *BackfillSessionsRequest) (*BackfillSessionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BackfillSessions not implemented")
 }
 func (UnimplementedOrchdServer) ListPRs(context.Context, *ListPRsRequest) (*ListPRsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPRs not implemented")
@@ -1420,6 +1438,24 @@ func _Orchd_ReindexKeywords_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).ReindexKeywords(ctx, req.(*ReindexKeywordsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_BackfillSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BackfillSessionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).BackfillSessions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_BackfillSessions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).BackfillSessions(ctx, req.(*BackfillSessionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2078,6 +2114,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReindexKeywords",
 			Handler:    _Orchd_ReindexKeywords_Handler,
+		},
+		{
+			MethodName: "BackfillSessions",
+			Handler:    _Orchd_BackfillSessions_Handler,
 		},
 		{
 			MethodName: "ListPRs",

@@ -99,6 +99,9 @@ type Service struct {
 	// older collection; writerMu guards it so a failure is retried.
 	writerMu      sync.Mutex
 	writerIndexed bool
+	// searchIndexed is set while, or once, the search filter indexes are being
+	// added to a collection made before them.
+	searchIndexed atomic.Bool
 
 	fallbackLog rateLog
 	// progress is set while a migration copies sources.

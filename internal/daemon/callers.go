@@ -69,6 +69,7 @@ var operatorActions = map[string]string{
 	orchdv1.Orchd_MigrateHybrid_FullMethodName:    "migrate the RAG store",
 	orchdv1.Orchd_DropBackup_FullMethodName:       "migrate the RAG store",
 	orchdv1.Orchd_ReindexKeywords_FullMethodName:  "migrate the RAG store",
+	orchdv1.Orchd_BackfillSessions_FullMethodName: "write to the RAG store",
 	orchdv1.Orchd_SaveSource_FullMethodName:       "change registered sources",
 	orchdv1.Orchd_RemoveSource_FullMethodName:     "change registered sources",
 	orchdv1.Orchd_RefreshSource_FullMethodName:    "refresh registered sources",

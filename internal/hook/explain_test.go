@@ -235,3 +235,33 @@ func TestRunRecoversFromAPanic(t *testing.T) {
 type panickingReader struct{}
 
 func (panickingReader) Read([]byte) (int, error) { panic("boom") }
+
+func TestRecallOnlyGetsRecentRecordsNewestFirst(t *testing.T) {
+	older := &orchdv1.SearchHit{SourceUri: "session://a/record", SourceType: "session_record", Text: "Fixed the socket.", Score: 0.1, EndedAt: 100}
+	newer := &orchdv1.SearchHit{SourceUri: "session://b/record", SourceType: "session_record", Text: "Added the board.", Score: 0.1, EndedAt: 200}
+	client := &countingClient{hits: []*orchdv1.SearchHit{older, newer}}
+	const prompt = "what have i worked on in the past 4 weeks?"
+	got := selectHits(context.Background(), client, prompt, nil, gatedAutoRAG(), nil, ptrCheck(prompt), nil)
+	if len(got) != 2 || got[0] != newer {
+		t.Fatalf("kept %v", uris(got))
+	}
+	// A date past now earns no first place, and with a project only it is read.
+	future := &orchdv1.SearchHit{SourceUri: "session://c/record", SourceType: "session_record", Text: "Claims tomorrow.", EndedAt: 1 << 40}
+	scoped := &countingClient{hits: []*orchdv1.SearchHit{older, future, newer}}
+	got = selectHits(context.Background(), scoped, prompt, []string{"repo:a"}, gatedAutoRAG(), nil, ptrCheck(prompt), nil)
+	if len(got) != 3 || got[0] != newer || len(scoped.requests) != 1 || len(scoped.requests[0].GetTags()) == 0 {
+		t.Fatalf("scoped: kept %v, %d searches", uris(got), len(scoped.requests))
+	}
+	req := client.requests[0]
+	if req.GetSourceType() != "session_record" || req.GetSince() == 0 || req.GetQuery() != recallQuery {
+		t.Fatalf("searched %+v", req)
+	}
+}
+
+func TestGateOn(t *testing.T) {
+	for v, want := range map[string]bool{"evidence": true, "Evidence": true, "evidnce": true, "off": false, " OFF ": false, "false": false, "": false} {
+		if gateOn(v) != want {
+			t.Errorf("gateOn(%q) = %v", v, !want)
+		}
+	}
+}

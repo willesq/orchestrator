@@ -99,7 +99,7 @@ const gateDepth = 4
 // promptGate is the prompt's verdict under the evidence gate, or nil when the
 // gate is off.
 func promptGate(cfg config.AutoRAGSettings, prompt string) *memctx.PromptCheck {
-	if cfg.Gate != GateEvidence {
+	if !gateOn(cfg.Gate) {
 		return nil
 	}
 	check := memctx.CheckPrompt(prompt)
@@ -116,6 +116,25 @@ func promptFloor(cfg config.AutoRAGSettings, prompt string) float64 {
 
 // GateEvidence is the hooks.auto_rag.gate value that turns the gate on.
 const GateEvidence = "evidence"
+
+// gateOn reads hooks.auto_rag.gate. Only "off" or "false" turn it off: a typo must
+// not quietly bring back injection on every prompt. Empty is the zero value of a
+// config that was never loaded; a loaded one defaults to evidence.
+func gateOn(v string) bool {
+	v = strings.ToLower(strings.TrimSpace(v))
+	return v != "" && v != "off" && v != "false"
+}
+
+// recallQuery finds the part of a record that says what a session did, which the
+// user's words ("what have I been up to") resemble no more than any other part.
+const recallQuery = "Outcome: what the session set out to do and what it delivered"
+
+// recallDepth is how many records a recall prompt reads: enough that their dates,
+// not their likeness to recallQuery, decide what it gets.
+const recallDepth = 40
+
+// recallWindow is how far back a prompt asking what happened lately looks.
+const recallWindow = 30 * 24 * time.Hour
 
 // projectFirstHits fills up to top_k slots with hits above min_score, taking the
 // current project's own hits first and topping up from the whole store. An
@@ -181,6 +200,10 @@ func selectHits(ctx context.Context, client orchdv1.OrchdClient, prompt string, 
 			return reasonUntrusted
 		}
 		how := relevance(h, cfg.MinScore)
+		// "What have I been working on" resembles no record; its date is the match.
+		if gate != nil && gate.RecallOnly {
+			how = byMeaning
+		}
 		belowFloor := false
 		if how == notRelevant && gate != nil && lowFloorKept == 0 && gate.PassesLowerFloor(h) {
 			how, belowFloor = byMeaning, true
@@ -229,6 +252,12 @@ func selectHits(ctx context.Context, client orchdv1.OrchdClient, prompt string, 
 	project := &orchdv1.SearchRequest{Query: prompt, TopK: int32(depth), Tags: projectTags, PerSource: 1}
 	global := &orchdv1.SearchRequest{Query: prompt, TopK: int32(depth), PerSource: 1}
 	if gate != nil {
+		if gate.RecallOnly {
+			since := time.Now().Add(-recallWindow).Unix()
+			for _, r := range []*orchdv1.SearchRequest{project, global} {
+				r.SourceType, r.Since, r.Query, r.TopK = "session_record", since, recallQuery, recallDepth
+			}
+		}
 		evidence := map[*orchdv1.SearchHit]int{}
 		for _, h := range gatedCandidates(ctx, client, gate, project, global, len(projectTags) > 0, evidence, trace) {
 			why := consider(h)
@@ -262,6 +291,10 @@ func gatedCandidates(ctx context.Context, client orchdv1.OrchdClient, gate *memc
 		if i == 0 && !scoped {
 			continue
 		}
+		// What happened elsewhere is no answer to "what was I working on" here.
+		if i == 1 && scoped && gate.RecallOnly {
+			continue
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -276,7 +309,19 @@ func gatedCandidates(ctx context.Context, client orchdv1.OrchdClient, gate *memc
 			trace(nil, errs[i].Error())
 			continue
 		}
-		maps.Copy(evidence, gate.ByEvidence(hits[i]))
+		if gate.RecallOnly {
+			// A date past now is a writer's claim, not recency.
+			now := time.Now().Unix()
+			when := func(h *orchdv1.SearchHit) int64 {
+				if t := h.GetEndedAt(); t <= now {
+					return t
+				}
+				return 0
+			}
+			sort.SliceStable(hits[i], func(a, b int) bool { return when(hits[i][a]) > when(hits[i][b]) })
+		} else {
+			maps.Copy(evidence, gate.ByEvidence(hits[i]))
+		}
 		all = append(all, hits[i]...)
 	}
 	sort.SliceStable(all, func(a, b int) bool { return memctx.Rank(all[a]) < memctx.Rank(all[b]) })

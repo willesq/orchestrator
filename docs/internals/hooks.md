@@ -36,7 +36,14 @@ they name a file.
      a fixed list of conversational words and the verbs of the work (`merge`, `release`, `push`,
      `fix`, `ci`, ...). Fewer than two, counting `cache` and `caching` as one, is no topic, unless it
      has an identifier-shaped token or a recall phrase (`left off`, `worked on`, `we decided`, ...).
-     "Let's merge it" gets its meaning from the live session.
+     "Let's merge it" gets its meaning from the live session;
+   - A prompt with no topic that asks what happened (a question word or `recap`, `remind me`, with
+     `worked on`, `working on`, `left off`, `been doing`, `last session`, `last time`) is searched
+     differently: session records of the last 30 days, newest first, the project's alone when in a
+     project, with no score floor, since its date is the match. Only a `session_record` under a
+     `session://` URI qualifies, not flagged, untrusted, harness text, a bare date line, or tagged
+     `queued-task` (what a queued task's session stored). Records reach the store through the Ingest
+     RPC, so a client can still write one under a `session://` URI, labelled as stored by a client.
 2. **Question or statement.** A prompt is a question if it ends in `?`, starts with
    who/what/when/where/why/how/which/can/could/did/do/does/is/are/should/would/will, or contains
    `find `, `show me`, `search for`, `look up`, `remind me`. Questions use `min_score` (0.25);
@@ -123,11 +130,10 @@ they name a file.
 graded blind: on 25 held-out prompts, pointers an agent would use went from 8% to 24% (95% interval of
 the change +6 to +26 points), prompts with one from 3 to 6 (none lost), injections on prompts needing no
 memory from 9 of 13 to 4 of 13, and tokens per prompt from 194 to 125. A prompt that does search runs two
-searches and costs more: the median went from about 470 to 810 ms, on a copy whose transcripts had just
-been rewritten. The list of generic words and the thresholds were tuned on 35 of those prompts; treat
-small differences as noise, and a prompt with no topic of its own (`what have I worked on`) gets nothing.
+searches, sharing one embedding. The list of generic words and the thresholds were tuned on 35 of those
+prompts; treat small differences as noise.
 
-`orch rag why "<prompt>" [--cwd <dir>] [--json]` runs the same decision for a prompt and prints each
+`orch rag why ["<prompt>"] [--cwd <dir>] [--json]` (the prompt from stdin when omitted or `-`) runs the same decision for a prompt and prints each
 candidate's cosine, verdict and shared topics, any failed search, and the exact block, changing
 nothing and marking nothing as injected. Correct what it shows with `orch rag forget <uri>` or by
 ingesting under the same URI. If orchd is down, a search fails or the 3 s deadline passes, the prompt
