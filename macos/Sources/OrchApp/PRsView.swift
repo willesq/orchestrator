@@ -189,8 +189,8 @@ private struct PRRow: View {
                     if let review { ReviewBadge(review: review) }
                     if let task = handoff.working(on: item.url) {
                         AgentChip(task: task)
-                    } else if landings.awaiting(in: handoff.tasks(for: item.url)) != nil {
-                        ReadyToLandChip()
+                    } else if let proposal = landings.awaiting(in: handoff.tasks(for: item.url)) {
+                        ReadyToLandChip(task: proposal)
                     }
                 }
             }

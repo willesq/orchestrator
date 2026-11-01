@@ -311,7 +311,7 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
       - **On the list and board:** while a task works on a PR, its row and card show **Agent
         working** (or **Agent stalled**) with a pulsing dot (steady under Reduce Motion), then
         **Ready to land** while a proposal waits on the user (`PRLandingModel`, from
-        `ListPRLandings` every 5 s).
+        `ListPRLandings` every 5 s), or **Proposal out of date** once the card has found it cannot land.
       - **Task rows:** also say **local only** or **may push**, and what the run cost, so two
         runs on one PR can be told apart.
         A blocked or failed run also shows the first line of why it stopped.
@@ -323,8 +323,9 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
       - **Landing:** a finished run whose result ends with a proposal (see
         [tasks.md](tasks.md#pr-landings)) shows a panel, reloaded when the PR's head changes:
         - **Ready to land:** the commits, the change's size, **Review diff** (the real diff,
-          coloured line by line, shown verbatim), **Push to `<branch>`…** (confirmed, naming the
-          commit and size), **Send back…** and **Discard**. Why it cannot land shows when it cannot.
+          coloured line by line, shown verbatim), **Push to `<branch>`…** (disabled until that diff
+          has been opened; confirmed, naming the commit and size), **Send back…** and **Discard**.
+          Why it cannot land, a diff cut off at its limit and any binary files all show here.
         - **Send back:** the user's feedback and the exact brief for a new local-only run;
           queuing it discards this proposal. ⌘↩ sends.
         - **The PR moved on / cannot land:** orchd's reason, with Send back and Discard.

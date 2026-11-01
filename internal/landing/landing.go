@@ -341,8 +341,8 @@ func (s *Service) Land(ctx context.Context, taskID, sha string) (Landing, error)
 	if err != nil {
 		return l, err
 	}
-	if !repoTrusted(repo) {
-		return l, fmt.Errorf("%w: the copy of this commit has been changed; check it again before pushing", ErrRefused)
+	if err := s.verifyForPush(ctx, repo); err != nil {
+		return l, err
 	}
 	if err := s.push(ctx, repo, ownerRepo, sha, l.Branch); err != nil {
 		return l, err
@@ -382,8 +382,8 @@ func (s *Service) Undo(ctx context.Context, taskID string) (Landing, error) {
 	if err != nil {
 		return Landing{}, err
 	}
-	if !repoTrusted(repo) {
-		return Landing{}, fmt.Errorf("%w: the copy of this commit has been changed, so undo is off", ErrRefused)
+	if err := s.verifyForPush(ctx, repo); err != nil {
+		return Landing{}, err
 	}
 	revert, err := s.restoreCommit(ctx, repo, rec.PriorHead, rec.SHA)
 	if err != nil {

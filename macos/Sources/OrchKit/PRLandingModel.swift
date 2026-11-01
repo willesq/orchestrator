@@ -24,6 +24,7 @@ public final class PRLandingModel {
     /// The commits whose diff the user has opened. Push waits for it.
     public private(set) var reviewed: Set<String> = []
 
+    private var generations: [String: Int] = [:]
     private let api: any PRLandingAPI
     private let sleep: @Sendable (Duration) async throws -> Void
 
@@ -64,15 +65,29 @@ public final class PRLandingModel {
         landing.canLand && reviewed.contains(landing.sha) && acting == nil
     }
 
-    /// Reads what task proposed, checked against the PR's current head.
+    /// Whether what task proposed is known to be unable to land as it is.
+    public func isOutOfDate(_ task: TaskRecord) -> Bool {
+        switch landings[task.id]?.state {
+        case .stale, .invalid: true
+        default: false
+        }
+    }
+
+    /// Reads what task proposed, checked against the PR's current head. The
+    /// newest read wins. A view that goes away or reloads cancels its read,
+    /// which is neither a failure nor a reason to skip the next one.
     public func load(_ taskID: String) async {
-        guard !loading.contains(taskID) else { return }
+        let generation = (generations[taskID] ?? 0) + 1
+        generations[taskID] = generation
         loading.insert(taskID)
-        defer { loading.remove(taskID) }
+        defer { if generations[taskID] == generation { loading.remove(taskID) } }
         do {
-            landings[taskID] = try await api.landing(taskID: taskID)
+            let fresh = try await api.landing(taskID: taskID)
+            guard generations[taskID] == generation else { return }
+            landings[taskID] = fresh
             errors[taskID] = nil
         } catch {
+            guard generations[taskID] == generation, !Task.isCancelled else { return }
             errors[taskID] = DaemonMonitor.describe(error)
         }
     }
@@ -124,6 +139,7 @@ public final class PRLandingModel {
             activity[taskID] = try await api.taskActivity(taskID: taskID)
             activityErrors[taskID] = nil
         } catch {
+            guard !Task.isCancelled else { return }
             activityErrors[taskID] = DaemonMonitor.describe(error)
         }
     }

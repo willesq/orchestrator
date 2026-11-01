@@ -119,24 +119,16 @@ public struct PRDiffLine: Sendable, Equatable, Identifiable {
     public var id: Int { index }
 
     /// Splits a unified diff into lines. Nothing here is ever rendered as
-    /// markup: this only picks each line's colour.
+    /// markup: this only picks each line's colour. It works on Unicode scalars,
+    /// since "\r\n" is one Character and a combining mark joins the character
+    /// before it, either of which would hide a line or its "+" from a comparison
+    /// of Characters. Other line breaks are shown as symbols, so one row cannot
+    /// pose as two.
     public static func parse(_ diff: String) -> [PRDiffLine] {
         var inHunk = false
         var lines: [PRDiffLine] = []
-        // "\r\n" is one Character, so splitting on "\n" would hide the next
-        // line, and its colour, inside this row. The other line breaks must not
-        // let one row pose as two either.
-        let normalized = diff.replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "␍")
-            .replacingOccurrences(of: "\u{2028}", with: "␤")
-            .replacingOccurrences(of: "\u{2029}", with: "␤")
-            .replacingOccurrences(of: "\u{85}", with: "␤")
-            .replacingOccurrences(of: "\u{0B}", with: "␤")
-            .replacingOccurrences(of: "\u{0C}", with: "␤")
-        var raw = normalized.split(separator: "\n", omittingEmptySubsequences: false)
-        if raw.last?.isEmpty == true { raw.removeLast() }
-        for (index, line) in raw.enumerated() {
-            let text = String(line)
+        for (index, scalars) in splitLines(diff).enumerated() {
+            let text = String(String.UnicodeScalarView(scalars))
             let kind: Kind
             if text.hasPrefix("diff --git ") {
                 kind = .file
@@ -146,15 +138,32 @@ public struct PRDiffLine: Sendable, Equatable, Identifiable {
                 inHunk = true
             } else if !inHunk {
                 kind = .meta
-            } else if text.hasPrefix("+") {
+            } else if scalars.first == "+" {
                 kind = .added
-            } else if text.hasPrefix("-") {
+            } else if scalars.first == "-" {
                 kind = .removed
             } else {
                 kind = .context
             }
             lines.append(PRDiffLine(index: index, kind: kind, text: text))
         }
+        return lines
+    }
+
+    private static func splitLines(_ diff: String) -> [[Unicode.Scalar]] {
+        var lines: [[Unicode.Scalar]] = [[]]
+        var pendingReturn = false
+        for scalar in diff.unicodeScalars {
+            if pendingReturn, scalar != "\n" { lines[lines.count - 1].append("␍") }
+            pendingReturn = false
+            switch scalar {
+            case "\n": lines.append([])
+            case "\r": pendingReturn = true
+            case "\u{2028}", "\u{2029}", "\u{85}", "\u{0B}", "\u{0C}": lines[lines.count - 1].append("␤")
+            default: lines[lines.count - 1].append(scalar)
+            }
+        }
+        if lines.last?.isEmpty == true { lines.removeLast() }
         return lines
     }
 }
@@ -199,7 +208,9 @@ extension PRHandoff {
               let first = task.result.split(whereSeparator: \.isNewline).first
         else { return nil }
         let line = first.trimmingCharacters(in: .whitespaces)
-        return line.hasPrefix("BLOCKED:") ? String(line.dropFirst(8)).trimmingCharacters(in: .whitespaces) : line
+        let reason = line.hasPrefix("BLOCKED:") ? String(line.dropFirst(8)).trimmingCharacters(in: .whitespaces) : line
+        // Results are written as Markdown; this shows as plain text.
+        return reason.replacing(/\[([^\]]*)\]\([^)]*\)/) { String($0.output.1) }
     }
 
     /// Whether task's brief told it to stay off the remote.

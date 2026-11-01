@@ -211,8 +211,10 @@ under the home directory, and for the result's last non-empty line to be
    copies the commit once into `<data>/landings/<task>.git`, a bare repository with no hooks and none
    of the worktree's config, by fetching the worktree's `HEAD` and checking it is the reported commit.
    Later commands run there, with replacement refs off. An agent runs as the same user and could write
-   there too, so a repository with any other config, or with hooks, replacement refs or grafts, is
-   thrown away and rebuilt on reading, and refused on pushing. The fetch needs git 2.45.1 or newer,
+   there too, so a repository with any other config, or with a planted `.git`, hooks, replacement refs,
+   grafts or a commit graph, is thrown away and rebuilt on reading, and refused on pushing. Pushing also
+   runs a full `git fsck` first, so a replaced object cannot show one change and send another. Commands
+   name the repository with `--git-dir`. The fetch needs git 2.45.1 or newer,
    whose `upload-pack` refuses a lazy fetch that a hostile source could use to run a command. orchd
    then reads the PR with `gh pr view` and compares:
 
@@ -246,6 +248,9 @@ a binary file changed.
 - The rule against pushing is an instruction, not a sandbox. An agent that pushes anyway is caught by
   the activity feed and the `on_pr` state, not prevented. The feed is evidence, not proof: a same-user
   agent can flood or forge its own transcript.
+- `fsck` runs before each push, so a slow repository takes longer to push, and a change made between
+  the check and the push is not caught. A worktree's `.git` file may point outside home; only the
+  commit is copied from it.
 - A process that outlives its task's process tree counts as the operator, as for every operator-only
   RPC ([daemon.md](daemon.md)), so it could call `LandPR`. A same-user agent could equally run `git
   push` itself: landing is a review gate for honest and prompt-injected runs, not a containment

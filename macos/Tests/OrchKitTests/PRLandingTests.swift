@@ -14,12 +14,19 @@ private final class FakeLandings: PRLandingAPI, @unchecked Sendable {
     var failLoad = false
     var failAct = false
     var failDecisions = false
+    /// Makes the next landing read wait until it is cancelled, as a real call does.
+    var hang = false
+    private(set) var loadCalls = 0
     private(set) var landed: [String] = []
     private(set) var undone = 0
     private(set) var discards: [Bool] = []
     private(set) var activityReads = 0
 
     func landing(taskID: String) async throws -> PRLanding {
+        loadCalls += 1
+        if hang {
+            try await Task.sleep(for: .seconds(60))
+        }
         if failLoad { throw Boom() }
         return current
     }
@@ -101,6 +108,7 @@ private func proposing(_ id: String = "t1", status: String = "complete", last: S
     @Test func stopReasonShowsWhyARunStopped() {
         #expect(PRHandoff.stopReason(TaskRecord(id: "x", result: "BLOCKED: no signer\nmore", status: "blocked")) == "no signer")
         #expect(PRHandoff.stopReason(TaskRecord(id: "x", result: "exit 1", status: "failed")) == "exit 1")
+        #expect(PRHandoff.stopReason(TaskRecord(id: "x", result: "BLOCKED: on [#1](https://x/1) now", status: "blocked")) == "on #1 now")
         #expect(PRHandoff.stopReason(TaskRecord(id: "x", result: "fine", status: "complete")) == nil)
         #expect(PRHandoff.stopReason(TaskRecord(id: "x", result: "", status: "blocked")) == nil)
     }
@@ -161,6 +169,36 @@ private func proposing(_ id: String = "t1", status: String = "complete", last: S
         #expect(model.landings["t1"]?.state == .proposed)
         #expect(model.errors["t1"] == nil)
         #expect(model.loading.isEmpty)
+    }
+
+    /// The panel reloads when the PR's head arrives, which cancels the first
+    /// read. That is not a failure, and must not stop the second read.
+    @Test func aCancelledLoadIsNotAnErrorAndTheNewestLoadWins() async {
+        let api = FakeLandings()
+        api.hang = true
+        let model = PRLandingModel(api: api)
+        let first = Task { await model.load("t1") }
+        while api.loadCalls == 0 { await Task.yield() }
+        api.hang = false
+        await model.load("t1")
+        #expect(api.loadCalls == 2)
+        #expect(model.landings["t1"]?.state == .proposed)
+        first.cancel()
+        await first.value
+        #expect(model.errors["t1"] == nil)
+        #expect(model.loading.isEmpty)
+
+        api.hang = true
+        let cancelled = Task { await model.load("t2") }
+        while api.loadCalls == 2 { await Task.yield() }
+        cancelled.cancel()
+        await cancelled.value
+        #expect(model.errors["t2"] == nil)
+        #expect(model.loading.isEmpty)
+
+        let reading = Task { await model.refreshActivity("t1") }
+        reading.cancel()
+        await reading.value
     }
 
     @Test func landPushesExactlyTheCommitShown() async {
@@ -252,6 +290,10 @@ private func proposing(_ id: String = "t1", status: String = "complete", last: S
         let parsed = PRDiffLine.parse(hostile)
         #expect(parsed.map(\.kind) == [.file, .hunk, .context, .added, .context])
         #expect(parsed[4].text == " ok␤+fake")
+        // A combining mark must not hide the "+" of an added line.
+        let marked = PRDiffLine.parse("@@ -1 +1 @@\n+\u{301}evil\n-\u{301}old\n x\ry\n")
+        #expect(marked.map(\.kind) == [.hunk, .added, .removed, .context])
+        #expect(marked[3].text == " x␍y")
     }
 
     @Test func stepsPickASymbolByWhatTheyDo() {
@@ -273,6 +315,21 @@ private func proposing(_ id: String = "t1", status: String = "complete", last: S
         #expect(landing.unseen.contains("too long") && landing.unseen.contains("1 binary file changed"))
         landing.binaryFiles = 2
         #expect(landing.unseen.contains("2 binary files"))
+    }
+
+    @Test func aStaleProposalIsOutOfDate() async {
+        let api = FakeLandings()
+        let model = PRLandingModel(api: api)
+        let task = proposing()
+        #expect(!model.isOutOfDate(task))
+        await model.load("t1")
+        #expect(!model.isOutOfDate(task))
+        api.current.state = .stale
+        await model.load("t1")
+        #expect(model.isOutOfDate(task))
+        api.current.state = .invalid
+        await model.load("t1")
+        #expect(model.isOutOfDate(task))
     }
 
     @Test func pushWaitsForTheUserToOpenTheDiff() {

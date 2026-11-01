@@ -279,8 +279,8 @@ private struct PRCard: View {
                 if let review { ReviewBadge(review: review) }
                 if let agent {
                     AgentChip(task: agent)
-                } else if landings.awaiting(in: handoff.tasks(for: item.url)) != nil {
-                    ReadyToLandChip()
+                } else if let proposal = landings.awaiting(in: handoff.tasks(for: item.url)) {
+                    ReadyToLandChip(task: proposal)
                 }
             }
             .lineLimit(1)

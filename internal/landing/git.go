@@ -44,7 +44,13 @@ var baseConfig = []string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonito
 // Git runs the real git with no terminal prompts and no inherited repository
 // environment.
 func Git(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, "git", append(append([]string{}, baseConfig...), args...)...)
+	all := append([]string{}, baseConfig...)
+	// Inside a landing repository, name it: git would otherwise prefer a .git
+	// planted within it over the repository itself.
+	if strings.HasSuffix(dir, ".git") {
+		all = append(all, "--git-dir=.")
+	}
+	cmd := exec.CommandContext(ctx, "git", append(all, args...)...)
 	cmd.Dir = dir
 	for _, kv := range os.Environ() {
 		if !strings.HasPrefix(kv, "GIT_") {
@@ -119,13 +125,27 @@ func repoTrusted(repo string) bool {
 	if err != nil || string(config) != repoConfig {
 		return false
 	}
-	for _, path := range []string{"hooks", "config.worktree", "shallow", "worktrees", "refs/replace",
-		"info/grafts", "info/attributes", "objects/info/alternates", "commondir"} {
+	for _, path := range []string{".git", "hooks", "config.worktree", "shallow", "worktrees", "refs/replace",
+		"info/grafts", "info/attributes", "objects/info/alternates", "objects/info/commit-graph",
+		"objects/info/commit-graphs", "commondir", "gitdir"} {
 		if _, err := os.Lstat(filepath.Join(repo, path)); err == nil {
 			return false
 		}
 	}
 	return true
+}
+
+// verifyForPush checks repo just before a push. Beyond repoTrusted, it rehashes
+// every object: a replaced loose object would show one change and send another,
+// since GitHub may already hold the real object elsewhere and accept the commit.
+func (s *Service) verifyForPush(ctx context.Context, repo string) error {
+	if !repoTrusted(repo) {
+		return fmt.Errorf("%w: the copy of this commit has been changed; check it again", ErrRefused)
+	}
+	if _, err := s.Git(ctx, repo, "fsck", "--full", "--no-dangling", "--no-progress"); err != nil {
+		return fmt.Errorf("%w: the copy of this commit does not check out: %s", ErrRefused, problemText(err))
+	}
+	return nil
 }
 
 // minGitVersion is the first git whose upload-pack refuses a lazy fetch by

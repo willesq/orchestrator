@@ -1,6 +1,8 @@
 package landing
 
 import (
+	"bytes"
+	"compress/zlib"
 	"context"
 	"encoding/json"
 	"errors"
@@ -593,6 +595,62 @@ func TestAPlantedRepositoryIsThrownAway(t *testing.T) {
 				t.Error("the commit did not reach the PR's branch")
 			}
 		})
+	}
+}
+
+// A replaced loose object can make the diff show one change while the push
+// sends another, so the push must not trust what it showed.
+func TestLandRefusesAForgedObject(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	if _, err := w.svc.Get(ctx, "task-1"); err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(w.svc.Dir, "task-1.git")
+	blob := run(t, repo, "rev-parse", w.sha+":a.txt")
+	path := filepath.Join(repo, "objects", blob[:2], blob[2:])
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var forged bytes.Buffer
+	zw := zlib.NewWriter(&forged)
+	if _, err := zw.Write([]byte("blob 5\x00harm\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, forged.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.svc.Land(ctx, "task-1", w.sha); !errors.Is(err, ErrRefused) {
+		t.Errorf("land: %v", err)
+	}
+	if w.remoteHead() != w.base {
+		t.Error("the forged commit reached the remote")
+	}
+}
+
+// Git prefers a .git inside the directory it runs in, so a landing repository
+// must be named, not discovered.
+func TestAPlantedDotGitIsNotRead(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	if _, err := w.svc.Get(ctx, "task-1"); err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(w.svc.Dir, "task-1.git")
+	other := filepath.Join(w.home, "other.git")
+	run(t, w.home, "init", "--quiet", "--bare", other)
+	run(t, other, "config", "user.name", "planted")
+	if err := os.WriteFile(filepath.Join(repo, ".git"), []byte("gitdir: "+other+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := Git(ctx, repo, "config", "--local", "--get", "user.name"); err == nil {
+		t.Errorf("the planted repository's config was read: %q", out)
+	}
+	if repoTrusted(repo) {
+		t.Error("a planted .git passed")
 	}
 }
 

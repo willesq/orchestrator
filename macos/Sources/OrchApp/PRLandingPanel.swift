@@ -155,7 +155,10 @@ struct PRLandingPanel: View {
             Button("Push \(PRReview.short(landing.sha))") { Task { await landings.land(landing) } }
             Button("Not yet", role: .cancel) {}
         } message: { landing in
-            Text(verbatim: "\(landing.commitCount), +\(landing.additions) −\(landing.deletions). \(landing.unseen) Fast-forward only, and refused if the branch has moved. Undo stays available until someone pushes on top.")
+            Text(verbatim: [
+                "\(landing.commitCount), +\(landing.additions) −\(landing.deletions).", landing.unseen,
+                "Fast-forward only, and refused if the branch has moved. Undo stays available until someone pushes on top.",
+            ].filter { !$0.isEmpty }.joined(separator: " "))
         }
         .confirmationDialog("Undo this landing?", isPresented: $confirmUndo, presenting: landing) { landing in
             Button("Push a commit that undoes it") { Task { await landings.undo(landing.taskID) } }
@@ -276,6 +279,9 @@ struct PRLandingPanel: View {
         header("Undone", symbol: "arrow.uturn.backward.circle", tone: .neutral)
         Text(verbatim: "\(PRReview.short(landing.revertSHA)) on \(displaySafe(landing.branch)) restored the tree of \(PRReview.short(landing.baseSHA)). \(PRReview.short(landing.sha)) stays in its history.")
             .font(.caption)
+        Button { showDiff = true } label: { Label("Review diff", systemImage: "doc.text.magnifyingglass") }
+            .controlSize(.small)
+            .disabled(landing.diff.isEmpty)
     }
 
     @ViewBuilder
@@ -314,6 +320,8 @@ private struct PRLandingDiffSheet: View {
                 .padding(6)
                 .textSelection(.enabled)
             }
+            // A short diff must start at the corner, not float in the middle.
+            .defaultScrollAnchor(.topLeading)
             .overlay(RoundedRectangle(cornerRadius: 4).stroke(.quaternary))
             HStack {
                 Spacer()
@@ -416,8 +424,17 @@ private struct SendBackSheet: View {
 
 /// The chip a PR row or card shows while a proposal waits on the user.
 struct ReadyToLandChip: View {
+    let task: TaskRecord
+
+    @Environment(PRLandingModel.self) private var landings
+
     var body: some View {
-        Chip(text: "Ready to land", tone: .accent, symbol: "tray.and.arrow.up.fill",
-             help: "An agent proposed a commit for this PR. Nothing is pushed until you choose to.")
+        if landings.isOutOfDate(task) {
+            Chip(text: "Proposal out of date", tone: .warning, symbol: "exclamationmark.triangle.fill",
+                 help: "An agent proposed a commit that can no longer land. Send it back or discard it.")
+        } else {
+            Chip(text: "Ready to land", tone: .accent, symbol: "tray.and.arrow.up.fill",
+                 help: "An agent proposed a commit for this PR. Nothing is pushed until you choose to.")
+        }
     }
 }
