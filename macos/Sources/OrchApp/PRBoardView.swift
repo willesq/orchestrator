@@ -213,6 +213,7 @@ private struct PRCard: View {
     let select: () -> Void
 
     @Environment(PRHandoffModel.self) private var handoff
+    @Environment(PRLandingModel.self) private var landings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -276,7 +277,11 @@ private struct PRCard: View {
                 if item.isDraft { Chip(text: "Draft") }
                 if let ci { ci }
                 if let review { ReviewBadge(review: review) }
-                if let agent { AgentChip(task: agent) }
+                if let agent {
+                    AgentChip(task: agent)
+                } else if landings.awaiting(in: handoff.tasks(for: item.url)) != nil {
+                    ReadyToLandChip()
+                }
             }
             .lineLimit(1)
         }

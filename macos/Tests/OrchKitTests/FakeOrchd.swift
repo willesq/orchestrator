@@ -28,6 +28,9 @@ struct FakeOrchdService: RegistrableRPCService {
     var document = Orchd_V1_Document()
     var registered = Orchd_V1_ListRegisteredSourcesResponse()
     var safetyNet = Orchd_V1_SafetyNetState()
+    var landing = Orchd_V1_PRLanding()
+    var landingDecisions = Orchd_V1_ListPRLandingsResponse()
+    var activity = Orchd_V1_TaskActivity()
     var settings = Orchd_V1_ListSettingsResponse()
     var settingItem = Orchd_V1_SettingItem()
     /// Records requests the fake received, for assertions.
@@ -43,6 +46,54 @@ struct FakeOrchdService: RegistrableRPCService {
         let docs = self.docs, document = self.document, registered = self.registered
         let safetyNet = self.safetyNet
         let settings = self.settings, settingItem = self.settingItem
+        let landing = self.landing, landingDecisions = self.landingDecisions, activity = self.activity
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.GetPRLanding.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_PRLandingRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_PRLanding>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: landing))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListPRLandings.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListPRLandingsRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListPRLandingsResponse>()
+        ) { _, _ in
+            StreamingServerResponse(single: ServerResponse(message: landingDecisions))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.LandPR.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_LandPRRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_PRLanding>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: landing))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.UndoPRLanding.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_PRLandingRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_PRLanding>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: landing))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.DiscardPRLanding.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_DiscardPRLandingRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_PRLanding>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: landing))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.GetTaskActivity.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_GetTaskActivityRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_TaskActivity>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: activity))
+        }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.ListSettings.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_ListSettingsRequest>(),

@@ -303,6 +303,83 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
         _ = try await orchd.stopPRReview(request, options: callOptions)
     }
 
+    public func landing(taskID: String) async throws -> PRLanding {
+        var request = Orchd_V1_PRLandingRequest()
+        request.taskID = taskID
+        return Self.landing(try await orchd.getPRLanding(request, options: landingOptions))
+    }
+
+    public func landingDecisions() async throws -> [String: PRLanding.State] {
+        let response = try await orchd.listPRLandings(Orchd_V1_ListPRLandingsRequest(), options: callOptions)
+        return response.decisions.reduce(into: [:]) { out, decision in
+            if let state = PRLanding.State(rawValue: decision.state) { out[decision.taskID] = state }
+        }
+    }
+
+    public func land(taskID: String, sha: String) async throws -> PRLanding {
+        var request = Orchd_V1_LandPRRequest()
+        request.taskID = taskID
+        request.sha = sha
+        return Self.landing(try await orchd.landPR(request, options: landingOptions))
+    }
+
+    public func undoLanding(taskID: String) async throws -> PRLanding {
+        var request = Orchd_V1_PRLandingRequest()
+        request.taskID = taskID
+        return Self.landing(try await orchd.undoPRLanding(request, options: landingOptions))
+    }
+
+    public func discardLanding(taskID: String, restore: Bool) async throws -> PRLanding {
+        var request = Orchd_V1_DiscardPRLandingRequest()
+        request.taskID = taskID
+        request.restore = restore
+        return Self.landing(try await orchd.discardPRLanding(request, options: landingOptions))
+    }
+
+    public func taskActivity(taskID: String) async throws -> TaskActivityLog {
+        var request = Orchd_V1_GetTaskActivityRequest()
+        request.id = taskID
+        let response = try await orchd.getTaskActivity(request, options: callOptions)
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let steps = response.steps.enumerated().map { index, step in
+            TaskActivityStep(index: index, at: iso.date(from: step.at), kind: step.kind, text: step.text, risk: step.risk)
+        }
+        return TaskActivityLog(available: response.available, steps: steps, total: Int(response.total))
+    }
+
+    /// A landing fetches a repository and may push over the network.
+    private var landingOptions: CallOptions {
+        var options = CallOptions.defaults
+        options.timeout = .seconds(180)
+        return options
+    }
+
+    static func landing(_ l: Orchd_V1_PRLanding) -> PRLanding {
+        var out = PRLanding(taskID: l.taskID, state: PRLanding.State(rawValue: l.state) ?? .none)
+        out.url = l.url
+        out.problem = l.problem
+        out.path = l.path
+        out.branch = l.branch
+        out.baseSHA = l.baseSha
+        out.sha = l.sha
+        out.commits = l.commits.map { .init(sha: $0.sha, subject: $0.subject, author: $0.author) }
+        out.totalCommits = Int(l.totalCommits)
+        out.files = l.files.map { .init(path: $0.path, additions: Int($0.additions), deletions: Int($0.deletions)) }
+        out.totalFiles = Int(l.totalFiles)
+        out.additions = Int(l.additions)
+        out.deletions = Int(l.deletions)
+        out.binaryFiles = Int(l.binaryFiles)
+        out.diff = l.diff
+        out.diffTruncated = l.diffTruncated
+        out.canLand = l.canLand
+        out.blocked = l.blocked
+        out.canUndo = l.canUndo
+        out.revertSHA = l.revertSha
+        out.decidedAt = l.decidedAt > 0 ? Date(timeIntervalSince1970: TimeInterval(l.decidedAt)) : nil
+        return out
+    }
+
     public func prDetail(url: String, refresh: Bool) async throws -> PRDetail {
         var request = Orchd_V1_GetPRDetailRequest()
         request.url = url

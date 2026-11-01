@@ -161,6 +161,7 @@ private struct PRRow: View {
     let review: PRReview?
 
     @Environment(PRHandoffModel.self) private var handoff
+    @Environment(PRLandingModel.self) private var landings
 
     var body: some View {
         let stale = item.isStale()
@@ -186,7 +187,11 @@ private struct PRRow: View {
                     }
                     if item.isDraft { Chip(text: "Draft") }
                     if let review { ReviewBadge(review: review) }
-                    if let task = handoff.working(on: item.url) { AgentChip(task: task) }
+                    if let task = handoff.working(on: item.url) {
+                        AgentChip(task: task)
+                    } else if landings.awaiting(in: handoff.tasks(for: item.url)) != nil {
+                        ReadyToLandChip()
+                    }
                 }
             }
             Spacer(minLength: 0)

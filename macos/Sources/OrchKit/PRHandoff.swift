@@ -98,7 +98,13 @@ public enum PRHandoff {
         if push {
             lines.append("- Push your commits to \(repo(detail.url)):\(detail.headRef) only. Never force-push, merge, close the PR, or push another branch.")
         } else {
-            lines.append("- Do not push, and do not comment on GitHub. Work in a local worktree and report the diff.")
+            // Someone else's PR or a protected head cannot land from orch, so
+            // proposing a commit would promise a button that never comes.
+            if canPush(detail, ownPR: ownPR) {
+                lines.append(contentsOf: proposalRules)
+            } else {
+                lines.append("\(noPushRule) Work in a local worktree and report the diff.")
+            }
         }
         if ownPR {
             lines.append("- Run the project's tests before you finish, and report what you changed and how you checked it.")
@@ -123,6 +129,17 @@ public enum PRHandoff {
         let linked = tasks.filter { links($0, to: url) }
         return linked.filter(\.isUnsettled) + linked.filter { !$0.isUnsettled }
     }
+
+    /// The rule that keeps an agent off the remote; `askedNotToPush` finds it.
+    static let noPushRule = "- Do not push, and do not comment on GitHub."
+
+    /// How an agent that may not push offers its commit for the user to land.
+    /// orchd reads the last line of the result; see internal/landing.
+    static let proposalRules = [
+        "\(noPushRule) The user reviews your commit in Orch and pushes it from there.",
+        "- Commit on top of the PR's current head in a worktree under your home directory, and leave that commit checked out.",
+        "- If you made a commit, end your final message with exactly this as its last line: PROPOSED: <absolute worktree path> <full 40-character commit SHA>",
+    ]
 
     /// How much of a review's full text goes into a brief.
     static let reportLimit = 8000
@@ -162,12 +179,12 @@ public enum PRHandoff {
     }
 
     /// owner/repo of a PR URL, or the URL itself.
-    private static func repo(_ url: String) -> String {
+    static func repo(_ url: String) -> String {
         let parts = URL(string: url)?.pathComponents ?? []
         return parts.count == 5 ? "\(parts[1])/\(parts[2])" : url
     }
 
-    private static func number(_ url: String) -> String {
+    static func number(_ url: String) -> String {
         URL(string: url)?.lastPathComponent ?? url
     }
 

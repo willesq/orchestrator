@@ -46,6 +46,7 @@ struct MainWindow: View {
     let github: GitHubModel
     let prs: PRsModel
     let handoff: PRHandoffModel
+    let landings: PRLandingModel
     let system: SystemModel
     let logs: LogsModel
     let docs: DocsModel
@@ -141,12 +142,14 @@ struct MainWindow: View {
             case .github:
                 GitHubView(model: github, prs: prs, navigator: navigator)
                     .environment(handoff)
+                    .environment(landings)
                     .environment(\.openTask) { id in
                         tasks.selectedID = id
                         pane = .tasks
                     }
                     // Which PRs an agent is on shows in the list, board and detail.
                     .task { await handoff.follow() }
+                    .task { await landings.follow() }
             case .claude:
                 ClaudeView(model: claude)
             case .safetyNet:

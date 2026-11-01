@@ -136,6 +136,22 @@ service Orchd {
   // RemoveSetting deletes an item you added or orch found from its file and
   // forgets it. Items orch install writes can only be turned off.
   rpc RemoveSetting(RemoveSettingRequest) returns (RemoveSettingResponse);
+  // GetTaskActivity reads what a task's session has done so far from its
+  // transcript: commands, edits and reads, with risky commands marked.
+  rpc GetTaskActivity(GetTaskActivityRequest) returns (TaskActivity);
+  // GetPRLanding shows the commit a task proposed for its PR, checked against
+  // the PR's current head, and what the user decided about it.
+  rpc GetPRLanding(PRLandingRequest) returns (PRLanding);
+  // ListPRLandings lists the decided landings, without calling GitHub, so the
+  // app can tell which proposals still wait on the user.
+  rpc ListPRLandings(ListPRLandingsRequest) returns (ListPRLandingsResponse);
+  // LandPR pushes the proposed commit to the PR's branch, fast-forward only.
+  rpc LandPR(LandPRRequest) returns (PRLanding);
+  // UndoPRLanding pushes a new commit restoring the tree the PR had before
+  // the landing. It never rewrites history.
+  rpc UndoPRLanding(PRLandingRequest) returns (PRLanding);
+  // DiscardPRLanding sets a proposal aside, or with restore brings it back.
+  rpc DiscardPRLanding(DiscardPRLandingRequest) returns (PRLanding);
 }
 
 message PingRequest {}
@@ -1031,4 +1047,79 @@ message PRFile {
   string path = 1;
   int32 additions = 2;
   int32 deletions = 3;
+}
+
+message GetTaskActivityRequest {
+  string id = 1;
+}
+
+message TaskActivityStep {
+  string at = 1;     // RFC 3339, empty when the transcript has no time
+  string kind = 2;   // read | edit | run | agent | other
+  string text = 3;   // the command, path or pattern, redacted and capped
+  string risk = 4;   // what makes it risky ("git push"), empty when it is not
+}
+
+message TaskActivity {
+  bool available = 1;                   // false: no transcript (a Codex run, or not started)
+  repeated TaskActivityStep steps = 2;  // oldest first; older plain steps are dropped past the limit
+  int32 total = 3;                      // steps read, including dropped ones
+}
+
+message PRLandingRequest {
+  string task_id = 1;
+}
+
+message ListPRLandingsRequest {}
+
+message PRLandingDecision {
+  string task_id = 1;
+  string url = 2;
+  string state = 3;
+}
+
+message ListPRLandingsResponse {
+  repeated PRLandingDecision decisions = 1;
+}
+
+message LandPRRequest {
+  string task_id = 1;
+  string sha = 2;     // the commit the user reviewed; anything else is refused
+}
+
+message DiscardPRLandingRequest {
+  string task_id = 1;
+  bool restore = 2;
+}
+
+message PRLandingCommit {
+  string sha = 1;
+  string subject = 2;
+  string author = 3;
+}
+
+message PRLanding {
+  string task_id = 1;
+  string url = 2;
+  // none | proposed | stale | invalid | on_pr | landed | undone | discarded
+  string state = 3;
+  string problem = 4;       // why it is stale or invalid
+  string path = 5;          // the worktree the proposal came from
+  string branch = 6;        // the PR's head branch
+  string base_sha = 7;      // the PR's head the commit builds on
+  string sha = 8;           // the proposed commit
+  repeated PRLandingCommit commits = 9;
+  int32 total_commits = 10;
+  repeated PRFile files = 11;
+  string diff = 12;         // capped; other people's text, shown verbatim
+  bool diff_truncated = 13;
+  bool can_land = 14;
+  string blocked = 15;      // why it cannot land, for the user
+  bool can_undo = 16;
+  string revert_sha = 17;
+  int64 decided_at = 18;    // unix seconds
+  int32 total_files = 19;   // files may list fewer
+  int32 additions = 20;
+  int32 deletions = 21;
+  int32 binary_files = 22;  // their changes show in no line count or diff
 }

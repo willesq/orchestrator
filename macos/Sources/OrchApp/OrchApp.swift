@@ -37,6 +37,7 @@ final class AppModel {
     let reviews: ReviewMonitor
     let prs: PRsModel
     let handoff: PRHandoffModel
+    let landings: PRLandingModel
     let navigator = Navigator()
     let windowControl = WindowControl()
     /// Brings the main window forward; set by the app delegate.
@@ -51,7 +52,7 @@ final class AppModel {
     private(set) var badges: PeriodicRefresh?
 
     init() {
-        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & PRReviewAPI & SystemAPI & CatalogAPI
+        let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & PRReviewAPI & PRLandingAPI & SystemAPI & CatalogAPI
             & SafetyNetAPI & SettingsAPI
         do {
             let client = try DaemonClient()
@@ -74,6 +75,7 @@ final class AppModel {
         self.reviews = reviews
         prs = PRsModel(api: api, reviews: reviews, taskLookup: { [api] id in try await api.task(id: id) })
         handoff = PRHandoffModel(api: api)
+        landings = PRLandingModel(api: api)
         system = SystemModel(api: api, loadReport: { try await DaemonControl().statusReport() })
         logs = LogsModel(api: api)
         docs = DocsModel(api: api)
@@ -204,4 +206,13 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
     func saveSource(_ draft: SourceDraft, replacing: String?) async throws -> RegisteredSource { throw failure }
     func removeSource(id: String, purge: Bool) async throws -> PurgeResult { throw failure }
     func refreshSource(id: String?) async throws { throw failure }
+}
+
+extension UnreachableDaemon: PRLandingAPI {
+    func landing(taskID: String) async throws -> PRLanding { throw failure }
+    func landingDecisions() async throws -> [String: PRLanding.State] { throw failure }
+    func land(taskID: String, sha: String) async throws -> PRLanding { throw failure }
+    func undoLanding(taskID: String) async throws -> PRLanding { throw failure }
+    func discardLanding(taskID: String, restore: Bool) async throws -> PRLanding { throw failure }
+    func taskActivity(taskID: String) async throws -> TaskActivityLog { throw failure }
 }

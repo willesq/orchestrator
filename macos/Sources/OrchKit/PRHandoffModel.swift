@@ -22,6 +22,12 @@ public struct PRHandoffDraft: Sendable, Equatable {
         self.init(goal: PRHandoff.suggestions(detail: detail, review: review).first ?? .other)
     }
 
+    /// Something else says nothing by itself, so it needs notes or an edited
+    /// brief: an agent sent off without them can only stop and ask.
+    public var needsInstructions: Bool {
+        goal == .other && editedBrief == nil && notes.allSatisfy(\.isWhitespace)
+    }
+
     /// ownPR false keeps the agent from pushing or running the PR's code.
     public func brief(detail: PRDetail, review: PRReview?, ownPR: Bool) -> String {
         editedBrief ?? PRHandoff.brief(goal: goal, detail: detail, review: review, mayPush: mayPush, notes: notes,

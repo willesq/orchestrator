@@ -38,6 +38,7 @@ import (
 	"github.com/willesq/orchestrator/internal/embed"
 	"github.com/willesq/orchestrator/internal/github"
 	"github.com/willesq/orchestrator/internal/handoff"
+	"github.com/willesq/orchestrator/internal/landing"
 	"github.com/willesq/orchestrator/internal/logs"
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
@@ -133,6 +134,9 @@ type server struct {
 	// nil when unavailable.
 	reviews *reviews.Watcher
 	details *detailCache
+	// landing decides what happens to commits tasks propose; nil when
+	// unavailable.
+	landing *landing.Service
 	// handoffDir is where SetGitHubScope asks the PR watcher to sweep now.
 	handoffDir string
 	// system serves TailLogs and GetSystemMetrics; nil when unavailable.
@@ -671,6 +675,7 @@ func Run(ctx context.Context) error {
 		prStateFile:  paths.PRStateFile(),
 		github:       ghService,
 		reviews:      reviewWatcher,
+		landing:      newLandingService(landing.NewStore(store), tasks, ghService),
 		details:      newDetailCache(github.GH),
 		handoffDir:   handoff.Dir(),
 		system:       system,

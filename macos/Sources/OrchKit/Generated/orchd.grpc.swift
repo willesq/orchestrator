@@ -605,6 +605,84 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "GetTaskActivity" metadata.
+        public enum GetTaskActivity: Sendable {
+            /// Request type for "GetTaskActivity".
+            public typealias Input = Orchd_V1_GetTaskActivityRequest
+            /// Response type for "GetTaskActivity".
+            public typealias Output = Orchd_V1_TaskActivity
+            /// Descriptor for "GetTaskActivity".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetTaskActivity",
+                type: .unary
+            )
+        }
+        /// Namespace for "GetPRLanding" metadata.
+        public enum GetPRLanding: Sendable {
+            /// Request type for "GetPRLanding".
+            public typealias Input = Orchd_V1_PRLandingRequest
+            /// Response type for "GetPRLanding".
+            public typealias Output = Orchd_V1_PRLanding
+            /// Descriptor for "GetPRLanding".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetPRLanding",
+                type: .unary
+            )
+        }
+        /// Namespace for "ListPRLandings" metadata.
+        public enum ListPRLandings: Sendable {
+            /// Request type for "ListPRLandings".
+            public typealias Input = Orchd_V1_ListPRLandingsRequest
+            /// Response type for "ListPRLandings".
+            public typealias Output = Orchd_V1_ListPRLandingsResponse
+            /// Descriptor for "ListPRLandings".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListPRLandings",
+                type: .unary
+            )
+        }
+        /// Namespace for "LandPR" metadata.
+        public enum LandPR: Sendable {
+            /// Request type for "LandPR".
+            public typealias Input = Orchd_V1_LandPRRequest
+            /// Response type for "LandPR".
+            public typealias Output = Orchd_V1_PRLanding
+            /// Descriptor for "LandPR".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "LandPR",
+                type: .unary
+            )
+        }
+        /// Namespace for "UndoPRLanding" metadata.
+        public enum UndoPRLanding: Sendable {
+            /// Request type for "UndoPRLanding".
+            public typealias Input = Orchd_V1_PRLandingRequest
+            /// Response type for "UndoPRLanding".
+            public typealias Output = Orchd_V1_PRLanding
+            /// Descriptor for "UndoPRLanding".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "UndoPRLanding",
+                type: .unary
+            )
+        }
+        /// Namespace for "DiscardPRLanding" metadata.
+        public enum DiscardPRLanding: Sendable {
+            /// Request type for "DiscardPRLanding".
+            public typealias Input = Orchd_V1_DiscardPRLandingRequest
+            /// Response type for "DiscardPRLanding".
+            public typealias Output = Orchd_V1_PRLanding
+            /// Descriptor for "DiscardPRLanding".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "DiscardPRLanding",
+                type: .unary
+            )
+        }
         /// Descriptors for all methods in the "orchd.v1.Orchd" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             Ping.descriptor,
@@ -651,7 +729,13 @@ public enum Orchd_V1_Orchd: Sendable {
             ListSettings.descriptor,
             SetSettingEnabled.descriptor,
             AddSetting.descriptor,
-            RemoveSetting.descriptor
+            RemoveSetting.descriptor,
+            GetTaskActivity.descriptor,
+            GetPRLanding.descriptor,
+            ListPRLandings.descriptor,
+            LandPR.descriptor,
+            UndoPRLanding.descriptor,
+            DiscardPRLanding.descriptor
         ]
     }
 }
@@ -1748,6 +1832,148 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RemoveSettingResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RemoveSettingResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetTaskActivity" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetTaskActivity reads what a task's session has done so far from its
+        /// > transcript: commands, edits and reads, with risky commands marked.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetTaskActivityRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetTaskActivityRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_TaskActivity` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getTaskActivity<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetTaskActivityRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetTaskActivityRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_TaskActivity>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_TaskActivity>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetPRLanding" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetPRLanding shows the commit a task proposed for its PR, checked against
+        /// > the PR's current head, and what the user decided about it.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_PRLandingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_PRLandingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRLanding` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getPRLanding<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_PRLandingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_PRLandingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRLanding>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListPRLandings" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListPRLandings lists the decided landings, without calling GitHub, so the
+        /// > app can tell which proposals still wait on the user.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListPRLandingsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListPRLandingsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListPRLandingsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listPRLandings<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListPRLandingsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListPRLandingsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListPRLandingsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListPRLandingsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "LandPR" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > LandPR pushes the proposed commit to the PR's branch, fast-forward only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_LandPRRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_LandPRRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRLanding` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func landPR<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_LandPRRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_LandPRRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRLanding>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "UndoPRLanding" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > UndoPRLanding pushes a new commit restoring the tree the PR had before
+        /// > the landing. It never rewrites history.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_PRLandingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_PRLandingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRLanding` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func undoPRLanding<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_PRLandingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_PRLandingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRLanding>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "DiscardPRLanding" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DiscardPRLanding sets a proposal aside, or with restore brings it back.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_DiscardPRLandingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_DiscardPRLandingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRLanding` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func discardPRLanding<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_DiscardPRLandingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_DiscardPRLandingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRLanding>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -3338,6 +3564,214 @@ extension Orchd_V1_Orchd {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "GetTaskActivity" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetTaskActivity reads what a task's session has done so far from its
+        /// > transcript: commands, edits and reads, with risky commands marked.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetTaskActivityRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetTaskActivityRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_TaskActivity` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getTaskActivity<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetTaskActivityRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetTaskActivityRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_TaskActivity>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_TaskActivity>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetTaskActivity.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetPRLanding" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetPRLanding shows the commit a task proposed for its PR, checked against
+        /// > the PR's current head, and what the user decided about it.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_PRLandingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_PRLandingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRLanding` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getPRLanding<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_PRLandingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_PRLandingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRLanding>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetPRLanding.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListPRLandings" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListPRLandings lists the decided landings, without calling GitHub, so the
+        /// > app can tell which proposals still wait on the user.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListPRLandingsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListPRLandingsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListPRLandingsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listPRLandings<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListPRLandingsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListPRLandingsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListPRLandingsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListPRLandingsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListPRLandings.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "LandPR" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > LandPR pushes the proposed commit to the PR's branch, fast-forward only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_LandPRRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_LandPRRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRLanding` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func landPR<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_LandPRRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_LandPRRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRLanding>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.LandPR.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "UndoPRLanding" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > UndoPRLanding pushes a new commit restoring the tree the PR had before
+        /// > the landing. It never rewrites history.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_PRLandingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_PRLandingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRLanding` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func undoPRLanding<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_PRLandingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_PRLandingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRLanding>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.UndoPRLanding.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "DiscardPRLanding" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DiscardPRLanding sets a proposal aside, or with restore brings it back.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_DiscardPRLandingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_DiscardPRLandingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRLanding` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func discardPRLanding<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_DiscardPRLandingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_DiscardPRLandingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRLanding>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.DiscardPRLanding.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -4681,6 +5115,184 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RemoveSettingRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RemoveSettingResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetTaskActivity" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetTaskActivity reads what a task's session has done so far from its
+    /// > transcript: commands, edits and reads, with risky commands marked.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetTaskActivityRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getTaskActivity<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetTaskActivityRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_TaskActivity>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getTaskActivity(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetTaskActivityRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_TaskActivity>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetPRLanding" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetPRLanding shows the commit a task proposed for its PR, checked against
+    /// > the PR's current head, and what the user decided about it.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_PRLandingRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getPRLanding<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_PRLandingRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getPRLanding(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_PRLandingRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PRLanding>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListPRLandings" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListPRLandings lists the decided landings, without calling GitHub, so the
+    /// > app can tell which proposals still wait on the user.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListPRLandingsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listPRLandings<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListPRLandingsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListPRLandingsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listPRLandings(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListPRLandingsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListPRLandingsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "LandPR" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > LandPR pushes the proposed commit to the PR's branch, fast-forward only.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_LandPRRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func landPR<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_LandPRRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.landPR(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_LandPRRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PRLanding>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "UndoPRLanding" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > UndoPRLanding pushes a new commit restoring the tree the PR had before
+    /// > the landing. It never rewrites history.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_PRLandingRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func undoPRLanding<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_PRLandingRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.undoPRLanding(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_PRLandingRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PRLanding>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "DiscardPRLanding" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > DiscardPRLanding sets a proposal aside, or with restore brings it back.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_DiscardPRLandingRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func discardPRLanding<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_DiscardPRLandingRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.discardPRLanding(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_DiscardPRLandingRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PRLanding>(),
             options: options,
             onResponse: handleResponse
         )
@@ -6206,6 +6818,208 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.removeSetting(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetTaskActivity" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetTaskActivity reads what a task's session has done so far from its
+    /// > transcript: commands, edits and reads, with risky commands marked.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getTaskActivity<Result>(
+        _ message: Orchd_V1_GetTaskActivityRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_TaskActivity>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetTaskActivityRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getTaskActivity(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetPRLanding" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetPRLanding shows the commit a task proposed for its PR, checked against
+    /// > the PR's current head, and what the user decided about it.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getPRLanding<Result>(
+        _ message: Orchd_V1_PRLandingRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_PRLandingRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getPRLanding(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListPRLandings" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListPRLandings lists the decided landings, without calling GitHub, so the
+    /// > app can tell which proposals still wait on the user.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listPRLandings<Result>(
+        _ message: Orchd_V1_ListPRLandingsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListPRLandingsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListPRLandingsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listPRLandings(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "LandPR" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > LandPR pushes the proposed commit to the PR's branch, fast-forward only.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func landPR<Result>(
+        _ message: Orchd_V1_LandPRRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_LandPRRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.landPR(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "UndoPRLanding" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > UndoPRLanding pushes a new commit restoring the tree the PR had before
+    /// > the landing. It never rewrites history.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func undoPRLanding<Result>(
+        _ message: Orchd_V1_PRLandingRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_PRLandingRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.undoPRLanding(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "DiscardPRLanding" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > DiscardPRLanding sets a proposal aside, or with restore brings it back.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func discardPRLanding<Result>(
+        _ message: Orchd_V1_DiscardPRLandingRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_DiscardPRLandingRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.discardPRLanding(
             request: request,
             options: options,
             onResponse: handleResponse

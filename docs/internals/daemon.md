@@ -124,6 +124,12 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `ListPRReviews` | → reviews (mode, state, heads, verdict, reason, comment, instructions, for_user, report, posted, note, times, last and next check) | `orch.db` only, never `gh`; operator-only |
 | `WatchPRReview` | url, mode, set_comment, comment, set_instructions, instructions → review | URL exactly `https://github.com/<owner>/<repo>/pull/<n>`, mode `verdict`/`approve`/`feedback`/`auto`/`comment`, instructions ≤ 4000 bytes (`InvalidArgument`); `review_anyway` lets one review of an untrusted author's PR run; restarts a stopped, closed or failed review; a post in flight for the PR → `Aborted`; operator-only ([tasks.md](tasks.md#pr-review-watch)) |
 | `StopPRReview` | url, forget → — | unwatched → `NotFound`; a post in flight → `Aborted`; `forget` deletes the row; operator-only |
+| `GetTaskActivity` | id → available, steps (time, kind, text, risk), total | from the task's transcript; none → not available; operator-only ([tasks.md](tasks.md#session-activity)) |
+| `GetPRLanding` | task_id → state, problem, path, branch, base, commit, commits, files, diff, can_land, blocked, can_undo, revert, decided_at | the proposal checked against the PR's head; unknown → `NotFound`; GitHub failure → `Unavailable`; operator-only ([tasks.md](tasks.md#pr-landings)) |
+| `ListPRLandings` | → each decision's task, URL and state | local only, for polling; operator-only |
+| `LandPR` | task_id, sha → the landing | pushes that commit, fast-forward only; anything no longer true → `FailedPrecondition`; a failed push → `Unavailable`; operator-only |
+| `UndoPRLanding` | task_id → the landing | pushes a commit restoring the earlier tree, while the landed commit is the head; else `FailedPrecondition`; operator-only |
+| `DiscardPRLanding` | task_id, restore → the landing | records or forgets the decision; operator-only |
 | `GetPRDetail` | url, refresh → title, body (≤ 8000 bytes), author, branches, head, sizes, CI, checks, labels, reviewers, reviews, files (≤ 100), fetched_at | one `gh pr view`, cached a minute per PR; GitHub failure → `Unavailable`; operator-only |
 | `ListPRs` | needs_me → PRs (with reasons and attention), updated_at | reads the PR babysitter's cache only, never `gh`; most urgent first, then repo and title; `updated_at` is the cache file's mtime, 0 before the first sweep; an unparseable cache → `Unavailable` |
 
@@ -169,6 +175,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 |---|---|
 | `<config>/config.yaml` | settings ([config.md](config.md)) |
 | `<config>/AGENTS.md`, `policy/`, `rag-eval.yaml` | shared agent policy; retrieval golden set |
+| `<data>/landings/<task>.git` | a proposal's commit, in a bare repository with no hooks; pruned after 30 days |
 | `<data>/orch.db` | SQLite: tasks, sources, docs, models, routing, managed settings |
 | `<data>/workflows.db` | durable workflow state |
 | `<data>/qdrant/`, `bin/qdrant`, `qdrant-api-key` (0600) | vector store, engine binary, API key |

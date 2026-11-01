@@ -32,9 +32,15 @@ struct PRHandoffCard: View {
                         .textStyle(.caption)
                 } else {
                     ForEach(linked.prefix(4)) { task in
-                        HandoffTaskRow(task: task, cancelling: handoff.cancelling == task.id,
-                                       open: { openTask(task.id) },
-                                       cancel: task.canCancel ? { confirmCancel = task } : nil)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HandoffTaskRow(task: task, cancelling: handoff.cancelling == task.id,
+                                           open: { openTask(task.id) },
+                                           cancel: task.canCancel ? { confirmCancel = task } : nil)
+                            AgentActivityFeed(task: task)
+                            if PRHandoff.proposes(task) {
+                                PRLandingPanel(task: task, detail: detail)
+                            }
+                        }
                     }
                 }
                 if !suggestions.isEmpty, let detail {
@@ -104,12 +110,15 @@ private struct HandoffTaskRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: displaySafe(task.headline)).font(.callout).lineLimit(2)
                 HStack(spacing: 6) {
-                    Text(verbatim: "\(task.agent) · \(status)")
+                    Text(verbatim: "\(task.agent) · \(status) · \(PRHandoff.mode(task))\(spent)")
                     if let started = task.run?.startedAt, task.isUnsettled {
                         Text(started, style: .relative)
                     }
                 }
                 .textStyle(.caption)
+                if let reason = PRHandoff.stopReason(task) {
+                    Text(verbatim: displaySafe(reason)).font(.caption).foregroundStyle(.orange).lineLimit(3)
+                }
                 if !task.prOutcome.isEmpty {
                     Text(verbatim: displaySafe(task.prOutcome)).textStyle(.caption).lineLimit(2)
                 }
@@ -124,6 +133,11 @@ private struct HandoffTaskRow: View {
                 .controlSize(.small)
                 .help("Show this task in Tasks")
         }
+    }
+
+    /// What the run cost, so two runs on one PR can be told apart.
+    private var spent: String {
+        task.costUSD > 0 ? String(format: " · $%.2f", task.costUSD) : ""
     }
 
     private var status: String {
@@ -251,7 +265,7 @@ private struct HandoffSheet: View {
                              ? "Unavailable: only your own PR, on a branch other than its base, main or master."
                              : form.mayPush
                              ? "It commits and pushes to this branch only: no force-push, merge, or other branch."
-                             : "Off: it works locally and reports a diff for you to push.")
+                             : "Off: it commits locally, and you review the diff and push it from here.")
                             .textStyle(.caption)
                     }
                 }
@@ -321,6 +335,9 @@ private struct HandoffSheet: View {
                     }
                 }
                 Spacer()
+                if form.needsInstructions, queued == nil {
+                    Text("Say what to do in Notes.").textStyle(.caption)
+                }
                 Button(queued == nil ? "Cancel" : "Done") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 if queued == nil {
@@ -341,6 +358,7 @@ private struct HandoffSheet: View {
 
     private var canSend: Bool {
         guard ownPR || trustsCode else { return false }
+        guard !form.needsInstructions else { return false }
         return DispatchDraft(agent: form.agent, body: form.brief(detail: detail, review: review, ownPR: ownPR)).problem == nil
     }
 
