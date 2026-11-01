@@ -340,12 +340,33 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
         var request = Orchd_V1_GetTaskActivityRequest()
         request.id = taskID
         let response = try await orchd.getTaskActivity(request, options: callOptions)
+        let steps = response.steps.map { step in
+            TaskActivityStep(index: Int(step.seq), at: Self.transcriptDate(step.at), kind: step.kind, text: step.text,
+                             risk: step.risk, tool: step.tool, title: step.title, detail: step.detail,
+                             commands: step.commands, commandTotal: Int(step.commandTotal), finished: step.finished, failed: step.failed, output: step.output,
+                             duration: TimeInterval(step.durationMs) / 1000, additions: Int(step.additions),
+                             deletions: Int(step.deletions))
+        }
+        var log = TaskActivityLog(available: response.available, steps: steps, total: Int(response.total))
+        log.tools = response.tools.map { .init(name: $0.name, count: Int($0.count)) }
+        log.files = response.filesEdited.map { .init(path: $0.path, additions: Int($0.additions), deletions: Int($0.deletions)) }
+        log.filesRead = Int(response.filesRead)
+        log.commands = Int(response.commands)
+        log.failed = Int(response.failed)
+        log.startedAt = Self.transcriptDate(response.startedAt)
+        log.lastAt = Self.transcriptDate(response.lastAt)
+        log.reportedPushed = response.pushed
+        log.reportedRisky = Int(response.risky)
+        return log
+    }
+
+    /// Transcripts write times with fractional seconds, usually.
+    private static func transcriptDate(_ text: String) -> Date? {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let steps = response.steps.enumerated().map { index, step in
-            TaskActivityStep(index: index, at: iso.date(from: step.at), kind: step.kind, text: step.text, risk: step.risk)
-        }
-        return TaskActivityLog(available: response.available, steps: steps, total: Int(response.total))
+        if let date = iso.date(from: text) { return date }
+        iso.formatOptions = [.withInternetDateTime]
+        return iso.date(from: text)
     }
 
     /// A landing fetches a repository and may push over the network.

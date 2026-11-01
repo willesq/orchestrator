@@ -51,9 +51,27 @@ func (s *server) GetTaskActivity(_ context.Context, req *orchdv1.GetTaskActivity
 	if err != nil {
 		return nil, grpcstatus.Errorf(codes.Internal, "read the session's transcript: %v", err)
 	}
-	out := &orchdv1.TaskActivity{Available: activity.Available, Total: int32(activity.Total)} //nolint:gosec // bounded by the transcript tail read
+	//nolint:gosec // every count is bounded by the transcript tail read
+	out := &orchdv1.TaskActivity{
+		Available: activity.Available, Total: int32(activity.Total), FilesRead: int32(activity.FilesRead),
+		Commands: int32(activity.Commands), Failed: int32(activity.Failed),
+		StartedAt: activity.StartedAt, LastAt: activity.LastAt, Pushed: activity.Pushed, Risky: int32(activity.Risky),
+	}
 	for _, step := range activity.Steps {
-		out.Steps = append(out.Steps, &orchdv1.TaskActivityStep{At: step.At, Kind: step.Kind, Text: step.Text, Risk: step.Risk})
+		//nolint:gosec // as above
+		out.Steps = append(out.Steps, &orchdv1.TaskActivityStep{
+			At: step.At, Kind: step.Kind, Text: step.Text, Risk: step.Risk, Tool: step.Tool, Title: step.Title,
+			Detail: step.Detail, Commands: step.Commands, Failed: step.Failed, Output: step.Output,
+			DurationMs: step.DurationMS, Additions: int32(step.Additions), Deletions: int32(step.Deletions),
+			Seq: int32(step.Seq), Finished: step.Finished, CommandTotal: int32(step.CommandTotal),
+		})
+	}
+	for _, tool := range activity.Tools {
+		out.Tools = append(out.Tools, &orchdv1.TaskActivityTool{Name: tool.Name, Count: int32(tool.Count)}) //nolint:gosec // as above
+	}
+	for _, file := range activity.Files {
+		//nolint:gosec // as above
+		out.FilesEdited = append(out.FilesEdited, &orchdv1.TaskActivityFile{Path: file.Path, Additions: int32(file.Additions), Deletions: int32(file.Deletions)})
 	}
 	return out, nil
 }

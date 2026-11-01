@@ -316,10 +316,17 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
         runs on one PR can be told apart.
         A blocked or failed run also shows the first line of why it stopped.
       - **Activity:** each run's tool calls (`GetTaskActivity`, every 3 s while it runs), opened
-        while it runs. A shell step shows the command, never the agent's description of it.
-        Risky commands carry a red chip and stay listed however long the run gets. A run told
-        not to push that ran `git push` shows a warning. Without a transcript (not started, or
-        Codex) it says so.
+        while it runs. Its line says how many commands ran, files were edited and read, and steps
+        failed or looked risky. Opened, it adds the run's time, turns and models, a chip per tool with
+        its count, the files edited with their lines, and **All / Commands / Files / Attention**.
+        - **Steps:** one line each, showing the main command rather than the `cd` before it, with
+          **failed**, the risk, the lines an edit wrote and how long a slow step took. A click opens
+          its commands one per line, what it returned, and **Copy**. A closed line is not selectable,
+          since selecting text lays it out past its limit, over the rows below.
+        - **Commands, never descriptions:** a shell step shows the command, never the agent's account
+          of it. Risky commands carry a red chip and stay listed however long the run gets. A run told
+          not to push that ran `git push` shows a warning. Without a transcript (not started, or Codex)
+          it says so.
       - **Landing:** a finished run whose result ends with a proposal (see
         [tasks.md](tasks.md#pr-landings)) shows a panel, reloaded when the PR's head changes:
         - **Ready to land:** the commits, the change's size, **Review diff** (the real diff,

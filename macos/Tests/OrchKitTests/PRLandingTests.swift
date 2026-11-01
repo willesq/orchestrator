@@ -296,6 +296,72 @@ private func proposing(_ id: String = "t1", status: String = "complete", last: S
         #expect(marked[3].text == " x␍y")
     }
 
+    @Test func aFailedStepShowsAsFailed() {
+        #expect(TaskActivityStep(index: 0, kind: "run", text: "", failed: true).symbolName == "xmark.circle.fill")
+    }
+
+    @Test func aStepHasMoreOnlyWhenOpeningItShowsMore() {
+        #expect(!TaskActivityStep(index: 0, kind: "read", text: "/a").hasMore)
+        #expect(TaskActivityStep(index: 0, kind: "run", text: "a; b", title: "b", detail: "a; b", commands: ["a", "b"]).hasMore)
+        #expect(TaskActivityStep(index: 0, kind: "read", text: "/a", output: "x").hasMore)
+        #expect(TaskActivityStep(index: 0, kind: "run", text: "a", detail: "a\nb").copyText == "a\nb")
+        // A here-document's unseen body must not reach the clipboard.
+        let heredoc = TaskActivityStep(index: 0, kind: "run", text: "x", detail: "bash <<E\nrm -rf /\nE", commands: ["bash <<E …"])
+        #expect(heredoc.copyText == "bash <<E …")
+        #expect(TaskActivityStep(index: 0, kind: "read", text: "/a").copyText == "/a")
+    }
+
+    @Test func aStepWithoutATotalCountsItsCommands() {
+        #expect(TaskActivityStep(index: 0, kind: "run", text: "x", commands: ["a", "b"]).commandTotal == 2)
+        #expect(TaskActivityStep(index: 0, kind: "run", text: "x", commands: ["a"], commandTotal: 9).commandTotal == 9)
+    }
+
+    @Test func filtersPickSteps() {
+        let run = TaskActivityStep(index: 0, kind: "run", text: "x")
+        let read = TaskActivityStep(index: 1, kind: "read", text: "x")
+        let edit = TaskActivityStep(index: 2, kind: "edit", text: "x")
+        let bad = TaskActivityStep(index: 3, kind: "other", text: "x", failed: true)
+        let risky = TaskActivityStep(index: 4, kind: "run", text: "x", risk: "git push")
+        let all = [run, read, edit, bad, risky]
+        #expect(all.filter(TaskActivityFilter.all.includes).count == 5)
+        #expect(all.filter(TaskActivityFilter.commands.includes).map(\.index) == [0, 4])
+        #expect(all.filter(TaskActivityFilter.files.includes).map(\.index) == [1, 2])
+        #expect(all.filter(TaskActivityFilter.attention.includes).map(\.index) == [3, 4])
+    }
+
+    @Test func aLogSummarizesWhatTheRunDid() {
+        var log = TaskActivityLog(available: true)
+        log.commands = 1
+        #expect(log.summary == "1 command · nothing risky")
+        log.commands = 6
+        log.files = [.init(path: "/a"), .init(path: "/b")]
+        log.filesRead = 3
+        log.failed = 1
+        log.steps = [TaskActivityStep(index: 0, kind: "run", text: "x", risk: "git push")]
+        #expect(log.summary == "6 commands · 2 files edited · 3 read · 1 failed · 1 risky")
+        #expect(log.span == nil)
+        log.startedAt = Date(timeIntervalSince1970: 0)
+        log.lastAt = Date(timeIntervalSince1970: 90)
+        #expect(log.span == 90)
+    }
+
+    @Test func aPushNoLongerListedStillCounts() {
+        var log = TaskActivityLog(available: true)
+        log.reportedPushed = true
+        log.reportedRisky = 3
+        #expect(log.pushed && log.riskyCount == 3 && log.summary.contains("3 risky"))
+    }
+
+    @Test func labelsReadForPeople() {
+        #expect(TaskActivityLog.Tool(name: "mcp__serena__find_symbol", count: 1).label == "serena: find_symbol")
+        #expect(TaskActivityLog.Tool(name: "Bash", count: 1).label == "Bash")
+        #expect(TaskActivityLog.shortPath("/a/b/c/d.go") == "…/c/d.go")
+        #expect(TaskActivityLog.shortPath("/a/b") == "/a/b")
+        #expect(TaskActivityLog.duration(0.42) == "420 ms")
+        #expect(TaskActivityLog.duration(12) == "12 s")
+        #expect(TaskActivityLog.duration(185) == "3 min 05 s")
+    }
+
     @Test func stepsPickASymbolByWhatTheyDo() {
         let kinds = ["read", "edit", "run", "agent", "other"]
         #expect(Set(kinds.map { TaskActivityStep(index: 0, kind: $0, text: "").symbolName }).count == 5)
@@ -407,9 +473,35 @@ private final class Counter: @unchecked Sendable {
         step.kind = "run"
         step.text = "git push"
         step.risk = "git push"
+        step.seq = 7
+        step.tool = "Bash"
+        step.title = "git push"
+        step.detail = "cd /x\ngit push"
+        step.commands = ["cd /x", "git push"]
+        step.commandTotal = 11
+        step.failed = true
+        step.finished = true
+        step.output = "denied"
+        step.durationMs = 1500
+        step.additions = 2
+        step.deletions = 1
         service.activity.available = true
         service.activity.total = 9
         service.activity.steps = [step]
+        var tool = Orchd_V1_TaskActivityTool()
+        tool.name = "Bash"
+        tool.count = 9
+        service.activity.tools = [tool]
+        var edited = Orchd_V1_TaskActivityFile()
+        edited.path = "/x/a.go"
+        edited.additions = 2
+        service.activity.filesEdited = [edited]
+        service.activity.filesRead = 3
+        service.activity.commands = 4
+        service.activity.failed = 1
+        service.activity.risky = 5
+        service.activity.startedAt = "2026-11-01T00:55:53Z"
+        service.activity.lastAt = "2026-11-01T00:56:53.500Z"
 
         try await withFakeOrchd(service) { socket in
             let client = try DaemonClient(socketPath: socket)
@@ -440,6 +532,13 @@ private final class Counter: @unchecked Sendable {
             let log = try await client.taskActivity(taskID: "t1")
             #expect(log.available && log.total == 9 && log.pushed && log.steps.first?.at != nil)
             #expect(service.recorder.last(Orchd_V1_GetTaskActivityRequest.self)?.id == "t1")
+            let first = try #require(log.steps.first)
+            #expect(first.commandTotal == 11)
+            #expect(first.index == 7 && first.tool == "Bash" && first.commands.count == 2 && first.failed && first.finished)
+            #expect(first.output == "denied" && first.duration == 1.5 && first.additions == 2 && first.deletions == 1)
+            #expect(log.riskyCount == 5)
+            #expect(log.tools.first?.count == 9 && log.files.first?.additions == 2)
+            #expect(log.filesRead == 3 && log.commands == 4 && log.failed == 1 && log.span == 60.5)
         }
     }
 }

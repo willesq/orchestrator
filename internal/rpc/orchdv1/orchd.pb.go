@@ -8113,10 +8113,22 @@ func (x *GetTaskActivityRequest) GetId() string {
 
 type TaskActivityStep struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	At            string                 `protobuf:"bytes,1,opt,name=at,proto3" json:"at,omitempty"`     // RFC 3339, empty when the transcript has no time
-	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // read | edit | run | agent | other
-	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"` // the command, path or pattern, redacted and capped
-	Risk          string                 `protobuf:"bytes,4,opt,name=risk,proto3" json:"risk,omitempty"` // what makes it risky ("git push"), empty when it is not
+	At            string                 `protobuf:"bytes,1,opt,name=at,proto3" json:"at,omitempty"`                                           // RFC 3339, empty when the transcript has no time
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`                                       // read | edit | run | agent | other
+	Text          string                 `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`                                       // the command, path or pattern, redacted and capped
+	Risk          string                 `protobuf:"bytes,4,opt,name=risk,proto3" json:"risk,omitempty"`                                       // what makes it risky ("git push"), empty when it is not
+	Tool          string                 `protobuf:"bytes,5,opt,name=tool,proto3" json:"tool,omitempty"`                                       // the tool's name
+	Title         string                 `protobuf:"bytes,6,opt,name=title,proto3" json:"title,omitempty"`                                     // one line for the step: its main command, or a path
+	Detail        string                 `protobuf:"bytes,7,opt,name=detail,proto3" json:"detail,omitempty"`                                   // the full command or pattern, redacted, capped, keeping its lines
+	Commands      []string               `protobuf:"bytes,8,rep,name=commands,proto3" json:"commands,omitempty"`                               // a shell step's commands, in order, capped
+	Failed        bool                   `protobuf:"varint,9,opt,name=failed,proto3" json:"failed,omitempty"`                                  // the tool reported an error
+	Output        string                 `protobuf:"bytes,10,opt,name=output,proto3" json:"output,omitempty"`                                  // the end of what it returned, redacted; newest steps only
+	DurationMs    int64                  `protobuf:"varint,11,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`       // until its result arrived; 0 when not known
+	Additions     int32                  `protobuf:"varint,12,opt,name=additions,proto3" json:"additions,omitempty"`                           // lines an edit adds
+	Deletions     int32                  `protobuf:"varint,13,opt,name=deletions,proto3" json:"deletions,omitempty"`                           // lines an edit removes
+	Seq           int32                  `protobuf:"varint,14,opt,name=seq,proto3" json:"seq,omitempty"`                                       // its place among all steps read, stable across polls
+	Finished      bool                   `protobuf:"varint,15,opt,name=finished,proto3" json:"finished,omitempty"`                             // its result has arrived
+	CommandTotal  int32                  `protobuf:"varint,16,opt,name=command_total,json=commandTotal,proto3" json:"command_total,omitempty"` // commands in the step, including those not listed
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -8179,18 +8191,223 @@ func (x *TaskActivityStep) GetRisk() string {
 	return ""
 }
 
+func (x *TaskActivityStep) GetTool() string {
+	if x != nil {
+		return x.Tool
+	}
+	return ""
+}
+
+func (x *TaskActivityStep) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *TaskActivityStep) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *TaskActivityStep) GetCommands() []string {
+	if x != nil {
+		return x.Commands
+	}
+	return nil
+}
+
+func (x *TaskActivityStep) GetFailed() bool {
+	if x != nil {
+		return x.Failed
+	}
+	return false
+}
+
+func (x *TaskActivityStep) GetOutput() string {
+	if x != nil {
+		return x.Output
+	}
+	return ""
+}
+
+func (x *TaskActivityStep) GetDurationMs() int64 {
+	if x != nil {
+		return x.DurationMs
+	}
+	return 0
+}
+
+func (x *TaskActivityStep) GetAdditions() int32 {
+	if x != nil {
+		return x.Additions
+	}
+	return 0
+}
+
+func (x *TaskActivityStep) GetDeletions() int32 {
+	if x != nil {
+		return x.Deletions
+	}
+	return 0
+}
+
+func (x *TaskActivityStep) GetSeq() int32 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *TaskActivityStep) GetFinished() bool {
+	if x != nil {
+		return x.Finished
+	}
+	return false
+}
+
+func (x *TaskActivityStep) GetCommandTotal() int32 {
+	if x != nil {
+		return x.CommandTotal
+	}
+	return 0
+}
+
+type TaskActivityTool struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskActivityTool) Reset() {
+	*x = TaskActivityTool{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[118]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskActivityTool) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskActivityTool) ProtoMessage() {}
+
+func (x *TaskActivityTool) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[118]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskActivityTool.ProtoReflect.Descriptor instead.
+func (*TaskActivityTool) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{118}
+}
+
+func (x *TaskActivityTool) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *TaskActivityTool) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+type TaskActivityFile struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Additions     int32                  `protobuf:"varint,2,opt,name=additions,proto3" json:"additions,omitempty"`
+	Deletions     int32                  `protobuf:"varint,3,opt,name=deletions,proto3" json:"deletions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskActivityFile) Reset() {
+	*x = TaskActivityFile{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[119]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskActivityFile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskActivityFile) ProtoMessage() {}
+
+func (x *TaskActivityFile) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[119]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskActivityFile.ProtoReflect.Descriptor instead.
+func (*TaskActivityFile) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{119}
+}
+
+func (x *TaskActivityFile) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *TaskActivityFile) GetAdditions() int32 {
+	if x != nil {
+		return x.Additions
+	}
+	return 0
+}
+
+func (x *TaskActivityFile) GetDeletions() int32 {
+	if x != nil {
+		return x.Deletions
+	}
+	return 0
+}
+
 type TaskActivity struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Available     bool                   `protobuf:"varint,1,opt,name=available,proto3" json:"available,omitempty"` // false: no transcript (a Codex run, or not started)
-	Steps         []*TaskActivityStep    `protobuf:"bytes,2,rep,name=steps,proto3" json:"steps,omitempty"`          // oldest first; older plain steps are dropped past the limit
-	Total         int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`         // steps read, including dropped ones
+	Available     bool                   `protobuf:"varint,1,opt,name=available,proto3" json:"available,omitempty"`                       // false: no transcript (a Codex run, or not started)
+	Steps         []*TaskActivityStep    `protobuf:"bytes,2,rep,name=steps,proto3" json:"steps,omitempty"`                                // oldest first; older plain steps are dropped past the limit
+	Total         int32                  `protobuf:"varint,3,opt,name=total,proto3" json:"total,omitempty"`                               // steps read, including dropped ones
+	Tools         []*TaskActivityTool    `protobuf:"bytes,4,rep,name=tools,proto3" json:"tools,omitempty"`                                // each tool used, most used first
+	FilesEdited   []*TaskActivityFile    `protobuf:"bytes,5,rep,name=files_edited,json=filesEdited,proto3" json:"files_edited,omitempty"` // capped
+	FilesRead     int32                  `protobuf:"varint,6,opt,name=files_read,json=filesRead,proto3" json:"files_read,omitempty"`      // distinct files read
+	Commands      int32                  `protobuf:"varint,7,opt,name=commands,proto3" json:"commands,omitempty"`                         // shell commands run
+	Failed        int32                  `protobuf:"varint,8,opt,name=failed,proto3" json:"failed,omitempty"`                             // steps that reported an error
+	StartedAt     string                 `protobuf:"bytes,9,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`       // the first step's time
+	LastAt        string                 `protobuf:"bytes,10,opt,name=last_at,json=lastAt,proto3" json:"last_at,omitempty"`               // the last step's time
+	Pushed        bool                   `protobuf:"varint,11,opt,name=pushed,proto3" json:"pushed,omitempty"`                            // a step ran git push, listed or not
+	Risky         int32                  `protobuf:"varint,12,opt,name=risky,proto3" json:"risky,omitempty"`                              // risky steps, listed or not
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TaskActivity) Reset() {
 	*x = TaskActivity{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[118]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8202,7 +8419,7 @@ func (x *TaskActivity) String() string {
 func (*TaskActivity) ProtoMessage() {}
 
 func (x *TaskActivity) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[118]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8215,7 +8432,7 @@ func (x *TaskActivity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskActivity.ProtoReflect.Descriptor instead.
 func (*TaskActivity) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{118}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{120}
 }
 
 func (x *TaskActivity) GetAvailable() bool {
@@ -8239,6 +8456,69 @@ func (x *TaskActivity) GetTotal() int32 {
 	return 0
 }
 
+func (x *TaskActivity) GetTools() []*TaskActivityTool {
+	if x != nil {
+		return x.Tools
+	}
+	return nil
+}
+
+func (x *TaskActivity) GetFilesEdited() []*TaskActivityFile {
+	if x != nil {
+		return x.FilesEdited
+	}
+	return nil
+}
+
+func (x *TaskActivity) GetFilesRead() int32 {
+	if x != nil {
+		return x.FilesRead
+	}
+	return 0
+}
+
+func (x *TaskActivity) GetCommands() int32 {
+	if x != nil {
+		return x.Commands
+	}
+	return 0
+}
+
+func (x *TaskActivity) GetFailed() int32 {
+	if x != nil {
+		return x.Failed
+	}
+	return 0
+}
+
+func (x *TaskActivity) GetStartedAt() string {
+	if x != nil {
+		return x.StartedAt
+	}
+	return ""
+}
+
+func (x *TaskActivity) GetLastAt() string {
+	if x != nil {
+		return x.LastAt
+	}
+	return ""
+}
+
+func (x *TaskActivity) GetPushed() bool {
+	if x != nil {
+		return x.Pushed
+	}
+	return false
+}
+
+func (x *TaskActivity) GetRisky() int32 {
+	if x != nil {
+		return x.Risky
+	}
+	return 0
+}
+
 type PRLandingRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
@@ -8248,7 +8528,7 @@ type PRLandingRequest struct {
 
 func (x *PRLandingRequest) Reset() {
 	*x = PRLandingRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[119]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8260,7 +8540,7 @@ func (x *PRLandingRequest) String() string {
 func (*PRLandingRequest) ProtoMessage() {}
 
 func (x *PRLandingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[119]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8273,7 +8553,7 @@ func (x *PRLandingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRLandingRequest.ProtoReflect.Descriptor instead.
 func (*PRLandingRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{119}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *PRLandingRequest) GetTaskId() string {
@@ -8291,7 +8571,7 @@ type ListPRLandingsRequest struct {
 
 func (x *ListPRLandingsRequest) Reset() {
 	*x = ListPRLandingsRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[120]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8303,7 +8583,7 @@ func (x *ListPRLandingsRequest) String() string {
 func (*ListPRLandingsRequest) ProtoMessage() {}
 
 func (x *ListPRLandingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[120]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8316,7 +8596,7 @@ func (x *ListPRLandingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPRLandingsRequest.ProtoReflect.Descriptor instead.
 func (*ListPRLandingsRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{120}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{122}
 }
 
 type PRLandingDecision struct {
@@ -8330,7 +8610,7 @@ type PRLandingDecision struct {
 
 func (x *PRLandingDecision) Reset() {
 	*x = PRLandingDecision{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[121]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8342,7 +8622,7 @@ func (x *PRLandingDecision) String() string {
 func (*PRLandingDecision) ProtoMessage() {}
 
 func (x *PRLandingDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[121]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8355,7 +8635,7 @@ func (x *PRLandingDecision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRLandingDecision.ProtoReflect.Descriptor instead.
 func (*PRLandingDecision) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{121}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *PRLandingDecision) GetTaskId() string {
@@ -8388,7 +8668,7 @@ type ListPRLandingsResponse struct {
 
 func (x *ListPRLandingsResponse) Reset() {
 	*x = ListPRLandingsResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[122]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8400,7 +8680,7 @@ func (x *ListPRLandingsResponse) String() string {
 func (*ListPRLandingsResponse) ProtoMessage() {}
 
 func (x *ListPRLandingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[122]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8413,7 +8693,7 @@ func (x *ListPRLandingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPRLandingsResponse.ProtoReflect.Descriptor instead.
 func (*ListPRLandingsResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{122}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *ListPRLandingsResponse) GetDecisions() []*PRLandingDecision {
@@ -8433,7 +8713,7 @@ type LandPRRequest struct {
 
 func (x *LandPRRequest) Reset() {
 	*x = LandPRRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[123]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8445,7 +8725,7 @@ func (x *LandPRRequest) String() string {
 func (*LandPRRequest) ProtoMessage() {}
 
 func (x *LandPRRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[123]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8458,7 +8738,7 @@ func (x *LandPRRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LandPRRequest.ProtoReflect.Descriptor instead.
 func (*LandPRRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{123}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *LandPRRequest) GetTaskId() string {
@@ -8485,7 +8765,7 @@ type DiscardPRLandingRequest struct {
 
 func (x *DiscardPRLandingRequest) Reset() {
 	*x = DiscardPRLandingRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[124]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8497,7 +8777,7 @@ func (x *DiscardPRLandingRequest) String() string {
 func (*DiscardPRLandingRequest) ProtoMessage() {}
 
 func (x *DiscardPRLandingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[124]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8510,7 +8790,7 @@ func (x *DiscardPRLandingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardPRLandingRequest.ProtoReflect.Descriptor instead.
 func (*DiscardPRLandingRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{124}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *DiscardPRLandingRequest) GetTaskId() string {
@@ -8538,7 +8818,7 @@ type PRLandingCommit struct {
 
 func (x *PRLandingCommit) Reset() {
 	*x = PRLandingCommit{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[125]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8550,7 +8830,7 @@ func (x *PRLandingCommit) String() string {
 func (*PRLandingCommit) ProtoMessage() {}
 
 func (x *PRLandingCommit) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[125]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8563,7 +8843,7 @@ func (x *PRLandingCommit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRLandingCommit.ProtoReflect.Descriptor instead.
 func (*PRLandingCommit) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{125}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *PRLandingCommit) GetSha() string {
@@ -8618,7 +8898,7 @@ type PRLanding struct {
 
 func (x *PRLanding) Reset() {
 	*x = PRLanding{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[126]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8630,7 +8910,7 @@ func (x *PRLanding) String() string {
 func (*PRLanding) ProtoMessage() {}
 
 func (x *PRLanding) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[126]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8643,7 +8923,7 @@ func (x *PRLanding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRLanding.ProtoReflect.Descriptor instead.
 func (*PRLanding) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{126}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *PRLanding) GetTaskId() string {
@@ -9502,16 +9782,49 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\tadditions\x18\x02 \x01(\x05R\tadditions\x12\x1c\n" +
 	"\tdeletions\x18\x03 \x01(\x05R\tdeletions\"(\n" +
 	"\x16GetTaskActivityRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"^\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x9c\x03\n" +
 	"\x10TaskActivityStep\x12\x0e\n" +
 	"\x02at\x18\x01 \x01(\tR\x02at\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
 	"\x04text\x18\x03 \x01(\tR\x04text\x12\x12\n" +
-	"\x04risk\x18\x04 \x01(\tR\x04risk\"t\n" +
+	"\x04risk\x18\x04 \x01(\tR\x04risk\x12\x12\n" +
+	"\x04tool\x18\x05 \x01(\tR\x04tool\x12\x14\n" +
+	"\x05title\x18\x06 \x01(\tR\x05title\x12\x16\n" +
+	"\x06detail\x18\a \x01(\tR\x06detail\x12\x1a\n" +
+	"\bcommands\x18\b \x03(\tR\bcommands\x12\x16\n" +
+	"\x06failed\x18\t \x01(\bR\x06failed\x12\x16\n" +
+	"\x06output\x18\n" +
+	" \x01(\tR\x06output\x12\x1f\n" +
+	"\vduration_ms\x18\v \x01(\x03R\n" +
+	"durationMs\x12\x1c\n" +
+	"\tadditions\x18\f \x01(\x05R\tadditions\x12\x1c\n" +
+	"\tdeletions\x18\r \x01(\x05R\tdeletions\x12\x10\n" +
+	"\x03seq\x18\x0e \x01(\x05R\x03seq\x12\x1a\n" +
+	"\bfinished\x18\x0f \x01(\bR\bfinished\x12#\n" +
+	"\rcommand_total\x18\x10 \x01(\x05R\fcommandTotal\"<\n" +
+	"\x10TaskActivityTool\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count\"b\n" +
+	"\x10TaskActivityFile\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1c\n" +
+	"\tadditions\x18\x02 \x01(\x05R\tadditions\x12\x1c\n" +
+	"\tdeletions\x18\x03 \x01(\x05R\tdeletions\"\x9e\x03\n" +
 	"\fTaskActivity\x12\x1c\n" +
 	"\tavailable\x18\x01 \x01(\bR\tavailable\x120\n" +
 	"\x05steps\x18\x02 \x03(\v2\x1a.orchd.v1.TaskActivityStepR\x05steps\x12\x14\n" +
-	"\x05total\x18\x03 \x01(\x05R\x05total\"+\n" +
+	"\x05total\x18\x03 \x01(\x05R\x05total\x120\n" +
+	"\x05tools\x18\x04 \x03(\v2\x1a.orchd.v1.TaskActivityToolR\x05tools\x12=\n" +
+	"\ffiles_edited\x18\x05 \x03(\v2\x1a.orchd.v1.TaskActivityFileR\vfilesEdited\x12\x1d\n" +
+	"\n" +
+	"files_read\x18\x06 \x01(\x05R\tfilesRead\x12\x1a\n" +
+	"\bcommands\x18\a \x01(\x05R\bcommands\x12\x16\n" +
+	"\x06failed\x18\b \x01(\x05R\x06failed\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\t \x01(\tR\tstartedAt\x12\x17\n" +
+	"\alast_at\x18\n" +
+	" \x01(\tR\x06lastAt\x12\x16\n" +
+	"\x06pushed\x18\v \x01(\bR\x06pushed\x12\x14\n" +
+	"\x05risky\x18\f \x01(\x05R\x05risky\"+\n" +
 	"\x10PRLandingRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\"\x17\n" +
 	"\x15ListPRLandingsRequest\"T\n" +
@@ -9628,7 +9941,7 @@ func file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP() []byte {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescData
 }
 
-var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 129)
+var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 131)
 var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*PingRequest)(nil),                   // 0: orchd.v1.PingRequest
 	(*PingResponse)(nil),                  // 1: orchd.v1.PingResponse
@@ -9748,17 +10061,19 @@ var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*PRFile)(nil),                        // 115: orchd.v1.PRFile
 	(*GetTaskActivityRequest)(nil),        // 116: orchd.v1.GetTaskActivityRequest
 	(*TaskActivityStep)(nil),              // 117: orchd.v1.TaskActivityStep
-	(*TaskActivity)(nil),                  // 118: orchd.v1.TaskActivity
-	(*PRLandingRequest)(nil),              // 119: orchd.v1.PRLandingRequest
-	(*ListPRLandingsRequest)(nil),         // 120: orchd.v1.ListPRLandingsRequest
-	(*PRLandingDecision)(nil),             // 121: orchd.v1.PRLandingDecision
-	(*ListPRLandingsResponse)(nil),        // 122: orchd.v1.ListPRLandingsResponse
-	(*LandPRRequest)(nil),                 // 123: orchd.v1.LandPRRequest
-	(*DiscardPRLandingRequest)(nil),       // 124: orchd.v1.DiscardPRLandingRequest
-	(*PRLandingCommit)(nil),               // 125: orchd.v1.PRLandingCommit
-	(*PRLanding)(nil),                     // 126: orchd.v1.PRLanding
-	nil,                                   // 127: orchd.v1.SystemMetrics.TasksEntry
-	nil,                                   // 128: orchd.v1.AddSettingRequest.FieldsEntry
+	(*TaskActivityTool)(nil),              // 118: orchd.v1.TaskActivityTool
+	(*TaskActivityFile)(nil),              // 119: orchd.v1.TaskActivityFile
+	(*TaskActivity)(nil),                  // 120: orchd.v1.TaskActivity
+	(*PRLandingRequest)(nil),              // 121: orchd.v1.PRLandingRequest
+	(*ListPRLandingsRequest)(nil),         // 122: orchd.v1.ListPRLandingsRequest
+	(*PRLandingDecision)(nil),             // 123: orchd.v1.PRLandingDecision
+	(*ListPRLandingsResponse)(nil),        // 124: orchd.v1.ListPRLandingsResponse
+	(*LandPRRequest)(nil),                 // 125: orchd.v1.LandPRRequest
+	(*DiscardPRLandingRequest)(nil),       // 126: orchd.v1.DiscardPRLandingRequest
+	(*PRLandingCommit)(nil),               // 127: orchd.v1.PRLandingCommit
+	(*PRLanding)(nil),                     // 128: orchd.v1.PRLanding
+	nil,                                   // 129: orchd.v1.SystemMetrics.TasksEntry
+	nil,                                   // 130: orchd.v1.AddSettingRequest.FieldsEntry
 }
 var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	6,   // 0: orchd.v1.SearchResponse.hits:type_name -> orchd.v1.SearchHit
@@ -9782,7 +10097,7 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	64,  // 18: orchd.v1.TailLogsResponse.entries:type_name -> orchd.v1.LogEntry
 	67,  // 19: orchd.v1.SystemMetrics.processes:type_name -> orchd.v1.ProcessMetrics
 	68,  // 20: orchd.v1.SystemMetrics.data:type_name -> orchd.v1.DataSize
-	127, // 21: orchd.v1.SystemMetrics.tasks:type_name -> orchd.v1.SystemMetrics.TasksEntry
+	129, // 21: orchd.v1.SystemMetrics.tasks:type_name -> orchd.v1.SystemMetrics.TasksEntry
 	74,  // 22: orchd.v1.ListDocsResponse.owners:type_name -> orchd.v1.DocOwner
 	76,  // 23: orchd.v1.ListDocsResponse.files:type_name -> orchd.v1.DocFile
 	73,  // 24: orchd.v1.ListDocsResponse.sync:type_name -> orchd.v1.DocsSyncState
@@ -9798,122 +10113,124 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	100, // 34: orchd.v1.ListSettingsResponse.items:type_name -> orchd.v1.SettingItem
 	98,  // 35: orchd.v1.SettingsProvider.kinds:type_name -> orchd.v1.SettingKind
 	99,  // 36: orchd.v1.SettingKind.fields:type_name -> orchd.v1.SettingField
-	128, // 37: orchd.v1.AddSettingRequest.fields:type_name -> orchd.v1.AddSettingRequest.FieldsEntry
+	130, // 37: orchd.v1.AddSettingRequest.fields:type_name -> orchd.v1.AddSettingRequest.FieldsEntry
 	107, // 38: orchd.v1.ListPRReviewsResponse.reviews:type_name -> orchd.v1.PRReview
 	113, // 39: orchd.v1.PRDetail.reviews:type_name -> orchd.v1.PRReviewerState
 	114, // 40: orchd.v1.PRDetail.checks:type_name -> orchd.v1.PRCheck
 	115, // 41: orchd.v1.PRDetail.files:type_name -> orchd.v1.PRFile
 	117, // 42: orchd.v1.TaskActivity.steps:type_name -> orchd.v1.TaskActivityStep
-	121, // 43: orchd.v1.ListPRLandingsResponse.decisions:type_name -> orchd.v1.PRLandingDecision
-	125, // 44: orchd.v1.PRLanding.commits:type_name -> orchd.v1.PRLandingCommit
-	115, // 45: orchd.v1.PRLanding.files:type_name -> orchd.v1.PRFile
-	0,   // 46: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
-	2,   // 47: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
-	4,   // 48: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
-	7,   // 49: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
-	10,  // 50: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
-	12,  // 51: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
-	14,  // 52: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
-	16,  // 53: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
-	20,  // 54: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
-	24,  // 55: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
-	26,  // 56: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
-	29,  // 57: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
-	31,  // 58: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
-	33,  // 59: orchd.v1.Orchd.RetryTask:input_type -> orchd.v1.RetryTaskRequest
-	35,  // 60: orchd.v1.Orchd.CancelTask:input_type -> orchd.v1.CancelTaskRequest
-	37,  // 61: orchd.v1.Orchd.WatchTasks:input_type -> orchd.v1.WatchTasksRequest
-	39,  // 62: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
-	41,  // 63: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
-	43,  // 64: orchd.v1.Orchd.ReindexKeywords:input_type -> orchd.v1.ReindexKeywordsRequest
-	45,  // 65: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
-	48,  // 66: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
-	51,  // 67: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
-	54,  // 68: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
-	56,  // 69: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
-	59,  // 70: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
-	105, // 71: orchd.v1.Orchd.ListPRReviews:input_type -> orchd.v1.ListPRReviewsRequest
-	108, // 72: orchd.v1.Orchd.WatchPRReview:input_type -> orchd.v1.WatchPRReviewRequest
-	109, // 73: orchd.v1.Orchd.StopPRReview:input_type -> orchd.v1.StopPRReviewRequest
-	111, // 74: orchd.v1.Orchd.GetPRDetail:input_type -> orchd.v1.GetPRDetailRequest
-	62,  // 75: orchd.v1.Orchd.TailLogs:input_type -> orchd.v1.TailLogsRequest
-	65,  // 76: orchd.v1.Orchd.GetSystemMetrics:input_type -> orchd.v1.GetSystemMetricsRequest
-	69,  // 77: orchd.v1.Orchd.ListDocs:input_type -> orchd.v1.ListDocsRequest
-	77,  // 78: orchd.v1.Orchd.GetDocument:input_type -> orchd.v1.GetDocumentRequest
-	71,  // 79: orchd.v1.Orchd.SyncDocs:input_type -> orchd.v1.SyncDocsRequest
-	72,  // 80: orchd.v1.Orchd.GetDocsSync:input_type -> orchd.v1.GetDocsSyncRequest
-	79,  // 81: orchd.v1.Orchd.ListRegisteredSources:input_type -> orchd.v1.ListRegisteredSourcesRequest
-	82,  // 82: orchd.v1.Orchd.SaveSource:input_type -> orchd.v1.SaveSourceRequest
-	83,  // 83: orchd.v1.Orchd.RemoveSource:input_type -> orchd.v1.RemoveSourceRequest
-	85,  // 84: orchd.v1.Orchd.RefreshSource:input_type -> orchd.v1.RefreshSourceRequest
-	87,  // 85: orchd.v1.Orchd.GetSafetyNet:input_type -> orchd.v1.GetSafetyNetRequest
-	88,  // 86: orchd.v1.Orchd.InstallSafetyNet:input_type -> orchd.v1.InstallSafetyNetRequest
-	95,  // 87: orchd.v1.Orchd.ListSettings:input_type -> orchd.v1.ListSettingsRequest
-	101, // 88: orchd.v1.Orchd.SetSettingEnabled:input_type -> orchd.v1.SetSettingEnabledRequest
-	102, // 89: orchd.v1.Orchd.AddSetting:input_type -> orchd.v1.AddSettingRequest
-	103, // 90: orchd.v1.Orchd.RemoveSetting:input_type -> orchd.v1.RemoveSettingRequest
-	116, // 91: orchd.v1.Orchd.GetTaskActivity:input_type -> orchd.v1.GetTaskActivityRequest
-	119, // 92: orchd.v1.Orchd.GetPRLanding:input_type -> orchd.v1.PRLandingRequest
-	120, // 93: orchd.v1.Orchd.ListPRLandings:input_type -> orchd.v1.ListPRLandingsRequest
-	123, // 94: orchd.v1.Orchd.LandPR:input_type -> orchd.v1.LandPRRequest
-	119, // 95: orchd.v1.Orchd.UndoPRLanding:input_type -> orchd.v1.PRLandingRequest
-	124, // 96: orchd.v1.Orchd.DiscardPRLanding:input_type -> orchd.v1.DiscardPRLandingRequest
-	1,   // 97: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
-	3,   // 98: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
-	5,   // 99: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
-	8,   // 100: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
-	11,  // 101: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
-	13,  // 102: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
-	15,  // 103: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
-	17,  // 104: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
-	21,  // 105: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
-	25,  // 106: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
-	27,  // 107: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
-	30,  // 108: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
-	32,  // 109: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
-	34,  // 110: orchd.v1.Orchd.RetryTask:output_type -> orchd.v1.RetryTaskResponse
-	36,  // 111: orchd.v1.Orchd.CancelTask:output_type -> orchd.v1.CancelTaskResponse
-	38,  // 112: orchd.v1.Orchd.WatchTasks:output_type -> orchd.v1.TaskEvent
-	40,  // 113: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
-	42,  // 114: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
-	44,  // 115: orchd.v1.Orchd.ReindexKeywords:output_type -> orchd.v1.ReindexKeywordsResponse
-	46,  // 116: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
-	49,  // 117: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
-	52,  // 118: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
-	55,  // 119: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
-	57,  // 120: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
-	60,  // 121: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
-	106, // 122: orchd.v1.Orchd.ListPRReviews:output_type -> orchd.v1.ListPRReviewsResponse
-	107, // 123: orchd.v1.Orchd.WatchPRReview:output_type -> orchd.v1.PRReview
-	110, // 124: orchd.v1.Orchd.StopPRReview:output_type -> orchd.v1.StopPRReviewResponse
-	112, // 125: orchd.v1.Orchd.GetPRDetail:output_type -> orchd.v1.PRDetail
-	63,  // 126: orchd.v1.Orchd.TailLogs:output_type -> orchd.v1.TailLogsResponse
-	66,  // 127: orchd.v1.Orchd.GetSystemMetrics:output_type -> orchd.v1.SystemMetrics
-	70,  // 128: orchd.v1.Orchd.ListDocs:output_type -> orchd.v1.ListDocsResponse
-	78,  // 129: orchd.v1.Orchd.GetDocument:output_type -> orchd.v1.Document
-	73,  // 130: orchd.v1.Orchd.SyncDocs:output_type -> orchd.v1.DocsSyncState
-	73,  // 131: orchd.v1.Orchd.GetDocsSync:output_type -> orchd.v1.DocsSyncState
-	80,  // 132: orchd.v1.Orchd.ListRegisteredSources:output_type -> orchd.v1.ListRegisteredSourcesResponse
-	81,  // 133: orchd.v1.Orchd.SaveSource:output_type -> orchd.v1.RegisteredSource
-	84,  // 134: orchd.v1.Orchd.RemoveSource:output_type -> orchd.v1.RemoveSourceResponse
-	86,  // 135: orchd.v1.Orchd.RefreshSource:output_type -> orchd.v1.RefreshSourceResponse
-	89,  // 136: orchd.v1.Orchd.GetSafetyNet:output_type -> orchd.v1.SafetyNetState
-	89,  // 137: orchd.v1.Orchd.InstallSafetyNet:output_type -> orchd.v1.SafetyNetState
-	96,  // 138: orchd.v1.Orchd.ListSettings:output_type -> orchd.v1.ListSettingsResponse
-	100, // 139: orchd.v1.Orchd.SetSettingEnabled:output_type -> orchd.v1.SettingItem
-	100, // 140: orchd.v1.Orchd.AddSetting:output_type -> orchd.v1.SettingItem
-	104, // 141: orchd.v1.Orchd.RemoveSetting:output_type -> orchd.v1.RemoveSettingResponse
-	118, // 142: orchd.v1.Orchd.GetTaskActivity:output_type -> orchd.v1.TaskActivity
-	126, // 143: orchd.v1.Orchd.GetPRLanding:output_type -> orchd.v1.PRLanding
-	122, // 144: orchd.v1.Orchd.ListPRLandings:output_type -> orchd.v1.ListPRLandingsResponse
-	126, // 145: orchd.v1.Orchd.LandPR:output_type -> orchd.v1.PRLanding
-	126, // 146: orchd.v1.Orchd.UndoPRLanding:output_type -> orchd.v1.PRLanding
-	126, // 147: orchd.v1.Orchd.DiscardPRLanding:output_type -> orchd.v1.PRLanding
-	97,  // [97:148] is the sub-list for method output_type
-	46,  // [46:97] is the sub-list for method input_type
-	46,  // [46:46] is the sub-list for extension type_name
-	46,  // [46:46] is the sub-list for extension extendee
-	0,   // [0:46] is the sub-list for field type_name
+	118, // 43: orchd.v1.TaskActivity.tools:type_name -> orchd.v1.TaskActivityTool
+	119, // 44: orchd.v1.TaskActivity.files_edited:type_name -> orchd.v1.TaskActivityFile
+	123, // 45: orchd.v1.ListPRLandingsResponse.decisions:type_name -> orchd.v1.PRLandingDecision
+	127, // 46: orchd.v1.PRLanding.commits:type_name -> orchd.v1.PRLandingCommit
+	115, // 47: orchd.v1.PRLanding.files:type_name -> orchd.v1.PRFile
+	0,   // 48: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
+	2,   // 49: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
+	4,   // 50: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
+	7,   // 51: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
+	10,  // 52: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
+	12,  // 53: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
+	14,  // 54: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
+	16,  // 55: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
+	20,  // 56: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
+	24,  // 57: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
+	26,  // 58: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
+	29,  // 59: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
+	31,  // 60: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
+	33,  // 61: orchd.v1.Orchd.RetryTask:input_type -> orchd.v1.RetryTaskRequest
+	35,  // 62: orchd.v1.Orchd.CancelTask:input_type -> orchd.v1.CancelTaskRequest
+	37,  // 63: orchd.v1.Orchd.WatchTasks:input_type -> orchd.v1.WatchTasksRequest
+	39,  // 64: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
+	41,  // 65: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
+	43,  // 66: orchd.v1.Orchd.ReindexKeywords:input_type -> orchd.v1.ReindexKeywordsRequest
+	45,  // 67: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
+	48,  // 68: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
+	51,  // 69: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
+	54,  // 70: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
+	56,  // 71: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
+	59,  // 72: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
+	105, // 73: orchd.v1.Orchd.ListPRReviews:input_type -> orchd.v1.ListPRReviewsRequest
+	108, // 74: orchd.v1.Orchd.WatchPRReview:input_type -> orchd.v1.WatchPRReviewRequest
+	109, // 75: orchd.v1.Orchd.StopPRReview:input_type -> orchd.v1.StopPRReviewRequest
+	111, // 76: orchd.v1.Orchd.GetPRDetail:input_type -> orchd.v1.GetPRDetailRequest
+	62,  // 77: orchd.v1.Orchd.TailLogs:input_type -> orchd.v1.TailLogsRequest
+	65,  // 78: orchd.v1.Orchd.GetSystemMetrics:input_type -> orchd.v1.GetSystemMetricsRequest
+	69,  // 79: orchd.v1.Orchd.ListDocs:input_type -> orchd.v1.ListDocsRequest
+	77,  // 80: orchd.v1.Orchd.GetDocument:input_type -> orchd.v1.GetDocumentRequest
+	71,  // 81: orchd.v1.Orchd.SyncDocs:input_type -> orchd.v1.SyncDocsRequest
+	72,  // 82: orchd.v1.Orchd.GetDocsSync:input_type -> orchd.v1.GetDocsSyncRequest
+	79,  // 83: orchd.v1.Orchd.ListRegisteredSources:input_type -> orchd.v1.ListRegisteredSourcesRequest
+	82,  // 84: orchd.v1.Orchd.SaveSource:input_type -> orchd.v1.SaveSourceRequest
+	83,  // 85: orchd.v1.Orchd.RemoveSource:input_type -> orchd.v1.RemoveSourceRequest
+	85,  // 86: orchd.v1.Orchd.RefreshSource:input_type -> orchd.v1.RefreshSourceRequest
+	87,  // 87: orchd.v1.Orchd.GetSafetyNet:input_type -> orchd.v1.GetSafetyNetRequest
+	88,  // 88: orchd.v1.Orchd.InstallSafetyNet:input_type -> orchd.v1.InstallSafetyNetRequest
+	95,  // 89: orchd.v1.Orchd.ListSettings:input_type -> orchd.v1.ListSettingsRequest
+	101, // 90: orchd.v1.Orchd.SetSettingEnabled:input_type -> orchd.v1.SetSettingEnabledRequest
+	102, // 91: orchd.v1.Orchd.AddSetting:input_type -> orchd.v1.AddSettingRequest
+	103, // 92: orchd.v1.Orchd.RemoveSetting:input_type -> orchd.v1.RemoveSettingRequest
+	116, // 93: orchd.v1.Orchd.GetTaskActivity:input_type -> orchd.v1.GetTaskActivityRequest
+	121, // 94: orchd.v1.Orchd.GetPRLanding:input_type -> orchd.v1.PRLandingRequest
+	122, // 95: orchd.v1.Orchd.ListPRLandings:input_type -> orchd.v1.ListPRLandingsRequest
+	125, // 96: orchd.v1.Orchd.LandPR:input_type -> orchd.v1.LandPRRequest
+	121, // 97: orchd.v1.Orchd.UndoPRLanding:input_type -> orchd.v1.PRLandingRequest
+	126, // 98: orchd.v1.Orchd.DiscardPRLanding:input_type -> orchd.v1.DiscardPRLandingRequest
+	1,   // 99: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
+	3,   // 100: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
+	5,   // 101: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
+	8,   // 102: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
+	11,  // 103: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
+	13,  // 104: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
+	15,  // 105: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
+	17,  // 106: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
+	21,  // 107: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
+	25,  // 108: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
+	27,  // 109: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
+	30,  // 110: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
+	32,  // 111: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
+	34,  // 112: orchd.v1.Orchd.RetryTask:output_type -> orchd.v1.RetryTaskResponse
+	36,  // 113: orchd.v1.Orchd.CancelTask:output_type -> orchd.v1.CancelTaskResponse
+	38,  // 114: orchd.v1.Orchd.WatchTasks:output_type -> orchd.v1.TaskEvent
+	40,  // 115: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
+	42,  // 116: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
+	44,  // 117: orchd.v1.Orchd.ReindexKeywords:output_type -> orchd.v1.ReindexKeywordsResponse
+	46,  // 118: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
+	49,  // 119: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
+	52,  // 120: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
+	55,  // 121: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
+	57,  // 122: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
+	60,  // 123: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
+	106, // 124: orchd.v1.Orchd.ListPRReviews:output_type -> orchd.v1.ListPRReviewsResponse
+	107, // 125: orchd.v1.Orchd.WatchPRReview:output_type -> orchd.v1.PRReview
+	110, // 126: orchd.v1.Orchd.StopPRReview:output_type -> orchd.v1.StopPRReviewResponse
+	112, // 127: orchd.v1.Orchd.GetPRDetail:output_type -> orchd.v1.PRDetail
+	63,  // 128: orchd.v1.Orchd.TailLogs:output_type -> orchd.v1.TailLogsResponse
+	66,  // 129: orchd.v1.Orchd.GetSystemMetrics:output_type -> orchd.v1.SystemMetrics
+	70,  // 130: orchd.v1.Orchd.ListDocs:output_type -> orchd.v1.ListDocsResponse
+	78,  // 131: orchd.v1.Orchd.GetDocument:output_type -> orchd.v1.Document
+	73,  // 132: orchd.v1.Orchd.SyncDocs:output_type -> orchd.v1.DocsSyncState
+	73,  // 133: orchd.v1.Orchd.GetDocsSync:output_type -> orchd.v1.DocsSyncState
+	80,  // 134: orchd.v1.Orchd.ListRegisteredSources:output_type -> orchd.v1.ListRegisteredSourcesResponse
+	81,  // 135: orchd.v1.Orchd.SaveSource:output_type -> orchd.v1.RegisteredSource
+	84,  // 136: orchd.v1.Orchd.RemoveSource:output_type -> orchd.v1.RemoveSourceResponse
+	86,  // 137: orchd.v1.Orchd.RefreshSource:output_type -> orchd.v1.RefreshSourceResponse
+	89,  // 138: orchd.v1.Orchd.GetSafetyNet:output_type -> orchd.v1.SafetyNetState
+	89,  // 139: orchd.v1.Orchd.InstallSafetyNet:output_type -> orchd.v1.SafetyNetState
+	96,  // 140: orchd.v1.Orchd.ListSettings:output_type -> orchd.v1.ListSettingsResponse
+	100, // 141: orchd.v1.Orchd.SetSettingEnabled:output_type -> orchd.v1.SettingItem
+	100, // 142: orchd.v1.Orchd.AddSetting:output_type -> orchd.v1.SettingItem
+	104, // 143: orchd.v1.Orchd.RemoveSetting:output_type -> orchd.v1.RemoveSettingResponse
+	120, // 144: orchd.v1.Orchd.GetTaskActivity:output_type -> orchd.v1.TaskActivity
+	128, // 145: orchd.v1.Orchd.GetPRLanding:output_type -> orchd.v1.PRLanding
+	124, // 146: orchd.v1.Orchd.ListPRLandings:output_type -> orchd.v1.ListPRLandingsResponse
+	128, // 147: orchd.v1.Orchd.LandPR:output_type -> orchd.v1.PRLanding
+	128, // 148: orchd.v1.Orchd.UndoPRLanding:output_type -> orchd.v1.PRLanding
+	128, // 149: orchd.v1.Orchd.DiscardPRLanding:output_type -> orchd.v1.PRLanding
+	99,  // [99:150] is the sub-list for method output_type
+	48,  // [48:99] is the sub-list for method input_type
+	48,  // [48:48] is the sub-list for extension type_name
+	48,  // [48:48] is the sub-list for extension extendee
+	0,   // [0:48] is the sub-list for field type_name
 }
 
 func init() { file_internal_rpc_orchdv1_orchd_proto_init() }
@@ -9927,7 +10244,7 @@ func file_internal_rpc_orchdv1_orchd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_rpc_orchdv1_orchd_proto_rawDesc), len(file_internal_rpc_orchdv1_orchd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   129,
+			NumMessages:   131,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

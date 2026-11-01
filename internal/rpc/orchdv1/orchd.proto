@@ -1058,12 +1058,44 @@ message TaskActivityStep {
   string kind = 2;   // read | edit | run | agent | other
   string text = 3;   // the command, path or pattern, redacted and capped
   string risk = 4;   // what makes it risky ("git push"), empty when it is not
+  string tool = 5;   // the tool's name
+  string title = 6;  // one line for the step: its main command, or a path
+  string detail = 7; // the full command or pattern, redacted, capped, keeping its lines
+  repeated string commands = 8;  // a shell step's commands, in order, capped
+  bool failed = 9;   // the tool reported an error
+  string output = 10;      // the end of what it returned, redacted; newest steps only
+  int64 duration_ms = 11;  // until its result arrived; 0 when not known
+  int32 additions = 12;    // lines an edit adds
+  int32 deletions = 13;    // lines an edit removes
+  int32 seq = 14;          // its place among all steps read, stable across polls
+  bool finished = 15;      // its result has arrived
+  int32 command_total = 16;  // commands in the step, including those not listed
+}
+
+message TaskActivityTool {
+  string name = 1;
+  int32 count = 2;
+}
+
+message TaskActivityFile {
+  string path = 1;
+  int32 additions = 2;
+  int32 deletions = 3;
 }
 
 message TaskActivity {
   bool available = 1;                   // false: no transcript (a Codex run, or not started)
   repeated TaskActivityStep steps = 2;  // oldest first; older plain steps are dropped past the limit
   int32 total = 3;                      // steps read, including dropped ones
+  repeated TaskActivityTool tools = 4;  // each tool used, most used first
+  repeated TaskActivityFile files_edited = 5;  // capped
+  int32 files_read = 6;                 // distinct files read
+  int32 commands = 7;                   // shell commands run
+  int32 failed = 8;                     // steps that reported an error
+  string started_at = 9;                // the first step's time
+  string last_at = 10;                  // the last step's time
+  bool pushed = 11;                     // a step ran git push, listed or not
+  int32 risky = 12;                     // risky steps, listed or not
 }
 
 message PRLandingRequest {

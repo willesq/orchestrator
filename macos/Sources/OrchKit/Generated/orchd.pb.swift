@@ -2752,6 +2752,72 @@ public nonisolated struct Orchd_V1_TaskActivityStep: Sendable {
   /// what makes it risky ("git push"), empty when it is not
   public var risk: String = String()
 
+  /// the tool's name
+  public var tool: String = String()
+
+  /// one line for the step: its main command, or a path
+  public var title: String = String()
+
+  /// the full command or pattern, redacted, capped, keeping its lines
+  public var detail: String = String()
+
+  /// a shell step's commands, in order, capped
+  public var commands: [String] = []
+
+  /// the tool reported an error
+  public var failed: Bool = false
+
+  /// the end of what it returned, redacted; newest steps only
+  public var output: String = String()
+
+  /// until its result arrived; 0 when not known
+  public var durationMs: Int64 = 0
+
+  /// lines an edit adds
+  public var additions: Int32 = 0
+
+  /// lines an edit removes
+  public var deletions: Int32 = 0
+
+  /// its place among all steps read, stable across polls
+  public var seq: Int32 = 0
+
+  /// its result has arrived
+  public var finished: Bool = false
+
+  /// commands in the step, including those not listed
+  public var commandTotal: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_TaskActivityTool: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var count: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_TaskActivityFile: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var path: String = String()
+
+  public var additions: Int32 = 0
+
+  public var deletions: Int32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2770,6 +2836,33 @@ public nonisolated struct Orchd_V1_TaskActivity: Sendable {
 
   /// steps read, including dropped ones
   public var total: Int32 = 0
+
+  /// each tool used, most used first
+  public var tools: [Orchd_V1_TaskActivityTool] = []
+
+  /// capped
+  public var filesEdited: [Orchd_V1_TaskActivityFile] = []
+
+  /// distinct files read
+  public var filesRead: Int32 = 0
+
+  /// shell commands run
+  public var commands: Int32 = 0
+
+  /// steps that reported an error
+  public var failed: Int32 = 0
+
+  /// the first step's time
+  public var startedAt: String = String()
+
+  /// the last step's time
+  public var lastAt: String = String()
+
+  /// a step ran git push, listed or not
+  public var pushed: Bool = false
+
+  /// risky steps, listed or not
+  public var risky: Int32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -8561,7 +8654,7 @@ nonisolated extension Orchd_V1_GetTaskActivityRequest: SwiftProtobuf.Message, Sw
 
 nonisolated extension Orchd_V1_TaskActivityStep: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TaskActivityStep"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}at\0\u{1}kind\0\u{1}text\0\u{1}risk\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}at\0\u{1}kind\0\u{1}text\0\u{1}risk\0\u{1}tool\0\u{1}title\0\u{1}detail\0\u{1}commands\0\u{1}failed\0\u{1}output\0\u{3}duration_ms\0\u{1}additions\0\u{1}deletions\0\u{1}seq\0\u{1}finished\0\u{3}command_total\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8573,6 +8666,18 @@ nonisolated extension Orchd_V1_TaskActivityStep: SwiftProtobuf.Message, SwiftPro
       case 2: try { try decoder.decodeSingularStringField(value: &self.kind) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.text) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.risk) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.tool) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.detail) }()
+      case 8: try { try decoder.decodeRepeatedStringField(value: &self.commands) }()
+      case 9: try { try decoder.decodeSingularBoolField(value: &self.failed) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.output) }()
+      case 11: try { try decoder.decodeSingularInt64Field(value: &self.durationMs) }()
+      case 12: try { try decoder.decodeSingularInt32Field(value: &self.additions) }()
+      case 13: try { try decoder.decodeSingularInt32Field(value: &self.deletions) }()
+      case 14: try { try decoder.decodeSingularInt32Field(value: &self.seq) }()
+      case 15: try { try decoder.decodeSingularBoolField(value: &self.finished) }()
+      case 16: try { try decoder.decodeSingularInt32Field(value: &self.commandTotal) }()
       default: break
       }
     }
@@ -8591,6 +8696,42 @@ nonisolated extension Orchd_V1_TaskActivityStep: SwiftProtobuf.Message, SwiftPro
     if !self.risk.isEmpty {
       try visitor.visitSingularStringField(value: self.risk, fieldNumber: 4)
     }
+    if !self.tool.isEmpty {
+      try visitor.visitSingularStringField(value: self.tool, fieldNumber: 5)
+    }
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 6)
+    }
+    if !self.detail.isEmpty {
+      try visitor.visitSingularStringField(value: self.detail, fieldNumber: 7)
+    }
+    if !self.commands.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.commands, fieldNumber: 8)
+    }
+    if self.failed != false {
+      try visitor.visitSingularBoolField(value: self.failed, fieldNumber: 9)
+    }
+    if !self.output.isEmpty {
+      try visitor.visitSingularStringField(value: self.output, fieldNumber: 10)
+    }
+    if self.durationMs != 0 {
+      try visitor.visitSingularInt64Field(value: self.durationMs, fieldNumber: 11)
+    }
+    if self.additions != 0 {
+      try visitor.visitSingularInt32Field(value: self.additions, fieldNumber: 12)
+    }
+    if self.deletions != 0 {
+      try visitor.visitSingularInt32Field(value: self.deletions, fieldNumber: 13)
+    }
+    if self.seq != 0 {
+      try visitor.visitSingularInt32Field(value: self.seq, fieldNumber: 14)
+    }
+    if self.finished != false {
+      try visitor.visitSingularBoolField(value: self.finished, fieldNumber: 15)
+    }
+    if self.commandTotal != 0 {
+      try visitor.visitSingularInt32Field(value: self.commandTotal, fieldNumber: 16)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8599,6 +8740,93 @@ nonisolated extension Orchd_V1_TaskActivityStep: SwiftProtobuf.Message, SwiftPro
     if lhs.kind != rhs.kind {return false}
     if lhs.text != rhs.text {return false}
     if lhs.risk != rhs.risk {return false}
+    if lhs.tool != rhs.tool {return false}
+    if lhs.title != rhs.title {return false}
+    if lhs.detail != rhs.detail {return false}
+    if lhs.commands != rhs.commands {return false}
+    if lhs.failed != rhs.failed {return false}
+    if lhs.output != rhs.output {return false}
+    if lhs.durationMs != rhs.durationMs {return false}
+    if lhs.additions != rhs.additions {return false}
+    if lhs.deletions != rhs.deletions {return false}
+    if lhs.seq != rhs.seq {return false}
+    if lhs.finished != rhs.finished {return false}
+    if lhs.commandTotal != rhs.commandTotal {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_TaskActivityTool: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TaskActivityTool"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}count\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.count) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if self.count != 0 {
+      try visitor.visitSingularInt32Field(value: self.count, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_TaskActivityTool, rhs: Orchd_V1_TaskActivityTool) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.count != rhs.count {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_TaskActivityFile: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TaskActivityFile"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}path\0\u{1}additions\0\u{1}deletions\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.path) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.additions) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.deletions) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.path.isEmpty {
+      try visitor.visitSingularStringField(value: self.path, fieldNumber: 1)
+    }
+    if self.additions != 0 {
+      try visitor.visitSingularInt32Field(value: self.additions, fieldNumber: 2)
+    }
+    if self.deletions != 0 {
+      try visitor.visitSingularInt32Field(value: self.deletions, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_TaskActivityFile, rhs: Orchd_V1_TaskActivityFile) -> Bool {
+    if lhs.path != rhs.path {return false}
+    if lhs.additions != rhs.additions {return false}
+    if lhs.deletions != rhs.deletions {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -8606,7 +8834,7 @@ nonisolated extension Orchd_V1_TaskActivityStep: SwiftProtobuf.Message, SwiftPro
 
 nonisolated extension Orchd_V1_TaskActivity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".TaskActivity"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}available\0\u{1}steps\0\u{1}total\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}available\0\u{1}steps\0\u{1}total\0\u{1}tools\0\u{3}files_edited\0\u{3}files_read\0\u{1}commands\0\u{1}failed\0\u{3}started_at\0\u{3}last_at\0\u{1}pushed\0\u{1}risky\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8617,6 +8845,15 @@ nonisolated extension Orchd_V1_TaskActivity: SwiftProtobuf.Message, SwiftProtobu
       case 1: try { try decoder.decodeSingularBoolField(value: &self.available) }()
       case 2: try { try decoder.decodeRepeatedMessageField(value: &self.steps) }()
       case 3: try { try decoder.decodeSingularInt32Field(value: &self.total) }()
+      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.tools) }()
+      case 5: try { try decoder.decodeRepeatedMessageField(value: &self.filesEdited) }()
+      case 6: try { try decoder.decodeSingularInt32Field(value: &self.filesRead) }()
+      case 7: try { try decoder.decodeSingularInt32Field(value: &self.commands) }()
+      case 8: try { try decoder.decodeSingularInt32Field(value: &self.failed) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.startedAt) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.lastAt) }()
+      case 11: try { try decoder.decodeSingularBoolField(value: &self.pushed) }()
+      case 12: try { try decoder.decodeSingularInt32Field(value: &self.risky) }()
       default: break
       }
     }
@@ -8632,6 +8869,33 @@ nonisolated extension Orchd_V1_TaskActivity: SwiftProtobuf.Message, SwiftProtobu
     if self.total != 0 {
       try visitor.visitSingularInt32Field(value: self.total, fieldNumber: 3)
     }
+    if !self.tools.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.tools, fieldNumber: 4)
+    }
+    if !self.filesEdited.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.filesEdited, fieldNumber: 5)
+    }
+    if self.filesRead != 0 {
+      try visitor.visitSingularInt32Field(value: self.filesRead, fieldNumber: 6)
+    }
+    if self.commands != 0 {
+      try visitor.visitSingularInt32Field(value: self.commands, fieldNumber: 7)
+    }
+    if self.failed != 0 {
+      try visitor.visitSingularInt32Field(value: self.failed, fieldNumber: 8)
+    }
+    if !self.startedAt.isEmpty {
+      try visitor.visitSingularStringField(value: self.startedAt, fieldNumber: 9)
+    }
+    if !self.lastAt.isEmpty {
+      try visitor.visitSingularStringField(value: self.lastAt, fieldNumber: 10)
+    }
+    if self.pushed != false {
+      try visitor.visitSingularBoolField(value: self.pushed, fieldNumber: 11)
+    }
+    if self.risky != 0 {
+      try visitor.visitSingularInt32Field(value: self.risky, fieldNumber: 12)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8639,6 +8903,15 @@ nonisolated extension Orchd_V1_TaskActivity: SwiftProtobuf.Message, SwiftProtobu
     if lhs.available != rhs.available {return false}
     if lhs.steps != rhs.steps {return false}
     if lhs.total != rhs.total {return false}
+    if lhs.tools != rhs.tools {return false}
+    if lhs.filesEdited != rhs.filesEdited {return false}
+    if lhs.filesRead != rhs.filesRead {return false}
+    if lhs.commands != rhs.commands {return false}
+    if lhs.failed != rhs.failed {return false}
+    if lhs.startedAt != rhs.startedAt {return false}
+    if lhs.lastAt != rhs.lastAt {return false}
+    if lhs.pushed != rhs.pushed {return false}
+    if lhs.risky != rhs.risky {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

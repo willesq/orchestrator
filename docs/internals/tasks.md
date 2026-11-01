@@ -263,13 +263,30 @@ a binary file changed.
 
 ## Session activity
 
-`GetTaskActivity` reads a task's tool calls from the last 4 MiB of its Claude Code transcript
-(`agentrun.ReadActivity`): the newest 200 steps, plus up to 200 earlier risky ones. Commands are redacted
-and capped at 240 bytes. Risky means, where a shell command starts: `git push` (and force), `git
-reset --hard`, `gh pr merge|close|comment|review|edit|ready|create`, `gh issue comment|edit`, a
-writing `gh api`, or a recursive force `rm`. A command hidden in a script or `sh -c` is not seen, so
-this reports what happened and prevents nothing. Codex runs have no such transcript, and show as
-unavailable. Operator-only, since a transcript may hold other tasks' text.
+`GetTaskActivity` reads a task's tool calls and their results from the last 4 MiB of its Claude Code
+transcript (`agentrun.ReadActivity`): the newest 200 steps, plus the newest 200 risky ones before them.
+Counts of tools, commands, files, failures and risky steps, and whether it pushed, cover every step in
+that tail. Nothing is stored: each request reads the file again. A transcript is written by an agent, so
+times must parse and tool names are capped.
+
+- **Each step:** the tool, a one-line title, the full command or pattern (≤ 2 KiB, keeping its lines),
+  and for a shell step its commands (≤ 8), split at `;`, `&&`, `||` and newlines outside quotes,
+  parentheses and here-documents. The title is the first command that does something, skipping `cd`,
+  `echo`, assignments and the like. This is for reading only, and is not a shell parser.
+- **Results:** matched by tool-use ID, giving whether it failed, how long it took, and the end of what
+  it returned (≤ 1.5 KiB). Only the newest 100 steps and failures carry output, to bound a poll.
+- **Edits:** lines written and replaced, counted from the tool's input, not from git. An edit that
+  replaces a line counts it both ways, so this is a sense of size, not a diff.
+- **Redaction:** commands and output lose control characters, then pass through `redact`, before they
+  are split or capped. Redaction matches known secret shapes, so a secret in any other form (a truncated
+  private key, an `Authorization` header) is shown. Operator-only for that reason.
+- **Copy** takes what the step shows, without a here-document's body, so pasting cannot run lines nobody read.
+- **Risky** means, where a shell command starts: `git push` (and force), `git reset --hard`,
+  `gh pr merge|close|comment|review|edit|ready|create`, `gh issue comment|edit`, a writing `gh api`, or
+  a recursive force `rm`. A command hidden in a script or `sh -c` is not seen, so this reports what
+  happened and prevents nothing.
+
+Codex runs have no such transcript, and show as unavailable.
 
 ## GitHub scopes
 

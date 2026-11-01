@@ -68,18 +68,50 @@ public struct TaskActivityStep: Sendable, Equatable, Identifiable {
     public let text: String
     /// What makes the step risky ("git push"), or "".
     public let risk: String
+    public let tool: String
+    /// One line for the step: its main command, or a path.
+    public let title: String
+    /// The full command or pattern, keeping its lines. May be empty.
+    public let detail: String
+    /// A shell step's first few commands, in order.
+    public let commands: [String]
+    /// How many commands it ran, including any not listed.
+    public let commandTotal: Int
+    public let finished: Bool
+    public let failed: Bool
+    /// The end of what the tool returned.
+    public let output: String
+    public let duration: TimeInterval
+    public let additions: Int
+    public let deletions: Int
     public var id: Int { index }
 
-    public init(index: Int, at: Date? = nil, kind: String, text: String, risk: String = "") {
+    public init(index: Int, at: Date? = nil, kind: String, text: String, risk: String = "", tool: String = "",
+                title: String = "", detail: String = "", commands: [String] = [], commandTotal: Int? = nil,
+                finished: Bool = false,
+                failed: Bool = false, output: String = "", duration: TimeInterval = 0, additions: Int = 0,
+                deletions: Int = 0) {
         self.index = index
         self.at = at
         self.kind = kind
         self.text = text
         self.risk = risk
+        self.tool = tool
+        self.title = title.isEmpty ? text : title
+        self.detail = detail
+        self.commands = commands
+        self.commandTotal = commandTotal ?? commands.count
+        self.finished = finished
+        self.failed = failed
+        self.output = output
+        self.duration = duration
+        self.additions = additions
+        self.deletions = deletions
     }
 
     public var symbolName: String {
         if !risk.isEmpty { return "exclamationmark.triangle.fill" }
+        if failed { return "xmark.circle.fill" }
         switch kind {
         case "read": return "doc.text.magnifyingglass"
         case "edit": return "pencil"
@@ -88,14 +120,81 @@ public struct TaskActivityStep: Sendable, Equatable, Identifiable {
         default: return "wrench.and.screwdriver"
         }
     }
+
+    /// Whether opening the step shows more than its row.
+    public var hasMore: Bool { commands.count > 1 || !detail.isEmpty || !output.isEmpty || title != text }
+
+    /// What Copy puts on the clipboard: what the step shows, and no more. A
+    /// here-document's body is not shown, so it is not copied either, or pasting
+    /// this could run lines nobody read.
+    public var copyText: String {
+        displaySafeLines(!commands.isEmpty ? commands.joined(separator: "\n") : detail.isEmpty ? text : detail)
+    }
+}
+
+/// Which of a run's steps to list.
+public enum TaskActivityFilter: String, Sendable, CaseIterable, Identifiable {
+    case all = "All", commands = "Commands", files = "Files", attention = "Attention"
+
+    public var id: String { rawValue }
+
+    public func includes(_ step: TaskActivityStep) -> Bool {
+        switch self {
+        case .all: true
+        case .commands: step.kind == "run"
+        case .files: step.kind == "read" || step.kind == "edit"
+        case .attention: step.failed || !step.risk.isEmpty
+        }
+    }
 }
 
 /// What a task's session has done so far. available is false when it has no
-/// transcript: a Codex run, or one that has not started.
+/// transcript: a Codex run, or one that has not started. The counts cover every
+/// step read, including steps not listed.
 public struct TaskActivityLog: Sendable, Equatable {
+    public struct Tool: Sendable, Equatable, Identifiable {
+        public let name: String
+        public let count: Int
+        public var id: String { name }
+
+        public init(name: String, count: Int) {
+            self.name = name
+            self.count = count
+        }
+
+        /// A tool's name as people say it: an MCP tool loses its plumbing.
+        public var label: String {
+            let parts = name.components(separatedBy: "__")
+            return parts.count == 3 && parts[0] == "mcp" ? "\(parts[1]): \(parts[2])" : name
+        }
+    }
+
+    public struct File: Sendable, Equatable, Identifiable {
+        public let path: String
+        public let additions: Int
+        public let deletions: Int
+        public var id: String { path }
+
+        public init(path: String, additions: Int = 0, deletions: Int = 0) {
+            self.path = path
+            self.additions = additions
+            self.deletions = deletions
+        }
+    }
+
     public var available = false
     public var steps: [TaskActivityStep] = []
     public var total = 0
+    public var tools: [Tool] = []
+    public var files: [File] = []
+    public var filesRead = 0
+    public var commands = 0
+    public var failed = 0
+    public var startedAt: Date?
+    public var lastAt: Date?
+    /// From orchd, which counts steps no longer listed.
+    public var reportedPushed = false
+    public var reportedRisky = 0
 
     public init(available: Bool = false, steps: [TaskActivityStep] = [], total: Int = 0) {
         self.available = available
@@ -106,7 +205,42 @@ public struct TaskActivityLog: Sendable, Equatable {
     public var risky: [TaskActivityStep] { steps.filter { !$0.risk.isEmpty } }
 
     /// Whether it ran a command that writes to a remote.
-    public var pushed: Bool { steps.contains { $0.risk == "git push" || $0.risk == "force push" } }
+    public var pushed: Bool { reportedPushed || steps.contains { $0.risk == "git push" || $0.risk == "force push" } }
+
+    /// How many steps were risky, including any no longer listed.
+    public var riskyCount: Int { max(reportedRisky, risky.count) }
+
+    /// A line that says what the run did and whether it needs a look.
+    public var summary: String {
+        var parts = [Self.count(commands, "command")]
+        if !files.isEmpty { parts.append("\(Self.count(files.count, "file")) edited") }
+        if filesRead > 0 { parts.append("\(filesRead) read") }
+        if failed > 0 { parts.append("\(failed) failed") }
+        parts.append(riskyCount == 0 ? "nothing risky" : "\(riskyCount) risky")
+        return parts.joined(separator: " · ")
+    }
+
+    /// The time from the first step to the last, or nil before there are two.
+    public var span: TimeInterval? {
+        guard let startedAt, let lastAt, lastAt > startedAt else { return nil }
+        return lastAt.timeIntervalSince(startedAt)
+    }
+
+    static func count(_ n: Int, _ noun: String) -> String { "\(n) \(noun)\(n == 1 ? "" : "s")" }
+
+    /// A path short enough for a row: its last two parts.
+    public static func shortPath(_ path: String) -> String {
+        let parts = path.split(separator: "/")
+        guard parts.count > 2 else { return path }
+        return "…/" + parts.suffix(2).joined(separator: "/")
+    }
+
+    /// "420 ms", "12 s", "3 min 05 s".
+    public static func duration(_ seconds: TimeInterval) -> String {
+        if seconds < 1 { return "\(Int(seconds * 1000)) ms" }
+        if seconds < 60 { return "\(Int(seconds)) s" }
+        return String(format: "%d min %02d s", Int(seconds) / 60, Int(seconds) % 60)
+    }
 }
 
 /// One line of a diff, classified for colouring.
