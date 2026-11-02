@@ -4,6 +4,8 @@
 
 Local-first memory and task orchestration for coding agents (Claude Code, Codex, Gemini).
 
+> **Testing:** this line was added to test a README edit and push.
+
 Coding agents forget everything between sessions. orch gives them a shared, durable memory on
 your machine: it indexes your docs and past sessions, adds relevant context to each prompt, and
 runs background agent tasks that survive restarts.
