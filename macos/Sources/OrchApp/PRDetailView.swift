@@ -135,11 +135,12 @@ private struct MetadataCard: View {
 
     private var ciText: String {
         let s = detail.checkSummary
+        let counts = "\(s.passing) passed, \(s.skipped) skipped, \(s.failing) failed"
         switch detail.ciState {
         case "none": return "No checks"
-        case "success": return "Passing (\(s.passing))"
-        case "failure": return "Failing (\(s.failing) of \(detail.checks.count))"
-        case "pending": return "Running (\(s.running) of \(detail.checks.count))"
+        case "success": return "Finished: \(counts)"
+        case "failure": return s.running > 0 ? "Failing: \(counts), \(s.running) running" : "Failing: \(counts)"
+        case "pending": return "Running: \(s.running) of \(detail.checks.count); \(counts)"
         default: return detail.ciState
         }
     }
@@ -181,7 +182,7 @@ private struct ChecksCard: View {
                 .padding(.top, 6)
             } label: {
                 let s = detail.checkSummary
-                Text(verbatim: "Checks — \(s.failing) failing, \(s.running) running, \(s.passing) passing").textStyle(.section)
+                Text(verbatim: "Checks — \(s.failing) failed, \(s.running) running, \(s.passing) passed, \(s.skipped) skipped").textStyle(.section)
             }
         }
     }
@@ -189,7 +190,7 @@ private struct ChecksCard: View {
     private func tone(_ result: String) -> Tone {
         switch result {
         case "success", "neutral", "skipped": .good
-        case "failure", "error", "timed_out", "cancelled", "action_required", "startup_failure": .bad
+        case "failure", "error", "timed_out", "cancelled", "action_required", "startup_failure", "stale": .bad
         default: .warning
         }
     }

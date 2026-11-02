@@ -347,15 +347,17 @@ extension PRHandoff {
         return reason.replacing(/\[([^\]]*)\]\([^)]*\)/) { String($0.output.1) }
     }
 
-    /// Whether task's brief told it to stay off the remote.
+    /// Whether task was told to stay off the remote: by its brief, or as a
+    /// review, whose agent instructions forbid pushing.
     public static func askedNotToPush(_ task: TaskRecord) -> Bool {
-        task.body.split(whereSeparator: \.isNewline).contains { $0.hasPrefix(noPushRule) }
+        task.agent == "pr-verdict" || task.body.split(whereSeparator: \.isNewline).contains { $0.hasPrefix(noPushRule) }
     }
 
     /// A one-word account of what the agent was allowed, for telling two runs
     /// on one PR apart.
     public static func mode(_ task: TaskRecord) -> String {
-        askedNotToPush(task) ? "local only" : "may push"
+        if task.agent == "pr-verdict" { return "review only" }
+        return askedNotToPush(task) ? "local only" : "may push"
     }
 
     /// The brief that sends a proposal back with the user's feedback. Like a

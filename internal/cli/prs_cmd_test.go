@@ -9,6 +9,21 @@ import (
 	"github.com/willesq/orchestrator/internal/prs"
 )
 
+func TestPRsShowsCheckCounts(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	_ = prs.SaveState(paths.PRStateFile(), prs.State{PRs: map[string]prs.PR{
+		"https://x/a": {URL: "https://x/a", Title: "a", Repo: "o/r", Reasons: []string{prs.ReasonAuthored}, CIState: "success", Checks: "0 passed, 1 skipped, 0 failed"},
+		"https://x/b": {URL: "https://x/b", Title: "b", Repo: "o/r", Reasons: []string{prs.ReasonAuthored}, CIState: "none"},
+	}})
+	out, err := run(factory(&fakeClient{}, nil), "", "prs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(out, "checks:") != 1 || !strings.Contains(out, "checks: 0 passed, 1 skipped, 0 failed") {
+		t.Errorf("out = %q", out)
+	}
+}
+
 func TestPRsNeedsMe(t *testing.T) {
 	tests := []struct {
 		name    string

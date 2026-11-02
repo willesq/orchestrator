@@ -95,14 +95,18 @@ func (f *fakeClient) ListGitHubItems(context.Context, *orchdv1.ListGitHubItemsRe
 }
 
 func (f *fakeClient) ListPRReviews(context.Context, *orchdv1.ListPRReviewsRequest, ...grpc.CallOption) (*orchdv1.ListPRReviewsResponse, error) {
-	return &orchdv1.ListPRReviewsResponse{}, nil
+	return &orchdv1.ListPRReviewsResponse{Reviews: prWatches.reviews}, prWatches.listErr
 }
 
 func (f *fakeClient) WatchPRReview(context.Context, *orchdv1.WatchPRReviewRequest, ...grpc.CallOption) (*orchdv1.PRReview, error) {
 	return &orchdv1.PRReview{}, nil
 }
 
-func (f *fakeClient) StopPRReview(context.Context, *orchdv1.StopPRReviewRequest, ...grpc.CallOption) (*orchdv1.StopPRReviewResponse, error) {
+func (f *fakeClient) StopPRReview(_ context.Context, req *orchdv1.StopPRReviewRequest, _ ...grpc.CallOption) (*orchdv1.StopPRReviewResponse, error) {
+	if prWatches.stopErr != nil {
+		return nil, prWatches.stopErr
+	}
+	prWatches.stopped = append(prWatches.stopped, req)
 	return &orchdv1.StopPRReviewResponse{}, nil
 }
 

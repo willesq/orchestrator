@@ -30,7 +30,7 @@ struct ReviewCard: View {
                 Menu {
                     Button("Stop watching") { Task { await prs.stop(url) } }
                     Button("Stop and forget the verdict", role: .destructive) { Task { await prs.stop(url, forget: true) } }
-                } label: { Image(systemName: "ellipsis.circle") }
+                } label: { Label("Stop watching", systemImage: "stop.circle") }
                     .menuStyle(.borderlessButton)
                     .fixedSize()
                     .help("Stop watching this PR")

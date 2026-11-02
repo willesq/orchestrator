@@ -36,6 +36,8 @@ orch task <id>            # for a pending or running task: running / waiting / â
                           # its process, how long, last activity, session, and how to open it
 orch task <id> --retry    # run it again; its session resumes where it left off
 orch task <id> --cancel   # stop a pending or running task
+orch prs watches          # the PRs orchd watches for review
+orch prs stop <pr-url>    # stop watching one; no new reviews start and nothing more is posted
 ```
 
 `orch tasks` marks a task nothing is running as `âš  stalled`. In Orch.app, the Tasks tab updates

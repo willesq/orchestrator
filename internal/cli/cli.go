@@ -55,7 +55,7 @@ func NewRootCmd(cf clientFactory) *cobra.Command {
 		newQdrantCmd(),
 		newSourceCmd(cf),
 		newDocsCmd(cf),
-		newPRsCmd(),
+		newPRsCmd(cf),
 		newGitHubCmd(cf),
 		newRepoCmd(),
 		newSettingsCmd(cf),

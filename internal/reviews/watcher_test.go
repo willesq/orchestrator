@@ -322,6 +322,19 @@ func TestPostFailureIsRecordedAndRetriedOnRequest(t *testing.T) {
 	}
 }
 
+func TestSkippedChecksDoNotHoldTheReview(t *testing.T) {
+	e, w := newEnv(t)
+	e.pr.checks = []string{"SUCCESS", "SKIPPED"}
+	_, _ = w.Watch(context.Background(), testURL, ModeVerdict, nil)
+	w.Tick(context.Background())
+	if r := get(t, w); r.State != StateReviewing || len(e.dispatched) != 1 {
+		t.Fatalf("%+v, dispatched %d", r, len(e.dispatched))
+	}
+	if !strings.Contains(e.dispatched[0], "1 passed, 1 skipped, 0 failed") {
+		t.Errorf("the review was not told the check counts: %s", e.dispatched[0])
+	}
+}
+
 func TestNotReadyStates(t *testing.T) {
 	tests := []struct {
 		name string

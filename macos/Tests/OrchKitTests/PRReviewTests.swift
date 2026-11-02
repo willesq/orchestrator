@@ -79,9 +79,10 @@ private let url2 = "https://github.com/willesq/theCalculator/pull/2"
             .init(name: "a", result: "success"), .init(name: "b", result: "skipped"),
             .init(name: "c", result: "failure"), .init(name: "d", result: "timed_out"),
             .init(name: "e", result: "pending"), .init(name: "f", result: "in_progress"),
+            .init(name: "g", result: "stale"),
         ])
         let s = d.checkSummary
-        #expect(s.passing == 2 && s.failing == 2 && s.running == 2)
+        #expect(s.passing == 1 && s.skipped == 1 && s.failing == 3 && s.running == 2)
     }
 
     private func item(_ n: Int, repo: String = "willesq/theCalculator", reasons: [GitHubReason] = [.authored],
