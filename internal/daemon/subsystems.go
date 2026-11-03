@@ -346,8 +346,8 @@ func prsUnit(s config.Settings, store *sql.DB, gh *github.Service) supervisor.Un
 }
 
 // prSweepDue reports whether the PR babysitter should sweep now: on its first
-// tick, once poll has passed since the last sweep, or when a hook or a scope
-// change asked and minRequestGap has passed. A request that comes sooner is
+// tick, once poll has passed since the last sweep, or when a hook, a scope
+// change or the app's Refresh asked and minRequestGap has passed. A request that comes sooner is
 // left in place, so it runs when the gap is up rather than being lost.
 func prSweepDue(dir string, last time.Time, poll time.Duration) bool {
 	since := time.Since(last)

@@ -450,6 +450,7 @@ private final class ItemsOnly: GitHubAPI, @unchecked Sendable {
     func setGitHubScope(_ scope: GitHubScope) async throws -> GitHubScope { scope }
     func gitHubRepos(owner: String) async throws -> [GitHubRepo] { [] }
     func gitHubItems() async throws -> GitHubItemList { GitHubItemList(items: items, updatedAt: nil) }
+    func requestGitHubSweep() async throws {}
 }
 
 @MainActor

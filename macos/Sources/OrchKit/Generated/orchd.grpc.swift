@@ -358,6 +358,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "RequestGitHubSweep" metadata.
+        public enum RequestGitHubSweep: Sendable {
+            /// Request type for "RequestGitHubSweep".
+            public typealias Input = Orchd_V1_RequestGitHubSweepRequest
+            /// Response type for "RequestGitHubSweep".
+            public typealias Output = Orchd_V1_RequestGitHubSweepResponse
+            /// Descriptor for "RequestGitHubSweep".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "RequestGitHubSweep",
+                type: .unary
+            )
+        }
         /// Namespace for "ListPRReviews" metadata.
         public enum ListPRReviews: Sendable {
             /// Request type for "ListPRReviews".
@@ -724,6 +737,7 @@ public enum Orchd_V1_Orchd: Sendable {
             SetGitHubScope.descriptor,
             ListGitHubRepos.descriptor,
             ListGitHubItems.descriptor,
+            RequestGitHubSweep.descriptor,
             ListPRReviews.descriptor,
             WatchPRReview.descriptor,
             StopPRReview.descriptor,
@@ -1386,6 +1400,31 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListGitHubItemsResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListGitHubItemsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RequestGitHubSweep" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RequestGitHubSweep asks the watcher to search GitHub soon, spaced like any
+        /// > other requested sweep. The caller sees the result as ListGitHubItems'
+        /// > updated_at advancing; this RPC does not wait for it.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RequestGitHubSweepRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RequestGitHubSweepRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RequestGitHubSweepResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func requestGitHubSweep<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RequestGitHubSweepRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RequestGitHubSweepRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RequestGitHubSweepResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RequestGitHubSweepResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListPRReviews" method.
@@ -2926,6 +2965,42 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.ListGitHubItems.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "RequestGitHubSweep" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RequestGitHubSweep asks the watcher to search GitHub soon, spaced like any
+        /// > other requested sweep. The caller sees the result as ListGitHubItems'
+        /// > updated_at advancing; this RPC does not wait for it.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RequestGitHubSweepRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RequestGitHubSweepRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RequestGitHubSweepResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func requestGitHubSweep<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RequestGitHubSweepRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RequestGitHubSweepRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RequestGitHubSweepResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RequestGitHubSweepResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.RequestGitHubSweep.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -4617,6 +4692,37 @@ extension Orchd_V1_Orchd.ClientProtocol {
         )
     }
 
+    /// Call the "RequestGitHubSweep" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RequestGitHubSweep asks the watcher to search GitHub soon, spaced like any
+    /// > other requested sweep. The caller sees the result as ListGitHubItems'
+    /// > updated_at advancing; this RPC does not wait for it.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RequestGitHubSweepRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func requestGitHubSweep<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RequestGitHubSweepRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RequestGitHubSweepResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.requestGitHubSweep(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RequestGitHubSweepRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RequestGitHubSweepResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "ListPRReviews" method.
     ///
     /// > Source IDL Documentation:
@@ -6268,6 +6374,41 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.listGitHubItems(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RequestGitHubSweep" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RequestGitHubSweep asks the watcher to search GitHub soon, spaced like any
+    /// > other requested sweep. The caller sees the result as ListGitHubItems'
+    /// > updated_at advancing; this RPC does not wait for it.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func requestGitHubSweep<Result>(
+        _ message: Orchd_V1_RequestGitHubSweepRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RequestGitHubSweepResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RequestGitHubSweepRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.requestGitHubSweep(
             request: request,
             options: options,
             onResponse: handleResponse

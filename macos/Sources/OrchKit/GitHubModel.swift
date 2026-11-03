@@ -26,15 +26,26 @@ public final class GitHubModel {
     /// Why loading an owner's repos failed, shown in the picker.
     public private(set) var repoErrors: [String: String] = [:]
     public private(set) var isRefreshing = false
+    /// Whether a check of GitHub the user asked for is still on its way.
+    public private(set) var isCheckingGitHub = false
+    /// Why the last check of GitHub did not finish, until the next one starts.
+    public private(set) var checkWarning: String?
     public var filter = Filter.all
 
     private let api: any GitHubAPI
     private let interval: Duration
+    private let checkPoll: Duration
+    private let checkTimeout: Duration
     private var pollTask: Task<Void, Never>?
 
-    public init(api: any GitHubAPI, interval: Duration = .seconds(30)) {
+    /// checkTimeout outlasts orchd's wait between requested sweeps (a minute)
+    /// plus the sweep itself.
+    public init(api: any GitHubAPI, interval: Duration = .seconds(30),
+                checkPoll: Duration = .seconds(2), checkTimeout: Duration = .seconds(120)) {
         self.api = api
         self.interval = interval
+        self.checkPoll = checkPoll
+        self.checkTimeout = checkTimeout
     }
 
     /// Items in enabled scopes passing the filter, newest first; items that
@@ -94,6 +105,37 @@ public final class GitHubModel {
             if Task.isCancelled { return }
             lastError = DaemonMonitor.describe(error)
         }
+    }
+
+    /// Reloads, asks orchd to search GitHub now, and follows the activity list
+    /// until the cache is rewritten. orchd does not report a failed sweep, so
+    /// one that never lands ends in checkWarning.
+    public func checkGitHub(rediscover: Bool = false) async {
+        guard !isCheckingGitHub else { return }
+        isCheckingGitHub = true
+        defer { isCheckingGitHub = false }
+        checkWarning = nil
+        await refresh(rediscover: rediscover)
+        // refresh does nothing while another is running, and this time has to
+        // be the cache's own from before the request.
+        await refreshItems()
+        let before = items?.updatedAt
+        do {
+            try await api.requestGitHubSweep()
+        } catch {
+            if Task.isCancelled { return }
+            checkWarning = "Could not ask orchd to check GitHub: \(DaemonMonitor.describe(error))"
+            return
+        }
+        let clock = ContinuousClock()
+        let deadline = clock.now + checkTimeout
+        while clock.now < deadline {
+            try? await Task.sleep(for: checkPoll)
+            if Task.isCancelled { return }
+            await refreshItems()
+            if let updated = items?.updatedAt, before.map({ updated > $0 }) ?? true { return }
+        }
+        checkWarning = "GitHub has not answered yet, so this may be out of date. It updates here once orchd gets through."
     }
 
     /// Polls items while the tab is in use; calling it again is a no-op.

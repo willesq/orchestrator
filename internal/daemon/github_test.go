@@ -14,6 +14,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/github"
+	"github.com/willesq/orchestrator/internal/handoff"
 	"github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
@@ -191,4 +192,32 @@ func TestWatchFrom(t *testing.T) {
 	if _, err := watchFrom(githubServer(t, &downAll).github)(ctx); err == nil {
 		t.Error("GitHub down: no error")
 	}
+}
+
+func TestRequestGitHubSweep(t *testing.T) {
+	ctx := context.Background()
+	t.Run("leaves one request however often it is asked", func(t *testing.T) {
+		s := &server{handoffDir: t.TempDir()}
+		for range 2 {
+			if _, err := s.RequestGitHubSweep(ctx, &orchdv1.RequestGitHubSweepRequest{}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if !handoff.TakePRSweep(s.handoffDir) {
+			t.Error("no sweep was requested")
+		}
+		if handoff.TakePRSweep(s.handoffDir) {
+			t.Error("repeated calls left more than one request")
+		}
+	})
+	t.Run("reports a request it could not leave", func(t *testing.T) {
+		file := filepath.Join(t.TempDir(), "not-a-dir")
+		if err := os.WriteFile(file, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		s := &server{handoffDir: file}
+		if _, err := s.RequestGitHubSweep(ctx, &orchdv1.RequestGitHubSweepRequest{}); grpcstatus.Code(err) != codes.Internal {
+			t.Errorf("err = %v, want Internal", err)
+		}
+	})
 }

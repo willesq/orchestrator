@@ -45,6 +45,7 @@ const (
 	Orchd_SetGitHubScope_FullMethodName        = "/orchd.v1.Orchd/SetGitHubScope"
 	Orchd_ListGitHubRepos_FullMethodName       = "/orchd.v1.Orchd/ListGitHubRepos"
 	Orchd_ListGitHubItems_FullMethodName       = "/orchd.v1.Orchd/ListGitHubItems"
+	Orchd_RequestGitHubSweep_FullMethodName    = "/orchd.v1.Orchd/RequestGitHubSweep"
 	Orchd_ListPRReviews_FullMethodName         = "/orchd.v1.Orchd/ListPRReviews"
 	Orchd_WatchPRReview_FullMethodName         = "/orchd.v1.Orchd/WatchPRReview"
 	Orchd_StopPRReview_FullMethodName          = "/orchd.v1.Orchd/StopPRReview"
@@ -148,6 +149,10 @@ type OrchdClient interface {
 	// ListGitHubItems serves the watcher's cache: open PRs and issues in the
 	// enabled scopes, each with why it is watched. Never calls gh.
 	ListGitHubItems(ctx context.Context, in *ListGitHubItemsRequest, opts ...grpc.CallOption) (*ListGitHubItemsResponse, error)
+	// RequestGitHubSweep asks the watcher to search GitHub soon, spaced like any
+	// other requested sweep. The caller sees the result as ListGitHubItems'
+	// updated_at advancing; this RPC does not wait for it.
+	RequestGitHubSweep(ctx context.Context, in *RequestGitHubSweepRequest, opts ...grpc.CallOption) (*RequestGitHubSweepResponse, error)
 	// ListPRReviews lists the PRs the user asked orchd to review once ready,
 	// each with where its review stands and the last verdict. Never calls gh.
 	ListPRReviews(ctx context.Context, in *ListPRReviewsRequest, opts ...grpc.CallOption) (*ListPRReviewsResponse, error)
@@ -506,6 +511,16 @@ func (c *orchdClient) ListGitHubItems(ctx context.Context, in *ListGitHubItemsRe
 	return out, nil
 }
 
+func (c *orchdClient) RequestGitHubSweep(ctx context.Context, in *RequestGitHubSweepRequest, opts ...grpc.CallOption) (*RequestGitHubSweepResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RequestGitHubSweepResponse)
+	err := c.cc.Invoke(ctx, Orchd_RequestGitHubSweep_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListPRReviews(ctx context.Context, in *ListPRReviewsRequest, opts ...grpc.CallOption) (*ListPRReviewsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListPRReviewsResponse)
@@ -841,6 +856,10 @@ type OrchdServer interface {
 	// ListGitHubItems serves the watcher's cache: open PRs and issues in the
 	// enabled scopes, each with why it is watched. Never calls gh.
 	ListGitHubItems(context.Context, *ListGitHubItemsRequest) (*ListGitHubItemsResponse, error)
+	// RequestGitHubSweep asks the watcher to search GitHub soon, spaced like any
+	// other requested sweep. The caller sees the result as ListGitHubItems'
+	// updated_at advancing; this RPC does not wait for it.
+	RequestGitHubSweep(context.Context, *RequestGitHubSweepRequest) (*RequestGitHubSweepResponse, error)
 	// ListPRReviews lists the PRs the user asked orchd to review once ready,
 	// each with where its review stands and the last verdict. Never calls gh.
 	ListPRReviews(context.Context, *ListPRReviewsRequest) (*ListPRReviewsResponse, error)
@@ -1007,6 +1026,9 @@ func (UnimplementedOrchdServer) ListGitHubRepos(context.Context, *ListGitHubRepo
 }
 func (UnimplementedOrchdServer) ListGitHubItems(context.Context, *ListGitHubItemsRequest) (*ListGitHubItemsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListGitHubItems not implemented")
+}
+func (UnimplementedOrchdServer) RequestGitHubSweep(context.Context, *RequestGitHubSweepRequest) (*RequestGitHubSweepResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RequestGitHubSweep not implemented")
 }
 func (UnimplementedOrchdServer) ListPRReviews(context.Context, *ListPRReviewsRequest) (*ListPRReviewsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPRReviews not implemented")
@@ -1564,6 +1586,24 @@ func _Orchd_ListGitHubItems_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).ListGitHubItems(ctx, req.(*ListGitHubItemsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_RequestGitHubSweep_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestGitHubSweepRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).RequestGitHubSweep(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_RequestGitHubSweep_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).RequestGitHubSweep(ctx, req.(*RequestGitHubSweepRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2142,6 +2182,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListGitHubItems",
 			Handler:    _Orchd_ListGitHubItems_Handler,
+		},
+		{
+			MethodName: "RequestGitHubSweep",
+			Handler:    _Orchd_RequestGitHubSweep_Handler,
 		},
 		{
 			MethodName: "ListPRReviews",

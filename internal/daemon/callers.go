@@ -75,6 +75,10 @@ var operatorActions = map[string]string{
 	orchdv1.Orchd_RefreshSource_FullMethodName:    "refresh registered sources",
 	orchdv1.Orchd_SyncDocs_FullMethodName:         "sync docs",
 	orchdv1.Orchd_SetGitHubScope_FullMethodName:   "change GitHub monitoring",
+	// Reason: every sweep spends the user's GitHub rate limit, and a task can
+	// read the cache instead. Tasks' gh pr mutations still request sweeps
+	// through the hook, within the same one-a-minute limit.
+	orchdv1.Orchd_RequestGitHubSweep_FullMethodName: "ask orchd to search GitHub",
 	// Reason: a watch can approve PRs, and verdicts carry text drawn from
 	// other people's code, so neither belongs in a task's reach.
 	orchdv1.Orchd_WatchPRReview_FullMethodName: "change PR review watches",

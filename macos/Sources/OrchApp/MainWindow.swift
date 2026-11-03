@@ -262,7 +262,7 @@ struct MainWindow: View {
         Task {
             async let a: Void = monitor.refresh()
             async let b: Void = prMonitor.refresh()
-            async let c: Void = github.refreshItems()
+            async let c: Void = github.checkGitHub()
             async let d: Void = tasks.refresh()
             async let e: Void = docs.load()
             async let f: Void = safetyNet.load()

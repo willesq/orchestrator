@@ -265,7 +265,12 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     filter says what it hides and offers **Show everything**. Clicking opens the item, but only exact
     `https://github.com/<owner>/<repo>/pull|issues/<n>` URLs. Titles and authors are other people's
     text, shown verbatim.
-  - **Refresh** asks GitHub for your orgs and teams again.
+  - **Refresh** calls `RequestGitHubSweep` and shows a spinner until `ListGitHubItems` reports a
+    newer `updated_at`, so a new PR or review request usually appears within about a minute instead of at
+    the next 10-minute sweep. If nothing lands in two minutes (gh failing, rate limited, the watcher
+    off) a banner says the list may be out of date; orchd does not report why. On Overview it also
+    asks GitHub for your orgs and teams again. **Refresh everything** in the command palette makes
+    the same request.
   - **Sections:** an Overview/PRs switch in the toolbar, kept across launches. Overview is the
     above. PRs shows "PRs (n)" while n verdicts wait on you.
   - **PRs:** the PRs from `ListGitHubItems`, needing-you first, then newest.

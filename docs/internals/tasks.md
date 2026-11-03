@@ -320,7 +320,8 @@ The `pr-babysitter` unit watches the user's enabled GitHub scopes for open PRs a
 
 **When it sweeps:**
 - Every poll (10 min), and on first start.
-- On request: the `handoff/pr-sweep` file, written after `gh pr` mutations and by `SetGitHubScope`.
+- On request: the `handoff/pr-sweep` file, written after `gh pr` mutations, by `SetGitHubScope` and
+  by `RequestGitHubSweep` (the app's Refresh).
   A requested sweep runs at most a minute after the previous sweep. An earlier request waits, rather
   than being dropped, so a scope change shows within about a minute.
 - After GitHub reports a rate limit, sweeps pause for 10 minutes.

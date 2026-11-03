@@ -94,6 +94,10 @@ func (f *fakeClient) ListGitHubItems(context.Context, *orchdv1.ListGitHubItemsRe
 	return &orchdv1.ListGitHubItemsResponse{}, nil
 }
 
+func (f *fakeClient) RequestGitHubSweep(context.Context, *orchdv1.RequestGitHubSweepRequest, ...grpc.CallOption) (*orchdv1.RequestGitHubSweepResponse, error) {
+	return &orchdv1.RequestGitHubSweepResponse{}, nil
+}
+
 func (f *fakeClient) ListPRReviews(context.Context, *orchdv1.ListPRReviewsRequest, ...grpc.CallOption) (*orchdv1.ListPRReviewsResponse, error) {
 	return &orchdv1.ListPRReviewsResponse{Reviews: prWatches.reviews}, prWatches.listErr
 }

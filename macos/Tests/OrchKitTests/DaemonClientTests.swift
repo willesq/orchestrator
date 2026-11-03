@@ -405,6 +405,14 @@ struct LiveDaemonTests {
         }
     }
 
+    @Test func requestsAGitHubSweep() async throws {
+        let service = FakeOrchdService()
+        try await withClient(service) { client in
+            try await client.requestGitHubSweep()
+            #expect(service.recorder.last(Orchd_V1_RequestGitHubSweepRequest.self) != nil)
+        }
+    }
+
     @Test func setScopeSendsReposOnlyWhenPicked() async throws {
         let service = FakeOrchdService()
         try await withClient(service) { client in

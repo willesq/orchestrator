@@ -95,6 +95,15 @@ func (s *server) SetGitHubScope(ctx context.Context, req *orchdv1.SetGitHubScope
 	return &orchdv1.SetGitHubScopeResponse{Scope: scopePB(stored)}, nil
 }
 
+// RequestGitHubSweep leaves the watcher a request; prSweepDue decides when it
+// runs, so repeated calls add up to at most one sweep a minute.
+func (s *server) RequestGitHubSweep(context.Context, *orchdv1.RequestGitHubSweepRequest) (*orchdv1.RequestGitHubSweepResponse, error) {
+	if err := handoff.RequestPRSweep(s.handoffDir); err != nil {
+		return nil, grpcstatus.Errorf(codes.Internal, "request PR sweep: %v", err)
+	}
+	return &orchdv1.RequestGitHubSweepResponse{}, nil
+}
+
 func (s *server) ListGitHubRepos(ctx context.Context, req *orchdv1.ListGitHubReposRequest) (*orchdv1.ListGitHubReposResponse, error) {
 	svc, err := s.githubService()
 	if err != nil {

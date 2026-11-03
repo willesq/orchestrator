@@ -219,4 +219,5 @@ public protocol GitHubAPI: Sendable {
     func setGitHubScope(_ scope: GitHubScope) async throws -> GitHubScope
     func gitHubRepos(owner: String) async throws -> [GitHubRepo]
     func gitHubItems() async throws -> GitHubItemList
+    func requestGitHubSweep() async throws
 }

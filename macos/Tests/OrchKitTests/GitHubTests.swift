@@ -53,6 +53,11 @@ private final class FakeGitHub: GitHubAPI, @unchecked Sendable {
     var failSet = false
     var failItems = false
     var failRepos = false
+    var failSweep = false
+    /// What the cache holds once a requested sweep has run; nil = it never does.
+    var afterSweep: GitHubItemList?
+    private(set) var sweepRequests = 0
+    private(set) var itemLoadsAtSweep = 0
     var setDelay: Duration = .zero
     private(set) var sets: [GitHubScope] = []
     private(set) var repoLoads: [String] = []
@@ -87,6 +92,13 @@ private final class FakeGitHub: GitHubAPI, @unchecked Sendable {
         if failItems { throw Boom() }
         return items
     }
+
+    func requestGitHubSweep() async throws {
+        sweepRequests += 1
+        itemLoadsAtSweep = itemLoads
+        if failSweep { throw Boom() }
+        if let afterSweep { items = afterSweep }
+    }
 }
 
 private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: TimeInterval) -> GitHubItem {
@@ -103,6 +115,46 @@ private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: T
         await model.refresh(rediscover: true)
         #expect(model.scopes.count == 2 && model.identity?.login == "willesq" && model.identity?.teams.count == 1)
         #expect(model.warning == "Could not reach GitHub" && model.items != nil && api.refreshes == [true])
+    }
+
+    @Test func checkFollowsTheRequestedSweepUntilTheCacheMoves() async {
+        let old = Date(timeIntervalSince1970: 1_800_000_000)
+        let api = FakeGitHub()
+        api.items = GitHubItemList(items: [], updatedAt: old)
+        api.afterSweep = GitHubItemList(items: [item(1, ago: 0)], updatedAt: old.addingTimeInterval(1))
+        let model = GitHubModel(api: api, checkPoll: .milliseconds(1), checkTimeout: .seconds(30))
+        await model.checkGitHub(rediscover: true)
+        #expect(api.sweepRequests == 1 && api.refreshes == [true])
+        #expect(api.itemLoadsAtSweep > 0, "the time to compare against comes from before the request")
+        #expect(model.items?.items.count == 1 && model.checkWarning == nil && !model.isCheckingGitHub)
+    }
+
+    @Test func checkCountsAFirstEverSweepAsDone() async {
+        let api = FakeGitHub()
+        api.afterSweep = GitHubItemList(items: [], updatedAt: Date())
+        let model = GitHubModel(api: api, checkPoll: .milliseconds(1), checkTimeout: .seconds(30))
+        await model.checkGitHub()
+        #expect(model.checkWarning == nil)
+    }
+
+    @Test func aSweepThatNeverLandsEndsInAWarningAndKeepsTheItems() async {
+        let api = FakeGitHub()
+        api.items = GitHubItemList(items: [item(1, ago: 0)], updatedAt: Date())
+        let model = GitHubModel(api: api, checkPoll: .milliseconds(1), checkTimeout: .milliseconds(20))
+        await model.checkGitHub()
+        #expect(model.checkWarning?.contains("may be out of date") == true)
+        #expect(model.items?.items.count == 1 && !model.isCheckingGitHub)
+        api.afterSweep = GitHubItemList(items: [], updatedAt: Date().addingTimeInterval(5))
+        await model.checkGitHub()
+        #expect(model.checkWarning == nil, "the next check clears it")
+    }
+
+    @Test func aRefusedSweepRequestIsReportedWithoutWaiting() async {
+        let api = FakeGitHub()
+        api.failSweep = true
+        let model = GitHubModel(api: api, checkPoll: .seconds(60), checkTimeout: .seconds(60))
+        await model.checkGitHub()
+        #expect(model.checkWarning == "Could not ask orchd to check GitHub: unavailable" && !model.isCheckingGitHub)
     }
 
     @Test func failuresAreReported() async {
@@ -351,6 +403,8 @@ private final class FakeGitHubForRobustness: GitHubAPI, @unchecked Sendable {
         if failItems { throw RobustnessBoom() }
         return GitHubItemList(items: [], updatedAt: nil)
     }
+
+    func requestGitHubSweep() async throws {}
 }
 
 private struct RobustnessBoom: Error, CustomStringConvertible { var description: String { "RPCError: unavailable" } }
