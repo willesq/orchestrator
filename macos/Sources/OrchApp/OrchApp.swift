@@ -180,6 +180,7 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
     func recommend(taskKind: String) async throws -> (route: RouteInfo?, fromTable: Bool) { throw failure }
     func gitHubIdentity(refresh: Bool) async throws -> GitHubIdentity { throw failure }
     func gitHubScopes(refresh: Bool) async throws -> GitHubScopeList { throw failure }
+    func requestGitHubSweep() async throws { throw failure }
     func setGitHubScope(_ scope: GitHubScope) async throws -> GitHubScope { throw failure }
     func gitHubRepos(owner: String) async throws -> [GitHubRepo] { throw failure }
     func gitHubItems() async throws -> GitHubItemList { throw failure }

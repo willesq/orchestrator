@@ -259,6 +259,10 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
         }
     }
 
+    public func requestGitHubSweep() async throws {
+        _ = try await orchd.requestGitHubSweep(Orchd_V1_RequestGitHubSweepRequest(), options: callOptions)
+    }
+
     public func gitHubItems() async throws -> GitHubItemList {
         let r = try await orchd.listGitHubItems(Orchd_V1_ListGitHubItemsRequest(), options: callOptions)
         let iso = ISO8601DateFormatter()

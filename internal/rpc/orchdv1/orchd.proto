@@ -75,6 +75,10 @@ service Orchd {
   // ListGitHubItems serves the watcher's cache: open PRs and issues in the
   // enabled scopes, each with why it is watched. Never calls gh.
   rpc ListGitHubItems(ListGitHubItemsRequest) returns (ListGitHubItemsResponse);
+  // RequestGitHubSweep asks the watcher to search GitHub soon, spaced like any
+  // other requested sweep. The caller sees the result as ListGitHubItems'
+  // updated_at advancing; this RPC does not wait for it.
+  rpc RequestGitHubSweep(RequestGitHubSweepRequest) returns (RequestGitHubSweepResponse);
   // ListPRReviews lists the PRs the user asked orchd to review once ready,
   // each with where its review stands and the last verdict. Never calls gh.
   rpc ListPRReviews(ListPRReviewsRequest) returns (ListPRReviewsResponse);
@@ -605,6 +609,10 @@ message ListGitHubItemsResponse {
   repeated GitHubItem items = 1;
   int64 updated_at = 2; // unix seconds the cache was last written; 0 = never
 }
+
+message RequestGitHubSweepRequest {}
+
+message RequestGitHubSweepResponse {}
 
 message GitHubItem {
   string url = 1;

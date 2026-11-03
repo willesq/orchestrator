@@ -23,6 +23,16 @@ struct GitHubView: View {
                 PRsView(github: model, prs: prs)
             }
         }
+        .safeAreaInset(edge: .top) {
+            if let warning = model.checkWarning {
+                Text(verbatim: warning)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(.bar)
+            }
+        }
         .navigationTitle("GitHub")
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -60,17 +70,24 @@ struct GitHubView: View {
                 }
             }
             ToolbarItem {
-                Button {
-                    Task {
-                        await model.refresh(rediscover: navigator.gitHubSection == .overview)
-                        await prs.reviews.refresh()
+                if model.isCheckingGitHub {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Checking GitHub")
+                        .help("Checking GitHub")
+                } else {
+                    Button {
+                        Task {
+                            await prs.reviews.refresh()
+                            await model.checkGitHub(rediscover: navigator.gitHubSection == .overview)
+                        }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
                     }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    .disabled(model.isRefreshing)
+                    .help(navigator.gitHubSection == .overview ? "Check GitHub for new activity, and for your orgs and teams"
+                        : "Check GitHub for new PRs and reload reviews")
                 }
-                .disabled(model.isRefreshing)
-                .help(navigator.gitHubSection == .overview ? "Ask GitHub for your orgs and teams again, and reload activity"
-                    : "Reload PRs and reviews")
             }
         }
         .onAppear { model.start() }

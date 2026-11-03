@@ -282,6 +282,14 @@ struct FakeOrchdService: RegistrableRPCService {
             return StreamingServerResponse(single: ServerResponse(message: ghItems))
         }
         router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.RequestGitHubSweep.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_RequestGitHubSweepRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_RequestGitHubSweepResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: Orchd_V1_RequestGitHubSweepResponse()))
+        }
+        router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.ListPRReviews.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_ListPRReviewsRequest>(),
             serializer: ProtobufSerializer<Orchd_V1_ListPRReviewsResponse>()
