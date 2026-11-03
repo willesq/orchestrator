@@ -190,7 +190,7 @@ private struct ChecksCard: View {
     private func tone(_ result: String) -> Tone {
         switch result {
         case "success", "neutral", "skipped": .good
-        case "failure", "error", "timed_out", "cancelled", "action_required", "startup_failure", "stale": .bad
+        case "failure", "error", "timed_out", "cancelled", "action_required", "startup_failure": .bad
         default: .warning
         }
     }

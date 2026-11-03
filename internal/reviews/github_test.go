@@ -41,6 +41,21 @@ func TestStatusWaiting(t *testing.T) {
 	}
 }
 
+func TestFetchDetailListsOnlyTheNewestRuns(t *testing.T) {
+	raw := `{"headRefOid":"` + shaA + `","statusCheckRollup":[
+		{"name":"title","workflowName":"ci","status":"COMPLETED","conclusion":"FAILURE","startedAt":"2026-11-01T00:00:00Z"},
+		{"name":"lint","workflowName":"ci","status":"COMPLETED","conclusion":"SKIPPED","startedAt":"2026-11-01T00:00:00Z"},
+		{"name":"title","workflowName":"ci","status":"COMPLETED","conclusion":"SUCCESS","startedAt":"2026-11-01T00:00:41Z"}]}`
+	d, err := FetchDetail(context.Background(), canned(raw, nil), testURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []CheckState{{"title", "success"}, {"lint", "skipped"}}
+	if d.CI != "success" || len(d.Checks) != 2 || d.Checks[0] != want[0] || d.Checks[1] != want[1] {
+		t.Fatalf("CI %q, checks %+v", d.CI, d.Checks)
+	}
+}
+
 func TestFetchDetail(t *testing.T) {
 	files := []map[string]any{}
 	for i := 0; i < maxFiles+5; i++ {

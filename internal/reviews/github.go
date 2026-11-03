@@ -21,7 +21,9 @@ type Status struct {
 	Mergeable string // MERGEABLE | CONFLICTING | UNKNOWN
 	CI        string // none | failure | pending | success
 	Checks    string // synopsis, such as "3 passed, 1 skipped, 0 failed"
-	Author    string
+	// ReplacedFailures counts failed runs that a newer run of the check replaced.
+	ReplacedFailures int
+	Author           string
 	// Association is the author's relation to the repo (OWNER, MEMBER,
 	// COLLABORATOR, CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, NONE).
 	Association string
@@ -50,7 +52,19 @@ func (s Status) Trusted() bool {
 // for green. Checks that all skipped do count: that can be the intent, and the
 // review, which is told the counts, judges it.
 func (s Status) ApproveReady() bool {
-	return s.Ready() && (s.Trusted() || s.CI == "success")
+	return s.Ready() && (s.Trusted() || (s.CI == "success" && s.ReplacedFailures == 0))
+}
+
+// promptChecks is the CI synopsis for the review, which judges whether the runs
+// that replaced a failure are real re-runs.
+func (s Status) promptChecks() string {
+	switch s.ReplacedFailures {
+	case 0:
+		return s.Checks
+	case 1:
+		return s.Checks + "; 1 earlier run failed and a newer run replaced it"
+	}
+	return fmt.Sprintf("%s; %d earlier runs failed and newer runs replaced them", s.Checks, s.ReplacedFailures)
 }
 
 // Waiting says why an open PR is not ready, for the user.
@@ -103,7 +117,8 @@ func FetchStatus(ctx context.Context, gh github.Runner, url string) (Status, err
 		return Status{}, fmt.Errorf("gh pr view gave no head commit")
 	}
 	st := Status{State: v.State, IsDraft: v.IsDraft, Head: v.HeadRefOid, Mergeable: v.Mergeable,
-		CI: prs.RollupCI(v.StatusCheckRollup), Checks: prs.CountChecks(v.StatusCheckRollup).String(), Author: v.Author.Login}
+		CI: prs.RollupCI(v.StatusCheckRollup), Checks: prs.CountChecks(v.StatusCheckRollup).String(), ReplacedFailures: prs.ReplacedFailures(v.StatusCheckRollup),
+		Author: v.Author.Login}
 	// gh pr view has no author association, so the REST API supplies it, and
 	// only when it matters: for a ready PR, to review or approve it.
 	if st.Ready() {
@@ -221,14 +236,8 @@ func FetchDetail(ctx context.Context, gh github.Runner, url string) (Detail, err
 			Author struct{ Login string } `json:"author"`
 			State  string                 `json:"state"`
 		} `json:"latestReviews"`
-		Checks []struct {
-			Name       string `json:"name"`
-			Context    string `json:"context"`
-			Status     string `json:"status"`
-			Conclusion string `json:"conclusion"`
-			State      string `json:"state"`
-		} `json:"statusCheckRollup"`
-		Files []struct {
+		Checks []prs.Check `json:"statusCheckRollup"`
+		Files  []struct {
 			Path      string `json:"path"`
 			Additions int    `json:"additions"`
 			Deletions int    `json:"deletions"`
@@ -244,7 +253,8 @@ func FetchDetail(ctx context.Context, gh github.Runner, url string) (Detail, err
 		Additions: v.Additions, Deletions: v.Deletions, ChangedFiles: v.Changed,
 		CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt, Mergeable: v.Mergeable, ReviewDecision: v.Decision,
 	}
-	for i, c := range v.Checks {
+	latest := prs.LatestChecks(v.Checks)
+	for i, c := range latest {
 		if i == maxList {
 			break
 		}
@@ -262,11 +272,7 @@ func FetchDetail(ctx context.Context, gh github.Runner, url string) (Detail, err
 		d.Checks = append(d.Checks, CheckState{Name: clean(name, 200, false), Result: strings.ToLower(result)})
 	}
 	// CI sums up every check, not only the listed ones.
-	all := make([]prs.Check, 0, len(v.Checks))
-	for _, c := range v.Checks {
-		all = append(all, prs.Check{Status: c.Status, Conclusion: c.Conclusion, State: c.State})
-	}
-	d.CI = prs.RollupCI(all)
+	d.CI = prs.RollupCI(latest)
 	for _, l := range v.Labels[:min(len(v.Labels), maxList)] {
 		d.Labels = append(d.Labels, clean(l.Name, 100, false))
 	}

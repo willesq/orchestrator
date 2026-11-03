@@ -356,7 +356,7 @@ func (w *Watcher) check(ctx context.Context, url string) {
 				return true
 			}
 			nonce := NewNonce()
-			id, err := w.Dispatch(ctx, Prompt(r.URL, r.Repo, r.Number, st.Head, nonce, st.Checks, r.Instructions))
+			id, err := w.Dispatch(ctx, Prompt(r.URL, r.Repo, r.Number, st.Head, nonce, st.promptChecks(), r.Instructions))
 			if err != nil {
 				r.State, r.Note = StateWaiting, "could not start the review: "+github.Printable(err.Error(), 300)
 				return true
@@ -401,6 +401,9 @@ func plan(r Review, st Status, me string) *posting {
 			return &posting{note: "not approving yet: " + st.Waiting()}
 		}
 		if !st.ApproveReady() {
+			if st.ReplacedFailures > 0 {
+				return &posting{note: "not approving: an earlier run of a check failed, and the author is not a member or collaborator; the verdict is yours to act on"}
+			}
 			return &posting{note: "not approving: no CI has run, and the author is not a member or collaborator"}
 		}
 		if me != "" && strings.EqualFold(me, st.Author) {

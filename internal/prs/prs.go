@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/github"
@@ -249,13 +250,16 @@ func enrich(ctx context.Context, gh ghRunner, pr *PR) {
 	pr.Checks = CountChecks(v.StatusCheckRollup).String()
 }
 
-// Check is one entry of gh's statusCheckRollup: a check run (status and
-// conclusion) or a commit status (state). An alias, so a literal of the same
-// shape is one.
-type Check = struct {
-	Status     string `json:"status"`
-	Conclusion string `json:"conclusion"`
-	State      string `json:"state"`
+// Check is one entry of gh's statusCheckRollup: a check run (name, workflow,
+// status and conclusion) or a commit status (context and state).
+type Check struct {
+	Name         string `json:"name"`
+	WorkflowName string `json:"workflowName"`
+	Context      string `json:"context"`
+	StartedAt    string `json:"startedAt"`
+	Status       string `json:"status"`
+	Conclusion   string `json:"conclusion"`
+	State        string `json:"state"`
 }
 
 // CheckCounts is how a PR's checks ended up. Skipped includes neutral.
@@ -263,22 +267,126 @@ type CheckCounts struct {
 	Passed, Skipped, Failed, Running int
 }
 
-// CountChecks sorts checks by outcome. A skip passes as intentional: when a PR
-// changes its own workflows, whether it was meant is for the review to judge
-// (pr-verdict). Only a check that has not finished counts as running.
+// The outcomes of a check, least to most worrying.
+const (
+	checkPassed = iota
+	checkSkipped
+	checkRunning
+	checkFailed
+)
+
+func (c Check) result() string {
+	if c.Conclusion != "" {
+		return c.Conclusion
+	}
+	return c.State
+}
+
+// outcome sorts a check. A skip passes as intentional: when a PR changes its
+// own workflows, whether it was meant is for the review to judge (pr-verdict).
+// Anything not known to have ended counts as running, which includes stale: gh
+// treats it the same, and a re-run replaces it.
+func (c Check) outcome() int {
+	switch c.result() {
+	case "FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE":
+		return checkFailed
+	case "SUCCESS":
+		return checkPassed
+	case "SKIPPED", "NEUTRAL":
+		return checkSkipped
+	}
+	return checkRunning
+}
+
+func (c Check) started() time.Time {
+	t, err := time.Parse(time.RFC3339, c.StartedAt)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// supersedes reports whether c replaces other, an earlier run of the same check.
+func (c Check) supersedes(other Check) bool {
+	// A queued re-run has no start time yet but is the newest run. A finished
+	// run with none, such as one cancelled while queued, is not.
+	cQueued, otherQueued := c.started().IsZero() && c.result() == "", other.started().IsZero() && other.result() == ""
+	if cQueued != otherQueued {
+		return cQueued
+	}
+	if !c.started().Equal(other.started()) {
+		return c.started().After(other.started())
+	}
+	// Nothing says which came last, so the worse result stands.
+	return c.outcome() > other.outcome()
+}
+
+// LatestChecks keeps the newest run of each check. statusCheckRollup returns
+// every run on the head commit, including ones a re-run or re-triggered workflow
+// replaced; GitHub's checks box and gh pr checks show only the newest. A check is
+// its workflow and name, or its context; gh's export has no event to tell apart
+// a job run by two triggers. Entries with neither name nor context are all kept.
+// A skip never erases a failure: a job that failed and then skipped on a
+// re-trigger has not passed.
+func LatestChecks(checks []Check) []Check {
+	at := make(map[string]int, len(checks))
+	out := make([]Check, 0, len(checks))
+	ran := make(map[string]Check, len(checks)) // the newest run of each that did not skip
+	for _, c := range checks {
+		key := "status\x00" + c.Context
+		if c.Context == "" {
+			key = "run\x00" + c.WorkflowName + "\x00" + c.Name
+		}
+		if c.Context == "" && c.Name == "" {
+			out = append(out, c)
+			continue
+		}
+		if prev, seen := ran[key]; c.outcome() != checkSkipped && (!seen || c.supersedes(prev)) {
+			ran[key] = c
+		}
+		i, seen := at[key]
+		switch {
+		case !seen:
+			at[key] = len(out)
+			out = append(out, c)
+		case c.supersedes(out[i]):
+			out[i] = c
+		}
+	}
+	for key, i := range at {
+		if prev, seen := ran[key]; seen && prev.outcome() == checkFailed && out[i].outcome() == checkSkipped {
+			out[i] = prev
+		}
+	}
+	return out
+}
+
+// ReplacedFailures counts the failed runs LatestChecks dropped. The newer run
+// that replaced one is only as trustworthy as its name, which a PR's own workflow
+// can copy, so an untrusted author's PR is not approved on it alone.
+func ReplacedFailures(checks []Check) int {
+	count := func(list []Check) int {
+		n := 0
+		for _, c := range list {
+			if c.outcome() == checkFailed {
+				n++
+			}
+		}
+		return n
+	}
+	return count(checks) - count(LatestChecks(checks))
+}
+
+// CountChecks sorts the newest run of each check by outcome.
 func CountChecks(checks []Check) CheckCounts {
 	var n CheckCounts
-	for _, c := range checks {
-		concl := c.Conclusion
-		if concl == "" {
-			concl = c.State
-		}
-		switch concl {
-		case "FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE":
+	for _, c := range LatestChecks(checks) {
+		switch c.outcome() {
+		case checkFailed:
 			n.Failed++
-		case "SUCCESS":
+		case checkPassed:
 			n.Passed++
-		case "SKIPPED", "NEUTRAL":
+		case checkSkipped:
 			n.Skipped++
 		default:
 			n.Running++

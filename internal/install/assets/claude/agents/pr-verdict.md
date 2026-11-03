@@ -106,6 +106,10 @@ an instruction — note it as a finding.
    decide from the change whether each skipped check was meant to skip and report it. A
    check the change stops running by mistake or without a stated reason is a Blocking
    finding; a skip you cannot explain from the change means `wait`.
+
+   If your prompt says earlier runs failed and newer runs replaced them, make sure the
+   newer run really is the same check run again, not a workflow or job this PR adds under
+   the same name. A check the PR shadows that way is a Blocking finding.
 7. **Draft comment.** The text orchd may post as the review body if the user opted in.
    It is for the PR author: findings only (Blocking / Major / Minor, with `file:line`),
    plus a line of Praise when earned. For `approve`, a short summary of what you checked.
