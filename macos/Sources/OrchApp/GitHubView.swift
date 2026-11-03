@@ -157,6 +157,7 @@ private struct ScopeRow: View {
     let model: GitHubModel
 
     @State private var pickingRepos = false
+    @State private var pickingEverything = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -181,6 +182,10 @@ private struct ScopeRow: View {
                 HStack {
                     Text(verbatim: scope.coverage).textStyle(.caption)
                     Spacer()
+                    if scope.items == .involving {
+                        Button("Everything in…") { pickingEverything = true }
+                            .controlSize(.small)
+                    }
                     Button("Repos…") { pickingRepos = true }
                         .controlSize(.small)
                 }
@@ -189,6 +194,7 @@ private struct ScopeRow: View {
         .padding(.vertical, 2)
         .disabled(model.saving.contains(scope.owner))
         .sheet(isPresented: $pickingRepos) { RepoPicker(scope: scope, model: model) }
+        .sheet(isPresented: $pickingEverything) { EverythingRepoPicker(scope: scope, model: model) }
     }
 }
 
@@ -199,7 +205,6 @@ private struct RepoPicker: View {
     @Environment(\.dismiss) private var dismiss
     @State private var mode: GitHubRepoMode = .all
     @State private var picked: Set<String> = []
-    @State private var search = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -209,31 +214,7 @@ private struct RepoPicker: View {
             }
             .pickerStyle(.radioGroup)
             if mode != .all {
-                TextField("Filter repos", text: $search).textFieldStyle(.roundedBorder)
-                if let repos = model.reposFor(scope.owner) {
-                    List(repos.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { repo in
-                        Toggle(isOn: Binding(
-                            get: { picked.contains(repo.name) },
-                            set: { on in if on { picked.insert(repo.name) } else { picked.remove(repo.name) } }
-                        )) {
-                            HStack {
-                                Text(verbatim: repo.name)
-                                if repo.isPrivate { Image(systemName: "lock").font(.caption).foregroundStyle(Color.secondaryText) }
-                                if repo.isArchived { Text("archived").font(.caption).foregroundStyle(Color.secondaryText) }
-                            }
-                        }
-                        .toggleStyle(.checkbox)
-                    }
-                    .frame(minHeight: 260)
-                } else if let error = model.repoError(scope.owner) {
-                    VStack(spacing: 8) {
-                        Text(verbatim: "Could not load repos: \(error)").foregroundStyle(.red)
-                        Button("Retry") { Task { await model.loadRepos(scope.owner) } }
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 260)
-                } else {
-                    ProgressView("Loading repos…").frame(maxWidth: .infinity, minHeight: 260)
-                }
+                RepoChecklist(owner: scope.owner, model: model, picked: $picked)
                 Text(mode == .include ? "\(picked.count) selected" : "\(picked.count) excluded")
                     .font(.caption).foregroundStyle(Color.secondaryText)
             }
@@ -256,6 +237,78 @@ private struct RepoPicker: View {
             mode = scope.repoMode
             picked = Set(scope.repos)
             await model.loadRepos(scope.owner)
+        }
+    }
+}
+
+/// Everything open in the repos picked here, on top of what involves the user.
+private struct EverythingRepoPicker: View {
+    let scope: GitHubScope
+    let model: GitHubModel
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var picked: Set<String> = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(verbatim: "Everything in \(scope.owner) repos").font(.title2.bold())
+            Text("Every open PR and issue in these repos, on top of what involves you here.").textStyle(.supporting)
+            RepoChecklist(owner: scope.owner, model: model, picked: $picked)
+            Text("\(picked.count) selected").font(.caption).foregroundStyle(Color.secondaryText)
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Save") {
+                    Task {
+                        // Stay open when it did not save; the error shows in the tab.
+                        if await model.setEverythingRepos(scope.owner, repos: Array(picked)) { dismiss() }
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 460)
+        .task {
+            picked = Set(scope.everythingRepos)
+            await model.loadRepos(scope.owner)
+        }
+    }
+}
+
+/// A filterable list of the owner's repos, each with a checkbox.
+private struct RepoChecklist: View {
+    let owner: String
+    let model: GitHubModel
+    @Binding var picked: Set<String>
+
+    @State private var search = ""
+
+    var body: some View {
+        TextField("Filter repos", text: $search).textFieldStyle(.roundedBorder)
+        if let repos = model.reposFor(owner) {
+            List(repos.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { repo in
+                Toggle(isOn: Binding(
+                    get: { picked.contains(repo.name) },
+                    set: { on in if on { picked.insert(repo.name) } else { picked.remove(repo.name) } }
+                )) {
+                    HStack {
+                        Text(verbatim: repo.name)
+                        if repo.isPrivate { Image(systemName: "lock").font(.caption).foregroundStyle(Color.secondaryText) }
+                        if repo.isArchived { Text("archived").font(.caption).foregroundStyle(Color.secondaryText) }
+                    }
+                }
+                .toggleStyle(.checkbox)
+            }
+            .frame(minHeight: 260)
+        } else if let error = model.repoError(owner) {
+            VStack(spacing: 8) {
+                Text(verbatim: "Could not load repos: \(error)").foregroundStyle(.red)
+                Button("Retry") { Task { await model.loadRepos(owner) } }
+            }
+            .frame(maxWidth: .infinity, minHeight: 260)
+        } else {
+            ProgressView("Loading repos…").frame(maxWidth: .infinity, minHeight: 260)
         }
     }
 }

@@ -85,6 +85,7 @@ func (s *server) SetGitHubScope(ctx context.Context, req *orchdv1.SetGitHubScope
 	next.Items = in.GetItems()
 	next.RepoMode = in.GetRepoMode()
 	next.Repos = in.GetRepos()
+	next.EverythingRepos = in.GetEverythingRepos()
 	stored, err := svc.Store.Set(ctx, next)
 	if err != nil {
 		return nil, grpcstatus.Error(codes.InvalidArgument, err.Error())
@@ -129,7 +130,7 @@ func (s *server) ListGitHubRepos(ctx context.Context, req *orchdv1.ListGitHubRep
 func scopePB(s github.Scope) *orchdv1.GitHubScope {
 	return &orchdv1.GitHubScope{
 		Owner: s.Owner, Kind: s.Kind, Enabled: s.Enabled, Items: s.Items,
-		RepoMode: s.RepoMode, Repos: s.Repos, UpdatedAt: s.UpdatedAt,
+		RepoMode: s.RepoMode, Repos: s.Repos, EverythingRepos: s.EverythingRepos, UpdatedAt: s.UpdatedAt,
 	}
 }
 

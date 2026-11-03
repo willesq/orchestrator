@@ -116,7 +116,7 @@ func TestSetGitHubScope(t *testing.T) {
 	}
 
 	resp, err := s.SetGitHubScope(ctx, &orchdv1.SetGitHubScopeRequest{Scope: &orchdv1.GitHubScope{
-		Owner: "wippdata", Kind: "user", Enabled: true, Items: "all", RepoMode: "include", Repos: []string{"api"},
+		Owner: "wippdata", Kind: "user", Enabled: true, Items: "all", RepoMode: "include", Repos: []string{"api"}, EverythingRepos: []string{"site"},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +126,8 @@ func TestSetGitHubScope(t *testing.T) {
 	}
 	got := resp.GetScope()
 	if got.GetOwner() != "WippData" || got.GetKind() != "org" || !got.GetEnabled() || got.GetItems() != "all" ||
-		got.GetRepoMode() != "include" || !slices.Equal(got.GetRepos(), []string{"api"}) {
+		got.GetRepoMode() != "include" || !slices.Equal(got.GetRepos(), []string{"api"}) ||
+		!slices.Equal(got.GetEverythingRepos(), []string{"site"}) {
 		t.Errorf("stored scope = %+v (kind must stay org, owner keep its case)", got)
 	}
 

@@ -41,15 +41,19 @@ public struct GitHubScope: Sendable, Equatable, Identifiable {
     public var items: GitHubItemsMode
     public var repoMode: GitHubRepoMode
     public var repos: [String]
+    /// Watched for every open item while `items` is `.involving`; kept but
+    /// ignored while it is `.all`, so switching back restores them.
+    public var everythingRepos: [String]
 
     public init(owner: String, isUser: Bool, enabled: Bool = false, items: GitHubItemsMode = .involving,
-                repoMode: GitHubRepoMode = .all, repos: [String] = []) {
+                repoMode: GitHubRepoMode = .all, repos: [String] = [], everythingRepos: [String] = []) {
         self.owner = owner
         self.isUser = isUser
         self.enabled = enabled
         self.items = items
         self.repoMode = repoMode
         self.repos = repos
+        self.everythingRepos = everythingRepos
     }
 
     /// A one-line description of what an enabled scope covers.
@@ -59,7 +63,9 @@ public struct GitHubScope: Sendable, Equatable, Identifiable {
         case .include: repos.count == 1 ? "1 repo" : "\(repos.count) repos"
         case .exclude: "all but \(repos.count) repo\(repos.count == 1 ? "" : "s")"
         }
-        return "\(items.label) · \(repoText)"
+        guard items == .involving, !everythingRepos.isEmpty else { return "\(items.label) · \(repoText)" }
+        let count = everythingRepos.count
+        return "\(items.label) + everything in \(count) repo\(count == 1 ? "" : "s") · \(repoText)"
     }
 }
 

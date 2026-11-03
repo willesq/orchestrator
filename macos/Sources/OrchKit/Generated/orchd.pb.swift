@@ -1214,6 +1214,10 @@ public nonisolated struct Orchd_V1_GitHubScope: Sendable {
   /// unix seconds
   public var updatedAt: Int64 = 0
 
+  /// repo names within owner watched for every open item while items is
+  /// involving; kept but ignored while items is all
+  public var everythingRepos: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -5600,7 +5604,7 @@ nonisolated extension Orchd_V1_ListGitHubScopesResponse: SwiftProtobuf.Message, 
 
 nonisolated extension Orchd_V1_GitHubScope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GitHubScope"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{1}kind\0\u{1}enabled\0\u{1}items\0\u{3}repo_mode\0\u{1}repos\0\u{3}updated_at\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{1}kind\0\u{1}enabled\0\u{1}items\0\u{3}repo_mode\0\u{1}repos\0\u{3}updated_at\0\u{3}everything_repos\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5615,6 +5619,7 @@ nonisolated extension Orchd_V1_GitHubScope: SwiftProtobuf.Message, SwiftProtobuf
       case 5: try { try decoder.decodeSingularStringField(value: &self.repoMode) }()
       case 6: try { try decoder.decodeRepeatedStringField(value: &self.repos) }()
       case 7: try { try decoder.decodeSingularInt64Field(value: &self.updatedAt) }()
+      case 8: try { try decoder.decodeRepeatedStringField(value: &self.everythingRepos) }()
       default: break
       }
     }
@@ -5642,6 +5647,9 @@ nonisolated extension Orchd_V1_GitHubScope: SwiftProtobuf.Message, SwiftProtobuf
     if self.updatedAt != 0 {
       try visitor.visitSingularInt64Field(value: self.updatedAt, fieldNumber: 7)
     }
+    if !self.everythingRepos.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.everythingRepos, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -5653,6 +5661,7 @@ nonisolated extension Orchd_V1_GitHubScope: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.repoMode != rhs.repoMode {return false}
     if lhs.repos != rhs.repos {return false}
     if lhs.updatedAt != rhs.updatedAt {return false}
+    if lhs.everythingRepos != rhs.everythingRepos {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

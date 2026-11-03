@@ -252,6 +252,8 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
   - **Watching:** your account ("You") and each org you belong to ("Org"), each with an on/off
     switch. An enabled scope also shows:
     - a picker between "Involving me" and "Everything open";
+    - with "Involving me", **Everything in…**, a sheet to choose repos watched for every open PR and
+      issue on top of that;
     - a summary of what it covers, and **Repos…**, a sheet to choose all repos, only some, or all
       but some, from the repos you can see.
 

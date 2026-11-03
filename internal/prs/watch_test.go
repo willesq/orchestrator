@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -35,6 +36,7 @@ func result(url, repo, author string, assignees ...string) map[string]any {
 type fakeSearch struct {
 	answers map[string][]map[string]any // "prs --involves=@me" -> hits
 	fail    string
+	failErr error // what fail returns; a rate limit when nil
 	calls   []string
 }
 
@@ -46,6 +48,9 @@ func (f *fakeSearch) run(_ context.Context, args ...string) ([]byte, error) {
 	}
 	key := args[1] + " " + args[2]
 	if f.fail != "" && key == f.fail {
+		if f.failErr != nil {
+			return nil, f.failErr
+		}
 		return nil, errors.New("gh: rate limited")
 	}
 	return json.Marshal(f.answers[key])
@@ -261,6 +266,130 @@ func TestEverythingScopesAreCapped(t *testing.T) {
 	}
 	if !slices.Equal(owners, []string{"a", "b", "c", "d", "e"}) {
 		t.Errorf("everything searches for %v, want the first %d alphabetically", owners, MaxEverythingScopes)
+	}
+}
+
+func TestEverythingReposAddToInvolvement(t *testing.T) {
+	gh := &fakeSearch{answers: map[string][]map[string]any{
+		"prs --involves=@me": {
+			result("https://github.com/x/mine", "WippData/web", "willesq"),
+			result("https://github.com/x/other-scope-repo", "WippData/legacy", "willesq"),
+		},
+		"prs --repo=WippData/api":    {result("https://github.com/x/all-pr", "WippData/api", "erin")},
+		"issues --repo=WippData/api": {result("https://github.com/x/all-issue", "WippData/api", "frank")},
+	}}
+	org := scope("WippData", github.ItemsInvolving, github.ReposInclude, "web")
+	org.EverythingRepos = []string{"api", "docs"}
+	whole := scope("sfmail", github.ItemsAll, github.ReposAll)
+	whole.EverythingRepos = []string{"ignored"}
+	off := scope("Troomi", github.ItemsInvolving, github.ReposAll)
+	off.Enabled, off.EverythingRepos = false, []string{"quiet"}
+
+	b, state := newBabysitter(t, gh, watchOf(org, whole, off))
+	if err := b.Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := LoadState(state).PRs
+	want := map[string][]string{
+		"https://github.com/x/mine":      {ReasonAuthored},
+		"https://github.com/x/all-pr":    {ReasonAllOpen},
+		"https://github.com/x/all-issue": {ReasonAllOpen},
+	}
+	if len(got) != len(want) {
+		t.Errorf("items = %v, want %d (repos outside the picks and the list dropped)", keys(got), len(want))
+	}
+	for url, reasons := range want {
+		if !slices.Equal(got[url].Reasons, reasons) {
+			t.Errorf("%s reasons = %v, want %v", url, got[url].Reasons, reasons)
+		}
+	}
+	if !slices.ContainsFunc(gh.calls, func(c string) bool {
+		return strings.HasPrefix(c, "search prs --repo=WippData/api --repo=WippData/docs --state=open")
+	}) {
+		t.Errorf("the scope's repos were not searched in one batch: %v", gh.calls)
+	}
+	for _, c := range gh.calls {
+		if strings.Contains(c, "sfmail/ignored") || strings.Contains(c, "quiet") {
+			t.Errorf("searched a repo that adds nothing: %s", c)
+		}
+	}
+}
+
+func TestRepoBatches(t *testing.T) {
+	long := strings.Repeat("r", 100)
+	var many []string
+	for i := range 20 {
+		many = append(many, fmt.Sprintf("o/%02d-%s", i, long))
+	}
+	tests := []struct {
+		name  string
+		repos []string
+		want  [][]string
+	}{
+		{"none", nil, nil},
+		{"sorted case-insensitively into one batch", []string{"o/b", "O/a"}, [][]string{{"--repo=O/a", "--repo=o/b"}}},
+		{"one repo per batch when each fills it, capped", many, func() [][]string {
+			var want [][]string
+			for _, r := range many[:MaxEverythingRepoBatches] {
+				want = append(want, []string{"--repo=" + r})
+			}
+			return want
+		}()},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := repoBatches(tt.repos)
+			if !slices.EqualFunc(got, tt.want, func(a, b []string) bool { return slices.Equal(a, b) }) {
+				t.Errorf("repoBatches = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestInvalidStoredEverythingReposAreNotSearched(t *testing.T) {
+	org := scope("WippData", github.ItemsInvolving, github.ReposAll)
+	org.EverythingRepos = []string{`x"y`, "api"}
+	gh := &fakeSearch{}
+	b, _ := newBabysitter(t, gh, watchOf(org))
+	if err := b.Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range gh.calls {
+		if strings.Contains(c, `x"y`) {
+			t.Errorf("searched an invalid repo name: %s", c)
+		}
+	}
+	if !slices.ContainsFunc(gh.calls, func(c string) bool { return strings.Contains(c, "--repo=WippData/api") }) {
+		t.Errorf("the valid repo was not searched: %v", gh.calls)
+	}
+}
+
+func TestEverythingRepoSearchFailures(t *testing.T) {
+	org := scope("WippData", github.ItemsInvolving, github.ReposAll)
+	org.EverythingRepos = []string{"gone"}
+	const key = "prs --repo=WippData/gone"
+	tests := []struct {
+		name    string
+		err     error
+		wantErr bool
+	}{
+		{"a deleted repo does not stop the sweep", errors.New("repositories cannot be searched either because they do not exist"), false},
+		{"anything else keeps the cache", errors.New("gh: rate limited"), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gh := &fakeSearch{fail: key, failErr: tt.err, answers: map[string][]map[string]any{
+				"prs --involves=@me": {result("https://github.com/x/mine", "WippData/web", "willesq")},
+			}}
+			b, state := newBabysitter(t, gh, watchOf(org))
+			err := b.Sweep(context.Background())
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Sweep err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if _, ok := LoadState(state).PRs["https://github.com/x/mine"]; ok == tt.wantErr {
+				t.Errorf("cache written = %v, want %v", ok, !tt.wantErr)
+			}
+		})
 	}
 }
 

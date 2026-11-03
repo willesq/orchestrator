@@ -3626,16 +3626,19 @@ func (x *ListGitHubScopesResponse) GetWarning() string {
 }
 
 type GitHubScope struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Owner         string                 `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
-	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // user | org; fixed by discovery
-	Enabled       bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	Items         string                 `protobuf:"bytes,4,opt,name=items,proto3" json:"items,omitempty"`                           // involving | all
-	RepoMode      string                 `protobuf:"bytes,5,opt,name=repo_mode,json=repoMode,proto3" json:"repo_mode,omitempty"`     // all | include | exclude
-	Repos         []string               `protobuf:"bytes,6,rep,name=repos,proto3" json:"repos,omitempty"`                           // repo names within owner, for include/exclude
-	UpdatedAt     int64                  `protobuf:"varint,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // unix seconds
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Owner     string                 `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	Kind      string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"` // user | org; fixed by discovery
+	Enabled   bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Items     string                 `protobuf:"bytes,4,opt,name=items,proto3" json:"items,omitempty"`                           // involving | all
+	RepoMode  string                 `protobuf:"bytes,5,opt,name=repo_mode,json=repoMode,proto3" json:"repo_mode,omitempty"`     // all | include | exclude
+	Repos     []string               `protobuf:"bytes,6,rep,name=repos,proto3" json:"repos,omitempty"`                           // repo names within owner, for include/exclude
+	UpdatedAt int64                  `protobuf:"varint,7,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // unix seconds
+	// repo names within owner watched for every open item while items is
+	// involving; kept but ignored while items is all
+	EverythingRepos []string `protobuf:"bytes,8,rep,name=everything_repos,json=everythingRepos,proto3" json:"everything_repos,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GitHubScope) Reset() {
@@ -3715,6 +3718,13 @@ func (x *GitHubScope) GetUpdatedAt() int64 {
 		return x.UpdatedAt
 	}
 	return 0
+}
+
+func (x *GitHubScope) GetEverythingRepos() []string {
+	if x != nil {
+		return x.EverythingRepos
+	}
+	return nil
 }
 
 type SetGitHubScopeRequest struct {
@@ -9597,7 +9607,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\arefresh\x18\x01 \x01(\bR\arefresh\"c\n" +
 	"\x18ListGitHubScopesResponse\x12-\n" +
 	"\x06scopes\x18\x01 \x03(\v2\x15.orchd.v1.GitHubScopeR\x06scopes\x12\x18\n" +
-	"\awarning\x18\x02 \x01(\tR\awarning\"\xb9\x01\n" +
+	"\awarning\x18\x02 \x01(\tR\awarning\"\xe4\x01\n" +
 	"\vGitHubScope\x12\x14\n" +
 	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
@@ -9606,7 +9616,8 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\trepo_mode\x18\x05 \x01(\tR\brepoMode\x12\x14\n" +
 	"\x05repos\x18\x06 \x03(\tR\x05repos\x12\x1d\n" +
 	"\n" +
-	"updated_at\x18\a \x01(\x03R\tupdatedAt\"D\n" +
+	"updated_at\x18\a \x01(\x03R\tupdatedAt\x12)\n" +
+	"\x10everything_repos\x18\b \x03(\tR\x0feverythingRepos\"D\n" +
 	"\x15SetGitHubScopeRequest\x12+\n" +
 	"\x05scope\x18\x01 \x01(\v2\x15.orchd.v1.GitHubScopeR\x05scope\"E\n" +
 	"\x16SetGitHubScopeResponse\x12+\n" +

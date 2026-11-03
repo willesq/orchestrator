@@ -192,6 +192,14 @@ public final class GitHubModel {
         }
     }
 
+    /// Sets the repos watched for every open item; an empty list clears them.
+    @discardableResult
+    public func setEverythingRepos(_ owner: String, repos: [String]) async -> Bool {
+        await update(owner) {
+            $0.everythingRepos = Array(Set(repos)).sorted { $0.lowercased() < $1.lowercased() }
+        }
+    }
+
     /// Loads the repos the user can see under owner, once; after a failure, a
     /// later call tries again.
     public func loadRepos(_ owner: String) async {

@@ -35,13 +35,17 @@ const (
 
 // Scope is one GitHub account the watcher may monitor.
 type Scope struct {
-	Owner     string
-	Kind      string
-	Enabled   bool
-	Items     string
-	RepoMode  string
-	Repos     []string
-	UpdatedAt int64 // unix seconds
+	Owner    string
+	Kind     string
+	Enabled  bool
+	Items    string
+	RepoMode string
+	Repos    []string
+	// EverythingRepos are watched for every open item while Items is
+	// ItemsInvolving. They are kept while Items is ItemsAll, so switching back
+	// restores them.
+	EverythingRepos []string
+	UpdatedAt       int64 // unix seconds
 }
 
 var (
@@ -56,6 +60,9 @@ var ErrNotFound = errors.New("no such GitHub scope")
 // ValidLogin reports whether s is a well-formed GitHub login. The regexp alone
 // allows more than 39 characters (each "-x" step takes two), hence the length.
 func ValidLogin(s string) bool { return len(s) <= 39 && loginRe.MatchString(s) }
+
+// ValidRepo reports whether s is a well-formed repo name, without its owner.
+func ValidRepo(s string) bool { return repoRe.MatchString(s) && s != "." && s != ".." }
 
 // Validate checks a scope's fields before it is stored.
 func (s Scope) Validate() error {
@@ -80,8 +87,8 @@ func (s Scope) Validate() error {
 	default:
 		return fmt.Errorf("repo mode must be %q, %q or %q, got %q", ReposAll, ReposInclude, ReposExclude, s.RepoMode)
 	}
-	for _, r := range s.Repos {
-		if !repoRe.MatchString(r) || r == "." || r == ".." {
+	for _, r := range slices.Concat(s.Repos, s.EverythingRepos) {
+		if !ValidRepo(r) {
 			return fmt.Errorf("invalid repo name %q", r)
 		}
 	}
@@ -93,6 +100,10 @@ func (s Scope) Watches(repo string) bool {
 	if !s.Enabled {
 		return false
 	}
+	// Naming a repo for everything is explicit, so it outranks the repo picks.
+	if containsFold(s.WatchedForEverything(), repo) {
+		return true
+	}
 	switch s.RepoMode {
 	case ReposInclude:
 		return containsFold(s.Repos, repo)
@@ -101,6 +112,15 @@ func (s Scope) Watches(repo string) bool {
 	default:
 		return true
 	}
+}
+
+// WatchedForEverything returns the repos that add searches of their own: none
+// when the whole scope is already watched for everything.
+func (s Scope) WatchedForEverything() []string {
+	if s.Items != ItemsInvolving {
+		return nil
+	}
+	return s.EverythingRepos
 }
 
 func containsFold(list []string, s string) bool {
@@ -119,7 +139,7 @@ func NewStore(db *sql.DB) *Store { return &Store{db: db, now: time.Now} }
 // List returns every scope: the user's own account first, then orgs by name.
 func (st *Store) List(ctx context.Context) ([]Scope, error) {
 	rows, err := st.db.QueryContext(ctx,
-		`SELECT owner, kind, enabled, items, repo_mode, repos, updated_at FROM github_scopes
+		`SELECT owner, kind, enabled, items, repo_mode, repos, everything_repos, updated_at FROM github_scopes
 		 ORDER BY CASE kind WHEN 'user' THEN 0 ELSE 1 END, lower(owner)`)
 	if err != nil {
 		return nil, err
@@ -129,12 +149,13 @@ func (st *Store) List(ctx context.Context) ([]Scope, error) {
 	for rows.Next() {
 		var s Scope
 		var enabled int
-		var repos string
-		if err := rows.Scan(&s.Owner, &s.Kind, &enabled, &s.Items, &s.RepoMode, &repos, &s.UpdatedAt); err != nil {
+		var repos, everything string
+		if err := rows.Scan(&s.Owner, &s.Kind, &enabled, &s.Items, &s.RepoMode, &repos, &everything, &s.UpdatedAt); err != nil {
 			return nil, err
 		}
 		s.Enabled = enabled != 0
 		s.Repos = splitRepos(repos)
+		s.EverythingRepos = splitRepos(everything)
 		out = append(out, s)
 	}
 	return out, rows.Err()
@@ -157,17 +178,19 @@ func (st *Store) Get(ctx context.Context, owner string) (Scope, error) {
 // Set stores a scope after validating it, replacing any existing row.
 func (st *Store) Set(ctx context.Context, s Scope) (Scope, error) {
 	s.Repos = normaliseRepos(s.Repos)
+	s.EverythingRepos = normaliseRepos(s.EverythingRepos)
 	if err := s.Validate(); err != nil {
 		return Scope{}, err
 	}
 	s.UpdatedAt = st.now().Unix()
 	_, err := st.db.ExecContext(ctx,
-		`INSERT INTO github_scopes (owner, kind, enabled, items, repo_mode, repos, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO github_scopes (owner, kind, enabled, items, repo_mode, repos, everything_repos, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(owner) DO UPDATE SET kind=excluded.kind, enabled=excluded.enabled,
 		   items=excluded.items, repo_mode=excluded.repo_mode, repos=excluded.repos,
-		   updated_at=excluded.updated_at`,
-		s.Owner, s.Kind, boolInt(s.Enabled), s.Items, s.RepoMode, strings.Join(s.Repos, ","), s.UpdatedAt)
+		   everything_repos=excluded.everything_repos, updated_at=excluded.updated_at`,
+		s.Owner, s.Kind, boolInt(s.Enabled), s.Items, s.RepoMode, strings.Join(s.Repos, ","),
+		strings.Join(s.EverythingRepos, ","), s.UpdatedAt)
 	if err != nil {
 		return Scope{}, err
 	}
