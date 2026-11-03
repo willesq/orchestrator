@@ -175,11 +175,19 @@ public final class PRsModel {
     /// non-nil comment replaces the draft. Reports whether orchd stored it.
     @discardableResult
     public func watch(_ url: String, mode: PRReviewMode, comment: String? = nil, instructions: String? = nil,
-                      reviewAnyway: Bool = false) async -> Bool {
+                      reviewAnyway: Bool = false, updateInPlace: Bool? = nil) async -> Bool {
         await change(url) {
             let review = try await self.api.watchPRReview(url: url, mode: mode, comment: comment, instructions: instructions,
-                                                          reviewAnyway: reviewAnyway)
+                                                          reviewAnyway: reviewAnyway, updateInPlace: updateInPlace)
             self.reviews.apply(review)
+        }
+    }
+
+    /// Changes only whether later comments edit orch's earlier one on url's PR.
+    @discardableResult
+    public func setUpdateInPlace(_ url: String, on: Bool) async -> Bool {
+        await change(url) {
+            self.reviews.apply(try await self.api.setPRReviewUpdateInPlace(url: url, on: on))
         }
     }
 

@@ -14,19 +14,24 @@ import (
 )
 
 // commentMarker starts every comment orch posts. GitHub does not render it,
-// but returns it from the API, which is how a later run finds the comment.
+// but returns it from the API, which is how a later run finds the comment when
+// the user chose to update it in place.
 const commentMarker = "<!-- orch:pr-review -->"
 
-// EventRefresh edits orch's earlier comment on a PR, and adds none if there is
-// none: the Poster returns ErrNoComment.
-const EventRefresh = "REFRESH"
+const (
+	// EventUpdate edits orch's earlier comment on a PR, or adds one if there is none.
+	EventUpdate = "UPDATE"
+	// EventRefresh edits orch's earlier comment on a PR, and adds none if there
+	// is none: the Poster returns ErrNoComment.
+	EventRefresh = "REFRESH"
+)
 
 // ErrNoComment is returned for an EventRefresh on a PR orch has not commented on.
 var ErrNoComment = errors.New("no earlier comment to update")
 
 // Poster submits a review on a PR, pinned to commit, so it can never land on
-// commits pushed after the verdict. event is APPROVE, COMMENT or EventRefresh.
-// A comment replaces orch's earlier one on the PR rather than adding another.
+// commits pushed after the verdict. event is APPROVE, COMMENT, EventUpdate or
+// EventRefresh.
 type Poster func(ctx context.Context, repo string, number int, event, commit, body string) error
 
 // GHPost submits the review through gh api. The body goes on stdin as JSON,
@@ -36,9 +41,11 @@ func GHPost(ctx context.Context, repo string, number int, event, commit, body st
 	case "APPROVE":
 		return ghSubmit(ctx, repo, number, event, commit, body)
 	case "COMMENT":
+		return ghSubmit(ctx, repo, number, event, commit, markedComment(commit, body))
+	case EventUpdate:
 		err := ghEditComment(ctx, repo, number, commit, body)
 		if errors.Is(err, ErrNoComment) {
-			return ghSubmit(ctx, repo, number, event, commit, markedComment(commit, body))
+			return ghSubmit(ctx, repo, number, "COMMENT", commit, markedComment(commit, body))
 		}
 		return err
 	case EventRefresh:
@@ -53,7 +60,7 @@ func markedComment(commit, body string) string {
 	if strings.TrimSpace(body) == "" {
 		body = "The latest review found nothing further to raise."
 	}
-	return fmt.Sprintf("%s\n%s\n\n<sub>Reviewed at %s. This comment is updated when a later review changes.</sub>",
+	return fmt.Sprintf("%s\n%s\n\n<sub>Reviewed at %s.</sub>",
 		commentMarker, body, commit)
 }
 

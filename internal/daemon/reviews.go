@@ -107,11 +107,33 @@ func (s *server) WatchPRReview(ctx context.Context, req *orchdv1.WatchPRReviewRe
 		}
 		instructions = &in
 	}
-	r, err := w.WatchOpts(ctx, req.GetUrl(), req.GetMode(), comment, instructions, req.GetReviewAnyway())
+	var updateInPlace *bool
+	if req.GetSetUpdateInPlace() {
+		u := req.GetUpdateInPlace()
+		updateInPlace = &u
+	}
+	r, err := w.WatchOpts(ctx, req.GetUrl(), req.GetMode(), comment, instructions, req.GetReviewAnyway(), updateInPlace)
 	if errors.Is(err, reviews.ErrPosting) {
 		return nil, grpcstatus.Error(codes.Aborted, err.Error())
 	}
 	if err != nil {
+		return nil, err
+	}
+	return reviewPB(r), nil
+}
+
+func (s *server) SetPRReviewUpdateInPlace(ctx context.Context, req *orchdv1.SetPRReviewUpdateInPlaceRequest) (*orchdv1.PRReview, error) {
+	w, err := s.reviewWatcher()
+	if err != nil {
+		return nil, err
+	}
+	r, err := w.SetUpdateInPlace(ctx, req.GetUrl(), req.GetUpdateInPlace())
+	switch {
+	case errors.Is(err, reviews.ErrNotFound):
+		return nil, grpcstatus.Error(codes.NotFound, err.Error())
+	case errors.Is(err, reviews.ErrPosting):
+		return nil, grpcstatus.Error(codes.Aborted, err.Error())
+	case err != nil:
 		return nil, err
 	}
 	return reviewPB(r), nil
@@ -204,7 +226,7 @@ func reviewPB(r reviews.Review) *orchdv1.PRReview {
 	return &orchdv1.PRReview{
 		Url: r.URL, Repo: r.Repo, Number: clampInt32(r.Number), Mode: r.Mode, State: r.State,
 		HeadSha: r.HeadSHA, PendingSha: r.PendingSHA, TaskId: r.TaskID, Verdict: r.Verdict,
-		Reason: r.Reason, Comment: r.Comment, Instructions: r.Instructions, ForUser: r.ForUser, Report: r.Report, GoAhead: r.GoAhead, Posted: r.Posted, Note: r.Note,
+		Reason: r.Reason, Comment: r.Comment, Instructions: r.Instructions, ForUser: r.ForUser, Report: r.Report, GoAhead: r.GoAhead, UpdateInPlace: r.UpdateInPlace, Posted: r.Posted, Note: r.Note,
 		CreatedAt: unixOrZero(r.CreatedAt), UpdatedAt: unixOrZero(r.UpdatedAt), VerdictAt: unixOrZero(r.VerdictAt),
 	}
 }

@@ -397,6 +397,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "SetPRReviewUpdateInPlace" metadata.
+        public enum SetPRReviewUpdateInPlace: Sendable {
+            /// Request type for "SetPRReviewUpdateInPlace".
+            public typealias Input = Orchd_V1_SetPRReviewUpdateInPlaceRequest
+            /// Response type for "SetPRReviewUpdateInPlace".
+            public typealias Output = Orchd_V1_PRReview
+            /// Descriptor for "SetPRReviewUpdateInPlace".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SetPRReviewUpdateInPlace",
+                type: .unary
+            )
+        }
         /// Namespace for "StopPRReview" metadata.
         public enum StopPRReview: Sendable {
             /// Request type for "StopPRReview".
@@ -740,6 +753,7 @@ public enum Orchd_V1_Orchd: Sendable {
             RequestGitHubSweep.descriptor,
             ListPRReviews.descriptor,
             WatchPRReview.descriptor,
+            SetPRReviewUpdateInPlace.descriptor,
             StopPRReview.descriptor,
             GetPRDetail.descriptor,
             TailLogs.descriptor,
@@ -1473,6 +1487,30 @@ extension Orchd_V1_Orchd {
         func watchPRReview<Result>(
             request: GRPCCore.ClientRequest<Orchd_V1_WatchPRReviewRequest>,
             serializer: some GRPCCore.MessageSerializer<Orchd_V1_WatchPRReviewRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRReview>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRReview>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetPRReviewUpdateInPlace" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetPRReviewUpdateInPlace changes whether a later comment edits orch's
+        /// > earlier one on a watched PR, and nothing else: it never posts or reviews.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetPRReviewUpdateInPlaceRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetPRReviewUpdateInPlaceRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRReview` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setPRReviewUpdateInPlace<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetPRReviewUpdateInPlaceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetPRReviewUpdateInPlaceRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRReview>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRReview>) async throws -> Result
@@ -3074,6 +3112,41 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.WatchPRReview.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SetPRReviewUpdateInPlace" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetPRReviewUpdateInPlace changes whether a later comment edits orch's
+        /// > earlier one on a watched PR, and nothing else: it never posts or reviews.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetPRReviewUpdateInPlaceRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetPRReviewUpdateInPlaceRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PRReview` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setPRReviewUpdateInPlace<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetPRReviewUpdateInPlaceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetPRReviewUpdateInPlaceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRReview>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRReview>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SetPRReviewUpdateInPlace.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -4786,6 +4859,36 @@ extension Orchd_V1_Orchd.ClientProtocol {
         )
     }
 
+    /// Call the "SetPRReviewUpdateInPlace" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetPRReviewUpdateInPlace changes whether a later comment edits orch's
+    /// > earlier one on a watched PR, and nothing else: it never posts or reviews.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SetPRReviewUpdateInPlaceRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setPRReviewUpdateInPlace<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SetPRReviewUpdateInPlaceRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRReview>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setPRReviewUpdateInPlace(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetPRReviewUpdateInPlaceRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PRReview>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "StopPRReview" method.
     ///
     /// > Source IDL Documentation:
@@ -6480,6 +6583,40 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.watchPRReview(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetPRReviewUpdateInPlace" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetPRReviewUpdateInPlace changes whether a later comment edits orch's
+    /// > earlier one on a watched PR, and nothing else: it never posts or reviews.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setPRReviewUpdateInPlace<Result>(
+        _ message: Orchd_V1_SetPRReviewUpdateInPlaceRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRReview>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SetPRReviewUpdateInPlaceRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setPRReviewUpdateInPlace(
             request: request,
             options: options,
             onResponse: handleResponse

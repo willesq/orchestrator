@@ -2468,7 +2468,7 @@ public nonisolated struct Orchd_V1_PRReview: @unchecked Sendable {
     set {_uniqueStorage()._comment = newValue}
   }
 
-  /// approved | commented | failed, for head_sha; empty when nothing
+  /// approved | commented | failed | none, for head_sha; empty when nothing yet
   public var posted: String {
     get {_storage._posted}
     set {_uniqueStorage()._posted = newValue}
@@ -2534,6 +2534,12 @@ public nonisolated struct Orchd_V1_PRReview: @unchecked Sendable {
     set {_uniqueStorage()._report = newValue}
   }
 
+  /// a later comment edits orch's earlier one on the PR rather than adding another
+  public var updateInPlace: Bool {
+    get {_storage._updateInPlace}
+    set {_uniqueStorage()._updateInPlace = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2566,6 +2572,25 @@ public nonisolated struct Orchd_V1_WatchPRReviewRequest: Sendable {
   /// review the next ready commit even though its author is not the repo's
   /// owner, a member or a collaborator (whose PRs are otherwise held)
   public var reviewAnyway: Bool = false
+
+  /// replace whether a later comment edits orch's earlier one on the PR
+  public var setUpdateInPlace: Bool = false
+
+  public var updateInPlace: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SetPRReviewUpdateInPlaceRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var url: String = String()
+
+  public var updateInPlace: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -8141,7 +8166,7 @@ nonisolated extension Orchd_V1_ListPRReviewsResponse: SwiftProtobuf.Message, Swi
 
 nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PRReview"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}repo\0\u{1}number\0\u{1}mode\0\u{1}state\0\u{3}head_sha\0\u{3}pending_sha\0\u{3}task_id\0\u{1}verdict\0\u{1}reason\0\u{1}comment\0\u{1}posted\0\u{1}note\0\u{3}created_at\0\u{3}updated_at\0\u{3}verdict_at\0\u{3}checked_at\0\u{3}next_check_at\0\u{1}instructions\0\u{3}go_ahead\0\u{3}for_user\0\u{1}report\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}repo\0\u{1}number\0\u{1}mode\0\u{1}state\0\u{3}head_sha\0\u{3}pending_sha\0\u{3}task_id\0\u{1}verdict\0\u{1}reason\0\u{1}comment\0\u{1}posted\0\u{1}note\0\u{3}created_at\0\u{3}updated_at\0\u{3}verdict_at\0\u{3}checked_at\0\u{3}next_check_at\0\u{1}instructions\0\u{3}go_ahead\0\u{3}for_user\0\u{1}report\0\u{3}update_in_place\0")
 
   fileprivate class _StorageClass {
     var _url: String = String()
@@ -8166,6 +8191,7 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
     var _goAhead: Bool = false
     var _forUser: String = String()
     var _report: String = String()
+    var _updateInPlace: Bool = false
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -8198,6 +8224,7 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
       _goAhead = source._goAhead
       _forUser = source._forUser
       _report = source._report
+      _updateInPlace = source._updateInPlace
     }
   }
 
@@ -8238,6 +8265,7 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
         case 20: try { try decoder.decodeSingularBoolField(value: &_storage._goAhead) }()
         case 21: try { try decoder.decodeSingularStringField(value: &_storage._forUser) }()
         case 22: try { try decoder.decodeSingularStringField(value: &_storage._report) }()
+        case 23: try { try decoder.decodeSingularBoolField(value: &_storage._updateInPlace) }()
         default: break
         }
       }
@@ -8312,6 +8340,9 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
       if !_storage._report.isEmpty {
         try visitor.visitSingularStringField(value: _storage._report, fieldNumber: 22)
       }
+      if _storage._updateInPlace != false {
+        try visitor.visitSingularBoolField(value: _storage._updateInPlace, fieldNumber: 23)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -8343,6 +8374,7 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
         if _storage._goAhead != rhs_storage._goAhead {return false}
         if _storage._forUser != rhs_storage._forUser {return false}
         if _storage._report != rhs_storage._report {return false}
+        if _storage._updateInPlace != rhs_storage._updateInPlace {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -8354,7 +8386,7 @@ nonisolated extension Orchd_V1_PRReview: SwiftProtobuf.Message, SwiftProtobuf._M
 
 nonisolated extension Orchd_V1_WatchPRReviewRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WatchPRReviewRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}mode\0\u{3}set_comment\0\u{1}comment\0\u{3}set_instructions\0\u{1}instructions\0\u{3}review_anyway\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{1}mode\0\u{3}set_comment\0\u{1}comment\0\u{3}set_instructions\0\u{1}instructions\0\u{3}review_anyway\0\u{3}set_update_in_place\0\u{3}update_in_place\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8369,6 +8401,8 @@ nonisolated extension Orchd_V1_WatchPRReviewRequest: SwiftProtobuf.Message, Swif
       case 5: try { try decoder.decodeSingularBoolField(value: &self.setInstructions) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.instructions) }()
       case 7: try { try decoder.decodeSingularBoolField(value: &self.reviewAnyway) }()
+      case 8: try { try decoder.decodeSingularBoolField(value: &self.setUpdateInPlace) }()
+      case 9: try { try decoder.decodeSingularBoolField(value: &self.updateInPlace) }()
       default: break
       }
     }
@@ -8396,6 +8430,12 @@ nonisolated extension Orchd_V1_WatchPRReviewRequest: SwiftProtobuf.Message, Swif
     if self.reviewAnyway != false {
       try visitor.visitSingularBoolField(value: self.reviewAnyway, fieldNumber: 7)
     }
+    if self.setUpdateInPlace != false {
+      try visitor.visitSingularBoolField(value: self.setUpdateInPlace, fieldNumber: 8)
+    }
+    if self.updateInPlace != false {
+      try visitor.visitSingularBoolField(value: self.updateInPlace, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8407,6 +8447,43 @@ nonisolated extension Orchd_V1_WatchPRReviewRequest: SwiftProtobuf.Message, Swif
     if lhs.setInstructions != rhs.setInstructions {return false}
     if lhs.instructions != rhs.instructions {return false}
     if lhs.reviewAnyway != rhs.reviewAnyway {return false}
+    if lhs.setUpdateInPlace != rhs.setUpdateInPlace {return false}
+    if lhs.updateInPlace != rhs.updateInPlace {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SetPRReviewUpdateInPlaceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetPRReviewUpdateInPlaceRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}url\0\u{3}update_in_place\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.url) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.updateInPlace) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.url.isEmpty {
+      try visitor.visitSingularStringField(value: self.url, fieldNumber: 1)
+    }
+    if self.updateInPlace != false {
+      try visitor.visitSingularBoolField(value: self.updateInPlace, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SetPRReviewUpdateInPlaceRequest, rhs: Orchd_V1_SetPRReviewUpdateInPlaceRequest) -> Bool {
+    if lhs.url != rhs.url {return false}
+    if lhs.updateInPlace != rhs.updateInPlace {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

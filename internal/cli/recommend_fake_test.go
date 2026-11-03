@@ -106,6 +106,10 @@ func (f *fakeClient) WatchPRReview(context.Context, *orchdv1.WatchPRReviewReques
 	return &orchdv1.PRReview{}, nil
 }
 
+func (f *fakeClient) SetPRReviewUpdateInPlace(context.Context, *orchdv1.SetPRReviewUpdateInPlaceRequest, ...grpc.CallOption) (*orchdv1.PRReview, error) {
+	return &orchdv1.PRReview{}, nil
+}
+
 func (f *fakeClient) StopPRReview(_ context.Context, req *orchdv1.StopPRReviewRequest, _ ...grpc.CallOption) (*orchdv1.StopPRReviewResponse, error) {
 	if prWatches.stopErr != nil {
 		return nil, prWatches.stopErr

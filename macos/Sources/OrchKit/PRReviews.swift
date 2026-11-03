@@ -119,6 +119,8 @@ public struct PRReview: Sendable, Equatable, Identifiable {
     public let instructions: String
     /// The next ready commit is reviewed although its author is not trusted.
     public let goAhead: Bool
+    /// A later comment edits orch's earlier one on the PR rather than adding another.
+    public let updateInPlace: Bool
     /// The review's answer to the notes, and its full text; never posted.
     public let forUser: String
     public let report: String
@@ -134,7 +136,7 @@ public struct PRReview: Sendable, Equatable, Identifiable {
     public init(url: String, repo: String = "", number: Int = 0, mode: PRReviewMode = .verdict,
                 state: PRReviewState? = .waiting, headSHA: String = "", pendingSHA: String = "", taskID: String = "",
                 verdict: PRVerdict? = nil, reason: String = "", comment: String = "", instructions: String = "",
-                goAhead: Bool = false, forUser: String = "", report: String = "", posted: String = "",
+                goAhead: Bool = false, updateInPlace: Bool = false, forUser: String = "", report: String = "", posted: String = "",
                 note: String = "", verdictAt: Date? = nil, updatedAt: Date? = nil, checkedAt: Date? = nil,
                 nextCheckAt: Date? = nil) {
         self.url = url
@@ -150,6 +152,7 @@ public struct PRReview: Sendable, Equatable, Identifiable {
         self.comment = comment
         self.instructions = instructions
         self.goAhead = goAhead
+        self.updateInPlace = updateInPlace
         self.forUser = forUser
         self.report = report
         self.posted = posted
@@ -272,9 +275,11 @@ public struct PRDetail: Sendable, Equatable {
 public protocol PRReviewAPI: Sendable {
     func prReviews() async throws -> [PRReview]
     /// Starts watching url, or changes its mode; a non-nil comment replaces
-    /// the drafted one.
+    /// the drafted one and a non-nil updateInPlace replaces that setting.
     func watchPRReview(url: String, mode: PRReviewMode, comment: String?, instructions: String?,
-                       reviewAnyway: Bool) async throws -> PRReview
+                       reviewAnyway: Bool, updateInPlace: Bool?) async throws -> PRReview
+    /// Changes only whether later comments edit orch's earlier one.
+    func setPRReviewUpdateInPlace(url: String, on: Bool) async throws -> PRReview
     func stopPRReview(url: String, forget: Bool) async throws
     func prDetail(url: String, refresh: Bool) async throws -> PRDetail
 }

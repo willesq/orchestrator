@@ -127,6 +127,8 @@ private final class FakeReviews: PRReviewAPI, @unchecked Sendable {
     var detail = PRDetail(url: url1, title: "Add divide")
     var error: Error?
     var watched: [(String, PRReviewMode, String?, String?, Bool)] = []
+    var updatesInPlace: [Bool?] = []
+    var settings: [Bool] = []
     var stopped: [(String, Bool)] = []
     var detailCalls = 0
 
@@ -136,11 +138,18 @@ private final class FakeReviews: PRReviewAPI, @unchecked Sendable {
     }
 
     func watchPRReview(url: String, mode: PRReviewMode, comment: String?, instructions: String?,
-                       reviewAnyway: Bool) async throws -> PRReview {
+                       reviewAnyway: Bool, updateInPlace: Bool?) async throws -> PRReview {
         if let error { throw error }
+        updatesInPlace.append(updateInPlace)
         watched.append((url, mode, comment, instructions, reviewAnyway))
         return PRReview(url: url, mode: mode, state: .waiting, comment: comment ?? "", instructions: instructions ?? "",
-                        goAhead: reviewAnyway)
+                        goAhead: reviewAnyway, updateInPlace: updateInPlace ?? false)
+    }
+
+    func setPRReviewUpdateInPlace(url: String, on: Bool) async throws -> PRReview {
+        if let error { throw error }
+        settings.append(on)
+        return PRReview(url: url, state: .verdict, updateInPlace: on)
     }
 
     func stopPRReview(url: String, forget: Bool) async throws {
@@ -245,6 +254,11 @@ private final class Counter: @unchecked Sendable {
         #expect(api.watched.last?.1 == .auto && api.watched.last?.3 == nil && api.watched.last?.4 == false)
         #expect(await model.watch(url1, mode: .verdict, reviewAnyway: true))
         #expect(api.watched.last?.4 == true && model.reviews.byURL[url1]?.goAhead == true)
+        #expect(await model.watch(url1, mode: .verdict, updateInPlace: true))
+        #expect(api.updatesInPlace.last == .some(true) && model.reviews.byURL[url1]?.updateInPlace == true)
+        let asked = api.watched.count
+        #expect(await model.setUpdateInPlace(url1, on: false))
+        #expect(api.settings == [false] && api.watched.count == asked && model.reviews.byURL[url1]?.updateInPlace == false)
 
         // Not reviewing: no lookup. Reviewing: the task is followed.
         await model.refreshReviewTask(url1)
@@ -347,13 +361,18 @@ private final class Counter: @unchecked Sendable {
             #expect(got.forUser == "deps fine" && got.report == "## Review")
             #expect(got.nextCheckAt == Date(timeIntervalSince1970: 1_800_000_170))
 
-            _ = try await client.watchPRReview(url: url1, mode: .comment, comment: "edited", instructions: "focus", reviewAnyway: true)
+            _ = try await client.watchPRReview(url: url1, mode: .comment, comment: "edited", instructions: "focus", reviewAnyway: true, updateInPlace: true)
             let sent = try #require(service.recorder.last(Orchd_V1_WatchPRReviewRequest.self))
             #expect(sent.url == url1 && sent.mode == "comment" && sent.setComment && sent.comment == "edited")
             #expect(sent.setInstructions && sent.instructions == "focus" && sent.reviewAnyway)
-            _ = try await client.watchPRReview(url: url1, mode: .verdict, comment: nil, instructions: nil, reviewAnyway: false)
+            #expect(sent.setUpdateInPlace && sent.updateInPlace)
+            _ = try await client.watchPRReview(url: url1, mode: .verdict, comment: nil, instructions: nil, reviewAnyway: false, updateInPlace: nil)
             let bare = try #require(service.recorder.last(Orchd_V1_WatchPRReviewRequest.self))
-            #expect(!bare.setComment && !bare.setInstructions)
+            #expect(!bare.setComment && !bare.setInstructions && !bare.setUpdateInPlace)
+
+            _ = try await client.setPRReviewUpdateInPlace(url: url1, on: true)
+            let setting = try #require(service.recorder.last(Orchd_V1_SetPRReviewUpdateInPlaceRequest.self))
+            #expect(setting.url == url1 && setting.updateInPlace)
 
             try await client.stopPRReview(url: url1, forget: true)
             #expect(service.recorder.last(Orchd_V1_StopPRReviewRequest.self)?.forget == true)

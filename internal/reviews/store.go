@@ -95,6 +95,9 @@ type Review struct {
 	// GoAhead lets the next ready commit be reviewed although its author is
 	// not trusted; a review consumes it.
 	GoAhead bool
+	// UpdateInPlace has a later comment edit orch's earlier one on the PR
+	// rather than add another.
+	UpdateInPlace bool
 	// Posted is what orch posted for HeadSHA, or empty.
 	Posted string
 	// Note is the last problem, or why nothing was posted.
@@ -132,13 +135,13 @@ type Store struct {
 func NewStore(db *sql.DB) *Store { return &Store{db: db, now: time.Now} }
 
 const columns = `url, repo, number, mode, state, head_sha, pending_sha, task_id, nonce, verdict, reason,
-	comment, instructions, for_user, report, go_ahead, posted, note, created_at, updated_at, verdict_at`
+	comment, instructions, for_user, report, go_ahead, posted, note, created_at, updated_at, verdict_at, update_in_place`
 
 func scan(row interface{ Scan(...any) error }) (Review, error) {
 	var r Review
 	var created, updated, verdict int64
 	err := row.Scan(&r.URL, &r.Repo, &r.Number, &r.Mode, &r.State, &r.HeadSHA, &r.PendingSHA, &r.TaskID, &r.Nonce,
-		&r.Verdict, &r.Reason, &r.Comment, &r.Instructions, &r.ForUser, &r.Report, &r.GoAhead, &r.Posted, &r.Note, &created, &updated, &verdict)
+		&r.Verdict, &r.Reason, &r.Comment, &r.Instructions, &r.ForUser, &r.Report, &r.GoAhead, &r.Posted, &r.Note, &created, &updated, &verdict, &r.UpdateInPlace)
 	r.CreatedAt, r.UpdatedAt, r.VerdictAt = unix(created), unix(updated), unix(verdict)
 	return r, err
 }
@@ -192,14 +195,14 @@ func (s *Store) Put(ctx context.Context, r *Review) error {
 	}
 	r.UpdatedAt = now
 	_, err := s.db.ExecContext(ctx, `INSERT INTO pr_reviews (`+columns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(url) DO UPDATE SET repo = excluded.repo, number = excluded.number, mode = excluded.mode,
 			state = excluded.state, head_sha = excluded.head_sha, pending_sha = excluded.pending_sha,
 			task_id = excluded.task_id, nonce = excluded.nonce, verdict = excluded.verdict, reason = excluded.reason,
 			comment = excluded.comment, instructions = excluded.instructions, for_user = excluded.for_user, report = excluded.report, go_ahead = excluded.go_ahead, posted = excluded.posted, note = excluded.note,
-			updated_at = excluded.updated_at, verdict_at = excluded.verdict_at`,
+			updated_at = excluded.updated_at, verdict_at = excluded.verdict_at, update_in_place = excluded.update_in_place`,
 		r.URL, r.Repo, r.Number, r.Mode, r.State, r.HeadSHA, r.PendingSHA, r.TaskID, r.Nonce, r.Verdict, r.Reason,
-		r.Comment, r.Instructions, r.ForUser, r.Report, r.GoAhead, r.Posted, r.Note, seconds(r.CreatedAt), seconds(r.UpdatedAt), seconds(r.VerdictAt))
+		r.Comment, r.Instructions, r.ForUser, r.Report, r.GoAhead, r.Posted, r.Note, seconds(r.CreatedAt), seconds(r.UpdatedAt), seconds(r.VerdictAt), r.UpdateInPlace)
 	return err
 }
 
