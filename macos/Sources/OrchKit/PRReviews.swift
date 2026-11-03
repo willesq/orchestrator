@@ -122,7 +122,7 @@ public struct PRReview: Sendable, Equatable, Identifiable {
     /// The review's answer to the notes, and its full text; never posted.
     public let forUser: String
     public let report: String
-    /// approved | commented | failed, for headSHA; empty when nothing.
+    /// approved | commented | failed | none, for headSHA; empty when nothing yet.
     public let posted: String
     public let note: String
     public let verdictAt: Date?

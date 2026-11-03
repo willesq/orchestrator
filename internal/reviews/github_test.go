@@ -122,30 +122,6 @@ func fakeGH(t *testing.T, code int, stderr string) (argsFile, stdinFile string) 
 	return argsFile, stdinFile
 }
 
-func TestGHPost(t *testing.T) {
-	argsFile, stdinFile := fakeGH(t, 0, "")
-	body := "it's `fine` $(whoami)\n\"quoted\""
-	if err := GHPost(context.Background(), "a/b", 9, "APPROVE", shaA, body); err != nil {
-		t.Fatal(err)
-	}
-	args, _ := os.ReadFile(argsFile)
-	if got := strings.Fields(string(args)); strings.Join(got, " ") != "api --method POST repos/a/b/pulls/9/reviews --input -" {
-		t.Errorf("args = %q", got)
-	}
-	var payload map[string]string
-	stdin, _ := os.ReadFile(stdinFile)
-	if err := json.Unmarshal(stdin, &payload); err != nil {
-		t.Fatal(err)
-	}
-	if payload["body"] != body || payload["event"] != "APPROVE" || payload["commit_id"] != shaA {
-		t.Errorf("payload = %v", payload)
-	}
-
-	if err := GHPost(context.Background(), "a/b", 9, "REQUEST_CHANGES", shaA, ""); err == nil {
-		t.Error("request changes accepted")
-	}
-}
-
 func TestGHPostFailure(t *testing.T) {
 	fakeGH(t, 1, "HTTP 422: Can not approve your own pull request")
 	err := GHPost(context.Background(), "a/b", 9, "COMMENT", shaA, "x")

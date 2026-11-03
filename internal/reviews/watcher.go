@@ -130,7 +130,7 @@ func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, inst
 		// A failed head is not retried on its own; asking again retries it.
 		r.State, r.HeadSHA = StateWaiting, ""
 	}
-	if r.Posted == PostedFailed || (mode == ModeComment && r.Posted == PostedCommented) {
+	if r.Posted == PostedFailed || (mode == ModeComment && (r.Posted == PostedCommented || r.Posted == PostedNone)) {
 		// Asking again is another attempt; a comment is posted once per ask.
 		r.Posted = ""
 	}
@@ -199,6 +199,10 @@ func (w *Watcher) Tick(ctx context.Context) {
 			continue
 		}
 		if r.State == StateReviewing {
+			// Before collecting: a new verdict replaces the comment asked for.
+			if post := planStale(r); post != nil {
+				w.send(ctx, r.URL, *post)
+			}
 			w.collect(ctx, r.URL)
 			continue
 		}
@@ -341,6 +345,7 @@ func (w *Watcher) check(ctx context.Context, url string) {
 			return true
 		}
 		if st.Head != r.HeadSHA {
+			post = planStale(*r)
 			if !st.Ready() {
 				r.State, r.Note = StateWaiting, st.Waiting()
 				if r.HeadSHA != "" && r.Verdict != "" {
@@ -388,6 +393,8 @@ func (w *Watcher) check(ctx context.Context, url string) {
 type posting struct {
 	event, commit, posted string
 	note                  string
+	// stale posts a verdict for a commit that is no longer the PR's head.
+	stale bool
 }
 
 // plan decides what to post for r's verdict now that the PR's head is still
@@ -410,13 +417,49 @@ func plan(r Review, st Status, me string) *posting {
 			return &posting{note: "GitHub does not let you approve your own PR; the verdict is yours to act on"}
 		}
 		return &posting{event: "APPROVE", commit: r.HeadSHA, posted: PostedApproved}
-	case r.Mode == ModeComment && r.Posted == "" && r.Comment != "":
-		return &posting{event: "COMMENT", commit: r.HeadSHA, posted: PostedCommented}
-	case (r.Mode == ModeFeedback || r.Mode == ModeAuto) && r.Verdict != VerdictApprove && r.Posted == "" && r.Comment != "":
-		// Findings for the author to fix; the next push is reviewed again.
-		return &posting{event: "COMMENT", commit: r.HeadSHA, posted: PostedCommented}
+	}
+	return planComment(r)
+}
+
+// planComment decides what r's permissions post as a comment, on any commit.
+func planComment(r Review) *posting {
+	if r.Posted != "" {
+		return nil
+	}
+	switch r.Mode {
+	case ModeComment:
+		if r.Comment != "" {
+			return &posting{event: "COMMENT", commit: r.HeadSHA, posted: PostedCommented}
+		}
+	case ModeFeedback, ModeAuto:
+		if r.Verdict == VerdictApprove {
+			// Nothing new to raise, but an earlier comment must not keep
+			// asking for changes.
+			return &posting{event: EventRefresh, commit: r.HeadSHA, posted: PostedCommented}
+		}
+		if r.Comment != "" {
+			// Findings for the author to fix; the next push is reviewed again.
+			return &posting{event: "COMMENT", commit: r.HeadSHA, posted: PostedCommented}
+		}
 	}
 	return nil
+}
+
+// planStale decides what to post for a verdict on a commit the PR has moved
+// past. The comment stays pinned to the reviewed commit, and an older commit
+// is never approved, nor are its findings replaced with approving text while
+// the new commit is unreviewed. A verdict with no HeadSHA is being redone at
+// the user's request, so it is not posted.
+func planStale(r Review) *posting {
+	if r.HeadSHA == "" || r.Verdict == "" {
+		return nil
+	}
+	p := planComment(r)
+	if p == nil || p.event == EventRefresh {
+		return nil
+	}
+	p.stale = true
+	return p
 }
 
 // send submits p with the comment as stored now, unless the user changed
@@ -426,8 +469,8 @@ func plan(r Review, st Status, me string) *posting {
 func (w *Watcher) send(ctx context.Context, url string, p posting) {
 	w.mu.Lock()
 	r, found, err := w.Store.Get(ctx, url)
-	if err != nil || !found || r.HeadSHA != p.commit || r.State != StateVerdict ||
-		(p.event == "APPROVE" && !approves(r.Mode)) || (p.event == "COMMENT" && !comments(r.Mode)) {
+	if err != nil || !found || r.HeadSHA != p.commit || (r.State != StateVerdict && !(p.stale && r.Active())) ||
+		(p.event == "APPROVE" && !approves(r.Mode)) || (p.event != "APPROVE" && !comments(r.Mode)) {
 		w.mu.Unlock()
 		return
 	}
@@ -438,6 +481,12 @@ func (w *Watcher) send(ctx context.Context, url string, p posting) {
 	w.mu.Unlock()
 
 	err = w.Post(ctx, r.Repo, r.Number, p.event, p.commit, r.Comment)
+	if err == nil && p.event == "APPROVE" && comments(r.Mode) {
+		// The approval stands either way, so a stale comment is not its failure.
+		if rerr := w.Post(ctx, r.Repo, r.Number, EventRefresh, p.commit, r.Comment); rerr != nil && !errors.Is(rerr, ErrNoComment) {
+			log.Printf("pr-reviews: update the comment on %s: %v", url, rerr)
+		}
+	}
 
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -447,10 +496,16 @@ func (w *Watcher) send(ctx context.Context, url string, p posting) {
 		log.Printf("pr-reviews: %s posted to %s but the row is gone: %v", p.event, url, gerr)
 		return
 	}
-	if err != nil {
+	if errors.Is(err, ErrNoComment) {
+		r.Posted = PostedNone
+	} else if err != nil {
 		r.Posted, r.Note = PostedFailed, "could not post to GitHub: "+github.Printable(err.Error(), 300)
 	} else {
-		r.Posted, r.Note = p.posted, ""
+		r.Posted = p.posted
+		if !p.stale {
+			// A stale verdict's note says what the new commit is waiting for.
+			r.Note = ""
+		}
 		if r.Mode == ModeComment {
 			// An asked-for comment is one-shot: later verdicts post nothing
 			// until asked again.
