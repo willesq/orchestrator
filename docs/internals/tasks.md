@@ -352,9 +352,14 @@ CI, review decision and mergeability are fetched with `gh pr view` only for PRs 
 or was asked to review, because only those can need the user. If the scopes can't be read or any
 search fails, the sweep fails and the cache is kept.
 
-CI rolls up to `none`, `failure`, `pending` or `success`. Only an unfinished check is `pending`. A
-skipped or neutral check counts as passing, and `action_required`, `startup_failure` and `stale` as
-failing. `orch prs`, the app and the review agent's prompt also show the counts, such as `3 passed,
+CI rolls up to `none`, `failure`, `pending` or `success`, from the newest run of each check (by
+workflow and name, or context): `statusCheckRollup` also returns runs a re-run or re-triggered
+workflow replaced, which GitHub's checks box leaves out. A run still queued counts as the newest, and
+a skip never replaces a failure. Unlike `gh pr checks`, a job run by two events counts as one check,
+because `gh pr view` does not export the event. Those names can also be copied by a workflow the PR
+adds, so an earlier failure blocks auto-approval for an untrusted author, and the review is told about
+it. Only a check not known to have ended is `pending`, which includes `stale`, as in `gh`.
+A skipped or neutral check counts as passing, and `action_required` and `startup_failure` as failing. `orch prs`, the app and the review agent's prompt also show the counts, such as `3 passed,
 1 skipped, 0 failed`: every check skipping can be the intent, so it is shown rather than blocked, for
 any author. The review judges skips, and looks at each one when the PR changes GitHub Actions. State
 is cached in

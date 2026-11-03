@@ -260,7 +260,7 @@ public struct PRDetail: Sendable, Equatable {
             switch c.result {
             case "success": out.passing += 1
             case "neutral", "skipped": out.skipped += 1
-            case "failure", "error", "timed_out", "cancelled", "action_required", "startup_failure", "stale": out.failing += 1
+            case "failure", "error", "timed_out", "cancelled", "action_required", "startup_failure": out.failing += 1
             default: out.running += 1
             }
         }

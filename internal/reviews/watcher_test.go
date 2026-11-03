@@ -322,6 +322,59 @@ func TestPostFailureIsRecordedAndRetriedOnRequest(t *testing.T) {
 	}
 }
 
+func TestReplacedFailureBlocksAutoApprovalOnlyForUntrustedAuthors(t *testing.T) {
+	base := Status{State: "OPEN", Head: shaA, Mergeable: "MERGEABLE", CI: "success", Checks: "1 passed, 0 skipped, 0 failed", ReplacedFailures: 1}
+	r := Review{Mode: ModeApprove, Verdict: VerdictApprove, HeadSHA: shaA}
+
+	untrusted := base
+	untrusted.Association = "CONTRIBUTOR"
+	if got := plan(r, untrusted, "me"); got == nil || got.event != "" || !strings.Contains(got.note, "earlier run") || strings.Contains(got.note, "no CI") {
+		t.Fatalf("untrusted: %+v", got)
+	}
+	trusted := base
+	trusted.Association = "COLLABORATOR"
+	if got := plan(r, trusted, "me"); got == nil || got.event != "APPROVE" {
+		t.Fatalf("trusted: %+v", got)
+	}
+	clean := untrusted
+	clean.ReplacedFailures = 0
+	if got := plan(r, clean, "me"); got == nil || got.event != "APPROVE" {
+		t.Fatalf("no replaced failure: %+v", got)
+	}
+}
+
+func TestPromptChecksNamesReplacedFailures(t *testing.T) {
+	st := Status{Checks: "1 passed, 0 skipped, 0 failed"}
+	if got := st.promptChecks(); got != st.Checks {
+		t.Errorf("got %q", got)
+	}
+	st.ReplacedFailures = 2
+	if got := st.promptChecks(); !strings.Contains(got, "2 earlier runs failed") {
+		t.Errorf("got %q", got)
+	}
+	st.ReplacedFailures = 1
+	if got := st.promptChecks(); !strings.Contains(got, "1 earlier run failed") {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestSupersededFailureDoesNotHoldTheReview(t *testing.T) {
+	ctx := context.Background()
+	gh := func(_ context.Context, args ...string) ([]byte, error) {
+		if args[0] == "api" {
+			return []byte("COLLABORATOR\n"), nil
+		}
+		return []byte(`{"state":"OPEN","headRefOid":"` + shaA + `","mergeable":"MERGEABLE","statusCheckRollup":[
+			{"name":"title","workflowName":"ci","status":"COMPLETED","conclusion":"FAILURE","startedAt":"2026-11-01T00:00:00Z"},
+			{"name":"title","workflowName":"ci","status":"COMPLETED","conclusion":"SUCCESS","startedAt":"2026-11-01T00:00:41Z"},
+			{"name":"lint","workflowName":"ci","status":"COMPLETED","conclusion":"SKIPPED","startedAt":"2026-11-01T00:00:00Z"}]}`), nil
+	}
+	st, err := FetchStatus(ctx, gh, testURL)
+	if err != nil || st.CI != "success" || !st.Ready() || st.Checks != "1 passed, 1 skipped, 0 failed" || st.ReplacedFailures != 1 {
+		t.Fatalf("%+v, %v; waiting says %q", st, err, st.Waiting())
+	}
+}
+
 func TestSkippedChecksDoNotHoldTheReview(t *testing.T) {
 	e, w := newEnv(t)
 	e.pr.checks = []string{"SUCCESS", "SKIPPED"}
