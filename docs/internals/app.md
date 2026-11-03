@@ -255,7 +255,8 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     - with "Involving me", **Everything in…**, a sheet to choose repos watched for every open PR and
       issue on top of that;
     - a summary of what it covers, and **Repos…**, a sheet to choose all repos, only some, or all
-      but some, from the repos you can see.
+      but some, from the repos you can see. Both sheets ask GitHub for the repos each time they open,
+      so a new repo is there to pick; if that fails, the last list stays with an error under it.
 
     Changes go to `SetGitHubScope`. orchd then sweeps within about a minute, and the activity list
     reloads every 30 s while the tab is open.

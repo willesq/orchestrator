@@ -56,6 +56,7 @@ private final class FakeGitHub: GitHubAPI, @unchecked Sendable {
     var failSet = false
     var failItems = false
     var failRepos = false
+    var newRepos: [String] = []
     var failSweep = false
     /// What the cache holds once a requested sweep has run; nil = it never does.
     var afterSweep: GitHubItemList?
@@ -87,7 +88,7 @@ private final class FakeGitHub: GitHubAPI, @unchecked Sendable {
     func gitHubRepos(owner: String) async throws -> [GitHubRepo] {
         repoLoads.append(owner)
         if failRepos { throw Boom() }
-        return [GitHubRepo(name: "api", isPrivate: true), GitHubRepo(name: "web")]
+        return [GitHubRepo(name: "api", isPrivate: true), GitHubRepo(name: "web")] + newRepos.map { GitHubRepo(name: $0) }
     }
 
     func gitHubItems() async throws -> GitHubItemList {
@@ -267,16 +268,37 @@ private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: T
         #expect(api.sets.count == 1)
     }
 
-    @Test func reposLoadOncePerOwner() async {
+    @Test func reposAreKeptPerOwner() async {
         let api = FakeGitHub()
         let model = GitHubModel(api: api)
         #expect(model.reposFor("WippData") == nil)
         await model.loadRepos("WippData")
-        await model.loadRepos("wippdata")
-        #expect(api.repoLoads == ["WippData"] && model.reposFor("WIPPDATA")?.count == 2)
+        #expect(model.reposFor("WIPPDATA")?.count == 2)
         api.failRepos = true
         await model.loadRepos("other")
         #expect(model.repoError("other") == "unavailable" && model.reposFor("other") == nil)
+    }
+
+    @Test func aRepoMadeSinceTheLastLoadShowsUp() async {
+        let api = FakeGitHub()
+        let model = GitHubModel(api: api)
+        await model.loadRepos("WippData")
+        api.newRepos = ["brand-new"]
+        await model.loadRepos("wippdata")
+        #expect(api.repoLoads == ["WippData", "wippdata"])
+        #expect(model.reposFor("WippData")?.map(\.name) == ["api", "web", "brand-new"])
+    }
+
+    @Test func aFailedReloadKeepsTheListAndSaysSo() async {
+        let api = FakeGitHub()
+        let model = GitHubModel(api: api)
+        await model.loadRepos("WippData")
+        api.failRepos = true
+        await model.loadRepos("WippData")
+        #expect(model.reposFor("WippData")?.count == 2 && model.repoError("WippData") == "unavailable")
+        api.failRepos = false
+        await model.loadRepos("WippData")
+        #expect(model.repoError("WippData") == nil)
     }
 
     @Test func visibleItemsFilterAndOrder() async {
