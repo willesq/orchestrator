@@ -245,6 +245,7 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
         pb.items = scope.items.rawValue
         pb.repoMode = scope.repoMode.rawValue
         pb.repos = scope.repoMode == .all ? [] : scope.repos
+        pb.everythingRepos = scope.everythingRepos
         var request = Orchd_V1_SetGitHubScopeRequest()
         request.scope = pb
         // Enabling a scope can make orchd check the user's memberships through gh.
@@ -603,7 +604,8 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
     static func scope(_ s: Orchd_V1_GitHubScope) -> GitHubScope {
         GitHubScope(owner: s.owner, isUser: s.kind == "user", enabled: s.enabled,
                     items: GitHubItemsMode(rawValue: s.items) ?? .involving,
-                    repoMode: GitHubRepoMode(rawValue: s.repoMode) ?? .all, repos: s.repos)
+                    repoMode: GitHubRepoMode(rawValue: s.repoMode) ?? .all, repos: s.repos,
+                    everythingRepos: s.everythingRepos)
     }
 
     private var callOptions: CallOptions {

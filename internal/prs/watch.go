@@ -3,6 +3,7 @@ package prs
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"slices"
 	"sort"
 	"strings"
@@ -29,12 +30,28 @@ const searchLimit = "100"
 // only for items involving the user.
 const MaxEverythingScopes = 5
 
+// MaxEverythingRepoBatches caps the batches of repos watched for every open
+// item: each adds two searches to every sweep. Beyond it (alphabetically), a
+// repo is watched only for items involving the user.
+const MaxEverythingRepoBatches = 5
+
+// maxRepoBatchChars keeps a batch's repo: qualifiers under GitHub's limit of
+// 256 characters a query, leaving room for the qualifiers gh adds.
+const maxRepoBatchChars = 200
+
+// repoSearchMissing is how GitHub answers a search whose repos are all gone or
+// out of reach.
+const repoSearchMissing = "cannot be searched"
+
 // query is one gh search. reason tags every hit, or, when empty, the hit's
 // author and assignees decide it (involvement).
 type query struct {
 	kind   string
 	flags  []string
 	reason string
+	// skipMissing tolerates repos that no longer exist, so one the user listed
+	// and later deleted cannot stop every sweep.
+	skipMissing bool
 }
 
 // ghUser is a GitHub account in search results.
@@ -62,15 +79,15 @@ var reasonOrder = []string{ReasonAuthored, ReasonAssigned, ReasonReviewRequested
 
 // poll finds open PRs and issues in the enabled scopes. A fixed set of
 // searches covers everything involving the user, whatever the number of
-// scopes; only scopes watched for everything add searches of their own. Hits
-// outside the enabled scopes, or their repo picks, are dropped.
+// scopes; only scopes and repos watched for everything add searches of their
+// own. Hits outside the enabled scopes, or their repo picks, are dropped.
 func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 	w, err := b.watch(ctx)
 	if err != nil {
 		return nil, err
 	}
 	watched := map[string]github.Scope{}
-	var everything []string
+	var everything, everythingRepos []string
 	for _, sc := range w.Scopes {
 		if !sc.Enabled || !github.ValidLogin(sc.Owner) {
 			continue
@@ -78,6 +95,11 @@ func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 		watched[strings.ToLower(sc.Owner)] = sc
 		if sc.Items == github.ItemsAll {
 			everything = append(everything, sc.Owner)
+		}
+		for _, repo := range sc.WatchedForEverything() {
+			if github.ValidRepo(repo) {
+				everythingRepos = append(everythingRepos, sc.Owner+"/"+repo)
+			}
 		}
 	}
 	if len(watched) == 0 {
@@ -99,11 +121,20 @@ func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 			query{kind: KindPR, flags: []string{"--owner=" + owner}, reason: ReasonAllOpen},
 			query{kind: KindIssue, flags: []string{"--owner=" + owner}, reason: ReasonAllOpen})
 	}
+	for _, flags := range repoBatches(everythingRepos) {
+		queries = append(queries,
+			query{kind: KindPR, flags: flags, reason: ReasonAllOpen, skipMissing: true},
+			query{kind: KindIssue, flags: flags, reason: ReasonAllOpen, skipMissing: true})
+	}
 
 	byURL := map[string]*PR{}
 	var order []string
 	for _, q := range queries {
 		hits, err := b.search(ctx, q)
+		if err != nil && q.skipMissing && strings.Contains(err.Error(), repoSearchMissing) {
+			log.Printf("pr-babysitter: skipping unsearchable repos %v: %v", q.flags, err)
+			continue
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -150,6 +181,32 @@ func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 		out = append(out, *item)
 	}
 	return out, nil
+}
+
+// repoBatches groups owner/name repos into the --repo flags of one search each,
+// up to MaxEverythingRepoBatches, so the number of searches stays nearly fixed
+// however long the lists grow.
+func repoBatches(repos []string) [][]string {
+	slices.SortFunc(repos, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
+	var batches [][]string
+	var batch []string
+	chars := 0
+	for _, repo := range repos {
+		cost := len("repo: ") + len(repo)
+		if len(batch) > 0 && chars+cost > maxRepoBatchChars {
+			batches = append(batches, batch)
+			batch, chars = nil, 0
+		}
+		batch = append(batch, "--repo="+repo)
+		chars += cost
+	}
+	if len(batch) > 0 {
+		batches = append(batches, batch)
+	}
+	if len(batches) > MaxEverythingRepoBatches {
+		batches = batches[:MaxEverythingRepoBatches]
+	}
+	return batches
 }
 
 // involvement says how an --involves hit relates to the user.

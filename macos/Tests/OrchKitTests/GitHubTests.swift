@@ -28,6 +28,9 @@ import Testing
         #expect(GitHubScope(owner: "o", isUser: false, repoMode: .include, repos: ["a", "b"]).coverage == "Involving me · 2 repos")
         #expect(GitHubScope(owner: "o", isUser: false, repoMode: .exclude, repos: ["a"]).coverage == "Involving me · all but 1 repo")
         #expect(GitHubScope(owner: "o", isUser: false, repoMode: .exclude, repos: ["a", "b"]).coverage == "Involving me · all but 2 repos")
+        #expect(GitHubScope(owner: "o", isUser: false, everythingRepos: ["a"]).coverage == "Involving me + everything in 1 repo · all repos")
+        #expect(GitHubScope(owner: "o", isUser: false, everythingRepos: ["a", "b"]).coverage == "Involving me + everything in 2 repos · all repos")
+        #expect(GitHubScope(owner: "o", isUser: false, items: .all, everythingRepos: ["a"]).coverage == "Everything open · all repos", "the list adds nothing to Everything open")
     }
 
     @Test func labelsAndOwners() {
@@ -228,6 +231,18 @@ private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: T
         #expect(model.scopes[1].repoMode == .include && model.scopes[1].repos == ["api", "web"])
         await model.setRepos("WippData", mode: .exclude, repos: [])
         #expect(model.scopes[1].repoMode == .all && model.scopes[1].repos.isEmpty)
+    }
+
+    @Test func everythingReposAreSortedSentAndCleared() async {
+        let api = FakeGitHub()
+        let model = GitHubModel(api: api)
+        await model.refresh()
+        await model.setEverythingRepos("WippData", repos: ["web", "api", "web"])
+        #expect(model.scopes[1].everythingRepos == ["api", "web"] && api.sets.last?.everythingRepos == ["api", "web"])
+        await model.setItems("WippData", .all)
+        #expect(api.sets.last?.everythingRepos == ["api", "web"], "switching to Everything open keeps the list")
+        await model.setEverythingRepos("WippData", repos: [])
+        #expect(model.scopes[1].everythingRepos.isEmpty)
     }
 
     @Test func failedChangeKeepsTheScopeAndSaysSo() async {

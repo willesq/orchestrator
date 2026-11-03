@@ -87,14 +87,19 @@ func printScopes(w io.Writer, resp *orchdv1.ListGitHubScopesResponse) {
 }
 
 func describeRepos(s *orchdv1.GitHubScope) string {
+	var out string
 	switch s.GetRepoMode() {
 	case github.ReposInclude:
-		return "repos: only " + strings.Join(s.GetRepos(), ", ")
+		out = "repos: only " + strings.Join(s.GetRepos(), ", ")
 	case github.ReposExclude:
-		return "repos: all but " + strings.Join(s.GetRepos(), ", ")
+		out = "repos: all but " + strings.Join(s.GetRepos(), ", ")
 	default:
-		return "repos: all"
+		out = "repos: all"
 	}
+	if s.GetItems() == github.ItemsInvolving && len(s.GetEverythingRepos()) > 0 {
+		out += "; everything in " + strings.Join(s.GetEverythingRepos(), ", ")
+	}
+	return out
 }
 
 // findScope returns the stored scope for owner, so a change keeps the rest.
@@ -113,7 +118,7 @@ func findScope(ctx context.Context, client orchdv1.OrchdClient, owner string) (*
 
 func newGitHubEnableCmd(cf clientFactory) *cobra.Command {
 	var allItems bool
-	var include, exclude []string
+	var include, exclude, everythingIn []string
 	cmd := &cobra.Command{
 		Use:   "enable <owner>",
 		Short: "Monitor an account or org (all repos you can see, unless narrowed)",
@@ -136,6 +141,11 @@ func newGitHubEnableCmd(cf clientFactory) *cobra.Command {
 				case len(exclude) > 0:
 					scope.RepoMode, scope.Repos = github.ReposExclude, exclude
 				}
+				// Unlike the repo picks, the list survives --all-items, so
+				// switching back to involving restores it.
+				if c.Flags().Changed("everything-in") {
+					scope.EverythingRepos = everythingIn
+				}
 				resp, err := client.SetGitHubScope(ctx, &orchdv1.SetGitHubScopeRequest{Scope: scope})
 				if err != nil {
 					return err
@@ -149,7 +159,9 @@ func newGitHubEnableCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().BoolVar(&allItems, "all-items", false, "every open PR and issue, not only those involving you")
 	cmd.Flags().StringSliceVar(&include, "include", nil, "only these repos (comma-separated names)")
 	cmd.Flags().StringSliceVar(&exclude, "exclude", nil, "every repo but these (comma-separated names)")
+	cmd.Flags().StringSliceVar(&everythingIn, "everything-in", nil, "also every open PR and issue in these repos (comma-separated names)")
 	cmd.MarkFlagsMutuallyExclusive("include", "exclude")
+	cmd.MarkFlagsMutuallyExclusive("all-items", "everything-in")
 	return cmd
 }
 

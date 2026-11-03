@@ -11,7 +11,7 @@ const (
 	ReasonAssigned        = "assigned"         // the user is an assignee
 	ReasonInvolved        = "involved"         // the user is mentioned or commented
 	ReasonReviewRequested = "review_requested" // of the user, or a team they are on
-	ReasonAllOpen         = "all_open"         // open in a scope watched for everything
+	ReasonAllOpen         = "all_open"         // open in a scope or repo watched for everything
 )
 
 // Why a PR needs the user now, in priority order.

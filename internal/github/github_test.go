@@ -47,6 +47,8 @@ func TestValidate(t *testing.T) {
 		{"all with repos", func(s *Scope) { s.Repos = []string{"api"} }, "takes no repos"},
 		{"include without repos", func(s *Scope) { s.RepoMode = ReposInclude }, "needs at least one repo"},
 		{"bad repo name", func(s *Scope) { s.RepoMode, s.Repos = ReposExclude, []string{"../etc"} }, "invalid repo name"},
+		{"valid everything repos", func(s *Scope) { s.EverythingRepos = []string{"api"} }, ""},
+		{"bad everything repo", func(s *Scope) { s.EverythingRepos = []string{".."} }, "invalid repo name"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -74,6 +76,11 @@ func TestWatches(t *testing.T) {
 		{"include miss", withRepos(base, ReposInclude, "web"), "api", false},
 		{"exclude hit", withRepos(base, ReposExclude, "api"), "api", false},
 		{"exclude miss", withRepos(base, ReposExclude, "web"), "api", true},
+		{"listed for everything outranks include", withEverything(withRepos(base, ReposInclude, "web"), "API"), "api", true},
+		{"listed for everything outranks exclude", withEverything(withRepos(base, ReposExclude, "api"), "api"), "api", true},
+		{"unlisted repo still follows the picks", withEverything(withRepos(base, ReposInclude, "web"), "docs"), "api", false},
+		{"list ignored while items is all", withEverything(func() Scope { s := withRepos(base, ReposInclude, "web"); s.Items = ItemsAll; return s }(), "api"), "api", false},
+		{"list ignored while disabled", Scope{Enabled: false, Items: ItemsInvolving, RepoMode: ReposAll, EverythingRepos: []string{"api"}}, "api", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -82,6 +89,11 @@ func TestWatches(t *testing.T) {
 			}
 		})
 	}
+}
+
+func withEverything(s Scope, repos ...string) Scope {
+	s.EverythingRepos = repos
+	return s
 }
 
 func withRepos(s Scope, mode string, repos ...string) Scope {
@@ -115,7 +127,7 @@ func TestSyncCreatesDefaultsAndKeepsChoices(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := st.Set(ctx, Scope{Owner: "WippData", Kind: KindOrg, Enabled: true, Items: ItemsAll,
-		RepoMode: ReposInclude, Repos: []string{" web ", "api", "API", ""}}); err != nil {
+		RepoMode: ReposInclude, Repos: []string{" web ", "api", "API", ""}, EverythingRepos: []string{" docs ", "DOCS", "site"}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.Sync(ctx, id); err != nil {
@@ -126,7 +138,8 @@ func TestSyncCreatesDefaultsAndKeepsChoices(t *testing.T) {
 	if me.Enabled {
 		t.Error("rediscovery re-enabled the user's account")
 	}
-	if !org.Enabled || org.Items != ItemsAll || !slices.Equal(org.Repos, []string{"api", "web"}) {
+	if !org.Enabled || org.Items != ItemsAll || !slices.Equal(org.Repos, []string{"api", "web"}) ||
+		!slices.Equal(org.EverythingRepos, []string{"docs", "site"}) {
 		t.Errorf("org scope after rediscovery = %+v", org)
 	}
 	if org.UpdatedAt != 1_800_000_000 {

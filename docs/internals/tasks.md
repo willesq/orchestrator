@@ -301,7 +301,10 @@ Codex runs have no such transcript, and show as unavailable.
   - an `items` mode: `involving` (authored, assigned, mentioned, or review requested of the user or
     their team) or `all` (every open PR and issue);
   - a repo mode: `all` (every repo the user can see), `include` (only the listed repos) or
-    `exclude` (all but the listed repos).
+    `exclude` (all but the listed repos);
+  - a list of repos watched for everything (`everything_repos`), on top of what involves the user.
+    A listed repo counts whatever the repo mode says. The list is kept but ignored while `items` is
+    `all`.
 - **Who can change them:** clients change scopes only through `SetGitHubScope`, which accepts only
   discovered accounts. `orch github` and the menu bar app's GitHub tab both use these RPCs.
 - **Guards:**
@@ -334,6 +337,12 @@ The `pr-babysitter` unit watches the user's enabled GitHub scopes for open PRs a
 - A scope watched for everything adds `--owner=<scope>` searches for its PRs and issues. At most 5
   such scopes are searched (alphabetically); further ones are watched only for items involving the
   user.
+- Repos watched for everything add `--repo=<owner>/<repo>` searches for their PRs and issues, batched
+  to stay under GitHub's 256-character query limit. At most 5 batches are searched (alphabetically);
+  further repos are watched only for items involving the user. Each search still returns at most 100
+  items, so a busy repo can push a quieter one in its batch past the limit. GitHub ignores a missing
+  repo in a batch, and a batch with only missing repos is skipped, so a deleted repo cannot stop the
+  sweep.
 - Every search asks for open items, newest first, at most 100 each. That keeps the number of
   searches nearly fixed against GitHub's limit of 30 a minute.
 - Hits outside the enabled scopes, or excluded by a scope's repo picks, are dropped. So the tray and

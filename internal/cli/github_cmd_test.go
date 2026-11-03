@@ -84,6 +84,42 @@ func TestGitHubEnableAndDisable(t *testing.T) {
 	}
 }
 
+func TestGitHubEverythingIn(t *testing.T) {
+	withFakeGitHub(t)
+	out, err := run(factory(&fakeClient{}, nil), "", "github", "enable", "WippData", "--everything-in", "api,site")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "everything in api, site") {
+		t.Errorf("output = %q", out)
+	}
+	if got := fakeGitHub.set[0]; got.GetItems() != "involving" || !slices.Equal(got.GetEverythingRepos(), []string{"api", "site"}) {
+		t.Errorf("sent %+v", got)
+	}
+
+	withFakeGitHub(t)
+	fakeGitHub.scopes.Scopes[1].EverythingRepos = []string{"api"}
+	if out, err := run(factory(&fakeClient{}, nil), "", "github", "disable", "WippData"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if got := fakeGitHub.set[0]; !slices.Equal(got.GetEverythingRepos(), []string{"api"}) {
+		t.Errorf("disable lost the list: %+v", got)
+	}
+
+	withFakeGitHub(t)
+	fakeGitHub.scopes.Scopes[1].EverythingRepos = []string{"api"}
+	if out, err := run(factory(&fakeClient{}, nil), "", "github", "enable", "WippData", "--all-items"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if got := fakeGitHub.set[0]; got.GetItems() != "all" || !slices.Equal(got.GetEverythingRepos(), []string{"api"}) {
+		t.Errorf("--all-items lost the list: %+v", got)
+	}
+
+	if _, err := run(factory(&fakeClient{}, nil), "", "github", "enable", "WippData", "--all-items", "--everything-in", "api"); err == nil {
+		t.Error("--all-items with --everything-in accepted")
+	}
+}
+
 func TestGitHubEnableErrors(t *testing.T) {
 	withFakeGitHub(t)
 	if _, err := run(factory(&fakeClient{}, nil), "", "github", "enable", "nobody"); err == nil || !strings.Contains(err.Error(), "not your account") {

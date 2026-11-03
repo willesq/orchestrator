@@ -573,6 +573,9 @@ message GitHubScope {
   string repo_mode = 5; // all | include | exclude
   repeated string repos = 6; // repo names within owner, for include/exclude
   int64 updated_at = 7; // unix seconds
+  // repo names within owner watched for every open item while items is
+  // involving; kept but ignored while items is all
+  repeated string everything_repos = 8;
 }
 
 message SetGitHubScopeRequest {
