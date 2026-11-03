@@ -301,6 +301,12 @@ private struct RepoChecklist: View {
                 .toggleStyle(.checkbox)
             }
             .frame(minHeight: 260)
+            if let error = model.repoError(owner) {
+                HStack {
+                    Text(verbatim: "Could not update this list: \(error)").font(.caption).foregroundStyle(.red)
+                    Button("Retry") { Task { await model.loadRepos(owner) } }
+                }
+            }
         } else if let error = model.repoError(owner) {
             VStack(spacing: 8) {
                 Text(verbatim: "Could not load repos: \(error)").foregroundStyle(.red)

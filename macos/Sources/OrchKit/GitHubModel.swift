@@ -200,15 +200,17 @@ public final class GitHubModel {
         }
     }
 
-    /// Loads the repos the user can see under owner, once; after a failure, a
-    /// later call tries again.
+    /// Loads the repos the user can see under owner. Every picker that opens
+    /// asks again, so a repo made since the last look shows up; the list already
+    /// on screen stays while that runs and if it fails.
     public func loadRepos(_ owner: String) async {
         let key = owner.lowercased()
-        guard repos[key] == nil else { return }
         repoErrors[key] = nil
         do {
             repos[key] = try await api.gitHubRepos(owner: owner)
         } catch {
+            // Closing the sheet cancels the load; that is not a failure to show.
+            if Task.isCancelled { return }
             repoErrors[key] = DaemonMonitor.describe(error)
         }
     }
