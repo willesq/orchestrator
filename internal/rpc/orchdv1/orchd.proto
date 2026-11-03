@@ -88,6 +88,9 @@ service Orchd {
   // (auto), or the drafted comment once, now (comment). The PR is checked
   // within seconds.
   rpc WatchPRReview(WatchPRReviewRequest) returns (PRReview);
+  // SetPRReviewUpdateInPlace changes whether a later comment edits orch's
+  // earlier one on a watched PR, and nothing else: it never posts or reviews.
+  rpc SetPRReviewUpdateInPlace(SetPRReviewUpdateInPlaceRequest) returns (PRReview);
   // StopPRReview stops watching a PR; forget also deletes its verdict.
   rpc StopPRReview(StopPRReviewRequest) returns (StopPRReviewResponse);
   // GetPRDetail reads one PR's metadata from GitHub (one gh call), cached for
@@ -988,7 +991,7 @@ message PRReview {
   string verdict = 9;       // approve | wait | changes; empty before the first
   string reason = 10;
   string comment = 11;      // the drafted review comment
-  string posted = 12;       // approved | commented | failed, for head_sha; empty when nothing
+  string posted = 12;       // approved | commented | failed | none, for head_sha; empty when nothing yet
   string note = 13;         // the last problem, or why nothing was posted
   int64 created_at = 14;    // unix seconds
   int64 updated_at = 15;
@@ -1004,6 +1007,8 @@ message PRReview {
   // only, never posted
   string for_user = 21;
   string report = 22;
+  // a later comment edits orch's earlier one on the PR rather than adding another
+  bool update_in_place = 23;
 }
 
 message WatchPRReviewRequest {
@@ -1018,6 +1023,14 @@ message WatchPRReviewRequest {
   // review the next ready commit even though its author is not the repo's
   // owner, a member or a collaborator (whose PRs are otherwise held)
   bool review_anyway = 7;
+  // replace whether a later comment edits orch's earlier one on the PR
+  bool set_update_in_place = 8;
+  bool update_in_place = 9;
+}
+
+message SetPRReviewUpdateInPlaceRequest {
+  string url = 1;
+  bool update_in_place = 2;
 }
 
 message StopPRReviewRequest {

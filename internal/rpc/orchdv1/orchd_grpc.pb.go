@@ -19,59 +19,60 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Orchd_Ping_FullMethodName                  = "/orchd.v1.Orchd/Ping"
-	Orchd_Ingest_FullMethodName                = "/orchd.v1.Orchd/Ingest"
-	Orchd_Search_FullMethodName                = "/orchd.v1.Orchd/Search"
-	Orchd_ListSources_FullMethodName           = "/orchd.v1.Orchd/ListSources"
-	Orchd_DeleteSource_FullMethodName          = "/orchd.v1.Orchd/DeleteSource"
-	Orchd_Dispatch_FullMethodName              = "/orchd.v1.Orchd/Dispatch"
-	Orchd_ListTasks_FullMethodName             = "/orchd.v1.Orchd/ListTasks"
-	Orchd_GetTask_FullMethodName               = "/orchd.v1.Orchd/GetTask"
-	Orchd_Status_FullMethodName                = "/orchd.v1.Orchd/Status"
-	Orchd_Restart_FullMethodName               = "/orchd.v1.Orchd/Restart"
-	Orchd_SummarizeSession_FullMethodName      = "/orchd.v1.Orchd/SummarizeSession"
-	Orchd_RecommendModel_FullMethodName        = "/orchd.v1.Orchd/RecommendModel"
-	Orchd_RateTask_FullMethodName              = "/orchd.v1.Orchd/RateTask"
-	Orchd_RetryTask_FullMethodName             = "/orchd.v1.Orchd/RetryTask"
-	Orchd_CancelTask_FullMethodName            = "/orchd.v1.Orchd/CancelTask"
-	Orchd_WatchTasks_FullMethodName            = "/orchd.v1.Orchd/WatchTasks"
-	Orchd_MigrateHybrid_FullMethodName         = "/orchd.v1.Orchd/MigrateHybrid"
-	Orchd_DropBackup_FullMethodName            = "/orchd.v1.Orchd/DropBackup"
-	Orchd_ReindexKeywords_FullMethodName       = "/orchd.v1.Orchd/ReindexKeywords"
-	Orchd_BackfillSessions_FullMethodName      = "/orchd.v1.Orchd/BackfillSessions"
-	Orchd_ListPRs_FullMethodName               = "/orchd.v1.Orchd/ListPRs"
-	Orchd_GetGitHubIdentity_FullMethodName     = "/orchd.v1.Orchd/GetGitHubIdentity"
-	Orchd_ListGitHubScopes_FullMethodName      = "/orchd.v1.Orchd/ListGitHubScopes"
-	Orchd_SetGitHubScope_FullMethodName        = "/orchd.v1.Orchd/SetGitHubScope"
-	Orchd_ListGitHubRepos_FullMethodName       = "/orchd.v1.Orchd/ListGitHubRepos"
-	Orchd_ListGitHubItems_FullMethodName       = "/orchd.v1.Orchd/ListGitHubItems"
-	Orchd_RequestGitHubSweep_FullMethodName    = "/orchd.v1.Orchd/RequestGitHubSweep"
-	Orchd_ListPRReviews_FullMethodName         = "/orchd.v1.Orchd/ListPRReviews"
-	Orchd_WatchPRReview_FullMethodName         = "/orchd.v1.Orchd/WatchPRReview"
-	Orchd_StopPRReview_FullMethodName          = "/orchd.v1.Orchd/StopPRReview"
-	Orchd_GetPRDetail_FullMethodName           = "/orchd.v1.Orchd/GetPRDetail"
-	Orchd_TailLogs_FullMethodName              = "/orchd.v1.Orchd/TailLogs"
-	Orchd_GetSystemMetrics_FullMethodName      = "/orchd.v1.Orchd/GetSystemMetrics"
-	Orchd_ListDocs_FullMethodName              = "/orchd.v1.Orchd/ListDocs"
-	Orchd_GetDocument_FullMethodName           = "/orchd.v1.Orchd/GetDocument"
-	Orchd_SyncDocs_FullMethodName              = "/orchd.v1.Orchd/SyncDocs"
-	Orchd_GetDocsSync_FullMethodName           = "/orchd.v1.Orchd/GetDocsSync"
-	Orchd_ListRegisteredSources_FullMethodName = "/orchd.v1.Orchd/ListRegisteredSources"
-	Orchd_SaveSource_FullMethodName            = "/orchd.v1.Orchd/SaveSource"
-	Orchd_RemoveSource_FullMethodName          = "/orchd.v1.Orchd/RemoveSource"
-	Orchd_RefreshSource_FullMethodName         = "/orchd.v1.Orchd/RefreshSource"
-	Orchd_GetSafetyNet_FullMethodName          = "/orchd.v1.Orchd/GetSafetyNet"
-	Orchd_InstallSafetyNet_FullMethodName      = "/orchd.v1.Orchd/InstallSafetyNet"
-	Orchd_ListSettings_FullMethodName          = "/orchd.v1.Orchd/ListSettings"
-	Orchd_SetSettingEnabled_FullMethodName     = "/orchd.v1.Orchd/SetSettingEnabled"
-	Orchd_AddSetting_FullMethodName            = "/orchd.v1.Orchd/AddSetting"
-	Orchd_RemoveSetting_FullMethodName         = "/orchd.v1.Orchd/RemoveSetting"
-	Orchd_GetTaskActivity_FullMethodName       = "/orchd.v1.Orchd/GetTaskActivity"
-	Orchd_GetPRLanding_FullMethodName          = "/orchd.v1.Orchd/GetPRLanding"
-	Orchd_ListPRLandings_FullMethodName        = "/orchd.v1.Orchd/ListPRLandings"
-	Orchd_LandPR_FullMethodName                = "/orchd.v1.Orchd/LandPR"
-	Orchd_UndoPRLanding_FullMethodName         = "/orchd.v1.Orchd/UndoPRLanding"
-	Orchd_DiscardPRLanding_FullMethodName      = "/orchd.v1.Orchd/DiscardPRLanding"
+	Orchd_Ping_FullMethodName                     = "/orchd.v1.Orchd/Ping"
+	Orchd_Ingest_FullMethodName                   = "/orchd.v1.Orchd/Ingest"
+	Orchd_Search_FullMethodName                   = "/orchd.v1.Orchd/Search"
+	Orchd_ListSources_FullMethodName              = "/orchd.v1.Orchd/ListSources"
+	Orchd_DeleteSource_FullMethodName             = "/orchd.v1.Orchd/DeleteSource"
+	Orchd_Dispatch_FullMethodName                 = "/orchd.v1.Orchd/Dispatch"
+	Orchd_ListTasks_FullMethodName                = "/orchd.v1.Orchd/ListTasks"
+	Orchd_GetTask_FullMethodName                  = "/orchd.v1.Orchd/GetTask"
+	Orchd_Status_FullMethodName                   = "/orchd.v1.Orchd/Status"
+	Orchd_Restart_FullMethodName                  = "/orchd.v1.Orchd/Restart"
+	Orchd_SummarizeSession_FullMethodName         = "/orchd.v1.Orchd/SummarizeSession"
+	Orchd_RecommendModel_FullMethodName           = "/orchd.v1.Orchd/RecommendModel"
+	Orchd_RateTask_FullMethodName                 = "/orchd.v1.Orchd/RateTask"
+	Orchd_RetryTask_FullMethodName                = "/orchd.v1.Orchd/RetryTask"
+	Orchd_CancelTask_FullMethodName               = "/orchd.v1.Orchd/CancelTask"
+	Orchd_WatchTasks_FullMethodName               = "/orchd.v1.Orchd/WatchTasks"
+	Orchd_MigrateHybrid_FullMethodName            = "/orchd.v1.Orchd/MigrateHybrid"
+	Orchd_DropBackup_FullMethodName               = "/orchd.v1.Orchd/DropBackup"
+	Orchd_ReindexKeywords_FullMethodName          = "/orchd.v1.Orchd/ReindexKeywords"
+	Orchd_BackfillSessions_FullMethodName         = "/orchd.v1.Orchd/BackfillSessions"
+	Orchd_ListPRs_FullMethodName                  = "/orchd.v1.Orchd/ListPRs"
+	Orchd_GetGitHubIdentity_FullMethodName        = "/orchd.v1.Orchd/GetGitHubIdentity"
+	Orchd_ListGitHubScopes_FullMethodName         = "/orchd.v1.Orchd/ListGitHubScopes"
+	Orchd_SetGitHubScope_FullMethodName           = "/orchd.v1.Orchd/SetGitHubScope"
+	Orchd_ListGitHubRepos_FullMethodName          = "/orchd.v1.Orchd/ListGitHubRepos"
+	Orchd_ListGitHubItems_FullMethodName          = "/orchd.v1.Orchd/ListGitHubItems"
+	Orchd_RequestGitHubSweep_FullMethodName       = "/orchd.v1.Orchd/RequestGitHubSweep"
+	Orchd_ListPRReviews_FullMethodName            = "/orchd.v1.Orchd/ListPRReviews"
+	Orchd_WatchPRReview_FullMethodName            = "/orchd.v1.Orchd/WatchPRReview"
+	Orchd_SetPRReviewUpdateInPlace_FullMethodName = "/orchd.v1.Orchd/SetPRReviewUpdateInPlace"
+	Orchd_StopPRReview_FullMethodName             = "/orchd.v1.Orchd/StopPRReview"
+	Orchd_GetPRDetail_FullMethodName              = "/orchd.v1.Orchd/GetPRDetail"
+	Orchd_TailLogs_FullMethodName                 = "/orchd.v1.Orchd/TailLogs"
+	Orchd_GetSystemMetrics_FullMethodName         = "/orchd.v1.Orchd/GetSystemMetrics"
+	Orchd_ListDocs_FullMethodName                 = "/orchd.v1.Orchd/ListDocs"
+	Orchd_GetDocument_FullMethodName              = "/orchd.v1.Orchd/GetDocument"
+	Orchd_SyncDocs_FullMethodName                 = "/orchd.v1.Orchd/SyncDocs"
+	Orchd_GetDocsSync_FullMethodName              = "/orchd.v1.Orchd/GetDocsSync"
+	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
+	Orchd_SaveSource_FullMethodName               = "/orchd.v1.Orchd/SaveSource"
+	Orchd_RemoveSource_FullMethodName             = "/orchd.v1.Orchd/RemoveSource"
+	Orchd_RefreshSource_FullMethodName            = "/orchd.v1.Orchd/RefreshSource"
+	Orchd_GetSafetyNet_FullMethodName             = "/orchd.v1.Orchd/GetSafetyNet"
+	Orchd_InstallSafetyNet_FullMethodName         = "/orchd.v1.Orchd/InstallSafetyNet"
+	Orchd_ListSettings_FullMethodName             = "/orchd.v1.Orchd/ListSettings"
+	Orchd_SetSettingEnabled_FullMethodName        = "/orchd.v1.Orchd/SetSettingEnabled"
+	Orchd_AddSetting_FullMethodName               = "/orchd.v1.Orchd/AddSetting"
+	Orchd_RemoveSetting_FullMethodName            = "/orchd.v1.Orchd/RemoveSetting"
+	Orchd_GetTaskActivity_FullMethodName          = "/orchd.v1.Orchd/GetTaskActivity"
+	Orchd_GetPRLanding_FullMethodName             = "/orchd.v1.Orchd/GetPRLanding"
+	Orchd_ListPRLandings_FullMethodName           = "/orchd.v1.Orchd/ListPRLandings"
+	Orchd_LandPR_FullMethodName                   = "/orchd.v1.Orchd/LandPR"
+	Orchd_UndoPRLanding_FullMethodName            = "/orchd.v1.Orchd/UndoPRLanding"
+	Orchd_DiscardPRLanding_FullMethodName         = "/orchd.v1.Orchd/DiscardPRLanding"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -162,6 +163,9 @@ type OrchdClient interface {
 	// (auto), or the drafted comment once, now (comment). The PR is checked
 	// within seconds.
 	WatchPRReview(ctx context.Context, in *WatchPRReviewRequest, opts ...grpc.CallOption) (*PRReview, error)
+	// SetPRReviewUpdateInPlace changes whether a later comment edits orch's
+	// earlier one on a watched PR, and nothing else: it never posts or reviews.
+	SetPRReviewUpdateInPlace(ctx context.Context, in *SetPRReviewUpdateInPlaceRequest, opts ...grpc.CallOption) (*PRReview, error)
 	// StopPRReview stops watching a PR; forget also deletes its verdict.
 	StopPRReview(ctx context.Context, in *StopPRReviewRequest, opts ...grpc.CallOption) (*StopPRReviewResponse, error)
 	// GetPRDetail reads one PR's metadata from GitHub (one gh call), cached for
@@ -541,6 +545,16 @@ func (c *orchdClient) WatchPRReview(ctx context.Context, in *WatchPRReviewReques
 	return out, nil
 }
 
+func (c *orchdClient) SetPRReviewUpdateInPlace(ctx context.Context, in *SetPRReviewUpdateInPlaceRequest, opts ...grpc.CallOption) (*PRReview, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PRReview)
+	err := c.cc.Invoke(ctx, Orchd_SetPRReviewUpdateInPlace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) StopPRReview(ctx context.Context, in *StopPRReviewRequest, opts ...grpc.CallOption) (*StopPRReviewResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(StopPRReviewResponse)
@@ -869,6 +883,9 @@ type OrchdServer interface {
 	// (auto), or the drafted comment once, now (comment). The PR is checked
 	// within seconds.
 	WatchPRReview(context.Context, *WatchPRReviewRequest) (*PRReview, error)
+	// SetPRReviewUpdateInPlace changes whether a later comment edits orch's
+	// earlier one on a watched PR, and nothing else: it never posts or reviews.
+	SetPRReviewUpdateInPlace(context.Context, *SetPRReviewUpdateInPlaceRequest) (*PRReview, error)
 	// StopPRReview stops watching a PR; forget also deletes its verdict.
 	StopPRReview(context.Context, *StopPRReviewRequest) (*StopPRReviewResponse, error)
 	// GetPRDetail reads one PR's metadata from GitHub (one gh call), cached for
@@ -1035,6 +1052,9 @@ func (UnimplementedOrchdServer) ListPRReviews(context.Context, *ListPRReviewsReq
 }
 func (UnimplementedOrchdServer) WatchPRReview(context.Context, *WatchPRReviewRequest) (*PRReview, error) {
 	return nil, status.Error(codes.Unimplemented, "method WatchPRReview not implemented")
+}
+func (UnimplementedOrchdServer) SetPRReviewUpdateInPlace(context.Context, *SetPRReviewUpdateInPlaceRequest) (*PRReview, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetPRReviewUpdateInPlace not implemented")
 }
 func (UnimplementedOrchdServer) StopPRReview(context.Context, *StopPRReviewRequest) (*StopPRReviewResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method StopPRReview not implemented")
@@ -1644,6 +1664,24 @@ func _Orchd_WatchPRReview_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_SetPRReviewUpdateInPlace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetPRReviewUpdateInPlaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SetPRReviewUpdateInPlace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SetPRReviewUpdateInPlace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SetPRReviewUpdateInPlace(ctx, req.(*SetPRReviewUpdateInPlaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_StopPRReview_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StopPRReviewRequest)
 	if err := dec(in); err != nil {
@@ -2194,6 +2232,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WatchPRReview",
 			Handler:    _Orchd_WatchPRReview_Handler,
+		},
+		{
+			MethodName: "SetPRReviewUpdateInPlace",
+			Handler:    _Orchd_SetPRReviewUpdateInPlace_Handler,
 		},
 		{
 			MethodName: "StopPRReview",

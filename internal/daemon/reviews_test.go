@@ -237,3 +237,27 @@ func TestWatchPRReviewAnyway(t *testing.T) {
 		t.Fatalf("review anyway = %+v, %v", r, err)
 	}
 }
+
+func TestSetPRReviewUpdateInPlace(t *testing.T) {
+	s, _, _ := reviewsServer(t)
+	ctx := context.Background()
+	req := &orchdv1.SetPRReviewUpdateInPlaceRequest{Url: reviewURL, UpdateInPlace: true}
+	if _, err := s.SetPRReviewUpdateInPlace(ctx, req); grpcstatus.Code(err) != codes.NotFound {
+		t.Fatalf("unwatched: %v", err)
+	}
+	if _, err := s.WatchPRReview(ctx, &orchdv1.WatchPRReviewRequest{Url: reviewURL, Mode: "verdict"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.SetPRReviewUpdateInPlace(ctx, req)
+	if err != nil || !got.GetUpdateInPlace() {
+		t.Fatalf("%+v, %v", got, err)
+	}
+	w, err := s.WatchPRReview(ctx, &orchdv1.WatchPRReviewRequest{Url: reviewURL, Mode: "verdict"})
+	if err != nil || !w.GetUpdateInPlace() {
+		t.Fatalf("kept: %+v, %v", w, err)
+	}
+	w, err = s.WatchPRReview(ctx, &orchdv1.WatchPRReviewRequest{Url: reviewURL, Mode: "verdict", SetUpdateInPlace: true})
+	if err != nil || w.GetUpdateInPlace() {
+		t.Fatalf("set off: %+v, %v", w, err)
+	}
+}

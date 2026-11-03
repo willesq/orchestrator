@@ -354,7 +354,8 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
       nested too deeply to render safely.
     - **Review:** two permissions, which for a watched PR always show the mode orchd holds, "approve the PR, with its comment if it has one" (unavailable on
       your own PR) and "comment its suggestions when it does not approve"; both off means orch
-      asks you each time. **Notes for the reviewer** are added to the review prompt and never
+      asks you each time. A third box, **Update its earlier comment instead of adding another**,
+      is off by default and also applies to **Post comment**. **Notes for the reviewer** are added to the review prompt and never
       posted. **Review when
       ready** starts the watch (`WatchPRReview`).
     - **Held:** a PR by someone who is not the repo's owner, a member or a collaborator waits for

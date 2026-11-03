@@ -11,6 +11,7 @@ struct ReviewCard: View {
 
     @State private var mayApprove = false
     @State private var mayComment = false
+    @State private var updateInPlace = false
     @State private var draft = ""
     @State private var editingDraft = false
     @State private var showReport = false
@@ -60,7 +61,7 @@ struct ReviewCard: View {
                     Button("Review when ready") {
                         Task {
                             await prs.watch(url, mode: PRReviewMode(mayApprove: mayApprove && !ownPR, mayComment: mayComment),
-                                            instructions: instructions)
+                                            instructions: instructions, updateInPlace: updateInPlace)
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -75,6 +76,7 @@ struct ReviewCard: View {
         .onAppear { sync(review) }
         .onChange(of: review?.comment) { _, _ in draft = review?.comment ?? "" }
         .onChange(of: review?.instructions) { _, _ in instructions = review?.instructions ?? "" }
+        .onChange(of: review?.updateInPlace) { _, _ in updateInPlace = review?.updateInPlace ?? false }
         .task(id: review?.taskID) {
             // While a review runs, follow its task so the card can say how it goes.
             while !Task.isCancelled, prs.reviews.byURL[url]?.state == .reviewing {
@@ -105,6 +107,7 @@ struct ReviewCard: View {
     private func sync(_ review: PRReview?) {
         draft = review?.comment ?? ""
         instructions = review?.instructions ?? ""
+        updateInPlace = review?.updateInPlace ?? false
     }
 
     private func confirm(_ mode: PRReviewMode) {
@@ -141,6 +144,10 @@ struct ReviewCard: View {
             Toggle(isOn: Binding(get: { current.mayComment }, set: { set(approve: current.mayApprove, comment: $0, review) })) {
                 Text("Comment its suggestions when it does not approve")
             }
+            Toggle(isOn: Binding(get: { review?.updateInPlace ?? updateInPlace }, set: { setUpdateInPlace($0, review) })) {
+                Text("Update its earlier comment instead of adding another")
+            }
+            .help("Also applies to Post comment. An approving verdict updates the comment too, when orch may comment")
             Text(verbatim: "Orch will: \(current.explanation)").textStyle(.caption)
         }
         .toggleStyle(.checkbox)
@@ -161,6 +168,14 @@ struct ReviewCard: View {
         } else {
             Task { await prs.watch(url, mode: mode) }
         }
+    }
+
+    private func setUpdateInPlace(_ on: Bool, _ review: PRReview?) {
+        guard review != nil else {
+            updateInPlace = on
+            return
+        }
+        Task { await prs.setUpdateInPlace(url, on: on) }
     }
 
     /// Why an untrusted author's PR waits, and the user's go-ahead.

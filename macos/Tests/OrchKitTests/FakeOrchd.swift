@@ -306,6 +306,14 @@ struct FakeOrchdService: RegistrableRPCService {
             return StreamingServerResponse(single: ServerResponse(message: prReview))
         }
         router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.SetPRReviewUpdateInPlace.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_SetPRReviewUpdateInPlaceRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_PRReview>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: prReview))
+        }
+        router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.StopPRReview.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_StopPRReviewRequest>(),
             serializer: ProtobufSerializer<Orchd_V1_StopPRReviewResponse>()

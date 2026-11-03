@@ -110,23 +110,25 @@ func TestGHPostUpdatesItsCommentInPlace(t *testing.T) {
 		want                       []string // write paths, in order
 		wantInBody                 string
 	}{
-		{name: "first comment is added", event: "COMMENT", body: "fix it",
+		{name: "first comment is added", event: EventUpdate, body: "fix it",
 			want: []string{createPath}, wantInBody: "fix it"},
-		{name: "later comment edits it", event: "COMMENT", body: "new",
+		{name: "later comment edits it", event: EventUpdate, body: "new",
 			reviews: review(1, "COMMENTED", "me", mine), want: []string{editPath(1)}, wantInBody: "new"},
-		{name: "login case does not matter", event: "COMMENT", body: "new",
+		{name: "login case does not matter", event: EventUpdate, body: "new",
 			reviews: review(1, "COMMENTED", "ME", mine), want: []string{editPath(1)}, wantInBody: "new"},
-		{name: "newest of several", event: "COMMENT", body: "new",
+		{name: "newest of several", event: EventUpdate, body: "new",
 			reviews: review(1, "COMMENTED", "me", mine) + review(2, "COMMENTED", "me", mine),
 			want:    []string{editPath(2)}, wantInBody: "new"},
-		{name: "someone else's marker does not count", event: "COMMENT", body: "new",
+		{name: "someone else's marker does not count", event: EventUpdate, body: "new",
 			reviews: review(1, "COMMENTED", "mallory", mine), want: []string{createPath}, wantInBody: "new"},
-		{name: "the user's own review does not count", event: "COMMENT", body: "new",
+		{name: "the user's own review does not count", event: EventUpdate, body: "new",
 			reviews: review(1, "COMMENTED", "me", "by hand"), want: []string{createPath}, wantInBody: "new"},
-		{name: "a quoted marker does not count", event: "COMMENT", body: "new",
+		{name: "a quoted marker does not count", event: EventUpdate, body: "new",
 			reviews: review(1, "COMMENTED", "me", "see "+commentMarker), want: []string{createPath}, wantInBody: "new"},
-		{name: "an approval is not edited", event: "COMMENT", body: "new",
+		{name: "an approval is not edited", event: EventUpdate, body: "new",
 			reviews: review(1, "APPROVED", "me", mine), want: []string{createPath}, wantInBody: "new"},
+		{name: "a plain comment always adds", event: "COMMENT", body: "new",
+			reviews: review(1, "COMMENTED", "me", mine), want: []string{createPath}, wantInBody: "new"},
 		{name: "refresh with nothing to refresh adds none", event: EventRefresh, body: "ok", wantErr: ErrNoComment},
 		{name: "refresh edits", event: EventRefresh, body: "ok",
 			reviews: review(1, "COMMENTED", "me", mine), want: []string{editPath(1)}, wantInBody: "ok"},
@@ -171,7 +173,7 @@ func TestGHPostNeverDuplicatesWhenItCannotLook(t *testing.T) {
 	ctx := context.Background()
 	for _, failing := range []string{"user", "--paginate"} {
 		calls := recordingGH(t, "", failing)
-		if err := GHPost(ctx, "a/b", 9, "COMMENT", shaA, "x"); err == nil || errors.Is(err, ErrNoComment) {
+		if err := GHPost(ctx, "a/b", 9, EventUpdate, shaA, "x"); err == nil || errors.Is(err, ErrNoComment) {
 			t.Fatalf("%s: err = %v", failing, err)
 		}
 		if w := writes(calls()); len(w) != 0 {
@@ -189,7 +191,7 @@ func TestGHPostNeverDuplicatesWhenItCannotLook(t *testing.T) {
 
 func TestGHPostFailedEditAddsNoComment(t *testing.T) {
 	calls := recordingGH(t, review(1, "COMMENTED", "me", mine), "PUT")
-	if err := GHPost(context.Background(), "a/b", 9, "COMMENT", shaA, "new"); err == nil {
+	if err := GHPost(context.Background(), "a/b", 9, EventUpdate, shaA, "new"); err == nil {
 		t.Fatal("a failed edit was not reported")
 	}
 	if w := writes(calls()); len(w) != 1 {

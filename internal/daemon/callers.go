@@ -81,10 +81,11 @@ var operatorActions = map[string]string{
 	orchdv1.Orchd_RequestGitHubSweep_FullMethodName: "ask orchd to search GitHub",
 	// Reason: a watch can approve PRs, and verdicts carry text drawn from
 	// other people's code, so neither belongs in a task's reach.
-	orchdv1.Orchd_WatchPRReview_FullMethodName: "change PR review watches",
-	orchdv1.Orchd_StopPRReview_FullMethodName:  "change PR review watches",
-	orchdv1.Orchd_ListPRReviews_FullMethodName: "read PR review verdicts",
-	orchdv1.Orchd_GetPRDetail_FullMethodName:   "read PR details through orchd (use gh)",
+	orchdv1.Orchd_WatchPRReview_FullMethodName:            "change PR review watches",
+	orchdv1.Orchd_SetPRReviewUpdateInPlace_FullMethodName: "change PR review watches",
+	orchdv1.Orchd_StopPRReview_FullMethodName:             "change PR review watches",
+	orchdv1.Orchd_ListPRReviews_FullMethodName:            "read PR review verdicts",
+	orchdv1.Orchd_GetPRDetail_FullMethodName:              "read PR details through orchd (use gh)",
 	// Reason: landing is the user's gate on what an agent proposed, so an
 	// agent must not reach it; a transcript may quote other tasks' secrets.
 	orchdv1.Orchd_GetTaskActivity_FullMethodName:  "read other sessions' activity",

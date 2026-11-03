@@ -56,7 +56,9 @@ type Watcher struct {
 	// posting holds PRs with a review on its way to GitHub; changes to them
 	// are refused until it lands, so what the user sees is what was posted.
 	posting map[string]bool
-	now     func() time.Time
+	// unrecorded holds, per PR, a commit posted to whose row could not say so.
+	unrecorded map[string]string
+	now        func() time.Time
 }
 
 func (w *Watcher) clock() time.Time {
@@ -91,12 +93,13 @@ func (w *Watcher) Watch(ctx context.Context, url, mode string, comment *string) 
 // reviews; nil keeps them. New notes on a PR that has a verdict or a failed
 // review review its current commit again with them.
 func (w *Watcher) WatchWith(ctx context.Context, url, mode string, comment, instructions *string) (Review, error) {
-	return w.WatchOpts(ctx, url, mode, comment, instructions, false)
+	return w.WatchOpts(ctx, url, mode, comment, instructions, false, nil)
 }
 
-// WatchOpts is WatchWith that can also give the go-ahead to review the next
+// WatchOpts is WatchWith that can also set whether later comments edit orch's
+// earlier one, and give the go-ahead to review the next
 // ready commit although its author is not trusted.
-func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, instructions *string, goAhead bool) (Review, error) {
+func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, instructions *string, goAhead bool, updateInPlace *bool) (Review, error) {
 	if !ValidMode(mode) {
 		return Review{}, fmt.Errorf("mode must be %s, %s, %s, %s or %s", ModeVerdict, ModeApprove, ModeComment, ModeFeedback, ModeAuto)
 	}
@@ -118,6 +121,9 @@ func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, inst
 	}
 	if goAhead {
 		r.GoAhead = true
+	}
+	if updateInPlace != nil {
+		r.UpdateInPlace = *updateInPlace
 	}
 	if r.Mode != mode {
 		// Who changed what orch may post, and when, is worth keeping.
@@ -151,6 +157,31 @@ func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, inst
 		return Review{}, err
 	}
 	w.markDue(url)
+	return r, nil
+}
+
+// SetUpdateInPlace changes whether later comments edit orch's earlier one on
+// the PR. It is a preference, not an ask: it never posts, retries or reviews.
+func (w *Watcher) SetUpdateInPlace(ctx context.Context, url string, on bool) (Review, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.posting[url] {
+		return Review{}, ErrPosting
+	}
+	r, found, err := w.Store.Get(ctx, url)
+	if err != nil {
+		return Review{}, err
+	}
+	if !found {
+		return Review{}, ErrNotFound
+	}
+	if r.UpdateInPlace != on {
+		log.Printf("pr-reviews: %s update in place is now %v", url, on)
+	}
+	r.UpdateInPlace = on
+	if err := w.Store.Put(ctx, &r); err != nil {
+		return Review{}, err
+	}
 	return r, nil
 }
 
@@ -429,20 +460,30 @@ func planComment(r Review) *posting {
 	switch r.Mode {
 	case ModeComment:
 		if r.Comment != "" {
-			return &posting{event: "COMMENT", commit: r.HeadSHA, posted: PostedCommented}
+			return &posting{event: commentEvent(r), commit: r.HeadSHA, posted: PostedCommented}
 		}
 	case ModeFeedback, ModeAuto:
 		if r.Verdict == VerdictApprove {
+			if !r.UpdateInPlace {
+				return nil
+			}
 			// Nothing new to raise, but an earlier comment must not keep
 			// asking for changes.
 			return &posting{event: EventRefresh, commit: r.HeadSHA, posted: PostedCommented}
 		}
 		if r.Comment != "" {
 			// Findings for the author to fix; the next push is reviewed again.
-			return &posting{event: "COMMENT", commit: r.HeadSHA, posted: PostedCommented}
+			return &posting{event: commentEvent(r), commit: r.HeadSHA, posted: PostedCommented}
 		}
 	}
 	return nil
+}
+
+func commentEvent(r Review) string {
+	if r.UpdateInPlace {
+		return EventUpdate
+	}
+	return "COMMENT"
 }
 
 // planStale decides what to post for a verdict on a commit the PR has moved
@@ -470,9 +511,14 @@ func (w *Watcher) send(ctx context.Context, url string, p posting) {
 	w.mu.Lock()
 	r, found, err := w.Store.Get(ctx, url)
 	if err != nil || !found || r.HeadSHA != p.commit || (r.State != StateVerdict && !(p.stale && r.Active())) ||
-		(p.event == "APPROVE" && !approves(r.Mode)) || (p.event != "APPROVE" && !comments(r.Mode)) {
+		(p.event == "APPROVE" && !approves(r.Mode)) || (p.event != "APPROVE" && !comments(r.Mode)) ||
+		(p.event == EventRefresh && !r.UpdateInPlace) || w.unrecorded[url] == p.commit {
 		w.mu.Unlock()
 		return
+	}
+	if p.event == "COMMENT" || p.event == EventUpdate {
+		// The plan may predate a change of the setting.
+		p.event = commentEvent(r)
 	}
 	if w.posting == nil {
 		w.posting = map[string]bool{}
@@ -481,7 +527,7 @@ func (w *Watcher) send(ctx context.Context, url string, p posting) {
 	w.mu.Unlock()
 
 	err = w.Post(ctx, r.Repo, r.Number, p.event, p.commit, r.Comment)
-	if err == nil && p.event == "APPROVE" && comments(r.Mode) {
+	if err == nil && p.event == "APPROVE" && comments(r.Mode) && r.UpdateInPlace {
 		// The approval stands either way, so a stale comment is not its failure.
 		if rerr := w.Post(ctx, r.Repo, r.Number, EventRefresh, p.commit, r.Comment); rerr != nil && !errors.Is(rerr, ErrNoComment) {
 			log.Printf("pr-reviews: update the comment on %s: %v", url, rerr)
@@ -491,9 +537,13 @@ func (w *Watcher) send(ctx context.Context, url string, p posting) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	delete(w.posting, url)
+	// What reached GitHub is recorded even during shutdown: a comment posted
+	// again would be a second comment.
+	ctx = context.WithoutCancel(ctx)
 	r, found, gerr := w.Store.Get(ctx, url)
 	if gerr != nil || !found {
 		log.Printf("pr-reviews: %s posted to %s but the row is gone: %v", p.event, url, gerr)
+		w.markUnrecorded(url, p.commit, err)
 		return
 	}
 	if errors.Is(err, ErrNoComment) {
@@ -513,7 +563,20 @@ func (w *Watcher) send(ctx context.Context, url string, p posting) {
 			r.Note = "comment posted; nothing more is posted unless you ask"
 		}
 	}
-	if err := w.Store.Put(ctx, &r); err != nil {
-		log.Printf("pr-reviews: record %s on %s: %v", p.event, url, err)
+	if perr := w.Store.Put(ctx, &r); perr != nil {
+		log.Printf("pr-reviews: record %s on %s: %v", p.event, url, perr)
+		w.markUnrecorded(url, p.commit, err)
 	}
+}
+
+// markUnrecorded stops commit being posted to url again this run, when the post
+// went out but the row does not say so. Call with w.mu held.
+func (w *Watcher) markUnrecorded(url, commit string, postErr error) {
+	if postErr != nil {
+		return
+	}
+	if w.unrecorded == nil {
+		w.unrecorded = map[string]string{}
+	}
+	w.unrecorded[url] = commit
 }

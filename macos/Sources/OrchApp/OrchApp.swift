@@ -186,9 +186,10 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
     func gitHubItems() async throws -> GitHubItemList { throw failure }
     func prReviews() async throws -> [PRReview] { throw failure }
     func watchPRReview(url: String, mode: PRReviewMode, comment: String?, instructions: String?,
-                       reviewAnyway: Bool) async throws -> PRReview {
+                       reviewAnyway: Bool, updateInPlace: Bool?) async throws -> PRReview {
         throw failure
     }
+    func setPRReviewUpdateInPlace(url: String, on: Bool) async throws -> PRReview { throw failure }
     func stopPRReview(url: String, forget: Bool) async throws { throw failure }
     func prDetail(url: String, refresh: Bool) async throws -> PRDetail { throw failure }
     func tailLogs(after: UInt64, limit: Int) async throws -> LogPage { throw failure }

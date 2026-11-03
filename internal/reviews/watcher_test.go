@@ -87,7 +87,7 @@ func newEnv(t *testing.T) (*fakeEnv, *Watcher) {
 			if event == EventRefresh && !e.commented {
 				return ErrNoComment
 			}
-			e.commented = e.commented || event == "COMMENT"
+			e.commented = e.commented || event == "COMMENT" || event == EventUpdate
 			e.posts = append(e.posts, posted{event, commit, body})
 			return e.postErr
 		},
@@ -646,7 +646,7 @@ func TestApproveNeedsCIForUntrustedAuthors(t *testing.T) {
 	e, w := newEnv(t)
 	ctx := context.Background()
 	e.pr.checks, e.pr.assoc = nil, "FIRST_TIME_CONTRIBUTOR"
-	_, _ = w.WatchOpts(ctx, testURL, ModeApprove, nil, nil, true)
+	_, _ = w.WatchOpts(ctx, testURL, ModeApprove, nil, nil, true, nil)
 	w.Tick(ctx)
 	finish(t, w, e, "task-1", VerdictApprove, "ok")
 	w.Tick(ctx)
@@ -703,16 +703,15 @@ func TestFeedbackCommentsOnlyWhenNotApproved(t *testing.T) {
 	if r := get(t, w); r.Mode != ModeFeedback || r.Posted != PostedCommented {
 		t.Fatalf("feedback mode not kept: %+v", r)
 	}
-	// The author pushes a fix; the next review approves, and only the earlier
-	// comment changes.
+	// The author pushes a fix; the next review approves, and feedback posts nothing.
 	e.pr.head = shaB
 	w.markDue(testURL)
 	w.Tick(ctx)
 	finish(t, w, e, "task-2", VerdictApprove, "looks right now")
 	w.Tick(ctx)
 	w.Tick(ctx)
-	if len(e.posts) != 2 || e.posts[1] != (posted{EventRefresh, shaB, "looks right now"}) {
-		t.Fatalf("feedback on approve: %+v", e.posts)
+	if len(e.posts) != 1 {
+		t.Fatalf("feedback mode posted on approve: %+v", e.posts)
 	}
 }
 
@@ -730,8 +729,8 @@ func TestAutoApprovesOrComments(t *testing.T) {
 	finish(t, w, e, "task-2", VerdictApprove, "nice")
 	w.Tick(ctx)
 	w.Tick(ctx)
-	want := []posted{{"COMMENT", shaA, "consider a test"}, {"APPROVE", shaB, "nice"}, {EventRefresh, shaB, "nice"}}
-	if len(e.posts) != 3 || e.posts[0] != want[0] || e.posts[1] != want[1] || e.posts[2] != want[2] {
+	want := []posted{{"COMMENT", shaA, "consider a test"}, {"APPROVE", shaB, "nice"}}
+	if len(e.posts) != 2 || e.posts[0] != want[0] || e.posts[1] != want[1] {
 		t.Fatalf("auto posts = %+v", e.posts)
 	}
 	if !ValidMode(ModeAuto) || !ValidMode(ModeFeedback) {
@@ -806,7 +805,7 @@ func TestUntrustedAuthorIsHeldUntilGoAhead(t *testing.T) {
 		t.Fatal("ran without a go-ahead")
 	}
 	// The go-ahead covers one review.
-	_, _ = w.WatchOpts(ctx, testURL, ModeVerdict, nil, nil, true)
+	_, _ = w.WatchOpts(ctx, testURL, ModeVerdict, nil, nil, true, nil)
 	w.Tick(ctx)
 	if r := get(t, w); len(e.dispatched) != 1 || r.GoAhead || r.State != StateReviewing {
 		t.Fatalf("go-ahead: %+v", r)
@@ -962,10 +961,87 @@ func TestStaleVerdictIsStillPosted(t *testing.T) {
 	})
 }
 
+// watchInPlace starts a watch with later comments editing the earlier one.
+func watchInPlace(t *testing.T, w *Watcher, mode string) {
+	t.Helper()
+	on := true
+	if _, err := w.WatchOpts(context.Background(), testURL, mode, nil, nil, false, &on); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUpdateInPlaceChoosesHowCommentsPost(t *testing.T) {
+	ctx := context.Background()
+	run := func(t *testing.T, inPlace bool) *fakeEnv {
+		t.Helper()
+		e, w := newEnv(t)
+		_, err := w.WatchOpts(ctx, testURL, ModeFeedback, nil, nil, false, &inPlace)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.Tick(ctx)
+		finish(t, w, e, "task-1", VerdictChanges, "first")
+		w.Tick(ctx)
+		w.Tick(ctx)
+		e.pr.head = shaB
+		w.markDue(testURL)
+		w.Tick(ctx)
+		finish(t, w, e, "task-2", VerdictChanges, "second")
+		w.Tick(ctx)
+		w.Tick(ctx)
+		e.pr.head = shaC
+		w.markDue(testURL)
+		w.Tick(ctx)
+		finish(t, w, e, "task-3", VerdictApprove, "good")
+		w.Tick(ctx)
+		w.Tick(ctx)
+		return e
+	}
+	t.Run("off adds a comment per verdict and leaves them", func(t *testing.T) {
+		e := run(t, false)
+		want := []posted{{"COMMENT", shaA, "first"}, {"COMMENT", shaB, "second"}}
+		if len(e.posts) != 2 || e.posts[0] != want[0] || e.posts[1] != want[1] {
+			t.Fatalf("posts = %+v", e.posts)
+		}
+	})
+	t.Run("on updates the comment, also when the verdict approves", func(t *testing.T) {
+		e := run(t, true)
+		want := []posted{{EventUpdate, shaA, "first"}, {EventUpdate, shaB, "second"}, {EventRefresh, shaC, "good"}}
+		if len(e.posts) != 3 || e.posts[0] != want[0] || e.posts[1] != want[1] || e.posts[2] != want[2] {
+			t.Fatalf("posts = %+v", e.posts)
+		}
+	})
+	t.Run("post comment follows it", func(t *testing.T) {
+		e, w := newEnv(t)
+		watchInPlace(t, w, ModeVerdict)
+		w.Tick(ctx)
+		finish(t, w, e, "task-1", VerdictChanges, "first")
+		w.Tick(ctx)
+		_, _ = w.Watch(ctx, testURL, ModeComment, nil)
+		w.Tick(ctx)
+		if len(e.posts) != 1 || e.posts[0] != (posted{EventUpdate, shaA, "first"}) {
+			t.Fatalf("posts = %+v", e.posts)
+		}
+	})
+	t.Run("kept when not given, and can be turned off", func(t *testing.T) {
+		_, w := newEnv(t)
+		watchInPlace(t, w, ModeFeedback)
+		_, _ = w.Watch(ctx, testURL, ModeAuto, nil)
+		if r := get(t, w); !r.UpdateInPlace {
+			t.Fatalf("not kept: %+v", r)
+		}
+		off := false
+		_, _ = w.WatchOpts(ctx, testURL, ModeAuto, nil, nil, false, &off)
+		if r := get(t, w); r.UpdateInPlace {
+			t.Fatalf("not turned off: %+v", r)
+		}
+	})
+}
+
 func TestApproveWithNoEarlierCommentAddsNone(t *testing.T) {
 	e, w := newEnv(t)
 	ctx := context.Background()
-	_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)
+	watchInPlace(t, w, ModeFeedback)
 	w.Tick(ctx)
 	finish(t, w, e, "task-1", VerdictApprove, "good")
 	calls := 0
@@ -984,7 +1060,7 @@ func TestApproveWithNoEarlierCommentAddsNone(t *testing.T) {
 	// The user's own "Post comment" still posts.
 	_, _ = w.Watch(ctx, testURL, ModeComment, nil)
 	w.Tick(ctx)
-	if r := get(t, w); len(e.posts) != 1 || e.posts[0] != (posted{"COMMENT", shaA, "good"}) || r.Posted != PostedCommented {
+	if r := get(t, w); len(e.posts) != 1 || e.posts[0] != (posted{EventUpdate, shaA, "good"}) || r.Posted != PostedCommented {
 		t.Fatalf("posts %+v, %+v", e.posts, r)
 	}
 }
@@ -993,7 +1069,7 @@ func TestApproveLeavesTheCommentAloneWithoutCommentPermission(t *testing.T) {
 	e, w := newEnv(t)
 	ctx := context.Background()
 	e.commented = true // an earlier comment the user asked for
-	_, _ = w.Watch(ctx, testURL, ModeApprove, nil)
+	watchInPlace(t, w, ModeApprove)
 	w.Tick(ctx)
 	finish(t, w, e, "task-1", VerdictApprove, "good")
 	w.Tick(ctx)
@@ -1006,7 +1082,7 @@ func TestApproveLeavesTheCommentAloneWithoutCommentPermission(t *testing.T) {
 func TestApprovalStandsIfTheCommentUpdateFails(t *testing.T) {
 	e, w := newEnv(t)
 	ctx := context.Background()
-	_, _ = w.Watch(ctx, testURL, ModeAuto, nil)
+	watchInPlace(t, w, ModeAuto)
 	w.Tick(ctx)
 	finish(t, w, e, "task-1", VerdictApprove, "good")
 	post := w.Post
@@ -1026,7 +1102,7 @@ func TestApprovalStandsIfTheCommentUpdateFails(t *testing.T) {
 func TestStaleApprovalKeepsEarlierFindings(t *testing.T) {
 	e, w := newEnv(t)
 	ctx := context.Background()
-	_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)
+	watchInPlace(t, w, ModeFeedback)
 	w.Tick(ctx)
 	finish(t, w, e, "task-1", VerdictChanges, "fix it")
 	w.Tick(ctx)
@@ -1061,5 +1137,150 @@ func TestStopBlocksAStalePostAlreadyPlanned(t *testing.T) {
 	w.send(ctx, testURL, *post)
 	if len(e.posts) != 0 {
 		t.Fatalf("posted after stop: %+v", e.posts)
+	}
+}
+
+func TestSetUpdateInPlaceOnlyChangesTheSetting(t *testing.T) {
+	ctx := context.Background()
+	_, unwatched := newEnv(t)
+	if _, err := unwatched.SetUpdateInPlace(ctx, testURL, true); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("an unwatched PR: %v", err)
+	}
+	tests := []struct {
+		name    string
+		prepare func(r *Review)
+	}{
+		{"posted comment", func(r *Review) { r.Posted = PostedCommented }},
+		{"failed post", func(r *Review) { r.Posted = PostedFailed }},
+		{"failed review", func(r *Review) { r.State, r.Verdict = StateFailed, "" }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e, w := newEnv(t)
+			_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)
+			w.Tick(ctx)
+			finish(t, w, e, "task-1", VerdictChanges, "fix it")
+			w.Post = func(context.Context, string, int, string, string, string) error { return nil }
+			w.Tick(ctx)
+			w.Tick(ctx)
+			w.update(ctx, testURL, func(r *Review) bool { tt.prepare(r); return true })
+			before := get(t, w)
+			dispatched := len(e.dispatched)
+			w.Post = func(context.Context, string, int, string, string, string) error { t.Fatal("posted"); return nil }
+			if _, err := w.SetUpdateInPlace(ctx, testURL, true); err != nil {
+				t.Fatal(err)
+			}
+			w.markDue(testURL)
+			w.Tick(ctx)
+			after := get(t, w)
+			if !after.UpdateInPlace || after.Posted != before.Posted || after.HeadSHA != before.HeadSHA ||
+				after.State != before.State || len(e.dispatched) != dispatched {
+				t.Fatalf("before %+v, after %+v", before, after)
+			}
+		})
+	}
+	t.Run("refused while posting", func(t *testing.T) {
+		_, w := newEnv(t)
+		_, _ = w.Watch(ctx, testURL, ModeVerdict, nil)
+		w.posting = map[string]bool{testURL: true}
+		if _, err := w.SetUpdateInPlace(ctx, testURL, true); !errors.Is(err, ErrPosting) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+}
+
+func TestSendUsesTheSettingAsItIsNow(t *testing.T) {
+	ctx := context.Background()
+	setup := func(t *testing.T) (*fakeEnv, *Watcher) {
+		t.Helper()
+		e, w := newEnv(t)
+		e.commented = true
+		watchInPlace(t, w, ModeFeedback)
+		w.Tick(ctx)
+		finish(t, w, e, "task-1", VerdictChanges, "fix it")
+		e.pr.head = shaB
+		w.collect(ctx, testURL)
+		return e, w
+	}
+	t.Run("off after planning adds rather than edits", func(t *testing.T) {
+		e, w := setup(t)
+		post := planStale(get(t, w))
+		if post == nil || post.event != EventUpdate {
+			t.Fatalf("plan = %+v", post)
+		}
+		if _, err := w.SetUpdateInPlace(ctx, testURL, false); err != nil {
+			t.Fatal(err)
+		}
+		w.send(ctx, testURL, *post)
+		if len(e.posts) != 1 || e.posts[0].event != "COMMENT" {
+			t.Fatalf("posts = %+v", e.posts)
+		}
+	})
+	t.Run("off after planning drops a refresh", func(t *testing.T) {
+		e, w := setup(t)
+		if _, err := w.SetUpdateInPlace(ctx, testURL, false); err != nil {
+			t.Fatal(err)
+		}
+		w.send(ctx, testURL, posting{event: EventRefresh, commit: shaA, posted: PostedCommented, stale: true})
+		if len(e.posts) != 0 {
+			t.Fatalf("posts = %+v", e.posts)
+		}
+	})
+}
+
+func TestPostedCommentIsNotRepeatedWhenRecordingFails(t *testing.T) {
+	ctx := context.Background()
+	verdict := func(t *testing.T) (*fakeEnv, *Watcher, Poster) {
+		t.Helper()
+		e, w := newEnv(t)
+		_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)
+		w.Tick(ctx)
+		finish(t, w, e, "task-1", VerdictChanges, "fix it")
+		return e, w, w.Post
+	}
+	t.Run("the daemon shutting down", func(t *testing.T) {
+		e, w, post := verdict(t)
+		tickCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		w.Post = func(ctx context.Context, repo string, number int, event, commit, body string) error {
+			cancel()
+			return post(ctx, repo, number, event, commit, body)
+		}
+		w.collect(ctx, testURL)
+		w.send(tickCtx, testURL, *plan(get(t, w), Status{}, ""))
+		if r := get(t, w); len(e.posts) != 1 || r.Posted != PostedCommented {
+			t.Fatalf("posts %+v, %+v", e.posts, r)
+		}
+	})
+	for _, table := range []bool{false, true} {
+		name := "the row cannot be read"
+		trigger := "ALTER TABLE pr_reviews RENAME TO pr_reviews_gone"
+		undo := "ALTER TABLE pr_reviews_gone RENAME TO pr_reviews"
+		if table {
+			name = "the row cannot be written"
+			trigger = "CREATE TRIGGER no_writes BEFORE UPDATE ON pr_reviews BEGIN SELECT RAISE(ABORT, 'read-only'); END"
+			undo = "DROP TRIGGER no_writes"
+		}
+		t.Run(name, func(t *testing.T) {
+			e, w, post := verdict(t)
+			w.Tick(ctx) // collects the verdict
+			w.Post = func(ctx context.Context, repo string, number int, event, commit, body string) error {
+				if _, err := w.Store.db.ExecContext(ctx, trigger); err != nil {
+					t.Fatal(err)
+				}
+				return post(ctx, repo, number, event, commit, body)
+			}
+			w.markDue(testURL)
+			w.Tick(ctx)
+			if _, err := w.Store.db.ExecContext(ctx, undo); err != nil {
+				t.Fatal(err)
+			}
+			w.Post = post
+			w.markDue(testURL)
+			w.Tick(ctx)
+			if len(e.posts) != 1 {
+				t.Fatalf("posted again: %+v", e.posts)
+			}
+		})
 	}
 }
