@@ -54,6 +54,9 @@ const (
 	PostedApproved  = "approved"
 	PostedCommented = "commented"
 	PostedFailed    = "failed"
+	// PostedNone is a verdict with nothing to post: it approves, and no earlier
+	// comment needed updating.
+	PostedNone = "none"
 )
 
 // ValidMode reports whether m is a mode a client may set.

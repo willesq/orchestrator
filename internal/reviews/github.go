@@ -1,12 +1,9 @@
 package reviews
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/willesq/orchestrator/internal/github"
@@ -133,35 +130,6 @@ func FetchStatus(ctx context.Context, gh github.Runner, url string) (Status, err
 		st.Association = strings.TrimSpace(string(out))
 	}
 	return st, nil
-}
-
-// Poster submits a review on a PR, pinned to commit, so it can never land on
-// commits pushed after the verdict. event is APPROVE or COMMENT.
-type Poster func(ctx context.Context, repo string, number int, event, commit, body string) error
-
-// GHPost submits the review through gh api. The body goes on stdin as JSON,
-// never on the command line.
-func GHPost(ctx context.Context, repo string, number int, event, commit, body string) error {
-	if event != "APPROVE" && event != "COMMENT" {
-		return fmt.Errorf("unsupported review event %q", event)
-	}
-	payload, err := json.Marshal(map[string]string{"commit_id": commit, "event": event, "body": body})
-	if err != nil {
-		return err
-	}
-	cmd := exec.CommandContext(ctx, "gh", "api", "--method", "POST",
-		fmt.Sprintf("repos/%s/pulls/%d/reviews", repo, number), "--input", "-")
-	cmd.Stdin = bytes.NewReader(payload)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && stderr.Len() > 0 {
-			return fmt.Errorf("gh api: %s", github.Printable(stderr.String(), 512))
-		}
-		return err
-	}
-	return nil
 }
 
 // Detail is a PR's metadata for the app, read on demand.

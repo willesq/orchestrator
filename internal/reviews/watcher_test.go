@@ -14,6 +14,7 @@ const (
 	testURL = "https://github.com/willesq/theCalculator/pull/7"
 	shaA    = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	shaB    = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	shaC    = "cccccccccccccccccccccccccccccccccccccccc"
 )
 
 type fakePR struct {
@@ -33,6 +34,7 @@ type fakeEnv struct {
 	tasks       map[string][2]string // id -> status, result
 	taskErr     error
 	posts       []posted
+	commented   bool
 	postErr     error
 	login       string
 	clock       time.Time
@@ -82,6 +84,10 @@ func newEnv(t *testing.T) (*fakeEnv, *Watcher) {
 			if repo != "willesq/theCalculator" || number != 7 {
 				return fmt.Errorf("posted to %s#%d", repo, number)
 			}
+			if event == EventRefresh && !e.commented {
+				return ErrNoComment
+			}
+			e.commented = e.commented || event == "COMMENT"
 			e.posts = append(e.posts, posted{event, commit, body})
 			return e.postErr
 		},
@@ -697,15 +703,16 @@ func TestFeedbackCommentsOnlyWhenNotApproved(t *testing.T) {
 	if r := get(t, w); r.Mode != ModeFeedback || r.Posted != PostedCommented {
 		t.Fatalf("feedback mode not kept: %+v", r)
 	}
-	// The author pushes a fix; the next review approves, and feedback posts nothing.
+	// The author pushes a fix; the next review approves, and only the earlier
+	// comment changes.
 	e.pr.head = shaB
 	w.markDue(testURL)
 	w.Tick(ctx)
 	finish(t, w, e, "task-2", VerdictApprove, "looks right now")
 	w.Tick(ctx)
 	w.Tick(ctx)
-	if len(e.posts) != 1 {
-		t.Fatalf("feedback mode posted on approve: %+v", e.posts)
+	if len(e.posts) != 2 || e.posts[1] != (posted{EventRefresh, shaB, "looks right now"}) {
+		t.Fatalf("feedback on approve: %+v", e.posts)
 	}
 }
 
@@ -723,8 +730,8 @@ func TestAutoApprovesOrComments(t *testing.T) {
 	finish(t, w, e, "task-2", VerdictApprove, "nice")
 	w.Tick(ctx)
 	w.Tick(ctx)
-	want := []posted{{"COMMENT", shaA, "consider a test"}, {"APPROVE", shaB, "nice"}}
-	if len(e.posts) != 2 || e.posts[0] != want[0] || e.posts[1] != want[1] {
+	want := []posted{{"COMMENT", shaA, "consider a test"}, {"APPROVE", shaB, "nice"}, {EventRefresh, shaB, "nice"}}
+	if len(e.posts) != 3 || e.posts[0] != want[0] || e.posts[1] != want[1] || e.posts[2] != want[2] {
 		t.Fatalf("auto posts = %+v", e.posts)
 	}
 	if !ValidMode(ModeAuto) || !ValidMode(ModeFeedback) {
@@ -851,5 +858,208 @@ func TestNotesAnswerAndReportAreKeptButNeverPosted(t *testing.T) {
 	}
 	if len(e.posts) != 1 || e.posts[0].body != "fix it" {
 		t.Fatalf("posted = %+v", e.posts)
+	}
+}
+
+func TestStaleVerdictIsStillPosted(t *testing.T) {
+	ctx := context.Background()
+	verdictThenPush := func(t *testing.T, mode, verdict string, checks []string) (*fakeEnv, *Watcher) {
+		t.Helper()
+		e, w := newEnv(t)
+		_, _ = w.Watch(ctx, testURL, mode, nil)
+		w.Tick(ctx)
+		finish(t, w, e, "task-1", verdict, "fix it")
+		e.pr.head, e.pr.checks = shaB, checks
+		w.Tick(ctx) // collects the verdict
+		w.Tick(ctx) // finds the push
+		return e, w
+	}
+	running, failing, green := []string{""}, []string{"FAILURE"}, []string{"SUCCESS"}
+
+	t.Run("post comment while the new commit waits for CI", func(t *testing.T) {
+		e, w := verdictThenPush(t, ModeVerdict, VerdictChanges, running)
+		if len(e.posts) != 0 {
+			t.Fatalf("posted without being asked: %+v", e.posts)
+		}
+		_, _ = w.Watch(ctx, testURL, ModeComment, nil)
+		w.Tick(ctx)
+		w.markDue(testURL)
+		w.Tick(ctx)
+		r := get(t, w)
+		if len(e.posts) != 1 || e.posts[0] != (posted{"COMMENT", shaA, "fix it"}) {
+			t.Fatalf("posts = %+v", e.posts)
+		}
+		if r.Posted != PostedCommented || r.Mode != ModeVerdict || r.State != StateWaiting {
+			t.Fatalf("%+v", r)
+		}
+	})
+
+	t.Run("post comment while the new commit is under review", func(t *testing.T) {
+		e, w := verdictThenPush(t, ModeVerdict, VerdictChanges, green)
+		if r := get(t, w); r.State != StateReviewing {
+			t.Fatalf("%+v", r)
+		}
+		_, _ = w.Watch(ctx, testURL, ModeComment, nil)
+		finish(t, w, e, "task-2", VerdictChanges, "second")
+		w.Tick(ctx) // the same tick collects the new verdict
+		if len(e.posts) != 1 || e.posts[0] != (posted{"COMMENT", shaA, "fix it"}) {
+			t.Fatalf("posts = %+v", e.posts)
+		}
+		w.Tick(ctx)
+		if r := get(t, w); len(e.posts) != 1 || r.Posted != "" || r.Mode != ModeVerdict || r.Comment != "second" {
+			t.Fatalf("the new verdict was posted unasked: %+v, %+v", e.posts, r)
+		}
+	})
+
+	t.Run("checkbox ticked while CI fails on the new commit", func(t *testing.T) {
+		e, w := verdictThenPush(t, ModeVerdict, VerdictChanges, failing)
+		_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)
+		w.Tick(ctx)
+		w.markDue(testURL)
+		w.Tick(ctx)
+		if len(e.posts) != 1 || e.posts[0] != (posted{"COMMENT", shaA, "fix it"}) {
+			t.Fatalf("posts = %+v", e.posts)
+		}
+		if r := get(t, w); r.Posted != PostedCommented || !strings.Contains(r.Note, "CI is failing") {
+			t.Fatalf("%+v", r)
+		}
+	})
+
+	t.Run("checkbox on and a push lands during the review", func(t *testing.T) {
+		e, _ := verdictThenPush(t, ModeFeedback, VerdictChanges, running)
+		if len(e.posts) != 1 || e.posts[0] != (posted{"COMMENT", shaA, "fix it"}) {
+			t.Fatalf("posts = %+v", e.posts)
+		}
+	})
+
+	t.Run("failure is reported", func(t *testing.T) {
+		e, w := newEnv(t)
+		_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)
+		w.Tick(ctx)
+		finish(t, w, e, "task-1", VerdictChanges, "fix it")
+		e.pr.head, e.pr.checks, e.postErr = shaB, running, errors.New("HTTP 422")
+		w.Tick(ctx)
+		w.Tick(ctx)
+		if r := get(t, w); r.Posted != PostedFailed || !strings.Contains(r.Note, "could not post") {
+			t.Fatalf("%+v", r)
+		}
+	})
+
+	t.Run("an older commit is never approved", func(t *testing.T) {
+		e, _ := verdictThenPush(t, ModeAuto, VerdictApprove, running)
+		if len(e.posts) != 0 {
+			t.Fatalf("posts = %+v", e.posts)
+		}
+	})
+
+	t.Run("nothing permitted posts nothing", func(t *testing.T) {
+		e, w := verdictThenPush(t, ModeVerdict, VerdictChanges, failing)
+		w.markDue(testURL)
+		w.Tick(ctx)
+		if len(e.posts) != 0 {
+			t.Fatalf("posts = %+v", e.posts)
+		}
+	})
+}
+
+func TestApproveWithNoEarlierCommentAddsNone(t *testing.T) {
+	e, w := newEnv(t)
+	ctx := context.Background()
+	_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)
+	w.Tick(ctx)
+	finish(t, w, e, "task-1", VerdictApprove, "good")
+	calls := 0
+	post := w.Post
+	w.Post = func(ctx context.Context, repo string, number int, event, commit, body string) error {
+		calls++
+		return post(ctx, repo, number, event, commit, body)
+	}
+	w.Tick(ctx)
+	w.Tick(ctx)
+	w.markDue(testURL)
+	w.Tick(ctx)
+	if r := get(t, w); len(e.posts) != 0 || calls != 1 || r.Posted != PostedNone || r.Note != "" {
+		t.Fatalf("posts %+v, %d calls, %+v", e.posts, calls, r)
+	}
+	// The user's own "Post comment" still posts.
+	_, _ = w.Watch(ctx, testURL, ModeComment, nil)
+	w.Tick(ctx)
+	if r := get(t, w); len(e.posts) != 1 || e.posts[0] != (posted{"COMMENT", shaA, "good"}) || r.Posted != PostedCommented {
+		t.Fatalf("posts %+v, %+v", e.posts, r)
+	}
+}
+
+func TestApproveLeavesTheCommentAloneWithoutCommentPermission(t *testing.T) {
+	e, w := newEnv(t)
+	ctx := context.Background()
+	e.commented = true // an earlier comment the user asked for
+	_, _ = w.Watch(ctx, testURL, ModeApprove, nil)
+	w.Tick(ctx)
+	finish(t, w, e, "task-1", VerdictApprove, "good")
+	w.Tick(ctx)
+	w.Tick(ctx)
+	if len(e.posts) != 1 || e.posts[0].event != "APPROVE" {
+		t.Fatalf("posts = %+v", e.posts)
+	}
+}
+
+func TestApprovalStandsIfTheCommentUpdateFails(t *testing.T) {
+	e, w := newEnv(t)
+	ctx := context.Background()
+	_, _ = w.Watch(ctx, testURL, ModeAuto, nil)
+	w.Tick(ctx)
+	finish(t, w, e, "task-1", VerdictApprove, "good")
+	post := w.Post
+	w.Post = func(ctx context.Context, repo string, number int, event, commit, body string) error {
+		if event == EventRefresh {
+			return errors.New("HTTP 500")
+		}
+		return post(ctx, repo, number, event, commit, body)
+	}
+	w.Tick(ctx)
+	w.Tick(ctx)
+	if r := get(t, w); r.Posted != PostedApproved || r.Note != "" {
+		t.Fatalf("%+v", r)
+	}
+}
+
+func TestStaleApprovalKeepsEarlierFindings(t *testing.T) {
+	e, w := newEnv(t)
+	ctx := context.Background()
+	_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)
+	w.Tick(ctx)
+	finish(t, w, e, "task-1", VerdictChanges, "fix it")
+	w.Tick(ctx)
+	w.Tick(ctx)
+	e.pr.head = shaB
+	w.markDue(testURL)
+	w.Tick(ctx)
+	finish(t, w, e, "task-2", VerdictApprove, "good")
+	e.pr.head, e.pr.checks = shaC, []string{""}
+	w.Tick(ctx)
+	w.Tick(ctx)
+	if len(e.posts) != 1 || e.posts[0].body != "fix it" {
+		t.Fatalf("findings replaced while the new commit is unreviewed: %+v", e.posts)
+	}
+}
+
+func TestStopBlocksAStalePostAlreadyPlanned(t *testing.T) {
+	e, w := newEnv(t)
+	ctx := context.Background()
+	_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)
+	w.Tick(ctx)
+	finish(t, w, e, "task-1", VerdictChanges, "fix it")
+	e.pr.head = shaB
+	w.collect(ctx, testURL)
+	post := planStale(get(t, w))
+	if post == nil {
+		t.Fatal("nothing planned")
+	}
+	if err := w.Stop(ctx, testURL, false); err != nil {
+		t.Fatal(err)
+	}
+	w.send(ctx, testURL, *post)
+	if len(e.posts) != 0 {
+		t.Fatalf("posted after stop: %+v", e.posts)
 	}
 }

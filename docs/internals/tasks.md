@@ -408,11 +408,24 @@ permissions, "approve" and "comment its suggestions":
 - `verdict`: nothing. The user decides on each verdict.
 - `approve`: approve when the verdict is `approve`, with the drafted comment as the body.
 - `feedback`: when the verdict is not `approve`, post the drafted comment so the author can fix
-  what it found, once per reviewed commit. The next push is reviewed again. It never approves.
+  what it found, once per reviewed commit. The next push is reviewed again. It never approves. A
+  later approving verdict updates an earlier comment, and adds none if there is none.
 - `auto`: `approve` and `feedback` together.
 - `comment`: the user's own "Post comment": post the current draft once, whatever the verdict,
-  then fall back to `verdict`. It is for the verdict the user read: if a new verdict lands first
-  (new notes or a new commit), it falls back to `verdict` without posting.
+  then fall back to `verdict`. It is for the verdict the user read: new notes drop the request,
+  as they redo the verdict.
+
+A comment the mode allows is posted even once the PR has moved past the reviewed commit, while the
+new commit waits or is under review. It stays pinned to the reviewed commit and is posted before any
+newer verdict is read. An older commit is never approved, and an approving verdict on one leaves
+earlier findings in place until the new commit is reviewed.
+
+**One comment per PR:** orch's comment starts with the hidden `<!-- orch:pr-review -->` marker, and
+its text names the reviewed commit. Any later comment edits the newest `COMMENTED` review with that
+marker written by the signed-in user, rather than adding one; an edited review keeps the commit it
+was first pinned to on GitHub. If orch cannot read the PR's reviews, it fails the post rather than
+risk a duplicate. An approval is a new review; with comment permission (`auto`) it also updates an
+earlier comment, and `approve` alone leaves that comment as it is.
 
 Every change of mode is logged (`pr-reviews: <url> may now post as …`), so what orch was allowed
 to post, and when that changed, can be traced.
