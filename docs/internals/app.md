@@ -285,8 +285,8 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
       check, review decision, requested reviewers, reviews, labels, files, description), with
       **Reload** and **Open on GitHub**. Text from GitHub is shown verbatim, never rendered.
     - **Agents:** the tasks working on the PR (`PRHandoff`: a task with the `PR: <url>` line a
-      hand-off writes, or that orchd recorded touching the PR; orch's review tasks and tasks that
-      only mention the URL are not counted), unfinished first, live from `ListTasks` every 5 s
+      hand-off writes, orch's own review of the PR, or one orchd recorded touching the PR; tasks
+      that only mention the URL are not counted), unfinished first, live from `ListTasks` every 5 s
       while the GitHub tab shows, each with **Cancel…** (confirmed) and **Open** in Tasks. What
       blocks the PR becomes a button, most blocking first: **Resolve conflicts**, **Fix failing
       CI**, **Address review**, **Apply orch's review** (a Changes needed verdict on the current

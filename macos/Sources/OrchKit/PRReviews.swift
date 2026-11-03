@@ -253,13 +253,14 @@ public struct PRDetail: Sendable, Equatable {
         self.fetchedAt = fetchedAt
     }
 
-    /// Checks grouped as failing, running and passing, for a one-line summary.
-    public var checkSummary: (failing: Int, running: Int, passing: Int) {
-        var out = (failing: 0, running: 0, passing: 0)
+    /// Checks grouped by outcome, for a one-line summary. Skipped includes neutral.
+    public var checkSummary: (failing: Int, running: Int, passing: Int, skipped: Int) {
+        var out = (failing: 0, running: 0, passing: 0, skipped: 0)
         for c in checks {
             switch c.result {
-            case "success", "neutral", "skipped": out.passing += 1
-            case "failure", "error", "timed_out", "cancelled", "action_required", "startup_failure": out.failing += 1
+            case "success": out.passing += 1
+            case "neutral", "skipped": out.skipped += 1
+            case "failure", "error", "timed_out", "cancelled", "action_required", "startup_failure", "stale": out.failing += 1
             default: out.running += 1
             }
         }

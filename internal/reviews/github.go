@@ -20,6 +20,7 @@ type Status struct {
 	Head      string // head commit SHA
 	Mergeable string // MERGEABLE | CONFLICTING | UNKNOWN
 	CI        string // none | failure | pending | success
+	Checks    string // synopsis, such as "3 passed, 1 skipped, 0 failed"
 	Author    string
 	// Association is the author's relation to the repo (OWNER, MEMBER,
 	// COLLABORATOR, CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, NONE).
@@ -46,7 +47,8 @@ func (s Status) Trusted() bool {
 // ApproveReady reports whether orch may approve: ready, and with CI that
 // actually passed unless the author is trusted. A fork PR whose workflows
 // await a maintainer's approval shows no checks at all, which must not pass
-// for green.
+// for green. Checks that all skipped do count: that can be the intent, and the
+// review, which is told the counts, judges it.
 func (s Status) ApproveReady() bool {
 	return s.Ready() && (s.Trusted() || s.CI == "success")
 }
@@ -101,7 +103,7 @@ func FetchStatus(ctx context.Context, gh github.Runner, url string) (Status, err
 		return Status{}, fmt.Errorf("gh pr view gave no head commit")
 	}
 	st := Status{State: v.State, IsDraft: v.IsDraft, Head: v.HeadRefOid, Mergeable: v.Mergeable,
-		CI: prs.RollupCI(v.StatusCheckRollup), Author: v.Author.Login}
+		CI: prs.RollupCI(v.StatusCheckRollup), Checks: prs.CountChecks(v.StatusCheckRollup).String(), Author: v.Author.Login}
 	// gh pr view has no author association, so the REST API supplies it, and
 	// only when it matters: for a ready PR, to review or approve it.
 	if st.Ready() {

@@ -42,7 +42,7 @@ func NewNonce() string {
 // in: the PR's title and text are other people's, so the agent reads them
 // from GitHub itself, as data. nonce marks the verdict block; nothing in the
 // PR can know it. instructions are the user's own notes for this PR.
-func Prompt(url, repo string, number int, head, nonce, instructions string) string {
+func Prompt(url, repo string, number int, head, nonce, checks, instructions string) string {
 	notes := ""
 	if instructions != "" {
 		notes = "\nThe user, who asked for this review, adds these notes for it. They are the user's own\n" +
@@ -57,9 +57,11 @@ adversarial fan-out, and end your final message with the verdict block. Review
 commit %s; if the PR's head has moved past it, review that commit anyway and say
 so in the reason.
 
+CI when this review started: %s.
+
 This review's verdict token is %s. Write the markers as
 "%s %s" and "%s %s", and never write the token anywhere else.
-%s`, url, repo, number, head, head, nonce, verdictBegin, nonce, verdictEnd, nonce, notes)
+%s`, url, repo, number, head, head, checks, nonce, verdictBegin, nonce, verdictEnd, nonce, notes)
 }
 
 // Verdict is what a review task returns.

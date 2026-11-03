@@ -4,6 +4,8 @@ Read this before reviewing a pull request or giving a review verdict. It extends
 the shared coding-agent expectations in `~/.config/orch/AGENTS.md`.
 
 - Check CI, reviews, and unresolved blocking feedback before approving or merging.
+  A skipped check counts as passing, unless the PR changes GitHub Actions workflows
+  or actions: then verify from the change that each skip is intentional.
   A later commit alone does not prove a finding was fixed: verify the affected
   behavior. Respect human reviewers and bots configured to gate merges.
 - Do not approve over unresolved blocking feedback unless the user explicitly

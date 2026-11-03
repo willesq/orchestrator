@@ -356,7 +356,7 @@ func (w *Watcher) check(ctx context.Context, url string) {
 				return true
 			}
 			nonce := NewNonce()
-			id, err := w.Dispatch(ctx, Prompt(r.URL, r.Repo, r.Number, st.Head, nonce, r.Instructions))
+			id, err := w.Dispatch(ctx, Prompt(r.URL, r.Repo, r.Number, st.Head, nonce, st.Checks, r.Instructions))
 			if err != nil {
 				r.State, r.Note = StateWaiting, "could not start the review: "+github.Printable(err.Error(), 300)
 				return true

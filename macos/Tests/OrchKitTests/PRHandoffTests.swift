@@ -164,7 +164,10 @@ private final class FakeTasks: TasksAPI, @unchecked Sendable {
         #expect(PRHandoff.links(TaskRecord(id: "a", body: "Fix\nPR: \(url)\n"), to: url))
         #expect(PRHandoff.links(TaskRecord(id: "a", body: "x", prs: [url]), to: url))
         #expect(!PRHandoff.links(TaskRecord(id: "a", body: "Fix\nPR: \(url)2"), to: url))
-        // orch's review tasks and briefs that only mention the PR do not count.
+        // orch's own review counts while it runs; another PR's does not, nor
+        // does a brief that only mentions the PR.
+        #expect(PRHandoff.links(TaskRecord(id: "a", agent: "pr-verdict", body: "Review \(url) (o/r#1) at head abc"), to: url))
+        #expect(!PRHandoff.links(TaskRecord(id: "a", agent: "pr-verdict", body: "Review \(url)2 (o/r#12) at head abc"), to: url))
         #expect(!PRHandoff.links(TaskRecord(id: "a", body: "Review \(url) (head abc)"), to: url))
         #expect(!PRHandoff.links(TaskRecord(id: "a", body: "> Title: see PR: \(url)"), to: url))
         #expect(!PRHandoff.links(TaskRecord(id: "a", body: "nothing"), to: url))

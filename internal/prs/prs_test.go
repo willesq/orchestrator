@@ -94,6 +94,28 @@ func TestClassifyAndFilter(t *testing.T) {
 	}
 }
 
+func TestCountChecks(t *testing.T) {
+	tests := []struct {
+		name   string
+		checks []Check
+		want   string
+	}{
+		{"none", nil, "no checks"},
+		{"mixed", []Check{{Conclusion: "SUCCESS"}, {State: "SUCCESS"}, {Conclusion: "SKIPPED"}, {Conclusion: "NEUTRAL"}, {Conclusion: "FAILURE"}},
+			"2 passed, 2 skipped, 1 failed"},
+		{"all skipped", []Check{{Conclusion: "SKIPPED"}}, "0 passed, 1 skipped, 0 failed"},
+		{"running is named only when there is some", []Check{{Conclusion: "SUCCESS"}, {Status: "IN_PROGRESS"}, {State: "PENDING"}},
+			"1 passed, 0 skipped, 0 failed, 2 running"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := CountChecks(tt.checks).String(); got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRollupCI(t *testing.T) {
 	type chk = struct {
 		Status     string `json:"status"`
@@ -109,6 +131,16 @@ func TestRollupCI(t *testing.T) {
 		{name: "any failure", checks: []chk{{Conclusion: "SUCCESS"}, {Conclusion: "FAILURE"}}, want: "failure"},
 		{name: "all success", checks: []chk{{Conclusion: "SUCCESS"}}, want: "success"},
 		{name: "in progress is pending", checks: []chk{{State: "IN_PROGRESS"}}, want: "pending"},
+		{name: "queued check run is pending", checks: []chk{{Status: "QUEUED"}}, want: "pending"},
+		{name: "commit status pending", checks: []chk{{State: "PENDING"}}, want: "pending"},
+		{name: "skipped passes", checks: []chk{{Conclusion: "SUCCESS"}, {Status: "COMPLETED", Conclusion: "SKIPPED"}}, want: "success"},
+		{name: "only skipped passes", checks: []chk{{Conclusion: "SKIPPED"}}, want: "success"},
+		{name: "neutral passes", checks: []chk{{Conclusion: "NEUTRAL"}}, want: "success"},
+		{name: "skipped does not hide a running check", checks: []chk{{Conclusion: "SKIPPED"}, {Status: "IN_PROGRESS"}}, want: "pending"},
+		{name: "skipped does not hide a failure", checks: []chk{{Conclusion: "SKIPPED"}, {Conclusion: "FAILURE"}}, want: "failure"},
+		{name: "action required fails", checks: []chk{{Conclusion: "ACTION_REQUIRED"}}, want: "failure"},
+		{name: "startup failure fails", checks: []chk{{Conclusion: "STARTUP_FAILURE"}}, want: "failure"},
+		{name: "stale fails", checks: []chk{{Conclusion: "STALE"}}, want: "failure"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

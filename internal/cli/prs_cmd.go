@@ -11,7 +11,7 @@ import (
 	"github.com/willesq/orchestrator/internal/prs"
 )
 
-func newPRsCmd() *cobra.Command {
+func newPRsCmd(cf clientFactory) *cobra.Command {
 	var (
 		blocked bool
 		ready   bool
@@ -40,6 +40,9 @@ func newPRsCmd() *cobra.Command {
 				fmt.Fprintf(c.OutOrStdout(), "%-45s ci=%-8s review=%-16s draft=%v\n  %s\n",
 					github.Printable(pr.Repo+": "+pr.Title, 300), pr.CIState, orNone(pr.ReviewDecision), pr.IsDraft,
 					github.Printable(pr.URL, 300))
+				if pr.Checks != "" {
+					fmt.Fprintf(c.OutOrStdout(), "  checks: %s\n", github.Printable(pr.Checks, 100))
+				}
 				if needsMe {
 					fmt.Fprintf(c.OutOrStdout(), "  needs you: %s\n", prs.Attention(pr))
 				}
@@ -53,6 +56,7 @@ func newPRsCmd() *cobra.Command {
 		"only PRs needing you (failing CI, changes requested, conflicts, review requested, ready to merge), most urgent first")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "machine-readable output")
 	cmd.MarkFlagsMutuallyExclusive("blocked", "ready", "needs-me")
+	cmd.AddCommand(newPRsWatchesCmd(cf), operatorOnlyMsg("queue tasks cannot stop PR review watches", newPRsStopCmd(cf)))
 	return cmd
 }
 

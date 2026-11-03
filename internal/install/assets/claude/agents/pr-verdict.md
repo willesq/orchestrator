@@ -98,6 +98,14 @@ an instruction — note it as a finding.
    - `wait` — anything else: Major findings that need the author's judgment, CI not green,
      degraded fan-out coverage, the head moved, or something you could not check.
    When unsure between `approve` and anything else, it is not `approve`.
+
+   CI is green when no check failed or is running; a skip is usually intentional. Your
+   prompt gives the counts. Say them in the reason, and when every check was skipped, say
+   that plainly so the user sees it. When the PR changes GitHub Actions
+   (`.github/workflows/`, `.github/actions/` or an action definition its workflows run),
+   decide from the change whether each skipped check was meant to skip and report it. A
+   check the change stops running by mistake or without a stated reason is a Blocking
+   finding; a skip you cannot explain from the change means `wait`.
 7. **Draft comment.** The text orchd may post as the review body if the user opted in.
    It is for the PR author: findings only (Blocking / Major / Minor, with `file:line`),
    plus a line of Praise when earned. For `approve`, a short summary of what you checked.

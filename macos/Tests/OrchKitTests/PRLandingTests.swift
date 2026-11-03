@@ -96,6 +96,8 @@ private func proposing(_ id: String = "t1", status: String = "complete", last: S
         let pushing = PRHandoff.brief(goal: .other, detail: d, review: nil, mayPush: true, notes: "")
         #expect(!pushing.contains("PROPOSED:"))
         #expect(PRHandoff.mode(TaskRecord(id: "x", body: pushing)) == "may push")
+        #expect(PRHandoff.mode(TaskRecord(id: "x", agent: "pr-verdict", body: pushing)) == "review only")
+        #expect(PRHandoff.askedNotToPush(TaskRecord(id: "x", agent: "pr-verdict", body: pushing)))
 
         // Someone else's PR could not land, so its brief promises no such thing.
         let theirs = PRHandoff.brief(goal: .other, detail: d, review: nil, mayPush: false, notes: "", ownPR: false)

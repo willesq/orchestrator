@@ -292,7 +292,7 @@ private struct PRCard: View {
         if let attention = item.attention { parts.append(attention.label) }
         if item.isDraft { parts.append("Draft") }
         switch item.ciState {
-        case "success": parts.append("CI passing")
+        case "success": parts.append("CI finished, none failed")
         case "pending": parts.append("CI running")
         case "failure" where item.attention != .ciFailed: parts.append("CI failing")
         default: break
@@ -302,7 +302,7 @@ private struct PRCard: View {
 
     private var ciChip: Chip? {
         switch item.ciState {
-        case "success": Chip(text: "CI", tone: .good, symbol: "checkmark.circle", help: "CI passing")
+        case "success": Chip(text: "CI", tone: .good, symbol: "checkmark.circle", help: "CI finished, none failed")
         case "pending": Chip(text: "CI", tone: .accent, symbol: "clock", help: "CI running")
         case "failure" where item.attention != .ciFailed:
             Chip(text: "CI", tone: .bad, symbol: "xmark.octagon", help: "CI failing")

@@ -352,7 +352,12 @@ CI, review decision and mergeability are fetched with `gh pr view` only for PRs 
 or was asked to review, because only those can need the user. If the scopes can't be read or any
 search fails, the sweep fails and the cache is kept.
 
-CI rolls up to `none`, `failure`, `pending` or `success`. State is cached in
+CI rolls up to `none`, `failure`, `pending` or `success`. Only an unfinished check is `pending`. A
+skipped or neutral check counts as passing, and `action_required`, `startup_failure` and `stale` as
+failing. `orch prs`, the app and the review agent's prompt also show the counts, such as `3 passed,
+1 skipped, 0 failed`: every check skipping can be the intent, so it is shown rather than blocked, for
+any author. The review judges skips, and looks at each one when the PR changes GitHub Actions. State
+is cached in
 `<data>/pr_babysitter_state.json`, written atomically (temp file, then rename) and owner-only.
 
 **Events:** new items and changes to the user's own PRs, including a new reason, append
@@ -407,7 +412,7 @@ review text before the verdict block (`report`, ≤ 60000 bytes); neither is eve
 or a failed review review its current commit again.
 
 **States:** `waiting` → (`held`) → `reviewing` → `verdict`, or `failed`; `closed` once the PR is merged or
-closed; `stopped` when the user stops watching. `StopPRReview` with `forget` deletes the row.
+closed; `stopped` when the user stops watching (in the app, or `orch prs stop`). `StopPRReview` with `forget` deletes the row. Stopping does not cancel a review task already running; that task is cancelled on its own, and its verdict is not collected.
 
 **The `pr-reviews` unit** ticks every 15 s:
 - A `reviewing` row reads its task from the ledger (no `gh`). Each review gets a random token

@@ -115,10 +115,13 @@ public enum PRHandoff {
     }
 
     /// Whether task works on the PR at url: orchd recorded it touching the
-    /// PR, or its body has the "PR: <url>" line a hand-off writes. Review
-    /// tasks and briefs that only mention the URL do not count.
+    /// PR, it is orch's own review of the PR, or its body has the "PR: <url>"
+    /// line a hand-off writes. Briefs that only mention the URL do not count.
     public static func links(_ task: TaskRecord, to url: String) -> Bool {
         if task.prs.contains(url) { return true }
+        // orchd records a task's PRs only when it ends, so a running review
+        // needs this to show on its PR and be cancellable there.
+        if task.agent == "pr-verdict", task.body.hasPrefix("Review \(url) ") { return true }
         let marker = "PR: \(url)"
         return task.body.split(whereSeparator: \.isNewline).contains { $0 == marker }
     }

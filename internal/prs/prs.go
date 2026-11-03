@@ -37,6 +37,7 @@ type PR struct {
 	Author         string `json:"author,omitempty"`
 	UpdatedAt      string `json:"updated_at,omitempty"` // RFC 3339, from GitHub
 	CIState        string `json:"ci_state"`             // success | failure | pending | none
+	Checks         string `json:"checks,omitempty"`     // synopsis, such as "3 passed, 1 skipped, 0 failed"
 	ReviewDecision string `json:"review_decision"`      // APPROVED | CHANGES_REQUESTED | ...
 	Mergeable      string `json:"mergeable"`
 	IsDraft        bool   `json:"is_draft"`
@@ -245,6 +246,7 @@ func enrich(ctx context.Context, gh ghRunner, pr *PR) {
 	pr.ReviewDecision = v.ReviewDecision
 	pr.Mergeable = v.Mergeable
 	pr.CIState = RollupCI(v.StatusCheckRollup)
+	pr.Checks = CountChecks(v.StatusCheckRollup).String()
 }
 
 // Check is one entry of gh's statusCheckRollup: a check run (status and
@@ -256,26 +258,56 @@ type Check = struct {
 	State      string `json:"state"`
 }
 
-// RollupCI sums checks up as none, failure, pending or success.
-func RollupCI(checks []Check) string {
-	if len(checks) == 0 {
-		return "none"
-	}
-	pending := false
+// CheckCounts is how a PR's checks ended up. Skipped includes neutral.
+type CheckCounts struct {
+	Passed, Skipped, Failed, Running int
+}
+
+// CountChecks sorts checks by outcome. A skip passes as intentional: when a PR
+// changes its own workflows, whether it was meant is for the review to judge
+// (pr-verdict). Only a check that has not finished counts as running.
+func CountChecks(checks []Check) CheckCounts {
+	var n CheckCounts
 	for _, c := range checks {
 		concl := c.Conclusion
 		if concl == "" {
 			concl = c.State
 		}
 		switch concl {
-		case "FAILURE", "ERROR", "TIMED_OUT", "CANCELLED":
-			return "failure"
+		case "FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE":
+			n.Failed++
 		case "SUCCESS":
+			n.Passed++
+		case "SKIPPED", "NEUTRAL":
+			n.Skipped++
 		default:
-			pending = true
+			n.Running++
 		}
 	}
-	if pending {
+	return n
+}
+
+// String is the synopsis shown to the user and to the review agent.
+func (n CheckCounts) String() string {
+	if n == (CheckCounts{}) {
+		return "no checks"
+	}
+	s := fmt.Sprintf("%d passed, %d skipped, %d failed", n.Passed, n.Skipped, n.Failed)
+	if n.Running > 0 {
+		s += fmt.Sprintf(", %d running", n.Running)
+	}
+	return s
+}
+
+// RollupCI sums checks up as none, failure, pending or success.
+func RollupCI(checks []Check) string {
+	n := CountChecks(checks)
+	switch {
+	case n == (CheckCounts{}):
+		return "none"
+	case n.Failed > 0:
+		return "failure"
+	case n.Running > 0:
 		return "pending"
 	}
 	return "success"
