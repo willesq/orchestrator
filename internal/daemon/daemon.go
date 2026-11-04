@@ -144,9 +144,16 @@ type server struct {
 	system *systemProbe
 	// docsReg and sourcesReg back the Docs and Sources RPCs, and documents
 	// rebuilds indexed sources; each is nil when unavailable.
-	docsReg    *docs.Registry
-	sourcesReg *sources.Registry
-	documents  documentReader
+	docsReg *docs.Registry
+	// docsGH lists an owner's repos; docsRefresh is a new owner's cadence.
+	docsGH      docs.GitHub
+	docsRefresh int64
+	// configStart is the config orchd started with; configMu keeps two
+	// SetConfig calls from losing each other's write.
+	configStart map[string]string
+	configMu    sync.Mutex
+	sourcesReg  *sources.Registry
+	documents   documentReader
 	// nudgeMu guards lastNudge, when RefreshSource last restarted the
 	// sources scheduler.
 	nudgeMu   sync.Mutex
@@ -561,6 +568,12 @@ func Run(ctx context.Context) error {
 		return err
 	}
 
+	// What this process runs with, so GetConfig can say what a restart would change.
+	configStart, err := config.Snapshot(v)
+	if err != nil {
+		return err
+	}
+
 	// Resolve the qdrant API key once (persisted, generated on first run) so the
 	// engine and the client share it independent of any ambient env var.
 	apiKey, err := resolveQdrantAPIKey(s)
@@ -680,7 +693,7 @@ func Run(ctx context.Context) error {
 	orchdv1.RegisterOrchdServer(gs, &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks, ctl: ctl, live: live, home: userHome(), hub: hub,
 		stopping:      runCtx.Done(),
-		workerEnabled: s.Queue.Worker.Enabled,
+		workerEnabled: s.Queue.Worker.Runs(),
 		summaries:     summaries,
 		router:        router, routerErr: routerErr,
 		rater:        dbRater{db: store},
@@ -694,6 +707,9 @@ func Run(ctx context.Context) error {
 		handoffDir:   handoff.Dir(),
 		system:       system,
 		docsReg:      docs.NewRegistry(store),
+		docsGH:       docs.NewGitHub(),
+		docsRefresh:  refreshSecs(s.Docs.DefaultRefresh),
+		configStart:  configStart,
 		prune:        newPruneGuard(store),
 		sourcesReg:   sources.NewRegistry(store),
 		documents:    svc,

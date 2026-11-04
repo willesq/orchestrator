@@ -16,7 +16,7 @@ runs background agent tasks that survive restarts.
   Unix socket. MCP servers expose search and the task queue to agents.
 - **`Orch.app`**, a macOS menu bar app, shows orchd's health and the PRs that need you, starts or
   restarts orchd, and has a window for its subsystems, searching memory, the task queue, the
-  GitHub accounts and orgs it watches, the safety net, and a Claude tab that turns Claude Code
+  GitHub accounts and orgs it watches, the safety net, and a Settings pane, the one place to configure orch, that also turns Claude Code
   hooks, permissions, plugins and cc-safety-net rules on or off (per machine, kept in `orch.db`,
   honored by `orch install`). Like
   the CLI, it talks to `orchd` and never opens the databases directly.

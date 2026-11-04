@@ -33,6 +33,11 @@ struct FakeOrchdService: RegistrableRPCService {
     var activity = Orchd_V1_TaskActivity()
     var settings = Orchd_V1_ListSettingsResponse()
     var settingItem = Orchd_V1_SettingItem()
+    var configState = Orchd_V1_ConfigState()
+    var docsOwners = Orchd_V1_ListDocsOwnersResponse()
+    var docsOwnerRepos = Orchd_V1_ListDocsOwnerReposResponse()
+    var docOwner = Orchd_V1_DocOwner()
+    var purge = Orchd_V1_PurgeDocsResponse()
     /// Records requests the fake received, for assertions.
     var recorder = Recorder()
 
@@ -47,6 +52,64 @@ struct FakeOrchdService: RegistrableRPCService {
         let safetyNet = self.safetyNet
         let settings = self.settings, settingItem = self.settingItem
         let landing = self.landing, landingDecisions = self.landingDecisions, activity = self.activity
+        let configState = self.configState, docsOwners = self.docsOwners, docsOwnerRepos = self.docsOwnerRepos
+        let docOwner = self.docOwner, purge = self.purge
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.GetConfig.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_GetConfigRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ConfigState>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: configState))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.SetConfig.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_SetConfigRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ConfigState>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: configState))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListDocsOwners.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListDocsOwnersRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListDocsOwnersResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: docsOwners))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListDocsOwnerRepos.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListDocsOwnerReposRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ListDocsOwnerReposResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: docsOwnerRepos))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.SaveDocsOwner.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_SaveDocsOwnerRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_DocOwner>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: docOwner))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.RemoveDocsOwner.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_RemoveDocsOwnerRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_PurgeDocsResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: purge))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.PurgeDocs.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_PurgeDocsRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_PurgeDocsResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: purge))
+        }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.GetPRLanding.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_PRLandingRequest>(),

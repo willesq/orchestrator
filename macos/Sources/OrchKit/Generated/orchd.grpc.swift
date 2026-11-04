@@ -514,6 +514,97 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ListDocsOwners" metadata.
+        public enum ListDocsOwners: Sendable {
+            /// Request type for "ListDocsOwners".
+            public typealias Input = Orchd_V1_ListDocsOwnersRequest
+            /// Response type for "ListDocsOwners".
+            public typealias Output = Orchd_V1_ListDocsOwnersResponse
+            /// Descriptor for "ListDocsOwners".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListDocsOwners",
+                type: .unary
+            )
+        }
+        /// Namespace for "ListDocsOwnerRepos" metadata.
+        public enum ListDocsOwnerRepos: Sendable {
+            /// Request type for "ListDocsOwnerRepos".
+            public typealias Input = Orchd_V1_ListDocsOwnerReposRequest
+            /// Response type for "ListDocsOwnerRepos".
+            public typealias Output = Orchd_V1_ListDocsOwnerReposResponse
+            /// Descriptor for "ListDocsOwnerRepos".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListDocsOwnerRepos",
+                type: .unary
+            )
+        }
+        /// Namespace for "SaveDocsOwner" metadata.
+        public enum SaveDocsOwner: Sendable {
+            /// Request type for "SaveDocsOwner".
+            public typealias Input = Orchd_V1_SaveDocsOwnerRequest
+            /// Response type for "SaveDocsOwner".
+            public typealias Output = Orchd_V1_DocOwner
+            /// Descriptor for "SaveDocsOwner".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SaveDocsOwner",
+                type: .unary
+            )
+        }
+        /// Namespace for "RemoveDocsOwner" metadata.
+        public enum RemoveDocsOwner: Sendable {
+            /// Request type for "RemoveDocsOwner".
+            public typealias Input = Orchd_V1_RemoveDocsOwnerRequest
+            /// Response type for "RemoveDocsOwner".
+            public typealias Output = Orchd_V1_PurgeDocsResponse
+            /// Descriptor for "RemoveDocsOwner".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "RemoveDocsOwner",
+                type: .unary
+            )
+        }
+        /// Namespace for "PurgeDocs" metadata.
+        public enum PurgeDocs: Sendable {
+            /// Request type for "PurgeDocs".
+            public typealias Input = Orchd_V1_PurgeDocsRequest
+            /// Response type for "PurgeDocs".
+            public typealias Output = Orchd_V1_PurgeDocsResponse
+            /// Descriptor for "PurgeDocs".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "PurgeDocs",
+                type: .unary
+            )
+        }
+        /// Namespace for "GetConfig" metadata.
+        public enum GetConfig: Sendable {
+            /// Request type for "GetConfig".
+            public typealias Input = Orchd_V1_GetConfigRequest
+            /// Response type for "GetConfig".
+            public typealias Output = Orchd_V1_ConfigState
+            /// Descriptor for "GetConfig".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetConfig",
+                type: .unary
+            )
+        }
+        /// Namespace for "SetConfig" metadata.
+        public enum SetConfig: Sendable {
+            /// Request type for "SetConfig".
+            public typealias Input = Orchd_V1_SetConfigRequest
+            /// Response type for "SetConfig".
+            public typealias Output = Orchd_V1_ConfigState
+            /// Descriptor for "SetConfig".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SetConfig",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -762,6 +853,13 @@ public enum Orchd_V1_Orchd: Sendable {
             GetDocument.descriptor,
             SyncDocs.descriptor,
             GetDocsSync.descriptor,
+            ListDocsOwners.descriptor,
+            ListDocsOwnerRepos.descriptor,
+            SaveDocsOwner.descriptor,
+            RemoveDocsOwner.descriptor,
+            PurgeDocs.descriptor,
+            GetConfig.descriptor,
+            SetConfig.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -1704,6 +1802,171 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DocsSyncState>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocsSyncState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListDocsOwners" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListDocsOwners returns the owners the docs sync tracks and what each covers.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListDocsOwnersRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListDocsOwnersRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListDocsOwnersResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listDocsOwners<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListDocsOwnersRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListDocsOwnersRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListDocsOwnersResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsOwnersResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListDocsOwnerRepos" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListDocsOwnerRepos asks GitHub for an owner's repos, to choose among them;
+        /// > the owner need not be registered.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListDocsOwnerReposRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListDocsOwnerReposRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListDocsOwnerReposResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listDocsOwnerRepos<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListDocsOwnerReposRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListDocsOwnerReposRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListDocsOwnerReposResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsOwnerReposResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SaveDocsOwner" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SaveDocsOwner registers an owner if needed and sets whether it syncs and
+        /// > which repos it covers. Refused while a docs sync runs.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SaveDocsOwnerRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SaveDocsOwnerRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_DocOwner` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func saveDocsOwner<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SaveDocsOwnerRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SaveDocsOwnerRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DocOwner>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocOwner>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RemoveDocsOwner" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveDocsOwner forgets an owner, and with purge and confirm deletes what
+        /// > it indexed. Refused while a docs sync runs.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RemoveDocsOwnerRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RemoveDocsOwnerRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PurgeDocsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func removeDocsOwner<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RemoveDocsOwnerRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RemoveDocsOwnerRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PurgeDocsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeDocsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "PurgeDocs" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PurgeDocs deletes the indexed docs of repos an owner no longer covers.
+        /// > Permanent: needs confirm. Refused while a docs sync runs.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_PurgeDocsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_PurgeDocsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PurgeDocsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func purgeDocs<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_PurgeDocsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_PurgeDocsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PurgeDocsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeDocsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetConfig" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetConfig returns every setting in config.yaml, described for editing.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetConfigRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetConfigRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ConfigState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getConfig<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetConfigRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetConfigRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ConfigState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetConfig" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetConfig validates and writes settings in one write: all of them or none.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetConfigRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetConfigRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ConfigState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setConfig<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetConfigRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetConfigRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ConfigState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListRegisteredSources" method.
@@ -3432,6 +3695,248 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "ListDocsOwners" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListDocsOwners returns the owners the docs sync tracks and what each covers.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListDocsOwnersRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListDocsOwnersRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListDocsOwnersResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listDocsOwners<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListDocsOwnersRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListDocsOwnersRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListDocsOwnersResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsOwnersResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListDocsOwners.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListDocsOwnerRepos" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListDocsOwnerRepos asks GitHub for an owner's repos, to choose among them;
+        /// > the owner need not be registered.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListDocsOwnerReposRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListDocsOwnerReposRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListDocsOwnerReposResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listDocsOwnerRepos<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListDocsOwnerReposRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListDocsOwnerReposRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListDocsOwnerReposResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsOwnerReposResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListDocsOwnerRepos.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SaveDocsOwner" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SaveDocsOwner registers an owner if needed and sets whether it syncs and
+        /// > which repos it covers. Refused while a docs sync runs.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SaveDocsOwnerRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SaveDocsOwnerRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_DocOwner` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func saveDocsOwner<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SaveDocsOwnerRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SaveDocsOwnerRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_DocOwner>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocOwner>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SaveDocsOwner.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "RemoveDocsOwner" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveDocsOwner forgets an owner, and with purge and confirm deletes what
+        /// > it indexed. Refused while a docs sync runs.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RemoveDocsOwnerRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RemoveDocsOwnerRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PurgeDocsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func removeDocsOwner<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RemoveDocsOwnerRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RemoveDocsOwnerRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PurgeDocsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeDocsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.RemoveDocsOwner.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "PurgeDocs" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PurgeDocs deletes the indexed docs of repos an owner no longer covers.
+        /// > Permanent: needs confirm. Refused while a docs sync runs.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_PurgeDocsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_PurgeDocsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PurgeDocsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func purgeDocs<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_PurgeDocsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_PurgeDocsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PurgeDocsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeDocsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.PurgeDocs.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetConfig" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetConfig returns every setting in config.yaml, described for editing.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetConfigRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetConfigRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ConfigState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getConfig<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetConfigRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetConfigRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ConfigState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetConfig.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SetConfig" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetConfig validates and writes settings in one write: all of them or none.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetConfigRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetConfigRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ConfigState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setConfig<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetConfigRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetConfigRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ConfigState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SetConfig.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -5122,6 +5627,213 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetDocsSyncRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_DocsSyncState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListDocsOwners" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListDocsOwners returns the owners the docs sync tracks and what each covers.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListDocsOwnersRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listDocsOwners<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListDocsOwnersRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsOwnersResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listDocsOwners(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListDocsOwnersRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListDocsOwnersResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListDocsOwnerRepos" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListDocsOwnerRepos asks GitHub for an owner's repos, to choose among them;
+    /// > the owner need not be registered.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListDocsOwnerReposRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listDocsOwnerRepos<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListDocsOwnerReposRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsOwnerReposResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listDocsOwnerRepos(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListDocsOwnerReposRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListDocsOwnerReposResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SaveDocsOwner" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SaveDocsOwner registers an owner if needed and sets whether it syncs and
+    /// > which repos it covers. Refused while a docs sync runs.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SaveDocsOwnerRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func saveDocsOwner<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SaveDocsOwnerRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocOwner>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.saveDocsOwner(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SaveDocsOwnerRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_DocOwner>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RemoveDocsOwner" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RemoveDocsOwner forgets an owner, and with purge and confirm deletes what
+    /// > it indexed. Refused while a docs sync runs.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RemoveDocsOwnerRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func removeDocsOwner<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RemoveDocsOwnerRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeDocsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.removeDocsOwner(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RemoveDocsOwnerRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PurgeDocsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "PurgeDocs" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > PurgeDocs deletes the indexed docs of repos an owner no longer covers.
+    /// > Permanent: needs confirm. Refused while a docs sync runs.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_PurgeDocsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func purgeDocs<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_PurgeDocsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeDocsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.purgeDocs(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_PurgeDocsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PurgeDocsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetConfig" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetConfig returns every setting in config.yaml, described for editing.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetConfigRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getConfig<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetConfigRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getConfig(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetConfigRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ConfigState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetConfig" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetConfig validates and writes settings in one write: all of them or none.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SetConfigRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setConfig<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SetConfigRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setConfig(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetConfigRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ConfigState>(),
             options: options,
             onResponse: handleResponse
         )
@@ -6887,6 +7599,241 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.getDocsSync(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListDocsOwners" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListDocsOwners returns the owners the docs sync tracks and what each covers.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listDocsOwners<Result>(
+        _ message: Orchd_V1_ListDocsOwnersRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsOwnersResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListDocsOwnersRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listDocsOwners(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListDocsOwnerRepos" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListDocsOwnerRepos asks GitHub for an owner's repos, to choose among them;
+    /// > the owner need not be registered.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listDocsOwnerRepos<Result>(
+        _ message: Orchd_V1_ListDocsOwnerReposRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListDocsOwnerReposResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListDocsOwnerReposRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listDocsOwnerRepos(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SaveDocsOwner" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SaveDocsOwner registers an owner if needed and sets whether it syncs and
+    /// > which repos it covers. Refused while a docs sync runs.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func saveDocsOwner<Result>(
+        _ message: Orchd_V1_SaveDocsOwnerRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_DocOwner>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SaveDocsOwnerRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.saveDocsOwner(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RemoveDocsOwner" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RemoveDocsOwner forgets an owner, and with purge and confirm deletes what
+    /// > it indexed. Refused while a docs sync runs.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func removeDocsOwner<Result>(
+        _ message: Orchd_V1_RemoveDocsOwnerRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeDocsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RemoveDocsOwnerRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.removeDocsOwner(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "PurgeDocs" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > PurgeDocs deletes the indexed docs of repos an owner no longer covers.
+    /// > Permanent: needs confirm. Refused while a docs sync runs.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func purgeDocs<Result>(
+        _ message: Orchd_V1_PurgeDocsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeDocsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_PurgeDocsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.purgeDocs(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetConfig" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetConfig returns every setting in config.yaml, described for editing.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getConfig<Result>(
+        _ message: Orchd_V1_GetConfigRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetConfigRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getConfig(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetConfig" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetConfig validates and writes settings in one write: all of them or none.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setConfig<Result>(
+        _ message: Orchd_V1_SetConfigRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SetConfigRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setConfig(
             request: request,
             options: options,
             onResponse: handleResponse

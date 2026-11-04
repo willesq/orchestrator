@@ -41,7 +41,7 @@ Subsystems: `qdrant` (binary mode), `workflow-worker`, `sources-scheduler`, `doc
 
 `orch settings list` shows the Claude Code hooks, permission rules and plugins and the
 cc-safety-net rules orch manages; `orch settings enable|disable <kind> <id>` turns one on or off,
-as the app's Claude tab does. The `settings-watcher` subsystem reads the files every 2 s and only
+as the app's Settings → Claude section does. The `settings-watcher` subsystem reads the files every 2 s and only
 imports what changed outside orch; it never writes. A change is written at once, after a one-time
 backup to `~/.local/share/orch/backups`, and refused if the file changed underneath (try again).
 A file that does not parse shows as an error and blocks changes until it is fixed. State is per

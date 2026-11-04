@@ -48,12 +48,14 @@ final class AppModel {
     let registeredSources: RegisteredSourcesModel
     let safetyNet: SafetyNetModel
     let claude: SettingsModel
+    let config: ConfigModel
+    let docsOwners: DocsOwnersModel
     /// Keeps the sidebar's badges current between visits to their tabs.
     private(set) var badges: PeriodicRefresh?
 
     init() {
         let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & PRReviewAPI & PRLandingAPI & SystemAPI & CatalogAPI
-            & SafetyNetAPI & SettingsAPI
+            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -82,6 +84,8 @@ final class AppModel {
         registeredSources = RegisteredSourcesModel(api: api)
         safetyNet = SafetyNetModel(api: api)
         claude = SettingsModel(api: api, providers: ["claude-code", "cc-safety-net", "orch-instructions"])
+        config = ConfigModel(api: api, restartDaemon: { [control] in try await control.perform(.restart) })
+        docsOwners = DocsOwnersModel(api: api, knownOwners: { [api] in try await api.gitHubScopes(refresh: false).scopes.map(\.owner) })
     }
 
     /// Starts polling; called once the app has finished launching, and not
@@ -111,6 +115,7 @@ final class AppModel {
             { [docs] in await docs.load() },
             { [safetyNet] in await safetyNet.load() },
             { [claude] in await claude.load() },
+            { [config] in await config.load() },
         ])
         badges.start()
         self.badges = badges
@@ -208,6 +213,16 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
     func saveSource(_ draft: SourceDraft, replacing: String?) async throws -> RegisteredSource { throw failure }
     func removeSource(id: String, purge: Bool) async throws -> PurgeResult { throw failure }
     func refreshSource(id: String?) async throws { throw failure }
+}
+
+extension UnreachableDaemon: ConfigAPI, DocsOwnersAPI {
+    func config() async throws -> ConfigState { throw failure }
+    func setConfig(_ values: [String: String], confirmSensitive: Bool) async throws -> ConfigState { throw failure }
+    func docsOwners() async throws -> [DocsOwner] { throw failure }
+    func docsOwnerRepos(owner: String) async throws -> [DocsOwnerRepoChoice] { throw failure }
+    func saveDocsOwner(owner: String, enabled: Bool, mode: DocsRepoMode, repos: [String]) async throws -> DocsOwner { throw failure }
+    func removeDocsOwner(owner: String, purge: Bool) async throws -> DocsPurgeResult { throw failure }
+    func purgeDocs(owner: String, repos: [String]) async throws -> DocsPurgeResult { throw failure }
 }
 
 extension UnreachableDaemon: PRLandingAPI {

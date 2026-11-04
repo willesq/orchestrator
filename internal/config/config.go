@@ -122,6 +122,7 @@ type QueueVerifySettings struct {
 type QueueSettings struct {
 	Worker QueueWorkerSettings `mapstructure:"worker"`
 	// MaxActive caps tasks pending or in progress; dispatch fails beyond it.
+	// Held to 1-MaxActiveTasks.
 	MaxActive int `mapstructure:"max_active"`
 }
 
@@ -137,7 +138,7 @@ type QueueWorkerSettings struct {
 	// in a headless run, so it must be a mode that decides without asking.
 	PermissionMode string `mapstructure:"permission_mode"`
 	Timeout        string `mapstructure:"timeout"`        // per-task wall-clock cap
-	MaxConcurrent  int    `mapstructure:"max_concurrent"` // tasks run at once
+	MaxConcurrent  int    `mapstructure:"max_concurrent"` // tasks run at once; 0 is off, held to MaxParallelTasks
 	// AllowedTools maps a worker harness ("claude") to the permission rules its
 	// headless sessions get without asking. Each harness spells its rules its own
 	// way, so lists are kept per harness; only "claude" is used today.
@@ -426,6 +427,7 @@ func Unmarshal(v *viper.Viper) (Settings, error) {
 	if err := v.Unmarshal(&s); err != nil {
 		return Settings{}, err
 	}
+	normalizeQueue(&s.Queue)
 	return s, nil
 }
 

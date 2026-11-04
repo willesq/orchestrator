@@ -1,16 +1,20 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/docs"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
@@ -273,4 +277,103 @@ func TestHumanAgoAndNextDue(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDocsOwnerChoiceCommands(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", t.TempDir())
+	// orchd down: nothing can be syncing, so the registry is written directly.
+	down := func() (orchdv1.OrchdClient, func(), error) { return nil, nil, errors.New("no socket") }
+	run := func(args ...string) (string, error) {
+		cmd := newDocsCmd(down)
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		cmd.SetArgs(args)
+		err := cmd.Execute()
+		return out.String(), err
+	}
+	if _, err := run("add", "acme"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"repos", "acme", "--only", "a,b"}, "only:a,b"},
+		{[]string{"repos", "acme", "--except", "c"}, "except:c"},
+		{[]string{"disable", "acme"}, "covers off"},
+		{[]string{"enable", "acme"}, "except:c"},
+		{[]string{"repos", "acme", "--all"}, "covers all"},
+	} {
+		got, err := run(tt.args...)
+		if err != nil || !strings.Contains(got, tt.want) {
+			t.Errorf("%v: %q, %v", tt.args, got, err)
+		}
+	}
+	for _, args := range [][]string{
+		{"repos", "acme"},
+		{"repos", "acme", "--all", "--only", "a"},
+		{"repos", "acme", "--only", "a,../b"},
+		{"repos", "nobody", "--all"},
+		{"enable", "nobody"},
+		{"purge", "acme"},
+	} {
+		if _, err := run(args...); err == nil {
+			t.Errorf("%v: no error", args)
+		}
+	}
+
+	t.Run("with orchd up, its answer stands, refusal included", func(t *testing.T) {
+		client := &ownerClient{}
+		cmd := newDocsCmd(func() (orchdv1.OrchdClient, func(), error) { return client, func() {}, nil })
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"disable", "acme"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		if client.saved == nil || client.saved.GetOwner() != "acme" || client.saved.GetEnabled() {
+			t.Errorf("saved = %+v", client.saved)
+		}
+		client.err = grpcstatus.Error(codes.Aborted, "a docs sync is running")
+		cmd.SetArgs([]string{"repos", "acme", "--only", "a"})
+		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "sync is running") {
+			t.Errorf("err = %v", err)
+		}
+		reg, closeFn, err := openDocsRegistry()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer closeFn()
+		if o, _ := findOwner(cmd, reg, "acme"); o.RepoMode == docs.ReposInclude {
+			t.Error("a refused change reached the registry")
+		}
+	})
+
+	t.Run("a queued task is refused before anything runs", func(t *testing.T) {
+		t.Setenv(agentrun.TaskIDEnv, "task-1")
+		for _, args := range [][]string{
+			{"add", "other"}, {"remove", "acme"}, {"disable", "acme"}, {"repos", "acme", "--all"},
+		} {
+			got, err := run(args...)
+			if err == nil || !strings.Contains(err.Error(), "queue tasks cannot") {
+				t.Errorf("%v: %q, %v", args, got, err)
+			}
+		}
+	})
+}
+
+// ownerClient answers SaveDocsOwner as orchd would.
+type ownerClient struct {
+	fakeClient
+	saved *orchdv1.SaveDocsOwnerRequest
+	err   error
+}
+
+func (o *ownerClient) SaveDocsOwner(_ context.Context, req *orchdv1.SaveDocsOwnerRequest, _ ...grpc.CallOption) (*orchdv1.DocOwner, error) {
+	if o.err != nil {
+		return nil, o.err
+	}
+	o.saved = req
+	return &orchdv1.DocOwner{}, nil
 }

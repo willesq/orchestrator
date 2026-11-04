@@ -16,7 +16,7 @@ public protocol DaemonAPI: Sendable {
 public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, GitHubAPI, PRReviewAPI, SystemAPI, CatalogAPI,
     Sendable {
     private let client: GRPCClient<HTTP2ClientTransport.Posix>
-    private let orchd: Orchd_V1_Orchd.Client<HTTP2ClientTransport.Posix>
+    let orchd: Orchd_V1_Orchd.Client<HTTP2ClientTransport.Posix>
     private let callTimeout: Duration
     private let searchTimeout: Duration
 

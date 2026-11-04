@@ -121,7 +121,7 @@ private struct SubsystemList: View {
     }
 }
 
-private struct LoginItemRow: View {
+struct LoginItemRow: View {
     let item: LoginItem
 
     var body: some View {

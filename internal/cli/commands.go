@@ -12,6 +12,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
@@ -147,6 +148,21 @@ func newVersionCmd() *cobra.Command {
 	}
 }
 
+// setConfigValue checks a setting the schema knows, including the queue's hard
+// limits. The operator typed the key, so a sensitive one needs nothing further.
+// Other keys (one entry of a map, say) are written as given.
+func setConfigValue(v *viper.Viper, key, text string) error {
+	f, known := config.FieldFor(key)
+	if !known {
+		return config.Set(v, key, text)
+	}
+	val, err := config.ParseText(f, text)
+	if err != nil {
+		return err
+	}
+	return config.Apply(v, map[string]any{key: val}, true)
+}
+
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "config", Short: "Get, set, and list configuration"}
 	cmd.AddCommand(
@@ -167,7 +183,7 @@ func newConfigCmd() *cobra.Command {
 				return nil
 			},
 		},
-		&cobra.Command{
+		operatorOnlyMsg("queue tasks cannot change orch's configuration; report it in the task result instead", &cobra.Command{
 			Use:   "set <key> <value>",
 			Short: "Set a config value and persist it",
 			Args:  cobra.ExactArgs(2),
@@ -176,13 +192,13 @@ func newConfigCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := config.Set(v, args[0], args[1]); err != nil {
+				if err := setConfigValue(v, args[0], args[1]); err != nil {
 					return err
 				}
 				fmt.Fprintf(c.OutOrStdout(), "set %s = %s\n", args[0], args[1])
 				return nil
 			},
-		},
+		}),
 		&cobra.Command{
 			Use:   "list",
 			Short: "List all configuration",

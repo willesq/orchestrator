@@ -52,8 +52,8 @@ stalled state, with **Retry**, **Cancel…** and **Copy Resume Command**.
 |---|---|---|
 | `queue.worker.permission_mode` | `auto` | `auto`, `dontAsk`, `acceptEdits` or `plan`; anything else, including `bypassPermissions`, fails the task |
 | `queue.worker.timeout` | `60m` | Per task |
-| `queue.worker.max_concurrent` | `1` | Tasks running at once |
-| `queue.max_active` | `20` | Pending plus running; dispatch fails beyond it |
+| `queue.worker.max_concurrent` | `1` | Tasks running at once, 0 to 50; 0 turns the worker off |
+| `queue.max_active` | `20` | Pending plus running, 1 to 50; dispatch fails beyond it |
 | `queue.worker.allowed_tools.claude` | read-only set | Permission rules granted without asking |
 | `queue.worker.codex.enabled` | `false` | Also run tasks routed to Codex |
 

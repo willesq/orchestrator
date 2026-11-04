@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -22,10 +23,17 @@ func newDocsCmd(cf clientFactory) *cobra.Command {
 		Short: "Ingest GitHub code-repo docs (markdown) for an owner on a cadence",
 	}
 	cmd.AddCommand(
-		newDocsAddCmd(), newDocsStatusCmd(), newDocsSyncCmd(cf),
-		newDocsRefreshCmd(cf), newDocsListCmd(), newDocsOwnersCmd(), newDocsRemoveCmd(),
+		docsOperatorOnly(newDocsAddCmd()), newDocsStatusCmd(), newDocsSyncCmd(cf),
+		newDocsRefreshCmd(cf), newDocsListCmd(), newDocsOwnersCmd(), docsOperatorOnly(newDocsRemoveCmd()),
+		docsOperatorOnly(newDocsToggleCmd(cf, "enable", true)), docsOperatorOnly(newDocsToggleCmd(cf, "disable", false)),
+		docsOperatorOnly(newDocsReposCmd(cf)), newDocsPurgeCmd(cf),
 	)
 	return cmd
+}
+
+// docsOperatorOnly refuses a command that changes what is synced inside a task.
+func docsOperatorOnly(cmd *cobra.Command) *cobra.Command {
+	return operatorOnlyMsg("queue tasks cannot change which docs are synced; report it in the task result instead", cmd)
 }
 
 func openDocsRegistry() (*docs.Registry, func(), error) {
@@ -127,7 +135,7 @@ func newDocsOwnersListCmd() *cobra.Command {
 				return nil
 			}
 			for _, o := range owners {
-				fmt.Fprintf(c.OutOrStdout(), "%-20s status=%s refresh=%ds\n", o.Owner, o.Status, o.RefreshSecs)
+				fmt.Fprintf(c.OutOrStdout(), "%-20s status=%s refresh=%ds covers=%s\n", o.Owner, o.Status, o.RefreshSecs, ownerCovers(o))
 			}
 			return nil
 		},
@@ -389,6 +397,149 @@ func newDocsRemoveCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// ownerCovers says in a few words what an owner syncs.
+func ownerCovers(o docs.Owner) string {
+	switch {
+	case !o.Enabled:
+		return "off"
+	case o.RepoMode == docs.ReposInclude:
+		return "only:" + strings.Join(o.Repos, ",")
+	case o.RepoMode == docs.ReposExclude:
+		return "except:" + strings.Join(o.Repos, ",")
+	}
+	return "all"
+}
+
+// findOwner loads a registered owner.
+func findOwner(c *cobra.Command, reg *docs.Registry, owner string) (docs.Owner, error) {
+	owners, err := selectOwners(c.Context(), reg, owner)
+	if err != nil {
+		return docs.Owner{}, err
+	}
+	return owners[0], nil
+}
+
+// saveOwnerChoice goes through orchd, whose guard refuses a queued task and which
+// refuses the change while a sync runs, since the sync would overwrite it. With
+// orchd down no sync can run, so the registry is written directly.
+func saveOwnerChoice(c *cobra.Command, cf clientFactory, reg *docs.Registry, o docs.Owner, choice docs.Choice) (docs.Owner, error) {
+	client, cleanup, err := cf()
+	if err == nil {
+		defer cleanup()
+		_, err = client.SaveDocsOwner(c.Context(), &orchdv1.SaveDocsOwnerRequest{
+			Owner: o.Owner, Enabled: choice.Enabled, RepoMode: choice.RepoMode, Repos: choice.Repos,
+		})
+		if err == nil {
+			return findOwner(c, reg, o.Owner)
+		}
+		if grpcstatus.Code(err) != codes.Unavailable {
+			return docs.Owner{}, err
+		}
+	}
+	return reg.SetChoice(c.Context(), o.Owner, choice)
+}
+
+func newDocsToggleCmd(cf clientFactory, verb string, enabled bool) *cobra.Command {
+	return &cobra.Command{
+		Use:   verb + " <owner>",
+		Short: "Turn a docs owner's sync on or off; its indexed docs stay either way",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			reg, closeFn, err := openDocsRegistry()
+			if err != nil {
+				return err
+			}
+			defer closeFn()
+			o, err := findOwner(c, reg, args[0])
+			if err != nil {
+				return err
+			}
+			next, err := saveOwnerChoice(c, cf, reg, o, docs.Choice{Enabled: enabled, RepoMode: ownerMode(o), Repos: o.Repos})
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(c.OutOrStdout(), "%s covers %s\n", next.Owner, ownerCovers(next))
+			return nil
+		},
+	}
+}
+
+func ownerMode(o docs.Owner) string {
+	if o.RepoMode == "" {
+		return docs.ReposAll
+	}
+	return o.RepoMode
+}
+
+func newDocsReposCmd(cf clientFactory) *cobra.Command {
+	var all bool
+	var only, except []string
+	cmd := &cobra.Command{
+		Use:   "repos <owner>",
+		Short: "Choose which of a docs owner's repos are synced; opted-out repos keep their indexed docs",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			choice := docs.Choice{RepoMode: docs.ReposAll}
+			switch {
+			case all && len(only) == 0 && len(except) == 0:
+			case !all && len(only) > 0 && len(except) == 0:
+				choice.RepoMode, choice.Repos = docs.ReposInclude, only
+			case !all && len(except) > 0 && len(only) == 0:
+				choice.RepoMode, choice.Repos = docs.ReposExclude, except
+			default:
+				return fmt.Errorf("give exactly one of --all, --only or --except")
+			}
+			reg, closeFn, err := openDocsRegistry()
+			if err != nil {
+				return err
+			}
+			defer closeFn()
+			o, err := findOwner(c, reg, args[0])
+			if err != nil {
+				return err
+			}
+			choice.Enabled = o.Enabled
+			next, err := saveOwnerChoice(c, cf, reg, o, choice)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(c.OutOrStdout(), "%s covers %s\n", next.Owner, ownerCovers(next))
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&all, "all", false, "sync every repo")
+	cmd.Flags().StringSliceVar(&only, "only", nil, "sync only these repos")
+	cmd.Flags().StringSliceVar(&except, "except", nil, "sync every repo but these")
+	return cmd
+}
+
+func newDocsPurgeCmd(cf clientFactory) *cobra.Command {
+	var confirm bool
+	cmd := &cobra.Command{
+		Use:   "purge <owner> [repo...]",
+		Short: "Delete the indexed docs of repos an owner no longer covers (permanent)",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			if !confirm {
+				return fmt.Errorf("this permanently deletes indexed docs; pass --confirm to go ahead")
+			}
+			client, cleanup, err := cf()
+			if err != nil {
+				return err
+			}
+			defer cleanup()
+			resp, err := client.PurgeDocs(c.Context(), &orchdv1.PurgeDocsRequest{Owner: args[0], Repos: args[1:], Confirm: true})
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(c.OutOrStdout(), "deleted %d docs (%d chunks)\n", resp.GetPurgedSources(), resp.GetPurgedChunks())
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&confirm, "confirm", false, "confirm the permanent deletion")
+	return cmd
 }
 
 // humanAgo renders a unix timestamp as a coarse "N ago" string ("never" if 0).

@@ -107,6 +107,9 @@ func (s *server) requireDocsOwner(ctx context.Context, owner string) error {
 	}
 	for _, o := range owners {
 		if o.Owner == owner {
+			if !o.Enabled {
+				return grpcstatus.Errorf(codes.FailedPrecondition, "%s is turned off; turn it on with: orch docs enable %s", owner, owner)
+			}
 			return nil
 		}
 	}

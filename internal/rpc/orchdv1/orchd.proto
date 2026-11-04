@@ -113,6 +113,24 @@ service Orchd {
   rpc SyncDocs(SyncDocsRequest) returns (DocsSyncState);
   // GetDocsSync reports the running docs sync, or the last one.
   rpc GetDocsSync(GetDocsSyncRequest) returns (DocsSyncState);
+  // ListDocsOwners returns the owners the docs sync tracks and what each covers.
+  rpc ListDocsOwners(ListDocsOwnersRequest) returns (ListDocsOwnersResponse);
+  // ListDocsOwnerRepos asks GitHub for an owner's repos, to choose among them;
+  // the owner need not be registered.
+  rpc ListDocsOwnerRepos(ListDocsOwnerReposRequest) returns (ListDocsOwnerReposResponse);
+  // SaveDocsOwner registers an owner if needed and sets whether it syncs and
+  // which repos it covers. Refused while a docs sync runs.
+  rpc SaveDocsOwner(SaveDocsOwnerRequest) returns (DocOwner);
+  // RemoveDocsOwner forgets an owner, and with purge and confirm deletes what
+  // it indexed. Refused while a docs sync runs.
+  rpc RemoveDocsOwner(RemoveDocsOwnerRequest) returns (PurgeDocsResponse);
+  // PurgeDocs deletes the indexed docs of repos an owner no longer covers.
+  // Permanent: needs confirm. Refused while a docs sync runs.
+  rpc PurgeDocs(PurgeDocsRequest) returns (PurgeDocsResponse);
+  // GetConfig returns every setting in config.yaml, described for editing.
+  rpc GetConfig(GetConfigRequest) returns (ConfigState);
+  // SetConfig validates and writes settings in one write: all of them or none.
+  rpc SetConfig(SetConfigRequest) returns (ConfigState);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -724,6 +742,87 @@ message DocOwner {
   string status = 6;      // ok | partial | error | new
   repeated DocRepo repos = 7;
   string error = 8;       // why the last sync failed or stopped early
+  bool enabled = 9;       // off: not synced, indexed docs kept
+  string repo_mode = 10;  // all | include | exclude
+  repeated string selected_repos = 11; // repo names, for include/exclude
+}
+
+message ListDocsOwnersRequest {}
+
+message ListDocsOwnersResponse {
+  repeated DocOwner owners = 1;
+}
+
+message ListDocsOwnerReposRequest {
+  string owner = 1;
+}
+
+message DocsOwnerRepo {
+  string name = 1;
+  bool archived = 2;
+  bool fork = 3;
+}
+
+message ListDocsOwnerReposResponse {
+  repeated DocsOwnerRepo repos = 1;
+}
+
+message SaveDocsOwnerRequest {
+  string owner = 1;
+  bool enabled = 2;
+  string repo_mode = 3; // all | include | exclude
+  repeated string repos = 4;
+  int64 refresh_secs = 5; // 0 keeps the cadence, or the default for a new owner
+}
+
+message RemoveDocsOwnerRequest {
+  string owner = 1;
+  bool purge = 2;   // also delete everything the owner indexed
+  bool confirm = 3; // required with purge: deletion is permanent
+}
+
+message PurgeDocsRequest {
+  string owner = 1;
+  // Repos to purge, which the owner must not cover. Empty means every repo
+  // the owner no longer covers.
+  repeated string repos = 2;
+  bool confirm = 3; // required: deletion is permanent
+}
+
+message PurgeDocsResponse {
+  int32 purged_sources = 1; // indexed docs deleted
+  int32 purged_chunks = 2;
+}
+
+message GetConfigRequest {}
+
+message SetConfigRequest {
+  map<string, string> values = 1; // key → JSON value
+  bool confirm_sensitive = 2;     // required to change a sensitive setting
+}
+
+message ConfigField {
+  string key = 1;
+  string section = 2;
+  string label = 3;
+  string help = 4;
+  string type = 5; // bool | int | float | string | duration | enum | path | url | version | list | map
+  string value = 6;         // current effective value, JSON
+  string default_value = 7; // JSON
+  repeated string options = 8; // enum
+  bool has_range = 9;
+  double min = 10;
+  double max = 11;
+  bool sensitive = 12;   // changing it needs confirm_sensitive
+  bool live = 13;        // takes effect without restarting orchd
+  bool env_override = 14; // an environment variable sets it, so it cannot be changed here
+  bool pending_restart = 15; // differs from what orchd started with
+}
+
+message ConfigState {
+  repeated ConfigField fields = 1;
+  string path = 2;              // config.yaml
+  bool restart_required = 3;    // some field is pending_restart
 }
 
 message DocRepo {

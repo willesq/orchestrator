@@ -414,6 +414,16 @@ the hand-off unit, as a `session_record` like any session.
     content), and for a stored row that fails validation (from before it existed).
   - A refresh running during the purge can store a source's docs again; purge again to remove them.
 
+**Opting in and out** (app: Settings → Docs; CLI: `orch docs enable|disable <owner>`,
+`orch docs repos <owner> --all|--only a,b|--except a,b`, `orch docs purge <owner> [repo...] --confirm`): an owner
+can be off, and can cover every repo, only some, or all but some (`docs_owners.enabled`, `repo_mode`, `repos`,
+migration `0021`). Names match case-insensitively. Opting out stops the sync and keeps what is indexed: the repo's
+row is marked `excluded`, which clears any failure it showed, so it stays in the catalog and search. Deleting those
+docs is a separate, confirmed step (`PurgeDocs`), refused for a repo still synced, since the next sync would only
+restore it. Opting a repo back in forgets its HEAD, so the next sync walks it and its status follows that sync;
+files whose hash is unchanged are not embedded again. Widening or resuming makes the owner due. Changes are refused
+while a sync runs, because the sync would overwrite them from what it read at its start.
+
 **Docs registry** (`orch docs add <owner>`, every 6 h): list the owner's repos with
 `gh api graphql` (skipping archived and forks by default), skip repos whose default-branch HEAD is
 unchanged, `gh repo clone --depth 1` into `<data>/repos`, and store each markdown file whose
