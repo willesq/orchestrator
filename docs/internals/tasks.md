@@ -441,10 +441,22 @@ review text before the verdict block (`report`, ≤ 60000 bytes); neither is eve
 or a failed review review its current commit again.
 
 **States:** `waiting` → (`held`) → `reviewing` → `verdict`, or `failed`; `closed` once the PR is merged or
-closed; `stopped` when the user stops watching (in the app, or `orch prs stop`). `StopPRReview` with `forget` deletes the row. Stopping does not cancel a review task already running; that task is cancelled on its own, and its verdict is not collected.
+closed; `stopped` when the user stops watching (in the app, or `orch prs stop`), or when the watch
+reaches its limit. A PR moving between draft and open stays watched. `closed` and `stopped` rows are no
+longer read; a closed PR that is reopened waits for the user to watch it again.
+
+**Watch limit:** a watch stops 14 days after it began (`watched_at`), with a note saying so and asking
+the user to watch the PR again, which starts a new 14 days. Changing the mode or notes of a running
+watch does not extend it. The limit is enforced when the PR is read, so within one poll, and also when
+the read fails. A review under way finishes first: its verdict is kept and shown, and is posted only if
+the user watches the PR again in a mode that posts and the commit is unchanged. A PR already merged or
+closed by then reads as `closed`. A go-ahead for an untrusted author does not carry into a new watch.
+
+`StopPRReview` with `forget` deletes the row. Stopping does not cancel a review task already running; that task is cancelled on its own, and its verdict is not collected.
 
 **The `pr-reviews` unit** ticks every 15 s:
-- A `reviewing` row reads its task from the ledger (no `gh`). Each review gets a random token
+- A `reviewing` row reads its task from the ledger (no `gh`), so a PR closed during a review, or a
+  limit reached during one, is acted on once the review ends, before anything is posted for it. Each review gets a random token
   (`nonce`, stored on the row and given only in the task prompt). The result must end with exactly
   one `ORCH-VERDICT-BEGIN <token> … ORCH-VERDICT-END <token>` block holding JSON
   `{verdict, reason, comment, for_user}`; a fence around it is allowed, nothing after it. A block quoted from

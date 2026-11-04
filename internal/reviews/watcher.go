@@ -22,6 +22,12 @@ const (
 // DefaultPoll is how often each watched PR's readiness is checked.
 const DefaultPoll = 2 * time.Minute
 
+const maxWatchDays = 14
+
+// MaxWatch is how long one watch runs before it stops and asks the user to
+// watch the PR again, so a forgotten PR does not keep polling and reviewing.
+const MaxWatch = maxWatchDays * 24 * time.Hour
+
 // Dispatcher queues a review task with body and returns its ID.
 type Dispatcher func(ctx context.Context, body string) (string, error)
 
@@ -130,7 +136,11 @@ func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, inst
 		log.Printf("pr-reviews: %s may now post as %q (was %q)", url, mode, r.Mode)
 	}
 	switch r.State {
-	case StateStopped, StateClosed, StateHeld:
+	case StateStopped, StateClosed:
+		// A new watch, with a full MaxWatch ahead of it. A go-ahead covers one
+		// review on the watch it was given for, unless this call gives it again.
+		r.State, r.WatchedAt, r.GoAhead = StateWaiting, time.Time{}, goAhead
+	case StateHeld:
 		r.State = StateWaiting
 	case StateFailed:
 		// A failed head is not retried on its own; asking again retries it.
@@ -359,7 +369,10 @@ func (w *Watcher) check(ctx context.Context, url string) {
 	w.mu.Unlock()
 	if err != nil {
 		w.update(ctx, url, func(r *Review) bool {
-			r.Note = "could not read the PR: " + github.Printable(err.Error(), 300)
+			// A PR that can no longer be read still reaches the limit.
+			if !w.expire(r) {
+				r.Note = "could not read the PR: " + github.Printable(err.Error(), 300)
+			}
 			return true
 		})
 		return
@@ -373,6 +386,9 @@ func (w *Watcher) check(ctx context.Context, url string) {
 	w.update(ctx, url, func(r *Review) bool {
 		if st.State != "OPEN" {
 			r.State, r.Note = StateClosed, "the PR is "+strings.ToLower(st.State)
+			return true
+		}
+		if w.expire(r) {
 			return true
 		}
 		if st.Head != r.HeadSHA {
@@ -418,6 +434,18 @@ func (w *Watcher) check(ctx context.Context, url string) {
 	if post != nil {
 		w.send(ctx, url, *post)
 	}
+}
+
+// expire stops a watch that has run past MaxWatch and reports whether it did.
+// Only check calls it, so a review under way finishes and keeps its verdict.
+func (w *Watcher) expire(r *Review) bool {
+	if w.clock().Sub(r.WatchedAt) <= MaxWatch {
+		return false
+	}
+	log.Printf("pr-reviews: %s reached the %d-day watch limit", r.URL, maxWatchDays)
+	r.State = StateStopped
+	r.Note = fmt.Sprintf("reached the %d-day watch limit; watch the PR again to keep going", maxWatchDays)
+	return true
 }
 
 // posting is a review orch is about to submit, or why it will not.
