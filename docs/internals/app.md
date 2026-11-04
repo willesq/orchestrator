@@ -60,8 +60,16 @@ first, each with its reason (see the PR babysitter in [tasks.md](tasks.md)). Cli
 
 ## Launching
 
-Orch.app lives in the menu bar (`LSUIElement`). Without help, opening it would show nothing, and on
-a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this:
+Orch.app lives in the menu bar and, by default, the Dock. With the Dock icon turned off, opening it
+would show nothing without help, and on a crowded menu bar its icon can sit behind the notch.
+`AppDelegate` handles this:
+
+- **Dock icon:** "Show in Dock" in Settings → App (`DockIcon`, on unless the user turned it off, in
+  user defaults) picks the activation policy before launch finishes and again when it changes, with
+  no relaunch. Off is `.accessory`: the menu bar icon and windows stay; the Dock icon, app menu and
+  ⌘-Tab entry go. The bundle does not set `LSUIElement`, because the default is a Dock app, so a copy
+  with the icon off can show it briefly as it launches. Keep in Dock makes the icon a launcher while
+  the app is not running.
 
 - **When the user opens it** (Finder, Spotlight, `open`), the main window appears. A launch at login
   (the launch Apple event's `keyAELaunchedAsLogInItem`) shows only the tray icon.
@@ -524,8 +532,7 @@ rebuild.
   - It removes a copy an earlier install left in the other folder, but only one whose bundle id is
     `com.willesq.orch`, so Spotlight and Login Items see a single Orch.
   - This is the way to run the app from source until the cask ships.
-- **Bundle settings:** `LSUIElement` keeps the app out of the Dock, and `LSMinimumSystemVersion`
-  is 15.2.
+- **Bundle settings:** `LSMinimumSystemVersion` is 15.2.
 - **Tests:** `make app-test` runs the tests, and `make app-cover` applies the 80%-per-file gate
   to `OrchKit` (generated code excluded).
 - **CI:** `app.yml` runs on pull requests to `main` that touch `macos/**`, `orchd.proto` or the

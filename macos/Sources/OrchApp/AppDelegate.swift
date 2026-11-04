@@ -3,9 +3,9 @@ import OrchKit
 import SwiftUI
 
 /// Launch handling SwiftUI's App does not cover: one copy at a time, and a
-/// visible window whenever the user opens the app. It lives in the menu bar,
-/// so without this opening it shows nothing, and its icon may sit behind the
-/// notch.
+/// visible window whenever the user opens the app. It can live in the menu bar
+/// alone, so without this opening it could show nothing, and its icon may sit
+/// behind the notch.
 ///
 /// The main window is a plain NSWindow hosting SwiftUI, because a SwiftUI
 /// `Window` scene can only be opened from a live view, and the menu bar label
@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // The launch Apple event is only available this early.
         let event = NSAppleEventManager.shared().currentAppleEvent
         launchedAsLoginItem = event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
+        DockIcon.apply(shown: DockIcon.shown())
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
