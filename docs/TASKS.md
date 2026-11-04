@@ -40,6 +40,10 @@ orch prs watches          # the PRs orchd watches for review
 orch prs stop <pr-url>    # stop watching one; no new reviews start and nothing more is posted
 ```
 
+A PR watch also ends by itself: when the PR is merged or closed (moving between draft and open keeps
+it), and after 14 days, with a note saying so. Choose to review the PR again in Orch.app for another 14
+days.
+
 `orch tasks` marks a task nothing is running as `⚠ stalled`. In Orch.app, the Tasks tab updates
 live as tasks change (orchd streams them; no refresh needed). It shows the same running, waiting or
 stalled state, with **Retry**, **Cancel…** and **Copy Resume Command**.

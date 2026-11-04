@@ -61,3 +61,29 @@ func TestDocsLegacyErrorsMigration(t *testing.T) {
 		t.Errorf("after down: error = %q (%v), want empty", got, err)
 	}
 }
+
+// A watch older than the column counts from when it was created.
+func TestPRReviewWatchedAtMigration(t *testing.T) {
+	conn, err := openAt(filepath.Join(t.TempDir(), "orch.db"))
+	if err != nil {
+		t.Fatalf("openAt: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	if err := goose.DownTo(conn, "migrations", 19); err != nil {
+		t.Fatalf("DownTo 19: %v", err)
+	}
+	if _, err := conn.Exec(`INSERT INTO pr_reviews (url, repo, number, mode, state, created_at, updated_at)
+		VALUES ('https://github.com/o/r/pull/1', 'o/r', 1, 'verdict', 'waiting', 1700000000, 1800000000)`); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if err := migrate(conn); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	var watched int64
+	if err := conn.QueryRow(`SELECT watched_at FROM pr_reviews`).Scan(&watched); err != nil {
+		t.Fatal(err)
+	}
+	if watched != 1700000000 {
+		t.Errorf("watched_at = %d, want created_at", watched)
+	}
+}

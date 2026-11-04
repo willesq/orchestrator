@@ -39,7 +39,7 @@ const (
 	StateVerdict   = "verdict"   // the verdict covers the PR's current head
 	StateFailed    = "failed"    // the review task failed; a new head tries again
 	StateClosed    = "closed"    // the PR was merged or closed
-	StateStopped   = "stopped"   // the user stopped watching it
+	StateStopped   = "stopped"   // the user stopped watching it, or the watch reached MaxWatch
 )
 
 // Verdicts a review task returns.
@@ -103,6 +103,8 @@ type Review struct {
 	// Note is the last problem, or why nothing was posted.
 	Note                            string
 	CreatedAt, UpdatedAt, VerdictAt time.Time
+	// WatchedAt is when the current watch began; Put stamps it when zero.
+	WatchedAt time.Time
 }
 
 // Active reports whether the watcher still works on the review.
@@ -135,14 +137,14 @@ type Store struct {
 func NewStore(db *sql.DB) *Store { return &Store{db: db, now: time.Now} }
 
 const columns = `url, repo, number, mode, state, head_sha, pending_sha, task_id, nonce, verdict, reason,
-	comment, instructions, for_user, report, go_ahead, posted, note, created_at, updated_at, verdict_at, update_in_place`
+	comment, instructions, for_user, report, go_ahead, posted, note, created_at, updated_at, verdict_at, update_in_place, watched_at`
 
 func scan(row interface{ Scan(...any) error }) (Review, error) {
 	var r Review
-	var created, updated, verdict int64
+	var created, updated, verdict, watched int64
 	err := row.Scan(&r.URL, &r.Repo, &r.Number, &r.Mode, &r.State, &r.HeadSHA, &r.PendingSHA, &r.TaskID, &r.Nonce,
-		&r.Verdict, &r.Reason, &r.Comment, &r.Instructions, &r.ForUser, &r.Report, &r.GoAhead, &r.Posted, &r.Note, &created, &updated, &verdict, &r.UpdateInPlace)
-	r.CreatedAt, r.UpdatedAt, r.VerdictAt = unix(created), unix(updated), unix(verdict)
+		&r.Verdict, &r.Reason, &r.Comment, &r.Instructions, &r.ForUser, &r.Report, &r.GoAhead, &r.Posted, &r.Note, &created, &updated, &verdict, &r.UpdateInPlace, &watched)
+	r.CreatedAt, r.UpdatedAt, r.VerdictAt, r.WatchedAt = unix(created), unix(updated), unix(verdict), unix(watched)
 	return r, err
 }
 
@@ -187,22 +189,26 @@ func (s *Store) Get(ctx context.Context, url string) (Review, bool, error) {
 	return r, err == nil, err
 }
 
-// Put writes r, stamping its update time (and creation time when new).
+// Put writes r, stamping its update time (and its creation and watch start
+// times when unset).
 func (s *Store) Put(ctx context.Context, r *Review) error {
 	now := s.now().UTC().Truncate(time.Second)
 	if r.CreatedAt.IsZero() {
 		r.CreatedAt = now
 	}
+	if r.WatchedAt.IsZero() {
+		r.WatchedAt = now
+	}
 	r.UpdatedAt = now
 	_, err := s.db.ExecContext(ctx, `INSERT INTO pr_reviews (`+columns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(url) DO UPDATE SET repo = excluded.repo, number = excluded.number, mode = excluded.mode,
 			state = excluded.state, head_sha = excluded.head_sha, pending_sha = excluded.pending_sha,
 			task_id = excluded.task_id, nonce = excluded.nonce, verdict = excluded.verdict, reason = excluded.reason,
 			comment = excluded.comment, instructions = excluded.instructions, for_user = excluded.for_user, report = excluded.report, go_ahead = excluded.go_ahead, posted = excluded.posted, note = excluded.note,
-			updated_at = excluded.updated_at, verdict_at = excluded.verdict_at, update_in_place = excluded.update_in_place`,
+			updated_at = excluded.updated_at, verdict_at = excluded.verdict_at, update_in_place = excluded.update_in_place, watched_at = excluded.watched_at`,
 		r.URL, r.Repo, r.Number, r.Mode, r.State, r.HeadSHA, r.PendingSHA, r.TaskID, r.Nonce, r.Verdict, r.Reason,
-		r.Comment, r.Instructions, r.ForUser, r.Report, r.GoAhead, r.Posted, r.Note, seconds(r.CreatedAt), seconds(r.UpdatedAt), seconds(r.VerdictAt), r.UpdateInPlace)
+		r.Comment, r.Instructions, r.ForUser, r.Report, r.GoAhead, r.Posted, r.Note, seconds(r.CreatedAt), seconds(r.UpdatedAt), seconds(r.VerdictAt), r.UpdateInPlace, seconds(r.WatchedAt))
 	return err
 }
 
