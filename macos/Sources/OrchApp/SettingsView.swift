@@ -101,6 +101,7 @@ struct SettingsView: View {
             Form {
                 Section("This app") {
                     AppearancePicker()
+                    DockIconToggle()
                     LoginItemRow(item: loginItem)
                 }
                 if let path = config.state?.path {

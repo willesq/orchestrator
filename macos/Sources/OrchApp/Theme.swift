@@ -229,3 +229,18 @@ struct AppearancePicker: View {
         .onChange(of: choice) { _, new in new.apply() }
     }
 }
+
+/// Shows or hides the Dock icon at once, without a relaunch.
+struct DockIconToggle: View {
+    @AppStorage(DockIcon.key) private var shown = true
+
+    var body: some View {
+        Toggle("Show in Dock", isOn: $shown)
+            .help("Keep an icon in the Dock as well as the menu bar")
+            .onChange(of: shown) { _, new in
+                NSApp.setActivationPolicy(DockIcon.policy(shown: new))
+                // Changing the policy can push the app's windows behind others.
+                NSApp.activate()
+            }
+    }
+}
