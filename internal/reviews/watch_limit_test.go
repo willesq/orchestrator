@@ -378,3 +378,38 @@ func TestVerdictKeptAtTheLimitPostsOnlyAfterWatchingAgain(t *testing.T) {
 		t.Fatalf("posts = %+v", e.posts)
 	}
 }
+
+// The poll that would stop the watch has not run yet, or orchd was down: what
+// the user asks for now is a new watch, not lost to the next check.
+func TestWatchingPastTheLimitBeforeItStopsIsANewWatch(t *testing.T) {
+	e, w := newEnv(t)
+	ctx := context.Background()
+	notes := "look again"
+	reviewed(t, e, w, ModeVerdict)
+	e.clock = e.clock.Add(MaxWatch + time.Second)
+	r, err := w.WatchWith(ctx, testURL, ModeVerdict, nil, &notes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !r.WatchedAt.Equal(e.clock.UTC()) {
+		t.Fatalf("WatchedAt = %v, clock %v", r.WatchedAt, e.clock)
+	}
+	w.Tick(ctx)
+	if r := get(t, w); r.State != StateReviewing || r.Instructions != notes {
+		t.Fatalf("after the check = %+v", r)
+	}
+}
+
+func TestPreferenceChangePastTheLimitDoesNotExtendIt(t *testing.T) {
+	e, w := newEnv(t)
+	ctx := context.Background()
+	reviewed(t, e, w, ModeVerdict)
+	e.clock = e.clock.Add(MaxWatch + time.Second)
+	if _, err := w.SetUpdateInPlace(ctx, testURL, true); err != nil {
+		t.Fatal(err)
+	}
+	w.Tick(ctx)
+	if r := get(t, w); r.State != StateStopped {
+		t.Fatalf("%+v", r)
+	}
+}

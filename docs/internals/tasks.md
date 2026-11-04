@@ -447,7 +447,8 @@ longer read; a closed PR that is reopened waits for the user to watch it again.
 
 **Watch limit:** a watch stops 14 days after it began (`watched_at`), with a note saying so and asking
 the user to watch the PR again, which starts a new 14 days. Changing the mode or notes of a running
-watch does not extend it. The limit is enforced when the PR is read, so within one poll, and also when
+watch does not extend it, unless it is already past the limit and not yet stopped: that counts as
+watching again. The limit is enforced when the PR is read, so within one poll, and also when
 the read fails. A review under way finishes first: its verdict is kept and shown, and is posted only if
 the user watches the PR again in a mode that posts and the commit is unchanged. A PR already merged or
 closed by then reads as `closed`. A go-ahead for an untrusted author does not carry into a new watch.

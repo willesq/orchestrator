@@ -135,12 +135,13 @@ func (w *Watcher) WatchOpts(ctx context.Context, url, mode string, comment, inst
 		// Who changed what orch may post, and when, is worth keeping.
 		log.Printf("pr-reviews: %s may now post as %q (was %q)", url, mode, r.Mode)
 	}
-	switch r.State {
-	case StateStopped, StateClosed:
+	if !r.Active() || w.pastLimit(r) {
 		// A new watch, with a full MaxWatch ahead of it. A go-ahead covers one
 		// review on the watch it was given for, unless this call gives it again.
-		r.State, r.WatchedAt, r.GoAhead = StateWaiting, time.Time{}, goAhead
-	case StateHeld:
+		r.WatchedAt, r.GoAhead = time.Time{}, goAhead
+	}
+	switch r.State {
+	case StateStopped, StateClosed, StateHeld:
 		r.State = StateWaiting
 	case StateFailed:
 		// A failed head is not retried on its own; asking again retries it.
@@ -436,10 +437,12 @@ func (w *Watcher) check(ctx context.Context, url string) {
 	}
 }
 
+func (w *Watcher) pastLimit(r Review) bool { return w.clock().Sub(r.WatchedAt) > MaxWatch }
+
 // expire stops a watch that has run past MaxWatch and reports whether it did.
 // Only check calls it, so a review under way finishes and keeps its verdict.
 func (w *Watcher) expire(r *Review) bool {
-	if w.clock().Sub(r.WatchedAt) <= MaxWatch {
+	if !w.pastLimit(*r) {
 		return false
 	}
 	log.Printf("pr-reviews: %s reached the %d-day watch limit", r.URL, maxWatchDays)
