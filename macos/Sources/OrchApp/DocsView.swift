@@ -42,9 +42,7 @@ private struct DocList: View {
                 .textFieldStyle(.roundedBorder)
                 .padding(8)
             if let error = model.lastError {
-                Label("orchd: \(error)", systemImage: "bolt.slash")
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                ErrorText("orchd: \(error)", symbol: "bolt.slash")
                     .padding(.horizontal, 8)
             }
             List(selection: Binding(get: { model.selected }, set: { file in Task { await model.select(file) } })) {
@@ -216,7 +214,7 @@ private struct DocumentText: View {
             if model.isLoadingDocument {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let error = model.documentError {
-                Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red).padding(12)
+                ErrorText(error, symbol: "exclamationmark.triangle", font: .body).padding(12)
                 Spacer()
             } else if let doc = model.document {
                 RebuildCallout(malformed: doc.malformed)
@@ -314,7 +312,7 @@ struct ScopedSearch<Scope: Hashable & Identifiable & RawRepresentable>: View whe
                     .disabled(search.isSearching)
             }
             if let error = search.lastError {
-                Text(verbatim: error).font(.caption).foregroundStyle(.red)
+                ErrorText(error)
             }
             if search.isSearching {
                 ProgressView().controlSize(.small)

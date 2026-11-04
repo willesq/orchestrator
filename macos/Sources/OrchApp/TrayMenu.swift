@@ -22,9 +22,7 @@ struct TrayMenu: View {
                 SubsystemList(subsystems: status.subsystems)
             }
             if let controlError {
-                Text(controlError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                ErrorText(controlError)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Divider()
@@ -144,7 +142,7 @@ struct LoginItemRow: View {
                 EmptyView()
             }
             if let error = item.lastError {
-                Text(error).font(.caption).foregroundStyle(.red)
+                ErrorText(error)
             }
         }
     }

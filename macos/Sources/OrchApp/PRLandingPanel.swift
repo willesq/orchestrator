@@ -34,7 +34,7 @@ struct PRLandingPanel: View {
             }
             if let error = landings.errors[task.id] {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(verbatim: displaySafe(error)).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                    ErrorText(displaySafe(error))
                     Button("Check again") { Task { await landings.load(task.id) } }.controlSize(.small)
                 }
             }
@@ -289,7 +289,7 @@ private struct SendBackSheet: View {
             .frame(minHeight: 180, maxHeight: 260)
             .overlay(RoundedRectangle(cornerRadius: 4).stroke(.quaternary))
             if let problem = handoff.dispatch.lastError {
-                Text(verbatim: displaySafe(problem)).font(.callout).foregroundStyle(.red)
+                ErrorText(displaySafe(problem), font: .callout)
             }
             HStack {
                 Spacer()

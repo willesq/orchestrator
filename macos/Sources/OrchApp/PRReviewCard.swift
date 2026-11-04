@@ -69,7 +69,7 @@ struct ReviewCard: View {
                 if let review, review.verdict != nil { verdict(review) }
             }
             if let error = prs.actionErrors[url] {
-                Text(verbatim: error).font(.caption).foregroundStyle(.red)
+                ErrorText(error)
             }
         }
         .disabled(saving)

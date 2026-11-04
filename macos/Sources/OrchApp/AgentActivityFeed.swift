@@ -44,7 +44,7 @@ struct AgentActivityFeed: View {
     private func content(_ log: TaskActivityLog?) -> some View {
         if let error = landings.activityErrors[task.id], log == nil {
             VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: "Could not read the session: \(displaySafe(error))").font(.caption).foregroundStyle(.red)
+                ErrorText("Could not read the session: \(displaySafe(error))")
                 Button("Try again") { Task { await landings.refreshActivity(task.id) } }.controlSize(.small)
             }
         } else if let log {

@@ -16,7 +16,7 @@ struct TasksView: View {
                 // the action that fills the list.
                 VStack(spacing: 0) {
                     if let error = model.lastError {
-                        Text(error).font(.caption).foregroundStyle(.red).padding(8)
+                        ErrorText(error).padding(8)
                     }
                     if model.filter == .all {
                         EmptyState(symbol: "paperplane", title: "No tasks yet",
@@ -68,7 +68,7 @@ struct TasksView: View {
     private var list: some View {
         VStack(spacing: 0) {
             if let error = model.lastError {
-                Text(error).font(.caption).foregroundStyle(.red).padding(8)
+                ErrorText(error).padding(8)
             }
             List(model.tasks, selection: $model.selectedID) { task in
                 VStack(alignment: .leading, spacing: 2) {
@@ -290,7 +290,7 @@ private struct DispatchSheet: View {
                 .frame(minHeight: 180)
                 .overlay(RoundedRectangle(cornerRadius: 4).stroke(.quaternary))
             if let problem = model.lastError {
-                Text(problem).font(.callout).foregroundStyle(.red)
+                ErrorText(problem, font: .callout)
             }
             if let outcome = model.outcome {
                 VStack(alignment: .leading, spacing: 2) {

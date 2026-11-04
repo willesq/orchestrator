@@ -80,10 +80,7 @@ private struct SafetyNetHeader: View {
                 ProgressView().controlSize(.small)
             }
             if let error = model.lastError {
-                Label { Text(verbatim: displaySafe(error)) } icon: { Image(systemName: "exclamationmark.triangle") }
-                    .foregroundStyle(.red)
-                    .font(.callout)
-                    .textSelection(.enabled)
+                ErrorText(displaySafe(error), symbol: "exclamationmark.triangle", font: .callout)
             }
             if let message = model.message {
                 Text(verbatim: message).textStyle(.supporting)
@@ -165,8 +162,7 @@ private struct RulebookList: View {
             ForEach(rulebooks) { rb in
                 Section {
                     if !rb.error.isEmpty {
-                        Label { Text(verbatim: displaySafe(rb.error)) } icon: { Image(systemName: "exclamationmark.triangle") }
-                            .foregroundStyle(.red)
+                        ErrorText(displaySafe(rb.error), symbol: "exclamationmark.triangle", font: .body)
                             .help("cc-safety-net skips this rulebook until it is fixed")
                     }
                     ForEach(rb.rules) { rule in
@@ -231,9 +227,7 @@ private struct RuleRow: View {
                     Text(verbatim: displaySafe(rule.reason)).textStyle(.caption).lineLimit(3)
                 }
                 if let item, let error = settings.itemErrors[item.ref] {
-                    Label { Text(verbatim: displaySafe(error)) } icon: { Image(systemName: "exclamationmark.triangle") }
-                        .font(.caption)
-                        .foregroundStyle(.red)
+                    ErrorText(displaySafe(error), symbol: "exclamationmark.triangle")
                 }
             }
             Spacer(minLength: 4)

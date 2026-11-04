@@ -123,7 +123,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(verbatim: bannerText)
                     if let error = config.restartError {
-                        Text(verbatim: error).font(.caption).foregroundStyle(.red)
+                        ErrorText(error)
                     }
                 }
                 Spacer(minLength: 8)
@@ -177,7 +177,7 @@ private struct ConfigForm<Header: View>: View {
             header
             if let error = config.lastError {
                 Section {
-                    Text(verbatim: "Could not read the settings: \(error)").foregroundStyle(.red)
+                    ErrorText("Could not read the settings: \(error)", font: .body)
                     Button("Try Again") { Task { await config.load() } }
                 }
             } else if config.state == nil {
@@ -217,7 +217,7 @@ private struct ConfigFieldRow: View {
                     .font(.caption).foregroundStyle(.orange)
             }
             if let error = config.fieldErrors[field.key] {
-                Text(verbatim: error).font(.caption).foregroundStyle(.red)
+                ErrorText(error)
             }
         }
         .contextMenu {

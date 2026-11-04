@@ -22,7 +22,7 @@ struct SourcesView: View {
                                message: "Add a web page, a local repo or an owner folder, and orch keeps it in memory, fetching it again on a schedule.",
                                actionTitle: "Add source", action: { editing = Editing(source: nil) })
                     if let error = model.lastError {
-                        Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.red).padding(8)
+                        ErrorText(error, symbol: "exclamationmark.triangle").padding(8)
                     }
                 }
             } else if !model.loaded && model.lastError == nil {
@@ -84,7 +84,7 @@ private struct SourceTable: View {
                 Divider()
                 VStack(alignment: .leading, spacing: 4) {
                     if let error = model.lastError {
-                        Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+                        ErrorText(error, symbol: "exclamationmark.triangle", font: .body)
                     }
                     if let message = model.message {
                         Text(verbatim: message).foregroundStyle(Color.secondaryText)
@@ -188,10 +188,10 @@ private struct SourceEditor: View {
                 TextField("Tags", text: $draft.tags, prompt: Text("optional, comma-separated"))
             }
             if let problem = draft.problem, !draft.trimmedURI.isEmpty {
-                Text(problem).font(.caption).foregroundStyle(.red)
+                ErrorText(problem)
             }
             if let error = model.lastError {
-                Text(verbatim: error).font(.caption).foregroundStyle(.red)
+                ErrorText(error)
             }
             HStack {
                 Spacer()

@@ -53,7 +53,7 @@ private struct SearchPane: View {
             }
             .padding(12)
             if let error = model.lastError {
-                Text("Search failed: \(error)").foregroundStyle(.red).padding(.horizontal, 12)
+                ErrorText("Search failed: \(error)", font: .body).padding(.horizontal, 12)
             }
             if let fallback = model.result?.fallback {
                 Text("Answered by meaning only: \(fallback)")
@@ -202,7 +202,7 @@ private struct SourcesPane: View {
             }
             .padding(12)
             if let error = model.lastError {
-                Text("Could not list sources: \(error)").foregroundStyle(.red).padding(.horizontal, 12)
+                ErrorText("Could not list sources: \(error)", font: .body).padding(.horizontal, 12)
             }
             Divider()
             Table(model.list?.sources ?? []) {

@@ -63,8 +63,7 @@ private struct SystemOverview: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if let error = model.lastError {
-                    Label("orchd: \(error)", systemImage: "bolt.slash")
-                        .foregroundStyle(.red)
+                    ErrorText("orchd: \(error)", symbol: "bolt.slash", font: .body)
                 }
                 processes
                 SubsystemsBox(status: model.status, restart: restart)
@@ -298,7 +297,7 @@ private struct ReportBox: View {
                     Text("orch status, every 15 s").textStyle(.caption)
                 }
                 if let error = model.reportError {
-                    Text(verbatim: error).font(.caption).foregroundStyle(.red).lineLimit(4)
+                    ErrorText(error).lineLimit(4)
                 }
                 // Titles and names can repeat (one line per harness), so rows
                 // are identified by position.

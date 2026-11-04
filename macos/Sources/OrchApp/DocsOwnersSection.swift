@@ -24,7 +24,7 @@ struct DocsOwnersSection: View {
                 Text(verbatim: message).textStyle(.caption)
             }
             if let error = model.lastError {
-                Text(verbatim: error).font(.caption).foregroundStyle(.red)
+                ErrorText(error)
             }
         } header: {
             Text("Synced into memory")
@@ -97,7 +97,7 @@ private struct DocsOwnerRowView: View {
                 }
             }
             if let error = model.ownerErrors[row.login] {
-                Text(verbatim: error).font(.caption).foregroundStyle(.red)
+                ErrorText(error)
             }
         }
     }
@@ -127,7 +127,7 @@ private struct DocsRepoPicker: View {
             }
             Text("Repos you opt out keep their indexed docs until you delete them.").textStyle(.caption)
             if let saveError {
-                Text(verbatim: saveError).font(.caption).foregroundStyle(.red)
+                ErrorText(saveError)
             }
             HStack {
                 Spacer()
@@ -174,7 +174,7 @@ private struct DocsRepoPicker: View {
             .frame(minHeight: 240)
         } else if let error = model.repoError(owner.owner) {
             VStack(spacing: 8) {
-                Text(verbatim: "Could not load repos: \(error)").foregroundStyle(.red)
+                ErrorText("Could not load repos: \(error)", font: .body)
                 Button("Retry") { Task { await model.loadRepos(owner.owner) } }
             }
             .frame(maxWidth: .infinity, minHeight: 240)
