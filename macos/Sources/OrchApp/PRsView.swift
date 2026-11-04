@@ -57,7 +57,7 @@ private struct PRListColumn: View {
         let all = github.items?.items ?? []
         let visible = prs.visible(all)
         VStack(spacing: 0) {
-            PRFilterBar(github: github, prs: prs, repos: prRepos(all))
+            PRFilterBar(github: github, prs: prs, repos: prRepos(all), authors: prAuthors(all))
             Divider()
             Group {
                 if github.items == nil, let error = github.lastError {
@@ -80,11 +80,12 @@ private struct PRListColumn: View {
     }
 }
 
-/// Search and the role, state and repo filters, shared by the list and the board.
+/// Search and the role, state, repo and author filters, shared by the list and the board.
 struct PRFilterBar: View {
     let github: GitHubModel
     @Bindable var prs: PRsModel
     let repos: [String]
+    let authors: [String]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -103,6 +104,13 @@ struct PRFilterBar: View {
                         Text(verbatim: displaySafe(repo)).tag(Optional(repo))
                     }
                     ForEach(repos, id: \.self) { Text(verbatim: displaySafe($0)).tag(Optional($0)) }
+                }
+                Picker("Author", selection: $prs.author) {
+                    Text("All authors").tag(String?.none)
+                    if let author = prs.author, !authors.contains(author) {
+                        Text(verbatim: displaySafe(author)).tag(Optional(author))
+                    }
+                    ForEach(authors, id: \.self) { Text(verbatim: displaySafe($0)).tag(Optional($0)) }
                 }
             }
             .labelsHidden()

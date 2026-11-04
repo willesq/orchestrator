@@ -18,7 +18,7 @@ struct PRBoardView: View {
                       stacking: .detail(shown: prs.selection != nil, backTitle: "Board", back: { prs.select(nil) }),
                       secondaryPresent: prs.selection != nil) {
             VStack(spacing: 0) {
-                PRFilterBar(github: github, prs: prs, repos: prRepos(all))
+                PRFilterBar(github: github, prs: prs, repos: prRepos(all), authors: prAuthors(all))
                 Divider()
                 Group {
                     if github.items == nil, let error = github.lastError {

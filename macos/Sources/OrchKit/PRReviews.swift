@@ -358,14 +358,15 @@ public enum PRStateFilter: String, Sendable, CaseIterable, Identifiable {
     }
 }
 
-/// The PRs to list: only PRs, narrowed by role, state, repo (nil for all) and
-/// a title or number search; PRs that need the user first, then newest.
+/// The PRs to list: only PRs, narrowed by role, state, repo and author (nil for
+/// all) and a title or number search; PRs that need the user first, then newest.
 public func filterPRs(_ items: [GitHubItem], reviews: [String: PRReview], role: PRRoleFilter, state: PRStateFilter,
-                      repo: String?, search: String) -> [GitHubItem] {
+                      repo: String?, author: String?, search: String) -> [GitHubItem] {
     let query = search.trimmingCharacters(in: .whitespaces)
     return items.filter { item in
         guard item.isPR, role.matches(item), state.matches(item, review: reviews[item.url]) else { return false }
         if let repo, item.repo.caseInsensitiveCompare(repo) != .orderedSame { return false }
+        if let author, item.author.caseInsensitiveCompare(author) != .orderedSame { return false }
         if query.isEmpty { return true }
         return item.title.localizedCaseInsensitiveContains(query) || "#\(item.number)" == query
             || "\(item.number)" == query
@@ -382,6 +383,17 @@ public func prRepos(_ items: [GitHubItem]) -> [String] {
     var out: [String] = []
     for item in items where item.isPR && seen.insert(item.repo.lowercased()).inserted {
         out.append(item.repo)
+    }
+    return out.sorted { $0.lowercased() < $1.lowercased() }
+}
+
+/// The authors of open PRs, for the author filter, sorted case-insensitively.
+/// PRs cached without an author add nothing.
+public func prAuthors(_ items: [GitHubItem]) -> [String] {
+    var seen = Set<String>()
+    var out: [String] = []
+    for item in items where item.isPR && !item.author.isEmpty && seen.insert(item.author.lowercased()).inserted {
+        out.append(item.author)
     }
     return out.sorted { $0.lowercased() < $1.lowercased() }
 }

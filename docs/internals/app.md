@@ -278,8 +278,8 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
     above. PRs shows "PRs (n)" while n verdicts wait on you.
   - **PRs:** the PRs from `ListGitHubItems`, needing-you first, then newest.
     - **Filters:** a title or `#number` search; role (Any, Mine, Review requested, Involved); state
-      (All open, Needs action, Drafts, CI failing, Watched for review, Has a verdict); repo. Each
-      row carries its attention, Draft, and its review (Watching, Reviewing, or the verdict).
+      (All open, Needs action, Drafts, CI failing, Watched for review, Has a verdict); repo; author.
+      Each row carries its attention, Draft, and its review (Watching, Reviewing, or the verdict).
     - **Layout:** a List/Board switch in the toolbar, kept across launches. Board lays the
       filtered PRs out in lanes by where each stands (`PRBoard`): **Fix** (CI failing, changes
       requested, conflicts, or a Changes needed verdict), **In flight** (drafts and running CI),

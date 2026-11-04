@@ -89,6 +89,8 @@ public final class PRsModel {
     public var state = PRStateFilter.open
     /// nil lists every repo.
     public var repo: String?
+    /// nil lists every author.
+    public var author: String?
     public var search = ""
     public private(set) var selection: String?
 
@@ -138,16 +140,18 @@ public final class PRsModel {
 
     /// The PRs in items the filters keep.
     public func visible(_ items: [GitHubItem]) -> [GitHubItem] {
-        filterPRs(items, reviews: reviews.byURL, role: role, state: state, repo: repo, search: search)
+        filterPRs(items, reviews: reviews.byURL, role: role, state: state, repo: repo, author: author,
+                  search: search)
     }
 
     /// Whether any filter narrows the list.
-    public var isFiltered: Bool { role != .all || state != .open || repo != nil || !search.isEmpty }
+    public var isFiltered: Bool { role != .all || state != .open || repo != nil || author != nil || !search.isEmpty }
 
     public func clearFilters() {
         role = .all
         state = .open
         repo = nil
+        author = nil
         search = ""
     }
 
