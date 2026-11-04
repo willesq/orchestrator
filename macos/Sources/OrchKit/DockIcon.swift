@@ -16,9 +16,4 @@ public enum DockIcon {
     public static func policy(shown: Bool) -> NSApplication.ActivationPolicy {
         shown ? .regular : .accessory
     }
-
-    @MainActor
-    public static func apply(shown: Bool, to app: NSApplication = .shared) {
-        app.setActivationPolicy(policy(shown: shown))
-    }
 }

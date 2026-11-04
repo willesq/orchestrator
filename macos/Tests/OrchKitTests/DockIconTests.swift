@@ -26,15 +26,4 @@ import Testing
         #expect(DockIcon.policy(shown: true) == .regular)
         #expect(DockIcon.policy(shown: false) == .accessory)
     }
-
-    @MainActor
-    @Test func applySetsThePolicy() {
-        let app = NSApplication.shared
-        let before = app.activationPolicy()
-        defer { app.setActivationPolicy(before) }
-        DockIcon.apply(shown: false, to: app)
-        #expect(app.activationPolicy() == .accessory)
-        DockIcon.apply(shown: true, to: app)
-        #expect(app.activationPolicy() == .regular)
-    }
 }

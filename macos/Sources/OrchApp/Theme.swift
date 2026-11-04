@@ -238,7 +238,7 @@ struct DockIconToggle: View {
         Toggle("Show in Dock", isOn: $shown)
             .help("Keep an icon in the Dock as well as the menu bar")
             .onChange(of: shown) { _, new in
-                DockIcon.apply(shown: new)
+                NSApp.setActivationPolicy(DockIcon.policy(shown: new))
                 // Changing the policy can push the app's windows behind others.
                 NSApp.activate()
             }

@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // The launch Apple event is only available this early.
         let event = NSAppleEventManager.shared().currentAppleEvent
         launchedAsLoginItem = event?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
-        DockIcon.apply(shown: DockIcon.shown())
+        NSApp.setActivationPolicy(DockIcon.policy(shown: DockIcon.shown()))
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
