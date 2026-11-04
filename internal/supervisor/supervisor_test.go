@@ -6,6 +6,7 @@ package supervisor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -369,5 +370,49 @@ func TestBeatOnUnknownUnitIsSafe(t *testing.T) {
 			s := New(context.Background())
 			s.beat("never-registered") // must not panic
 		})
+	}
+}
+
+func TestStartAllContinuesPastADegradedUnit(t *testing.T) {
+	tests := []struct {
+		name      string
+		firstErr  error
+		wantErr   bool
+		wantState string // of the unit registered after the failing one
+	}{
+		{name: "a degraded unit leaves the rest running", firstErr: Degraded(errors.New("boom")), wantState: StateRunning},
+		{name: "a plain failure still stops StartAll", firstErr: errors.New("boom"), wantErr: true, wantState: StateStopped},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := New(context.Background())
+			_ = s.Add(Unit{Name: "a", Run: func(context.Context, func()) error { return tt.firstErr }})
+			_ = s.Add(Unit{Name: "b", Run: noopRun})
+			err := s.StartAll()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("StartAll err = %v, want error %v", err, tt.wantErr)
+			}
+			st := s.Status()
+			if st[0].State != StateFailed || st[0].Err != "boom" {
+				t.Errorf("a = %+v, want failed/boom", st[0])
+			}
+			if st[1].State != tt.wantState {
+				t.Errorf("b state = %q, want %q", st[1].State, tt.wantState)
+			}
+		})
+	}
+}
+
+func TestDegraded(t *testing.T) {
+	if Degraded(nil) != nil {
+		t.Errorf("Degraded(nil) is not nil")
+	}
+	base := errors.New("boom")
+	err := Degraded(base)
+	if !errors.Is(err, base) || err.Error() != "boom" {
+		t.Errorf("Degraded(boom) = %v, want it to wrap boom with the same text", err)
+	}
+	if !IsDegraded(fmt.Errorf("start a: %w", err)) || IsDegraded(base) {
+		t.Errorf("IsDegraded does not see through wrapping or misreports a plain error")
 	}
 }

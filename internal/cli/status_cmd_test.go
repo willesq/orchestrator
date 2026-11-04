@@ -320,6 +320,7 @@ func TestQdrantAPIKey(t *testing.T) {
 		{name: "custom env name", envName: "MY_QDRANT_KEY", env: "custom", want: "custom"},
 		{name: "persisted key is trimmed", file: ptr("  from-file\n"), want: "from-file"},
 		{name: "no key anywhere is empty and creates no file", want: ""},
+		{name: "a whitespace-only file is no key", file: ptr(" \n\t"), want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -349,3 +350,39 @@ func TestQdrantAPIKey(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+func TestQdrantKeyRejected(t *testing.T) {
+	keyed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("api-key") != "right" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer keyed.Close()
+	sick := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer sick.Close()
+
+	tests := []struct {
+		name string
+		url  string
+		key  string
+		want bool
+	}{
+		{name: "accepted key", url: keyed.URL, key: "right", want: false},
+		{name: "rejected key", url: keyed.URL, key: "wrong", want: true},
+		// Without a key status cannot know what orchd sends, so a 401 proves nothing.
+		{name: "no resolved key is not checked", url: keyed.URL, key: "", want: false},
+		{name: "a server error is not a rejection", url: sick.URL, key: "right", want: false},
+		{name: "nothing listening is not a rejection", url: "http://127.0.0.1:1", key: "right", want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := qdrantKeyRejected(context.Background(), tt.url, tt.key); got != tt.want {
+				t.Errorf("qdrantKeyRejected = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

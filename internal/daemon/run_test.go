@@ -2,8 +2,12 @@ package daemon
 
 import (
 	"context"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -354,3 +358,69 @@ func seedModel(t *testing.T, dataDir string) {
 // on a healthy run and is deliberately generous: only a real hang reaches it,
 // never a slow or loaded machine.
 const waitLimit = 30 * time.Second
+
+// foreignQdrant is a stub engine that answers /readyz but refuses every key, like
+// another Qdrant with its own API key holding orchd's port.
+func foreignQdrant(t *testing.T) int {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusUnauthorized) })
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	_, portStr, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	port, _ := strconv.Atoi(portStr)
+	return port
+}
+
+func TestRunStaysUpWhenQdrantRejectsTheKey(t *testing.T) {
+	seedRunEnv(t, "q.sock")
+	t.Setenv("ORCH_PR_BABYSITTER_ENABLED", "false")
+	t.Setenv("ORCH_RAG_QDRANT_MODE", "binary")
+	t.Setenv("ORCH_RAG_QDRANT_HTTP_PORT", strconv.Itoa(foreignQdrant(t)))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() { errCh <- Run(ctx) }()
+	defer func() {
+		cancel()
+		<-errCh
+	}()
+
+	sock := paths.SocketPath()
+	if !waitForFile(sock, waitLimit) {
+		select {
+		case err := <-errCh:
+			errCh <- err
+			t.Fatalf("orchd exited instead of serving: %v", err)
+		default:
+			t.Fatalf("socket %s never appeared", sock)
+		}
+	}
+	conn, err := grpc.NewClient("unix://"+sock, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("dial socket: %v", err)
+	}
+	defer conn.Close()
+	rpcCtx, rpcCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer rpcCancel()
+	resp, err := orchdv1.NewOrchdClient(conn).Status(rpcCtx, &orchdv1.StatusRequest{}, grpc.WaitForReady(true))
+	if err != nil {
+		t.Fatalf("Status: %v", err)
+	}
+	var found bool
+	for _, s := range resp.GetSubsystems() {
+		switch {
+		case s.GetName() == UnitQdrant:
+			found = true
+			if s.GetState() != supervisor.StateFailed || !strings.Contains(s.GetError(), "rejects orchd's API key") {
+				t.Errorf("qdrant unit = %s %q, want failed with the rejected-key error", s.GetState(), s.GetError())
+			}
+		case s.GetState() == supervisor.StateFailed:
+			t.Errorf("unit %s failed too: %s", s.GetName(), s.GetError())
+		}
+	}
+	if !found {
+		t.Errorf("no qdrant unit in status")
+	}
+}

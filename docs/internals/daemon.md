@@ -18,7 +18,9 @@ the MCP servers are clients that dial it per call.
 6. Build the embedder (lazy-loaded, 384 dims) and the RAG service over the Qdrant store.
 7. Open the durable workflow backend (`<data>/workflows.db`) and wire the task ledger, completion
    notifier and dispatcher.
-8. Register the supervised subsystems below and start them, failing fast.
+8. Register the supervised subsystems below and start them, failing fast. The exception is a
+   unit that fails *degraded* (today only `qdrant` with a rejected API key): it is left `failed`
+   and the rest start, so orchd stays up.
 9. Listen on the Unix socket (remove a stale one first, then `chmod 0600`). The socket is the
    trust boundary: anything running as the user can connect. orchd listens on nothing else; the
    only TCP listener it starts is the Qdrant engine, on 127.0.0.1.
@@ -169,11 +171,23 @@ unlinks before relinking) is not a change. Durable tasks resume after the restar
 **qdrant** reuses an engine that already answers `/readyz` on `http_port` (such as an orphan from
 a hard kill) instead of spawning a second one, but only after one keyed request (`GET
 /collections` with orchd's API key) succeeds. `/readyz` needs no key, so a different Qdrant on the
-same port would otherwise pass and turn every request into a 401. When the key is refused, the
-unit fails with an error naming the port; stop the other engine or move orchd with
-`rag.qdrant.http_port` and `grpc_port`. The same check runs after spawning, in case another engine
-took the port first. This catches a misconfiguration, not an impostor: a keyless engine still
-passes. `orch status` reports such an engine as `rejects orchd's API key`.
+same port would otherwise pass and turn every request into a 401. The same check runs after
+spawning, in case another engine took the port first. The check catches a misconfiguration, not an
+impostor: a keyless engine still passes.
+
+- **Key rejected (401/403):** the unit is marked `failed` with an error naming the port, and orchd
+  keeps running; only memory is unavailable. Exiting instead would take the socket, hooks and task
+  queue down and crash-loop under launchd's `KeepAlive`. Another engine may hold the port, or an
+  orphan was started with an older key: stop it, or move orchd with `rag.qdrant.http_port` and
+  `grpc_port`, then `orch restart qdrant`.
+- **Any other failure** (5xx, timeout): retried up to 3 times, 1 s apart, then logged, and the
+  engine is used anyway, since it already answered `/readyz`.
+
+`orch status` shows the failed unit under subsystems. Its vector-store line runs the same check
+with the key it resolves itself (the env override, else `<data>/qdrant-api-key`; it never
+generates one) and reports `rejects the resolved API key`. With no key it skips the check. Status
+can't be certain it resolved the key orchd uses, for example when the env differs from orchd's
+launchd environment.
 
 ## On-disk state
 

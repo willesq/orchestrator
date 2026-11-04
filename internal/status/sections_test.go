@@ -227,10 +227,10 @@ func TestVectorSection(t *testing.T) {
 		rejected    bool
 	}{
 		{
-			name: "an engine that rejects orchd's key is a problem",
+			name: "an engine that rejects the resolved key is a problem",
 			mode: "binary", ready: true, rejected: true,
-			wantValue: "rejects orchd's API key", wantLevel: LevelBad, wantStorage: true,
-			wantDetail: "another engine may hold the port",
+			wantValue: "rejects the resolved API key", wantLevel: LevelBad, wantStorage: true,
+			wantDetail: "or orchd may use a different key",
 		},
 		{
 			name: "an unreachable engine is not reported as rejecting the key",

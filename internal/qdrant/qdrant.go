@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -58,6 +59,10 @@ type Provisioner struct {
 	run      runFunc
 	stop     stopFunc
 	httpc    *http.Client
+	// keyAttempts and keyRetryDelay bound how long Start retries a key check
+	// that fails for a reason other than a rejected key.
+	keyAttempts   int
+	keyRetryDelay time.Duration
 	// pid is the engine this provisioner started; 0 when it did not start one
 	// (none running, or an existing engine was reused).
 	pid atomic.Int64
@@ -69,6 +74,9 @@ func New(cfg Config) *Provisioner {
 		cfg:      cfg,
 		download: httpDownload,
 		httpc:    &http.Client{Timeout: 3 * time.Second},
+
+		keyAttempts:   3,
+		keyRetryDelay: time.Second,
 	}
 	p.run = func(bin, dir string, env []string) (stopFunc, error) {
 		return execRun(bin, dir, env, cfg.Output, &p.pid)
@@ -165,16 +173,37 @@ func (p *Provisioner) Start(ctx context.Context) error {
 }
 
 // checkOwnEngine confirms the engine on the HTTP port accepts orchd's API key.
+// Only a rejected key is an error. Any other failure is retried a few times
+// and then logged and ignored: the engine already answered /readyz, so a slow
+// or briefly erroring engine is no proof it is someone else's. This catches a
+// misconfiguration, not an impostor: a listener that accepts any key passes.
 func (p *Provisioner) checkOwnEngine(ctx context.Context) error {
 	base := fmt.Sprintf("http://127.0.0.1:%d", p.cfg.HTTPPort)
-	err := CheckKey(ctx, base, p.cfg.APIKey)
-	if errors.Is(err, ErrKeyRejected) {
-		return fmt.Errorf("qdrant on 127.0.0.1:%d rejects orchd's API key, so another engine holds the port; "+
-			"stop it or move orchd with rag.qdrant.http_port and rag.qdrant.grpc_port: %w", p.cfg.HTTPPort, err)
+	var err error
+	for attempt := 1; ; attempt++ {
+		err = CheckKey(ctx, base, p.cfg.APIKey)
+		if err == nil {
+			return nil
+		}
+		if errors.Is(err, ErrKeyRejected) {
+			// An orphan started with an older key is refused the same way, so
+			// this cannot say for certain that the engine is someone else's.
+			return fmt.Errorf("qdrant on 127.0.0.1:%d rejects orchd's API key, so another engine may hold the port; "+
+				"stop it or move orchd with rag.qdrant.http_port and rag.qdrant.grpc_port: %w", p.cfg.HTTPPort, err)
+		}
+		if attempt >= p.keyAttempts {
+			break
+		}
+		t := time.NewTimer(p.keyRetryDelay)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return fmt.Errorf("qdrant on 127.0.0.1:%d: %w", p.cfg.HTTPPort, ctx.Err())
+		case <-t.C:
+		}
 	}
-	if err != nil {
-		return fmt.Errorf("qdrant on 127.0.0.1:%d: %w", p.cfg.HTTPPort, err)
-	}
+	log.Printf("qdrant: could not confirm the engine on 127.0.0.1:%d accepts orchd's API key; using it anyway: %v",
+		p.cfg.HTTPPort, err)
 	return nil
 }
 

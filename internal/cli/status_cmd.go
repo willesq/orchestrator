@@ -81,7 +81,7 @@ func statusDeps(cf clientFactory, s config.Settings) status.Deps {
 		},
 		QdrantReady: func(ctx context.Context) bool { return qdrantReady(ctx, s.QdrantURL()) },
 		QdrantKeyRejected: func(ctx context.Context) bool {
-			return errors.Is(qdrant.CheckKey(ctx, s.QdrantURL(), qdrantAPIKey(s)), qdrant.ErrKeyRejected)
+			return qdrantKeyRejected(ctx, s.QdrantURL(), qdrantAPIKey(s))
 		},
 		Service:                serviceInfo,
 		Checks:                 check.Preconditions(),
@@ -119,9 +119,20 @@ func qdrantReady(ctx context.Context, baseURL string) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
+// qdrantKeyRejected reports whether the engine at baseURL refuses key. With no
+// key it reports false: an empty key draws a 401 from any keyed engine, which
+// says nothing about the key orchd actually sends.
+func qdrantKeyRejected(ctx context.Context, baseURL, key string) bool {
+	if key == "" {
+		return false
+	}
+	return errors.Is(qdrant.CheckKey(ctx, baseURL, key), qdrant.ErrKeyRejected)
+}
+
 // qdrantAPIKey is the key orchd sends to qdrant, resolved like orchd's
 // resolveQdrantAPIKey: the env override, else the persisted key file. Unlike
-// orchd it never generates a key, so a status check leaves no file behind.
+// orchd it never generates a key, so a status check leaves no file behind; a
+// missing or whitespace-only file (which orchd would replace) yields "".
 func qdrantAPIKey(s config.Settings) string {
 	envName := s.RAG.Qdrant.APIKeyEnv
 	if envName == "" {

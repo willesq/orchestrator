@@ -174,16 +174,42 @@ func (s *Supervisor) Start(name string) error {
 }
 
 // StartAll starts every unit in registration order, stopping at the first
-// failure so a broken dependency does not bring up half a system silently.
+// failure so a broken dependency does not bring up half a system silently. A
+// unit whose Run returns a Degraded error is the exception: it is left failed,
+// visible in Status, and the remaining units start.
 func (s *Supervisor) StartAll() error {
 	s.lifecycle.Lock()
 	defer s.lifecycle.Unlock()
 	for _, name := range s.Names() {
-		if err := s.start(name); err != nil {
+		if err := s.start(name); err != nil && !IsDegraded(err) {
 			return err
 		}
 	}
 	return nil
+}
+
+// degradedError marks a Run failure the rest of the system can run without.
+type degradedError struct{ err error }
+
+func (d degradedError) Error() string { return d.err.Error() }
+func (d degradedError) Unwrap() error { return d.err }
+
+// Degraded wraps a Run error so StartAll leaves that unit failed and starts the
+// others, for a unit whose loss disables one feature rather than the whole
+// system. It keeps err's text and chain; Degraded(nil) is nil. Never use it for
+// a unit that enforces security, such as authorization: its failure would then
+// leave the system running without it.
+func Degraded(err error) error {
+	if err == nil {
+		return nil
+	}
+	return degradedError{err: err}
+}
+
+// IsDegraded reports whether err, or anything it wraps, came from Degraded.
+func IsDegraded(err error) bool {
+	var d degradedError
+	return errors.As(err, &d)
 }
 
 // Stop cancels one unit and runs its Stop hook. Stopping a stopped unit is a no-op.

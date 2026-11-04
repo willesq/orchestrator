@@ -583,12 +583,15 @@ func TestStartRefusesAnEngineThatRejectsTheKey(t *testing.T) {
 		{name: "keyless engine is reused", engineKey: "", ourKey: "k1", collections: http.StatusOK},
 		{name: "another engine's key is refused", engineKey: "other", ourKey: "k1", collections: http.StatusOK, wantErr: ErrKeyRejected, wantAnyErr: true},
 		{name: "no key against a keyed engine is refused", engineKey: "other", ourKey: "", collections: http.StatusOK, wantErr: ErrKeyRejected, wantAnyErr: true},
-		{name: "a failing keyed request is refused", engineKey: "k1", ourKey: "k1", collections: http.StatusInternalServerError, wantAnyErr: true},
+		// The engine already answered /readyz, so a check that keeps failing for
+		// another reason is no proof the engine is someone else's.
+		{name: "a failing keyed request is still reused", engineKey: "k1", ourKey: "k1", collections: http.StatusInternalServerError},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			port, _ := keyedServer(t, tt.engineKey, tt.collections)
 			p := New(Config{HTTPPort: port, APIKey: tt.ourKey})
+			p.keyRetryDelay = time.Millisecond
 			spawned := false
 			p.run = func(string, string, []string) (stopFunc, error) {
 				spawned = true
@@ -603,6 +606,11 @@ func TestStartRefusesAnEngineThatRejectsTheKey(t *testing.T) {
 			}
 			if err != nil && !strings.Contains(err.Error(), strconv.Itoa(port)) {
 				t.Errorf("error %q does not name the port", err)
+			}
+			// An orphan started with an older key is refused the same way, so the
+			// error must not claim it is certainly another engine.
+			if err != nil && !strings.Contains(err.Error(), "may hold the port") {
+				t.Errorf("error %q overstates who holds the port", err)
 			}
 			if spawned {
 				t.Errorf("spawned a second engine on a held port")
@@ -698,5 +706,57 @@ func TestCheckKey(t *testing.T) {
 	}
 	if leaked.Load() {
 		t.Errorf("the API key followed a redirect")
+	}
+}
+
+func TestStartRetriesATransientKeyCheck(t *testing.T) {
+	tests := []struct {
+		name         string
+		failures     int32 // /collections answers 503 this many times, then 200
+		wantRequests int32
+	}{
+		{name: "one blip is retried", failures: 1, wantRequests: 2},
+		{name: "a persistent failure stops after the last attempt", failures: 100, wantRequests: 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var requests atomic.Int32
+			mux := http.NewServeMux()
+			mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+			mux.HandleFunc("/collections", func(w http.ResponseWriter, _ *http.Request) {
+				if requests.Add(1) <= tt.failures {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+			srv := httptest.NewServer(mux)
+			t.Cleanup(srv.Close)
+			_, portStr, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+			port, _ := strconv.Atoi(portStr)
+
+			p := New(Config{HTTPPort: port, APIKey: "k1"})
+			p.keyRetryDelay = time.Millisecond
+			if err := p.Start(context.Background()); err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+			if got := requests.Load(); got != tt.wantRequests {
+				t.Errorf("keyed requests = %d, want %d", got, tt.wantRequests)
+			}
+		})
+	}
+}
+
+func TestStartKeyCheckHonoursCancellation(t *testing.T) {
+	_, url := keyedServer(t, "", http.StatusServiceUnavailable)
+	_, portStr, _ := net.SplitHostPort(strings.TrimPrefix(url, "http://"))
+	port, _ := strconv.Atoi(portStr)
+	p := New(Config{HTTPPort: port, APIKey: "k1"})
+	p.keyRetryDelay = time.Hour
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(50*time.Millisecond, cancel)
+	err := p.Start(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Start err = %v, want context.Canceled", err)
 	}
 }
