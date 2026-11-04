@@ -112,6 +112,18 @@ func TestQdrantUnitRunError(t *testing.T) {
 	}
 }
 
+func TestWorkerStaysAwayAtZeroParallelTasks(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	s := config.Settings{}
+	s.RAG.Qdrant.Mode = "external"
+	s.Queue.Worker.Enabled = true
+	for _, u := range subsystems(deps{settings: s}) {
+		if u.Name == UnitWorker {
+			t.Fatal("the worker runs with max_concurrent 0")
+		}
+	}
+}
+
 func TestSubsystems(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -153,6 +165,7 @@ func TestSubsystems(t *testing.T) {
 			s.RAG.Qdrant.HTTPPort = 6333
 			s.PRBabysitter.Enabled = tt.prs
 			s.Queue.Worker.Enabled = tt.worker
+			s.Queue.Worker.MaxConcurrent = 1
 
 			d := deps{settings: s}
 			if tt.watch {

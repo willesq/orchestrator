@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -1159,4 +1160,41 @@ func TestSearchNarrowsToOneSource(t *testing.T) {
 
 func (f *fakeClient) SummarizeSession(context.Context, *orchdv1.SummarizeSessionRequest, ...grpc.CallOption) (*orchdv1.SummarizeSessionResponse, error) {
 	return &orchdv1.SummarizeSessionResponse{}, f.err
+}
+
+func TestConfigSetRefusedInATask(t *testing.T) {
+	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv(agentrun.TaskIDEnv, "task-1")
+	for _, key := range []string{"queue.worker.claude_bin", "routing.kinds.code"} {
+		cmd := newConfigCmd()
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"set", key, "/tmp/x"})
+		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "queue tasks cannot") {
+			t.Errorf("%s: err = %v", key, err)
+		}
+	}
+}
+
+func TestConfigSetChecksKnownKeys(t *testing.T) {
+	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	v, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		key, val string
+		ok       bool
+	}{
+		{"queue.worker.max_concurrent", "50", true},
+		{"queue.worker.max_concurrent", "51", false},
+		{"queue.max_active", "0", false},
+		{"queue.worker.permission_mode", "bypassPermissions", false},
+		{"queue.worker.permission_mode", "plan", true},
+		{"routing.kinds.code", "fast", true}, // one entry of a map
+	} {
+		if err := setConfigValue(v, tt.key, tt.val); (err == nil) != tt.ok {
+			t.Errorf("%s=%s: err = %v", tt.key, tt.val, err)
+		}
+	}
 }

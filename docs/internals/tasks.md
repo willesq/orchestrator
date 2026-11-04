@@ -19,8 +19,10 @@ Packages: `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `pr
      serialized) and runs `RunActivity` again, up to 20 times. The next worker resumes the
      session. Before this, the workflow failed and the ledger kept the task `in_progress` with
      nothing running it (issue #100).
-3. **Worker:** runs only with `queue.worker.enabled` (default `true`); `max_concurrent` parallel
-   activities. Stopping cancels sessions.
+3. **Worker:** runs only with `queue.worker.enabled` (default `true`) and `max_concurrent` above 0;
+   `max_concurrent` parallel activities, at most 50 ([config.md](config.md#queue-limits)). Stopping cancels
+   sessions. Tasks given the same working directory are not isolated from each other: running several at
+   once in one checkout can interleave their changes, so give each its own worktree.
 4. **Reconcile on start:** each time the worker starts, before it takes any work,
    `queue.Control.Reconcile` checks every `pending` or `in_progress` task. Three guards apply:
    - **New tasks:** a task dispatched under a minute ago is skipped, since its row is written

@@ -12,6 +12,8 @@ struct DashboardView: View {
     let sources: RegisteredSourcesModel
     /// Shows another pane, for the summary chips.
     let open: (Pane) -> Void
+    /// Shows the Safety Net part of Settings.
+    let openSafetyNet: () -> Void
     /// Opens what a timeline entry records.
     let follow: (ActivityTarget) -> Void
 
@@ -61,9 +63,8 @@ struct DashboardView: View {
     private var summary: some View {
         FlowLayout(spacing: 10) {
             SummaryChip(symbol: Pane.docs.symbol, title: "Docs", value: docsValue.text, tone: docsValue.tone) { open(.docs) }
-            SummaryChip(symbol: Pane.safetyNet.symbol, title: "Safety Net", value: safetyValue.text, tone: safetyValue.tone) {
-                open(.safetyNet)
-            }
+            SummaryChip(symbol: SettingsSection.safetyNet.symbol, title: "Safety Net", value: safetyValue.text, tone: safetyValue.tone,
+                        action: openSafetyNet)
             SummaryChip(symbol: "arrow.triangle.pull", title: "PRs", value: prValue.text, tone: prValue.tone) { open(.github) }
         }
     }

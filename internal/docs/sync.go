@@ -120,7 +120,7 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 	}
 	var todo []Repo
 	for _, rp := range repos {
-		if (rp.IsArchived && !opts.IncludeArchived) || (rp.IsFork && !opts.IncludeForks) {
+		if (rp.IsArchived && !opts.IncludeArchived) || (rp.IsFork && !opts.IncludeForks) || !o.Covers(rp.Name) {
 			continue
 		}
 		todo = append(todo, rp)

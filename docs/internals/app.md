@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SafetyNetView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), config.yaml (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
 ## Connection
@@ -93,10 +93,11 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
 - **Appearance:** follows the system's light or dark mode by default. A picker at the foot of the
   sidebar and in the menu bar panel keeps Light or Dark instead (`appearance` in user defaults,
   applied to the whole app, menu bar panel included, at launch and on change).
-- **Sidebar badges:** Docs shows how many repos failed to sync, GitHub how many PRs need you,
-  Safety Net a dot in its state's color, and Claude an orange dot when items were removed or are
-  missing from their files. They come from the models the tabs use; a `PeriodicRefresh` reloads
-  docs, Safety Net and settings every five minutes, and the PR count follows `PRMonitor`.
+- **Sidebar badges:** Docs shows how many repos failed to sync, GitHub how many PRs need you, and
+  Settings a dot for the most pressing thing inside it: changes waiting for a restart, then a Safety
+  Net state that is not good, then items removed or missing from their files. Its own list marks the
+  same per section. They come from the models the tabs use; a `PeriodicRefresh` reloads docs, Safety
+  Net, settings and config every five minutes, and the PR count follows `PRMonitor`.
 - **Command palette (⌘K):** one keyboard surface over the whole app, from any pane. It lists, most
   pressing first, the PRs that need you, actions (New task…, which opens the dispatch sheet on the
   Tasks pane; Dock as companion or Expand; Keep Orch on top; Refresh everything; Show PRs that need action; each appearance), every pane with its
@@ -249,18 +250,7 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
   - **Rating:** a finished task can be rated good, needed rework or bad (`RateTask`), which feeds
     model routing.
 - **GitHub:** what orch monitors on GitHub, and what it found.
-  - **Watching:** your account ("You") and each org you belong to ("Org"), each with an on/off
-    switch. An enabled scope also shows:
-    - a picker between "Involving me" and "Everything open";
-    - with "Involving me", **Everything in…**, a sheet to choose repos watched for every open PR and
-      issue on top of that;
-    - a summary of what it covers, and **Repos…**, a sheet to choose all repos, only some, or all
-      but some, from the repos you can see. Both sheets ask GitHub for the repos each time they open,
-      so a new repo is there to pick; if that fails, the last list stays with an error under it.
-
-    Changes go to `SetGitHubScope`. orchd then sweeps within about a minute, and the activity list
-    reloads every 30 s while the tab is open.
-  - **Your teams:** from `GetGitHubIdentity`.
+  - **Watching:** one line naming the enabled scopes, with **Change in Settings…**.
   - **Activity:** `ListGitHubItems`, filtered by All, PRs or Issues in the toolbar, in two sections:
     **Needs action** and **Everything else**, each newest first. Each row shows its title,
     `repo#number`, author, age, and its reasons as chips; a reason its attention already states is
@@ -376,54 +366,88 @@ a crowded menu bar its icon can sit behind the notch. `AppDelegate` handles this
       why it could not, is shown with the verdict.
       stops watching, or stops and forgets the verdict (`StopPRReview`). What orch has posted, or
       why it could not, is shown with the verdict.
-- **Claude:** the managed settings ([settings.md](settings.md)): Claude Code's hooks, permission
-  rules and plugins, cc-safety-net's rules, and what orch ships for agents, in seven sections
-  (Hooks grouped by event, Permissions by list, Plugins by marketplace, Safety Net rules by
-  rulebook, Instructions by topic, Subagents, Skills), each with how many are on. Instructions,
-  Subagents and Skills show each item's full text, rendered, in the detail pane.
-  - **Live:** `ListSettings` every 2 s while the tab is shown, so edits made to the files elsewhere
-    appear within a few seconds; nothing is redrawn when the listing has not changed.
-  - **Rows:** a switch, a readable name, the exact text under it, and an origin badge (`orch`,
-    `you`, `external` for what was already in the file). A hook is named after what it runs: known
-    tools (Orca's `.orca/agent-hooks` wrapper, cc-status, cc-safety-net, rtk) by name,
-    `orch-hook` and `serena-hooks` with their subcommand, anything else by its program's base name.
-    Its matcher is a chip, and the full command is a truncated monospace line (in full in the
-    detail pane). The section picker reads "Hooks · 37 on" or "Hooks · 35 of 37 on".
-  - **Filter:** the toolbar's search field keeps items whose name, command or matcher match. A removed or missing item says why. A
-    change in flight shows a spinner; a refusal (for example, the file changed underneath, or
-    the file does not parse) is shown under that row.
-  - **Detail:** the selected item's group, ID, origin, when it changed, and the exact JSON written
-    to the file, with **Remove…** (confirmed) for items you added or orch found. An instruction
-    module instead shows its title, description, topic and installed path, and its full text
-    rendered as Markdown (`ModuleDetail`, with `MarkdownRenderer`), so it can be read without
-    opening the file.
-  - **Add:** the toolbar's Add opens a form built from the kind's fields as orchd describes them
-    (hooks and permission rules); required fields and whole numbers are checked before sending,
-    and orchd's refusal is shown in the form.
-  - **Scope:** the header shows the file and "This Mac only": choices live in this machine's
-    `orch.db`.
-  - **Reuse:** `SettingsModel` (OrchKit) takes the provider names it shows, and the list, row,
-    detail and add-form views in `SettingsComponents.swift` take a provider and kind, so a tab over
-    another tool's settings reuses them. Every string from a file goes through `displaySafe`.
-- **Safety Net:** cc-safety-net in Claude Code (`GetSafetyNet`, read when the tab opens and on
-  **Reload**).
-  - **State:** a badge (Protected, Rules incomplete, Not installed, Old copy installed, Update
-    available, Disabled), the installed and pinned version with the pinned commit and release
-    date, any competing copy, what is wrong with the rules, and plugin files that could not be
-    read.
-  - **Rulebooks:** every source `rule.json` lists, in order, marked orch or yours. Each rule reads
-    as one phrase ("Blocks `git worktree add`") with its reason under it, and has the same switch
-    as the Claude tab: it goes through the cc-safety-net settings provider (`SetSettingEnabled`
-    on `<rulebook>/<rule>`), so both tabs agree. A rulebook cc-safety-net would skip shows why.
-  - **Actions:** only the action that applies is shown, as the primary button: **Install**
-    (missing, old copy, or disabled), else **Upgrade** (outdated), else **Repair rules** (rules
-    not ok, rule files only); otherwise the header says "Up to date". Each sends `InstallSafetyNet`
-    with a 10-minute deadline.
-    While it runs, the tab polls `GetSafetyNet` every second for the current step; afterwards it
-    shows the result, the error, and the command output. orchd's refusal when an action is
-    already running is shown as is.
-  - **Text:** rule names, reasons, paths, errors and command output come from files and commands,
-    so all of it goes through `displaySafe`.
+- **Settings:** the one place to configure orch, as a list of sections beside the section itself.
+  The section is kept across launches, and each is in the command palette. A window that last showed
+  the old Claude or Safety Net pane reopens on that section.
+  - **Tasks, Docs, GitHub, Memory:** config.yaml, each row built from how orchd describes it (`GetConfig`,
+    [config.md](config.md#schema)): a switch, a number with its range, a picker, or text. Text is written
+    on Return, lists and maps on **Save**, so half-typed values are not sent; what orchd refuses shows
+    under the row. A right-click offers **Reset to Default**. A row an environment variable sets is
+    disabled and says so.
+    - **Sensitive settings** carry a shield and ask first, naming the new value.
+    - **Restart:** while changes wait, a banner counts them with **Restart orchd…** (confirmed, since
+      running tasks are interrupted and resume), and each waiting row says "after restart". It runs
+      `orch daemon restart`, like the menu's.
+  - **Tasks:** parallel tasks (0 to 50, 0 is off), the queue limit, permissions, verification, Codex and
+    routing.
+  - **Docs:** a switch per account and org from GitHub scopes, plus any owner added by name. On shows what
+    it covers, with **Repos…** (every repo, only some, or all but some, from what `ListDocsOwnerRepos` lists,
+    including forks and archived repos) and **Remove…** (keeping or deleting its docs). Opted-out repos that
+    still have docs get **Delete Its Docs…**, confirmed and naming them.
+  - **GitHub:** what orch watches, and how often:
+    - **Watching:** your account ("You") and each org you belong to ("Org"), each with an on/off
+      switch. An enabled scope also shows:
+      - a picker between "Involving me" and "Everything open";
+      - with "Involving me", **Everything in…**, a sheet to choose repos watched for every open PR and
+        issue on top of that;
+      - a summary of what it covers, and **Repos…**, a sheet to choose all repos, only some, or all
+        but some, from the repos you can see. Both sheets ask GitHub for the repos each time they open,
+        so a new repo is there to pick; if that fails, the last list stays with an error under it.
+
+      Changes go to `SetGitHubScope`. orchd then sweeps within about a minute, and the activity list
+      reloads every 30 s while the tab is open.
+    - **Your teams:** from `GetGitHubIdentity`.
+  - **Memory:** sources, prompt context, session summaries, search, embedding and the vector store.
+  - **App:** appearance, open at login, and where config.yaml is.
+
+  - **Claude:** the managed settings ([settings.md](settings.md)): Claude Code's hooks, permission
+    rules and plugins, cc-safety-net's rules, and what orch ships for agents, in seven sections
+    (Hooks grouped by event, Permissions by list, Plugins by marketplace, Safety Net rules by
+    rulebook, Instructions by topic, Subagents, Skills), each with how many are on. Instructions,
+    Subagents and Skills show each item's full text, rendered, in the detail pane.
+    - **Live:** `ListSettings` every 2 s while the tab is shown, so edits made to the files elsewhere
+      appear within a few seconds; nothing is redrawn when the listing has not changed.
+    - **Rows:** a switch, a readable name, the exact text under it, and an origin badge (`orch`,
+      `you`, `external` for what was already in the file). A hook is named after what it runs: known
+      tools (Orca's `.orca/agent-hooks` wrapper, cc-status, cc-safety-net, rtk) by name,
+      `orch-hook` and `serena-hooks` with their subcommand, anything else by its program's base name.
+      Its matcher is a chip, and the full command is a truncated monospace line (in full in the
+      detail pane). The section picker reads "Hooks · 37 on" or "Hooks · 35 of 37 on".
+    - **Filter:** the toolbar's search field keeps items whose name, command or matcher match. A removed or missing item says why. A
+      change in flight shows a spinner; a refusal (for example, the file changed underneath, or
+      the file does not parse) is shown under that row.
+    - **Detail:** the selected item's group, ID, origin, when it changed, and the exact JSON written
+      to the file, with **Remove…** (confirmed) for items you added or orch found. An instruction
+      module instead shows its title, description, topic and installed path, and its full text
+      rendered as Markdown (`ModuleDetail`, with `MarkdownRenderer`), so it can be read without
+      opening the file.
+    - **Add:** the toolbar's Add opens a form built from the kind's fields as orchd describes them
+      (hooks and permission rules); required fields and whole numbers are checked before sending,
+      and orchd's refusal is shown in the form.
+    - **Scope:** the header shows the file and "This Mac only": choices live in this machine's
+      `orch.db`.
+    - **Reuse:** `SettingsModel` (OrchKit) takes the provider names it shows, and the list, row,
+      detail and add-form views in `SettingsComponents.swift` take a provider and kind, so a tab over
+      another tool's settings reuses them. Every string from a file goes through `displaySafe`.
+  - **Safety Net:** cc-safety-net in Claude Code (`GetSafetyNet`, read when the tab opens and on
+    **Reload**).
+    - **State:** a badge (Protected, Rules incomplete, Not installed, Old copy installed, Update
+      available, Disabled), the installed and pinned version with the pinned commit and release
+      date, any competing copy, what is wrong with the rules, and plugin files that could not be
+      read.
+    - **Rulebooks:** every source `rule.json` lists, in order, marked orch or yours. Each rule reads
+      as one phrase ("Blocks `git worktree add`") with its reason under it, and has the same switch
+      as the Claude tab: it goes through the cc-safety-net settings provider (`SetSettingEnabled`
+      on `<rulebook>/<rule>`), so both tabs agree. A rulebook cc-safety-net would skip shows why.
+    - **Actions:** only the action that applies is shown, as the primary button: **Install**
+      (missing, old copy, or disabled), else **Upgrade** (outdated), else **Repair rules** (rules
+      not ok, rule files only); otherwise the header says "Up to date". Each sends `InstallSafetyNet`
+      with a 10-minute deadline.
+      While it runs, the tab polls `GetSafetyNet` every second for the current step; afterwards it
+      shows the result, the error, and the command output. orchd's refusal when an action is
+      already running is shown as is.
+    - **Text:** rule names, reasons, paths, errors and command output come from files and commands,
+      so all of it goes through `displaySafe`.
 - **Dispatch:** a sheet that sends `Dispatch` with an agent, an optional task kind (showing what
   `RecommendModel` would route it to), an optional pinned model, an optional working directory
   (chosen with a folder picker) and the task body.

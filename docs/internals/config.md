@@ -6,7 +6,8 @@ missing file is fine.
 
 Writes (`orch config set`, `SetMany`) set keys and rewrite the whole resolved view (`WriteCanonical`):
 marshal to YAML, write a temp file in the same directory, fsync, `chmod 0644`, rename. Related keys
-change together in one write. orchd itself writes config only to record a migration switch or drop.
+change together in one write. `SetConfig` and `orch config set` on a key the schema knows go through
+`config.Apply`, which validates first; other keys (one entry of a map, say) are written as given. orchd itself writes config only to record a migration switch or drop.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -53,12 +54,12 @@ change together in one write. orchd itself writes config only to record a migrat
 | `sessions.summarize.enabled` | `true` | model-written session summaries |
 | `sessions.summarize.model` | `haiku` | model for summaries |
 | `sessions.summarize.timeout` | `2m` | per summary |
-| `queue.max_active` | `20` | pending + running tasks; dispatch fails beyond (0 = no cap) |
+| `queue.max_active` | `20` | pending + running tasks; dispatch fails beyond. 1 to 50, never below `max_concurrent` |
 | `queue.worker.enabled` | `true` | run dispatched tasks (never with `bypassPermissions`; sessions cannot dispatch more) |
 | `queue.worker.claude_bin` | found automatically | Claude Code binary |
 | `queue.worker.permission_mode` | `auto` | `auto`, `dontAsk`, `acceptEdits` or `plan` |
 | `queue.worker.timeout` | `60m` | per task |
-| `queue.worker.max_concurrent` | `1` | parallel tasks |
+| `queue.worker.max_concurrent` | `1` | parallel tasks, 0 to 50; 0 turns the worker off |
 | `queue.worker.allowed_tools.claude` | read-only git/ls/go test/go vet/gh pr view/orch search set | rules granted without asking |
 | `queue.worker.verify.enabled` | `true` | test a task's changes before completing it |
 | `queue.worker.verify.timeout` | `15m` | per check |
@@ -77,3 +78,29 @@ change together in one write. orchd itself writes config only to record a migrat
 | `routing.min_evidence` | `5` | outcomes before evidence moves a rank |
 | `routing.evaluate.enabled`, `interval` | `true`, `168h` | evaluator subsystem |
 | `routing.auto_apply` | `false` | evaluator only proposes |
+
+## Schema
+
+`config.Fields` (`internal/config/schema.go`) describes every key: its section, label, help, type, range or
+options, and two flags. It is what `GetConfig` serves and the app's Settings pane is built from. A test fails
+when a default has no field.
+
+- **Sensitive:** a key that changes what agents may run or where orch keeps its data. `SetConfig` refuses it
+  without `confirm_sensitive`, and the app asks first. `orch config set` does not ask, because the operator
+  typed the key.
+- **Live:** a key each short-lived process reads for itself (`hooks.auto_rag.*`, read by orch-hook on every
+  prompt). Every other key takes effect when orchd restarts: `Restart` restarts subsystems in place, without
+  reading config again.
+
+`GetConfig` compares each key against a snapshot from orchd's start, so it reports what is waiting for a
+restart however the value was changed, and a value set back stops waiting. A key an environment variable
+overrides is reported as such, and writing it is refused, since the write would have no effect.
+
+## Queue limits
+
+`max_concurrent` and `max_active` are held to `config.MaxParallelTasks` and `config.MaxActiveTasks` (both 50)
+on every route: `Apply` refuses more, and `Unmarshal` clamps a hand-edited file or environment variable and
+logs it, raising `max_active` to at least `max_concurrent`. `max_active: 0` used to mean no cap and now means
+50. The worker runs only when `queue.worker.enabled` is true and `max_concurrent` is above 0
+(`QueueWorkerSettings.Runs`); `max_concurrent: 0` used to mean 1 and now means off. Setting it above 0 through
+`Apply` also turns `enabled` on and raises `max_active` if needed, so the app offers the one number.

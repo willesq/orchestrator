@@ -73,7 +73,7 @@ and records the outcome. Routing picks the model per task kind from the models y
 
 | Path | Contents |
 |---|---|
-| `~/.config/orch/config.yaml` | Settings (`orch config set`); defaults are compiled in |
+| `~/.config/orch/config.yaml` | Settings (the app's Settings pane, or `orch config set`); defaults are compiled in |
 | `~/.config/orch/AGENTS.md`, `policy/` | Shared agent policy installed from this repo |
 | `~/.local/share/orch/orch.db` | SQLite: tasks, sources, model registry, routing |
 | `~/.local/share/orch/workflows.db` | Durable workflow state for the task queue |

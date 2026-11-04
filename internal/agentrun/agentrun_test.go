@@ -108,7 +108,7 @@ func TestRunInvokesClaudeHeadless(t *testing.T) {
 	}
 	args := strings.Split(strings.TrimSpace(f.recorded(t, "args")), "\n")
 	want := []string{"-p", "--output-format", "json", "--permission-mode", "auto",
-		"--disallowedTools", "mcp__queue__queue_dispatch,Bash(orch dispatch:*)", "--agent", "dev", "--session-id", SessionID("task-1")}
+		"--disallowedTools", deniedTools("dev"), "--agent", "dev", "--session-id", SessionID("task-1")}
 	if !slices.Equal(args, want) {
 		t.Errorf("args = %q, want %q", args, want)
 	}
@@ -525,7 +525,7 @@ func TestRunMeasuresFailedRuns(t *testing.T) {
 }
 
 func TestDeniedTools(t *testing.T) {
-	if got := deniedTools("dev"); got != dispatchTools {
+	if got := deniedTools("dev"); got != dispatchTools+","+operatorTools || !strings.Contains(got, "Bash(orch config set:*)") {
 		t.Errorf("dev denied %q", got)
 	}
 	got := deniedTools("pr-verdict")

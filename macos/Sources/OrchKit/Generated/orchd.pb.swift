@@ -1660,6 +1660,243 @@ public nonisolated struct Orchd_V1_DocOwner: Sendable {
   /// why the last sync failed or stopped early
   public var error: String = String()
 
+  /// off: not synced, indexed docs kept
+  public var enabled: Bool = false
+
+  /// all | include | exclude
+  public var repoMode: String = String()
+
+  /// repo names, for include/exclude
+  public var selectedRepos: [String] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListDocsOwnersRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListDocsOwnersResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var owners: [Orchd_V1_DocOwner] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListDocsOwnerReposRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var owner: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_DocsOwnerRepo: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var archived: Bool = false
+
+  public var fork: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListDocsOwnerReposResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var repos: [Orchd_V1_DocsOwnerRepo] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SaveDocsOwnerRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var owner: String = String()
+
+  public var enabled: Bool = false
+
+  /// all | include | exclude
+  public var repoMode: String = String()
+
+  public var repos: [String] = []
+
+  /// 0 keeps the cadence, or the default for a new owner
+  public var refreshSecs: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_RemoveDocsOwnerRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var owner: String = String()
+
+  /// also delete everything the owner indexed
+  public var purge: Bool = false
+
+  /// required with purge: deletion is permanent
+  public var confirm: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_PurgeDocsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var owner: String = String()
+
+  /// Repos to purge, which the owner must not cover. Empty means every repo
+  /// the owner no longer covers.
+  public var repos: [String] = []
+
+  /// required: deletion is permanent
+  public var confirm: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_PurgeDocsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// indexed docs deleted
+  public var purgedSources: Int32 = 0
+
+  public var purgedChunks: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_GetConfigRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SetConfigRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// key → JSON value
+  public var values: Dictionary<String,String> = [:]
+
+  /// required to change a sensitive setting
+  public var confirmSensitive: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ConfigField: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var key: String = String()
+
+  public var section: String = String()
+
+  public var label: String = String()
+
+  public var help: String = String()
+
+  /// bool | int | float | string | duration | enum | path | url | version | list | map
+  public var type: String = String()
+
+  /// current effective value, JSON
+  public var value: String = String()
+
+  /// JSON
+  public var defaultValue: String = String()
+
+  /// enum
+  public var options: [String] = []
+
+  public var hasRange_p: Bool = false
+
+  public var min: Double = 0
+
+  public var max: Double = 0
+
+  /// changing it needs confirm_sensitive
+  public var sensitive: Bool = false
+
+  /// takes effect without restarting orchd
+  public var live: Bool = false
+
+  /// an environment variable sets it, so it cannot be changed here
+  public var envOverride: Bool = false
+
+  /// differs from what orchd started with
+  public var pendingRestart: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ConfigState: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var fields: [Orchd_V1_ConfigField] = []
+
+  /// config.yaml
+  public var path: String = String()
+
+  /// some field is pending_restart
+  public var restartRequired: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -6546,7 +6783,7 @@ nonisolated extension Orchd_V1_DocsSyncState: SwiftProtobuf.Message, SwiftProtob
 
 nonisolated extension Orchd_V1_DocOwner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DocOwner"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{3}refresh_secs\0\u{1}scope\0\u{1}tags\0\u{3}last_synced\0\u{1}status\0\u{1}repos\0\u{1}error\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{3}refresh_secs\0\u{1}scope\0\u{1}tags\0\u{3}last_synced\0\u{1}status\0\u{1}repos\0\u{1}error\0\u{1}enabled\0\u{3}repo_mode\0\u{3}selected_repos\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6562,6 +6799,9 @@ nonisolated extension Orchd_V1_DocOwner: SwiftProtobuf.Message, SwiftProtobuf._M
       case 6: try { try decoder.decodeSingularStringField(value: &self.status) }()
       case 7: try { try decoder.decodeRepeatedMessageField(value: &self.repos) }()
       case 8: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      case 9: try { try decoder.decodeSingularBoolField(value: &self.enabled) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.repoMode) }()
+      case 11: try { try decoder.decodeRepeatedStringField(value: &self.selectedRepos) }()
       default: break
       }
     }
@@ -6592,6 +6832,15 @@ nonisolated extension Orchd_V1_DocOwner: SwiftProtobuf.Message, SwiftProtobuf._M
     if !self.error.isEmpty {
       try visitor.visitSingularStringField(value: self.error, fieldNumber: 8)
     }
+    if self.enabled != false {
+      try visitor.visitSingularBoolField(value: self.enabled, fieldNumber: 9)
+    }
+    if !self.repoMode.isEmpty {
+      try visitor.visitSingularStringField(value: self.repoMode, fieldNumber: 10)
+    }
+    if !self.selectedRepos.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.selectedRepos, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -6604,6 +6853,517 @@ nonisolated extension Orchd_V1_DocOwner: SwiftProtobuf.Message, SwiftProtobuf._M
     if lhs.status != rhs.status {return false}
     if lhs.repos != rhs.repos {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.enabled != rhs.enabled {return false}
+    if lhs.repoMode != rhs.repoMode {return false}
+    if lhs.selectedRepos != rhs.selectedRepos {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListDocsOwnersRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListDocsOwnersRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListDocsOwnersRequest, rhs: Orchd_V1_ListDocsOwnersRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListDocsOwnersResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListDocsOwnersResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owners\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.owners) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owners.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.owners, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListDocsOwnersResponse, rhs: Orchd_V1_ListDocsOwnersResponse) -> Bool {
+    if lhs.owners != rhs.owners {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListDocsOwnerReposRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListDocsOwnerReposRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListDocsOwnerReposRequest, rhs: Orchd_V1_ListDocsOwnerReposRequest) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_DocsOwnerRepo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".DocsOwnerRepo"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}archived\0\u{1}fork\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.archived) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.fork) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if self.archived != false {
+      try visitor.visitSingularBoolField(value: self.archived, fieldNumber: 2)
+    }
+    if self.fork != false {
+      try visitor.visitSingularBoolField(value: self.fork, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_DocsOwnerRepo, rhs: Orchd_V1_DocsOwnerRepo) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.archived != rhs.archived {return false}
+    if lhs.fork != rhs.fork {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListDocsOwnerReposResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListDocsOwnerReposResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}repos\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.repos) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.repos.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.repos, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListDocsOwnerReposResponse, rhs: Orchd_V1_ListDocsOwnerReposResponse) -> Bool {
+    if lhs.repos != rhs.repos {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SaveDocsOwnerRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SaveDocsOwnerRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{1}enabled\0\u{3}repo_mode\0\u{1}repos\0\u{3}refresh_secs\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.enabled) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.repoMode) }()
+      case 4: try { try decoder.decodeRepeatedStringField(value: &self.repos) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.refreshSecs) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    if self.enabled != false {
+      try visitor.visitSingularBoolField(value: self.enabled, fieldNumber: 2)
+    }
+    if !self.repoMode.isEmpty {
+      try visitor.visitSingularStringField(value: self.repoMode, fieldNumber: 3)
+    }
+    if !self.repos.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.repos, fieldNumber: 4)
+    }
+    if self.refreshSecs != 0 {
+      try visitor.visitSingularInt64Field(value: self.refreshSecs, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SaveDocsOwnerRequest, rhs: Orchd_V1_SaveDocsOwnerRequest) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.enabled != rhs.enabled {return false}
+    if lhs.repoMode != rhs.repoMode {return false}
+    if lhs.repos != rhs.repos {return false}
+    if lhs.refreshSecs != rhs.refreshSecs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RemoveDocsOwnerRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RemoveDocsOwnerRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{1}purge\0\u{1}confirm\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.purge) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.confirm) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    if self.purge != false {
+      try visitor.visitSingularBoolField(value: self.purge, fieldNumber: 2)
+    }
+    if self.confirm != false {
+      try visitor.visitSingularBoolField(value: self.confirm, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RemoveDocsOwnerRequest, rhs: Orchd_V1_RemoveDocsOwnerRequest) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.purge != rhs.purge {return false}
+    if lhs.confirm != rhs.confirm {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_PurgeDocsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PurgeDocsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{1}repos\0\u{1}confirm\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 2: try { try decoder.decodeRepeatedStringField(value: &self.repos) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.confirm) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    if !self.repos.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.repos, fieldNumber: 2)
+    }
+    if self.confirm != false {
+      try visitor.visitSingularBoolField(value: self.confirm, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_PurgeDocsRequest, rhs: Orchd_V1_PurgeDocsRequest) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.repos != rhs.repos {return false}
+    if lhs.confirm != rhs.confirm {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_PurgeDocsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PurgeDocsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}purged_sources\0\u{3}purged_chunks\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.purgedSources) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.purgedChunks) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.purgedSources != 0 {
+      try visitor.visitSingularInt32Field(value: self.purgedSources, fieldNumber: 1)
+    }
+    if self.purgedChunks != 0 {
+      try visitor.visitSingularInt32Field(value: self.purgedChunks, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_PurgeDocsResponse, rhs: Orchd_V1_PurgeDocsResponse) -> Bool {
+    if lhs.purgedSources != rhs.purgedSources {return false}
+    if lhs.purgedChunks != rhs.purgedChunks {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_GetConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetConfigRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_GetConfigRequest, rhs: Orchd_V1_GetConfigRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SetConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetConfigRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}values\0\u{3}confirm_sensitive\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: &self.values) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.confirmSensitive) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.values.isEmpty {
+      try visitor.visitMapField(fieldType: SwiftProtobuf._ProtobufMap<SwiftProtobuf.ProtobufString,SwiftProtobuf.ProtobufString>.self, value: self.values, fieldNumber: 1)
+    }
+    if self.confirmSensitive != false {
+      try visitor.visitSingularBoolField(value: self.confirmSensitive, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SetConfigRequest, rhs: Orchd_V1_SetConfigRequest) -> Bool {
+    if lhs.values != rhs.values {return false}
+    if lhs.confirmSensitive != rhs.confirmSensitive {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ConfigField: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConfigField"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{1}section\0\u{1}label\0\u{1}help\0\u{1}type\0\u{1}value\0\u{3}default_value\0\u{1}options\0\u{3}has_range\0\u{1}min\0\u{1}max\0\u{1}sensitive\0\u{1}live\0\u{3}env_override\0\u{3}pending_restart\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.key) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.section) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.label) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.help) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.type) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.value) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.defaultValue) }()
+      case 8: try { try decoder.decodeRepeatedStringField(value: &self.options) }()
+      case 9: try { try decoder.decodeSingularBoolField(value: &self.hasRange_p) }()
+      case 10: try { try decoder.decodeSingularDoubleField(value: &self.min) }()
+      case 11: try { try decoder.decodeSingularDoubleField(value: &self.max) }()
+      case 12: try { try decoder.decodeSingularBoolField(value: &self.sensitive) }()
+      case 13: try { try decoder.decodeSingularBoolField(value: &self.live) }()
+      case 14: try { try decoder.decodeSingularBoolField(value: &self.envOverride) }()
+      case 15: try { try decoder.decodeSingularBoolField(value: &self.pendingRestart) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.key.isEmpty {
+      try visitor.visitSingularStringField(value: self.key, fieldNumber: 1)
+    }
+    if !self.section.isEmpty {
+      try visitor.visitSingularStringField(value: self.section, fieldNumber: 2)
+    }
+    if !self.label.isEmpty {
+      try visitor.visitSingularStringField(value: self.label, fieldNumber: 3)
+    }
+    if !self.help.isEmpty {
+      try visitor.visitSingularStringField(value: self.help, fieldNumber: 4)
+    }
+    if !self.type.isEmpty {
+      try visitor.visitSingularStringField(value: self.type, fieldNumber: 5)
+    }
+    if !self.value.isEmpty {
+      try visitor.visitSingularStringField(value: self.value, fieldNumber: 6)
+    }
+    if !self.defaultValue.isEmpty {
+      try visitor.visitSingularStringField(value: self.defaultValue, fieldNumber: 7)
+    }
+    if !self.options.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.options, fieldNumber: 8)
+    }
+    if self.hasRange_p != false {
+      try visitor.visitSingularBoolField(value: self.hasRange_p, fieldNumber: 9)
+    }
+    if self.min.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.min, fieldNumber: 10)
+    }
+    if self.max.bitPattern != 0 {
+      try visitor.visitSingularDoubleField(value: self.max, fieldNumber: 11)
+    }
+    if self.sensitive != false {
+      try visitor.visitSingularBoolField(value: self.sensitive, fieldNumber: 12)
+    }
+    if self.live != false {
+      try visitor.visitSingularBoolField(value: self.live, fieldNumber: 13)
+    }
+    if self.envOverride != false {
+      try visitor.visitSingularBoolField(value: self.envOverride, fieldNumber: 14)
+    }
+    if self.pendingRestart != false {
+      try visitor.visitSingularBoolField(value: self.pendingRestart, fieldNumber: 15)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ConfigField, rhs: Orchd_V1_ConfigField) -> Bool {
+    if lhs.key != rhs.key {return false}
+    if lhs.section != rhs.section {return false}
+    if lhs.label != rhs.label {return false}
+    if lhs.help != rhs.help {return false}
+    if lhs.type != rhs.type {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.defaultValue != rhs.defaultValue {return false}
+    if lhs.options != rhs.options {return false}
+    if lhs.hasRange_p != rhs.hasRange_p {return false}
+    if lhs.min != rhs.min {return false}
+    if lhs.max != rhs.max {return false}
+    if lhs.sensitive != rhs.sensitive {return false}
+    if lhs.live != rhs.live {return false}
+    if lhs.envOverride != rhs.envOverride {return false}
+    if lhs.pendingRestart != rhs.pendingRestart {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ConfigState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConfigState"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}fields\0\u{1}path\0\u{3}restart_required\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.fields) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.path) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.restartRequired) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.fields.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.fields, fieldNumber: 1)
+    }
+    if !self.path.isEmpty {
+      try visitor.visitSingularStringField(value: self.path, fieldNumber: 2)
+    }
+    if self.restartRequired != false {
+      try visitor.visitSingularBoolField(value: self.restartRequired, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ConfigState, rhs: Orchd_V1_ConfigState) -> Bool {
+    if lhs.fields != rhs.fields {return false}
+    if lhs.path != rhs.path {return false}
+    if lhs.restartRequired != rhs.restartRequired {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

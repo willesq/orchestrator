@@ -73,7 +73,7 @@ private struct DocList: View {
                 if model.catalog != nil && groups.isEmpty {
                     if model.filter.isEmpty {
                         EmptyState(symbol: "doc.text.magnifyingglass", title: "No synced docs",
-                                   message: "Add a GitHub owner with orch docs add <owner> and its docs show up here.")
+                                   message: "Opt an account or org in under Settings → Docs and its docs show up here.")
                     } else {
                         EmptyState(symbol: "magnifyingglass", title: "No docs match",
                                    actionTitle: "Clear filter", action: { model.filter = "" })

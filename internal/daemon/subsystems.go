@@ -96,7 +96,7 @@ func subsystems(d deps) []supervisor.Unit {
 	if u, ok := qdrantUnit(d.settings, d.apiKey, d.system); ok {
 		out = append(out, u)
 	}
-	if d.settings.Queue.Worker.Enabled {
+	if d.settings.Queue.Worker.Runs() {
 		var reg *models.Registry
 		if d.store != nil {
 			reg = models.NewRegistry(d.store)

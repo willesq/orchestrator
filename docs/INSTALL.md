@@ -115,7 +115,7 @@ Limitations:
 - Rule files are not tamper-resistant: an agent can edit `~/.cc-safety-net/rules/`. They guard
   against mistakes, not a hostile agent. orch does not write cc-safety-net's `policy.json` and
   leaves its safety level at `standard`.
-- A rulebook that fails validation is skipped silently by cc-safety-net; the Safety Net tab and
+- A rulebook that fails validation is skipped silently by cc-safety-net; Settings → Safety Net and
   `orch status` report it.
 - Running Claude Code sessions load a newly installed plugin only after a restart.
 
@@ -135,7 +135,7 @@ each harness at them: Claude Code and Gemini import the header and each enabled 
 instructions stay in each harness's own entry file.
 
 **Turning modules on and off.** Every module is on by default. Turn one off for this machine in
-Orch.app (Claude tab, **Instructions**) or with `orch settings disable module
+Orch.app (Settings → Claude, **Instructions**) or with `orch settings disable module
 <name>`; for example, turn off `gpg-signing` on a machine that does not sign commits. The choice
 lives in this machine's `orch.db`. orchd removes that module's import from each managed block
 within seconds and puts it back if the block is edited by hand; the next session loads the
@@ -143,7 +143,7 @@ change. The app shows each module's full text.
 
 **Subagents and skills.** The Claude Code subagents and skills orch ships (its own, plus the
 author's `adversarial-qa`, `adversarial-reviewer`, `security-audit` and other agents, and the
-`adversarial-qa`, `api-design` and `qa-fixer` skills) are toggled the same way: Claude tab,
+`adversarial-qa`, `api-design` and `qa-fixer` skills) are toggled the same way: Settings → Claude,
 **Subagents** or **Skills**, or `orch settings disable agent <name>` / `disable skill <name>`.
 Off removes the files orch installed for it from `~/.claude` (backed up first); on puts them
 back. A copy of your own that is identical to the shipped one is taken over; one you changed is

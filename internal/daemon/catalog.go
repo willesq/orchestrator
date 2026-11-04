@@ -61,10 +61,9 @@ func (s *server) ListDocs(ctx context.Context, _ *orchdv1.ListDocsRequest) (*orc
 		if err != nil {
 			return nil, err
 		}
-		pb := &orchdv1.DocOwner{
-			Owner: o.Owner, RefreshSecs: o.RefreshSecs, Scope: o.Scope, Tags: o.Tags,
-			LastSynced: o.LastSynced, Status: o.Status, Error: o.Error,
-		}
+		// Tasks may call ListDocs; what is opted in is the operator's to read.
+		pb := docOwnerPB(o)
+		pb.Enabled, pb.RepoMode, pb.SelectedRepos = false, "", nil
 		for _, r := range repos {
 			heads[r.Owner+"/"+r.Repo] = r.HeadSHA
 			pb.Repos = append(pb.Repos, &orchdv1.DocRepo{

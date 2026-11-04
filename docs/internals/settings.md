@@ -3,7 +3,7 @@
 orch keeps items it finds in other tools' configuration files as desired state in `orch.db`, and
 writes that state back to the files. The providers cover Claude Code
 (`~/.claude/settings.json`), cc-safety-net's custom rules, and orch's own instruction modules
-(the managed block of each harness entry file). The app's **Claude** tab, the
+(the managed block of each harness entry file). The app's **Settings → Claude** section, the
 `orch settings` command and the settings RPCs are views over this one store.
 
 Code: `internal/settings` (store, reconciler, provider interface),
@@ -221,10 +221,10 @@ model).
   them is overwritten. The backup taken before orch's first change to a file is kept.
 - The operator-only rule covers the RPCs. A same-user process with a shell (a queued task, say)
   can still edit `orch.db` or the files directly, as for the rest of orch's state; for example, a
-  row marking a credential deny rule off keeps `orch install` from restoring it. The Claude tab
+  row marking a credential deny rule off keeps `orch install` from restoring it. The Settings → Claude section
   shows it as off and `orch status` counts it among `N disabled by you`.
 - Payloads of disabled and removed items stay in `orch.db` until removed (forgotten) in the
-  Claude tab; a permission rule saved with a secret in it stays there too. `ListSettings` returns
+  Settings → Claude section; a permission rule saved with a secret in it stays there too. `ListSettings` returns
   them, and queued tasks may call it.
 - `orch install --home <dir>` still reads this machine's toggles from the real `orch.db`; it only
   ever leaves items out, so a test install against a temporary home may skip items turned off

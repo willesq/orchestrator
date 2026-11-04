@@ -57,6 +57,13 @@ const (
 	Orchd_GetDocument_FullMethodName              = "/orchd.v1.Orchd/GetDocument"
 	Orchd_SyncDocs_FullMethodName                 = "/orchd.v1.Orchd/SyncDocs"
 	Orchd_GetDocsSync_FullMethodName              = "/orchd.v1.Orchd/GetDocsSync"
+	Orchd_ListDocsOwners_FullMethodName           = "/orchd.v1.Orchd/ListDocsOwners"
+	Orchd_ListDocsOwnerRepos_FullMethodName       = "/orchd.v1.Orchd/ListDocsOwnerRepos"
+	Orchd_SaveDocsOwner_FullMethodName            = "/orchd.v1.Orchd/SaveDocsOwner"
+	Orchd_RemoveDocsOwner_FullMethodName          = "/orchd.v1.Orchd/RemoveDocsOwner"
+	Orchd_PurgeDocs_FullMethodName                = "/orchd.v1.Orchd/PurgeDocs"
+	Orchd_GetConfig_FullMethodName                = "/orchd.v1.Orchd/GetConfig"
+	Orchd_SetConfig_FullMethodName                = "/orchd.v1.Orchd/SetConfig"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName               = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName             = "/orchd.v1.Orchd/RemoveSource"
@@ -188,6 +195,24 @@ type OrchdClient interface {
 	SyncDocs(ctx context.Context, in *SyncDocsRequest, opts ...grpc.CallOption) (*DocsSyncState, error)
 	// GetDocsSync reports the running docs sync, or the last one.
 	GetDocsSync(ctx context.Context, in *GetDocsSyncRequest, opts ...grpc.CallOption) (*DocsSyncState, error)
+	// ListDocsOwners returns the owners the docs sync tracks and what each covers.
+	ListDocsOwners(ctx context.Context, in *ListDocsOwnersRequest, opts ...grpc.CallOption) (*ListDocsOwnersResponse, error)
+	// ListDocsOwnerRepos asks GitHub for an owner's repos, to choose among them;
+	// the owner need not be registered.
+	ListDocsOwnerRepos(ctx context.Context, in *ListDocsOwnerReposRequest, opts ...grpc.CallOption) (*ListDocsOwnerReposResponse, error)
+	// SaveDocsOwner registers an owner if needed and sets whether it syncs and
+	// which repos it covers. Refused while a docs sync runs.
+	SaveDocsOwner(ctx context.Context, in *SaveDocsOwnerRequest, opts ...grpc.CallOption) (*DocOwner, error)
+	// RemoveDocsOwner forgets an owner, and with purge and confirm deletes what
+	// it indexed. Refused while a docs sync runs.
+	RemoveDocsOwner(ctx context.Context, in *RemoveDocsOwnerRequest, opts ...grpc.CallOption) (*PurgeDocsResponse, error)
+	// PurgeDocs deletes the indexed docs of repos an owner no longer covers.
+	// Permanent: needs confirm. Refused while a docs sync runs.
+	PurgeDocs(ctx context.Context, in *PurgeDocsRequest, opts ...grpc.CallOption) (*PurgeDocsResponse, error)
+	// GetConfig returns every setting in config.yaml, described for editing.
+	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*ConfigState, error)
+	// SetConfig validates and writes settings in one write: all of them or none.
+	SetConfig(ctx context.Context, in *SetConfigRequest, opts ...grpc.CallOption) (*ConfigState, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -635,6 +660,76 @@ func (c *orchdClient) GetDocsSync(ctx context.Context, in *GetDocsSyncRequest, o
 	return out, nil
 }
 
+func (c *orchdClient) ListDocsOwners(ctx context.Context, in *ListDocsOwnersRequest, opts ...grpc.CallOption) (*ListDocsOwnersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDocsOwnersResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListDocsOwners_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ListDocsOwnerRepos(ctx context.Context, in *ListDocsOwnerReposRequest, opts ...grpc.CallOption) (*ListDocsOwnerReposResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDocsOwnerReposResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListDocsOwnerRepos_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) SaveDocsOwner(ctx context.Context, in *SaveDocsOwnerRequest, opts ...grpc.CallOption) (*DocOwner, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DocOwner)
+	err := c.cc.Invoke(ctx, Orchd_SaveDocsOwner_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) RemoveDocsOwner(ctx context.Context, in *RemoveDocsOwnerRequest, opts ...grpc.CallOption) (*PurgeDocsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgeDocsResponse)
+	err := c.cc.Invoke(ctx, Orchd_RemoveDocsOwner_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) PurgeDocs(ctx context.Context, in *PurgeDocsRequest, opts ...grpc.CallOption) (*PurgeDocsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgeDocsResponse)
+	err := c.cc.Invoke(ctx, Orchd_PurgeDocs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*ConfigState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigState)
+	err := c.cc.Invoke(ctx, Orchd_GetConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) SetConfig(ctx context.Context, in *SetConfigRequest, opts ...grpc.CallOption) (*ConfigState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigState)
+	err := c.cc.Invoke(ctx, Orchd_SetConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -908,6 +1003,24 @@ type OrchdServer interface {
 	SyncDocs(context.Context, *SyncDocsRequest) (*DocsSyncState, error)
 	// GetDocsSync reports the running docs sync, or the last one.
 	GetDocsSync(context.Context, *GetDocsSyncRequest) (*DocsSyncState, error)
+	// ListDocsOwners returns the owners the docs sync tracks and what each covers.
+	ListDocsOwners(context.Context, *ListDocsOwnersRequest) (*ListDocsOwnersResponse, error)
+	// ListDocsOwnerRepos asks GitHub for an owner's repos, to choose among them;
+	// the owner need not be registered.
+	ListDocsOwnerRepos(context.Context, *ListDocsOwnerReposRequest) (*ListDocsOwnerReposResponse, error)
+	// SaveDocsOwner registers an owner if needed and sets whether it syncs and
+	// which repos it covers. Refused while a docs sync runs.
+	SaveDocsOwner(context.Context, *SaveDocsOwnerRequest) (*DocOwner, error)
+	// RemoveDocsOwner forgets an owner, and with purge and confirm deletes what
+	// it indexed. Refused while a docs sync runs.
+	RemoveDocsOwner(context.Context, *RemoveDocsOwnerRequest) (*PurgeDocsResponse, error)
+	// PurgeDocs deletes the indexed docs of repos an owner no longer covers.
+	// Permanent: needs confirm. Refused while a docs sync runs.
+	PurgeDocs(context.Context, *PurgeDocsRequest) (*PurgeDocsResponse, error)
+	// GetConfig returns every setting in config.yaml, described for editing.
+	GetConfig(context.Context, *GetConfigRequest) (*ConfigState, error)
+	// SetConfig validates and writes settings in one write: all of them or none.
+	SetConfig(context.Context, *SetConfigRequest) (*ConfigState, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -1079,6 +1192,27 @@ func (UnimplementedOrchdServer) SyncDocs(context.Context, *SyncDocsRequest) (*Do
 }
 func (UnimplementedOrchdServer) GetDocsSync(context.Context, *GetDocsSyncRequest) (*DocsSyncState, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetDocsSync not implemented")
+}
+func (UnimplementedOrchdServer) ListDocsOwners(context.Context, *ListDocsOwnersRequest) (*ListDocsOwnersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDocsOwners not implemented")
+}
+func (UnimplementedOrchdServer) ListDocsOwnerRepos(context.Context, *ListDocsOwnerReposRequest) (*ListDocsOwnerReposResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDocsOwnerRepos not implemented")
+}
+func (UnimplementedOrchdServer) SaveDocsOwner(context.Context, *SaveDocsOwnerRequest) (*DocOwner, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveDocsOwner not implemented")
+}
+func (UnimplementedOrchdServer) RemoveDocsOwner(context.Context, *RemoveDocsOwnerRequest) (*PurgeDocsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveDocsOwner not implemented")
+}
+func (UnimplementedOrchdServer) PurgeDocs(context.Context, *PurgeDocsRequest) (*PurgeDocsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PurgeDocs not implemented")
+}
+func (UnimplementedOrchdServer) GetConfig(context.Context, *GetConfigRequest) (*ConfigState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetConfig not implemented")
+}
+func (UnimplementedOrchdServer) SetConfig(context.Context, *SetConfigRequest) (*ConfigState, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetConfig not implemented")
 }
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
@@ -1826,6 +1960,132 @@ func _Orchd_GetDocsSync_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_ListDocsOwners_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDocsOwnersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListDocsOwners(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListDocsOwners_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListDocsOwners(ctx, req.(*ListDocsOwnersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ListDocsOwnerRepos_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDocsOwnerReposRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListDocsOwnerRepos(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListDocsOwnerRepos_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListDocsOwnerRepos(ctx, req.(*ListDocsOwnerReposRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_SaveDocsOwner_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveDocsOwnerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SaveDocsOwner(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SaveDocsOwner_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SaveDocsOwner(ctx, req.(*SaveDocsOwnerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_RemoveDocsOwner_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveDocsOwnerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).RemoveDocsOwner(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_RemoveDocsOwner_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).RemoveDocsOwner(ctx, req.(*RemoveDocsOwnerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_PurgeDocs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurgeDocsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).PurgeDocs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_PurgeDocs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).PurgeDocs(ctx, req.(*PurgeDocsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_GetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetConfig(ctx, req.(*GetConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_SetConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SetConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SetConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SetConfig(ctx, req.(*SetConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -2268,6 +2528,34 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetDocsSync",
 			Handler:    _Orchd_GetDocsSync_Handler,
+		},
+		{
+			MethodName: "ListDocsOwners",
+			Handler:    _Orchd_ListDocsOwners_Handler,
+		},
+		{
+			MethodName: "ListDocsOwnerRepos",
+			Handler:    _Orchd_ListDocsOwnerRepos_Handler,
+		},
+		{
+			MethodName: "SaveDocsOwner",
+			Handler:    _Orchd_SaveDocsOwner_Handler,
+		},
+		{
+			MethodName: "RemoveDocsOwner",
+			Handler:    _Orchd_RemoveDocsOwner_Handler,
+		},
+		{
+			MethodName: "PurgeDocs",
+			Handler:    _Orchd_PurgeDocs_Handler,
+		},
+		{
+			MethodName: "GetConfig",
+			Handler:    _Orchd_GetConfig_Handler,
+		},
+		{
+			MethodName: "SetConfig",
+			Handler:    _Orchd_SetConfig_Handler,
 		},
 		{
 			MethodName: "ListRegisteredSources",

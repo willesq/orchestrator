@@ -203,3 +203,31 @@ func (f *fakeClient) DiscardPRLanding(context.Context, *orchdv1.DiscardPRLanding
 func (f *fakeClient) BackfillSessions(context.Context, *orchdv1.BackfillSessionsRequest, ...grpc.CallOption) (*orchdv1.BackfillSessionsResponse, error) {
 	return &orchdv1.BackfillSessionsResponse{}, nil
 }
+
+func (f *fakeClient) ListDocsOwners(context.Context, *orchdv1.ListDocsOwnersRequest, ...grpc.CallOption) (*orchdv1.ListDocsOwnersResponse, error) {
+	return &orchdv1.ListDocsOwnersResponse{}, nil
+}
+
+func (f *fakeClient) ListDocsOwnerRepos(context.Context, *orchdv1.ListDocsOwnerReposRequest, ...grpc.CallOption) (*orchdv1.ListDocsOwnerReposResponse, error) {
+	return &orchdv1.ListDocsOwnerReposResponse{}, nil
+}
+
+func (f *fakeClient) SaveDocsOwner(context.Context, *orchdv1.SaveDocsOwnerRequest, ...grpc.CallOption) (*orchdv1.DocOwner, error) {
+	return &orchdv1.DocOwner{}, nil
+}
+
+func (f *fakeClient) RemoveDocsOwner(context.Context, *orchdv1.RemoveDocsOwnerRequest, ...grpc.CallOption) (*orchdv1.PurgeDocsResponse, error) {
+	return &orchdv1.PurgeDocsResponse{}, nil
+}
+
+func (f *fakeClient) PurgeDocs(context.Context, *orchdv1.PurgeDocsRequest, ...grpc.CallOption) (*orchdv1.PurgeDocsResponse, error) {
+	return &orchdv1.PurgeDocsResponse{}, nil
+}
+
+func (f *fakeClient) GetConfig(context.Context, *orchdv1.GetConfigRequest, ...grpc.CallOption) (*orchdv1.ConfigState, error) {
+	return &orchdv1.ConfigState{}, nil
+}
+
+func (f *fakeClient) SetConfig(context.Context, *orchdv1.SetConfigRequest, ...grpc.CallOption) (*orchdv1.ConfigState, error) {
+	return &orchdv1.ConfigState{}, nil
+}

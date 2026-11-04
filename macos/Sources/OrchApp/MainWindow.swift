@@ -2,7 +2,7 @@ import OrchKit
 import SwiftUI
 
 enum Pane: String, CaseIterable, Identifiable {
-    case dashboard, system, memory, docs, sources, tasks, github, claude, safetyNet
+    case dashboard, system, memory, docs, sources, tasks, github, settings
 
     var id: String { rawValue }
 
@@ -15,8 +15,7 @@ enum Pane: String, CaseIterable, Identifiable {
         case .sources: "Sources"
         case .tasks: "Tasks"
         case .github: "GitHub"
-        case .claude: "Claude"
-        case .safetyNet: "Safety Net"
+        case .settings: "Settings"
         }
     }
 
@@ -29,8 +28,7 @@ enum Pane: String, CaseIterable, Identifiable {
         case .sources: "tray.full"
         case .tasks: "checklist"
         case .github: "point.3.connected.trianglepath.dotted"
-        case .claude: "slider.horizontal.3"
-        case .safetyNet: "checkmark.shield"
+        case .settings: "gearshape"
         }
     }
 }
@@ -53,6 +51,9 @@ struct MainWindow: View {
     let registeredSources: RegisteredSourcesModel
     let safetyNet: SafetyNetModel
     let claude: SettingsModel
+    let config: ConfigModel
+    let docsOwners: DocsOwnersModel
+    let loginItem: LoginItem
     @Bindable var navigator: Navigator
     let window: WindowControl
 
@@ -128,7 +129,7 @@ struct MainWindow: View {
             case .dashboard:
                 DashboardView(monitor: monitor, prMonitor: prMonitor, restart: restart, docs: docs, safetyNet: safetyNet,
                               tasks: tasks, reviews: prs.reviews, sources: registeredSources,
-                              open: { pane = $0 }, follow: follow)
+                              open: { pane = $0 }, openSafetyNet: { navigator.showSettings(.safetyNet) }, follow: follow)
             case .system:
                 SystemView(model: system, logs: logs, restart: restart)
             case .memory:
@@ -150,10 +151,9 @@ struct MainWindow: View {
                     // Which PRs an agent is on shows in the list, board and detail.
                     .task { await handoff.follow() }
                     .task { await landings.follow() }
-            case .claude:
-                ClaudeView(model: claude)
-            case .safetyNet:
-                SafetyNetView(model: safetyNet, settings: claude)
+            case .settings:
+                SettingsView(config: config, docsOwners: docsOwners, github: github, claude: claude, safetyNet: safetyNet,
+                             loginItem: loginItem, navigator: navigator)
             }
         }
         .toolbar {
@@ -212,6 +212,10 @@ struct MainWindow: View {
                 choice.apply()
             })
         }
+        for section in SettingsSection.allCases {
+            commands.append(PaletteCommand(id: "settings:\(section.rawValue)", section: "Go to", title: "Settings: \(section.title)",
+                                           symbol: section.symbol) { navigator.showSettings(section) })
+        }
         for item in Pane.allCases {
             var subtitle: String?
             var tone = Tone.neutral
@@ -267,7 +271,8 @@ struct MainWindow: View {
             async let e: Void = docs.load()
             async let f: Void = safetyNet.load()
             async let g: Void = claude.load()
-            _ = await (a, b, c, d, e, f, g)
+            async let h: Void = config.load()
+            _ = await (a, b, c, d, e, f, g, h)
         }
     }
 
@@ -281,13 +286,8 @@ struct MainWindow: View {
         case .github:
             let n = prMonitor.needsYou.count
             return n > 0 ? .count(n, .accent, "\(n) need you") : .none
-        case .safetyNet:
-            guard let state = safetyNet.state else { return .none }
-            let badge = state.badge
-            return .dot(SafetyNetView.tone(badge.tone), badge.label)
-        case .claude:
-            let n = claude.changedOutside
-            return n > 0 ? .dot(.warning, "\(n) edited outside orch") : .none
+        case .settings:
+            return SettingsView.status(config: config, safetyNet: safetyNet, claude: claude)
         default:
             return .none
         }

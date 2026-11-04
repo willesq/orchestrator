@@ -130,7 +130,7 @@ update. When the specialist finishes, the `subagent-stop` hook appends a
 
 ### Alternative: hand off as a durable queue task
 
-When `orch config get queue.worker.enabled` reports `true` and the work should outlive this
+When `orch config get queue.worker.enabled` reports `true`, `queue.worker.max_concurrent` is above 0, and the work should outlive this
 session (long-running, or the user is about to close it), you may hand off with
 `mcp__queue__queue_dispatch` instead of the `Agent` spawn above. Pass the same fully
 inlined prompt as `body`, the specialist as `agent`, the canonical repo as `cwd`, and

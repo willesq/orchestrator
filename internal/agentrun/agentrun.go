@@ -123,12 +123,18 @@ const gitHubWriteTools = "Bash(gh pr review:*),Bash(gh pr comment:*),Bash(gh pr 
 	"Bash(gh repo edit:*),Bash(gh repo delete:*),Bash(gh secret:*),Bash(gh variable:*),Bash(gh label:*)," +
 	"Bash(gh gist:*),Bash(git push:*),Bash(git -C:*),Bash(curl:*),Bash(wget:*),Bash(sqlite3:*),WebFetch"
 
+// operatorTools are the commands that change orch's own settings, denied to every
+// run so a task cannot widen its own limits or permissions.
+const operatorTools = "Bash(orch config set:*),Bash(orch docs add:*),Bash(orch docs remove:*)," +
+	"Bash(orch docs enable:*),Bash(orch docs disable:*),Bash(orch docs repos:*),Bash(orch docs purge:*)"
+
 // deniedTools lists what agent may not use in a run.
 func deniedTools(agent string) string {
+	denied := dispatchTools + "," + operatorTools
 	if readOnlyAgents[agent] {
-		return dispatchTools + "," + gitHubWriteTools
+		return denied + "," + gitHubWriteTools
 	}
-	return dispatchTools
+	return denied
 }
 
 // ValidAgent reports whether name can be passed to --agent.

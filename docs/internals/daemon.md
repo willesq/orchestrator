@@ -61,7 +61,9 @@ stored: its session-end hook's `Ingest` and `SummarizeSession` are refused, so t
 stores the record and queues the summary from the entry the hook left.
 
 **Limits.** This raises the bar from "unset a variable" to "leave orchd's process tree"; it is
-advisory, not a sandbox, because a task runs as the user. A task can leave the tree in one
+advisory, not a sandbox, because a task runs as the user. `orch config set` and the `orch docs` commands that
+change what is synced refuse inside a task and are denied to its Claude Code sessions, though a task could still
+edit `config.yaml` itself, and can read it. A task can leave the tree in one
 command: `launchctl submit`, `open` (a `.command` file or an app), `osascript`, `at` or cron, or
 `systemd-run --user` all start a process launchd or systemd owns, and a process whose parent
 exits before orchd accepts its connection is reparented the same way. A task can also write the
@@ -110,6 +112,13 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `Search` filters | source_uri, all_tags | `source_uri` keeps one source; `all_tags` requires every tag (e.g. `owner:o`, `repo:r` for one repo's docs), alongside `tags` (any); each tag list at most 32 tags of 256 bytes |
 | `ListDocs` | → owners (repos, indexed commit), files (URI, path, chunks, GitHub URL), truncated | files are docs both the store holds and the registry recorded; GitHub URLs pinned to the indexed commit; owner and repo names validated before a URL is built; at most 10,000 files or 3 MiB |
 | `SyncDocs` | owner (empty = all), force, confirm_prune (needs owner: grants each of its repos with a current refused prune, for one prune no larger within the hour, and forgets their HEAD so this sync walks them; `FailedPrecondition` when none is refused) → sync state | refused with `Aborted` while a sync runs, which is never interrupted (nothing is queued); owner validated and must be registered (`NotFound`); with the scheduler's run lock held, force clears the owner's caches and the owner is marked due; the `docs-scheduler` tick (every 2 s) then scans |
+| `ListDocsOwners` | → owners (enabled, repo mode, selected repos, each repo's files and status) | operator-only |
+| `ListDocsOwnerRepos` | owner → repos (name, archived, fork) | asks GitHub; the owner need not be registered; operator-only |
+| `SaveDocsOwner` | owner, enabled, repo_mode, repos, refresh_secs → owner | registers the owner if new; `Aborted` while a docs sync runs |
+| `RemoveDocsOwner` | owner, purge, confirm → purged counts | purge needs `confirm`; a failed purge leaves the owner; `Aborted` while a docs sync runs |
+| `PurgeDocs` | owner, repos (empty = every repo not covered), confirm → purged counts | needs `confirm`; a repo still synced → `FailedPrecondition`; `Aborted` while a docs sync runs |
+| `GetConfig` | → fields, path, restart_required | every setting in config.yaml ([config.md](config.md#schema)); operator-only |
+| `SetConfig` | values (key → JSON), confirm_sensitive → same as `GetConfig` | all or none; invalid → `InvalidArgument`; unconfirmed sensitive or env-overridden → `FailedPrecondition`; logs key names, never values |
 | `GetDocsSync` | → running, owner, started/finished, done of total, last repo | the docs scheduler's progress |
 | `GetDocument` | source_uri → text, chunks, malformed, oversize, web_url, writer, content_hash, trust | rebuilt from chunks (see [memory.md](memory.md)); over 3 MiB → `oversize`, no text; nothing indexed → `NotFound`; URI ≤ 4096 bytes |
 | `ListRegisteredSources` | → sources (with how to search within each) | the `sources` registry |
@@ -150,7 +159,7 @@ Unit names are a public contract (`orch restart <name>`).
 | Unit | Shape | Cadence | Enabled by | Work |
 |---|---|---|---|---|
 | `qdrant` | Run + Stop | — | `rag.qdrant.mode: binary` | run the native engine from `<data>/bin/qdrant` |
-| `workflow-worker` | Run + Stop | — | `queue.worker.enabled` | durable task worker, `max_concurrent` parallel |
+| `workflow-worker` | Run + Stop | — | `queue.worker.enabled` and `max_concurrent` above 0 | durable task worker, `max_concurrent` parallel |
 | `sources-scheduler` | Tick | `sources.scan_interval` (5m) | always | refresh due web/repo/owner sources |
 | `docs-scheduler` | Tick | `docs.scan_interval` (1m) | always | sync GitHub owners' repo markdown |
 | `pr-reviews` | Tick | 15 s; each watched PR read from GitHub every 2 minutes or when changed | always (needs `orch.db`) | review watched PRs once ready and post what the user opted in to ([tasks.md](tasks.md#pr-review-watch)) |

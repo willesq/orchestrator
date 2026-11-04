@@ -12,8 +12,34 @@ package docs
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
+	"regexp"
+	"slices"
 	"strings"
 )
+
+// What an owner's repo selection means.
+const (
+	ReposAll     = "all"
+	ReposInclude = "include"
+	ReposExclude = "exclude"
+)
+
+// Repo statuses that are not the outcome of a sync.
+const (
+	// StatusPaused marks an owner turned off.
+	StatusPaused = "paused"
+	// StatusExcluded marks a repo no longer synced, whose indexed docs stay.
+	StatusExcluded = "excluded"
+)
+
+// ErrNoOwner is returned for an owner that is not registered.
+var ErrNoOwner = errors.New("docs owner is not registered")
+
+const minRefreshSecs = 60
+
+var repoNameRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,100}$`)
 
 // Owner is a registered GitHub owner (user or org) whose repos' docs are ingested.
 type Owner struct {
@@ -26,6 +52,60 @@ type Owner struct {
 	// Error says why the last sync failed or stopped early; empty when it
 	// completed.
 	Error string
+	// Enabled owners are synced; a paused one keeps its row and indexed docs.
+	Enabled bool
+	// RepoMode says how Repos selects: ReposAll (empty means the same),
+	// ReposInclude or ReposExclude.
+	RepoMode string
+	Repos    []string
+}
+
+// Covers reports whether the owner's selection takes in a repo. GitHub names
+// are case-insensitive, so the selection is too.
+func (o Owner) Covers(repo string) bool {
+	listed := slices.ContainsFunc(o.Repos, func(r string) bool { return strings.EqualFold(r, repo) })
+	switch o.RepoMode {
+	case ReposInclude:
+		return listed
+	case ReposExclude:
+		return !listed
+	}
+	return true
+}
+
+// Choice is what the operator decides about an owner.
+type Choice struct {
+	Enabled  bool
+	RepoMode string
+	Repos    []string
+	// RefreshSecs replaces the cadence when above zero.
+	RefreshSecs int64
+}
+
+// Validate checks a choice before it is stored.
+func (c Choice) Validate() error {
+	switch c.RepoMode {
+	case ReposAll:
+		if len(c.Repos) > 0 {
+			return fmt.Errorf("repo mode %q takes no repos", c.RepoMode)
+		}
+	case ReposInclude, ReposExclude:
+		if len(c.Repos) == 0 {
+			return fmt.Errorf("repo mode %q needs at least one repo", c.RepoMode)
+		}
+	default:
+		return fmt.Errorf("repo mode must be %q, %q or %q, got %q", ReposAll, ReposInclude, ReposExclude, c.RepoMode)
+	}
+	for _, r := range c.Repos {
+		if !repoNameRe.MatchString(r) {
+			return fmt.Errorf("invalid repo name %q", r)
+		}
+	}
+	// Each sync lists the owner's repos, which spends the GitHub rate limit.
+	if c.RefreshSecs != 0 && c.RefreshSecs < minRefreshSecs {
+		return fmt.Errorf("refresh must be at least %d seconds", minRefreshSecs)
+	}
+	return nil
 }
 
 // RepoState is the per-repo sync bookkeeping used to skip unchanged repos.
@@ -46,12 +126,30 @@ type Registry struct{ db *sql.DB }
 // NewRegistry wraps an open orch.db handle.
 func NewRegistry(db *sql.DB) *Registry { return &Registry{db: db} }
 
-// AddOwner upserts an owner (idempotent by login).
+// canonicalOwner returns the spelling an owner is registered under, or login
+// when it is new. GitHub logins are case-insensitive, while purging and syncing
+// go by the exact spelling, so two rows for one owner would act on each other's
+// docs.
+func (r *Registry) canonicalOwner(ctx context.Context, login string) (string, error) {
+	var owner string
+	err := r.db.QueryRowContext(ctx, `SELECT owner FROM docs_owners WHERE owner=? COLLATE NOCASE`, login).Scan(&owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return login, nil
+	}
+	return owner, err
+}
+
+// AddOwner upserts an owner (idempotent by login, whatever its case).
 func (r *Registry) AddOwner(ctx context.Context, o Owner) error {
+	canonical, err := r.canonicalOwner(ctx, o.Owner)
+	if err != nil {
+		return err
+	}
+	o.Owner = canonical
 	if o.Status == "" {
 		o.Status = "new"
 	}
-	_, err := r.db.ExecContext(ctx,
+	_, err = r.db.ExecContext(ctx,
 		`INSERT INTO docs_owners (owner, refresh_secs, scope, tags, last_synced, status)
 		 VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(owner) DO UPDATE SET
@@ -63,7 +161,7 @@ func (r *Registry) AddOwner(ctx context.Context, o Owner) error {
 // ListOwners returns all registered owners.
 func (r *Registry) ListOwners(ctx context.Context) ([]Owner, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT owner, refresh_secs, scope, tags, last_synced, status, error FROM docs_owners ORDER BY owner`)
+		`SELECT owner, refresh_secs, scope, tags, last_synced, status, error, enabled, repo_mode, repos FROM docs_owners ORDER BY owner`)
 	if err != nil {
 		return nil, err
 	}
@@ -74,13 +172,86 @@ func (r *Registry) ListOwners(ctx context.Context) ([]Owner, error) {
 // DueOwners returns owners whose refresh interval has elapsed by `now`.
 func (r *Registry) DueOwners(ctx context.Context, now int64) ([]Owner, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT owner, refresh_secs, scope, tags, last_synced, status, error
-		 FROM docs_owners WHERE (? - last_synced) >= refresh_secs ORDER BY owner`, now)
+		`SELECT owner, refresh_secs, scope, tags, last_synced, status, error, enabled, repo_mode, repos
+		 FROM docs_owners WHERE enabled=1 AND (? - last_synced) >= refresh_secs ORDER BY owner`, now)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	return scanOwners(rows)
+}
+
+// SetChoice stores what the operator decided about an owner. Repos it stops
+// covering are marked excluded, which clears any failure they showed, and keep
+// their indexed docs and catalog entry. A repo it covers again forgets its HEAD,
+// so the next sync walks it and its status reflects that sync; unchanged files
+// are not embedded again. Widening or resuming makes the owner due.
+func (r *Registry) SetChoice(ctx context.Context, owner string, c Choice) (Owner, error) {
+	if err := c.Validate(); err != nil {
+		return Owner{}, err
+	}
+	all, err := r.ListOwners(ctx)
+	if err != nil {
+		return Owner{}, err
+	}
+	i := slices.IndexFunc(all, func(o Owner) bool { return strings.EqualFold(o.Owner, owner) })
+	if i < 0 {
+		return Owner{}, fmt.Errorf("%w: %s", ErrNoOwner, owner)
+	}
+	prev := all[i]
+	owner = prev.Owner
+	next := prev
+	next.Enabled, next.RepoMode, next.Repos = c.Enabled, c.RepoMode, c.Repos
+	if c.RefreshSecs > 0 {
+		next.RefreshSecs = c.RefreshSecs
+	}
+	repos, err := r.ListRepos(ctx, owner)
+	if err != nil {
+		return Owner{}, err
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Owner{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, rp := range repos {
+		covered := next.Enabled && next.Covers(rp.Repo)
+		switch {
+		case !covered && rp.Status != StatusExcluded:
+			_, err = tx.ExecContext(ctx, `UPDATE docs_repos SET status=?, error='' WHERE owner=? AND repo=?`,
+				StatusExcluded, owner, rp.Repo)
+		case covered && rp.Status == StatusExcluded:
+			_, err = tx.ExecContext(ctx, `UPDATE docs_repos SET head_sha='', status='new', error='' WHERE owner=? AND repo=?`,
+				owner, rp.Repo)
+		}
+		if err != nil {
+			return Owner{}, err
+		}
+	}
+	changed := prev.RepoMode != next.RepoMode || !slices.Equal(prev.Repos, next.Repos)
+	switch {
+	case !next.Enabled:
+		next.Status, next.Error = StatusPaused, ""
+	case !prev.Enabled:
+		next.Status, next.LastSynced = "new", 0
+	case changed:
+		next.LastSynced = 0
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE docs_owners SET enabled=?, repo_mode=?, repos=?, refresh_secs=?, last_synced=?, status=?, error=? WHERE owner=?`,
+		next.Enabled, next.RepoMode, strings.Join(next.Repos, ","), next.RefreshSecs, next.LastSynced, next.Status, next.Error, owner); err != nil {
+		return Owner{}, err
+	}
+	return next, tx.Commit()
+}
+
+// ForgetRepo drops a repo's sync state and the hashes of its docs, once its
+// indexed docs are gone.
+func (r *Registry) ForgetRepo(ctx context.Context, owner, repo string) error {
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM docs_repos WHERE owner=? AND repo=?`, owner, repo); err != nil {
+		return err
+	}
+	return r.deleteHashes(ctx, "repo://"+owner+"/"+repo+"/")
 }
 
 // RemoveOwner deletes an owner and its per-repo + per-file caches.
@@ -91,7 +262,14 @@ func (r *Registry) RemoveOwner(ctx context.Context, owner string) error {
 	if _, err := r.db.ExecContext(ctx, `DELETE FROM docs_repos WHERE owner=?`, owner); err != nil {
 		return err
 	}
-	_, err := r.db.ExecContext(ctx, `DELETE FROM doc_hashes WHERE uri LIKE ?`, "repo://"+owner+"/%")
+	return r.deleteHashes(ctx, "repo://"+owner+"/")
+}
+
+// deleteHashes forgets the hashes under a URI prefix ending in "/". A range,
+// not LIKE, which ignores case and reads _ and % in a name as wildcards.
+func (r *Registry) deleteHashes(ctx context.Context, prefix string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM doc_hashes WHERE uri >= ? AND uri < ?`,
+		prefix, strings.TrimSuffix(prefix, "/")+"0")
 	return err
 }
 
@@ -124,18 +302,58 @@ func (r *Registry) MarkDue(ctx context.Context, owner string) error {
 // ClearCaches drops the repo-SHA and file-hash caches for an owner (or all, if
 // owner==""), forcing the next sync to re-clone and re-ingest everything.
 func (r *Registry) ClearCaches(ctx context.Context, owner string) error {
-	if owner == "" {
-		if _, err := r.db.ExecContext(ctx, `DELETE FROM docs_repos`); err != nil {
+	// Opted-out repos are not synced, so nothing would restore what is cleared:
+	// their hashes are how a later purge finds the docs they still hold.
+	where, args := `status != ?`, []any{StatusExcluded}
+	if owner != "" {
+		where, args = where+` AND owner=?`, append(args, owner)
+	}
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM docs_repos WHERE `+where, args...); err != nil {
+		return err
+	}
+	kept := map[string]bool{}
+	rows, err := r.db.QueryContext(ctx, `SELECT owner, repo FROM docs_repos WHERE status = ?`, StatusExcluded)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var o, repo string
+		if err := rows.Scan(&o, &repo); err != nil {
 			return err
 		}
-		_, err := r.db.ExecContext(ctx, `DELETE FROM doc_hashes WHERE uri LIKE ?`, "repo://%")
+		kept["repo://"+o+"/"+repo+"/"] = true
+	}
+	if err := rows.Err(); err != nil {
 		return err
 	}
-	if _, err := r.db.ExecContext(ctx, `DELETE FROM docs_repos WHERE owner=?`, owner); err != nil {
+	prefix := "repo://"
+	if owner != "" {
+		prefix += owner + "/"
+	}
+	uris, err := r.HashURIs(ctx, prefix)
+	if err != nil {
 		return err
 	}
-	_, err := r.db.ExecContext(ctx, `DELETE FROM doc_hashes WHERE uri LIKE ?`, "repo://"+owner+"/%")
-	return err
+	for _, uri := range uris {
+		if keptURI(kept, uri) {
+			continue
+		}
+		if err := r.DeleteHash(ctx, uri); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// keptURI reports whether a doc URI (repo://owner/repo/path) is in a kept repo.
+func keptURI(kept map[string]bool, uri string) bool {
+	rest, ok := strings.CutPrefix(uri, "repo://")
+	if !ok {
+		return false
+	}
+	parts := strings.SplitN(rest, "/", 3)
+	return len(parts) == 3 && kept["repo://"+parts[0]+"/"+parts[1]+"/"]
 }
 
 // RepoSHA returns the last-synced HEAD SHA for a repo ("" if never synced).
@@ -237,12 +455,16 @@ func scanOwners(rows *sql.Rows) ([]Owner, error) {
 	var out []Owner
 	for rows.Next() {
 		var o Owner
-		var tags string
-		if err := rows.Scan(&o.Owner, &o.RefreshSecs, &o.Scope, &tags, &o.LastSynced, &o.Status, &o.Error); err != nil {
+		var tags, repos string
+		if err := rows.Scan(&o.Owner, &o.RefreshSecs, &o.Scope, &tags, &o.LastSynced, &o.Status, &o.Error,
+			&o.Enabled, &o.RepoMode, &repos); err != nil {
 			return nil, err
 		}
 		if tags != "" {
 			o.Tags = strings.Split(tags, ",")
+		}
+		if repos != "" {
+			o.Repos = strings.Split(repos, ",")
 		}
 		out = append(out, o)
 	}
