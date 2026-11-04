@@ -2,11 +2,13 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -15,6 +17,8 @@ import (
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/install"
+	"github.com/willesq/orchestrator/internal/paths"
+	"github.com/willesq/orchestrator/internal/qdrant"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/safetynet"
 	"github.com/willesq/orchestrator/internal/status"
@@ -75,7 +79,10 @@ func statusDeps(cf clientFactory, s config.Settings) status.Deps {
 			defer cancel()
 			return client.Status(ctx, &orchdv1.StatusRequest{})
 		},
-		QdrantReady:            func(ctx context.Context) bool { return qdrantReady(ctx, s.QdrantURL()) },
+		QdrantReady: func(ctx context.Context) bool { return qdrantReady(ctx, s.QdrantURL()) },
+		QdrantKeyRejected: func(ctx context.Context) bool {
+			return errors.Is(qdrant.CheckKey(ctx, s.QdrantURL(), qdrantAPIKey(s)), qdrant.ErrKeyRejected)
+		},
 		Service:                serviceInfo,
 		Checks:                 check.Preconditions(),
 		Store:                  db.OpenReader,
@@ -110,6 +117,24 @@ func qdrantReady(ctx context.Context, baseURL string) bool {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode == http.StatusOK
+}
+
+// qdrantAPIKey is the key orchd sends to qdrant, resolved like orchd's
+// resolveQdrantAPIKey: the env override, else the persisted key file. Unlike
+// orchd it never generates a key, so a status check leaves no file behind.
+func qdrantAPIKey(s config.Settings) string {
+	envName := s.RAG.Qdrant.APIKeyEnv
+	if envName == "" {
+		envName = "QDRANT_API_KEY"
+	}
+	if k := os.Getenv(envName); k != "" {
+		return k
+	}
+	b, err := os.ReadFile(filepath.Join(paths.DataDir(), "qdrant-api-key"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // serviceInfo describes how orchd is managed: Homebrew's services when installed

@@ -166,6 +166,15 @@ size, mtime). When it changes and orchd's parent is launchd (ppid 1), orchd exit
 KeepAlive starts the new build; unsupervised, it only logs. A briefly missing binary (an upgrade
 unlinks before relinking) is not a change. Durable tasks resume after the restart.
 
+**qdrant** reuses an engine that already answers `/readyz` on `http_port` (such as an orphan from
+a hard kill) instead of spawning a second one, but only after one keyed request (`GET
+/collections` with orchd's API key) succeeds. `/readyz` needs no key, so a different Qdrant on the
+same port would otherwise pass and turn every request into a 401. When the key is refused, the
+unit fails with an error naming the port; stop the other engine or move orchd with
+`rag.qdrant.http_port` and `grpc_port`. The same check runs after spawning, in case another engine
+took the port first. This catches a misconfiguration, not an impostor: a keyless engine still
+passes. `orch status` reports such an engine as `rejects orchd's API key`.
+
 ## On-disk state
 
 Config dir: `$ORCH_CONFIG_DIR`, else `$XDG_CONFIG_HOME/orch`, else `~/.config/orch`.

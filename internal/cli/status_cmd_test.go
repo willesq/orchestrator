@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/paths"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/safetynet"
@@ -305,3 +306,46 @@ func TestSafetyNetLine(t *testing.T) {
 		t.Errorf("ok line %+v", l)
 	}
 }
+
+func TestQdrantAPIKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		envName  string
+		env      string
+		file     *string
+		want     string
+		wantFile bool
+	}{
+		{name: "env override wins", env: "from-env", file: ptr("from-file\n"), want: "from-env"},
+		{name: "custom env name", envName: "MY_QDRANT_KEY", env: "custom", want: "custom"},
+		{name: "persisted key is trimmed", file: ptr("  from-file\n"), want: "from-file"},
+		{name: "no key anywhere is empty and creates no file", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dataDir := t.TempDir()
+			t.Setenv("ORCH_DATA_DIR", dataDir)
+			envName := tt.envName
+			if envName == "" {
+				envName = "QDRANT_API_KEY"
+			}
+			t.Setenv(envName, tt.env)
+			keyFile := filepath.Join(dataDir, "qdrant-api-key")
+			if tt.file != nil {
+				if err := os.WriteFile(keyFile, []byte(*tt.file), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var s config.Settings
+			s.RAG.Qdrant.APIKeyEnv = tt.envName
+			if got := qdrantAPIKey(s); got != tt.want {
+				t.Errorf("qdrantAPIKey = %q, want %q", got, tt.want)
+			}
+			if _, err := os.Stat(keyFile); tt.file == nil && err == nil {
+				t.Errorf("status created %s; only orchd should generate the key", keyFile)
+			}
+		})
+	}
+}
+
+func ptr(s string) *string { return &s }
