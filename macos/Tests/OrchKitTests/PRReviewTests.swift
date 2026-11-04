@@ -87,8 +87,8 @@ private let url2 = "https://github.com/willesq/theCalculator/pull/2"
 
     private func item(_ n: Int, repo: String = "willesq/theCalculator", reasons: [GitHubReason] = [.authored],
                       draft: Bool = false, ci: String = "", attention: Attention? = nil, updated: TimeInterval = 0,
-                      isPR: Bool = true, title: String = "Add divide") -> GitHubItem {
-        GitHubItem(url: "https://github.com/\(repo)/pull/\(n)", title: title, repo: repo, isPR: isPR, number: n,
+                      isPR: Bool = true, title: String = "Add divide", author: String = "") -> GitHubItem {
+        GitHubItem(url: "https://github.com/\(repo)/pull/\(n)", title: title, repo: repo, isPR: isPR, number: n, author: author,
                    updatedAt: Date(timeIntervalSince1970: 1_800_000_000 + updated), isDraft: draft, ciState: ci,
                    reasons: reasons, attention: attention)
     }
@@ -102,7 +102,7 @@ private let url2 = "https://github.com/willesq/theCalculator/pull/2"
         let reviews = [mine.url: PRReview(url: mine.url, state: .waiting),
                        review.url: PRReview(url: review.url, state: .stopped, verdict: .wait)]
         func run(_ role: PRRoleFilter = .all, _ state: PRStateFilter = .open, repo: String? = nil, _ search: String = "") -> [Int] {
-            filterPRs(all, reviews: reviews, role: role, state: state, repo: repo, search: search).map(\.number)
+            filterPRs(all, reviews: reviews, role: role, state: state, repo: repo, author: nil, search: search).map(\.number)
         }
         // Attention first, then newest; issues never.
         #expect(run() == [2, 3, 1])
@@ -119,6 +119,29 @@ private let url2 = "https://github.com/willesq/theCalculator/pull/2"
         #expect(run(.all, .open, "#1") == [1])
         #expect(run(.all, .open, "2") == [2])
         #expect(prRepos(all) == ["Org/Api", "willesq/theCalculator"])
+    }
+
+    @Test func filtersByAuthor() {
+        let alice = item(1, updated: 10, author: "Alice")
+        let bot = item(2, repo: "Org/Api", updated: 20, author: "renovate[bot]")
+        let alsoAlice = item(3, repo: "Org/Api", updated: 30, author: "alice")
+        let unknown = item(4, updated: 40)
+        let issue = item(5, isPR: false, author: "zed")
+        let all = [alice, bot, alsoAlice, unknown, issue]
+        func run(author: String?, repo: String? = nil, _ search: String = "") -> [Int] {
+            filterPRs(all, reviews: [:], role: .all, state: .open, repo: repo, author: author, search: search).map(\.number)
+        }
+        #expect(run(author: nil) == [4, 3, 2, 1])
+        // Case-insensitive and whole-login, so a PR with no author only shows unfiltered.
+        #expect(run(author: "ALICE") == [3, 1])
+        #expect(run(author: "ali") == [])
+        // Combines with the other filters.
+        #expect(run(author: "alice", repo: "org/api") == [3])
+        #expect(run(author: "renovate[bot]", "add") == [2])
+        #expect(run(author: "nobody") == [])
+        // One entry per person, none for a blank author, none from issues.
+        #expect(prAuthors(all) == ["Alice", "renovate[bot]"])
+        #expect(prAuthors([]) == [])
     }
 }
 
@@ -287,12 +310,19 @@ private final class Counter: @unchecked Sendable {
         #expect(!model.isFiltered)
         model.role = .mine
         model.repo = "a/b"
+        model.author = "alice"
         model.search = "x"
         #expect(model.isFiltered)
-        let items = [GitHubItem(url: url1, title: "x", repo: "a/b", number: 1, reasons: [.authored])]
+        let items = [GitHubItem(url: url1, title: "x", repo: "a/b", number: 1, author: "alice", reasons: [.authored])]
         #expect(model.visible(items).count == 1)
+        model.author = "bob"
+        #expect(model.visible(items).isEmpty)
         model.clearFilters()
         #expect(!model.isFiltered)
+        #expect(model.author == nil)
+        model.author = "alice"
+        #expect(model.isFiltered)
+        model.clearFilters()
         model.select(url1)
         #expect(model.selection == url1)
         for _ in 0..<100 where model.details[url1] == nil { try await Task.sleep(for: .milliseconds(10)) }
