@@ -205,7 +205,8 @@ func TestReadyNoServer(t *testing.T) {
 	}
 }
 
-// flipReadyServer serves 503 on /readyz until ready is set true.
+// flipReadyServer serves 503 on /readyz until ready is set true, and a keyless
+// /collections.
 func flipReadyServer(t *testing.T, ready *atomic.Bool) (int, func()) {
 	t.Helper()
 	mux := http.NewServeMux()
@@ -216,6 +217,8 @@ func flipReadyServer(t *testing.T, ready *atomic.Bool) (int, func()) {
 		}
 		w.WriteHeader(http.StatusServiceUnavailable)
 	})
+	// A keyless engine: Start's key check passes.
+	mux.HandleFunc("/collections", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
@@ -539,5 +542,221 @@ func TestExecRunClearsPIDWhenTheProcessDies(t *testing.T) {
 	}
 	if err := stop(); err != nil {
 		t.Errorf("stop after a crash: %v", err)
+	}
+}
+
+// keyedServer is a stub engine that is always ready and accepts only wantKey on
+// its keyed endpoints, like a qdrant started with QDRANT__SERVICE__API_KEY.
+func keyedServer(t *testing.T, wantKey string, collections int) (port int, url string) {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	mux.HandleFunc("/collections", func(w http.ResponseWriter, r *http.Request) {
+		if wantKey != "" && r.Header.Get("api-key") != wantKey {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(collections)
+	})
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	srv := &httptest.Server{Listener: lis, Config: &http.Server{Handler: mux}}
+	srv.Start()
+	t.Cleanup(srv.Close)
+	_, portStr, _ := net.SplitHostPort(lis.Addr().String())
+	port, _ = strconv.Atoi(portStr)
+	return port, srv.URL
+}
+
+func TestStartRefusesAnEngineThatRejectsTheKey(t *testing.T) {
+	tests := []struct {
+		name        string
+		engineKey   string
+		ourKey      string
+		collections int
+		wantErr     error // nil means Start reuses the engine
+		wantAnyErr  bool
+	}{
+		{name: "same key is reused", engineKey: "k1", ourKey: "k1", collections: http.StatusOK},
+		{name: "keyless engine is reused", engineKey: "", ourKey: "k1", collections: http.StatusOK},
+		{name: "another engine's key is refused", engineKey: "other", ourKey: "k1", collections: http.StatusOK, wantErr: ErrKeyRejected, wantAnyErr: true},
+		{name: "no key against a keyed engine is refused", engineKey: "other", ourKey: "", collections: http.StatusOK, wantErr: ErrKeyRejected, wantAnyErr: true},
+		// The engine already answered /readyz, so a check that keeps failing for
+		// another reason is no proof the engine is someone else's.
+		{name: "a failing keyed request is still reused", engineKey: "k1", ourKey: "k1", collections: http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			port, _ := keyedServer(t, tt.engineKey, tt.collections)
+			p := New(Config{HTTPPort: port, APIKey: tt.ourKey})
+			p.keyRetryDelay = time.Millisecond
+			spawned := false
+			p.run = func(string, string, []string) (stopFunc, error) {
+				spawned = true
+				return func() error { return nil }, nil
+			}
+			err := p.Start(context.Background())
+			if (err != nil) != tt.wantAnyErr {
+				t.Fatalf("Start err = %v, want error %v", err, tt.wantAnyErr)
+			}
+			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+				t.Errorf("Start err = %v, want %v", err, tt.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), strconv.Itoa(port)) {
+				t.Errorf("error %q does not name the port", err)
+			}
+			// An orphan started with an older key is refused the same way, so the
+			// error must not claim it is certainly another engine.
+			if err != nil && !strings.Contains(err.Error(), "may hold the port") {
+				t.Errorf("error %q overstates who holds the port", err)
+			}
+			if spawned {
+				t.Errorf("spawned a second engine on a held port")
+			}
+		})
+	}
+}
+
+func TestStartChecksTheKeyAfterSpawning(t *testing.T) {
+	// The port was free at the readiness check but another engine took it before
+	// ours bound, so the engine that turns ready is not the one orchd spawned.
+	var ready atomic.Bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		if ready.Load() {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	mux.HandleFunc("/collections", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusForbidden) })
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	_, portStr, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	port, _ := strconv.Atoi(portStr)
+
+	dir := t.TempDir()
+	p := New(Config{Version: "v1.17.1", BinDir: dir, Storage: filepath.Join(dir, "store"), HTTPPort: port, APIKey: "k1"})
+	_ = os.WriteFile(p.BinaryPath(), []byte("x"), 0o755)
+	stopped := false
+	p.run = func(string, string, []string) (stopFunc, error) {
+		ready.Store(true)
+		return func() error { stopped = true; return nil }, nil
+	}
+	err := p.Start(context.Background())
+	if !errors.Is(err, ErrKeyRejected) {
+		t.Fatalf("Start err = %v, want ErrKeyRejected", err)
+	}
+	if !stopped {
+		t.Errorf("the spawned engine was left running")
+	}
+	if err := p.Stop(); err != nil {
+		t.Errorf("Stop after a failed Start: %v", err)
+	}
+}
+
+func TestCheckKey(t *testing.T) {
+	_, okURL := keyedServer(t, "k1", http.StatusOK)
+	_, sickURL := keyedServer(t, "", http.StatusInternalServerError)
+	// The key must not follow a redirect to another host.
+	var leaked atomic.Bool
+	sink := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("api-key") != "" {
+			leaked.Store(true)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(sink.Close)
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, sink.URL+"/collections", http.StatusFound)
+	}))
+	t.Cleanup(redirector.Close)
+
+	tests := []struct {
+		name       string
+		url, key   string
+		wantErr    error
+		wantAnyErr bool
+	}{
+		{name: "accepted key", url: okURL, key: "k1"},
+		{name: "trailing slash", url: okURL + "/", key: "k1"},
+		{name: "rejected key", url: okURL, key: "nope", wantErr: ErrKeyRejected, wantAnyErr: true},
+		{name: "missing key", url: okURL, key: "", wantErr: ErrKeyRejected, wantAnyErr: true},
+		{name: "server error", url: sickURL, key: "k1", wantAnyErr: true},
+		{name: "redirect is not followed", url: redirector.URL, key: "k1", wantAnyErr: true},
+		{name: "nothing listening", url: "http://127.0.0.1:1", key: "k1", wantAnyErr: true},
+		{name: "malformed url", url: "http://[::1]:namedport", key: "k1", wantAnyErr: true},
+		{name: "non-http scheme", url: "file:///etc/passwd", key: "k1", wantAnyErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := CheckKey(context.Background(), tt.url, tt.key)
+			if (err != nil) != tt.wantAnyErr {
+				t.Fatalf("CheckKey err = %v, want error %v", err, tt.wantAnyErr)
+			}
+			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+				t.Errorf("CheckKey err = %v, want %v", err, tt.wantErr)
+			}
+			if err != nil && tt.key != "" && strings.Contains(err.Error(), tt.key) {
+				t.Errorf("error %q contains the key", err)
+			}
+		})
+	}
+	if leaked.Load() {
+		t.Errorf("the API key followed a redirect")
+	}
+}
+
+func TestStartRetriesATransientKeyCheck(t *testing.T) {
+	tests := []struct {
+		name         string
+		failures     int32 // /collections answers 503 this many times, then 200
+		wantRequests int32
+	}{
+		{name: "one blip is retried", failures: 1, wantRequests: 2},
+		{name: "a persistent failure stops after the last attempt", failures: 100, wantRequests: 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var requests atomic.Int32
+			mux := http.NewServeMux()
+			mux.HandleFunc("/readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+			mux.HandleFunc("/collections", func(w http.ResponseWriter, _ *http.Request) {
+				if requests.Add(1) <= tt.failures {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+			srv := httptest.NewServer(mux)
+			t.Cleanup(srv.Close)
+			_, portStr, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+			port, _ := strconv.Atoi(portStr)
+
+			p := New(Config{HTTPPort: port, APIKey: "k1"})
+			p.keyRetryDelay = time.Millisecond
+			if err := p.Start(context.Background()); err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+			if got := requests.Load(); got != tt.wantRequests {
+				t.Errorf("keyed requests = %d, want %d", got, tt.wantRequests)
+			}
+		})
+	}
+}
+
+func TestStartKeyCheckHonoursCancellation(t *testing.T) {
+	_, url := keyedServer(t, "", http.StatusServiceUnavailable)
+	_, portStr, _ := net.SplitHostPort(strings.TrimPrefix(url, "http://"))
+	port, _ := strconv.Atoi(portStr)
+	p := New(Config{HTTPPort: port, APIKey: "k1"})
+	p.keyRetryDelay = time.Hour
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(50*time.Millisecond, cancel)
+	err := p.Start(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Start err = %v, want context.Canceled", err)
 	}
 }

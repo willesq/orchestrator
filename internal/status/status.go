@@ -90,6 +90,10 @@ type Deps struct {
 	Orchd func(ctx context.Context) (*orchdv1.StatusResponse, error)
 	// QdrantReady probes the vector store's HTTP readiness.
 	QdrantReady func(ctx context.Context) bool
+	// QdrantKeyRejected reports whether the engine refuses the API key status
+	// resolved, as when a different qdrant holds the port: /readyz alone cannot
+	// tell. It is false when no key resolves.
+	QdrantKeyRejected func(ctx context.Context) bool
 	// Service reports how orchd is installed as a service.
 	Service func() ServiceInfo
 	// SocketPresent reports whether orchd's socket file exists, which separates a
@@ -165,6 +169,9 @@ func (d Deps) withDefaults() Deps {
 	}
 	if d.QdrantReady == nil {
 		d.QdrantReady = func(context.Context) bool { return false }
+	}
+	if d.QdrantKeyRejected == nil {
+		d.QdrantKeyRejected = func(context.Context) bool { return false }
 	}
 	if d.Service == nil {
 		d.Service = func() ServiceInfo { return ServiceInfo{Manager: "unknown"} }
@@ -335,8 +342,14 @@ func vectorSection(ctx context.Context, d Deps, resp *orchdv1.StatusResponse) Se
 		Detail: fmt.Sprintf("mode=%s, url=%s, %s",
 			orNone(q.Mode), orNone(redactURL(d.Settings.QdrantURL())), owner),
 	}
-	if !d.QdrantReady(ctx) {
+	switch {
+	case !d.QdrantReady(ctx):
 		engine.Value, engine.Level = "not reachable", LevelBad
+	case d.QdrantKeyRejected(ctx):
+		// Status resolves the key itself, from its own environment and files,
+		// so it cannot be sure this is the key orchd sends.
+		engine.Value, engine.Level = "rejects the resolved API key", LevelBad
+		engine.Detail += ", another engine may hold the port, or orchd may use a different key"
 	}
 	sec.Lines = append(sec.Lines,
 		engine,

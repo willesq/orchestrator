@@ -15,9 +15,12 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +38,7 @@ type Config struct {
 	Storage  string // storage directory (the data location)
 	HTTPPort int
 	GRPCPort int
-	APIKey   string // optional; health checks don't require it
+	APIKey   string // optional; /readyz doesn't require it, CheckKey does
 	// Output receives the engine's stdout and stderr; nil discards them.
 	Output io.Writer
 }
@@ -56,6 +59,10 @@ type Provisioner struct {
 	run      runFunc
 	stop     stopFunc
 	httpc    *http.Client
+	// keyAttempts and keyRetryDelay bound how long Start retries a key check
+	// that fails for a reason other than a rejected key.
+	keyAttempts   int
+	keyRetryDelay time.Duration
 	// pid is the engine this provisioner started; 0 when it did not start one
 	// (none running, or an existing engine was reused).
 	pid atomic.Int64
@@ -67,6 +74,9 @@ func New(cfg Config) *Provisioner {
 		cfg:      cfg,
 		download: httpDownload,
 		httpc:    &http.Client{Timeout: 3 * time.Second},
+
+		keyAttempts:   3,
+		keyRetryDelay: time.Second,
 	}
 	p.run = func(bin, dir string, env []string) (stopFunc, error) {
 		return execRun(bin, dir, env, cfg.Output, &p.pid)
@@ -130,10 +140,12 @@ func (p *Provisioner) EnsureBinary(ctx context.Context) error {
 
 // Start ensures the binary, launches it hardened against the storage dir, and
 // waits until it reports ready. If an engine is already serving on the port
-// (e.g. an orphan from a hard kill), it is reused rather than double-spawned.
+// (e.g. an orphan from a hard kill), it is reused rather than double-spawned,
+// but only when it accepts orchd's API key: an engine that does not is someone
+// else's, and reusing it would turn every request into a 401.
 func (p *Provisioner) Start(ctx context.Context) error {
 	if p.Ready(ctx) {
-		return nil
+		return p.checkOwnEngine(ctx)
 	}
 	if err := p.EnsureBinary(ctx); err != nil {
 		return err
@@ -146,11 +158,52 @@ func (p *Provisioner) Start(ctx context.Context) error {
 		return err
 	}
 	p.stop = stop
-	if err := p.waitReady(ctx, 30*time.Second); err != nil {
+	// Checked again after spawning: another engine may have taken the port
+	// between the readiness probe and ours binding to it.
+	err = p.waitReady(ctx, 30*time.Second)
+	if err == nil {
+		err = p.checkOwnEngine(ctx)
+	}
+	if err != nil {
 		_ = stop()
 		p.stop = nil
 		return err
 	}
+	return nil
+}
+
+// checkOwnEngine confirms the engine on the HTTP port accepts orchd's API key.
+// Only a rejected key is an error. Any other failure is retried a few times
+// and then logged and ignored: the engine already answered /readyz, so a slow
+// or briefly erroring engine is no proof it is someone else's. This catches a
+// misconfiguration, not an impostor: a listener that accepts any key passes.
+func (p *Provisioner) checkOwnEngine(ctx context.Context) error {
+	base := fmt.Sprintf("http://127.0.0.1:%d", p.cfg.HTTPPort)
+	var err error
+	for attempt := 1; ; attempt++ {
+		err = CheckKey(ctx, base, p.cfg.APIKey)
+		if err == nil {
+			return nil
+		}
+		if errors.Is(err, ErrKeyRejected) {
+			// An orphan started with an older key is refused the same way, so
+			// this cannot say for certain that the engine is someone else's.
+			return fmt.Errorf("qdrant on 127.0.0.1:%d rejects orchd's API key, so another engine may hold the port; "+
+				"stop it or move orchd with rag.qdrant.http_port and rag.qdrant.grpc_port: %w", p.cfg.HTTPPort, err)
+		}
+		if attempt >= p.keyAttempts {
+			break
+		}
+		t := time.NewTimer(p.keyRetryDelay)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return fmt.Errorf("qdrant on 127.0.0.1:%d: %w", p.cfg.HTTPPort, ctx.Err())
+		case <-t.C:
+		}
+	}
+	log.Printf("qdrant: could not confirm the engine on 127.0.0.1:%d accepts orchd's API key; using it anyway: %v",
+		p.cfg.HTTPPort, err)
 	return nil
 }
 
@@ -212,6 +265,46 @@ func (p *Provisioner) Ready(ctx context.Context) bool {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode == http.StatusOK
+}
+
+// ErrKeyRejected means a qdrant engine answered but refused the API key, which
+// usually means a different engine, with its own key, holds the port.
+var ErrKeyRejected = errors.New("qdrant rejected the API key")
+
+// CheckKey makes one keyed request (GET /collections) to the engine at baseURL.
+// It returns nil when the engine accepts apiKey, or needs no key, and
+// ErrKeyRejected on 401 or 403. /readyz needs no key, so only this check shows
+// whether an engine that looks ready will serve orchd's requests. Redirects are
+// not followed, so the key is never sent to another host.
+func CheckKey(ctx context.Context, baseURL, apiKey string) error {
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		// The URL is left out: a configured one can carry userinfo credentials.
+		return errors.New("check qdrant key: invalid url")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.JoinPath("collections").String(), nil)
+	if err != nil {
+		return fmt.Errorf("check qdrant key: %w", err)
+	}
+	if apiKey != "" {
+		req.Header.Set("api-key", apiKey)
+	}
+	client := &http.Client{
+		Timeout:       3 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("check qdrant key: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch {
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return fmt.Errorf("check qdrant key: %s: %w", resp.Status, ErrKeyRejected)
+	case resp.StatusCode != http.StatusOK:
+		return fmt.Errorf("check qdrant key: unexpected status %s", resp.Status)
+	}
+	return nil
 }
 
 func (p *Provisioner) waitReady(ctx context.Context, timeout time.Duration) error {

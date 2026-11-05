@@ -224,7 +224,20 @@ func TestVectorSection(t *testing.T) {
 		wantLevel   string
 		wantStorage bool
 		wantDetail  string
+		rejected    bool
 	}{
+		{
+			name: "an engine that rejects the resolved key is a problem",
+			mode: "binary", ready: true, rejected: true,
+			wantValue: "rejects the resolved API key", wantLevel: LevelBad, wantStorage: true,
+			wantDetail: "or orchd may use a different key",
+		},
+		{
+			name: "an unreachable engine is not reported as rejecting the key",
+			mode: "binary", ready: false, rejected: true,
+			wantValue: "not reachable", wantLevel: LevelBad, wantStorage: true,
+			wantDetail: "orchd-managed",
+		},
 		{
 			name: "binary mode reports orchd ownership and storage",
 			mode: "binary", ready: true,
@@ -250,6 +263,7 @@ func TestVectorSection(t *testing.T) {
 			d.Settings.RAG.Qdrant.Mode = tt.mode
 			d.Settings.RAG.Qdrant.URL = "http://example:6333"
 			d.QdrantReady = func(context.Context) bool { return tt.ready }
+			d.QdrantKeyRejected = func(context.Context) bool { return tt.rejected }
 
 			sec := section(t, Collect(context.Background(), d), "vector store")
 			engine := line(t, sec, "engine")

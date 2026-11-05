@@ -7,6 +7,7 @@ package daemon
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -201,7 +202,16 @@ func qdrantUnit(s config.Settings, apiKey string, sys *systemProbe) (supervisor.
 		Detail: fmt.Sprintf("native engine on :%d", s.RAG.Qdrant.HTTPPort),
 		Run: func(ctx context.Context, beat func()) error {
 			if err := qp.Start(ctx); err != nil {
-				return fmt.Errorf("start qdrant: %w", err)
+				err = fmt.Errorf("start qdrant: %w", err)
+				if errors.Is(err, qdrant.ErrKeyRejected) {
+					// Only memory needs this engine. Exiting would take the socket,
+					// hooks and task queue down with it and, under launchd's
+					// KeepAlive, crash-loop; so orchd stays up with the unit failed,
+					// where orch status shows why.
+					log.Printf("qdrant: %v; memory requests will fail until this is fixed, the rest of orchd keeps running", err)
+					return supervisor.Degraded(err)
+				}
+				return err
 			}
 			beat()
 			return nil
