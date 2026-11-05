@@ -178,8 +178,10 @@ impostor: a keyless engine still passes.
 - **Key rejected (401/403):** the unit is marked `failed` with an error naming the port, and orchd
   keeps running; only memory is unavailable. Exiting instead would take the socket, hooks and task
   queue down and crash-loop under launchd's `KeepAlive`. Another engine may hold the port, or an
-  orphan was started with an older key: stop it, or move orchd with `rag.qdrant.http_port` and
-  `grpc_port`, then `orch restart qdrant`.
+  orphan was started with an older key. To recover, either:
+  - stop that engine, then `orch restart qdrant`; or
+  - move orchd with `rag.qdrant.http_port` and `grpc_port`, then a full `orch restart`. orchd
+    reads the ports only at startup, so `orch restart qdrant` would retry the old port.
 - **Any other failure** (5xx, timeout): retried up to 3 times, 1 s apart, then logged, and the
   engine is used anyway, since it already answered `/readyz`.
 
