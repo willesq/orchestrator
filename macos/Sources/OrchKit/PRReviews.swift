@@ -331,7 +331,7 @@ public enum PRRoleFilter: String, Sendable, CaseIterable, Identifiable {
 
 /// How the PRs list narrows by each PR's state.
 public enum PRStateFilter: String, Sendable, CaseIterable, Identifiable {
-    case open, needsAction, draft, ciFailing, watched, verdicts
+    case open, needsAction, draft, ciFailing, verdicts
 
     public var id: String { rawValue }
 
@@ -341,7 +341,6 @@ public enum PRStateFilter: String, Sendable, CaseIterable, Identifiable {
         case .needsAction: "Needs action"
         case .draft: "Drafts"
         case .ciFailing: "CI failing"
-        case .watched: "Watched for review"
         case .verdicts: "Has a verdict"
         }
     }
@@ -352,7 +351,6 @@ public enum PRStateFilter: String, Sendable, CaseIterable, Identifiable {
         case .needsAction: item.attention != nil
         case .draft: item.isDraft
         case .ciFailing: item.ciState == "failure"
-        case .watched: review?.state?.isActive == true
         case .verdicts: review?.verdict != nil
         }
     }
@@ -361,10 +359,11 @@ public enum PRStateFilter: String, Sendable, CaseIterable, Identifiable {
 /// The PRs to list: only PRs, narrowed by role, state, repo and author (nil for
 /// all) and a title or number search; PRs that need the user first, then newest.
 public func filterPRs(_ items: [GitHubItem], reviews: [String: PRReview], role: PRRoleFilter, state: PRStateFilter,
-                      repo: String?, author: String?, search: String) -> [GitHubItem] {
+                      watchedOnly: Bool = false, repo: String?, author: String?, search: String) -> [GitHubItem] {
     let query = search.trimmingCharacters(in: .whitespaces)
     return items.filter { item in
         guard item.isPR, role.matches(item), state.matches(item, review: reviews[item.url]) else { return false }
+        if watchedOnly, reviews[item.url]?.state?.isActive != true { return false }
         if let repo, item.repo.caseInsensitiveCompare(repo) != .orderedSame { return false }
         if let author, item.author.caseInsensitiveCompare(author) != .orderedSame { return false }
         if query.isEmpty { return true }

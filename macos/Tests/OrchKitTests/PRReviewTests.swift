@@ -112,13 +112,38 @@ private let url2 = "https://github.com/willesq/theCalculator/pull/2"
         #expect(run(.all, .needsAction) == [2])
         #expect(run(.all, .draft) == [3])
         #expect(run(.all, .ciFailing) == [3])
-        #expect(run(.all, .watched) == [1])
         #expect(run(.all, .verdicts) == [2])
         #expect(run(repo: "org/api") == [3])
         #expect(run(.all, .open, "fix") == [3])
         #expect(run(.all, .open, "#1") == [1])
         #expect(run(.all, .open, "2") == [2])
         #expect(prRepos(all) == ["Org/Api", "willesq/theCalculator"])
+    }
+
+    @Test func filtersToWatched() {
+        let waiting = item(1, updated: 10)
+        let verdict = item(2, attention: .reviewRequested, updated: 20)
+        let stopped = item(3, draft: true, updated: 30)
+        let closed = item(4, updated: 40)
+        let unwatched = item(5, attention: .reviewRequested, updated: 50)
+        let all = [waiting, verdict, stopped, closed, unwatched]
+        let reviews = [waiting.url: PRReview(url: waiting.url, state: .waiting),
+                       verdict.url: PRReview(url: verdict.url, state: .verdict),
+                       stopped.url: PRReview(url: stopped.url, state: .stopped),
+                       closed.url: PRReview(url: closed.url, state: .closed)]
+        func run(_ state: PRStateFilter = .open, watchedOnly: Bool, repo: String? = nil) -> [Int] {
+            filterPRs(all, reviews: reviews, role: .all, state: state, watchedOnly: watchedOnly, repo: repo, author: nil,
+                      search: "").map(\.number)
+        }
+        #expect(run(watchedOnly: false) == [5, 2, 4, 3, 1])
+        // A stopped or closed watch no longer counts.
+        #expect(run(watchedOnly: true) == [2, 1])
+        // Narrows within the other filters.
+        #expect(run(.needsAction, watchedOnly: true) == [2])
+        #expect(run(.draft, watchedOnly: true) == [])
+        #expect(run(watchedOnly: true, repo: "org/none") == [])
+        #expect(filterPRs(all, reviews: [:], role: .all, state: .open, watchedOnly: true, repo: nil, author: nil,
+                          search: "").isEmpty)
     }
 
     @Test func filtersByAuthor() {
@@ -320,6 +345,12 @@ private final class Counter: @unchecked Sendable {
         model.clearFilters()
         #expect(!model.isFiltered)
         #expect(model.author == nil)
+        model.watchedOnly = true
+        #expect(model.isFiltered)
+        #expect(model.visible(items).isEmpty)
+        model.clearFilters()
+        #expect(!model.watchedOnly)
+        #expect(!model.isFiltered)
         model.author = "alice"
         #expect(model.isFiltered)
         model.clearFilters()

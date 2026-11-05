@@ -87,6 +87,8 @@ public final class ReviewMonitor {
 public final class PRsModel {
     public var role = PRRoleFilter.all
     public var state = PRStateFilter.open
+    /// Lists only the PRs orchd is still watching for review.
+    public var watchedOnly = false
     /// nil lists every repo.
     public var repo: String?
     /// nil lists every author.
@@ -140,16 +142,17 @@ public final class PRsModel {
 
     /// The PRs in items the filters keep.
     public func visible(_ items: [GitHubItem]) -> [GitHubItem] {
-        filterPRs(items, reviews: reviews.byURL, role: role, state: state, repo: repo, author: author,
-                  search: search)
+        filterPRs(items, reviews: reviews.byURL, role: role, state: state, watchedOnly: watchedOnly, repo: repo,
+                  author: author, search: search)
     }
 
     /// Whether any filter narrows the list.
-    public var isFiltered: Bool { role != .all || state != .open || repo != nil || author != nil || !search.isEmpty }
+    public var isFiltered: Bool { role != .all || state != .open || watchedOnly || repo != nil || author != nil || !search.isEmpty }
 
     public func clearFilters() {
         role = .all
         state = .open
+        watchedOnly = false
         repo = nil
         author = nil
         search = ""

@@ -112,6 +112,10 @@ struct PRFilterBar: View {
                     }
                     ForEach(authors, id: \.self) { Text(verbatim: displaySafe($0)).tag(Optional($0)) }
                 }
+                Toggle("Watched only", isOn: $prs.watchedOnly)
+                    .toggleStyle(.button)
+                    .labelsVisibility(.visible)
+                    .help("Show only the PRs orch is watching for review")
             }
             .labelsHidden()
             .pickerStyle(.menu)
