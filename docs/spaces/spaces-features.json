@@ -483,14 +483,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "189c7bd2b8bf7eb3dde3903da07f6150947a67ca927572d2b08cb7e1a8296058",
-      "branch": null,
+      "branch": "feat/sp-001-hook-payloads",
       "pr": null
     },
     {
