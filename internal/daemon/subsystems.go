@@ -88,6 +88,9 @@ type deps struct {
 	taskHub *taskHub
 	// reviews is the PR review watcher shared with its RPCs; nil drops its unit.
 	reviews *reviews.Watcher
+	// ghProfiles picks the gh login of each space's GitHub calls; nil runs
+	// every call as the default login.
+	ghProfiles *ghProfiles
 }
 
 // subsystems lists orchd's supervised units in start order (stopped in reverse).
@@ -107,14 +110,14 @@ func subsystems(d deps) []supervisor.Unit {
 	}
 	sched := d.docs
 	if sched == nil {
-		sched = newDocsScheduler(d.settings, d.store, d.rag, nil)
+		sched = newDocsScheduler(d.settings, d.store, d.rag, nil, d.ghProfiles)
 	}
 	out = append(out, sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, sched))
 	if d.settingsSvc != nil {
 		out = append(out, settingsUnit(d.settingsSvc))
 	}
 	if d.settings.PRBabysitter.Enabled {
-		out = append(out, prsUnit(d.settings, d.store, d.github))
+		out = append(out, prsUnit(d.settings, d.store, d.github, d.ghProfiles))
 	}
 	if d.reviews != nil {
 		out = append(out, reviewsUnit(d.reviews))
@@ -293,8 +296,13 @@ func sourcesUnit(s config.Settings, store *sql.DB, ing sources.Ingester) supervi
 
 // newDocsScheduler builds the one docs scheduler orchd runs: the docs unit
 // ticks it and SyncDocs asks it to run now, so a sync never runs twice at once.
-// sp, when set, re-checks each owner's space binding before it syncs.
-func newDocsScheduler(s config.Settings, store *sql.DB, ing docs.Ingester, sp *spaces.Engine) *docs.Scheduler {
+// sp, when set, re-checks each owner's space binding before it syncs; ghp,
+// when set, syncs each owner as its space's gh login.
+func newDocsScheduler(s config.Settings, store *sql.DB, ing docs.Ingester, sp *spaces.Engine, ghp *ghProfiles) *docs.Scheduler {
+	var clients func(context.Context, string) (docs.GitHub, docs.Git, error)
+	if ghp != nil {
+		clients = ghp.docsClients
+	}
 	return docs.NewScheduler(docs.NewRegistry(store), ing, docs.SyncOpts{
 		RepoCache:       s.RepoCacheDir(),
 		IncludeArchived: s.Docs.IncludeArchived,
@@ -304,6 +312,7 @@ func newDocsScheduler(s config.Settings, store *sql.DB, ing docs.Ingester, sp *s
 		ExcludeDirs:     s.Ingest.ExcludeDirs,
 		Guard:           docsGuard(store),
 		CheckOwner:      docsOwnerCheck(sp),
+		Clients:         clients,
 	}, interval(s.Docs.ScanInterval, time.Minute))
 }
 
@@ -326,11 +335,14 @@ func docsUnit(s config.Settings, sched *docs.Scheduler) supervisor.Unit {
 // prsUnit polls open PRs and issues in the user's enabled GitHub scopes via gh
 // and caches state + events on transitions. gh failures (e.g. not
 // authenticated) are non-fatal: the cache stays as-is.
-func prsUnit(s config.Settings, store *sql.DB, gh *github.Service) supervisor.Unit {
-	bb := prs.New(paths.PRStateFile(), paths.EventsDir(), watchFrom(gh))
+func prsUnit(s config.Settings, store *sql.DB, gh *github.Service, ghp *ghProfiles) supervisor.Unit {
+	bb := prs.New(paths.PRStateFile(), paths.EventsDir(), watchFrom(gh, ghp))
 	var attr *evidence.Attributor
 	if store != nil {
 		attr = evidence.NewAttributor(store)
+		if ghp != nil {
+			attr.GH = evidence.GH(ghp.Routed())
+		}
 	}
 	poll := interval(s.PRBabysitter.PollInterval, 10*time.Minute)
 	var last, backoffUntil time.Time

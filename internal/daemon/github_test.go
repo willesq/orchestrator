@@ -180,17 +180,17 @@ func TestListGitHubRepos(t *testing.T) {
 
 func TestWatchFrom(t *testing.T) {
 	ctx := context.Background()
-	if _, err := watchFrom(nil)(ctx); err == nil {
+	if _, err := watchFrom(nil, nil)(ctx); err == nil {
 		t.Error("no service: no error")
 	}
 	down := false
 	s := githubServer(t, &down)
-	w, err := watchFrom(s.github)(ctx)
+	w, err := watchFrom(s.github, nil)(ctx)
 	if err != nil || w.Login != "willesq" || len(w.Scopes) != 2 || !w.Scopes[0].Enabled {
 		t.Errorf("watch = %+v, %v", w, err)
 	}
 	downAll := true
-	if _, err := watchFrom(githubServer(t, &downAll).github)(ctx); err == nil {
+	if _, err := watchFrom(githubServer(t, &downAll).github, nil)(ctx); err == nil {
 		t.Error("GitHub down: no error")
 	}
 }

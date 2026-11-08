@@ -47,7 +47,7 @@ func landingServer(t *testing.T) (*server, *[]string) {
 		}
 		return nil, nil
 	})
-	svc := newLandingService(landing.NewStore(conn), tasks, gh)
+	svc := newLandingService(landing.NewStore(conn), tasks, gh, nil)
 	svc.Home = home
 	svc.GH = func(context.Context, ...string) ([]byte, error) {
 		return json.Marshal(map[string]any{

@@ -23,12 +23,12 @@ const activityLimit = 200
 const landingRetention = 30 * 24 * time.Hour
 
 // newLandingService wires landing to the ledger and the shared GitHub identity.
-func newLandingService(store *landing.Store, tasks taskReader, gh *github.Service) *landing.Service {
+func newLandingService(store *landing.Store, tasks taskReader, gh *github.Service, ghp *ghProfiles) *landing.Service {
 	svc := &landing.Service{
 		Store: store,
 		Dir:   filepath.Join(paths.DataDir(), "landings"),
 		Home:  userHome(),
-		GH:    github.GH,
+		GH:    ghp.Routed(),
 		Git:   landing.Git,
 		Login: func(ctx context.Context) (string, error) {
 			id, err := gh.Identity(ctx, false)
@@ -38,6 +38,13 @@ func newLandingService(store *landing.Store, tasks taskReader, gh *github.Servic
 			t, ok, err := tasks.Get(ctx, id)
 			return landing.Task{Body: t.Body, Result: t.Result, Status: t.Status}, ok, err
 		},
+	}
+	if ghp != nil {
+		// A space's PRs are its account's, and pushes to them run as it.
+		svc.AccountFor = func(ctx context.Context, owner string) (landing.Account, error) {
+			env, login, err := ghp.account(ctx, owner, svc.Login)
+			return landing.Account{Login: login, Env: env}, err
+		}
 	}
 	svc.Prune(landingRetention, time.Now())
 	return svc

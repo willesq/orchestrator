@@ -12,6 +12,8 @@ type Resolved struct {
 	spaces             map[string]*Space
 	// roots are every bound folder root, expanded, for placement.
 	roots []root
+	// ghDirs are each space's gh_config_dir, expanded, by space.
+	ghDirs map[string]string
 }
 
 // Configured reports whether any space is defined. Without one, orch keeps

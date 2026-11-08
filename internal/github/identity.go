@@ -38,9 +38,17 @@ type Repo struct {
 // Runner runs gh with args and returns stdout; injectable for tests.
 type Runner func(ctx context.Context, args ...string) ([]byte, error)
 
-// GH runs the real gh CLI.
+// GH runs the real gh CLI with the default login.
 func GH(ctx context.Context, args ...string) ([]byte, error) {
-	out, err := exec.CommandContext(ctx, "gh", args...).Output()
+	return GHEnv(ctx, nil, args...)
+}
+
+// GHEnv runs the real gh CLI with env as its environment; nil is this
+// process's, so gh uses the default login.
+func GHEnv(ctx context.Context, env []string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "gh", args...)
+	cmd.Env = env
+	out, err := cmd.Output()
 	if err != nil {
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {

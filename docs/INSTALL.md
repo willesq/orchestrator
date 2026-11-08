@@ -20,6 +20,22 @@ The cask needs macOS 15.2 or later, and installs `Orch.app`, a menu bar app show
 health with start and restart controls. It depends on the `orch` formula, which stays the owner
 of the daemon.
 
+## GitHub accounts per space
+
+When you use [spaces](OPERATIONS.md#spaces), give each job (isolated space) its own GitHub
+account. Pick a directory outside every git repository, name it as the space's `gh_config_dir`,
+and log in to it yourself:
+
+```sh
+GH_CONFIG_DIR=~/.config/gh-acme gh auth login
+```
+
+orchd then runs every gh call about that space's orgs as that account: docs sync, PR monitoring,
+reviews and org identity checks. Until the profile is logged in, the space's orgs are not synced,
+and `orch status` names the space and the command to run. orch checks a profile only with
+`gh auth status`; it never reads the profile's files or its token. See
+[internals/config.md](internals/config.md#spaces-policy).
+
 ## What `orch install` does
 
 Install previews by default, backs up every file before changing it, leaves other tools' hooks

@@ -17,6 +17,8 @@ type orgFake struct {
 	nodes map[string]string
 	fail  error
 	calls int
+	// profiles is the gh profile each login was last looked up with.
+	profiles map[string]GHProfile
 }
 
 func fakeOrgs(nodes map[string]string) *orgFake {
@@ -26,10 +28,14 @@ func fakeOrgs(nodes map[string]string) *orgFake {
 	return &orgFake{nodes: nodes}
 }
 
-func (f *orgFake) lookup(_ context.Context, login string) (OrgIdentity, error) {
+func (f *orgFake) lookup(_ context.Context, login string, prof GHProfile) (OrgIdentity, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
+	if f.profiles == nil {
+		f.profiles = map[string]GHProfile{}
+	}
+	f.profiles[strings.ToLower(login)] = prof
 	if f.fail != nil {
 		return OrgIdentity{}, f.fail
 	}
@@ -164,13 +170,15 @@ func TestApplyRefusesUnconfirmedOrgs(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range []struct {
 		name   string
-		lookup func(context.Context, string) (OrgIdentity, error)
+		lookup func(context.Context, string, GHProfile) (OrgIdentity, error)
 	}{
-		{"gh fails", func(context.Context, string) (OrgIdentity, error) { return OrgIdentity{}, errors.New("HTTP 404") }},
-		{"other account", func(context.Context, string) (OrgIdentity, error) {
+		{"gh fails", func(context.Context, string, GHProfile) (OrgIdentity, error) {
+			return OrgIdentity{}, errors.New("HTTP 404")
+		}},
+		{"other account", func(context.Context, string, GHProfile) (OrgIdentity, error) {
 			return OrgIdentity{Login: "someone-else", NodeID: "O_x"}, nil
 		}},
-		{"no node id", func(_ context.Context, l string) (OrgIdentity, error) { return OrgIdentity{Login: l}, nil }},
+		{"no node id", func(_ context.Context, l string, _ GHProfile) (OrgIdentity, error) { return OrgIdentity{Login: l}, nil }},
 		{"no lookup", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

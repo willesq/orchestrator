@@ -149,6 +149,9 @@ type server struct {
 	config *configService
 	// spaces holds the enforced spaces policy; nil when unavailable.
 	spaces *spaces.Engine
+	// ghProfiles picks the gh login of each space's GitHub calls; nil runs
+	// every call as the default login.
+	ghProfiles *ghProfiles
 	// repos looks up a repo's owner and visibility for placement.
 	repos      *repoLookups
 	sourcesReg *sources.Registry
@@ -575,10 +578,12 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	cfg := newConfigService(store, configStart)
-	sp, err := spaces.Open(ctx, store, spacesEnv())
+	ghp := newGHProfiles()
+	sp, err := spaces.Open(ctx, store, spacesEnv(ghp))
 	if err != nil {
 		return err
 	}
+	ghp.spaces = sp
 	// Reason: only the load result is logged here. Status would validate the
 	// newest draft, which anyone may save, and must not hold up startup.
 	if _, err := sp.Current(); err != nil {
@@ -657,16 +662,16 @@ func Run(ctx context.Context) error {
 
 	// One GitHub service, so the server and the PR watcher share the identity
 	// cache.
-	ghService := github.NewService(github.NewStore(store), github.GH)
-	reviewWatcher := newReviewWatcher(reviews.NewStore(store), disp, tasks, ghService)
+	ghService := github.NewService(github.NewStore(store), ghp.Routed())
+	reviewWatcher := newReviewWatcher(reviews.NewStore(store), disp, tasks, ghService, ghp)
 
-	docsSched := newDocsScheduler(s, store, svc, sp)
+	docsSched := newDocsScheduler(s, store, svc, sp, ghp)
 	settingsSvc := settingsFor(store)
 	sup := supervisor.New(runCtx)
 	for _, u := range subsystems(deps{
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
-		summaries: summaries, github: ghService, system: system, docs: docsSched,
+		summaries: summaries, github: ghService, ghProfiles: ghp, system: system, docs: docsSched,
 		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub, reviews: reviewWatcher,
 	}) {
 		if err := sup.Add(u); err != nil {
@@ -704,8 +709,8 @@ func Run(ctx context.Context) error {
 		prStateFile:  paths.PRStateFile(),
 		github:       ghService,
 		reviews:      reviewWatcher,
-		landing:      newLandingService(landing.NewStore(store), tasks, ghService),
-		details:      newDetailCache(github.GH),
+		landing:      newLandingService(landing.NewStore(store), tasks, ghService, ghp),
+		details:      newDetailCache(ghp.Routed()),
 		handoffDir:   handoff.Dir(),
 		system:       system,
 		docsReg:      docs.NewRegistry(store),
@@ -713,7 +718,8 @@ func Run(ctx context.Context) error {
 		docsRefresh:  refreshSecs(s.Docs.DefaultRefresh),
 		config:       cfg,
 		spaces:       sp,
-		repos:        newRepoLookups(github.GH),
+		repos:        newRepoLookups(ghp.Routed()),
+		ghProfiles:   ghp,
 		prune:        newPruneGuard(store),
 		sourcesReg:   sources.NewRegistry(store),
 		documents:    svc,

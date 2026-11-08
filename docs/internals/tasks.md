@@ -350,6 +350,12 @@ The `pr-babysitter` unit watches the user's enabled GitHub scopes for open PRs a
 - Hits outside the enabled scopes, or excluded by a scope's repo picks, are dropped. So the tray and
   `orch prs` cover only what the user opted in to.
 - Only `https://github.com/` item URLs are kept, and scope logins are checked again when read.
+- With spaces applied, the searches above run once as the default login and once as each logged-in
+  space gh profile (SP-063, [config.md](config.md#spaces-policy)). An owner's items are kept only
+  from the account its space routes it to, and are enriched as that account. An owner bound to an
+  isolated space without a working profile is dropped. Everything searches and repo batches go
+  only to the owner's account, and the limits of 5 apply per account. As before, a hit counts only
+  for a scope the user enabled.
 
 **Each item records:**
 - its kind (`pr` or `issue`), number, author and update time;

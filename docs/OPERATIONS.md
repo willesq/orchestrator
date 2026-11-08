@@ -71,6 +71,11 @@ org, and `orch spaces diff` names it. Check the org on GitHub. If the change is 
 newest revision again with `--confirm-github-org ORG`. Until you do, any apply is refused. See
 [internals/config.md](internals/config.md#spaces-policy).
 
+Each isolated space syncs its GitHub orgs only as its own account: set the space's
+`gh_config_dir` and run `GH_CONFIG_DIR=<dir> gh auth login` ([INSTALL.md](INSTALL.md#github-accounts-per-space)).
+`orch status` names any space whose profile is missing or not logged in, and warns when one
+profile's account can see another job's org.
+
 `orch spaces why` shows how the applied policy places a target: every bound root holding it from
 shallowest to deepest, what its GitHub remote contributes, the rule that decided and the result.
 For a path it also says where a session started there would write and which space it would read
