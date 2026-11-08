@@ -208,6 +208,71 @@ verified.
   `KeepAlive`, logs under `~/Library/Logs/orchestrator/`), skipped when orchd is installed under
   Homebrew's `Cellar`, since `brew services` supervises it.
 
+## Harness sandbox and permission layering
+
+These are the measured facts that per-space harness settings (spaces plan, SP-046) build on.
+They were recorded on 2026-11-08 with Claude Code 2.1.309 and codex-cli 0.166.0 on macOS, in a
+scratch directory, without changing any real harness configuration (spaces plan, SP-004).
+
+**Claude Code.** Headless `claude -p` sessions ran in scratch git repositories. Each settings
+file set a distinct `env` marker, and the run recorded which markers reached the Bash tool:
+
+| Launched from | User | Root `settings.json` | Root `settings.local.json` | Subfolder's own `.claude/` |
+|---|---|---|---|---|
+| checkout root | yes | yes | yes | n/a |
+| subfolder with its own `.claude/settings{,.local}.json` | yes | **no** | yes | both apply |
+| subfolder without `.claude/` (two repositories) | yes | **no** | yes | n/a |
+| subfolder of a non-git directory whose parent has `.claude/` | yes | n/a | n/a | parent **not** applied |
+
+- A project `.claude/settings.json` applies only when the session starts in its directory, but
+  the checkout root's `settings.local.json` applies anywhere in the checkout. Per-checkout files
+  therefore belong in the root `settings.local.json`. Because the root `settings.json` may not
+  apply, that file should carry every key the deny depends on: `sandbox.enabled: true`,
+  `sandbox.allowUnsandboxedCommands: false` and the `Read(//...)` denies. This follows from the
+  runs below; no run launched from a subfolder with all three in the local file alone.
+- `sandbox.enabled: true` in project settings overrides `enabled: false` in user settings.
+  `sandbox.filesystem.denyRead` entries from project and local settings merge: both folders were
+  denied in one session.
+- With the sandbox on and `allowUnsandboxedCommands: false`, `denyRead` makes `cat` fail with
+  `Operation not permitted`. It does **not** stop the Read tool, which returned the file.
+- A `permissions.deny` rule `Read(//<absolute path>/**)` blocks the Read tool ("File is in a
+  directory that is denied by your permission settings"). With the sandbox on and
+  `allowUnsandboxedCommands: false`, the same rule also makes sandboxed `cat` fail, so one Read
+  deny covered both. Grep, Glob, Edit, Write and other file tools were not tested against it. The
+  single-slash form `Read(/<absolute path>/**)` did not block (presumably because it is resolved
+  against the settings file).
+- A fresh `CLAUDE_CONFIG_DIR`, or a temporary `HOME`, starts logged out (`Not logged in · Please
+  run /login`). A per-space profile for `orch run` needs its own login. Whether that login then
+  persists per profile was not tested.
+- In auto permission mode, the auto-mode classifier can refuse a Bash call before the sandbox is
+  reached. Tests of the sandbox itself must use `--permission-mode default`.
+
+**Codex.** Codex 0.166 can deny reads to a folder from shell commands with a permissions profile:
+
+```toml
+default_permissions = "job"
+[permissions.job]
+extends = ":workspace"
+[permissions.job.filesystem]
+"/abs/other-job-root" = "deny"
+```
+
+- Under `codex sandbox` (the same seatbelt sandbox, with no model), the profile made `cat`, `ls`,
+  Python `open()`, a symlink from the workspace and `cd` into the folder all fail. Without the
+  profile, the same `cat` succeeded.
+- The profile takes effect from `$CODEX_HOME/config.toml`, from `-p <name>`
+  (`$CODEX_HOME/<name>.config.toml` layered on the user config), or from `-c` overrides. In a
+  `codex exec` session with the profile given by `-c`, the session ran under it
+  (`sandbox: workspace-write`) and the agent declined the read, citing the denied path.
+- A checkout's own `.codex/config.toml` cannot make it the session's profile. Even with the
+  project trusted, `codex exec` from the root and from a subfolder ran `sandbox: read-only` and
+  read the denied file. (`codex sandbox -P job` does apply a profile defined there, but
+  `codex exec` has no such flag.) Codex has no per-checkout path for this, so per-space Codex
+  settings need the launcher (`-p <space>` or `-c`), not a per-checkout file. This also means a
+  checkout cannot weaken a profile the launcher supplies.
+- The `:workspace` base still lets the shell write `/tmp` and `$TMPDIR`, which every space
+  shares; a read deny on other roots does not close that channel.
+
 ## Status checks
 
 - **Drift:** each adapter's pending edits. Items turned off in orch are not drift; the
