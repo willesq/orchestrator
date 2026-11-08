@@ -148,6 +148,10 @@ service Orchd {
   // newest, so the operator applies exactly what they reviewed. A draft an
   // agent session saved also needs accept_agent_draft.
   rpc ApplySpaces(ApplySpacesRequest) returns (ApplySpacesResponse);
+  // ExplainPlacement says which space content from a target (a path, URL,
+  // owner/repo or chat tenant) goes to and why. Agents get an answer only
+  // when every space it names is public; the operator sees all.
+  rpc ExplainPlacement(ExplainPlacementRequest) returns (PlacementExplanation);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -920,6 +924,44 @@ message ApplySpacesRequest {
 
 message ApplySpacesResponse {
   int64 applied_revision = 1;
+}
+
+message ExplainPlacementRequest {
+  // An absolute path, an http(s) URL, owner/repo, or a chat tenant as
+  // slack:<id>, teams:<id> or slack://<id>/...
+  string target = 1;
+}
+
+// PlacementRoot is one bound folder root holding the target.
+message PlacementRoot {
+  string root = 1;
+  string space = 2;
+  string kind = 3;
+}
+
+// PlacementRemote is what the target's GitHub repo contributes.
+message PlacementRemote {
+  string owner = 1; // the current owner, as GitHub reports it when checked
+  string repo = 2;
+  string visibility = 3; // public | private | "" (not checked)
+  string space = 4;      // the owner's space, "" when unbound
+  string kind = 5;
+  string effect = 6;
+}
+
+message PlacementExplanation {
+  string target_kind = 1; // path | url | repo | chat
+  // Every bound root holding the target, shallowest first; the last decides.
+  repeated PlacementRoot roots = 2;
+  PlacementRemote remote = 3;
+  string rule = 4; // the deciding rule
+  string reason = 5;
+  string outcome = 6; // placed | quarantined | conflict
+  string space = 7;
+  // For a path: where a session started there writes, and the space whose
+  // reads it gets ("" for none: public only).
+  string session_space = 8;
+  string session_reads = 9;
 }
 
 message DocRepo {

@@ -236,3 +236,30 @@ func (e *Engine) UnconfirmedOrgs(ctx context.Context) ([]string, error) {
 	sort.Slice(out, func(i, j int) bool { return orgKey(out[i]) < orgKey(out[j]) })
 	return out, nil
 }
+
+// Place classifies o under the enforced policy, confirming its remote's
+// GitHub org binding from orch.db. ErrBroken means nothing can be placed.
+func (e *Engine) Place(ctx context.Context, o Origin) (Placement, error) {
+	res, err := e.Current()
+	if err != nil {
+		return Placement{}, err
+	}
+	return e.PlaceUnder(ctx, res, o)
+}
+
+// PlaceUnder is Place under res, for a caller that checks the answer against
+// the same policy it was placed under.
+func (e *Engine) PlaceUnder(ctx context.Context, res *Resolved, o Origin) (Placement, error) {
+	var opt Options
+	if o.Remote != nil && res.Configured() {
+		if _, ok := res.GitHubOrgSpace(o.Remote.Owner); ok {
+			b, err := loadBinding(ctx, e.db, orgKey(o.Remote.Owner))
+			if err != nil {
+				return Placement{}, err
+			}
+			held := b != nil && !b.suspended
+			opt.Confirmed = func(string) bool { return held }
+		}
+	}
+	return Classify(o, res, opt), nil
+}

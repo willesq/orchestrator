@@ -54,6 +54,7 @@ orch spaces draft < policy.json       # save a draft revision; changes nothing
 orch spaces diff [--full]             # what the newest draft changes, and its problems
 orch spaces apply --revision N        # enforce draft N
 orch spaces apply --revision N --confirm-github-org ORG   # also accept ORG's changed GitHub identity
+orch spaces why <path|url|owner/repo|slack:ID|teams:ID>   # which space its content goes to, and why
 ```
 
 The spaces policy lives in `orch.db` as numbered revisions. Diff and apply are yours alone: orchd
@@ -69,6 +70,12 @@ sees a different node ID. orchd then stops syncing that org, `orch status` repor
 org, and `orch spaces diff` names it. Check the org on GitHub. If the change is expected, apply the
 newest revision again with `--confirm-github-org ORG`. Until you do, any apply is refused. See
 [internals/config.md](internals/config.md#spaces-policy).
+
+`orch spaces why` shows how the applied policy places a target: every bound root holding it from
+shallowest to deepest, what its GitHub remote contributes, the rule that decided and the result.
+For a path it also says where a session started there would write and which space it would read
+as. Inside an agent session orchd answers only when every space in the answer is public. See
+[internals/memory.md](internals/memory.md#placement).
 
 ## Upgrades
 

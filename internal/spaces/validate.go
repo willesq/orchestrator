@@ -3,11 +3,14 @@ package spaces
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/willesq/orchestrator/internal/github"
@@ -258,7 +261,7 @@ func Validate(p Policy, env Env) (*Resolved, error) {
 		}
 	}
 
-	res := &Resolved{Policy: p, spaces: byName}
+	res := &Resolved{Policy: p, spaces: byName, roots: roots}
 	res.PublicRootSessions = publicRootSessions(p.PublicRootSessions, byName, names, add)
 	if len(ps) > 0 {
 		return nil, ps
@@ -321,12 +324,36 @@ func publicRootSessions(set string, byName map[string]*Space, names []string, ad
 	return Quarantine
 }
 
-// prefixKey normalizes a web prefix for comparison: scheme and host are
-// case-insensitive, the path is not.
+// prefixKey normalizes a web prefix or URL for comparison: the scheme is
+// ignored, the host is case-insensitive, a default port and trailing dots on
+// the host are dropped, and the path is cleaned of dot segments, re-escaped
+// and stripped of its trailing slash, so https://a.com/x/../private,
+// http://a.com/%70rivate and https://a.com/private/ all key the same. The
+// path stays case-sensitive. A backslash in the path is refused: some
+// servers read it as a slash.
 func prefixKey(prefix string) (string, bool) {
 	u, err := url.Parse(prefix)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || strings.Contains(u.Path, `\`) {
 		return "", false
 	}
-	return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host) + u.EscapedPath(), true
+	scheme := strings.ToLower(u.Scheme)
+	host := strings.TrimRight(strings.ToLower(u.Hostname()), ".")
+	if host == "" {
+		return "", false
+	}
+	port := 0
+	if ps := u.Port(); ps != "" {
+		if port, err = strconv.Atoi(ps); err != nil || port < 1 || port > 65535 {
+			return "", false
+		}
+	}
+	if port != 0 && !(scheme == "http" && port == 80 || scheme == "https" && port == 443) {
+		host = net.JoinHostPort(host, strconv.Itoa(port))
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	p := strings.TrimSuffix(path.Clean("/"+u.Path), "/")
+	// Reason: http and https name the same site, so a prefix bound under
+	// one scheme also holds pages fetched under the other.
+	return "http(s)://" + host + (&url.URL{Path: p}).EscapedPath(), true
 }

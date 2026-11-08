@@ -946,7 +946,12 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestClassifyCases (internal/spaces/classify_test.go) has 57 table cases, all passing. It covers every listed case: repo in isolated org; fork owned by a job org with a public parent; public repo in public org; private repo in public org; repo transferred between orgs (public->job: remote_stricter; job->job: conflict); root and remote agree; remote stricter; root stricter; two isolated spaces (conflict); nested roots ~/code (public), ~/code/willesq (private), ~/code/company1 (isolated) and a deeper path under each, plus case-folding and the sibling-prefix boundary; remote only, no root; no root and no remote; allowlisted web prefix; web page ingested by a session (D-14); Slack and Teams tenants; client ingest from a pinned session; sticky retag override (incl. over a conflict, to quarantine, to a removed space); unmatched. Also TestClassifyRemoteEffect, TestClassifyWithoutPolicy (INV-10: no policy -> shared), TestEnginePlace (org binding confirmed/suspended from orch.db), TestPrefixKeyNormalizes and TestWebPrefixBoundaries.",
+            "a2: TestClassifyNeverPublicWhenUnplaced runs a property test over 20,000 seeded random origins across every system, path, remote owner/visibility, URL, writer, tenant and org-confirmation state. No unmatched, conflicting or quarantined origin returns a public space; all of them return quarantine. Session content is never placed in public. Passes, and passes 20 times under -race.",
+            "a3: TestSessionUnderPublicRoot checks D-22. A session pinned under the public root ~/code reads as 'oss', and res.CanRead(ReadAs, x) is true only for public spaces (not personal, acme, globex or quarantine). Its content goes to public_root_sessions (personal, rule public_root_session). With no default space and two private spaces, the content goes to quarantine and the session still reads public only. Passes.",
+            "Gates on the SP-022 tree: go test ./... exit 0; go vet ./... exit 0; gofmt -l on changed Go files 0 lines; make cover 'All files >= 80%' (classify.go 98.7%, validate.go 98.7%, orgs.go 94.6%, resolved.go 100%)."
+          ]
         },
         {
           "id": "SP-022.2",
@@ -960,7 +965,12 @@
               "threshold": "pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestExplainPlacementCases (internal/daemon/placement_rpc_test.go) drives the ExplainPlacement RPC over temporary git checkouts with a fake gh. It covers 19 targetable cases: path, owner/repo, URL and slack:/teams: chat URIs, including the slack:// form. Every case asserts: every matching root shallowest to deepest, the remote's owner/repo/visibility/space/effect, the deciding rule and reason, the result, and for paths the session's write space and read-as space. Writer, client and override cases cannot be named as a 'why' target and are covered by TestClassifyCases. TestSpacesWhy (internal/cli/spaces_cmd_test.go) checks that 'orch spaces why' prints roots shallowest first with the deepest marked, the remote's effect, 'rule: <rule>: <reason>', 'result: <space> (<outcome>)' and the session line, and that it makes ~ and ./ paths absolute.",
+            "a1 (agent limit): TestExplainPlacementAgents sends requests as harness, queued-task, orchd-spawned and unidentified callers. They get an answer only for targets whose every named space is public, with no session fields. Isolated, private, quarantined, conflicting, unbound-remote and planted-.git probe targets all get one identical refusal. TestExplainPlacementProbe (operator sees the unbound case) and TestExplainPlacementErrorsHidden (errors are masked for agents) also pass. Until SP-010/SP-011 pin sessions, an agent's own space is unknown, so agents see public-only answers, which is narrower than 'own space or public'. ExplainPlacement is in taskCallable. TestExplainPlacementNoPolicy, TestExplainPlacementBadTargets, TestRepoLookups (10-minute cache, 512-entry cap, 30 lookups/min, invalid names spend nothing) and github TestLookupRepo pass.",
+            "Coverage of changed daemon files (cover_by_file.py over the daemon profile): placement_rpc.go 97.8%, callers.go 96.9%, daemon.go 91.1%; cli/spaces_why.go 95.1%, spaces_cmd.go 98.9%, github/identity.go 93.2%. The daemon profile skips the existing flaky TestWatchTasksStreamsSnapshotChangesAndTicks, which also fails on unmodified origin/main under -coverprofile, and which makes scripts/cover.sh silently drop the daemon package.",
+            "Security audit: security-audit agent, 4 rounds. Round 1: 0 critical/high, 3 medium. M1: an agent could learn org bindings by planting a .git under a public root. M2: a repo with unknown visibility could be placed in public. M3: URL normalization was missing in web-prefix matching. Round 2: the prefix trailing-slash boundary was still medium. Round 3: unkeyable URLs fell back to the writer's space (medium). All fixed with regression tests. Round 4: 0 critical/high/medium open. Lows are recorded in the PR body."
+          ]
         }
       ],
       "status": "in_progress",
