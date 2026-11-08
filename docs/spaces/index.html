@@ -1,0 +1,605 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>orch Spaces Plan</title>
+<style>
+/* Layout: a reader for spaces-features.json. It renders the file and holds no plan content of its own, so humans and agents read the same source. */
+:root {
+  color-scheme: light;
+  --ink: #18222b; --muted: #52606d; --paper: #f4f6f7; --surface: #ffffff; --line: #d8dfe5;
+  --accent: #2f6f8f; --accent-soft: #e2eef4;
+  --do: #23764a; --do-soft: #e3f3ea; --later: #8a6400; --later-soft: #f8f0dc; --no: #a3332b; --no-soft: #f8e5e3;
+  --font-display: "Avenir Next", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #e3eaef; --muted: #a2b0bc; --paper: #0f151a; --surface: #172028; --line: #2a3742;
+    --accent: #7fbfdc; --accent-soft: #16303b;
+    --do: #7fd3a0; --do-soft: #15301f; --later: #e8b75a; --later-soft: #33270f; --no: #f08a80; --no-soft: #3a1c19;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 16px/1.6 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 66rem; margin: 0 auto; padding-block: 2.5rem 4rem; display: grid; gap: 2.5rem; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.2; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(1.8rem, 4.2vw, 2.4rem); font-weight: 700; }
+h2 { font-size: 1.4rem; font-weight: 700; }
+h3 { font-size: 1.08rem; font-weight: 650; }
+p { margin: 0; max-width: 74ch; }
+ul, ol { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.35rem; max-width: 80ch; }
+a { color: var(--accent); text-underline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+code { background: var(--accent-soft); padding: 0.05em 0.3em; border-radius: 3px; }
+.eyebrow { font: 600 0.74rem/1 var(--font-body); letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+section { display: grid; gap: 1rem; }
+header { display: grid; gap: 0.7rem; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1.2rem 1.3rem; display: grid; gap: 0.7rem; }
+.loader { display: grid; gap: 0.8rem; }
+.loader[hidden] { display: none; }
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 1.5rem; text-align: center; color: var(--muted); }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 0.7rem; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0.8rem 0.95rem; display: grid; gap: 0.2rem; }
+.stat b { font: 700 1.4rem/1.1 var(--font-display); color: var(--accent); font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 0.88rem; }
+.next { border-left: 5px solid var(--do); }
+.pill { display: inline-block; font: 700 0.68rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; padding: 0.32rem 0.5rem; border-radius: 4px; white-space: nowrap; }
+.pill.todo { color: var(--muted); background: var(--paper); border: 1px solid var(--line); }
+.pill.in_progress { color: var(--accent); background: var(--accent-soft); }
+.pill.blocked { color: var(--no); background: var(--no-soft); }
+.pill.superseded { color: var(--muted); background: var(--paper); border: 1px dashed var(--line); text-decoration: line-through; }
+.pill.done, .pill.pass { color: var(--do); background: var(--do-soft); }
+.pill.open { color: var(--later); background: var(--later-soft); }
+.pill.hashbad { color: var(--no); background: var(--no-soft); }
+.pill.hashok { color: var(--do); background: var(--do-soft); }
+.pill.type { color: var(--muted); background: var(--paper); border: 1px solid var(--line); text-transform: none; letter-spacing: 0; font-weight: 600; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 36rem; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 0.7rem/1.2 var(--font-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; position: sticky; top: 0; background: var(--paper); padding: 0.6rem 0; z-index: 2; border-bottom: 1px solid var(--line); }
+.controls select, .controls input { font: inherit; font-size: 0.92rem; padding: 0.45rem 0.6rem; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.controls input { min-width: 14rem; }
+.count { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.phase { display: grid; gap: 0.8rem; }
+.phase-head { display: grid; gap: 0.3rem; }
+.bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; max-width: 24rem; }
+.bar i { display: block; height: 100%; background: var(--do); }
+details.feat { background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: 10px; }
+details.feat[data-status="done"] { border-left-color: var(--do); }
+details.feat[data-status="in_progress"] { border-left-color: var(--accent); }
+details.feat[data-status="blocked"] { border-left-color: var(--no); }
+details.feat > summary { list-style: none; cursor: pointer; padding: 0.85rem 1.1rem; display: flex; flex-wrap: wrap; gap: 0.4rem 0.8rem; align-items: baseline; }
+details.feat > summary::-webkit-details-marker { display: none; }
+details.feat > summary::before { content: "▸"; color: var(--muted); }
+details.feat[open] > summary::before { content: "▾"; }
+.fid { font: 600 0.82rem/1 var(--font-mono); color: var(--muted); }
+.ftitle { font: 650 1.02rem/1.3 var(--font-display); flex: 1 1 18rem; }
+.fbody { padding: 0 1.1rem 1.1rem; display: grid; gap: 0.85rem; }
+.kv { display: grid; grid-template-columns: 9rem 1fr; gap: 0.3rem 0.8rem; font-size: 0.93rem; }
+@media (max-width: 640px) { .kv { grid-template-columns: 1fr; } }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+.dep { display: inline-block; margin-right: 0.35rem; }
+.dep.unmet { color: var(--later); }
+.dep.met { color: var(--do); }
+.cp { border: 1px solid var(--line); border-radius: 8px; padding: 0.7rem 0.85rem; display: grid; gap: 0.5rem; }
+.cp h4 { margin: 0; font: 650 0.95rem/1.3 var(--font-display); }
+.ev { font-size: 0.86rem; }
+.hidden { display: none !important; }
+.pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 760px) { .pgrid { grid-template-columns: 1fr; } }
+.meter { display: grid; gap: 0.3rem; }
+.meter .lbl { display: flex; justify-content: space-between; font-size: 0.9rem; }
+.meter .bar { max-width: none; height: 10px; }
+.bar i.ip { background: var(--accent); }
+.cplist { list-style: none; padding-left: 0; display: grid; gap: 0.25rem; font-size: 0.93rem; }
+.cplist .mk { display: inline-block; width: 1.4rem; font-weight: 700; }
+.cplist .ok { color: var(--do); } .cplist .now { color: var(--accent); } .cplist .no { color: var(--muted); }
+.live-meta { display: grid; grid-template-columns: 7rem 1fr; gap: 0.2rem 0.8rem; font-size: 0.9rem; }
+.live-meta dt { color: var(--muted); } .live-meta dd { margin: 0; overflow-wrap: anywhere; }
+.current { border-left: 5px solid var(--accent); }
+.activity { list-style: none; padding-left: 0; display: grid; gap: 0.3rem; font-size: 0.92rem; }
+.activity time { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 0.5rem; }
+footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--line); padding-top: 1.1rem; display: grid; gap: 0.4rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">orch · plan reader</span>
+  <h1 id="title">Spaces plan</h1>
+  <p class="muted" id="meta">Loading <code>spaces-features.json</code>…</p>
+</header>
+
+<div class="loader card" id="loader" hidden>
+  <h2>Load the plan file</h2>
+  <p>This page renders <code>spaces-features.json</code> and nothing else. Browsers block reading a local file automatically when the page is opened directly from disk. Choose the file, or serve the folder: <code>python3 -m http.server -d docs/spaces 8765</code>, then open <code>http://localhost:8765</code>.</p>
+  <div class="drop" id="drop">Drop <code>spaces-features.json</code> here, or <input type="file" id="file" accept="application/json,.json" aria-label="Choose spaces-features.json"></div>
+  <p class="muted" id="loadErr" aria-live="polite"></p>
+</div>
+
+<main id="app" class="hidden" style="display:grid;gap:2.5rem">
+  <section aria-labelledby="h-over">
+    <div class="row" style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:baseline;justify-content:space-between">
+      <h2 id="h-over">Progress</h2>
+      <span class="muted" id="liveNote" aria-live="polite"></span>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="card" id="meters"></div>
+    <div class="pgrid">
+      <div class="card current" id="current"></div>
+      <div class="card next" id="nextUp"></div>
+    </div>
+    <div class="pgrid">
+      <div class="card" id="doneList"></div>
+      <div class="card" id="blockedList"></div>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>Phase</th><th>Done</th><th>In progress</th><th>Blocked</th><th style="width:30%">Progress</th></tr></thead><tbody id="phaseTable"></tbody></table></div>
+    <div class="card" id="activity"></div>
+  </section>
+
+  <section aria-labelledby="h-proc">
+    <h2 id="h-proc">Session procedure</h2>
+    <p class="muted">Every session runs this, so the prompt never changes.</p>
+    <div class="card"><ul id="proc" style="list-style:none;padding-left:0"></ul></div>
+    <div class="card"><h3>Status values</h3><ul id="statusValues" style="list-style:none;padding-left:0"></ul></div>
+    <div class="card"><h3>Local safety (this Mac runs the orch being changed)</h3><ul id="safety"></ul></div>
+  </section>
+
+  <section aria-labelledby="h-instr">
+    <h2 id="h-instr">Instructions for agents</h2>
+    <div class="card"><ol id="instr"></ol></div>
+  </section>
+
+  <section aria-labelledby="h-design">
+    <h2 id="h-design">Design summary</h2>
+    <div class="card" id="design"></div>
+  </section>
+
+  <section aria-labelledby="h-inv">
+    <h2 id="h-inv">Invariants</h2>
+    <div class="table-wrap"><table><thead><tr><th>ID</th><th>Rule</th><th>Verified by</th></tr></thead><tbody id="inv"></tbody></table></div>
+  </section>
+
+  <section aria-labelledby="h-dod">
+    <h2 id="h-dod">Definition of done (every feature)</h2>
+    <div class="table-wrap"><table><thead><tr><th>ID</th><th>Check</th><th>Measure</th><th>Threshold</th></tr></thead><tbody id="dod"></tbody></table></div>
+  </section>
+
+  <section aria-labelledby="h-dec">
+    <h2 id="h-dec">Decisions</h2>
+    <div id="decisions" style="display:grid;gap:1rem"></div>
+  </section>
+
+  <section aria-labelledby="h-feat">
+    <h2 id="h-feat">Features</h2>
+    <div class="controls" role="group" aria-label="Filter features">
+      <select id="fPhase" aria-label="Phase"><option value="">All phases</option></select>
+      <select id="fStatus" aria-label="Status"><option value="">Any status</option><option>todo</option><option>in_progress</option><option>blocked</option><option>done</option></select>
+      <input id="fText" type="search" placeholder="Search id, title, path…" aria-label="Search features">
+      <button type="button" id="expand" class="pill type" style="cursor:pointer;padding:0.45rem 0.7rem">Expand all</button>
+      <span class="count" id="count" aria-live="polite"></span>
+    </div>
+    <div id="phases" style="display:grid;gap:2rem"></div>
+  </section>
+</main>
+
+<footer>
+  <p>Source of truth: <code>docs/spaces/spaces-features.json</code> (status is authoritative on origin/main). This page only displays it; edit the JSON, never this page, to change the plan.</p>
+  <p id="hashNote"></p>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var JSON_PATH = 'spaces-features.json';
+
+  function el(tag, opts, kids) {
+    var e = document.createElement(tag);
+    if (opts) {
+      if (opts.cls) e.className = opts.cls;
+      if (opts.text != null) e.textContent = String(opts.text);
+      if (opts.attrs) Object.keys(opts.attrs).forEach(function (k) { e.setAttribute(k, opts.attrs[k]); });
+    }
+    (kids || []).forEach(function (k) { if (k != null) e.appendChild(typeof k === 'string' ? document.createTextNode(k) : k); });
+    return e;
+  }
+  function pill(text, cls) { return el('span', { cls: 'pill ' + cls, text: text }); }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+
+  // Canonical JSON matching Python json.dumps(sort_keys=True, separators=(',',':'), ensure_ascii=False).
+  function canon(v) {
+    if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+    if (v && typeof v === 'object') {
+      return '{' + Object.keys(v).sort().map(function (k) { return JSON.stringify(k) + ':' + canon(v[k]); }).join(',') + '}';
+    }
+    return JSON.stringify(v);
+  }
+  function sha256(text) {
+    if (!(window.crypto && crypto.subtle)) return Promise.resolve(null);
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    }).catch(function () { return null; });
+  }
+
+  var LIVE_PATH = 'progress.local.json', PLAN = null, LIVE = null, STALE_MIN = 30;
+
+  function cpDone(f, c) { return f.status === 'done' || (c.evidence && c.evidence.length > 0); }
+  function ago(iso) {
+    var t = Date.parse(iso); if (isNaN(t)) return '';
+    var m = Math.round((Date.now() - t) / 60000);
+    if (m < 1) return 'just now'; if (m < 60) return m + ' min ago';
+    var h = Math.round(m / 60); if (h < 48) return h + ' h ago'; return Math.round(h / 24) + ' days ago';
+  }
+  function ghLink(url, text) {
+    return (typeof url === 'string' && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(url))
+      ? el('a', { text: text || url.replace('https://github.com/', ''), attrs: { href: url } }) : null;
+  }
+  function meter(label, done, total, ip) {
+    var pct = total ? Math.round(100 * done / total) : 0, ipPct = total && ip ? Math.round(100 * ip / total) : 0;
+    var bar = el('div', { cls: 'bar', attrs: { role: 'img', 'aria-label': label + ': ' + done + ' of ' + total } },
+      [el('i', { attrs: { style: 'width:' + pct + '%;float:left' } }), ip ? el('i', { cls: 'ip', attrs: { style: 'width:' + ipPct + '%;float:left' } }) : null]);
+    return el('div', { cls: 'meter' }, [el('div', { cls: 'lbl' }, [el('span', { text: label }), el('b', { text: done + ' / ' + total + ' (' + pct + '%)' })]), bar]);
+  }
+
+  function renderProgress(d, live) {
+    var feats = d.features.slice().sort(function (a, b) { return a.priority - b.priority; }), byId = {};
+    feats.forEach(function (f) { byId[f.id] = f; });
+    // The live file reflects work on a feature branch that hasn't merged yet, so it overrides this copy's status for its feature.
+    function eff(f) { return live && live.feature === f.id && live.status && f.status !== 'done' ? live.status : f.status; }
+    var done = feats.filter(function (f) { return f.status === 'done'; });
+    var inprog = feats.filter(function (f) { return eff(f) === 'in_progress'; });
+    var blocked = feats.filter(function (f) { return eff(f) === 'blocked'; });
+    var cps = 0, cpsDone = 0, acc = 0, accDone = 0;
+    feats.forEach(function (f) { f.checkpoints.forEach(function (c) { cps++; acc += c.acceptance.length; if (cpDone(f, c)) { cpsDone++; accDone += c.acceptance.length; } }); });
+
+    var stats = document.getElementById('stats'); clear(stats);
+    [[done.length + ' / ' + feats.length, 'features done'], [cpsDone + ' / ' + cps, 'checkpoints with evidence'], [accDone + ' / ' + acc, 'acceptance checks covered'],
+     [inprog.length, 'in progress'], [blocked.length, 'blocked'], [d.decisions.open.length, 'open decisions']].forEach(function (x) {
+      stats.appendChild(el('div', { cls: 'stat' }, [el('b', { text: x[0] }), el('span', { text: x[1] })]));
+    });
+    var meters = document.getElementById('meters'); clear(meters);
+    meters.appendChild(meter('Features (green done, blue in progress)', done.length, feats.length, inprog.length));
+    meters.appendChild(meter('Checkpoints with evidence', cpsDone, cps));
+
+    // Current task: the live file if a session wrote one, else features marked in_progress in this copy.
+    var cur = document.getElementById('current'); clear(cur);
+    cur.appendChild(el('h3', { text: 'Current task' }));
+    var lf = live && live.feature && byId[live.feature] ? byId[live.feature] : null;
+    var showF = lf || inprog[0] || null;
+    if (!showF) {
+      cur.appendChild(el('p', { cls: 'muted', text: 'No session is working on a feature right now.' }));
+    } else {
+      var head = el('p', {}, [el('a', { text: showF.id + ' · ' + showF.title, attrs: { href: '#' + showF.id } }), ' ']);
+      var st = lf ? (live.status || 'in_progress') : showF.status;
+      head.appendChild(pill(String(st).replace('_', ' '), st));
+      cur.appendChild(head);
+      var liveDone = lf && Array.isArray(live.checkpoints_done) ? live.checkpoints_done : [];
+      var ul = el('ul', { cls: 'cplist' }), n = 0;
+      showF.checkpoints.forEach(function (c) {
+        var ok = cpDone(showF, c) || liveDone.indexOf(c.id) >= 0, now = lf && live.checkpoint === c.id && !ok;
+        if (ok) n++;
+        ul.appendChild(el('li', {}, [el('span', { cls: 'mk ' + (ok ? 'ok' : now ? 'now' : 'no'), text: ok ? '✓' : now ? '▶' : '○' }), c.id + ' · ' + c.title]));
+      });
+      cur.appendChild(meter('Checkpoints', n, showF.checkpoints.length));
+      cur.appendChild(ul);
+      if (lf) {
+        var stale = live.updated_at && (Date.now() - Date.parse(live.updated_at)) > STALE_MIN * 60000;
+        var dl = el('dl', { cls: 'live-meta' });
+        [['Step', live.step], ['Note', live.note], ['Branch', live.branch], ['Worktree', live.worktree], ['Session', (live.harness ? live.harness + ' · ' : '') + (live.session_id || '')]].forEach(function (kv) {
+          if (kv[1]) { dl.appendChild(el('dt', { text: kv[0] })); dl.appendChild(el('dd', { cls: kv[0] === 'Note' || kv[0] === 'Step' ? '' : 'mono', text: kv[1] })); }
+        });
+        var pr = ghLink(live.pr || showF.pr);
+        if (pr) { dl.appendChild(el('dt', { text: 'PR' })); dl.appendChild(el('dd', {}, [pr])); }
+        dl.appendChild(el('dt', { text: 'Updated' }));
+        dl.appendChild(el('dd', {}, [String(live.updated_at || '—') + ' (' + ago(live.updated_at) + ') ', stale ? pill('stale: no update in ' + STALE_MIN + ' min', 'blocked') : null]));
+        cur.appendChild(dl);
+      } else {
+        cur.appendChild(el('p', { cls: 'muted', text: 'From this copy of the plan. No live progress file (progress.local.json) was found, so the current checkpoint is unknown.' }));
+      }
+    }
+
+    // Next up: session_procedure step 2, the first not-done feature by priority. No skipping.
+    var remaining = feats.filter(function (f) { return f.status !== 'done' && f.status !== 'superseded'; });
+    var nu = document.getElementById('nextUp'); clear(nu);
+    nu.appendChild(el('h3', { text: 'Next up (session_procedure step 2)' }));
+    if (remaining.length) {
+      var nx = remaining[0];
+      var nxs = eff(nx);
+      nu.appendChild(el('p', {}, [el('a', { text: nx.id + ' · ' + nx.title, attrs: { href: '#' + nx.id } }), ' ', pill(nxs.replace('_', ' '), nxs), nxs !== nx.status ? ' ' : null, nxs !== nx.status ? pill('live', 'type') : null]));
+      if (nxs === 'blocked') nu.appendChild(el('p', {}, [pill('waiting on you', 'blocked'), ' ' + (nx.blocked_reason || 'No reason recorded.')]));
+      var blockers = d.decisions.open.filter(function (q) { return q.blocks.indexOf(nx.id) >= 0; });
+      if (blockers.length) nu.appendChild(el('p', {}, [pill('needs decision', 'open'), ' ' + blockers.map(function (q) { return q.id + ': ' + q.question; }).join(' · ')]));
+      if (remaining.length > 1) nu.appendChild(el('p', { cls: 'muted', text: 'Then, in order: ' + remaining.slice(1, 6).map(function (f) { return f.id; }).join(', ') + (remaining.length > 6 ? ' …' : '') }));
+      nu.appendChild(el('p', { cls: 'muted', text: 'Statuses come from this copy of the plan; sessions read origin/main, which changes when a feature\'s PR merges.' }));
+    } else {
+      nu.appendChild(el('p', { cls: 'muted', text: 'Every feature is done or superseded.' }));
+    }
+
+    var dlist = document.getElementById('doneList'); clear(dlist);
+    dlist.appendChild(el('h3', { text: 'Done (' + done.length + ')' }));
+    if (!done.length) dlist.appendChild(el('p', { cls: 'muted', text: 'Nothing verified yet.' }));
+    else {
+      var du = el('ul', { cls: 'cplist' });
+      done.slice().sort(function (a, b) { return String(b.verified_at || '').localeCompare(String(a.verified_at || '')); }).forEach(function (f) {
+        du.appendChild(el('li', {}, [el('span', { cls: 'mk ok', text: '✓' }), el('a', { text: f.id, attrs: { href: '#' + f.id } }), ' ' + f.title + ' · ' + (f.verified_at || '') + (f.verified_sha ? ' · ' + String(f.verified_sha).slice(0, 7) : '') + ' ', ghLink(f.pr, 'PR')]));
+      });
+      dlist.appendChild(du);
+    }
+    var blist = document.getElementById('blockedList'); clear(blist);
+    blist.appendChild(el('h3', { text: 'Blocked (' + blocked.length + ')' }));
+    if (!blocked.length) blist.appendChild(el('p', { cls: 'muted', text: 'Nothing is blocked.' }));
+    else {
+      var bu = el('ul', { cls: 'cplist' });
+      blocked.forEach(function (f) { var why = f.blocked_reason || (live && live.feature === f.id ? live.note : '') || 'No reason recorded.'; bu.appendChild(el('li', {}, [el('span', { cls: 'mk now', text: '!' }), el('a', { text: f.id, attrs: { href: '#' + f.id } }), ' ' + why])); });
+      blist.appendChild(bu);
+    }
+
+    var pt = document.getElementById('phaseTable'); clear(pt);
+    d.phases.forEach(function (p) {
+      var pf = feats.filter(function (f) { return f.phase === p.id; });
+      var pd = pf.filter(function (f) { return f.status === 'done'; }).length;
+      var pi = pf.filter(function (f) { return eff(f) === 'in_progress'; }).length;
+      var pb = pf.filter(function (f) { return eff(f) === 'blocked'; }).length;
+      pt.appendChild(el('tr', {}, [el('td', { text: p.id + ' · ' + p.name }), el('td', { text: pd + ' / ' + pf.length }), el('td', { text: pi }), el('td', { text: pb }),
+        el('td', {}, [meter('', pd, pf.length, pi)])]));
+    });
+
+    var act = document.getElementById('activity'); clear(act);
+    act.appendChild(el('h3', { text: 'Recent activity' }));
+    var items = [];
+    (live && Array.isArray(live.history) ? live.history : []).forEach(function (h) { items.push({ at: h.at, text: (h.feature ? h.feature + ' · ' : '') + (h.event || '') }); });
+    (d.changelog || []).forEach(function (c) { items.push({ at: c.date, text: 'Plan: ' + c.change }); });
+    items.sort(function (a, b) { return String(b.at || '').localeCompare(String(a.at || '')); });
+    if (!items.length) act.appendChild(el('p', { cls: 'muted', text: 'No activity recorded.' }));
+    var au = el('ul', { cls: 'activity' });
+    items.slice(0, 12).forEach(function (it) { au.appendChild(el('li', {}, [el('time', { text: it.at || '' }), it.text])); });
+    act.appendChild(au);
+  }
+
+  function render(d) {
+    document.title = d.title || 'Plan';
+    document.getElementById('title').textContent = d.title;
+    var meta = document.getElementById('meta'); clear(meta);
+    meta.appendChild(document.createTextNode('Plan ' + d.plan_id + ' · created ' + d.created + ' · updated ' + d.updated + ' · base ' + d.base_commit + ' · '));
+    if (d.origin && d.origin.issue) meta.appendChild(el('a', { text: 'origin issue', attrs: { href: d.origin.issue } }));
+
+    var feats = d.features, byId = {};
+    feats.forEach(function (f) { byId[f.id] = f; });
+    PLAN = d;
+    renderProgress(d, LIVE);
+
+    var proc = document.getElementById('proc'); clear(proc);
+    (d.session_procedure || []).forEach(function (t) {
+      var m = /^(\d+[a-z]?)\.\s*/.exec(t);
+      proc.appendChild(el('li', {}, [m ? el('b', { text: m[1] + ' ' }) : null, m ? t.slice(m[0].length) : t]));
+    });
+    var safety = document.getElementById('safety'); clear(safety);
+    (d.local_safety || []).forEach(function (t) { safety.appendChild(el('li', { text: t })); });
+    var sv = document.getElementById('statusValues'); clear(sv);
+    Object.keys(d.status_values || {}).forEach(function (k) { sv.appendChild(el('li', {}, [pill(k.replace('_', ' '), k), ' ' + d.status_values[k]])); });
+
+    var instr = document.getElementById('instr'); clear(instr);
+    d.agent_instructions.forEach(function (t) { instr.appendChild(el('li', { text: t })); });
+
+    var ds = d.design_summary, design = document.getElementById('design'); clear(design);
+    design.appendChild(el('h3', { text: 'Problem' }));
+    design.appendChild(el('p', { text: ds.problem }));
+    design.appendChild(el('h3', { text: 'Core model' }));
+    var ul = el('ul'); ds.core_model.forEach(function (t) { ul.appendChild(el('li', { text: t })); }); design.appendChild(ul);
+    design.appendChild(el('h3', { text: 'Labels' }));
+    design.appendChild(el('p', { text: ds.labels }));
+    design.appendChild(el('h3', { text: 'Code anchors' }));
+    var dl = el('dl', { cls: 'kv' });
+    Object.keys(ds.existing_code_anchors).forEach(function (k) { dl.appendChild(el('dt', { text: k.replace(/_/g, ' ') })); dl.appendChild(el('dd', { cls: 'mono', text: ds.existing_code_anchors[k] })); });
+    design.appendChild(dl);
+    if (d.origin && d.origin.design_docs) {
+      design.appendChild(el('p', { cls: 'muted', text: 'Background docs: ' + d.origin.design_docs.join(', ') + '. ' + (d.origin.design_docs_note || '') }));
+    }
+
+    function featLinks(ids) {
+      var s = el('span');
+      ids.forEach(function (id, i) { if (i) s.appendChild(document.createTextNode(', ')); s.appendChild(el('a', { text: id, attrs: { href: '#' + id } })); });
+      return s;
+    }
+    var inv = document.getElementById('inv'); clear(inv);
+    d.invariants.forEach(function (r) { inv.appendChild(el('tr', {}, [el('td', { cls: 'mono', text: r.id }), el('td', { text: r.rule }), el('td', {}, [featLinks(r.verified_by)])])); });
+    var dod = document.getElementById('dod'); clear(dod);
+    d.definition_of_done.forEach(function (r) { dod.appendChild(el('tr', {}, [el('td', { cls: 'mono', text: r.id }), el('td', { text: r.check }), el('td', { text: r.measure }), el('td', { text: r.threshold })])); });
+
+    var dec = document.getElementById('decisions'); clear(dec);
+    function decTable(title, rows, cols) {
+      if (!rows.length) return el('div', { cls: 'card' }, [el('h3', { text: title }), el('p', { cls: 'muted', text: 'None.' })]);
+      var tb = el('tbody');
+      rows.forEach(function (r) { tb.appendChild(el('tr', {}, cols.map(function (c) { return c.f(r); }))); });
+      return el('div', { cls: 'card' }, [el('h3', { text: title }), el('div', { cls: 'table-wrap' }, [el('table', {}, [el('thead', {}, [el('tr', {}, cols.map(function (c) { return el('th', { text: c.h }); }))]), tb])])]);
+    }
+    dec.appendChild(decTable('Open: need your answer', d.decisions.open, [
+      { h: 'ID', f: function (r) { return el('td', { cls: 'mono', text: r.id }); } },
+      { h: 'Question', f: function (r) {
+        var td = el('td', {}, [el('b', { text: r.question })]);
+        if (r.detail) td.appendChild(el('p', { cls: 'muted', text: r.detail }));
+        if (r.options && r.options.length) {
+          var ol = el('ul');
+          r.options.forEach(function (o) {
+            var rec = r.recommendation && o.label.indexOf(r.recommendation + '.') === 0;
+            ol.appendChild(el('li', {}, [el('b', { text: o.label }), rec ? ' ' : null, rec ? pill('recommended', 'pass') : null, ': ' + o.detail]));
+          });
+          td.appendChild(ol);
+        }
+        return td;
+      } },
+      { h: 'Blocks', f: function (r) { return el('td', {}, [featLinks(r.blocks)]); } }]));
+    dec.appendChild(decTable('Recommended, pending your confirmation', d.decisions.recommended_pending_confirmation, [
+      { h: 'ID', f: function (r) { return el('td', { cls: 'mono', text: r.id }); } },
+      { h: 'Recommendation', f: function (r) { return el('td', { text: r.decision }); } },
+      { h: 'Affects', f: function (r) { return el('td', {}, [featLinks(r.affects)]); } }]));
+    dec.appendChild(decTable('Confirmed by you', d.decisions.confirmed_by_user, [
+      { h: 'ID', f: function (r) { return el('td', { cls: 'mono', text: r.id }); } },
+      { h: 'Decision', f: function (r) { return el('td', { text: r.decision }); } },
+      { h: 'Date', f: function (r) { return el('td', { text: r.date }); } }]));
+
+    var fPhase = document.getElementById('fPhase');
+    while (fPhase.options.length > 1) fPhase.remove(1);
+    d.phases.forEach(function (p) { fPhase.appendChild(el('option', { text: p.id + ' · ' + p.name, attrs: { value: p.id } })); });
+
+    var phasesEl = document.getElementById('phases'); clear(phasesEl);
+    var hashChecks = [];
+    d.phases.forEach(function (p) {
+      var pf = feats.filter(function (f) { return f.phase === p.id; }).sort(function (a, b) { return a.priority - b.priority; });
+      var done = pf.filter(function (f) { return f.passes; }).length;
+      var bar = el('div', { cls: 'bar', attrs: { role: 'img', 'aria-label': done + ' of ' + pf.length + ' verified' } }, [el('i', { attrs: { style: 'width:' + (pf.length ? (100 * done / pf.length) : 0) + '%' } })]);
+      var sec = el('div', { cls: 'phase', attrs: { 'data-phase': p.id } }, [
+        el('div', { cls: 'phase-head' }, [
+          el('h3', { text: p.id + ' · ' + p.name + '  (' + done + '/' + pf.length + ')' }),
+          el('p', { text: p.goal }), el('p', { cls: 'muted', text: 'Exit: ' + p.exit_criteria }), bar])
+      ]);
+      pf.forEach(function (f) { sec.appendChild(featCard(f, byId, d, hashChecks)); });
+      phasesEl.appendChild(sec);
+    });
+
+    Promise.all(hashChecks).then(function (res) {
+      var bad = res.filter(function (r) { return r === false; }).length;
+      var unk = res.filter(function (r) { return r === null; }).length;
+      document.getElementById('hashNote').textContent = unk === res.length
+        ? 'Criteria hashes not checked: this browser context has no Web Crypto (open over http://localhost to enable).'
+        : (bad ? bad + ' feature(s) have acceptance criteria that no longer match their criteria_sha256: someone edited them.' : 'All ' + (res.length - unk) + ' criteria hashes match: no acceptance criteria were edited since they were stamped.');
+    });
+
+    applyFilters();
+    document.getElementById('loader').hidden = true;
+    document.getElementById('app').classList.remove('hidden');
+    if (location.hash) { var t = document.getElementById(location.hash.slice(1)); if (t) { t.open = true; t.scrollIntoView(); } }
+  }
+
+  function featCard(f, byId, d, hashChecks) {
+    var hashPill = pill('criteria …', 'type');
+    var crit = f.checkpoints.map(function (c) { return { id: c.id, title: c.title, acceptance: c.acceptance }; });
+    hashChecks.push(sha256(canon(crit)).then(function (h) {
+      if (h === null || !f.criteria_sha256) { hashPill.textContent = f.criteria_sha256 ? 'criteria hash not checked' : 'criteria not stamped'; return null; }
+      var ok = h === f.criteria_sha256;
+      hashPill.textContent = ok ? 'criteria unchanged' : 'criteria edited';
+      hashPill.className = 'pill ' + (ok ? 'hashok' : 'hashbad');
+      return ok;
+    }));
+    var acc = 0, cdone = 0; f.checkpoints.forEach(function (c) { acc += c.acceptance.length; if (cpDone(f, c)) cdone++; });
+    var depsMet = f.depends_on.every(function (x) { return byId[x] && byId[x].passes; });
+    var summary = el('summary', {}, [
+      el('span', { cls: 'fid', text: f.id }), el('span', { cls: 'ftitle', text: f.title }),
+      pill(f.status.replace('_', ' '), f.status), f.passes ? pill('verified', 'pass') : null,
+      el('span', { cls: 'muted', text: '#' + f.priority + ' · ' + cdone + '/' + f.checkpoints.length + ' checkpoints · ' + acc + ' checks' + (f.depends_on.length && !depsMet ? ' · waiting on deps' : '') })
+    ]);
+    var deps = el('dd');
+    if (!f.depends_on.length) deps.textContent = 'none';
+    f.depends_on.forEach(function (x) {
+      var ok = byId[x] && byId[x].passes;
+      deps.appendChild(el('a', { cls: 'dep ' + (ok ? 'met' : 'unmet'), text: (ok ? '✓ ' : '○ ') + x, attrs: { href: '#' + x, title: byId[x] ? byId[x].title : 'unknown' } }));
+    });
+    var blockers = d.decisions.open.filter(function (q) { return q.blocks.indexOf(f.id) >= 0; }).map(function (q) { return q.id; });
+    var dl = el('dl', { cls: 'kv' }, [
+      el('dt', { text: 'Why' }), el('dd', { text: f.why }),
+      el('dt', { text: 'Depends on' }), deps,
+      el('dt', { text: 'Touches' }), el('dd', { cls: 'mono', text: f.touches.join(' · ') }),
+      el('dt', { text: 'Docs to update' }), el('dd', { cls: 'mono', text: f.docs_to_update.join(' · ') }),
+      el('dt', { text: 'Open decisions' }), el('dd', { text: blockers.length ? blockers.join(', ') : 'none' }),
+      el('dt', { text: 'Verification' }), el('dd', {}, [hashPill, ' ', el('span', { cls: 'muted', text: 'verified_sha ' + (f.verified_sha || '—') + ' · verified_at ' + (f.verified_at || '—') + ' · attempts ' + f.attempts })]),
+      f.blocked_reason ? el('dt', { text: 'Blocked' }) : null, f.blocked_reason ? el('dd', { text: f.blocked_reason }) : null
+    ]);
+    var body = el('div', { cls: 'fbody' }, [el('p', { text: f.summary }), dl]);
+    f.checkpoints.forEach(function (c) {
+      var tb = el('tbody');
+      c.acceptance.forEach(function (a) {
+        tb.appendChild(el('tr', {}, [el('td', { cls: 'mono', text: a.id }), el('td', {}, [pill(a.type, 'type')]), el('td', { text: a.check }), el('td', { text: a.measure }), el('td', { text: a.threshold })]));
+      });
+      var cp = el('div', { cls: 'cp' }, [
+        el('h4', { text: c.id + ' · ' + c.title }),
+        el('div', { cls: 'table-wrap' }, [el('table', {}, [el('thead', {}, [el('tr', {}, ['#', 'Type', 'Check', 'Measure', 'Threshold'].map(function (h) { return el('th', { text: h }); }))]), tb])])
+      ]);
+      if (c.evidence && c.evidence.length) {
+        var eu = el('ul', { cls: 'ev' }); c.evidence.forEach(function (e) { eu.appendChild(el('li', { text: typeof e === 'string' ? e : JSON.stringify(e) })); });
+        cp.appendChild(el('div', {}, [el('b', { text: 'Evidence' }), eu]));
+      } else {
+        cp.appendChild(el('p', { cls: 'muted ev', text: 'No evidence recorded yet.' }));
+      }
+      body.appendChild(cp);
+    });
+    var det = el('details', { cls: 'feat', attrs: { id: f.id, 'data-status': f.status, 'data-phase': f.phase } }, [summary, body]);
+    det.dataset.search = [f.id, f.title, f.summary, f.why, f.touches.join(' '), f.docs_to_update.join(' ')].join(' ').toLowerCase();
+    return det;
+  }
+
+  function applyFilters() {
+    var ph = document.getElementById('fPhase').value, st = document.getElementById('fStatus').value, q = document.getElementById('fText').value.trim().toLowerCase();
+    var shown = 0, total = 0;
+    document.querySelectorAll('details.feat').forEach(function (d) {
+      total++;
+      var on = (!ph || d.dataset.phase === ph) && (!st || d.dataset.status === st) && (!q || d.dataset.search.indexOf(q) >= 0);
+      d.classList.toggle('hidden', !on); if (on) shown++;
+    });
+    document.querySelectorAll('.phase').forEach(function (p) {
+      p.classList.toggle('hidden', !p.querySelector('details.feat:not(.hidden)'));
+    });
+    document.getElementById('count').textContent = shown + ' of ' + total + ' features';
+  }
+  ['fPhase', 'fStatus'].forEach(function (id) { document.getElementById(id).addEventListener('change', applyFilters); });
+  document.getElementById('fText').addEventListener('input', applyFilters);
+  var expanded = false;
+  document.getElementById('expand').addEventListener('click', function () {
+    expanded = !expanded;
+    document.querySelectorAll('details.feat:not(.hidden)').forEach(function (d) { d.open = expanded; });
+    this.textContent = expanded ? 'Collapse all' : 'Expand all';
+  });
+
+  function showLoader(msg) {
+    document.getElementById('loader').hidden = false;
+    document.getElementById('meta').textContent = 'Plan file not loaded yet.';
+    if (msg) document.getElementById('loadErr').textContent = msg;
+  }
+  function loadText(text) {
+    try { render(JSON.parse(text)); }
+    catch (e) { showLoader('That file is not a valid plan: ' + e.message); }
+  }
+  document.getElementById('file').addEventListener('change', function (e) {
+    var f = e.target.files[0]; if (!f) return;
+    f.text().then(loadText);
+  });
+  var drop = document.getElementById('drop');
+  ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) { var f = e.dataTransfer.files[0]; if (f) f.text().then(loadText); });
+
+  function fetchJSON(path) {
+    return fetch(path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  }
+  function setLiveNote(text) { document.getElementById('liveNote').textContent = text; }
+  fetchJSON(JSON_PATH)
+    .then(function (plan) {
+      return fetchJSON(LIVE_PATH).catch(function () { return null; }).then(function (live) {
+        LIVE = live; render(plan);
+        setLiveNote('Refreshes every 30 s · ' + (live ? 'live progress file found' : 'no live progress file'));
+        setInterval(function () {
+          Promise.all([fetchJSON(JSON_PATH).catch(function () { return PLAN; }), fetchJSON(LIVE_PATH).catch(function () { return null; })])
+            .then(function (r) { LIVE = r[1]; PLAN = r[0]; renderProgress(r[0], r[1]); setLiveNote('Progress refreshed ' + new Date().toLocaleTimeString() + ' · reload the page to refresh the feature list'); });
+        }, 30000);
+      });
+    })
+    .catch(function () { showLoader(''); });
+})();
+</script>
+</body>
+</html>
