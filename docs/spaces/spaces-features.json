@@ -367,7 +367,7 @@
       },
       {
         "id": "D-25",
-        "decision": "config.yaml was removed (settings live in orch.db, PR #142). The spaces policy is stored in orch.db as numbered draft and applied revisions with a content hash; SetSpacesDraft is open to any caller, ApplySpaces is operator-only and names the reviewed revision, and drift means a pending draft or an applied row that no longer matches its hash. SP-020.2.a3 reworded accordingly.",
+        "decision": "config.yaml was removed (settings live in orch.db, PR #142). The spaces policy is stored in orch.db as numbered draft and applied revisions with a content hash; SetSpacesDraft is open to any caller except queued tasks, and drafts record whether the operator saved them; DiffSpaces and ApplySpaces are operator-only and names the reviewed revision, and drift means a pending draft or an applied row that no longer matches its hash. SP-020.2.a3 reworded accordingly.",
         "date": "2026-11-08"
       }
     ],
@@ -835,10 +835,10 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "7de2732a4aa1993676378b752e5b8bf2d86adde1",
+      "verified_at": "2026-11-08T19:09:33Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "d841529f82afc337d6c0bad84f72e4c247776b5bc4e4536359c213b334af7d48",
