@@ -135,7 +135,8 @@ does not leave its services down until someone notices. When orchd cannot run at
 
 The spaces policy ([the spaces plan](../spaces/spaces-features.json), D-25) is not a setting in
 `config_values`: it is nested, and it must be reviewed before it takes effect, which `SetConfig`
-does not do. `internal/spaces` keeps it in two tables of `orch.db` (migration `0023`):
+does not do. `internal/spaces` keeps it in two tables of `orch.db` (migration `0023`), plus the
+GitHub org bindings below (migration `0024`):
 
 - **`spaces_revisions`:** every saved policy, as canonical JSON with its sha256, who saved it,
   and whether that was the operator (`by_operator`). `SetSpacesDraft` (`orch spaces draft`,
@@ -181,8 +182,40 @@ revision exists:
 `Status` errors never name a space, root or org, since tasks may call `Status`; `DiffSpaces`
 carries the details.
 
+**GitHub org bindings** (`spaces_org_bindings`, `internal/spaces/orgs.go`). A deleted GitHub
+login can be registered again by someone else; the account's node ID cannot be reused, so a
+binding records the node ID and trusts that. Before `ApplySpaces` takes the write lock, it looks up
+every org the revision binds through `Env.LookupOrg`. orchd's lookup is
+`github.LookupAccount`: `gh api users/<login>`, which answers for orgs and users alike. The lookup
+must return the same login, compared case-insensitively, and a usable node ID. If any lookup fails,
+the apply is refused (`Unavailable`) and nothing changes. The lookups are skipped when the apply
+would be refused anyway (a stale revision, or an agent's draft without `accept_agent_draft`).
+Inside the apply's transaction each bound org's row is written: keyed by the lowercased login,
+with GitHub's spelling, the node ID, the revision and the time. Rows of orgs the revision no longer
+binds are kept, so dropping an org and adding it back later cannot bind a different account
+unconfirmed. An org whose node ID differs
+from its existing binding is refused with `ErrOrgChanged` (`FailedPrecondition`) unless
+`confirm_github_orgs` names it (`--confirm-github-org`). So an apply made for another reason
+never accepts a changed org by accident. Re-binding clears a suspension.
+
+Each docs sync of an owner first calls `Engine.CheckOrg` (`docs.SyncOpts.CheckOwner`). An owner
+that no space binds syncs as before, with no GitHub call. For a bound owner, orchd looks it up
+again. If the node ID differs from the binding, the binding is suspended: `suspended_at` and
+`seen_node_id` are set, and orchd logs that a bound org changed. The log line names no org,
+because tasks can read orchd's log. A suspended binding
+stays suspended even if GitHub later returns the original node ID; only an apply clears it. While
+an org is suspended, or was applied before bindings existed and has no row, `OrgSpace` and
+`CheckOrg` return `quarantine` for its new content. Content does not yet carry a space (SP-023),
+so for now quarantining means the sync indexes nothing for that owner: its result is `error`,
+with a reason that points to `orch spaces diff`. A failed lookup also stops that owner's sync
+without suspending. The reason is the same in both cases and has no lookup detail, since agent
+sessions can list docs owners. `Status` adds an error that counts the unconfirmed orgs without naming them,
+and `DiffSpaces` lists them (`unconfirmed_github_orgs`). Lookups use the default `gh` account until
+per-space accounts exist (SP-063).
+
 **Validation** (`spaces.Validate`) reports every problem with a rule name: an unknown kind; a
-bad or reserved name (`quarantine`, `shared`); a GitHub org, web prefix (scheme and host compared
+bad or reserved name (`quarantine`, `shared`); a GitHub org that is not a well-formed GitHub login;
+a GitHub org, web prefix (scheme and host compared
 case-insensitively) or chat tenant (`slack:<id>`, `teams:<id>`) bound to two spaces; the same
 root bound twice; a nested root less strict than a root above it (public < private < isolated);
 a root of one isolated space inside another's; an isolated space reading an isolated one; a

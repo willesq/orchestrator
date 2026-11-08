@@ -23,7 +23,24 @@ import (
 
 const spacesDoc = `{"spaces":[{"name":"acme","kind":"isolated","github_orgs":["acme"]},{"name":"personal","kind":"private"}]}`
 
+// orgNodes answers GitHub org lookups in spaces tests: login -> node ID,
+// "N_<login>" for any login not listed.
+type orgNodes map[string]string
+
+func (o orgNodes) lookup(_ context.Context, login string) (spaces.OrgIdentity, error) {
+	login = strings.ToLower(login)
+	if n, ok := o[login]; ok {
+		return spaces.OrgIdentity{Login: login, NodeID: n}, nil
+	}
+	return spaces.OrgIdentity{Login: login, NodeID: "N_" + login}, nil
+}
+
 func spacesServer(t *testing.T) *server {
+	t.Helper()
+	return spacesServerWith(t, orgNodes{})
+}
+
+func spacesServerWith(t *testing.T, orgLookup orgNodes) *server {
 	t.Helper()
 	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	conn, err := db.Open()
@@ -31,7 +48,7 @@ func spacesServer(t *testing.T) *server {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	e, err := spaces.Open(context.Background(), conn, spaces.Env{Home: "/home/u", InGitTree: func(string) bool { return false }})
+	e, err := spaces.Open(context.Background(), conn, spaces.Env{Home: "/home/u", InGitTree: func(string) bool { return false }, LookupOrg: orgLookup.lookup})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,5 +345,81 @@ func TestCallerLabel(t *testing.T) {
 		if got := callerLabel(tt.ctx); got != tt.want {
 			t.Errorf("callerLabel = %q, want %q", got, tt.want)
 		}
+	}
+}
+
+// TestApplySpacesConfirmsChangedOrg is SP-021 end to end: a docs sync that
+// sees a bound org's node ID change quarantines the org (its docs are not
+// synced), orch status reports it without naming it, DiffSpaces names it to
+// the operator, and only an apply confirming it restores the binding.
+func TestApplySpacesConfirmsChangedOrg(t *testing.T) {
+	nodes := orgNodes{"acme": "O_acme"}
+	s := spacesServerWith(t, nodes)
+	d := draft(t, s, spacesDoc)
+	if _, err := s.ApplySpaces(operatorCtx, &orchdv1.ApplySpacesRequest{ReviewedRevision: d.GetRevision()}); err != nil {
+		t.Fatal(err)
+	}
+	check := docsOwnerCheck(s.spaces)
+	if err := check(context.Background(), "acme"); err != nil {
+		t.Fatalf("check before the change = %v", err)
+	}
+	if err := check(context.Background(), "unbound-org"); err != nil {
+		t.Fatalf("check of an unbound owner = %v", err)
+	}
+
+	nodes["acme"] = "O_impostor"
+	if err := check(context.Background(), "acme"); !errors.Is(err, errOwnerQuarantined) {
+		t.Fatalf("check after the change = %v, want errOwnerQuarantined", err)
+	}
+	if st := s.spacesStatus(context.Background()); !strings.Contains(st.GetError(), "not confirmed") || strings.Contains(st.GetError(), "acme") {
+		t.Errorf("status error = %q", st.GetError())
+	}
+	diff, err := s.DiffSpaces(operatorCtx, &orchdv1.DiffSpacesRequest{})
+	if err != nil || !slices.Equal(diff.GetUnconfirmedGithubOrgs(), []string{"acme"}) {
+		t.Fatalf("DiffSpaces = %v, %v", diff.GetUnconfirmedGithubOrgs(), err)
+	}
+
+	_, err = s.ApplySpaces(operatorCtx, &orchdv1.ApplySpacesRequest{ReviewedRevision: d.GetRevision()})
+	if grpcstatus.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), "--confirm-github-org") {
+		t.Fatalf("apply without confirming = %v", err)
+	}
+	if _, err := s.ApplySpaces(operatorCtx, &orchdv1.ApplySpacesRequest{ReviewedRevision: d.GetRevision(), ConfirmGithubOrgs: []string{"acme"}}); err != nil {
+		t.Fatalf("apply confirming = %v", err)
+	}
+	if err := check(context.Background(), "acme"); err != nil {
+		t.Fatalf("check after confirming = %v", err)
+	}
+}
+
+func TestApplySpacesOrgLookupFails(t *testing.T) {
+	s := spacesServer(t)
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	env := spaces.Env{Home: "/home/u", InGitTree: func(string) bool { return false },
+		LookupOrg: func(context.Context, string) (spaces.OrgIdentity, error) {
+			return spaces.OrgIdentity{}, errors.New("HTTP 502")
+		}}
+	if s.spaces, err = spaces.Open(context.Background(), conn, env); err != nil {
+		t.Fatal(err)
+	}
+	d := draft(t, s, spacesDoc)
+	_, err = s.ApplySpaces(operatorCtx, &orchdv1.ApplySpacesRequest{ReviewedRevision: d.GetRevision()})
+	if grpcstatus.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "HTTP 502") {
+		t.Fatalf("apply = %v, want Unavailable", err)
+	}
+	if err := docsOwnerCheck(s.spaces)(context.Background(), "acme"); err != nil {
+		t.Fatalf("check with nothing applied = %v", err)
+	}
+}
+
+func TestDocsOwnerCheckWithoutSpaces(t *testing.T) {
+	if docsOwnerCheck(nil) != nil {
+		t.Error("no engine should mean no check")
+	}
+	if spacesEnv().LookupOrg == nil {
+		t.Error("orchd's spaces env has no GitHub lookup")
 	}
 }

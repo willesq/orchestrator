@@ -2059,6 +2059,10 @@ public nonisolated struct Orchd_V1_SpacesDiff: Sendable {
   /// false: an agent session saved it
   public var draftByOperator: Bool = false
 
+  /// Applied GitHub orgs whose new content goes to quarantine: a sync saw a
+  /// different node ID, or none was confirmed. Confirm one at the next apply.
+  public var unconfirmedGithubOrgs: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2074,6 +2078,11 @@ public nonisolated struct Orchd_V1_ApplySpacesRequest: Sendable {
   /// accept_agent_draft confirms the operator reviewed a draft an agent
   /// session saved; without it such a draft is refused.
   public var acceptAgentDraft: Bool = false
+
+  /// confirm_github_orgs accepts the changed identity (node ID) of these
+  /// bound GitHub orgs; without it, an org whose node ID changed since it was
+  /// bound is refused.
+  public var confirmGithubOrgs: [String] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -7814,7 +7823,7 @@ nonisolated extension Orchd_V1_SpacesChange: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension Orchd_V1_SpacesDiff: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SpacesDiff"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}applied_revision\0\u{3}applied_json\0\u{3}draft_revision\0\u{3}draft_json\0\u{1}changes\0\u{1}problems\0\u{3}draft_created_by\0\u{3}draft_created_at\0\u{3}draft_by_operator\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}applied_revision\0\u{3}applied_json\0\u{3}draft_revision\0\u{3}draft_json\0\u{1}changes\0\u{1}problems\0\u{3}draft_created_by\0\u{3}draft_created_at\0\u{3}draft_by_operator\0\u{3}unconfirmed_github_orgs\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7831,6 +7840,7 @@ nonisolated extension Orchd_V1_SpacesDiff: SwiftProtobuf.Message, SwiftProtobuf.
       case 7: try { try decoder.decodeSingularStringField(value: &self.draftCreatedBy) }()
       case 8: try { try decoder.decodeSingularInt64Field(value: &self.draftCreatedAt) }()
       case 9: try { try decoder.decodeSingularBoolField(value: &self.draftByOperator) }()
+      case 10: try { try decoder.decodeRepeatedStringField(value: &self.unconfirmedGithubOrgs) }()
       default: break
       }
     }
@@ -7864,6 +7874,9 @@ nonisolated extension Orchd_V1_SpacesDiff: SwiftProtobuf.Message, SwiftProtobuf.
     if self.draftByOperator != false {
       try visitor.visitSingularBoolField(value: self.draftByOperator, fieldNumber: 9)
     }
+    if !self.unconfirmedGithubOrgs.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.unconfirmedGithubOrgs, fieldNumber: 10)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -7877,6 +7890,7 @@ nonisolated extension Orchd_V1_SpacesDiff: SwiftProtobuf.Message, SwiftProtobuf.
     if lhs.draftCreatedBy != rhs.draftCreatedBy {return false}
     if lhs.draftCreatedAt != rhs.draftCreatedAt {return false}
     if lhs.draftByOperator != rhs.draftByOperator {return false}
+    if lhs.unconfirmedGithubOrgs != rhs.unconfirmedGithubOrgs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7884,7 +7898,7 @@ nonisolated extension Orchd_V1_SpacesDiff: SwiftProtobuf.Message, SwiftProtobuf.
 
 nonisolated extension Orchd_V1_ApplySpacesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ApplySpacesRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}reviewed_revision\0\u{3}accept_agent_draft\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}reviewed_revision\0\u{3}accept_agent_draft\0\u{3}confirm_github_orgs\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7894,6 +7908,7 @@ nonisolated extension Orchd_V1_ApplySpacesRequest: SwiftProtobuf.Message, SwiftP
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularInt64Field(value: &self.reviewedRevision) }()
       case 2: try { try decoder.decodeSingularBoolField(value: &self.acceptAgentDraft) }()
+      case 3: try { try decoder.decodeRepeatedStringField(value: &self.confirmGithubOrgs) }()
       default: break
       }
     }
@@ -7906,12 +7921,16 @@ nonisolated extension Orchd_V1_ApplySpacesRequest: SwiftProtobuf.Message, SwiftP
     if self.acceptAgentDraft != false {
       try visitor.visitSingularBoolField(value: self.acceptAgentDraft, fieldNumber: 2)
     }
+    if !self.confirmGithubOrgs.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.confirmGithubOrgs, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Orchd_V1_ApplySpacesRequest, rhs: Orchd_V1_ApplySpacesRequest) -> Bool {
     if lhs.reviewedRevision != rhs.reviewedRevision {return false}
     if lhs.acceptAgentDraft != rhs.acceptAgentDraft {return false}
+    if lhs.confirmGithubOrgs != rhs.confirmGithubOrgs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -186,6 +186,46 @@ func (s *Service) Repos(ctx context.Context, owner string) ([]Repo, error) {
 	return repos, nil
 }
 
+// Account is a GitHub account's login, as GitHub spells it, and its node ID.
+// The node ID stays with the account when it is renamed and is never given to
+// another account, so it tells a re-registered login from the original.
+type Account struct {
+	Login  string
+	NodeID string
+}
+
+// maxNodeID bounds a node ID read from gh; GitHub's are under 40 bytes.
+const maxNodeID = 128
+
+// LookupAccount resolves login, an org or a user, to its Account. It fails
+// when GitHub returns a different login, so a caller never binds an account
+// it did not ask for.
+func LookupAccount(ctx context.Context, gh Runner, login string) (Account, error) {
+	if !ValidLogin(login) {
+		return Account{}, fmt.Errorf("invalid GitHub login %q", login)
+	}
+	// users/<login> answers for orgs too, so a space may bind the user's own
+	// account as well as their orgs.
+	out, err := gh(ctx, "api", "users/"+login, "--jq", "{login, node_id}")
+	if err != nil {
+		return Account{}, err
+	}
+	var a struct {
+		Login  string `json:"login"`
+		NodeID string `json:"node_id"`
+	}
+	if err := json.Unmarshal(out, &a); err != nil {
+		return Account{}, fmt.Errorf("parse GitHub account %s: %w", login, err)
+	}
+	switch {
+	case !strings.EqualFold(a.Login, login):
+		return Account{}, fmt.Errorf("GitHub returned account %q for %q", Printable(a.Login, 64), login)
+	case a.NodeID == "" || len(a.NodeID) > maxNodeID || Printable(a.NodeID, maxNodeID) != a.NodeID:
+		return Account{}, fmt.Errorf("GitHub returned no usable node ID for %q", login)
+	}
+	return Account{Login: a.Login, NodeID: a.NodeID}, nil
+}
+
 func discover(ctx context.Context, gh Runner) (Identity, error) {
 	var id Identity
 	out, err := gh(ctx, "api", "user", "--jq", ".login")

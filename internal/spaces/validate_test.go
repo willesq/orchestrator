@@ -11,7 +11,7 @@ import (
 
 // testEnv expands "~" to /home/u and treats nothing as a git tree.
 func testEnv() Env {
-	return Env{Home: "/home/u", InGitTree: func(string) bool { return false }}
+	return Env{Home: "/home/u", InGitTree: func(string) bool { return false }, LookupOrg: fakeOrgs(nil).lookup}
 }
 
 // mustProblems validates p and returns its problems, failing if it passed.
@@ -173,6 +173,11 @@ func TestValidateRules(t *testing.T) {
 		{
 			name: "empty org",
 			p:    Policy{Spaces: []Space{{Name: "acme", Kind: Isolated, GitHubOrgs: []string{" "}}}},
+			rule: RuleBadBinding,
+		},
+		{
+			name: "org that is not a GitHub login",
+			p:    Policy{Spaces: []Space{{Name: "acme", Kind: Isolated, GitHubOrgs: []string{"\x1b]8;;x\x07acme"}}}},
 			rule: RuleBadBinding,
 		},
 	}

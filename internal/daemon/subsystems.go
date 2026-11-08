@@ -37,6 +37,7 @@ import (
 	"github.com/willesq/orchestrator/internal/selfupdate"
 	"github.com/willesq/orchestrator/internal/settings"
 	"github.com/willesq/orchestrator/internal/sources"
+	"github.com/willesq/orchestrator/internal/spaces"
 	"github.com/willesq/orchestrator/internal/supervisor"
 	"github.com/willesq/orchestrator/internal/workflows"
 )
@@ -106,7 +107,7 @@ func subsystems(d deps) []supervisor.Unit {
 	}
 	sched := d.docs
 	if sched == nil {
-		sched = newDocsScheduler(d.settings, d.store, d.rag)
+		sched = newDocsScheduler(d.settings, d.store, d.rag, nil)
 	}
 	out = append(out, sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, sched))
 	if d.settingsSvc != nil {
@@ -292,7 +293,8 @@ func sourcesUnit(s config.Settings, store *sql.DB, ing sources.Ingester) supervi
 
 // newDocsScheduler builds the one docs scheduler orchd runs: the docs unit
 // ticks it and SyncDocs asks it to run now, so a sync never runs twice at once.
-func newDocsScheduler(s config.Settings, store *sql.DB, ing docs.Ingester) *docs.Scheduler {
+// sp, when set, re-checks each owner's space binding before it syncs.
+func newDocsScheduler(s config.Settings, store *sql.DB, ing docs.Ingester, sp *spaces.Engine) *docs.Scheduler {
 	return docs.NewScheduler(docs.NewRegistry(store), ing, docs.SyncOpts{
 		RepoCache:       s.RepoCacheDir(),
 		IncludeArchived: s.Docs.IncludeArchived,
@@ -301,6 +303,7 @@ func newDocsScheduler(s config.Settings, store *sql.DB, ing docs.Ingester) *docs
 		Git:             docs.NewGit(),
 		ExcludeDirs:     s.Ingest.ExcludeDirs,
 		Guard:           docsGuard(store),
+		CheckOwner:      docsOwnerCheck(sp),
 	}, interval(s.Docs.ScanInterval, time.Minute))
 }
 
