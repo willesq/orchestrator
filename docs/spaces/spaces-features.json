@@ -467,7 +467,10 @@
               "threshold": ">= 8"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "Recorded 2026-11-08 with scripts/hook-capture.sh, codex-cli 0.166.0, headless `codex exec --dangerously-bypass-hook-trust` in the scratch project (user approved the batch on 2026-11-08). Codex ignores an untrusted project's .codex/hooks.json even with the trust bypass: the first run recorded nothing until the user trusted the scratch project interactively. 10 scenarios recorded: X01 cd within, X02 cd outside, X03 cd x && cmd, X04 absolute path in shell, X05 git -C, X06 shell workdir parameter outside, X07 PreToolUse deny, X08 apply_patch on an outside path, X09 resume, X11 subagent with workdir outside. X10 /compact via `codex exec resume` did not compact (no PreCompact; the text went to the model as a prompt).",
+            "Findings: (1) Codex has no CwdChanged event (0.166 events: SessionStart, UserPromptSubmit, PreToolUse, PermissionRequest, PostToolUse, PreCompact, PostCompact, SubagentStart, SubagentStop, Stop, SessionEnd, plus model/interrupt events). (2) Each shell call is independent: cd never persists and payload cwd stays the session root (X01-X03). (3) The shell tool's workdir parameter moves payload cwd (X06, X11: cwd=outside) while tool_input holds only `command` and the hook process still runs in the project; the guard must use payload cwd, not its own working directory. (4) Shell tool_name is `Bash`; file edits use tool_name `apply_patch` with the target path only inside tool_input.command (`*** Update File: <path>`) (X08). (5) Subagents: spawn/wait tools appear as `collaborationspawn_agent`/`collaborationwait_agent`; subagent tool calls keep the parent session_id and add agent_id/agent_type (X11). (6) Resume: SessionStart source=resume, cwd = session root (X09). (7) PreToolUse deny with hookSpecificOutput.permissionDecision=deny plus a non-empty permissionDecisionReason blocks the call; no PostToolUse follows (X07). Codex rejects `ask`, a deny without a reason, and updatedInput without allow (binary strings)."
+          ]
         },
         {
           "id": "SP-001.4",
