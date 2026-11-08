@@ -830,7 +830,7 @@
       "attempts": 1,
       "criteria_sha256": "d841529f82afc337d6c0bad84f72e4c247776b5bc4e4536359c213b334af7d48",
       "branch": "feat/sp-020-spaces-config",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/143"
     },
     {
       "id": "SP-021",
