@@ -626,9 +626,10 @@ request takes 8.2–9.0 ms in every case, and 1.8–2.0 ms of that without its d
 returns those vectors so it can compute cosine for keyword-only hits. The engine did not overlap
 concurrent requests: 4 raw requests in parallel took about their sum (13–30 ms). So each extra
 space collection adds a whole hybrid search, and the split layout costs 1.5–1.9x at p95. That is
-over the plan's 1.3x threshold, so the layout decision is to be revisited
-([D-10](../spaces/spaces-features.json)). Changes that would reduce the cost: fewer segments for
-small space collections, keyword requests that don't return vectors, or one request per collection
-using Qdrant's server-side fusion. These were not measured as a full layout.
+over the plan's 1.3x threshold. The layout decision (D-10 in
+[the spaces plan](../spaces/spaces-features.json)) was revisited on 2026-11-08 and kept: the
+measured cost is accepted (D-24). Changes that would reduce it: fewer segments for small space
+collections, keyword requests that don't return vectors, or one request per collection using
+Qdrant's server-side fusion. None of these was measured as a full layout.
 
 Relabelling is cheap either way: at most 10.3 s for 40,000 chunks, well under the 120 s threshold.
