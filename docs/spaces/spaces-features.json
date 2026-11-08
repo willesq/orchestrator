@@ -1158,7 +1158,7 @@
       "attempts": 1,
       "criteria_sha256": "3db36eb1d0b4067e2568db4d0f867d703bfebd6a838987cb146e93c7bdc27c56",
       "branch": "feat/sp-010-session-pins",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/147"
     },
     {
       "id": "SP-011",
