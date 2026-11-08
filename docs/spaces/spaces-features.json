@@ -691,14 +691,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "d1dbf64c9c35281ee3a4f9bdbec9dc1dbb2c9972c890efde854e577fc233ff12",
-      "branch": null,
+      "branch": "feat/sp-004-harness-settings-layering",
       "pr": null
     },
     {
