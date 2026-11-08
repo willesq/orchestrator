@@ -235,3 +235,15 @@ func (f *fakeClient) SetConfig(context.Context, *orchdv1.SetConfigRequest, ...gr
 func (f *fakeClient) RemoveLegacyConfig(context.Context, *orchdv1.RemoveLegacyConfigRequest, ...grpc.CallOption) (*orchdv1.ConfigState, error) {
 	return &orchdv1.ConfigState{}, nil
 }
+
+func (f *fakeClient) SetSpacesDraft(context.Context, *orchdv1.SetSpacesDraftRequest, ...grpc.CallOption) (*orchdv1.SpacesDraft, error) {
+	return &orchdv1.SpacesDraft{}, nil
+}
+
+func (f *fakeClient) DiffSpaces(context.Context, *orchdv1.DiffSpacesRequest, ...grpc.CallOption) (*orchdv1.SpacesDiff, error) {
+	return &orchdv1.SpacesDiff{}, nil
+}
+
+func (f *fakeClient) ApplySpaces(context.Context, *orchdv1.ApplySpacesRequest, ...grpc.CallOption) (*orchdv1.ApplySpacesResponse, error) {
+	return &orchdv1.ApplySpacesResponse{}, nil
+}

@@ -69,6 +69,19 @@ opened it (`internal/daemon/callers.go`) rather than trusting clients to check `
   Other platforms return `ErrUnsupported`, which the walk reports as not found with no error:
   such a caller has no identity and so gets no space. On an M3 Max one lookup costs about 15 µs
   (start time) or 1.4 µs (cwd), and a full walk to the root about 0.12 ms.
+- **Harness:** at connect time orchd also walks the peer's ancestry and records the nearest
+  agent harness. `procstat.ReadProgram` reads each process's kernel name and, for the user's own
+  processes, its executable and arguments: sysctl `kern.proc.pid` and `kern.procargs2` on macOS,
+  `/proc/<pid>/comm`, `exe` and `cmdline` on Linux. A process is a harness when its name, its
+  executable or one of its first two arguments is `claude` or `codex`, or is under
+  `@anthropic-ai/claude-code`, `@openai/codex` or `claude/versions/`. The kernel name alone is
+  not enough: npm installs run as `node`, and Claude Code's native installer names its binary
+  after the version. The walk is not retried: a session exiting mid-walk would leave a second
+  walk with no harness to find. `DiffSpaces` and `ApplySpaces` use it (`refuseNonOperator`).
+  They are refused to queued tasks, to any caller inside an agent session, and to a caller whose
+  ancestry orchd cannot read, so a session can neither read nor apply the spaces policy it runs
+  under. The limits below apply here too: a process that leaves the session's tree is not caught,
+  and a harness installed some other way and renamed is not recognised.
 - **Report:** `orchdclient` sends the `orch-task-id` metadata when `ORCH_TASK_ID` is set, which
   names the task in the refusal and covers callers outside orchd's process tree.
 

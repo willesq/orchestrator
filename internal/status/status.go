@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -130,6 +131,10 @@ func Collect(ctx context.Context, d Deps) Report {
 		dataSection(ctx, d),
 		harnessSection(d),
 		preconditionSection(d),
+	}
+	if sec, ok := spacesSection(resp, orchdErr); ok {
+		// After subsystems: what orchd enforces sits beside what it runs.
+		r.Sections = slices.Insert(r.Sections, 2, sec)
 	}
 	if d.InstructionLoad != nil {
 		sec := Section{Title: "always-loaded instructions", Lines: d.InstructionLoad()}
@@ -327,6 +332,46 @@ func subsystemSection(d Deps, resp *orchdv1.StatusResponse, err error) Section {
 		sec.Lines = append(sec.Lines, l)
 	}
 	return sec
+}
+
+// spacesSection reports the enforced spaces policy and any drift from it: a
+// draft saved but not applied, or orch.db's applied revision edited outside
+// orchd. Neither changes what is enforced. ok is false while spaces were
+// never used, so the report is unchanged for anyone without them.
+func spacesSection(resp *orchdv1.StatusResponse, err error) (sec Section, ok bool) {
+	sec = Section{Title: "spaces"}
+	sp := resp.GetSpaces()
+	if err != nil || sp == nil ||
+		(sp.GetAppliedRevision() == 0 && sp.GetDraftRevision() == 0 && len(sp.GetDrift()) == 0 && sp.GetError() == "") {
+		return sec, false
+	}
+	policy := Line{Name: "policy", Value: "none applied", Level: LevelOK, Detail: "one shared space, as before spaces"}
+	if n := sp.GetAppliedRevision(); n > 0 {
+		policy.Value = fmt.Sprintf("revision %d applied", n)
+		policy.Detail = ""
+		if !sp.GetConfigured() {
+			policy.Detail = "no spaces defined: one shared space"
+		}
+	}
+	sec.Lines = append(sec.Lines, policy)
+	for _, drift := range sp.GetDrift() {
+		l := Line{Name: "drift", Level: LevelWarn}
+		switch drift {
+		case "draft":
+			l.Value = fmt.Sprintf("draft revision %d not applied", sp.GetDraftRevision())
+			l.Detail = "review with 'orch spaces diff', then 'orch spaces apply'"
+		case "changed_outside_orchd":
+			l.Value, l.Level = "applied revision changed outside orchd", LevelBad
+			l.Detail = "orchd keeps enforcing the revision it loaded; apply a revision to replace it"
+		default:
+			l.Value = drift
+		}
+		sec.Lines = append(sec.Lines, l)
+	}
+	if e := sp.GetError(); e != "" {
+		sec.Lines = append(sec.Lines, Line{Name: "error", Value: e, Level: LevelBad})
+	}
+	return sec, true
 }
 
 func vectorSection(ctx context.Context, d Deps, resp *orchdv1.StatusResponse) Section {

@@ -592,6 +592,17 @@ share (same directory name), or whose path has a dot segment.
 filters, once each; a comparison over fewer than 10 cases is never called significant. Runs of another version are
   not compared. `--mode`, `--ranking` and `--per-source` score other settings on the same daemon.
 
+## Spaces
+
+Memory spaces separate what each job's sessions can read ([the spaces plan](../spaces/spaces-features.json)).
+The policy that defines them, the operator-only apply, and drift are described in
+[config.md](config.md#spaces-policy). `spaces.Resolved.CanRead(reader, target)` is the rule read
+paths will use: a space reads itself, every public space and the private spaces it lists, and
+never another isolated space or quarantine. Nothing in memory uses it yet. Chunks are not yet
+stamped with a space, and search is not yet filtered by one; later features in the plan add
+both. Until a policy with spaces is applied, everything is in the one implicit `shared` space
+and search behaves as it always has.
+
 ## Cost of a collection per space
 
 Memory spaces (D-10) plan one Qdrant collection per space, with the payload filter kept as a

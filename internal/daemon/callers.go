@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -17,6 +18,7 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/willesq/orchestrator/internal/orchdclient"
+	"github.com/willesq/orchestrator/internal/procstat"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
@@ -111,6 +113,12 @@ var operatorActions = map[string]string{
 	orchdv1.Orchd_SetSettingEnabled_FullMethodName: "change Claude Code, cc-safety-net or instruction, subagent and skill settings",
 	orchdv1.Orchd_AddSetting_FullMethodName:        "change Claude Code, cc-safety-net or instruction, subagent and skill settings",
 	orchdv1.Orchd_RemoveSetting_FullMethodName:     "change Claude Code, cc-safety-net or instruction, subagent and skill settings",
+	// Reason: the policy names every space's orgs and roots, which a task in
+	// one job must not learn about another; ApplySpaces is also refused to
+	// interactive harness sessions (refuseNonOperator).
+	orchdv1.Orchd_SetSpacesDraft_FullMethodName: "change the spaces policy",
+	orchdv1.Orchd_DiffSpaces_FullMethodName:     "read the spaces policy",
+	orchdv1.Orchd_ApplySpaces_FullMethodName:    "apply the spaces policy",
 }
 
 // refuseQueued returns the refusal for method when ctx's caller is a queued
@@ -203,6 +211,12 @@ type callerAuth struct {
 	spawned bool
 	// err says why the process could not be identified.
 	err error
+	// harness names the nearest agent harness process (claude, codex) at or
+	// above the caller, empty when there is none.
+	harness string
+	// harnessErr says why the harness walk failed; such a caller is treated
+	// as if it ran in a harness.
+	harnessErr error
 }
 
 func (callerAuth) AuthType() string { return "orchd-peer" }
@@ -217,6 +231,9 @@ type peerCredentials struct {
 	parent func(pid int) (int, error)
 	// peerPID returns a connection's peer PID; nil reads the socket.
 	peerPID func(net.Conn) (int, error)
+	// program returns what a process runs; nil means no lookup, so every
+	// caller counts as possibly in a harness.
+	program func(pid int) (procstat.Program, error)
 }
 
 func (p peerCredentials) ServerHandshake(c net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -247,7 +264,124 @@ func (p peerCredentials) identify(c net.Conn) callerAuth {
 		// reparented tree instead of refusing the operator.
 		spawned, err = descendsFrom(pid, p.self, p.parent)
 	}
-	return callerAuth{pid: pid, spawned: spawned, err: err}
+	// Reason: unlike the orchd walk above, a failed harness walk is not
+	// retried. A session that exits mid-walk reparents its children to
+	// launchd, and a second walk would then find no harness.
+	harness, herr := harnessAncestor(pid, p.parent, p.program)
+	return callerAuth{pid: pid, spawned: spawned, err: err, harness: harness, harnessErr: herr}
+}
+
+// harnessNames are the program names of the agent harnesses spaces cover
+// (D-20).
+var harnessNames = map[string]bool{"claude": true, "codex": true}
+
+// harnessPaths mark a harness by where it is installed, for installs whose
+// program name says nothing: npm packages run under node, and Claude Code's
+// native installer runs a binary named for its version.
+var harnessPaths = map[string]string{
+	"/@anthropic-ai/claude-code/": "claude",
+	"/claude/versions/":           "claude",
+	"/@openai/codex/":             "codex",
+}
+
+// interpreters run a script named in their arguments.
+var interpreters = map[string]bool{"node": true, "bun": true, "deno": true}
+
+// harnessOf names the harness prog is, or "". It looks at the kernel name,
+// the executable, and the first two arguments (an interpreter and its script).
+func harnessOf(prog procstat.Program) string {
+	cands := []string{prog.Name, prog.Path}
+	if len(prog.Args) > 2 {
+		cands = append(cands, prog.Args[:2]...)
+	} else {
+		cands = append(cands, prog.Args...)
+	}
+	for _, c := range cands {
+		if c == "" {
+			continue
+		}
+		if base := filepath.Base(c); harnessNames[base] {
+			return base
+		}
+		for marker, name := range harnessPaths {
+			if strings.Contains(c, marker) {
+				return name
+			}
+		}
+	}
+	return ""
+}
+
+// harnessAncestor returns the name of the nearest harness process at or above
+// pid, or "" when the walk reaches launchd or init without one.
+func harnessAncestor(pid int, parent func(int) (int, error), program func(int) (procstat.Program, error)) (string, error) {
+	if program == nil {
+		return "", errors.New("process programs cannot be read")
+	}
+	for range maxAncestry {
+		prog, err := program(pid)
+		if err != nil {
+			return "", fmt.Errorf("program of process %d: %w", pid, err)
+		}
+		if h := harnessOf(prog); h != "" {
+			return h, nil
+		}
+		// An interpreter's script says what it runs; without its arguments
+		// it could be a harness, so the caller cannot be cleared.
+		if interpreters[prog.Name] && len(prog.Args) < 2 {
+			return "", fmt.Errorf("process %d runs %s, whose script cannot be read", pid, prog.Name)
+		}
+		ppid, err := parent(pid)
+		if err != nil {
+			return "", fmt.Errorf("parent of process %d: %w", pid, err)
+		}
+		if ppid <= 1 || ppid == pid {
+			return "", nil
+		}
+		pid = ppid
+	}
+	return "", fmt.Errorf("process ancestry deeper than %d", maxAncestry)
+}
+
+// operator reports whether ctx's caller is the operator, else describes it.
+// Queued callers are refused separately, by refuseQueued.
+func operator(ctx context.Context) (who string, ok bool) {
+	if _, queued := queuedCaller(ctx); queued {
+		return "a queued task", false
+	}
+	p, found := peer.FromContext(ctx)
+	a, isCaller := callerAuth{}, false
+	if found {
+		a, isCaller = p.AuthInfo.(callerAuth)
+	}
+	switch {
+	case !isCaller:
+		return "unidentified process", false
+	case a.err != nil:
+		return fmt.Sprintf("a process orchd cannot identify (%v)", a.err), false
+	case a.harnessErr != nil:
+		return fmt.Sprintf("process %d, whose ancestry orchd cannot read", a.pid), false
+	case a.harness != "":
+		return fmt.Sprintf("process %d, inside a %s session", a.pid, a.harness), false
+	}
+	return "", true
+}
+
+// refuseNonOperator refuses method unless ctx's caller is the operator: a
+// process orchd identified, that orchd did not start and that does not run
+// inside an agent harness. It is stricter than refuseQueued, which lets
+// interactive sessions through, and fails closed when orchd cannot tell.
+func refuseNonOperator(ctx context.Context, method, action string) error {
+	if err := refuseQueued(ctx, method); err != nil {
+		return err
+	}
+	who, ok := operator(ctx)
+	if ok {
+		return nil
+	}
+	log.Printf("orchd: refused %s from %s", method, who)
+	return grpcstatus.Errorf(codes.PermissionDenied,
+		"only the operator can %s: use Orch.app, or run the command in a terminal outside any agent session (caller: %s)", action, who)
 }
 
 func (peerCredentials) ClientHandshake(context.Context, string, net.Conn) (net.Conn, credentials.AuthInfo, error) {
