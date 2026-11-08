@@ -264,3 +264,53 @@ the PR Watch menu bar app reads.
   original mode, and renames it over the target. A symlinked registry is written through to its
   target and keeps its link. Anything but a regular file under 4 MiB is left alone.
 - There is no `gh` fallback when the output holds no URL, so the hook stays local and fast.
+
+## Harness payloads and working directory
+
+Recorded on 2026-11-08 from Claude Code 2.1.309 and codex-cli 0.166.0 with
+`scripts/hook-capture.sh` (below). The payloads are fixtures in
+`internal/hook/testdata/payloads/`, one line per event with its scenario label, and
+`TestRecordedPayloadsParse` decodes each into `Payload`. Spaces (the session pin and the
+tool guard) depend on these facts.
+
+| | Claude Code | Codex |
+|---|---|---|
+| Does `cwd` follow `cd`? | Within the project, yes: the next event's `cwd` and the hook process's working directory follow it. A `cd` outside the project, or any `cd` with `CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR=1`, is undone after the call, and the next `cwd` is the project root again. | No. Each shell call starts in the session root, and `cd` never carries over. The shell tool's `workdir` parameter sets that call's `cwd`. `tool_input` then holds only `command`, and the hook process still runs in the root. |
+| Does `CwdChanged` exist? | Yes, with `old_cwd` and `new_cwd`. It also fires for a `cd` that is about to be undone, and no event reports the undo. Its own `cwd` field was the new directory in one run and the old one in another. `EnterWorktree` moves `cwd` into `.claude/worktrees/<name>` without firing it. | No such event. |
+| Can PreToolUse deny? | Yes. The call does not run, no PostToolUse follows, and the model sees the reason. | Yes, under the same conditions. A deny must carry a non-empty reason; `ask` is rejected, and so is `updatedInput` without `allow`. |
+| Deny output format | stdout `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"…"}}` | The same JSON |
+
+Both harnesses:
+
+- Absolute paths, `git -C` and file tools never change `cwd`. Their targets exist only in
+  `tool_input`: Claude Code's `Read` puts the path in `file_path`, and Codex's `apply_patch`
+  puts it in the patch text (`*** Update File: <path>`).
+- Subagent tool calls keep the parent's `session_id` and add `agent_id` and `agent_type`.
+  A `cd` inside a Claude Code subagent does not persist. Codex names its agent tools
+  `collaborationspawn_agent` and `collaborationwait_agent`.
+- Resume fires SessionStart with `source=resume`, starting in the project root rather than the
+  last `cwd`. A Claude Code compact fires PreCompact, then SessionStart (`source=compact`),
+  then PostCompact; `cwd` is unchanged.
+- Another PreToolUse hook can rewrite `tool_input`; for example, rtk turns `ls` into `rtk ls`.
+  The rewritten input shows only in PostToolUse, so a guard has to judge the input that runs.
+
+Codex runs hooks from a project's `.codex/hooks.json` only once the project is trusted, even with
+`--dangerously-bypass-hook-trust`, which skips hook-trust review for a single run. Claude Code
+reads project hooks from `.claude/settings.local.json`. Its `/cd` command is not available in
+`claude -p`, and Codex's `/compact` is not available in `codex exec`.
+
+### Capturing payloads
+
+`scripts/hook-capture.sh setup <dir>` builds a logging hook (`internal/hook/capture`) and creates
+`<dir>/project`, a scratch git repository. It also creates `<dir>/outside`. The hook goes only
+into the project's untracked `.claude/settings.local.json` and `.codex/hooks.json`. The script
+refuses `~` and paths under `~/.claude`, `~/.codex`, `~/.gemini` and `~/.config/orch`, including
+through symlinks or `..`, and creates its directories with mode 0700. `scenario <dir> <label>`
+labels the events that follow. Each event is appended to `<dir>/payloads/<harness>.jsonl` as
+`{at, harness, event, scenario, hook_cwd, payload, redactions}`. Every string in the payload is
+redacted and `tool_response` is cut to 2 KiB. `summary` prints one row per event, and `clean`
+removes only a directory the script created. A PreToolUse call whose `tool_input` contains
+`HOOK_CAPTURE_DENY` is denied, to test deny handling. Before committing new fixtures, replace the
+scratch and home paths, replace opaque blobs such as Codex's encrypted subagent `message`, and
+scan for secrets and personal data (for example with trufflehog). The redactor only knows
+common token shapes.
