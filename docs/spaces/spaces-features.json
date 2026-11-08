@@ -632,7 +632,9 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: In internal/procstat/identity_other.go (!darwin && !linux), readProc and Cwd return ErrUnsupported. TestIdentityUnsupported checks that StartTime and Cwd return ErrUnsupported and that NearestAncestor returns found=false with a nil error, so the caller gets no identity and no space. It ran and passed on GOOS=js GOARCH=wasm under node v26.13.0 via go_js_wasm_exec, 2026-11-08. TestNearestAncestorWalk/unsupported_is_no_identity passes on darwin, linux and js/wasm: a registered pid behind an ErrUnsupported reader gives found=false, err=nil. The test binary also compiles for windows, freebsd, openbsd and netbsd (go test -c)."
+          ]
         }
       ],
       "status": "in_progress",
