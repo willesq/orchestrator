@@ -35,6 +35,8 @@ const (
 	RulePublicReads           Rule = "public_reads"
 	RuleUnknownRead           Rule = "unknown_read"
 	RuleTermsInGitTree        Rule = "terms_file_in_git_tree"
+	RuleGHProfileInGitTree    Rule = "gh_config_dir_in_git_tree"
+	RuleGHProfileShared       Rule = "gh_config_dir_shared"
 	RulePublicRootSessions    Rule = "public_root_sessions"
 	RuleTooLarge              Rule = "too_large"
 	RuleUnparseable           Rule = "unparseable"
@@ -82,9 +84,10 @@ type Env struct {
 	// InGitTree reports whether path lies inside a git working tree; nil
 	// looks for a .git entry in path's parents.
 	InGitTree func(path string) bool
-	// LookupOrg reads a GitHub account's identity, for apply and sync; nil
-	// refuses to apply a policy that binds any org.
-	LookupOrg func(ctx context.Context, login string) (OrgIdentity, error)
+	// LookupOrg reads a GitHub account's identity, for apply and sync, as
+	// the gh profile of the space that binds it; nil refuses to apply a
+	// policy that binds any org.
+	LookupOrg func(ctx context.Context, login string, gh GHProfile) (OrgIdentity, error)
 }
 
 // DefaultEnv reads the user's home and the real filesystem.
@@ -196,6 +199,8 @@ func Validate(p Policy, env Env) (*Resolved, error) {
 		bound[rule][key] = space
 	}
 	var roots []root
+	ghDirs := map[string]string{}
+	ghDirOwner := map[string]string{}
 	for _, n := range names {
 		s := byName[n]
 		for _, org := range s.GitHubOrgs {
@@ -240,6 +245,24 @@ func Validate(p Policy, env Env) (*Resolved, error) {
 				add(RuleTermsInGitTree, n, "space %q has its terms file inside a git working tree", n)
 			}
 		}
+		if s.GHConfigDir != "" {
+			path := env.expand(s.GHConfigDir)
+			key := strings.ToLower(path)
+			switch {
+			case path == "":
+				add(RuleBadBinding, n, "space %q has gh_config_dir %q, which is not an absolute path", n, s.GHConfigDir)
+			case env.inGitTree(path):
+				// Reason: gh may store a token in the directory's hosts.yml,
+				// which a repository would commit and push.
+				add(RuleGHProfileInGitTree, n, "space %q has its gh_config_dir inside a git working tree", n)
+			case ghDirOwner[key] != "":
+				// Reason: one profile is one GitHub account, so two spaces
+				// sharing it would share an account.
+				add(RuleGHProfileShared, n, "spaces %q and %q use the same gh_config_dir; give each its own GitHub account", ghDirOwner[key], n)
+			default:
+				ghDirs[n], ghDirOwner[key] = path, n
+			}
+		}
 	}
 	checkRoots(roots, add)
 
@@ -261,7 +284,7 @@ func Validate(p Policy, env Env) (*Resolved, error) {
 		}
 	}
 
-	res := &Resolved{Policy: p, spaces: byName, roots: roots}
+	res := &Resolved{Policy: p, spaces: byName, roots: roots, ghDirs: ghDirs}
 	res.PublicRootSessions = publicRootSessions(p.PublicRootSessions, byName, names, add)
 	if len(ps) > 0 {
 		return nil, ps

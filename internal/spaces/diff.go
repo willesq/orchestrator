@@ -107,5 +107,11 @@ func changedFields(x, y Space) fieldChanges {
 		c.fields = append(c.fields, "terms_file")
 		c.details = append(c.details, fmt.Sprintf("terms_file: %q -> %q", x.TermsFile, y.TermsFile))
 	}
+	if x.GHConfigDir != y.GHConfigDir {
+		// Reason: a changed profile changes which GitHub account the space's
+		// calls run as, so the reviewer must see it.
+		c.fields = append(c.fields, "gh_config_dir")
+		c.details = append(c.details, fmt.Sprintf("gh_config_dir: %q -> %q", x.GHConfigDir, y.GHConfigDir))
+	}
 	return c
 }

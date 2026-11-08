@@ -52,6 +52,25 @@ var gitEnvKept = map[string]bool{
 // Git runs the real git with no terminal prompts and no inherited repository
 // environment.
 func Git(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	return gitIn(ctx, os.Environ(), nil, dir, args...)
+}
+
+// profileGitEnv keeps the user's git configuration out of a push as a
+// profile. Reason: a global insteadOf rule could turn the URL into SSH with
+// the default key, and an askpass program could answer for another account.
+var profileGitEnv = []string{"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1"}
+
+// GitWithEnv is Git run in env, a gh profile's environment, so the gh
+// credential helper answers as the profile's account.
+func GitWithEnv(env []string) GitRunner {
+	return func(ctx context.Context, dir string, args ...string) ([]byte, error) {
+		return gitIn(ctx, env, profileGitEnv, dir, args...)
+	}
+}
+
+// gitIn runs git with base's environment, less its GIT_ variables other than
+// gitEnvKept and SSH_ASKPASS, plus extra.
+func gitIn(ctx context.Context, base, extra []string, dir string, args ...string) ([]byte, error) {
 	all := append([]string{}, baseConfig...)
 	// Inside a landing repository, name it: git would otherwise prefer a .git
 	// planted within it over the repository itself.
@@ -60,12 +79,13 @@ func Git(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	}
 	cmd := exec.CommandContext(ctx, "git", append(all, args...)...)
 	cmd.Dir = dir
-	for _, kv := range os.Environ() {
+	for _, kv := range base {
 		name, _, _ := strings.Cut(kv, "=")
-		if !strings.HasPrefix(name, "GIT_") || gitEnvKept[name] {
+		if (!strings.HasPrefix(name, "GIT_") || gitEnvKept[name]) && (extra == nil || name != "SSH_ASKPASS") {
 			cmd.Env = append(cmd.Env, kv)
 		}
 	}
+	cmd.Env = append(cmd.Env, extra...)
 	// Replacement refs would show one commit's content and push another's.
 	cmd.Env = append(cmd.Env, "GIT_TERMINAL_PROMPT=0", "GIT_NO_REPLACE_OBJECTS=1")
 	var stderr bytes.Buffer
@@ -312,7 +332,19 @@ func capDiff(out []byte) (string, bool) {
 // but a fast-forward. It names the repository and the credential helper
 // itself rather than using anything from the agent's clone.
 func (s *Service) push(ctx context.Context, repo, ownerRepo, sha, branch string) error {
-	_, err := s.Git(ctx, repo, "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential",
+	acct, err := s.ownerAccount(ctx, ownerRepo)
+	if err != nil {
+		return err
+	}
+	git := s.Git
+	if acct.Env != nil {
+		gitAs := s.GitAs
+		if gitAs == nil {
+			gitAs = GitWithEnv
+		}
+		git = gitAs(acct.Env)
+	}
+	_, err = git(ctx, repo, "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential",
 		"push", "--quiet", "--no-verify", "https://github.com/"+ownerRepo+".git", sha+":refs/heads/"+branch)
 	return err
 }

@@ -27,7 +27,7 @@ const spacesDoc = `{"spaces":[{"name":"acme","kind":"isolated","github_orgs":["a
 // "N_<login>" for any login not listed.
 type orgNodes map[string]string
 
-func (o orgNodes) lookup(_ context.Context, login string) (spaces.OrgIdentity, error) {
+func (o orgNodes) lookup(_ context.Context, login string, _ spaces.GHProfile) (spaces.OrgIdentity, error) {
 	login = strings.ToLower(login)
 	if n, ok := o[login]; ok {
 		return spaces.OrgIdentity{Login: login, NodeID: n}, nil
@@ -399,7 +399,7 @@ func TestApplySpacesOrgLookupFails(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	env := spaces.Env{Home: "/home/u", InGitTree: func(string) bool { return false },
-		LookupOrg: func(context.Context, string) (spaces.OrgIdentity, error) {
+		LookupOrg: func(context.Context, string, spaces.GHProfile) (spaces.OrgIdentity, error) {
 			return spaces.OrgIdentity{}, errors.New("HTTP 502")
 		}}
 	if s.spaces, err = spaces.Open(context.Background(), conn, env); err != nil {
@@ -419,7 +419,7 @@ func TestDocsOwnerCheckWithoutSpaces(t *testing.T) {
 	if docsOwnerCheck(nil) != nil {
 		t.Error("no engine should mean no check")
 	}
-	if spacesEnv().LookupOrg == nil {
+	if spacesEnv(newGHProfiles()).LookupOrg == nil {
 		t.Error("orchd's spaces env has no GitHub lookup")
 	}
 }

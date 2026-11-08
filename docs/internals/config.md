@@ -210,8 +210,76 @@ so for now quarantining means the sync indexes nothing for that owner: its resul
 with a reason that points to `orch spaces diff`. A failed lookup also stops that owner's sync
 without suspending. The reason is the same in both cases and has no lookup detail, since agent
 sessions can list docs owners. `Status` adds an error that counts the unconfirmed orgs without naming them,
-and `DiffSpaces` lists them (`unconfirmed_github_orgs`). Lookups use the default `gh` account until
-per-space accounts exist (SP-063).
+and `DiffSpaces` lists them (`unconfirmed_github_orgs`). Each lookup runs as the gh profile of the
+space that binds the org (below): at apply, the draft's binding decides; at sync, the applied
+policy's. So an isolated org cannot be applied until its space's profile is logged in, and the
+refusal names the space.
+
+**GitHub accounts per space** (SP-063, D-18; `spaces.GHProfile`, `internal/daemon/ghprofiles.go`).
+A space may name a gh profile directory, `gh_config_dir`. orchd runs every gh call about an org
+bound to that space with `GH_CONFIG_DIR` set to it, so the call runs as the account logged in
+there. It also removes `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`,
+`GITHUB_ENTERPRISE_TOKEN` and `GH_HOST`, which would otherwise override the profile
+(`github.ProfileEnv`). The user logs each profile in themselves with
+`GH_CONFIG_DIR=<dir> gh auth login`. orch checks a profile only with
+`gh auth status --active --hostname github.com --json hosts`, using the login it reports, and then
+lists that account's orgs (`gh api user/orgs`). Both answers are cached for five minutes, or one
+minute after a failure. A check runs on its own 15-second deadline, and a caller's cancellation is
+never cached, so a task calling `Status` and giving up early cannot make a working profile look
+logged out. orch never reads files inside a profile directory and never runs
+`gh auth token`; `internal/github`'s `TestNoCodeReadsGHCredentials` scans the source to keep it so.
+
+Which login a call runs as:
+
+- An org bound to a space with a profile: that profile, when it is logged in.
+- An org bound to an isolated space with no profile, or with a profile that is not logged in: no
+  call at all. Its docs are not synced, its PRs and issues are dropped from the PR watcher, and its
+  review posts, PR lookups and identity checks are refused. The reason the docs list and orchd's
+  log carry names no space; the operator sees which in `orch status`.
+- An org bound to a public or private space without a profile, an org no space binds, and a call
+  about no org (`gh api user`): the default login, as before spaces.
+
+The call sites:
+
+- **Routed calls.** PR lookups, the review watcher, landing's PR reads, placement's repo lookups
+  and the GitHub tab's repo list go through `ghProfiles.Routed`. It reads the account from the call's
+  `https://github.com/<owner>/…` URL or its `repos/`, `users/` or `orgs/` API path, and refuses a
+  call that names two different accounts.
+- **Review posts** use `reviews.NewGHPoster`, which picks the login from the repo's owner.
+- **Landing** (`landing.Service.AccountFor`) requires the PR to be the profile account's own, and
+  pushes as that account. The push runs with the profile's environment through
+  `landing.GitWithEnv`, which drops the user's global and system git config and `SSH_ASKPASS`.
+- **The docs owner picker** (`ListDocsOwnerRepos`) lists a space's org as its account, and refuses
+  one whose space has no working profile.
+- **Docs sync** uses `docs.SyncOpts.Clients`, which runs before `CheckOwner`. A profile's clone
+  does not use `gh repo clone`, because git would then choose credentials from the user's SSH keys
+  or keychain helper. It runs `git clone https://github.com/<owner>/<repo>.git` with gh, in the
+  profile's environment, as the only credential helper (`credential.helper=!gh auth git-credential`).
+  It also sets `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`, and drops `GIT_ASKPASS`,
+  `SSH_ASKPASS` and `GIT_CONFIG_*`, so no `insteadOf` rule, helper or askpass program can substitute
+  another account.
+- **The PR watcher** searches once as the default login and once as each logged-in profile. Each
+  owner's items are kept only from the account its space routes it to, and are enriched as that
+  account ([tasks.md](tasks.md#pr-babysitter)). Profile accounts and their orgs are not added as
+  GitHub scopes, because tasks can list scopes. As with the default login, a profile's items are
+  kept only for a scope the user enabled, because tasks in any space can read the PR cache. So an
+  org that only the profile's account belongs to has no scope, and is not watched yet.
+
+`Status` adds the problems to the spaces line. The operator (a caller that `refuseNonOperator`
+would admit) sees each one with the space it concerns:
+
+- an isolated space that binds orgs but has no profile;
+- a profile that is not logged in, with the exact `GH_CONFIG_DIR=<dir> gh auth login` to run;
+- a profile whose account can see an org bound to a different isolated space (it is that org's
+  login or a member of it), since account separation is then not effective;
+- two isolated spaces whose profiles are logged in to the same account;
+- the default login seeing an isolated space's org, or being the same account as an isolated
+  space's profile. This is checked once any isolated space binds orgs.
+
+Membership comes from `gh api user/orgs`. Access as an outside collaborator is not detected, and a
+token without `read:org` lists only public memberships.
+
+Every other caller sees only how many problems there are.
 
 **Validation** (`spaces.Validate`) reports every problem with a rule name: an unknown kind; a
 bad or reserved name (`quarantine`, `shared`); a GitHub org that is not a well-formed GitHub login;
@@ -221,9 +289,11 @@ root bound twice; a nested root less strict than a root above it (public < priva
 a root of one isolated space inside another's; an isolated space reading an isolated one; a
 private space reading an isolated one; a public space reading anything; a read of a space that
 does not exist; a terms file inside a git working tree (a `.git` in any parent, after resolving
-symlinks); a policy over the size limits; and a
-`public_root_sessions` that is not a private or isolated space. Roots and terms files may start
-with `~` and must otherwise be absolute. Roots are compared case-insensitively, since macOS
+symlinks); a `gh_config_dir` that is not absolute, is inside a git working tree (gh may keep a
+token in it) or is shared by two spaces (one profile is one account); a policy over the size
+limits; and a
+`public_root_sessions` that is not a private or isolated space. Roots, terms files and
+`gh_config_dir` may start with `~` and must otherwise be absolute. Roots are compared case-insensitively, since macOS
 volumes usually are. With `public_root_sessions` unset, session content from under a public root
 goes to the only private space when there is exactly one, else to quarantine.
 

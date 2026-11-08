@@ -60,6 +60,10 @@ type Space struct {
 	Reads []string `json:"reads,omitempty"`
 	// TermsFile is the outbound term list, kept outside every git tree.
 	TermsFile string `json:"terms_file,omitempty"`
+	// GHConfigDir is the gh profile directory (GH_CONFIG_DIR) the space's
+	// GitHub calls run with. An isolated space's orgs are synced only through
+	// it, once the user has logged it in with gh.
+	GHConfigDir string `json:"gh_config_dir,omitempty"`
 }
 
 // Policy is a whole spaces policy, as saved in one revision.
@@ -129,12 +133,12 @@ func checkSize(p Policy) error {
 				}
 			}
 		}
-		for _, v := range []string{s.Name, string(s.Kind), s.TermsFile} {
+		for _, v := range []string{s.Name, string(s.Kind), s.TermsFile, s.GHConfigDir} {
 			if len(v) > maxString {
 				return fmt.Errorf("spaces policy: a value is over %d bytes", maxString)
 			}
 		}
-		for _, path := range append([]string{s.TermsFile}, s.Roots...) {
+		for _, path := range append([]string{s.TermsFile, s.GHConfigDir}, s.Roots...) {
 			if strings.Count(path, "/") > maxDepth {
 				return fmt.Errorf("spaces policy: a path is more than %d folders deep", maxDepth)
 			}

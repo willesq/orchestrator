@@ -137,10 +137,14 @@ func scopePB(s github.Scope) *orchdv1.GitHubScope {
 // watchFrom reports the user's login and scopes to the PR watcher. Without
 // GitHub the scopes cannot be checked against the user's memberships, so the
 // sweep fails and the cache is kept.
-func watchFrom(svc *github.Service) prs.WatchSource {
+func watchFrom(svc *github.Service, ghp *ghProfiles) prs.WatchSource {
 	return func(ctx context.Context) (prs.Watch, error) {
 		if svc == nil {
 			return prs.Watch{}, errors.New("GitHub scopes unavailable")
+		}
+		accounts, route, err := ghp.watchAccounts(ctx)
+		if err != nil {
+			return prs.Watch{}, err
 		}
 		scopes, ghErr, err := svc.Scopes(ctx, false)
 		if err != nil {
@@ -153,6 +157,6 @@ func watchFrom(svc *github.Service) prs.WatchSource {
 		if err != nil {
 			return prs.Watch{}, err
 		}
-		return prs.Watch{Login: id.Login, Scopes: scopes}, nil
+		return prs.Watch{Login: id.Login, Scopes: scopes, Accounts: accounts, Route: route}, nil
 	}
 }

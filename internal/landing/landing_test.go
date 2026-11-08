@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -399,7 +400,7 @@ func TestBlockedBranches(t *testing.T) {
 		{PRState{State: "OPEN", Branch: "a..b", Base: "main", Author: "me"}, "not one orch"},
 		{PRState{State: "OPEN", Branch: "x", Base: "main", Author: "me", CrossRepository: true}, "fork"},
 	} {
-		got, err := w.svc.blocked(ctx, tc.pr)
+		got, err := w.svc.blocked(ctx, testURL, tc.pr)
 		if err != nil || !strings.Contains(got, tc.want) {
 			t.Errorf("%+v: got %q, %v", tc.pr, got, err)
 		}
@@ -774,5 +775,82 @@ func TestReadPRRejectsBadOutput(t *testing.T) {
 	w.svc.GH = func(context.Context, ...string) ([]byte, error) { return []byte(`{"headRefOid":"short"}`), nil }
 	if _, err := w.svc.readPR(context.Background(), testURL); err == nil {
 		t.Error("a missing head passed")
+	}
+}
+
+// TestLandAsTheOwnersProfile (SP-063): with AccountFor set, the PR must be
+// the owner's account's, and the push and its undo run git in that account's
+// environment without the user's git configuration; a refused owner pushes
+// nothing.
+func TestLandAsTheOwnersProfile(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	w.author = "work-me"
+	var owners []string
+	w.svc.AccountFor = func(_ context.Context, owner string) (Account, error) {
+		owners = append(owners, owner)
+		return Account{Login: "Work-Me", Env: append(os.Environ(), "GH_CONFIG_DIR=/profiles/acme", "SSH_ASKPASS=/bin/false")}, nil
+	}
+	var pushes [][]string
+	w.svc.GitAs = func(env []string) GitRunner {
+		return func(ctx context.Context, dir string, args ...string) ([]byte, error) {
+			pushes = append(pushes, env)
+			for i, arg := range args {
+				if arg == testPush {
+					args[i] = w.remote
+				}
+			}
+			return gitIn(ctx, env, profileGitEnv, dir, args...)
+		}
+	}
+	if _, err := w.svc.Land(ctx, "task-1", w.sha); err != nil {
+		t.Fatal(err)
+	}
+	if w.remoteHead() != w.sha {
+		t.Fatalf("remote at %s, want %s", w.remoteHead(), w.sha)
+	}
+	if _, err := w.svc.Undo(ctx, "task-1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(pushes) != 2 {
+		t.Fatalf("pushes as the profile = %d, want land and undo", len(pushes))
+	}
+	for _, env := range pushes {
+		if !slices.Contains(env, "GH_CONFIG_DIR=/profiles/acme") {
+			t.Errorf("push env lacks the profile: %v", env)
+		}
+	}
+	for _, o := range owners {
+		if o != "acme" {
+			t.Errorf("asked for owner %q", o)
+		}
+	}
+
+	w2 := newWorld(t)
+	w2.svc.AccountFor = func(context.Context, string) (Account, error) {
+		return Account{}, errors.New("its space has no gh profile")
+	}
+	before := w2.remoteHead()
+	if _, err := w2.svc.Land(ctx, "task-1", w2.sha); err == nil || !strings.Contains(err.Error(), "no gh profile") {
+		t.Errorf("refused owner: err = %v", err)
+	}
+	if w2.remoteHead() != before {
+		t.Error("a refused owner's proposal was pushed")
+	}
+}
+
+func TestGitWithEnvDropsUserConfig(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(cfg, []byte("[url \"git@github.com:\"]\n\tinsteadOf = https://github.com/\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", cfg)
+	ctx := context.Background()
+	get := []string{"config", "--global", "--get", "url.git@github.com:.insteadof"}
+	if out, err := Git(ctx, t.TempDir(), get...); err != nil || strings.TrimSpace(string(out)) != "https://github.com/" {
+		t.Fatalf("Git reads the user's config: %q, %v", out, err)
+	}
+	if out, err := GitWithEnv(os.Environ())(ctx, t.TempDir(), get...); err == nil || len(out) != 0 {
+		t.Errorf("GitWithEnv read the user's insteadOf rule: %q, %v", out, err)
 	}
 }

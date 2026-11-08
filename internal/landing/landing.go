@@ -143,8 +143,41 @@ type Service struct {
 	Git   GitRunner
 	Login func(context.Context) (string, error)
 	Task  func(context.Context, string) (Task, bool, error)
+	// AccountFor, when set, picks the GitHub account for a PR's owner: a
+	// space's gh profile (SP-063). The PR must be that account's, and pushes
+	// run as it. An error refuses. nil uses Login and the default gh login.
+	AccountFor func(ctx context.Context, owner string) (Account, error)
+	// GitAs runs git with a profile's environment; nil is GitWithEnv.
+	GitAs func(env []string) GitRunner
 
 	mu sync.Mutex
+}
+
+// Account is the GitHub account a PR's pushes run as.
+type Account struct {
+	Login string
+	// Env, when set, is the gh environment (github.ProfileEnv) pushes run
+	// with, without the user's git configuration; nil is the default login.
+	Env []string
+}
+
+// account returns the account for the PR at url.
+func (s *Service) account(ctx context.Context, url string) (Account, error) {
+	ownerRepo, _, err := reviews.ParseURL(url)
+	if err != nil {
+		return Account{}, err
+	}
+	return s.ownerAccount(ctx, ownerRepo)
+}
+
+// ownerAccount returns the account for the owner of ownerRepo.
+func (s *Service) ownerAccount(ctx context.Context, ownerRepo string) (Account, error) {
+	if s.AccountFor == nil {
+		login, err := s.Login(ctx)
+		return Account{Login: login}, err
+	}
+	owner, _, _ := strings.Cut(ownerRepo, "/")
+	return s.AccountFor(ctx, owner)
 }
 
 // PRState is the part of a PR that decides whether a proposal may land.
@@ -180,7 +213,7 @@ func (s *Service) readPR(ctx context.Context, url string) (PRState, error) {
 
 // blocked says why a commit may not be pushed to the PR, or "". The app has
 // its own version of this for the form; this one is the check that counts.
-func (s *Service) blocked(ctx context.Context, pr PRState) (string, error) {
+func (s *Service) blocked(ctx context.Context, url string, pr PRState) (string, error) {
 	switch {
 	case pr.State != "OPEN":
 		return "The PR is no longer open.", nil
@@ -193,11 +226,11 @@ func (s *Service) blocked(ctx context.Context, pr PRState) (string, error) {
 	if lowered == strings.ToLower(pr.Base) || lowered == "main" || lowered == "master" || lowered == "develop" || lowered == "trunk" {
 		return "The PR's head is a protected branch, so orch will not push to it.", nil
 	}
-	login, err := s.Login(ctx)
+	acct, err := s.account(ctx, url)
 	if err != nil {
 		return "", err
 	}
-	if login == "" || !strings.EqualFold(login, pr.Author) {
+	if login := acct.Login; login == "" || !strings.EqualFold(login, pr.Author) {
 		return "Someone else wrote this PR, so orch will not push to it.", nil
 	}
 	return "", nil
@@ -278,7 +311,7 @@ func (s *Service) get(ctx context.Context, taskID string) (Landing, error) {
 		return Landing{}, err
 	}
 	l.State = StateProposed
-	if l.Blocked, err = s.blocked(ctx, pr); err != nil {
+	if l.Blocked, err = s.blocked(ctx, l.URL, pr); err != nil {
 		return Landing{}, err
 	}
 	l.CanLand = l.Blocked == ""
@@ -373,7 +406,7 @@ func (s *Service) Undo(ctx context.Context, taskID string) (Landing, error) {
 	if why := undoBlocked(pr, rec); why != "" {
 		return Landing{}, fmt.Errorf("%w: %s", ErrRefused, why)
 	}
-	if why, err := s.blocked(ctx, pr); err != nil {
+	if why, err := s.blocked(ctx, rec.URL, pr); err != nil {
 		return Landing{}, err
 	} else if why != "" {
 		return Landing{}, fmt.Errorf("%w: %s", ErrRefused, why)

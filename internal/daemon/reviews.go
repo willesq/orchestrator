@@ -26,11 +26,11 @@ const reviewsTick = 15 * time.Second
 
 // newReviewWatcher wires the watcher to the dispatch queue, the ledger and the
 // shared GitHub identity.
-func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, gh *github.Service) *reviews.Watcher {
+func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, gh *github.Service, ghp *ghProfiles) *reviews.Watcher {
 	return &reviews.Watcher{
 		Store: store,
-		GH:    github.GH,
-		Post:  reviews.GHPost,
+		GH:    ghp.Routed(),
+		Post:  reviews.NewGHPoster(ghp.Env),
 		// Unrouted, so the agent's own model runs: the review fans out to
 		// subagents, which only Claude Code sessions have.
 		Dispatch: func(ctx context.Context, body string) (string, error) {

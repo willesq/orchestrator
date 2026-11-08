@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -196,5 +197,53 @@ func TestGHPostFailedEditAddsNoComment(t *testing.T) {
 	}
 	if w := writes(calls()); len(w) != 1 {
 		t.Fatalf("a failed edit added a comment: %+v", w)
+	}
+}
+
+// TestNewGHPosterPostsAsTheOwnersProfile (SP-063): every gh call of a post
+// runs with the environment envFor gives the repo's owner, and a refused
+// owner gets no call at all.
+func TestNewGHPosterPostsAsTheOwnersProfile(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "calls.log")
+	script := "#!/bin/sh\nprintf '%s|%s\\n' \"$GH_CONFIG_DIR\" \"$*\" >> '" + logPath + "'\ncat >/dev/null\n" +
+		"case \"$2\" in user) echo work-me ;; esac\n"
+	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	var owners []string
+	post := NewGHPoster(func(_ context.Context, owner string) ([]string, error) {
+		owners = append(owners, owner)
+		if owner == "globex" {
+			return nil, errors.New("its space has no gh profile")
+		}
+		return append(os.Environ(), "GH_CONFIG_DIR=/profiles/acme"), nil
+	})
+	if err := post(context.Background(), "acme/api", 9, EventUpdate, shaA, "ok"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
+	// Looking for its earlier comment takes two calls, then one adds it.
+	if len(lines) != 3 {
+		t.Fatalf("calls = %q", lines)
+	}
+	for _, l := range lines {
+		if !strings.HasPrefix(l, "/profiles/acme|") {
+			t.Errorf("call ran as another login: %q", l)
+		}
+	}
+	if err := post(context.Background(), "globex/web", 9, "APPROVE", shaA, "ok"); err == nil || !strings.Contains(err.Error(), "no gh profile") {
+		t.Errorf("refused owner: err = %v", err)
+	}
+	if b2, _ := os.ReadFile(logPath); len(b2) != len(b) {
+		t.Error("a refused owner's post ran gh")
+	}
+	if !slices.Equal(owners, []string{"acme", "globex"}) {
+		t.Errorf("owners asked = %v", owners)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
@@ -100,13 +101,26 @@ func (s *server) spacesStatus(ctx context.Context) *orchdv1.SpacesStatus {
 	if err != nil {
 		return &orchdv1.SpacesStatus{Error: "could not read the spaces policy: " + err.Error()}
 	}
-	return &orchdv1.SpacesStatus{
+	out := &orchdv1.SpacesStatus{
 		Configured:      st.Configured,
 		AppliedRevision: st.AppliedRevision,
 		DraftRevision:   st.DraftRevision,
 		Drift:           st.Drift,
 		Error:           st.Error,
 	}
+	if probs := s.ghProfiles.problems(ctx); len(probs) > 0 {
+		// Reason: Status is open to every caller and the problems name
+		// spaces and orgs, so only the operator sees them.
+		msg := fmt.Sprintf("%d problem(s) with the spaces' GitHub accounts; the operator sees them in 'orch status'", len(probs))
+		if _, ok := operator(ctx); ok {
+			msg = strings.Join(probs, "; ")
+		}
+		if out.Error != "" {
+			msg = out.Error + "; " + msg
+		}
+		out.Error = msg
+	}
+	return out
 }
 
 func problemsProto(ps spaces.Problems) []*orchdv1.SpacesProblem {
@@ -136,11 +150,18 @@ func callerLabel(ctx context.Context) string {
 	return fmt.Sprintf("operator (process %d)", a.pid)
 }
 
-// spacesEnv is the real filesystem plus gh for GitHub org identities.
-func spacesEnv() spaces.Env {
+// spacesEnv is the real filesystem plus gh for GitHub org identities, each
+// looked up as the gh profile of the space binding the org.
+func spacesEnv(ghp *ghProfiles) spaces.Env {
 	env := spaces.DefaultEnv()
-	env.LookupOrg = func(ctx context.Context, login string) (spaces.OrgIdentity, error) {
-		a, err := github.LookupAccount(ctx, github.GH, login)
+	env.LookupOrg = func(ctx context.Context, login string, prof spaces.GHProfile) (spaces.OrgIdentity, error) {
+		penv, err := ghp.profileEnv(ctx, prof)
+		if err != nil {
+			// Names the space for the operator at apply; docsOwnerCheck
+			// replaces it before a sync reason or log line shows it.
+			return spaces.OrgIdentity{}, fmt.Errorf("space %q: %w", prof.Space, err)
+		}
+		a, err := github.LookupAccount(ctx, ghp.runner(penv), login)
 		return spaces.OrgIdentity{Login: a.Login, NodeID: a.NodeID}, err
 	}
 	return env

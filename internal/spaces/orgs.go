@@ -46,12 +46,14 @@ func boundOrgs(p Policy) map[string]string {
 	return orgs
 }
 
-// lookupOrg reads login's identity from GitHub through env.LookupOrg.
-func (e Env) lookupOrg(ctx context.Context, login string) (OrgIdentity, error) {
+// lookupOrg reads login's identity from GitHub through env.LookupOrg, as the
+// gh profile of the space res binds it to.
+func (e Env) lookupOrg(ctx context.Context, res *Resolved, login string) (OrgIdentity, error) {
 	if e.LookupOrg == nil {
 		return OrgIdentity{}, fmt.Errorf("%w %q: no GitHub lookup is configured", ErrOrgLookup, login)
 	}
-	id, err := e.LookupOrg(ctx, login)
+	prof, _ := res.GHProfileFor(login)
+	id, err := e.LookupOrg(ctx, login, prof)
 	switch {
 	case err != nil:
 		return OrgIdentity{}, fmt.Errorf("%w %q: %v", ErrOrgLookup, login, err)
@@ -74,9 +76,13 @@ func (e *Engine) resolveOrgs(ctx context.Context, n int64, acceptAgentDraft bool
 	if err != nil {
 		return nil, nil
 	}
+	res, err := Validate(p, e.env)
+	if err != nil {
+		return nil, nil
+	}
 	ids := map[string]OrgIdentity{}
 	for k, login := range boundOrgs(p) {
-		id, err := e.env.lookupOrg(ctx, login)
+		id, err := e.env.lookupOrg(ctx, res, login)
 		if err != nil {
 			return nil, err
 		}
@@ -155,7 +161,11 @@ func bindOrgs(ctx context.Context, tx *sql.Tx, res *Resolved, revision int64, id
 // binding is suspended or was never confirmed, else its space. It reads only
 // orch.db; CheckOrg also asks GitHub.
 func (e *Engine) OrgSpace(ctx context.Context, login string) (string, error) {
-	space, b, err := e.orgBinding(ctx, login)
+	res, err := e.Current()
+	if err != nil {
+		return "", err
+	}
+	space, b, err := e.orgBinding(ctx, res, login)
 	switch {
 	case err != nil, space == "":
 		return "", err
@@ -165,12 +175,9 @@ func (e *Engine) OrgSpace(ctx context.Context, login string) (string, error) {
 	return space, nil
 }
 
-// orgBinding returns the space login is bound to and its stored binding.
-func (e *Engine) orgBinding(ctx context.Context, login string) (string, *orgBinding, error) {
-	res, err := e.Current()
-	if err != nil {
-		return "", nil, err
-	}
+// orgBinding returns the space login is bound to and its stored binding,
+// under res.
+func (e *Engine) orgBinding(ctx context.Context, res *Resolved, login string) (string, *orgBinding, error) {
 	space, ok := res.GitHubOrgSpace(login)
 	if !ok {
 		return "", nil, nil
@@ -186,14 +193,18 @@ func (e *Engine) orgBinding(ctx context.Context, login string) (string, *orgBind
 // new identity at an apply. A lookup failure is an error; the caller must not
 // place the content.
 func (e *Engine) CheckOrg(ctx context.Context, login string) (string, error) {
-	space, b, err := e.orgBinding(ctx, login)
+	res, err := e.Current()
+	if err != nil {
+		return "", err
+	}
+	space, b, err := e.orgBinding(ctx, res, login)
 	switch {
 	case err != nil, space == "":
 		return "", err
 	case b == nil || b.suspended:
 		return Quarantine, nil
 	}
-	id, err := e.env.lookupOrg(ctx, login)
+	id, err := e.env.lookupOrg(ctx, res, login)
 	if err != nil {
 		return "", err
 	}

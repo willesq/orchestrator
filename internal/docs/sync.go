@@ -20,6 +20,7 @@ import (
 	"unicode"
 
 	"github.com/willesq/orchestrator/internal/gitdates"
+	"github.com/willesq/orchestrator/internal/github"
 	"github.com/willesq/orchestrator/internal/mdwalk"
 	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/rag"
@@ -78,6 +79,10 @@ type SyncOpts struct {
 	// CheckOwner, when set, runs before an owner's repos are listed; an
 	// error stops that owner's sync before anything is ingested.
 	CheckOwner func(ctx context.Context, owner string) error
+	// Clients, when set, picks the GitHub and Git an owner's sync uses, so
+	// a space's orgs sync as its own GitHub account; an error stops that
+	// owner's sync before anything is fetched. nil uses GH and Git.
+	Clients func(ctx context.Context, owner string) (GitHub, Git, error)
 }
 
 // Result is how one owner's sync went.
@@ -113,6 +118,15 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 	now := opts.Now
 	if now == nil {
 		now = func() int64 { return 0 }
+	}
+	if opts.Clients != nil {
+		gh, git, err := opts.Clients(ctx, o.Owner)
+		if err != nil {
+			reason := "not synced: " + err.Error()
+			log.Printf("docs: %s: %s", o.Owner, reason)
+			return Result{Status: "error", Reason: reason}
+		}
+		opts.GH, opts.Git = gh, git
 	}
 	if opts.CheckOwner != nil {
 		if err := opts.CheckOwner(ctx, o.Owner); err != nil {
@@ -481,7 +495,15 @@ type runFunc func(ctx context.Context, name string, args ...string) ([]byte, err
 // failure reported as an owner's "error" status carries the reason (bad auth,
 // missing binary, clone rejection) instead of just an exit code.
 func execRun(ctx context.Context, name string, args ...string) ([]byte, error) {
-	out, err := exec.CommandContext(ctx, name, args...).Output()
+	return execRunEnv(ctx, nil, name, args...)
+}
+
+// execRunEnv is execRun with env as the command's environment; nil is this
+// process's.
+func execRunEnv(ctx context.Context, env []string, name string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Env = env
+	out, err := cmd.Output()
 	var ee *exec.ExitError
 	if errors.As(err, &ee) && len(ee.Stderr) > 0 {
 		// Reason: git/gh error text can echo a credential-bearing remote URL.
@@ -521,9 +543,16 @@ var errStalled = errors.New("stalled")
 // leaves nothing behind; WaitDelay bounds anything that escaped the group and
 // still holds the output pipe.
 func runWatched(ctx context.Context, stall time.Duration, name string, args ...string) ([]byte, error) {
+	return runWatchedEnv(ctx, stall, nil, name, args...)
+}
+
+// runWatchedEnv is runWatched with env as the command's environment; nil is
+// this process's.
+func runWatchedEnv(ctx context.Context, stall time.Duration, env []string, name string, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = waitDelay
@@ -679,7 +708,12 @@ func parseGraphQLPage(b []byte) (repos []Repo, hasNext bool, endCursor string, e
 	return repos, page.PageInfo.HasNextPage, page.PageInfo.EndCursor, nil
 }
 
-type ghGit struct{ run runFunc }
+type ghGit struct {
+	run runFunc
+	// profile clones with plain git over HTTPS, with gh, run in the
+	// profile's environment, as the only credential helper.
+	profile bool
+}
 
 // Sync (re)clones the repo shallowly to dest. Since callers only sync repos whose
 // HEAD moved, a fresh shallow clone is simplest and always correct.
@@ -693,7 +727,18 @@ func (g ghGit) Sync(ctx context.Context, owner, repo, dest string) error {
 	// `gh repo clone` uses the user's gh auth so private repos work.
 	// --progress keeps git reporting while it transfers, which the stall
 	// watchdog relies on.
-	if _, err := g.run(ctx, "gh", "repo", "clone", owner+"/"+repo, dest, "--", "--depth", "1", "--progress"); err != nil {
+	args := []string{"repo", "clone", owner + "/" + repo, dest, "--", "--depth", "1", "--progress"}
+	name := "gh"
+	if g.profile {
+		if !github.ValidLogin(owner) || !github.ValidRepo(repo) {
+			return fmt.Errorf("invalid GitHub repo %q", owner+"/"+repo)
+		}
+		// The empty helper drops any configured before it, so only gh, as
+		// the profile's account, answers for credentials.
+		name, args = "git", []string{"-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential",
+			"clone", "--depth", "1", "--progress", "--", "https://github.com/" + owner + "/" + repo + ".git", dest}
+	}
+	if _, err := g.run(ctx, name, args...); err != nil {
 		return fmt.Errorf("gh repo clone %s/%s: %w", owner, repo, err)
 	}
 	return nil

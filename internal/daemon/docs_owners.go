@@ -69,7 +69,18 @@ func (s *server) ListDocsOwnerRepos(ctx context.Context, req *orchdv1.ListDocsOw
 	if !github.ValidLogin(req.GetOwner()) {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "invalid GitHub login %q", req.GetOwner())
 	}
-	repos, err := s.docsGH.ListRepos(ctx, req.GetOwner())
+	gh := s.docsGH
+	if s.ghProfiles != nil {
+		// A space's org is listed as its account, or not at all.
+		env, err := s.ghProfiles.Env(ctx, req.GetOwner())
+		if err != nil {
+			return nil, grpcstatus.Errorf(codes.FailedPrecondition, "GitHub: %v", err)
+		}
+		if env != nil {
+			gh = docs.NewProfileGitHub(env)
+		}
+	}
+	repos, err := gh.ListRepos(ctx, req.GetOwner())
 	if err != nil {
 		return nil, grpcstatus.Errorf(codes.Unavailable, "GitHub: %v", err)
 	}

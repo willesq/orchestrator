@@ -16,6 +16,21 @@ import (
 type Watch struct {
 	Login  string
 	Scopes []github.Scope
+	// Accounts are the spaces' gh profiles, each searched as its own login
+	// besides the default one (SP-063).
+	Accounts []Account
+	// Route names the account an owner's items come through: "" for the
+	// default login, else an Account's Name. ok false drops the owner's
+	// items, as its space has no working gh profile. nil routes every owner
+	// to the default login.
+	Route func(owner string) (account string, ok bool)
+}
+
+// Account is a gh login the babysitter searches as.
+type Account struct {
+	Name  string
+	Login string
+	GH    func(ctx context.Context, args ...string) ([]byte, error)
 }
 
 // WatchSource reports the current Watch.
@@ -110,63 +125,29 @@ func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 		everything = everything[:MaxEverythingScopes]
 	}
 
-	queries := []query{
-		{kind: KindPR, flags: []string{"--involves=@me"}},
-		// Includes requests made to a team the user is on.
-		{kind: KindPR, flags: []string{"--review-requested=@me"}, reason: ReasonReviewRequested},
-		{kind: KindIssue, flags: []string{"--involves=@me"}},
+	route := w.Route
+	if route == nil {
+		route = func(string) (string, bool) { return "", true }
 	}
-	for _, owner := range everything {
-		queries = append(queries,
-			query{kind: KindPR, flags: []string{"--owner=" + owner}, reason: ReasonAllOpen},
-			query{kind: KindIssue, flags: []string{"--owner=" + owner}, reason: ReasonAllOpen})
-	}
-	for _, flags := range repoBatches(everythingRepos) {
-		queries = append(queries,
-			query{kind: KindPR, flags: flags, reason: ReasonAllOpen, skipMissing: true},
-			query{kind: KindIssue, flags: flags, reason: ReasonAllOpen, skipMissing: true})
-	}
-
 	byURL := map[string]*PR{}
+	via := map[string]ghRunner{}
 	var order []string
-	for _, q := range queries {
-		hits, err := b.search(ctx, q)
-		if err != nil && q.skipMissing && strings.Contains(err.Error(), repoSearchMissing) {
-			log.Printf("pr-babysitter: skipping unsearchable repos %v: %v", q.flags, err)
-			continue
+	for _, acct := range append([]Account{{Login: w.Login, GH: b.gh}}, w.Accounts...) {
+		// Reason: each owner's items come only through its space's account,
+		// so a call about one space's org never runs as another's login.
+		mine := func(owner string) bool {
+			name, ok := route(owner)
+			return ok && name == acct.Name
 		}
-		if err != nil {
+		// Reason: the PR cache is readable by tasks in any space, so a
+		// profile's items, like the default login's, are kept only for a
+		// scope the user enabled.
+		kept := func(owner, repo string) bool {
+			sc, ok := watched[strings.ToLower(owner)]
+			return ok && sc.Watches(repo)
+		}
+		if err := b.searchAs(ctx, acct, mine, kept, everything, everythingRepos, byURL, via, &order); err != nil {
 			return nil, err
-		}
-		for _, h := range hits {
-			// Only github.com item URLs: one later goes to gh pr view as an
-			// argument, so nothing that could read as a flag.
-			if !strings.HasPrefix(h.URL, "https://github.com/") {
-				continue
-			}
-			owner, repo, ok := strings.Cut(h.Repository.NameWithOwner, "/")
-			sc, watchedOwner := watched[strings.ToLower(owner)]
-			if !ok || !watchedOwner || !sc.Watches(repo) {
-				continue
-			}
-			item, seen := byURL[h.URL]
-			if !seen {
-				item = &PR{
-					URL: h.URL, Title: h.Title, Repo: h.Repository.NameWithOwner, Kind: q.kind,
-					Number: h.Number, Author: h.Author.Login, UpdatedAt: h.UpdatedAt, IsDraft: h.IsDraft,
-				}
-				byURL[h.URL] = item
-				order = append(order, h.URL)
-			}
-			reasons := []string{q.reason}
-			if q.reason == "" {
-				reasons = involvement(h, w.Login)
-			}
-			for _, r := range reasons {
-				if !slices.Contains(item.Reasons, r) {
-					item.Reasons = append(item.Reasons, r)
-				}
-			}
 		}
 	}
 
@@ -176,11 +157,84 @@ func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 		sortReasons(item.Reasons)
 		// CI and review state only matter where the PR can need the user.
 		if item.IsPR() && (item.Authored() || slices.Contains(item.Reasons, ReasonReviewRequested)) {
-			enrich(ctx, b.gh, item)
+			enrich(ctx, via[url], item)
 		}
 		out = append(out, *item)
 	}
 	return out, nil
+}
+
+// searchAs runs the sweep's searches as acct, for the owners mine accepts,
+// keeping the hits kept accepts and adding them to byURL (in order) and recording in via which account found
+// each.
+func (b *Babysitter) searchAs(ctx context.Context, acct Account, mine func(owner string) bool, kept func(owner, repo string) bool,
+	everything, everythingRepos []string, byURL map[string]*PR, via map[string]ghRunner, order *[]string) error {
+	queries := []query{
+		{kind: KindPR, flags: []string{"--involves=@me"}},
+		// Includes requests made to a team the user is on.
+		{kind: KindPR, flags: []string{"--review-requested=@me"}, reason: ReasonReviewRequested},
+		{kind: KindIssue, flags: []string{"--involves=@me"}},
+	}
+	for _, owner := range everything {
+		if mine(owner) {
+			queries = append(queries,
+				query{kind: KindPR, flags: []string{"--owner=" + owner}, reason: ReasonAllOpen},
+				query{kind: KindIssue, flags: []string{"--owner=" + owner}, reason: ReasonAllOpen})
+		}
+	}
+	var repos []string
+	for _, r := range everythingRepos {
+		if owner, _, _ := strings.Cut(r, "/"); mine(owner) {
+			repos = append(repos, r)
+		}
+	}
+	for _, flags := range repoBatches(repos) {
+		queries = append(queries,
+			query{kind: KindPR, flags: flags, reason: ReasonAllOpen, skipMissing: true},
+			query{kind: KindIssue, flags: flags, reason: ReasonAllOpen, skipMissing: true})
+	}
+
+	for _, q := range queries {
+		hits, err := search(ctx, acct.GH, q)
+		if err != nil && q.skipMissing && strings.Contains(err.Error(), repoSearchMissing) {
+			log.Printf("pr-babysitter: skipping unsearchable repos %v: %v", q.flags, err)
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		for _, h := range hits {
+			// Only github.com item URLs: one later goes to gh pr view as an
+			// argument, so nothing that could read as a flag.
+			if !strings.HasPrefix(h.URL, "https://github.com/") {
+				continue
+			}
+			owner, repo, ok := strings.Cut(h.Repository.NameWithOwner, "/")
+			if !ok || !kept(owner, repo) || !mine(owner) {
+				continue
+			}
+			item, seen := byURL[h.URL]
+			if !seen {
+				item = &PR{
+					URL: h.URL, Title: h.Title, Repo: h.Repository.NameWithOwner, Kind: q.kind,
+					Number: h.Number, Author: h.Author.Login, UpdatedAt: h.UpdatedAt, IsDraft: h.IsDraft,
+				}
+				byURL[h.URL] = item
+				via[h.URL] = acct.GH
+				*order = append(*order, h.URL)
+			}
+			reasons := []string{q.reason}
+			if q.reason == "" {
+				reasons = involvement(h, acct.Login)
+			}
+			for _, r := range reasons {
+				if !slices.Contains(item.Reasons, r) {
+					item.Reasons = append(item.Reasons, r)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // repoBatches groups owner/name repos into the --repo flags of one search each,
@@ -230,7 +284,7 @@ func sortReasons(reasons []string) {
 	})
 }
 
-func (b *Babysitter) search(ctx context.Context, q query) ([]hit, error) {
+func search(ctx context.Context, gh ghRunner, q query) ([]hit, error) {
 	fields := "url,title,number,repository,author,assignees,updatedAt"
 	what := "issues"
 	if q.kind == KindPR {
@@ -241,7 +295,7 @@ func (b *Babysitter) search(ctx context.Context, q query) ([]hit, error) {
 	// Newest first, so a burst of stale items cannot push recent ones past
 	// the limit.
 	args = append(args, "--state=open", "--sort=updated", "--limit", searchLimit, "--json", fields)
-	out, err := b.gh(ctx, args...)
+	out, err := gh(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
