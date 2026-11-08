@@ -64,6 +64,7 @@ const (
 	Orchd_PurgeDocs_FullMethodName                = "/orchd.v1.Orchd/PurgeDocs"
 	Orchd_GetConfig_FullMethodName                = "/orchd.v1.Orchd/GetConfig"
 	Orchd_SetConfig_FullMethodName                = "/orchd.v1.Orchd/SetConfig"
+	Orchd_RemoveLegacyConfig_FullMethodName       = "/orchd.v1.Orchd/RemoveLegacyConfig"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName               = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName             = "/orchd.v1.Orchd/RemoveSource"
@@ -209,10 +210,15 @@ type OrchdClient interface {
 	// PurgeDocs deletes the indexed docs of repos an owner no longer covers.
 	// Permanent: needs confirm. Refused while a docs sync runs.
 	PurgeDocs(ctx context.Context, in *PurgeDocsRequest, opts ...grpc.CallOption) (*PurgeDocsResponse, error)
-	// GetConfig returns every setting in config.yaml, described for editing.
+	// GetConfig returns every setting, described for editing. Settings live in
+	// orch.db; this and SetConfig are the only way to change them.
 	GetConfig(ctx context.Context, in *GetConfigRequest, opts ...grpc.CallOption) (*ConfigState, error)
 	// SetConfig validates and writes settings in one write: all of them or none.
+	// A value equal to the default resets the setting to follow the default.
 	SetConfig(ctx context.Context, in *SetConfigRequest, opts ...grpc.CallOption) (*ConfigState, error)
+	// RemoveLegacyConfig deletes the config.yaml orch no longer reads, once its
+	// settings were imported.
+	RemoveLegacyConfig(ctx context.Context, in *RemoveLegacyConfigRequest, opts ...grpc.CallOption) (*ConfigState, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -730,6 +736,16 @@ func (c *orchdClient) SetConfig(ctx context.Context, in *SetConfigRequest, opts 
 	return out, nil
 }
 
+func (c *orchdClient) RemoveLegacyConfig(ctx context.Context, in *RemoveLegacyConfigRequest, opts ...grpc.CallOption) (*ConfigState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigState)
+	err := c.cc.Invoke(ctx, Orchd_RemoveLegacyConfig_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -1017,10 +1033,15 @@ type OrchdServer interface {
 	// PurgeDocs deletes the indexed docs of repos an owner no longer covers.
 	// Permanent: needs confirm. Refused while a docs sync runs.
 	PurgeDocs(context.Context, *PurgeDocsRequest) (*PurgeDocsResponse, error)
-	// GetConfig returns every setting in config.yaml, described for editing.
+	// GetConfig returns every setting, described for editing. Settings live in
+	// orch.db; this and SetConfig are the only way to change them.
 	GetConfig(context.Context, *GetConfigRequest) (*ConfigState, error)
 	// SetConfig validates and writes settings in one write: all of them or none.
+	// A value equal to the default resets the setting to follow the default.
 	SetConfig(context.Context, *SetConfigRequest) (*ConfigState, error)
+	// RemoveLegacyConfig deletes the config.yaml orch no longer reads, once its
+	// settings were imported.
+	RemoveLegacyConfig(context.Context, *RemoveLegacyConfigRequest) (*ConfigState, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -1213,6 +1234,9 @@ func (UnimplementedOrchdServer) GetConfig(context.Context, *GetConfigRequest) (*
 }
 func (UnimplementedOrchdServer) SetConfig(context.Context, *SetConfigRequest) (*ConfigState, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetConfig not implemented")
+}
+func (UnimplementedOrchdServer) RemoveLegacyConfig(context.Context, *RemoveLegacyConfigRequest) (*ConfigState, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveLegacyConfig not implemented")
 }
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
@@ -2086,6 +2110,24 @@ func _Orchd_SetConfig_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_RemoveLegacyConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveLegacyConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).RemoveLegacyConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_RemoveLegacyConfig_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).RemoveLegacyConfig(ctx, req.(*RemoveLegacyConfigRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -2556,6 +2598,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetConfig",
 			Handler:    _Orchd_SetConfig_Handler,
+		},
+		{
+			MethodName: "RemoveLegacyConfig",
+			Handler:    _Orchd_RemoveLegacyConfig_Handler,
 		},
 		{
 			MethodName: "ListRegisteredSources",

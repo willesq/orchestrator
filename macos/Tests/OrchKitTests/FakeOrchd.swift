@@ -71,6 +71,16 @@ struct FakeOrchdService: RegistrableRPCService {
             return StreamingServerResponse(single: ServerResponse(message: configState))
         }
         router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.RemoveLegacyConfig.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_RemoveLegacyConfigRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ConfigState>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            var removed = configState
+            removed.legacyFile = ""
+            return StreamingServerResponse(single: ServerResponse(message: removed))
+        }
+        router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.ListDocsOwners.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_ListDocsOwnersRequest>(),
             serializer: ProtobufSerializer<Orchd_V1_ListDocsOwnersResponse>()

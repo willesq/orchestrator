@@ -33,7 +33,8 @@ and a new session sees the latest in its SessionStart digest.
 
 When the worker is disabled, tasks stay `pending` indefinitely. Say so plainly instead of
 implying they are running; check with `orch config get queue.worker.enabled` and `queue.worker.max_concurrent` (`orch status`
-lists a `workflow-worker` subsystem only when it is on). A task interrupted by an orchd
+lists a `workflow-worker` subsystem only when it is on). The user turns it on in Orch.app
+(Settings → Tasks → Parallel tasks). A task interrupted by an orchd
 restart is not lost: its session resumes once orchd is back. `orch task <id>` says whether a
 pending or in-progress task is running, waiting for a worker, or stalled, with its session and
 the command to open it; for a stalled task, suggest `orch task <id> --retry` or `--cancel` and

@@ -1873,11 +1873,11 @@ public nonisolated struct Orchd_V1_ConfigField: Sendable {
   /// takes effect without restarting orchd
   public var live: Bool = false
 
-  /// an environment variable sets it, so it cannot be changed here
-  public var envOverride: Bool = false
-
   /// differs from what orchd started with
   public var pendingRestart: Bool = false
+
+  /// set away from its default
+  public var overridden: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -1891,11 +1891,25 @@ public nonisolated struct Orchd_V1_ConfigState: Sendable {
 
   public var fields: [Orchd_V1_ConfigField] = []
 
-  /// config.yaml
-  public var path: String = String()
-
   /// some field is pending_restart
   public var restartRequired: Bool = false
+
+  /// a config.yaml orch no longer reads, still on disk; empty if none
+  public var legacyFile: String = String()
+
+  /// Why orchd could not start its services, when it runs only to let the
+  /// settings be fixed; empty when it started normally.
+  public var startupError: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_RemoveLegacyConfigRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -7231,7 +7245,7 @@ nonisolated extension Orchd_V1_SetConfigRequest: SwiftProtobuf.Message, SwiftPro
 
 nonisolated extension Orchd_V1_ConfigField: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConfigField"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{1}section\0\u{1}label\0\u{1}help\0\u{1}type\0\u{1}value\0\u{3}default_value\0\u{1}options\0\u{3}has_range\0\u{1}min\0\u{1}max\0\u{1}sensitive\0\u{1}live\0\u{3}env_override\0\u{3}pending_restart\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}key\0\u{1}section\0\u{1}label\0\u{1}help\0\u{1}type\0\u{1}value\0\u{3}default_value\0\u{1}options\0\u{3}has_range\0\u{1}min\0\u{1}max\0\u{1}sensitive\0\u{1}live\0\u{4}\u{2}pending_restart\0\u{1}overridden\0\u{b}env_override\0\u{c}\u{e}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7252,8 +7266,8 @@ nonisolated extension Orchd_V1_ConfigField: SwiftProtobuf.Message, SwiftProtobuf
       case 11: try { try decoder.decodeSingularDoubleField(value: &self.max) }()
       case 12: try { try decoder.decodeSingularBoolField(value: &self.sensitive) }()
       case 13: try { try decoder.decodeSingularBoolField(value: &self.live) }()
-      case 14: try { try decoder.decodeSingularBoolField(value: &self.envOverride) }()
       case 15: try { try decoder.decodeSingularBoolField(value: &self.pendingRestart) }()
+      case 16: try { try decoder.decodeSingularBoolField(value: &self.overridden) }()
       default: break
       }
     }
@@ -7299,11 +7313,11 @@ nonisolated extension Orchd_V1_ConfigField: SwiftProtobuf.Message, SwiftProtobuf
     if self.live != false {
       try visitor.visitSingularBoolField(value: self.live, fieldNumber: 13)
     }
-    if self.envOverride != false {
-      try visitor.visitSingularBoolField(value: self.envOverride, fieldNumber: 14)
-    }
     if self.pendingRestart != false {
       try visitor.visitSingularBoolField(value: self.pendingRestart, fieldNumber: 15)
+    }
+    if self.overridden != false {
+      try visitor.visitSingularBoolField(value: self.overridden, fieldNumber: 16)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -7322,8 +7336,8 @@ nonisolated extension Orchd_V1_ConfigField: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.max != rhs.max {return false}
     if lhs.sensitive != rhs.sensitive {return false}
     if lhs.live != rhs.live {return false}
-    if lhs.envOverride != rhs.envOverride {return false}
     if lhs.pendingRestart != rhs.pendingRestart {return false}
+    if lhs.overridden != rhs.overridden {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7331,7 +7345,7 @@ nonisolated extension Orchd_V1_ConfigField: SwiftProtobuf.Message, SwiftProtobuf
 
 nonisolated extension Orchd_V1_ConfigState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ConfigState"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}fields\0\u{1}path\0\u{3}restart_required\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}fields\0\u{4}\u{2}restart_required\0\u{3}legacy_file\0\u{3}startup_error\0\u{b}path\0\u{c}\u{2}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -7340,8 +7354,9 @@ nonisolated extension Orchd_V1_ConfigState: SwiftProtobuf.Message, SwiftProtobuf
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.fields) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.path) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.restartRequired) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.legacyFile) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.startupError) }()
       default: break
       }
     }
@@ -7351,19 +7366,42 @@ nonisolated extension Orchd_V1_ConfigState: SwiftProtobuf.Message, SwiftProtobuf
     if !self.fields.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.fields, fieldNumber: 1)
     }
-    if !self.path.isEmpty {
-      try visitor.visitSingularStringField(value: self.path, fieldNumber: 2)
-    }
     if self.restartRequired != false {
       try visitor.visitSingularBoolField(value: self.restartRequired, fieldNumber: 3)
+    }
+    if !self.legacyFile.isEmpty {
+      try visitor.visitSingularStringField(value: self.legacyFile, fieldNumber: 4)
+    }
+    if !self.startupError.isEmpty {
+      try visitor.visitSingularStringField(value: self.startupError, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Orchd_V1_ConfigState, rhs: Orchd_V1_ConfigState) -> Bool {
     if lhs.fields != rhs.fields {return false}
-    if lhs.path != rhs.path {return false}
     if lhs.restartRequired != rhs.restartRequired {return false}
+    if lhs.legacyFile != rhs.legacyFile {return false}
+    if lhs.startupError != rhs.startupError {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RemoveLegacyConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RemoveLegacyConfigRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RemoveLegacyConfigRequest, rhs: Orchd_V1_RemoveLegacyConfigRequest) -> Bool {
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

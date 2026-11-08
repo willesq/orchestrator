@@ -1,7 +1,7 @@
 import OrchKit
 import SwiftUI
 
-/// The one place to configure orch: config.yaml, docs and GitHub opt-ins,
+/// The one place to configure orch: its settings, docs and GitHub opt-ins,
 /// Claude Code's settings, the safety net and this app's own preferences.
 struct SettingsView: View {
     let config: ConfigModel
@@ -16,6 +16,7 @@ struct SettingsView: View {
 
     /// What the sidebar shows for the pane: the most pressing thing inside it.
     static func status(config: ConfigModel, safetyNet: SafetyNetModel, claude: SettingsModel) -> SidebarStatus {
+        if config.state?.startupError.isEmpty == false { return .dot(.bad, "orchd could not start its services") }
         if config.state?.restartRequired == true { return .dot(.warning, "Waiting for orchd to restart") }
         if let badge = safetyNet.state?.badge, badge.tone != .good {
             return .dot(SafetyNetView.tone(badge.tone), "Safety Net: \(badge.label)")
@@ -38,6 +39,7 @@ struct SettingsView: View {
             .frame(width: 160)
             Divider()
             VStack(spacing: 0) {
+                startupBanner
                 restartBanner
                 detail.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -65,6 +67,8 @@ struct SettingsView: View {
             return SafetyNetView.tone(badge.tone)
         case .claude:
             return claude.changedOutside > 0 ? .warning : nil
+        case .overview:
+            return config.state?.startupError.isEmpty == false ? .bad : nil
         default:
             let waiting = section.configSections.flatMap(config.fields(section:)).contains(where: \.pendingRestart)
             return waiting ? .warning : nil
@@ -74,6 +78,9 @@ struct SettingsView: View {
     @ViewBuilder
     private var detail: some View {
         switch navigator.settingsSection {
+        case .overview:
+            SettingsOverview(config: config) { navigator.settingsSection = $0 }
+                .navigationTitle("Overview")
         case .tasks, .memory:
             ConfigForm(config: config, sections: navigator.settingsSection.configSections)
                 .navigationTitle(navigator.settingsSection.title)
@@ -104,14 +111,28 @@ struct SettingsView: View {
                     DockIconToggle()
                     LoginItemRow(item: loginItem)
                 }
-                if let path = config.state?.path {
-                    Section("Configuration file") {
-                        Text(verbatim: displaySafe(path)).textStyle(.supporting).textSelection(.enabled)
-                    }
-                }
             }
             .formStyle(.grouped)
             .navigationTitle("App")
+        }
+    }
+
+    /// orchd runs only to serve settings: one of them stopped its services.
+    @ViewBuilder
+    private var startupBanner: some View {
+        if let error = config.state?.startupError, !error.isEmpty {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.octagon.fill").foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("orchd could not start its services. Fix the setting below, then restart orchd.")
+                    Text(verbatim: displaySafe(error)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                Spacer(minLength: 8)
+                Button("Restart orchd…") { confirmingRestart = true }.disabled(config.isRestarting)
+            }
+            .padding(10)
+            .background(.bar)
+            Divider()
         }
     }
 
@@ -198,7 +219,7 @@ private struct ConfigForm<Header: View>: View {
 
 /// One setting: a control for its type, what it means, and anything wrong with
 /// the last change. Text is written when submitted, not per keystroke, since
-/// each write is a whole-file rewrite and half a value may not validate.
+/// half a value may not validate.
 private struct ConfigFieldRow: View {
     let field: ConfigField
     let config: ConfigModel
@@ -208,20 +229,16 @@ private struct ConfigFieldRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             control
-                .disabled(field.envOverride || config.pending.contains(field.key))
+                .disabled(config.pending.contains(field.key))
             if !field.help.isEmpty {
                 Text(verbatim: field.help).textStyle(.caption)
-            }
-            if field.envOverride {
-                Text("An environment variable sets this, so it cannot be changed here.")
-                    .font(.caption).foregroundStyle(.orange)
             }
             if let error = config.fieldErrors[field.key] {
                 Text(verbatim: error).font(.caption).foregroundStyle(.red)
             }
         }
         .contextMenu {
-            if !field.isDefault && !field.envOverride {
+            if !field.isDefault {
                 Button("Reset to Default") { Task { await config.resetToDefault(field) } }
             }
         }
@@ -303,4 +320,61 @@ private struct ConfigFieldRow: View {
     private func commit() {
         Task { await config.changeText(field, text: draft) }
     }
+}
+
+/// Settings at a glance: where they live, what waits for a restart, and
+/// leftovers worth tidying, offered quietly rather than as warnings.
+private struct SettingsOverview: View {
+    let config: ConfigModel
+    let show: (SettingsSection) -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Changed from default") {
+                    Text(verbatim: "\(changed.count)")
+                }
+                ForEach(SettingsSection.allCases.filter { !$0.configSections.isEmpty }) { section in
+                    let count = changed.filter { section.configSections.contains($0.section) }.count
+                    if count > 0 {
+                        Button { show(section) } label: {
+                            LabeledContent(section.title) { Text(verbatim: "\(count) changed") }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if config.pendingRestartCount > 0 {
+                    LabeledContent("Waiting for a restart") { Text(verbatim: "\(config.pendingRestartCount)") }
+                }
+            } header: {
+                Text("Settings")
+            } footer: {
+                Text("orch keeps its settings in its database; change them here.")
+            }
+            if let legacy = config.state?.legacyFile, !legacy.isEmpty {
+                Section("Tidy up") {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Legacy config.yaml found")
+                            Text("orch no longer reads it; its settings were imported. Remove keeps a copy in orch's backups.")
+                                .textStyle(.caption)
+                            Text(verbatim: displaySafe(legacy)).textStyle(.codeCaption).textSelection(.enabled)
+                            if let error = config.legacyError {
+                                Text(verbatim: error).font(.caption).foregroundStyle(.red)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        if config.isRemovingLegacy {
+                            ProgressView().controlSize(.small).accessibilityLabel("Removing config.yaml")
+                        } else {
+                            Button("Remove") { Task { await config.removeLegacyConfig() } }
+                        }
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var changed: [ConfigField] { config.state?.fields.filter { !$0.isDefault } ?? [] }
 }

@@ -1,13 +1,65 @@
 # Configuration
 
-`internal/config` loads settings with Viper: compiled defaults, then `<config>/config.yaml`, then
-environment variables `ORCH_<KEY>` with dots as underscores (`ORCH_QUEUE_WORKER_ENABLED`). A
-missing file is fine.
+orch's settings live in `orch.db` and are changed in Orch.app's Settings pane, through orchd's
+`GetConfig` and `SetConfig`. There is no settings file and no environment override: `ORCH_<KEY>`
+variables are not read. The location variables (`ORCH_DATA_DIR`, `ORCH_CONFIG_DIR`, `ORCH_SOCKET`)
+still say where orch keeps its files, `orch.db` among them.
 
-Writes (`orch config set`, `SetMany`) set keys and rewrite the whole resolved view (`WriteCanonical`):
-marshal to YAML, write a temp file in the same directory, fsync, `chmod 0644`, rename. Related keys
-change together in one write. `SetConfig` and `orch config set` on a key the schema knows go through
-`config.Apply`, which validates first; other keys (one entry of a map, say) are written as given. orchd itself writes config only to record a migration switch or drop.
+`internal/config` resolves the compiled defaults, then the rows of `config_values` (migration
+`0022`: key, JSON value, `updated_at`, `updated_by`). Only values that differ from a default are
+stored, so a default changed in a later release reaches everyone who never set it, and setting a
+value back to its default deletes its row. Every write validates first (`ApplyStore`, the checks
+below) and lands in one transaction: related keys change together, all or nothing. A row that names
+no setting, or no longer passes its checks (only possible by editing `orch.db` by hand), is skipped
+and logged by key, never by value, and the default applies.
+
+- **Readers.** `config.Load` opens `orch.db` read-only and never migrates it, so orch-hook (on every
+  prompt) and the CLI's read commands can call it; with no store yet, or one older than migration
+  `0022`, the defaults apply. orchd reads through its own connection (`LoadStore`).
+- **Writers.** Orch.app through `SetConfig` (`updated_by` `app`). orch's own maintenance writes
+  record what they switched through `config.Save`: a hybrid migration's collection switch and backup
+  drop (`orchd:migrate`), `orch qdrant migrate` and `cutover` (`cli:<command>`). `orch config reset`
+  (`cli:reset`) is the way out when orchd cannot run at all.
+- **CLI.** `orch config get <key>` and `orch config list` read; `orch config reset <key>...` or
+  `--all` puts settings back to their defaults and names the keys it reset, refused inside a queued
+  task. There is no `orch config set`.
+- **Accepted risk.** `orch config reset` writes `orch.db` itself, so orchd's process-ancestry guard
+  (daemon.md, "Queued callers") does not cover it: only `ORCH_TASK_ID` and the Claude Code deny rule
+  stop a queued task, and a task can clear the variable. Resetting a sensitive key can widen what
+  agents may do. This is no wider than before (`orch config set` had the same gate, and a task can
+  write `orch.db` or could edit `config.yaml` directly); the harness sandbox is the boundary.
+
+### The old config.yaml
+
+Releases before this kept settings in `<config>/config.yaml`. At startup orchd imports it once
+(`ImportLegacy`): every value that differs from today's default is stored as it is, with
+`updated_by` `import`, even one an older orch wrote only because it saved every key, since dropping
+it would change what runs (a worker that was off would turn on). The queue limits are imported as
+the old loader clamped them (`max_active: 0` ran as 50). Invalid and unknown keys keep their
+defaults and are logged by name. A `config_import` row records that the import ran, so it never runs
+twice; a first start without the file records it too, so a config.yaml written later (by an older
+orch, say) is never imported over settings confirmed in the app. A file that does not parse is not
+imported, and orchd tries again at the next start.
+
+The file is left in place and never read again. `GetConfig` reports it in `legacy_file` while it
+exists, and `RemoveLegacyConfig` removes it: always that one fixed path, and only once the import
+ran. It first copies the file (owner-only) to `<data>/backups/config.yaml.<UTC time>`, since its
+comments and any keys the import could not keep live only there; a symlink is removed as a link,
+its target untouched. Orch.app offers this as a quiet row under Settings → Overview.
+
+### When a setting stops orchd
+
+Settings can only be changed through orchd, so a setting that stops orchd's services from starting
+(a model folder it cannot create, a port in use, a storage path) must not take orchd down with it.
+If anything after the config is read fails (the Qdrant key, the embedding model, the workflow
+store, adding or starting subsystems), orchd stops what started and serves only `Ping`,
+`GetConfig`, `SetConfig`, `RemoveLegacyConfig` and `Restart`, with the failure in `GetConfig`'s
+`startup_error`; every other RPC is unimplemented. Orch.app shows the error at the top of Settings.
+Once the setting is fixed, restarting orchd (the app's restart, or `Restart`, which exits for the
+service manager to start orchd again) tries the full start. orchd also exits to try again after
+10 minutes, so a failure that clears by itself (the network down during the first model download)
+does not leave its services down until someone notices. When orchd cannot run at all,
+`orch config reset` reaches the store directly.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -86,21 +138,20 @@ options, and two flags. It is what `GetConfig` serves and the app's Settings pan
 when a default has no field.
 
 - **Sensitive:** a key that changes what agents may run or where orch keeps its data. `SetConfig` refuses it
-  without `confirm_sensitive`, and the app asks first. `orch config set` does not ask, because the operator
-  typed the key.
+  without `confirm_sensitive`, and the app asks first. orch's own maintenance writes and `orch config reset`
+  do not ask: the operator ran the command.
 - **Live:** a key each short-lived process reads for itself (`hooks.auto_rag.*`, read by orch-hook on every
   prompt). Every other key takes effect when orchd restarts: `Restart` restarts subsystems in place, without
   reading config again.
 
 `GetConfig` compares each key against a snapshot from orchd's start, so it reports what is waiting for a
-restart however the value was changed, and a value set back stops waiting. A key an environment variable
-overrides is reported as such, and writing it is refused, since the write would have no effect.
+restart however the value was changed, and a value set back stops waiting. Each field also says whether it is
+`overridden` (set away from its default).
 
 ## Queue limits
 
 `max_concurrent` and `max_active` are held to `config.MaxParallelTasks` and `config.MaxActiveTasks` (both 50)
-on every route: `Apply` refuses more, and `Unmarshal` clamps a hand-edited file or environment variable and
-logs it, raising `max_active` to at least `max_concurrent`. `max_active: 0` used to mean no cap and now means
+on every route: `ApplyStore` refuses more, and `Unmarshal` clamps an imported or hand-edited value and logs it, raising `max_active` to at least `max_concurrent`. `max_active: 0` used to mean no cap and now means
 50. The worker runs only when `queue.worker.enabled` is true and `max_concurrent` is above 0
 (`QueueWorkerSettings.Runs`); `max_concurrent: 0` used to mean 1 and now means off. Setting it above 0 through
-`Apply` also turns `enabled` on and raises `max_active` if needed, so the app offers the one number.
+`ApplyStore` also turns `enabled` on and raises `max_active` if needed, so the app offers the one number.

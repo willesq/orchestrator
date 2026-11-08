@@ -11,6 +11,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/willesq/orchestrator/internal/config/configtest"
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/docs"
 	"github.com/willesq/orchestrator/internal/rag"
@@ -281,9 +282,7 @@ func TestDedupeListsLegacyLocalSourceCopies(t *testing.T) {
 	roots = sources.ResolvePath(roots)
 	t.Setenv("ORCH_CONFIG_DIR", cfgDir)
 	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
-	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte("sources:\n  known_roots: [\""+roots+"\"]\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	configtest.Set(t, map[string]string{"sources.known_roots": `["` + roots + `"]`})
 	notes := filepath.Join(roots, "local", "notes")
 	if err := os.MkdirAll(filepath.Join(roots, "mine", "proj"), 0o755); err != nil {
 		t.Fatal(err)

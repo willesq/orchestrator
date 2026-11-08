@@ -66,6 +66,7 @@ func TestRankingParams(t *testing.T) {
 
 func TestDefaultsWireRanking(t *testing.T) {
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	v, err := config.Load()
 	if err != nil {
 		t.Fatal(err)

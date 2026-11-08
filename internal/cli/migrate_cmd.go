@@ -118,7 +118,7 @@ func runMigrate(w io.Writer, oldPath, newPath string, v *viper.Viper, deps migra
 	}
 	fmt.Fprintf(w, "copied %s -> %s\n", oldPath, newPath)
 
-	if err := config.Set(v, "rag.qdrant.storage", newPath); err != nil {
+	if err := config.Save(map[string]any{"rag.qdrant.storage": newPath}, "cli:migrate"); err != nil {
 		return fmt.Errorf("update config: %w", err)
 	}
 	fmt.Fprintln(w, "repointed rag.qdrant.storage")

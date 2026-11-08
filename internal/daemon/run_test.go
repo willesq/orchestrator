@@ -13,8 +13,11 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	grpcstatus "google.golang.org/grpc/status"
 
+	"github.com/willesq/orchestrator/internal/config/configtest"
 	"github.com/willesq/orchestrator/internal/paths"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/selfupdate"
@@ -147,9 +150,8 @@ func TestRunSupervisesAndRestartsSubsystems(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ORCH_PR_BABYSITTER_ENABLED", "false")
-			t.Setenv("ORCH_QUEUE_WORKER_ENABLED", "true")
 			seedRunEnv(t, "orchd-supervisortest.sock")
+			configtest.Set(t, map[string]string{"pr_babysitter.enabled": "false", "queue.worker.enabled": "true"})
 
 			ctx, cancel := context.WithCancel(context.Background())
 			errCh := make(chan error, 1)
@@ -241,7 +243,7 @@ func seedRunEnv(t *testing.T, sockName string) string {
 	// The routing evaluator runs model discovery, which reads harness caches
 	// under HOME; a live daemon in a test must never see the developer's own.
 	t.Setenv("HOME", filepath.Join(dir, "home"))
-	t.Setenv("ORCH_RAG_QDRANT_MODE", "external")
+	configtest.Set(t, map[string]string{"rag.qdrant.mode": `"external"`})
 	// Unix socket paths are capped near 104 chars on macOS; t.TempDir() plus the
 	// test name blows past that, so use a short directory of the test's own. A
 	// fixed name in the shared temp dir would let overlapping test runs replace
@@ -289,8 +291,7 @@ func TestRunSocketIsOwnerOnly(t *testing.T) {
 			t.Setenv("ORCH_DATA_DIR", filepath.Join(dir, "data"))
 			t.Setenv("ORCH_CONFIG_DIR", filepath.Join(dir, "cfg"))
 			t.Setenv("HOME", filepath.Join(dir, "home")) // discovery must not see the developer's caches
-			t.Setenv("ORCH_RAG_QDRANT_MODE", "external")
-			t.Setenv("ORCH_PR_BABYSITTER_ENABLED", "false")
+			configtest.Set(t, map[string]string{"rag.qdrant.mode": `"external"`, "pr_babysitter.enabled": "false"})
 			// Keep the path short enough for macOS's Unix socket limit and unique
 			// across simultaneous test processes.
 			socketDir, err := os.MkdirTemp(os.TempDir(), "orch-perm-")
@@ -375,9 +376,11 @@ func foreignQdrant(t *testing.T) int {
 
 func TestRunStaysUpWhenQdrantRejectsTheKey(t *testing.T) {
 	seedRunEnv(t, "q.sock")
-	t.Setenv("ORCH_PR_BABYSITTER_ENABLED", "false")
-	t.Setenv("ORCH_RAG_QDRANT_MODE", "binary")
-	t.Setenv("ORCH_RAG_QDRANT_HTTP_PORT", strconv.Itoa(foreignQdrant(t)))
+	configtest.Set(t, map[string]string{
+		"pr_babysitter.enabled": "false",
+		"rag.qdrant.mode":       `"binary"`,
+		"rag.qdrant.http_port":  strconv.Itoa(foreignQdrant(t)),
+	})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
@@ -422,5 +425,76 @@ func TestRunStaysUpWhenQdrantRejectsTheKey(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("no qdrant unit in status")
+	}
+}
+
+// A setting that stops orchd's services from starting must not take the
+// settings down with them: they can only be changed through orchd.
+func TestRunServesSettingsWhenASettingStopsTheStart(t *testing.T) {
+	dir := seedRunEnv(t, "rec.sock")
+	blocker := filepath.Join(dir, "a-file")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	configtest.Set(t, map[string]string{
+		"pr_babysitter.enabled": "false",
+		"embedder.model_dir":    strconv.Quote(filepath.Join(blocker, "minilm")),
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- Run(ctx) }()
+
+	sock := paths.SocketPath()
+	if !waitForFile(sock, waitLimit) {
+		select {
+		case err := <-errCh:
+			t.Fatalf("orchd exited instead of serving its settings: %v", err)
+		default:
+			t.Fatalf("socket %s never appeared", sock)
+		}
+	}
+	conn, err := grpc.NewClient("unix://"+sock, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	client := orchdv1.NewOrchdClient(conn)
+	rpcCtx, rpcCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer rpcCancel()
+
+	st, err := client.GetConfig(rpcCtx, &orchdv1.GetConfigRequest{}, grpc.WaitForReady(true))
+	if err != nil {
+		t.Fatalf("GetConfig: %v", err)
+	}
+	if !strings.Contains(st.GetStartupError(), "not a directory") {
+		t.Errorf("startup error = %q", st.GetStartupError())
+	}
+	if _, err := client.Status(rpcCtx, &orchdv1.StatusRequest{}); grpcstatus.Code(err) != codes.Unimplemented {
+		t.Errorf("Status in recovery = %v, want Unimplemented", err)
+	}
+	if _, err := client.Ping(rpcCtx, &orchdv1.PingRequest{}); err != nil {
+		t.Errorf("Ping: %v", err)
+	}
+	st, err = client.SetConfig(rpcCtx, &orchdv1.SetConfigRequest{Values: map[string]string{"embedder.model_dir": `""`}, ConfirmSensitive: true})
+	if err != nil {
+		t.Fatalf("SetConfig: %v", err)
+	}
+	for _, f := range st.GetFields() {
+		if f.GetKey() == "embedder.model_dir" && f.GetOverridden() {
+			t.Error("model_dir still overridden after it was set back")
+		}
+	}
+	if _, err := client.Restart(rpcCtx, &orchdv1.RestartRequest{}); err != nil {
+		t.Fatalf("Restart: %v", err)
+	}
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Errorf("Run after a recovery restart = %v, want a clean exit", err)
+		}
+	case <-time.After(waitLimit):
+		t.Fatal("orchd did not exit for the service manager to restart it")
 	}
 }

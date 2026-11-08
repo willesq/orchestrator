@@ -113,10 +113,10 @@ func rollbackHybrid(c *cobra.Command) error {
 	if !rag.ValidCollectionName(backup) {
 		return fmt.Errorf("recorded backup collection %q is not a valid name", backup)
 	}
-	if err := config.SetMany(v, map[string]any{
+	if err := config.Save(map[string]any{
 		"rag.qdrant.collection":        backup,
 		"rag.qdrant.backup_collection": current,
-	}); err != nil {
+	}, "cli:rag-migrate"); err != nil {
 		return err
 	}
 	fmt.Fprintf(c.OutOrStdout(), "rag.qdrant.collection is %s again (%s kept); run `orch restart` for orchd to use it\n", backup, current)

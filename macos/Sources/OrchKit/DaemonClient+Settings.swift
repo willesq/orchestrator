@@ -1,7 +1,7 @@
 import Foundation
 import GRPCCore
 
-/// config.yaml and the docs opt-in, for the Settings pane.
+/// orch's settings and the docs opt-in, for the Settings pane.
 extension DaemonClient: ConfigAPI, DocsOwnersAPI {
     /// Listing repos waits on gh, and a purge may delete many docs.
     private var slowOptions: CallOptions {
@@ -21,13 +21,17 @@ extension DaemonClient: ConfigAPI, DocsOwnersAPI {
         return Self.configState(try await orchd.setConfig(request))
     }
 
+    public func removeLegacyConfig() async throws -> ConfigState {
+        Self.configState(try await orchd.removeLegacyConfig(Orchd_V1_RemoveLegacyConfigRequest()))
+    }
+
     static func configState(_ r: Orchd_V1_ConfigState) -> ConfigState {
         ConfigState(fields: r.fields.map { f in
             ConfigField(key: f.key, section: f.section, label: f.label, help: f.help,
                         type: ConfigFieldType(rawValue: f.type) ?? .string, value: f.value, defaultValue: f.defaultValue,
                         options: f.options, range: f.hasRange_p && f.min <= f.max ? f.min...f.max : nil,
-                        sensitive: f.sensitive, live: f.live, envOverride: f.envOverride, pendingRestart: f.pendingRestart)
-        }, path: r.path, restartRequired: r.restartRequired)
+                        sensitive: f.sensitive, live: f.live, pendingRestart: f.pendingRestart)
+        }, restartRequired: r.restartRequired, legacyFile: r.legacyFile, startupError: r.startupError)
     }
 
     public func docsOwners() async throws -> [DocsOwner] {

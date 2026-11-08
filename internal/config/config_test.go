@@ -1,6 +1,8 @@
 package config
 
 import (
+	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -22,11 +24,7 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-			v, err := Load()
-			if err != nil {
-				t.Fatalf("Load: %v", err)
-			}
+			v := loadTemp(t)
 			if got := v.GetString(tt.key); got != tt.want {
 				t.Errorf("%s = %q, want %q", tt.key, got, tt.want)
 			}
@@ -34,74 +32,48 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
-func TestSetPersistsAndReloads(t *testing.T) {
-	tests := []struct {
-		name        string
-		key         string
-		value       string
-		checkKept   string
-		keptDefault string
-	}{
-		{
-			name:        "persisted value survives reload and keeps defaults",
-			key:         "rag.qdrant.mode",
-			value:       "external",
-			checkKept:   "rag.qdrant.version",
-			keptDefault: "v1.17.1",
-		},
+func TestAppliedValueReloadsAndKeepsDefaults(t *testing.T) {
+	loadTemp(t)
+	if err := applyTemp(t, map[string]any{"rag.qdrant.mode": "external"}, true); err != nil {
+		t.Fatal(err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			t.Setenv("ORCH_CONFIG_DIR", dir)
-
-			v, err := Load()
-			if err != nil {
-				t.Fatalf("Load: %v", err)
-			}
-			if err := Set(v, tt.key, tt.value); err != nil {
-				t.Fatalf("Set: %v", err)
-			}
-			if _, err := os.Stat(filepath.Join(dir, "config.yaml")); err != nil {
-				t.Fatalf("config.yaml not written: %v", err)
-			}
-
-			v2, err := Load()
-			if err != nil {
-				t.Fatalf("reload: %v", err)
-			}
-			if got := v2.GetString(tt.key); got != tt.value {
-				t.Errorf("%s after reload = %q, want %q", tt.key, got, tt.value)
-			}
-			if got := v2.GetString(tt.checkKept); got != tt.keptDefault {
-				t.Errorf("default lost: %s = %q, want %q", tt.checkKept, got, tt.keptDefault)
-			}
-		})
+	if _, err := os.Stat(paths.LegacyConfigFile()); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("a write created config.yaml: %v", err)
+	}
+	v := reload(t)
+	if got := v.GetString("rag.qdrant.mode"); got != "external" {
+		t.Errorf("mode after reload = %q, want external", got)
+	}
+	if got := v.GetString("rag.qdrant.version"); got != "v1.17.1" {
+		t.Errorf("default lost: version = %q", got)
 	}
 }
 
-func TestEnvOverridesDefault(t *testing.T) {
-	tests := []struct {
-		name   string
-		envKey string
-		envVal string
-		key    string
-		want   string
-	}{
-		{name: "env overrides embedder model", envKey: "ORCH_EMBEDDER_MODEL", envVal: "custom/model", key: "embedder.model", want: "custom/model"},
+func TestLoadIgnoresALegacyFile(t *testing.T) {
+	loadTemp(t)
+	if err := os.WriteFile(paths.LegacyConfigFile(), []byte("rag:\n  qdrant:\n    mode: external\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-			t.Setenv(tt.envKey, tt.envVal)
-			v, err := Load()
-			if err != nil {
-				t.Fatalf("Load: %v", err)
-			}
-			if got := v.GetString(tt.key); got != tt.want {
-				t.Errorf("%s = %q, want %q", tt.key, got, tt.want)
-			}
-		})
+	if got := reload(t).GetString("rag.qdrant.mode"); got != "binary" {
+		t.Errorf("mode = %q: Load read config.yaml", got)
+	}
+}
+
+func TestLoadWithAStoreOlderThanTheSettingsTable(t *testing.T) {
+	loadTemp(t)
+	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := sql.Open("sqlite", "file:"+paths.DBFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`CREATE TABLE meta (k TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.Close()
+	if got := reload(t).GetString("rag.qdrant.mode"); got != "binary" {
+		t.Errorf("mode = %q, want the default", got)
 	}
 }
 
@@ -115,11 +87,7 @@ func TestUnmarshalTyped(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-			v, err := Load()
-			if err != nil {
-				t.Fatalf("Load: %v", err)
-			}
+			v := loadTemp(t)
 			s, err := Unmarshal(v)
 			if err != nil {
 				t.Fatalf("Unmarshal: %v", err)
@@ -145,11 +113,7 @@ func TestGetAndList(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-			v, err := Load()
-			if err != nil {
-				t.Fatalf("Load: %v", err)
-			}
+			v := loadTemp(t)
 			got := Get(v, tt.getKey)
 			if (got == nil) != tt.wantNil {
 				t.Errorf("Get(%q) nil = %v, want %v", tt.getKey, got == nil, tt.wantNil)
@@ -221,23 +185,16 @@ func TestIngestExcludeDirs(t *testing.T) {
 		want []string
 	}{
 		{name: "defaults to the built-in list", set: nil, want: mdwalk.DefaultExcludeDirs},
-		{name: "comma-separated CLI value replaces the list", set: "vendor,generated", want: []string{"vendor", "generated"}},
+		{name: "a stored list replaces the built-in one", set: []string{"vendor", "generated"}, want: []string{"vendor", "generated"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-			v, err := Load()
-			if err != nil {
-				t.Fatalf("Load: %v", err)
-			}
+			v := loadTemp(t)
 			if tt.set != nil {
-				if err := Set(v, "ingest.exclude_dirs", tt.set); err != nil {
-					t.Fatalf("Set: %v", err)
+				if err := applyTemp(t, map[string]any{"ingest.exclude_dirs": tt.set}, true); err != nil {
+					t.Fatalf("apply: %v", err)
 				}
-				// Reload so the value comes back through the config file.
-				if v, err = Load(); err != nil {
-					t.Fatalf("reload: %v", err)
-				}
+				v = reload(t)
 			}
 			s, err := Unmarshal(v)
 			if err != nil {
@@ -251,8 +208,8 @@ func TestIngestExcludeDirs(t *testing.T) {
 }
 
 func TestSessionSummaryDefaults(t *testing.T) {
-	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-	v, err := Load()
+	v := loadTemp(t)
+	var err error
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,16 +225,11 @@ func TestSessionSummaryDefaults(t *testing.T) {
 // A partial source_weights map replaces the default map (the daemon overlays
 // it on the defaults; see rankingParams).
 func TestSourceWeightsFromConfig(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("ORCH_CONFIG_DIR", dir)
-	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("rag:\n  search:\n    source_weights:\n      web: 0.5\n"), 0o600); err != nil {
+	loadTemp(t)
+	if err := applyTemp(t, map[string]any{"rag.search.source_weights": map[string]any{"web": 0.5}}, true); err != nil {
 		t.Fatal(err)
 	}
-	v, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := Unmarshal(v)
+	s, err := Unmarshal(reload(t))
 	if err != nil {
 		t.Fatal(err)
 	}

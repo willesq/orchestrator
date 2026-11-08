@@ -218,6 +218,7 @@ private struct UnreachableDaemon: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Gi
 extension UnreachableDaemon: ConfigAPI, DocsOwnersAPI {
     func config() async throws -> ConfigState { throw failure }
     func setConfig(_ values: [String: String], confirmSensitive: Bool) async throws -> ConfigState { throw failure }
+    func removeLegacyConfig() async throws -> ConfigState { throw failure }
     func docsOwners() async throws -> [DocsOwner] { throw failure }
     func docsOwnerRepos(owner: String) async throws -> [DocsOwnerRepoChoice] { throw failure }
     func saveDocsOwner(owner: String, enabled: Bool, mode: DocsRepoMode, repos: [String]) async throws -> DocsOwner { throw failure }

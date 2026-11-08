@@ -87,7 +87,7 @@ server, not something to improvise around.
 - NEVER ingest content you didn't see ("ingest the AWS docs" without a URL → ask which).
 - NEVER delete without the user asking for that specific URI. Deletion is permanent,
   there is no undo, and `rag_delete_source` removes every chunk under the URI at once.
-- The live config is `~/.config/orch/config.yaml`, managed with `orch config get|set|list`;
-  edit it through those commands rather than by hand.
+- orch's settings live in its database and are changed by the user in Orch.app (Settings);
+  `orch config get|list` reads them. Never edit them yourself; suggest the change instead.
 - NEVER set `source_type` outside the closed set (`web`, `file`, `manual`, `gap_fill`,
   `comms_thread`, `repo_doc`, `session_record`, `session_transcript`, `auto_memory`).

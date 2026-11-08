@@ -9,15 +9,12 @@ if it starts with `BLOCKED:`. Read results with `orch tasks`, `orch task <id>`, 
 `orch tasks --stats` summarizes cost, run time and success per agent.
 
 The worker is on by default. It runs only tasks that were dispatched, never with
-`bypassPermissions`, and its sessions cannot dispatch more. To turn it off:
+`bypassPermissions`, and its sessions cannot dispatch more. To turn it off, set **Parallel tasks**
+to 0 in Orch.app (Settings → Tasks) and restart orchd.
 
-```sh
-orch config set queue.worker.enabled false
-orch restart
-```
-
-A config file written by an older orch may still say `enabled: false` (`orch config set` writes
-every key); set it to `true` to turn the worker on.
+A config.yaml written by an older orch may have said `enabled: false` only because that orch saved
+every key. orch imports such a file as it is, so a worker that was off stays off; set **Parallel
+tasks** above 0 to turn it on.
 
 **Accepted risk:** `orch install` pre-approves the queue MCP tools, `queue_dispatch` included. A
 prompt injection in an interactive session can therefore dispatch a task the worker runs
@@ -47,6 +44,8 @@ days.
 `orch tasks` marks a task nothing is running as `⚠ stalled`. In Orch.app, the Tasks tab updates
 live as tasks change (orchd streams them; no refresh needed). It shows the same running, waiting or
 stalled state, with **Retry**, **Cancel…** and **Copy Resume Command**.
+
+Settings are changed in Orch.app (Settings → Tasks):
 
 | Setting | Default | Meaning |
 |---|---|---|

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,12 +13,13 @@ import (
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+
 	"gopkg.in/yaml.v3"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/check"
 	"github.com/willesq/orchestrator/internal/config"
+	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/install"
 	"github.com/willesq/orchestrator/internal/mcpserver"
 	"github.com/willesq/orchestrator/internal/memctx"
@@ -148,23 +150,13 @@ func newVersionCmd() *cobra.Command {
 	}
 }
 
-// setConfigValue checks a setting the schema knows, including the queue's hard
-// limits. The operator typed the key, so a sensitive one needs nothing further.
-// Other keys (one entry of a map, say) are written as given.
-func setConfigValue(v *viper.Viper, key, text string) error {
-	f, known := config.FieldFor(key)
-	if !known {
-		return config.Set(v, key, text)
-	}
-	val, err := config.ParseText(f, text)
-	if err != nil {
-		return err
-	}
-	return config.Apply(v, map[string]any{key: val}, true)
-}
-
 func newConfigCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "config", Short: "Get, set, and list configuration"}
+	cmd := &cobra.Command{
+		Use:   "config",
+		Short: "Read configuration, or reset it",
+		Long: "Settings live in orch.db and are changed in Orch.app (Settings). These commands read\n" +
+			"them, and reset reaches them when orchd cannot run.",
+	}
 	cmd.AddCommand(
 		&cobra.Command{
 			Use:   "get <key>",
@@ -183,22 +175,7 @@ func newConfigCmd() *cobra.Command {
 				return nil
 			},
 		},
-		operatorOnlyMsg("queue tasks cannot change orch's configuration; report it in the task result instead", &cobra.Command{
-			Use:   "set <key> <value>",
-			Short: "Set a config value and persist it",
-			Args:  cobra.ExactArgs(2),
-			RunE: func(c *cobra.Command, args []string) error {
-				v, err := config.Load()
-				if err != nil {
-					return err
-				}
-				if err := setConfigValue(v, args[0], args[1]); err != nil {
-					return err
-				}
-				fmt.Fprintf(c.OutOrStdout(), "set %s = %s\n", args[0], args[1])
-				return nil
-			},
-		}),
+		newConfigResetCmd(),
 		&cobra.Command{
 			Use:   "list",
 			Short: "List all configuration",
@@ -697,4 +674,43 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().IntVar(&perSource, "per-source", 0, "most results one source may return (default rag.search.per_source; -1 for no cap)")
 	addBoundFlags(cmd, &since, &until)
 	return cmd
+}
+
+// newConfigResetCmd puts settings back to their defaults without orchd: the way
+// out when a setting stops orchd from running at all, where the app cannot
+// reach it.
+func newConfigResetCmd() *cobra.Command {
+	var all bool
+	cmd := &cobra.Command{
+		Use:   "reset [key...]",
+		Short: "Reset settings to their defaults (--all for every one); restart orchd to apply",
+		RunE: func(c *cobra.Command, args []string) error {
+			if all == (len(args) > 0) {
+				return errors.New("name the settings to reset, or pass --all")
+			}
+			conn, err := db.Open()
+			if err != nil {
+				return err
+			}
+			defer func() { _ = conn.Close() }()
+			ctx := c.Context()
+			keys := args
+			if all {
+				keys, err = config.ResetAllStore(ctx, conn)
+			} else {
+				err = config.ResetStore(ctx, conn, args, true, "cli:reset")
+			}
+			if err != nil {
+				return err
+			}
+			if len(keys) == 0 {
+				fmt.Fprintln(c.OutOrStdout(), "every setting already had its default")
+				return nil
+			}
+			fmt.Fprintf(c.OutOrStdout(), "reset %s; run `orch restart` for orchd to use the defaults\n", strings.Join(keys, ", "))
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&all, "all", false, "reset every setting")
+	return operatorOnlyMsg("queue tasks cannot change orch's configuration; report it in the task result instead", cmd)
 }

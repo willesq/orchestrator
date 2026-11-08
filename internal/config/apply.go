@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -21,10 +20,6 @@ import (
 // ErrConfirmSensitive is returned when a change touches a sensitive setting
 // without the caller having confirmed it.
 var ErrConfirmSensitive = errors.New("sensitive setting needs confirmation")
-
-// ErrEnvOverride is returned when a change would have no effect, because an
-// environment variable overrides the key.
-var ErrEnvOverride = errors.New("overridden by an environment variable")
 
 // versionRe is a release tag; it goes into the URL the engine is downloaded from.
 var versionRe = regexp.MustCompile(`^v\d+\.\d+\.\d+$`)
@@ -47,17 +42,6 @@ func normalizeQueue(q *QueueSettings) {
 
 // Runs reports whether the worker runs tasks: enabled, with at least one slot.
 func (w QueueWorkerSettings) Runs() bool { return w.Enabled && w.MaxConcurrent > 0 }
-
-// envName is the variable that overrides a key.
-func envName(key string) string {
-	return "ORCH_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
-}
-
-// EnvOverridden reports whether an environment variable overrides key.
-func EnvOverridden(key string) bool {
-	_, ok := os.LookupEnv(envName(key))
-	return ok
-}
 
 // ParseJSON decodes a client's JSON value for the field and validates it.
 func ParseJSON(f Field, raw string) (any, error) {
@@ -175,7 +159,8 @@ func checkText(f Field, s string) (any, error) {
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return bad("must be an http or https URL")
 		}
-		// The whole config is written to a world-readable file.
+		// Settings are shown in the app and logged around; credentials
+		// belong in the key variable.
 		if u.User != nil {
 			return bad("must not contain a username or password")
 		}
@@ -242,25 +227,22 @@ func checkMap(f Field, val any) (any, error) {
 	return out, nil
 }
 
-// Apply validates parsed values against the queue's rules and persists them in
-// one write: all of them or none. Raising parallel tasks turns the worker on
-// and raises the queue limit with it, because a queue smaller than its parallel
+// planWrites checks values against the current config v and returns every key
+// to write: all of them or none. Raising parallel tasks turns the worker on and
+// raises the queue limit with it, because a queue smaller than its parallel
 // tasks would refuse the work those slots exist for.
-func Apply(v *viper.Viper, values map[string]any, confirmSensitive bool) error {
+func planWrites(v *viper.Viper, values map[string]any, confirmSensitive bool) (map[string]any, error) {
 	writes := make(map[string]any, len(values)+2)
 	for key, val := range values {
 		f, known := FieldFor(key)
 		if known && f.Sensitive && !confirmSensitive {
-			return fmt.Errorf("%w: %s", ErrConfirmSensitive, key)
-		}
-		if EnvOverridden(key) {
-			return fmt.Errorf("%w: %s is set by %s", ErrEnvOverride, key, envName(key))
+			return nil, fmt.Errorf("%w: %s", ErrConfirmSensitive, key)
 		}
 		writes[key] = val
 	}
 	s, err := Unmarshal(v)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	parallel, active := s.Queue.Worker.MaxConcurrent, s.Queue.MaxActive
 	newParallel, setParallel := values[keyMaxConcurrent].(int)
@@ -276,22 +258,24 @@ func Apply(v *viper.Viper, values map[string]any, confirmSensitive bool) error {
 	}
 	if parallel > active {
 		if setActive {
-			return fmt.Errorf("%s (%d) cannot be lower than %s (%d)", keyMaxActive, active, keyMaxConcurrent, parallel)
+			return nil, fmt.Errorf("%s (%d) cannot be lower than %s (%d)", keyMaxActive, active, keyMaxConcurrent, parallel)
 		}
 		writes[keyMaxActive] = parallel
 	}
-	return SetMany(v, writes)
+	return writes, nil
 }
 
 // Entry is a field with its current and default values, as JSON.
 type Entry struct {
 	Field
 	Value, Default string
-	EnvOverride    bool
 }
 
+// Overridden reports whether the field is set away from its default.
+func (e Entry) Overridden() bool { return e.Value != e.Default }
+
 // Entries returns every field clients are offered, in section order. defaults
-// is a config with no file or environment applied, from Defaults.
+// holds only the compiled defaults, from Defaults.
 func Entries(v, defaults *viper.Viper) ([]Entry, error) {
 	var out []Entry
 	for _, f := range Fields {
@@ -306,7 +290,7 @@ func Entries(v, defaults *viper.Viper) ([]Entry, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, Entry{Field: f, Value: val, Default: def, EnvOverride: EnvOverridden(f.Key)})
+		out = append(out, Entry{Field: f, Value: val, Default: def})
 	}
 	return out, nil
 }

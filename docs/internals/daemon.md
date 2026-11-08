@@ -11,7 +11,8 @@ the MCP servers are clients that dial it per call.
    because launchd's minimal `PATH` hides `gh` and `claude`; an explicit `PATH` keeps precedence.
 2. Open `orch.db` (SQLite, pure Go, WAL, `busy_timeout=5000`, foreign keys on) and apply the
    embedded migrations.
-3. Load config.
+3. Import an older release's `config.yaml` once ([config.md](config.md#the-old-configyaml)), then
+   load the settings from `orch.db`.
 4. Resolve the Qdrant API key: the env var named by `rag.qdrant.api_key_env` if set, else
    `<data>/qdrant-api-key`, else generate 32 random bytes, hex-encode, write the file 0600.
 5. Download the embedding model if missing.
@@ -25,6 +26,12 @@ the MCP servers are clients that dial it per call.
    trust boundary: anything running as the user can connect. orchd listens on nothing else; the
    only TCP listener it starts is the Qdrant engine, on 127.0.0.1.
 10. Serve gRPC until the context ends.
+
+If any of steps 4 to 8 fails, orchd stops what it started and serves only the settings (`Ping`,
+`GetConfig`, `SetConfig`, `RemoveLegacyConfig`, `Restart`) on the same socket, with the failure
+in `GetConfig`'s `startup_error`, so the setting at fault can be fixed in Orch.app
+([config.md](config.md#when-a-setting-stops-orchd)). `Restart` there exits for the service manager
+to start orchd again, as it does by itself after 10 minutes.
 
 Before step 2, `log` output is also teed into an in-memory ring of the last 5000 lines
 (`internal/logs`), which `TailLogs` serves. Each line is tagged with a source from its prefix:
@@ -77,9 +84,9 @@ stored: its session-end hook's `Ingest` and `SummarizeSession` are refused, so t
 stores the record and queues the summary from the entry the hook left.
 
 **Limits.** This raises the bar from "unset a variable" to "leave orchd's process tree"; it is
-advisory, not a sandbox, because a task runs as the user. `orch config set` and the `orch docs` commands that
+advisory, not a sandbox, because a task runs as the user. `orch config reset` and the `orch docs` commands that
 change what is synced refuse inside a task and are denied to its Claude Code sessions, though a task could still
-edit `config.yaml` itself, and can read it. A task can leave the tree in one
+write the settings in `orch.db` itself (as it could edit `config.yaml` before), and can read them. A task can leave the tree in one
 command: `launchctl submit`, `open` (a `.command` file or an app), `osascript`, `at` or cron, or
 `systemd-run --user` all start a process launchd or systemd owns, and a process whose parent
 exits before orchd accepts its connection is reparented the same way. A task can also write the
@@ -133,8 +140,9 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `SaveDocsOwner` | owner, enabled, repo_mode, repos, refresh_secs → owner | registers the owner if new; `Aborted` while a docs sync runs |
 | `RemoveDocsOwner` | owner, purge, confirm → purged counts | purge needs `confirm`; a failed purge leaves the owner; `Aborted` while a docs sync runs |
 | `PurgeDocs` | owner, repos (empty = every repo not covered), confirm → purged counts | needs `confirm`; a repo still synced → `FailedPrecondition`; `Aborted` while a docs sync runs |
-| `GetConfig` | → fields, path, restart_required | every setting in config.yaml ([config.md](config.md#schema)); operator-only |
-| `SetConfig` | values (key → JSON), confirm_sensitive → same as `GetConfig` | all or none; invalid → `InvalidArgument`; unconfirmed sensitive or env-overridden → `FailedPrecondition`; logs key names, never values |
+| `GetConfig` | → fields (each with `overridden`), restart_required, legacy_file, startup_error | every setting, from `orch.db` ([config.md](config.md#schema)); operator-only |
+| `SetConfig` | values (key → JSON), confirm_sensitive → same as `GetConfig` | all or none; a default value deletes the key's row; invalid → `InvalidArgument`; unconfirmed sensitive → `FailedPrecondition`; logs key names, never values; operator-only |
+| `RemoveLegacyConfig` | → same as `GetConfig` | moves `<config>/config.yaml` to `<data>/backups/`, never a path from the request; before the import ran → `FailedPrecondition`; operator-only |
 | `GetDocsSync` | → running, owner, started/finished, done of total, last repo | the docs scheduler's progress |
 | `GetDocument` | source_uri → text, chunks, malformed, oversize, web_url, writer, content_hash, trust | rebuilt from chunks (see [memory.md](memory.md)); over 3 MiB → `oversize`, no text; nothing indexed → `NotFound`; URI ≤ 4096 bytes |
 | `ListRegisteredSources` | → sources (with how to search within each) | the `sources` registry |
@@ -222,7 +230,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 
 | Path | Contents |
 |---|---|
-| `<config>/config.yaml` | settings ([config.md](config.md)) |
+| `<config>/config.yaml` | settings of older releases: imported into `orch.db` once, then never read ([config.md](config.md#the-old-configyaml)) |
 | `<config>/AGENTS.md`, `policy/`, `rag-eval.yaml` | shared agent policy; retrieval golden set |
 | `<data>/landings/<task>.git` | a proposal's commit, in a bare repository with no hooks; pruned after 30 days |
 | `<data>/orch.db` | SQLite: tasks, sources, docs, models, routing, managed settings |
@@ -246,6 +254,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `docs_owners`, `docs_repos`, `doc_hashes` | GitHub owners and cadence; per-repo HEAD; content hash per `repo://` URI |
 | `providers`, `models` | provider state; model registry (tier, efforts, visibility, state) |
 | `routing`, `routing_history` | current table (kind, rank, provider, model, effort, rationale, evidence_n, pinned); prior generations |
+| `config_values`, `config_import` | orch's settings that differ from a default (key, JSON value, updated_at, updated_by); whether the old config.yaml was imported ([config.md](config.md)) |
 | `settings_items` | provider, kind, identity (key), enabled, origin (`orch`/`you`/`found`), payload (JSON), present, removed_at, created_at, updated_at ([settings.md](settings.md)) |
 
 ## Invariants

@@ -125,7 +125,7 @@ const gitHubWriteTools = "Bash(gh pr review:*),Bash(gh pr comment:*),Bash(gh pr 
 
 // operatorTools are the commands that change orch's own settings, denied to every
 // run so a task cannot widen its own limits or permissions.
-const operatorTools = "Bash(orch config set:*),Bash(orch docs add:*),Bash(orch docs remove:*)," +
+const operatorTools = "Bash(orch config reset:*),Bash(orch docs add:*),Bash(orch docs remove:*)," +
 	"Bash(orch docs enable:*),Bash(orch docs disable:*),Bash(orch docs repos:*),Bash(orch docs purge:*)"
 
 // deniedTools lists what agent may not use in a run.

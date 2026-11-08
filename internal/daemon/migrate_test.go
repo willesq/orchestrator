@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -102,6 +103,7 @@ func TestMigrateHybridRPC(t *testing.T) {
 
 func TestRecordSwitch(t *testing.T) {
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	if err := recordSwitch("orchestrator", "orchestrator-hybrid"); err != nil {
 		t.Fatal(err)
 	}
@@ -118,6 +120,7 @@ func TestRecordSwitch(t *testing.T) {
 func TestDropBackupRPC(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	if _, err := (&server{}).DropBackup(ctx, &orchdv1.DropBackupRequest{}); grpcstatus.Code(err) != codes.Unavailable {
 		t.Fatalf("no migrator err = %v", err)
 	}
@@ -151,6 +154,7 @@ func TestDropBackupRPC(t *testing.T) {
 func TestDropBackupRefusals(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	if err := recordSwitch("orchestrator", "orchestrator-hybrid"); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +167,7 @@ func TestDropBackupRefusals(t *testing.T) {
 		t.Fatal("a refused drop forgot the backup")
 	}
 	// Config naming the same collection twice is refused before any drop.
-	if err := config.SetMany(v, map[string]any{"rag.qdrant.backup_collection": "orchestrator-hybrid"}); err != nil {
+	if err := config.Save(map[string]any{"rag.qdrant.backup_collection": "orchestrator-hybrid"}, "test"); err != nil {
 		t.Fatal(err)
 	}
 	m := &fakeMigrator{}
@@ -201,6 +205,7 @@ func TestStatusReportsMigrationProgress(t *testing.T) {
 func TestDropBackupAlreadyGone(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	if err := recordSwitch("orchestrator", "orchestrator-hybrid"); err != nil {
 		t.Fatal(err)
 	}
@@ -224,6 +229,7 @@ func TestDropBackupAlreadyGone(t *testing.T) {
 
 func TestDropBackupConfigClearFails(t *testing.T) {
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	if err := recordSwitch("orchestrator", "orchestrator-hybrid"); err != nil {
 		t.Fatal(err)
 	}

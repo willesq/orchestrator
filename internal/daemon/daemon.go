@@ -15,11 +15,9 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"math"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
@@ -42,7 +39,6 @@ import (
 	"github.com/willesq/orchestrator/internal/logs"
 	"github.com/willesq/orchestrator/internal/model"
 	"github.com/willesq/orchestrator/internal/paths"
-	"github.com/willesq/orchestrator/internal/procstat"
 	"github.com/willesq/orchestrator/internal/prunecap"
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rag"
@@ -148,12 +144,10 @@ type server struct {
 	// docsGH lists an owner's repos; docsRefresh is a new owner's cadence.
 	docsGH      docs.GitHub
 	docsRefresh int64
-	// configStart is the config orchd started with; configMu keeps two
-	// SetConfig calls from losing each other's write.
-	configStart map[string]string
-	configMu    sync.Mutex
-	sourcesReg  *sources.Registry
-	documents   documentReader
+	// config serves the settings in orch.db.
+	config     *configService
+	sourcesReg *sources.Registry
+	documents  documentReader
 	// nudgeMu guards lastNudge, when RefreshSource last restarted the
 	// sources scheduler.
 	nudgeMu   sync.Mutex
@@ -559,7 +553,8 @@ func Run(ctx context.Context) error {
 	}
 	defer func() { _ = store.Close() }()
 
-	v, err := config.Load()
+	importLegacyConfig(ctx, store)
+	v, err := config.LoadStore(ctx, store)
 	if err != nil {
 		return err
 	}
@@ -573,17 +568,22 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	cfg := newConfigService(store, configStart)
+	// Reason: from here a failure is most often a setting (a model folder, a
+	// port, a storage path), and settings can only be changed through orchd.
+	// Exiting would leave nothing to fix them with, so orchd serves them alone.
+	recovery := func(err error) error { return serveRecovery(ctx, cfg, err) }
 
 	// Resolve the qdrant API key once (persisted, generated on first run) so the
 	// engine and the client share it independent of any ambient env var.
 	apiKey, err := resolveQdrantAPIKey(s)
 	if err != nil {
-		return err
+		return recovery(err)
 	}
 
 	// First run downloads the embedding model so search/ingest work out of the box.
 	if err := ensureModel(ctx, s); err != nil {
-		return err
+		return recovery(err)
 	}
 
 	svc, emb := buildRAG(s, s.QdrantURL(), apiKey)
@@ -593,7 +593,7 @@ func Run(ctx context.Context) error {
 	// dispatcher (used by the RPC handler, not a subsystem) enqueues them.
 	b, err := queue.NewBackend()
 	if err != nil {
-		return err
+		return recovery(err)
 	}
 	defer func() { _ = b.Close() }()
 	tasks := queue.NewSQLTaskStore(store)
@@ -655,41 +655,28 @@ func Run(ctx context.Context) error {
 		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub, reviews: reviewWatcher,
 	}) {
 		if err := sup.Add(u); err != nil {
-			return err
+			return recovery(err)
 		}
 	}
 	if err := sup.StartAll(); err != nil {
-		return err
+		// Units that did start would hold their ports and files meanwhile.
+		_ = sup.StopAll()
+		return recovery(err)
 	}
 	defer func() { _ = sup.StopAll() }()
 
-	sock := paths.SocketPath()
-	_ = os.Remove(sock)
-	lis, err := net.Listen("unix", sock)
+	lis, closeSocket, err := listenSocket()
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.Remove(sock) }()
-	// The socket is the only trust boundary: anything that can connect gets the
-	// whole RPC surface (Dispatch, Restart, the RAG store). Left to the ambient
-	// umask the mode is an accident, so pin it to owner-only rather than relying
-	// on the caller's environment.
-	if err := os.Chmod(sock, 0o600); err != nil {
-		return fmt.Errorf("secure socket %s: %w", sock, err)
-	}
+	defer closeSocket()
 
 	router, routerErr := newRouter(store, routing.PolicyFrom(s.Routing))
 	if routerErr != nil {
 		log.Printf("orchd: model routing is off: %v", routerErr)
 	}
 
-	// Each connection is attributed to its process so operator-only RPCs can
-	// refuse queued tasks however they reach the socket (callers.go).
-	gs := grpc.NewServer(
-		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent}),
-		grpc.UnaryInterceptor(guardQueuedCallers),
-		grpc.StreamInterceptor(guardQueuedStreams),
-	)
+	gs := newGRPCServer()
 	orchdv1.RegisterOrchdServer(gs, &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks, ctl: ctl, live: live, home: userHome(), hub: hub,
 		stopping:      runCtx.Done(),
@@ -709,7 +696,7 @@ func Run(ctx context.Context) error {
 		docsReg:      docs.NewRegistry(store),
 		docsGH:       docs.NewGitHub(),
 		docsRefresh:  refreshSecs(s.Docs.DefaultRefresh),
-		configStart:  configStart,
+		config:       cfg,
 		prune:        newPruneGuard(store),
 		sourcesReg:   sources.NewRegistry(store),
 		documents:    svc,
@@ -723,7 +710,7 @@ func Run(ctx context.Context) error {
 	}()
 
 	log.Printf("orchd %s listening on %s (subsystems: %s)",
-		version.Version, sock, strings.Join(sup.Names(), ", "))
+		version.Version, lis.Addr(), strings.Join(sup.Names(), ", "))
 	return gs.Serve(lis)
 }
 

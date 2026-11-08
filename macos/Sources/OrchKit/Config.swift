@@ -6,7 +6,7 @@ public enum ConfigFieldType: String, Sendable, Equatable {
     case bool, int, float, string, duration, `enum`, path, url, list, map
 }
 
-/// One setting from config.yaml, as orchd describes it. Values are JSON, as
+/// One of orch's settings, as orchd describes it. Values are JSON, as
 /// orchd sends and accepts them.
 public struct ConfigField: Sendable, Equatable, Identifiable {
     public var id: String { key }
@@ -21,12 +21,11 @@ public struct ConfigField: Sendable, Equatable, Identifiable {
     public var range: ClosedRange<Double>?
     public var sensitive: Bool
     public var live: Bool
-    public var envOverride: Bool
     public var pendingRestart: Bool
 
     public init(key: String, section: String = "", label: String = "", help: String = "", type: ConfigFieldType = .string,
                 value: String = "\"\"", defaultValue: String = "\"\"", options: [String] = [], range: ClosedRange<Double>? = nil,
-                sensitive: Bool = false, live: Bool = false, envOverride: Bool = false, pendingRestart: Bool = false) {
+                sensitive: Bool = false, live: Bool = false, pendingRestart: Bool = false) {
         self.key = key
         self.section = section
         self.label = label
@@ -38,7 +37,6 @@ public struct ConfigField: Sendable, Equatable, Identifiable {
         self.range = range
         self.sensitive = sensitive
         self.live = live
-        self.envOverride = envOverride
         self.pendingRestart = pendingRestart
     }
 
@@ -130,22 +128,29 @@ public enum ConfigJSON {
     }
 }
 
-/// Every setting in config.yaml, and whether orchd needs a restart for them.
+/// Every setting, kept in orch's database, and whether orchd needs a restart for them.
 public struct ConfigState: Sendable, Equatable {
     public var fields: [ConfigField]
-    public var path: String
     public var restartRequired: Bool
+    /// A config.yaml older releases kept settings in, still on disk though orch
+    /// no longer reads it; empty when there is none.
+    public var legacyFile: String
+    /// Why orchd could not start its services, when it runs only so settings
+    /// can be fixed; empty when it started normally.
+    public var startupError: String
 
-    public init(fields: [ConfigField] = [], path: String = "", restartRequired: Bool = false) {
+    public init(fields: [ConfigField] = [], restartRequired: Bool = false, legacyFile: String = "", startupError: String = "") {
         self.fields = fields
-        self.path = path
         self.restartRequired = restartRequired
+        self.legacyFile = legacyFile
+        self.startupError = startupError
     }
 }
 
 public protocol ConfigAPI: Sendable {
     func config() async throws -> ConfigState
     func setConfig(_ values: [String: String], confirmSensitive: Bool) async throws -> ConfigState
+    func removeLegacyConfig() async throws -> ConfigState
 }
 
 /// A change to a sensitive setting, waiting for the user to confirm it.
@@ -155,7 +160,7 @@ public struct ConfigChange: Sendable, Equatable, Identifiable {
     public let json: String
 }
 
-/// Drives the Settings pane's view of config.yaml. A change is written at once;
+/// Drives the Settings pane's view of orch's settings. A change is written at once;
 /// a failure stays with that field, so a view shows it inline.
 @MainActor
 @Observable
@@ -168,6 +173,8 @@ public final class ConfigModel {
     public var confirmation: ConfigChange?
     public private(set) var isRestarting = false
     public private(set) var restartError: String?
+    public private(set) var isRemovingLegacy = false
+    public private(set) var legacyError: String?
 
     private let api: any ConfigAPI
     private let restartDaemon: @Sendable () async throws -> Void
@@ -242,6 +249,20 @@ public final class ConfigModel {
             lastError = nil
         } catch {
             fieldErrors[key] = displaySafe(DocsModel.refusal(error))
+        }
+    }
+
+    /// Deletes the config.yaml orch no longer reads.
+    public func removeLegacyConfig() async {
+        guard !isRemovingLegacy else { return }
+        isRemovingLegacy = true
+        legacyError = nil
+        defer { isRemovingLegacy = false }
+        generation += 1
+        do {
+            state = try await api.removeLegacyConfig()
+        } catch {
+            legacyError = displaySafe(DocsModel.refusal(error))
         }
     }
 
