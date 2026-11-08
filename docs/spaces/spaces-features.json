@@ -963,14 +963,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "5fe369bccbe4936845c7b84d433b20c8e15832ddc357a5bb66d4c84a290ba9aa",
-      "branch": null,
+      "branch": "feat/sp-022-placement",
       "pr": null
     },
     {
