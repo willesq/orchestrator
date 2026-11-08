@@ -39,7 +39,7 @@
       "A PreToolUse guard (plus CwdChanged logging) records every tool call, extracts its targets (cwd, file paths, cd destinations, git -C, gh repo targets) and refuses calls that reach another isolated space. Moving within the session's own space is allowed. Enforcement is on from the first release.",
       "Defense in layers: orchd memory enforcement (all harnesses), the pre-tool guard, OS sandbox deny rules for other jobs' folders, harness permission rules for file tools, a separate GitHub account per job, and git hooks for outbound terms.",
       "The command log is bounded: deleted 7 days after the session ends (or 7 days after the last event if it never ends), total size cap, refusals kept 90 days, hash-chained, credential-redacted, never indexed into RAG.",
-      "Policy changes are drafts until applied by the operator (the user at a terminal or in the app). Callers descended from a harness or from orchd cannot apply. Edits to config.yaml made by agents show as drift and do nothing.",
+      "Policy changes are drafts until applied by the operator (the user at a terminal or in the app). The policy lives in orch.db as numbered revisions: anyone, agents included, may save a draft; only the operator applies one, naming the revision they reviewed. Callers descended from a harness or from orchd cannot apply. A pending draft, or an applied revision edited in orch.db outside orchd, shows as drift and changes nothing that is enforced.",
       "With no spaces configured, orch behaves exactly as today.",
       "Each enforcement layer (memory filtering, tool guard mode, outbound terms, sandbox rules) has an operator-only switch in the UI and CLI, optionally timed. Switching a layer off is logged and announced in every session's start digest; logging continues while it is off.",
       "A session's liveness comes from the kernel: its pinned harness PID must still exist with the same start time. Idle sessions left open for days stay 'idle', never 'ended'; a process that exits without SessionEnd is marked ended within a minute. 'orch sessions list' shows every session, including running harness processes that have no pin.",
@@ -363,6 +363,11 @@
       {
         "id": "D-24",
         "decision": "Keep one Qdrant collection per space (D-10) and accept its measured search cost: 1.5x (2 segments) to 1.9x (default segments) the p95 of one filtered collection, about +15 ms per hybrid search on 40,000 chunks (SP-002, docs/internals/memory.md 'Cost of a collection per space').",
+        "date": "2026-11-08"
+      },
+      {
+        "id": "D-25",
+        "decision": "config.yaml was removed (settings live in orch.db, PR #142). The spaces policy is stored in orch.db as numbered draft and applied revisions with a content hash; SetSpacesDraft is open to any caller, ApplySpaces is operator-only and names the reviewed revision, and drift means a pending draft or an applied row that no longer matches its hash. SP-020.2.a3 reworded accordingly.",
         "date": "2026-11-08"
       }
     ],
@@ -718,12 +723,12 @@
       "phase": "P1",
       "priority": 5,
       "title": "Spaces config, validation, apply and drift",
-      "summary": "config.yaml 'spaces:' with kinds public/isolated/private and bindings (github_orgs, roots, web_prefixes, chat, reads, terms_file). Roots may nest when the inner root is at least as strict (D-15). orchd validates, stores the applied copy and its content hash in orch.db, and reports drift when config.yaml differs. DiffSpaces and ApplySpaces RPCs; apply is operator-only.",
+      "summary": "orch.db holds the spaces policy as numbered revisions (JSON document and sha256): drafts and the applied one. The policy has kinds public/isolated/private and bindings (github_orgs, roots, web_prefixes, chat, reads, terms_file). Roots may nest when the inner root is at least as strict (D-15). orchd validates, keeps enforcing the last good applied revision, and reports drift when a draft is pending or the applied row no longer matches its hash. SetSpacesDraft, DiffSpaces and ApplySpaces RPCs; apply is operator-only and names the reviewed revision.",
       "why": "D-08, D-15, INV-04, INV-06, INV-10, INV-14.",
       "depends_on": [],
       "touches": [
-        "internal/config/schema.go",
         "internal/spaces/",
+        "internal/db/migrations/",
         "internal/daemon/callers.go",
         "internal/rpc/orchdv1/orchd.proto"
       ],
@@ -795,7 +800,7 @@
             {
               "id": "a3",
               "type": "test",
-              "check": "Editing config.yaml without apply changes nothing and sets a drift flag visible in orch status.",
+              "check": "Saving a draft without apply, or editing the applied revision in orch.db outside orchd, changes nothing that is enforced and sets a drift flag visible in orch status.",
               "measure": "test",
               "threshold": "passes"
             }
@@ -817,14 +822,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
-      "criteria_sha256": "1aff5b745908a92dce823917d8fb9b2cc6c82981075ba36c1a8f66559c591088",
-      "branch": null,
+      "attempts": 1,
+      "criteria_sha256": "d841529f82afc337d6c0bad84f72e4c247776b5bc4e4536359c213b334af7d48",
+      "branch": "feat/sp-020-spaces-config",
       "pr": null
     },
     {
@@ -3277,7 +3282,7 @@
       "phase": "P4",
       "priority": 42,
       "title": "Activity and Review",
-      "summary": "Per-session command log with directory moves and refusals; Review shows the pending config diff with per-line validation, effect counts, drift from config.yaml, and Apply behind Touch ID or password.",
+      "summary": "Per-session command log with directory moves and refusals; Review shows the pending config diff with per-line validation, effect counts, drift (a pending draft or an applied revision changed outside orchd), and Apply behind Touch ID or password.",
       "why": "Preview every effect before it applies.",
       "depends_on": [
         "SP-051"
@@ -3644,6 +3649,10 @@
     {
       "date": "2026-11-08",
       "change": "SP-002 measured the cost of a collection per space: 1.5-1.9x p95 over one filtered collection (threshold 1.3x), relabel of 40,000 chunks 0.3-10 s. The user revisited D-10 and kept it, accepting the cost (D-24)."
+    },
+    {
+      "date": "2026-11-08",
+      "change": "config.yaml removed by design (PR #142). D-25: the spaces policy lives in orch.db as draft/applied revisions. Reworded SP-020 summary and SP-020.2.a3 (criteria_sha256 recomputed with the user's approval), the design_summary drift rule and SP-054's summary."
     }
   ],
   "plan_location": {
