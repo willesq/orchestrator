@@ -560,14 +560,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "ef9f2052f6f2c1315fcad3a9dc017001eae874cc8449f66ced3907ee10948488",
-      "branch": null,
+      "branch": "feat/sp-002-qdrant-costs",
       "pr": null
     },
     {
