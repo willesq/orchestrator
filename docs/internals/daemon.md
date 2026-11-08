@@ -48,6 +48,20 @@ opened it (`internal/daemon/callers.go`) rather than trusting clients to check `
   descendant. A walk that fails is retried once; a peer that still cannot be placed, or a call
   without orchd's peer information, is treated as a task. On platforms without peer lookup, and
   for a Linux peer in a PID namespace orchd cannot see (PID 0), only the next signal applies.
+- **Identity (for spaces):** `internal/procstat` also reads a process's start time
+  (`StartTime`: sysctl `kern.proc.pid` on macOS, to the microsecond; on Linux the start ticks in
+  `/proc/<pid>/stat` added to the boot time, which is read once per process so a clock step
+  cannot shift it within that process) and working directory (`Cwd`: libproc `proc_pidinfo`
+  on macOS; `/proc/<pid>/cwd` on Linux), never through a command. PID plus start time
+  (`procstat.Identity`, compared with `Same`) names one process for its life, so a reused PID
+  never matches an earlier record. `procstat.NearestAncestor` walks from a PID up through its
+  parents (at most 256 steps) and returns the first one a registry callback accepts. Each step
+  reads start time and parent in one kernel read, and a parent that started after its child
+  (its PID was reused mid-walk) ends the walk with an error. The starting PID is taken on trust:
+  a caller with a socket peer PID must confirm that process is still the one that connected.
+  Other platforms return `ErrUnsupported`, which the walk reports as not found with no error:
+  such a caller has no identity and so gets no space. On an M3 Max one lookup costs about 15 µs
+  (start time) or 1.4 µs (cwd), and a full walk to the root about 0.12 ms.
 - **Report:** `orchdclient` sends the `orch-task-id` metadata when `ORCH_TASK_ID` is set, which
   names the task in the refusal and covers callers outside orchd's process tree.
 
