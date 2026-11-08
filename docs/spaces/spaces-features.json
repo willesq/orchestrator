@@ -571,10 +571,10 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "712b0f3fd5c579a8c35ff0a8e56c3d29b0b7f671",
+      "verified_at": "2026-11-08T16:12:27Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "ef9f2052f6f2c1315fcad3a9dc017001eae874cc8449f66ced3907ee10948488",
