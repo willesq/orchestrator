@@ -491,7 +491,7 @@
       "attempts": 1,
       "criteria_sha256": "189c7bd2b8bf7eb3dde3903da07f6150947a67ca927572d2b08cb7e1a8296058",
       "branch": "feat/sp-001-hook-payloads",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/138"
     },
     {
       "id": "SP-002",
