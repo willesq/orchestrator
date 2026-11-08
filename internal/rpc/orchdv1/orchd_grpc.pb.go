@@ -68,6 +68,7 @@ const (
 	Orchd_SetSpacesDraft_FullMethodName           = "/orchd.v1.Orchd/SetSpacesDraft"
 	Orchd_DiffSpaces_FullMethodName               = "/orchd.v1.Orchd/DiffSpaces"
 	Orchd_ApplySpaces_FullMethodName              = "/orchd.v1.Orchd/ApplySpaces"
+	Orchd_ExplainPlacement_FullMethodName         = "/orchd.v1.Orchd/ExplainPlacement"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName               = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName             = "/orchd.v1.Orchd/RemoveSource"
@@ -234,6 +235,10 @@ type OrchdClient interface {
 	// newest, so the operator applies exactly what they reviewed. A draft an
 	// agent session saved also needs accept_agent_draft.
 	ApplySpaces(ctx context.Context, in *ApplySpacesRequest, opts ...grpc.CallOption) (*ApplySpacesResponse, error)
+	// ExplainPlacement says which space content from a target (a path, URL,
+	// owner/repo or chat tenant) goes to and why. Agents get an answer only
+	// when every space it names is public; the operator sees all.
+	ExplainPlacement(ctx context.Context, in *ExplainPlacementRequest, opts ...grpc.CallOption) (*PlacementExplanation, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -791,6 +796,16 @@ func (c *orchdClient) ApplySpaces(ctx context.Context, in *ApplySpacesRequest, o
 	return out, nil
 }
 
+func (c *orchdClient) ExplainPlacement(ctx context.Context, in *ExplainPlacementRequest, opts ...grpc.CallOption) (*PlacementExplanation, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PlacementExplanation)
+	err := c.cc.Invoke(ctx, Orchd_ExplainPlacement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -1099,6 +1114,10 @@ type OrchdServer interface {
 	// newest, so the operator applies exactly what they reviewed. A draft an
 	// agent session saved also needs accept_agent_draft.
 	ApplySpaces(context.Context, *ApplySpacesRequest) (*ApplySpacesResponse, error)
+	// ExplainPlacement says which space content from a target (a path, URL,
+	// owner/repo or chat tenant) goes to and why. Agents get an answer only
+	// when every space it names is public; the operator sees all.
+	ExplainPlacement(context.Context, *ExplainPlacementRequest) (*PlacementExplanation, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -1303,6 +1322,9 @@ func (UnimplementedOrchdServer) DiffSpaces(context.Context, *DiffSpacesRequest) 
 }
 func (UnimplementedOrchdServer) ApplySpaces(context.Context, *ApplySpacesRequest) (*ApplySpacesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ApplySpaces not implemented")
+}
+func (UnimplementedOrchdServer) ExplainPlacement(context.Context, *ExplainPlacementRequest) (*PlacementExplanation, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExplainPlacement not implemented")
 }
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
@@ -2248,6 +2270,24 @@ func _Orchd_ApplySpaces_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_ExplainPlacement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExplainPlacementRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ExplainPlacement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ExplainPlacement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ExplainPlacement(ctx, req.(*ExplainPlacementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -2734,6 +2774,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ApplySpaces",
 			Handler:    _Orchd_ApplySpaces_Handler,
+		},
+		{
+			MethodName: "ExplainPlacement",
+			Handler:    _Orchd_ExplainPlacement_Handler,
 		},
 		{
 			MethodName: "ListRegisteredSources",

@@ -226,6 +226,38 @@ func LookupAccount(ctx context.Context, gh Runner, login string) (Account, error
 	return Account{Login: a.Login, NodeID: a.NodeID}, nil
 }
 
+// RepoInfo is a repo as GitHub reports it now: after a transfer or rename,
+// Owner and Name are the current ones.
+type RepoInfo struct {
+	Owner   string
+	Name    string
+	Private bool
+}
+
+// LookupRepo reads owner/name's current owner and visibility. GitHub
+// redirects a transferred repo's old name, so Owner can differ from owner.
+func LookupRepo(ctx context.Context, gh Runner, owner, name string) (RepoInfo, error) {
+	if !ValidLogin(owner) || !ValidRepo(name) {
+		return RepoInfo{}, fmt.Errorf("invalid GitHub repo %q", owner+"/"+name)
+	}
+	out, err := gh(ctx, "api", "repos/"+owner+"/"+name, "--jq", "{owner: .owner.login, name, private}")
+	if err != nil {
+		return RepoInfo{}, err
+	}
+	var r struct {
+		Owner   string `json:"owner"`
+		Name    string `json:"name"`
+		Private *bool  `json:"private"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		return RepoInfo{}, fmt.Errorf("parse GitHub repo %s/%s: %w", owner, name, err)
+	}
+	if !ValidLogin(r.Owner) || !ValidRepo(r.Name) || r.Private == nil {
+		return RepoInfo{}, fmt.Errorf("GitHub returned no usable repo for %s/%s", owner, name)
+	}
+	return RepoInfo{Owner: r.Owner, Name: r.Name, Private: *r.Private}, nil
+}
+
 func discover(ctx context.Context, gh Runner) (Identity, error) {
 	var id Identity
 	out, err := gh(ctx, "api", "user", "--jq", ".login")

@@ -18,6 +18,8 @@ var spacesFake struct {
 	applyReq *orchdv1.ApplySpacesRequest
 	draft    *orchdv1.SpacesDraft
 	diff     *orchdv1.SpacesDiff
+	whyReq   *orchdv1.ExplainPlacementRequest
+	why      *orchdv1.PlacementExplanation
 	err      error
 }
 
@@ -25,6 +27,7 @@ func resetSpacesFake(t *testing.T) {
 	t.Helper()
 	clear := func() {
 		spacesFake.draftReq, spacesFake.applyReq, spacesFake.draft, spacesFake.diff, spacesFake.err = nil, nil, nil, nil, nil
+		spacesFake.whyReq, spacesFake.why = nil, nil
 	}
 	clear()
 	t.Cleanup(clear)
@@ -45,6 +48,11 @@ func (f *fakeClient) ApplySpaces(_ context.Context, req *orchdv1.ApplySpacesRequ
 		return nil, spacesFake.err
 	}
 	return &orchdv1.ApplySpacesResponse{AppliedRevision: req.GetReviewedRevision()}, nil
+}
+
+func (f *fakeClient) ExplainPlacement(_ context.Context, req *orchdv1.ExplainPlacementRequest, _ ...grpc.CallOption) (*orchdv1.PlacementExplanation, error) {
+	spacesFake.whyReq = req
+	return spacesFake.why, spacesFake.err
 }
 
 func TestSpacesDraft(t *testing.T) {
@@ -177,5 +185,69 @@ func TestSpacesApply(t *testing.T) {
 	spacesFake.err = errors.New("only the operator can apply the spaces policy")
 	if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "apply", "--revision", "7"); err == nil {
 		t.Fatal("want the refusal")
+	}
+}
+
+func TestSpacesWhy(t *testing.T) {
+	resetSpacesFake(t)
+	spacesFake.why = &orchdv1.PlacementExplanation{
+		TargetKind: "path",
+		Roots: []*orchdv1.PlacementRoot{
+			{Root: "/home/u/code", Space: "oss", Kind: "public"},
+			{Root: "/home/u/code/company1", Space: "acme", Kind: "isolated"},
+		},
+		Remote:       &orchdv1.PlacementRemote{Owner: "acme", Repo: "app", Visibility: "private", Space: "acme", Kind: "isolated", Effect: "owner bound to acme (isolated)"},
+		Rule:         "root_and_remote_agree",
+		Reason:       "its root and its remote's owner are both bound to acme",
+		Outcome:      "placed",
+		Space:        "acme",
+		SessionSpace: "acme",
+		SessionReads: "acme",
+	}
+	out, err := run(factory(&fakeClient{}, nil), "", "spaces", "why", "/home/u/code/company1/app")
+	if err != nil || spacesFake.whyReq.GetTarget() != "/home/u/code/company1/app" {
+		t.Fatalf("why: %q, %v, sent %v", out, err, spacesFake.whyReq)
+	}
+	want := []string{
+		"target: /home/u/code/company1/app (path)",
+		"roots, shallowest first:\n  /home/u/code  oss (public)\n  /home/u/code/company1  acme (isolated)  <- deepest, counts",
+		"remote: acme/app (private): owner bound to acme (isolated)",
+		"rule: root_and_remote_agree: its root and its remote's owner are both bound to acme",
+		"result: acme (placed)",
+		"a session started here: content goes to acme; reads as acme",
+	}
+	for _, w := range want {
+		if !strings.Contains(out, w) {
+			t.Errorf("missing %q in:\n%s", w, out)
+		}
+	}
+
+	spacesFake.why = &orchdv1.PlacementExplanation{TargetKind: "path", Rule: "public_root_session", Outcome: "quarantined", Space: "quarantine", SessionSpace: "quarantine"}
+	out, err = run(factory(&fakeClient{}, nil), "", "spaces", "why", "~/x")
+	if err != nil || !strings.HasSuffix(spacesFake.whyReq.GetTarget(), "/x") || !strings.HasPrefix(spacesFake.whyReq.GetTarget(), "/") {
+		t.Fatalf("~ not expanded: %v, %v", spacesFake.whyReq, err)
+	}
+	for _, w := range []string{"roots: none hold it", "remote: none", "reads as no space (public only)"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("missing %q in:\n%s", w, out)
+		}
+	}
+
+	spacesFake.why = &orchdv1.PlacementExplanation{TargetKind: "repo", Remote: &orchdv1.PlacementRemote{Owner: "oss-org", Repo: "lib", Effect: "owner bound to oss"}, Space: "quarantine"}
+	if out, _ = run(factory(&fakeClient{}, nil), "", "spaces", "why", "./sub"); !strings.HasPrefix(spacesFake.whyReq.GetTarget(), "/") {
+		t.Fatalf("relative path sent as %q", spacesFake.whyReq.GetTarget())
+	}
+	if !strings.Contains(out, "visibility not checked") || strings.Contains(out, "roots:") {
+		t.Errorf("repo output: %s", out)
+	}
+	for _, target := range []string{"acme/app", "https://docs.oss.dev/a", "slack:T1"} {
+		if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "why", target); err != nil || spacesFake.whyReq.GetTarget() != target {
+			t.Errorf("%s sent as %q, %v", target, spacesFake.whyReq.GetTarget(), err)
+		}
+	}
+
+	spacesFake.err = errors.New("permission denied")
+	if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "why", "acme/app"); err == nil {
+		t.Error("orchd's refusal was not returned")
 	}
 }

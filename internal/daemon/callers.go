@@ -56,6 +56,8 @@ var taskCallable = map[string]bool{
 	orchdv1.Orchd_ListRegisteredSources_FullMethodName: true,
 	orchdv1.Orchd_GetSafetyNet_FullMethodName:          true,
 	orchdv1.Orchd_ListSettings_FullMethodName:          true,
+	// ExplainPlacement answers agents only about public placements.
+	orchdv1.Orchd_ExplainPlacement_FullMethodName: true,
 }
 
 // operatorActions says what each operator-only RPC would do, for the refusal.

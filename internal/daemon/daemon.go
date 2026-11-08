@@ -148,7 +148,9 @@ type server struct {
 	// config serves the settings in orch.db.
 	config *configService
 	// spaces holds the enforced spaces policy; nil when unavailable.
-	spaces     *spaces.Engine
+	spaces *spaces.Engine
+	// repos looks up a repo's owner and visibility for placement.
+	repos      *repoLookups
 	sourcesReg *sources.Registry
 	documents  documentReader
 	// nudgeMu guards lastNudge, when RefreshSource last restarted the
@@ -711,6 +713,7 @@ func Run(ctx context.Context) error {
 		docsRefresh:  refreshSecs(s.Docs.DefaultRefresh),
 		config:       cfg,
 		spaces:       sp,
+		repos:        newRepoLookups(github.GH),
 		prune:        newPruneGuard(store),
 		sourcesReg:   sources.NewRegistry(store),
 		documents:    svc,

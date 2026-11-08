@@ -10,6 +10,8 @@ type Resolved struct {
 	// goes: a private or isolated space, or Quarantine.
 	PublicRootSessions string
 	spaces             map[string]*Space
+	// roots are every bound folder root, expanded, for placement.
+	roots []root
 }
 
 // Configured reports whether any space is defined. Without one, orch keeps

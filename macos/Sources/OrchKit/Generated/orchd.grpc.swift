@@ -657,6 +657,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ExplainPlacement" metadata.
+        public enum ExplainPlacement: Sendable {
+            /// Request type for "ExplainPlacement".
+            public typealias Input = Orchd_V1_ExplainPlacementRequest
+            /// Response type for "ExplainPlacement".
+            public typealias Output = Orchd_V1_PlacementExplanation
+            /// Descriptor for "ExplainPlacement".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ExplainPlacement",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -916,6 +929,7 @@ public enum Orchd_V1_Orchd: Sendable {
             SetSpacesDraft.descriptor,
             DiffSpaces.descriptor,
             ApplySpaces.descriptor,
+            ExplainPlacement.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -2124,6 +2138,31 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ApplySpacesResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ApplySpacesResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ExplainPlacement" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ExplainPlacement says which space content from a target (a path, URL,
+        /// > owner/repo or chat tenant) goes to and why. Agents get an answer only
+        /// > when every space it names is public; the operator sees all.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ExplainPlacementRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ExplainPlacementRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PlacementExplanation` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func explainPlacement<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ExplainPlacementRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ExplainPlacementRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PlacementExplanation>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PlacementExplanation>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListRegisteredSources" method.
@@ -4239,6 +4278,42 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "ExplainPlacement" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ExplainPlacement says which space content from a target (a path, URL,
+        /// > owner/repo or chat tenant) goes to and why. Agents get an answer only
+        /// > when every space it names is public; the operator sees all.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ExplainPlacementRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ExplainPlacementRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PlacementExplanation` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func explainPlacement<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ExplainPlacementRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ExplainPlacementRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PlacementExplanation>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PlacementExplanation>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ExplainPlacement.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -6261,6 +6336,37 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ApplySpacesRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ApplySpacesResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ExplainPlacement" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ExplainPlacement says which space content from a target (a path, URL,
+    /// > owner/repo or chat tenant) goes to and why. Agents get an answer only
+    /// > when every space it names is public; the operator sees all.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ExplainPlacementRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func explainPlacement<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ExplainPlacementRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PlacementExplanation>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.explainPlacement(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ExplainPlacementRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PlacementExplanation>(),
             options: options,
             onResponse: handleResponse
         )
@@ -8402,6 +8508,41 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.applySpaces(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ExplainPlacement" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ExplainPlacement says which space content from a target (a path, URL,
+    /// > owner/repo or chat tenant) goes to and why. Agents get an answer only
+    /// > when every space it names is public; the operator sees all.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func explainPlacement<Result>(
+        _ message: Orchd_V1_ExplainPlacementRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PlacementExplanation>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ExplainPlacementRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.explainPlacement(
             request: request,
             options: options,
             onResponse: handleResponse

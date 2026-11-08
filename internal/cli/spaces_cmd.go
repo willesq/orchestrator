@@ -28,12 +28,14 @@ operator applied.
   orch spaces draft < policy.json    save a draft (changes nothing)
   orch spaces diff                   compare the draft with what is applied
   orch spaces apply --revision N     enforce draft N (operator only)
+  orch spaces why <target>           show where a path, URL, repo or chat
+                                     tenant's content goes, and why
 
 Diff and apply are refused inside an agent session (Claude Code, Codex) and
 inside tasks orchd runs: run them in your own terminal or use Orch.app. An
 agent session may save a draft; applying one needs --accept-agent-draft.`,
 	}
-	cmd.AddCommand(newSpacesDraftCmd(cf), newSpacesDiffCmd(cf), newSpacesApplyCmd(cf))
+	cmd.AddCommand(newSpacesDraftCmd(cf), newSpacesDiffCmd(cf), newSpacesApplyCmd(cf), newSpacesWhyCmd(cf))
 	return cmd
 }
 

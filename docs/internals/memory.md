@@ -603,6 +603,74 @@ stamped with a space, and search is not yet filtered by one; later features in t
 both. Until a policy with spaces is applied, everything is in the one implicit `shared` space
 and search behaves as it always has.
 
+## Placement
+
+`spaces.Classify(origin, resolved, options)` (`internal/spaces/classify.go`) decides which space
+content goes to. It is a pure function: writers report facts about where content came from as a
+`spaces.Origin` (system, source URI, local path, GitHub repo with its current owner and
+visibility, URL, chat tenant, and the space of the pinned session that wrote it) and never choose
+a space themselves. No writer calls it yet; stamping every write is SP-023. The result is a
+space, `quarantine`, or a conflict (also `quarantine`), with the deciding rule, a reason, every
+matching root and the remote's effect.
+
+- **No policy:** everything is `shared`, as before spaces (`no_policy`).
+- **Checkouts, docs syncs and sessions** combine two candidates. The root candidate is the deepest
+  bound root holding the path, matched case-insensitively at path boundaries, like a CODEOWNERS
+  file (`~/code/company10` is not under `~/code/company1`). The remote candidate is the space of
+  the repo's owner. A fork's parent is ignored, and a transferred repo counts under its current
+  owner. When both exist and differ, the stricter kind wins (`root_stricter`, `remote_stricter`).
+  Two different spaces of the same kind are a `conflict`: two isolated spaces, as the plan
+  requires, and also two private or two public ones, since neither is stricter. With neither
+  candidate the origin is `unmatched`. A docs sync has no path, so only its remote counts.
+- **Public needs proof.** A result that would be public is quarantined (`not_verified_public`)
+  whenever the checkout has a remote that GitHub has not confirmed is public, whoever owns it. That
+  includes the times GitHub cannot be reached. A folder with no remote under a public root is
+  public, as the operator declared.
+- **Org bindings must hold.** A remote whose owner's binding is suspended or unconfirmed
+  (SP-021) sends the content to quarantine (`org_unconfirmed`). `Engine.Place` reads the binding
+  from `orch.db`. A nil `Options.Confirmed` confirms nothing.
+- **Sessions** are placed like their first cwd. A session under a public root reads as that public
+  space, so it reads public only, and its content goes to `public_root_sessions` (D-22). A session
+  never writes to a public space. In a conflict or unmatched folder it has no space.
+- **Web pages** go to the longest bound prefix they fall under, at a path boundary. URLs and
+  prefixes are compared after normalization: http and https treated as one site, the host
+  lowercased, a default port and
+  trailing dots on the host dropped, the port read as a number, dot segments resolved, the path
+  re-escaped and its trailing slash ignored. So `https://a.com/x/../private`,
+  `https://a.com/%70rivate` and `https://a.com/private` all fall under `https://a.com/private/`,
+  and `https://wiki.corp.com` falls under `https://wiki.corp.com/`. Paths stay case-sensitive. A
+  URL that cannot be normalized, such as one with a backslash in its path (some servers read it as
+  a slash) or a bad escape, is quarantined even when a session ingested it, because it cannot be
+  checked against stricter prefixes. A page a pinned
+  session ingested takes the session's space (D-14). When the prefix's space differs from the
+  session's, the stricter wins, and two equally strict spaces are a conflict.
+- **Client notes** take the writing session's space. Without a pinned session they are
+  unmatched. A pin naming a space the policy no longer has, or a public space, is not trusted
+  (`writer_unknown`).
+- **Chat** goes to the space bound to `<provider>:<tenant>`.
+- **A sticky retag override** (`Options.Override`, recorded by SP-071) wins over every rule. One
+  naming a removed space quarantines.
+
+An unmatched or conflicting origin is never placed in public (`TestClassifyNeverPublicWhenUnplaced`).
+Paths are compared as given. Symlinks are not resolved, so a writer passes the path it actually
+used.
+
+**Explaining a placement.** `ExplainPlacement` (`orch spaces why <target>`) builds the origin
+itself. A path's remote comes from the checkout's `.git` files, read without running git
+(`handoff.FindCheckout`). An anonymous checkout, whose `.git` file does not point back, has no
+remote. A repo's current owner and visibility come from `gh api repos/<owner>/<repo>`, cached for
+10 minutes, with at most 512 entries and 30 uncached lookups a minute across all callers. Without
+an answer the repo keeps the owner its remote names and an unknown visibility, which is never
+public. For a path, the operator also sees where a session started there would write and which
+space it would read as. Until sessions are pinned (SP-010, SP-011), orchd cannot tell an agent's
+own space. So any caller other than the operator gets an answer only when every space it names is
+public and any remote's owner is bound to a public space. Otherwise, and on any error, it gets one
+fixed refusal that does not say why. The remote rule matters because an agent can write a `.git`
+naming any org under a public root. If an unbound owner were answered, the refusal would show
+which orgs the other spaces bind. One thing still shows: an agent can learn that a folder it
+names lies under a non-public root. Folder names are already visible to it on disk. Queued tasks
+may call it on the same terms.
+
 ## Cost of a collection per space
 
 Memory spaces (D-10) plan one Qdrant collection per space, with the payload filter kept as a

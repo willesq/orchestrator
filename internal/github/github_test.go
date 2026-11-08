@@ -431,3 +431,35 @@ func TestLookupAccount(t *testing.T) {
 		t.Errorf("invalid login: err = %v", err)
 	}
 }
+
+func TestLookupRepo(t *testing.T) {
+	answer := func(out string, err error) Runner {
+		return func(_ context.Context, args ...string) ([]byte, error) {
+			if want := []string{"api", "repos/acme/app", "--jq", "{owner: .owner.login, name, private}"}; !slices.Equal(args, want) {
+				t.Fatalf("gh args = %q, want %q", args, want)
+			}
+			return []byte(out), err
+		}
+	}
+	got, err := LookupRepo(context.Background(), answer(`{"owner":"globex","name":"app2","private":true}`, nil), "acme", "app")
+	if err != nil || got != (RepoInfo{Owner: "globex", Name: "app2", Private: true}) {
+		t.Fatalf("LookupRepo = %+v, %v", got, err)
+	}
+	for _, tc := range []struct {
+		name, out string
+		err       error
+		want      string
+	}{
+		{"gh fails", "", errors.New("gh api: 404"), "404"},
+		{"unparseable", "{nope", nil, "parse GitHub repo"},
+		{"no visibility", `{"owner":"acme","name":"app"}`, nil, "no usable repo"},
+		{"bad owner", `{"owner":"-x-","name":"app","private":false}`, nil, "no usable repo"},
+	} {
+		if _, err := LookupRepo(context.Background(), answer(tc.out, tc.err), "acme", "app"); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", tc.name, err, tc.want)
+		}
+	}
+	if _, err := LookupRepo(context.Background(), nil, "acme", "../x"); err == nil {
+		t.Error("an invalid repo name was looked up")
+	}
+}
