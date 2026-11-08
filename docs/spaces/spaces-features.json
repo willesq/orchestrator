@@ -1048,7 +1048,7 @@
       "attempts": 1,
       "criteria_sha256": "283fd77410dd0bb0980e0c5a2a9a91b1c286bbaf4ca0dc1bb76de0e704b10ac7",
       "branch": "feat/sp-063-gh-profiles",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/146"
     },
     {
       "id": "SP-010",
