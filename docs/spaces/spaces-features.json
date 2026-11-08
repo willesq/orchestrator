@@ -536,7 +536,9 @@
               "threshold": "recorded"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestIntegrationSpacesCost (internal/rag/spaces_bench_it_test.go; ORCH_QDRANT_BENCH=1, qdrant v1.17.1 native, Apple M3 Max 16 cores, 2026-11-08). One hybrid collection of 40,000 synthetic chunks (384-d dense clustered around 256 centres, BM25 from the real tokenizer over a Zipf vocabulary), searched through Service.Search (hybrid, weighted ranking, TopK 10) with payload filter tags any [space:s0 space:s1] (50% of chunks), 200 queries after 20 warm-up. Default segments (auto): p50 16.45 ms, p95 17.06 ms. With ORCH_QDRANT_BENCH_SEGMENTS=2: p50 11.22 ms, p95 11.77 ms. Recorded."
+          ]
         },
         {
           "id": "SP-002.2",
