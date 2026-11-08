@@ -559,7 +559,10 @@
               "threshold": "<= 120 s"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestIntegrationSpacesCost, same corpus split across 4 collections; the 2 allowed collections searched in parallel through Service.Search (each with its own space tag filter as the second layer) and fused by RRF (k=60), 200 queries interleaved with the baseline. Default segments: p50 30.75-31.13 ms, p95 32.64-32.94 ms, ratio 1.93-1.94x over 3 runs. ORCH_QDRANT_BENCH_SEGMENTS=2: p50 16.45 ms, p95 17.54 ms, ratio 1.49x. Over the 1.3x threshold, so documented in docs/internals/memory.md ('Cost of a collection per space'): request latency barely depends on collection size; the keyword request returning dense vectors costs 8.2-9.0 ms (1.8-2.0 ms without them); the engine did not overlap concurrent requests (4 parallel raw requests 13-30 ms), so each extra collection adds a whole hybrid search. Top-10 agreement between layouts 85.5%. R-03 (now D-10) to be revisited with the user.",
+            "a2: TestIntegrationSpacesCost, POST /points/payload?wait=true with a filter matching all 40,000 chunks: one collection 0.33 s (default segments; 10.3 s with 2 segments); 4 space collections, one filtered set_payload each, 0.39-0.44 s total. Count afterwards = 40,000 relabelled. Threshold <= 120 s met."
+          ]
         }
       ],
       "status": "in_progress",

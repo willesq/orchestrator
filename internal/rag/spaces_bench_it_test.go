@@ -252,6 +252,11 @@ func TestIntegrationSpacesCost(t *testing.T) {
 	}
 	p := qdrant.New(qdrant.Config{Version: "v1.17.1", BinDir: binDir, Storage: filepath.Join(dir, "store"), HTTPPort: 6421, GRPCPort: 6422})
 	ctx := context.Background()
+	// Start reuses an engine already on the port, which would put the
+	// benchmark's collections in someone else's storage.
+	if p.Ready(ctx) {
+		t.Fatal("an engine is already serving 127.0.0.1:6421; stop it first")
+	}
 	if err := p.Start(ctx); err != nil {
 		t.Fatalf("start: %v", err)
 	}

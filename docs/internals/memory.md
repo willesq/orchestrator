@@ -591,3 +591,44 @@ share (same directory name), or whose path has a dot segment.
   95% interval and the share of resamples where it was not positive. Cases pair by query and
 filters, once each; a comparison over fewer than 10 cases is never called significant. Runs of another version are
   not compared. `--mode`, `--ranking` and `--per-source` score other settings on the same daemon.
+
+## Cost of a collection per space
+
+Memory spaces (D-10) plan one Qdrant collection per space, with the payload filter kept as a
+second layer. `TestIntegrationSpacesCost` (`internal/rag/spaces_bench_it_test.go`) measures what
+that costs against one collection filtered by payload. It is gated: set `ORCH_QDRANT_BENCH=1`
+(and `ORCH_QDRANT_BIN_DIR` to reuse a downloaded engine, `ORCH_QDRANT_BENCH_SEGMENTS` to set
+the segments per collection). It runs its own engine on 127.0.0.1:6421 with temporary storage.
+
+**Setup:** 40,000 synthetic chunks in 4 spaces: 384-dimension dense vectors clustered around 256
+centres, BM25 vectors from the real tokenizer over a Zipf vocabulary with code identifiers. The
+same chunks are loaded once into one collection and once split into 4 space collections. Each
+search goes through `Service.Search` (hybrid, weighted, TopK 10) for 200 queries after 20
+warm-up queries. The baseline searches the one collection filtered to 2 spaces
+(`tags` any). The split layout searches the 2 allowed space collections in parallel and fuses the
+two lists by reciprocal rank (k = 60).
+
+**Results** (qdrant v1.17.1, Apple M3 Max, 2026-11-08):
+
+| | default segments (one per CPU) | 2 segments |
+|---|---|---|
+| baseline p50 / p95 | 16.5 / 17.1 ms | 11.2 / 11.8 ms |
+| 2 space collections p50 / p95 | 31.1 / 32.9 ms | 16.4 / 17.5 ms |
+| p95 ratio | 1.93x | 1.49x |
+| relabel 40,000 chunks, one filtered `set_payload` | 0.33 s | 10.3 s |
+| relabel across 4 space collections | 0.40 s | 0.44 s |
+
+Both layouts return the same top 10 for 85.5% of hits.
+
+**Where the time goes.** Collection size barely matters. A dense request takes 4.1–4.3 ms on
+either 40,000 or 10,000 chunks with default segments, and 1.4 ms with 2 segments. A keyword
+request takes 8.2–9.0 ms in every case, and 1.8–2.0 ms of that without its dense vectors. Search
+returns those vectors so it can compute cosine for keyword-only hits. The engine did not overlap
+concurrent requests: 4 raw requests in parallel took about their sum (13–30 ms). So each extra
+space collection adds a whole hybrid search, and the split layout costs 1.5–1.9x at p95. That is
+over the plan's 1.3x threshold, so the layout decision is to be revisited
+([D-10](../spaces/spaces-features.json)). Changes that would reduce the cost: fewer segments for
+small space collections, keyword requests that don't return vectors, or one request per collection
+using Qdrant's server-side fusion. These were not measured as a full layout.
+
+Relabelling is cheap either way: at most 10.3 s for 40,000 chunks, well under the 120 s threshold.
