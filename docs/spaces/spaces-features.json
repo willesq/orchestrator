@@ -971,7 +971,7 @@
       "attempts": 1,
       "criteria_sha256": "5fe369bccbe4936845c7b84d433b20c8e15832ddc357a5bb66d4c84a290ba9aa",
       "branch": "feat/sp-022-placement",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/145"
     },
     {
       "id": "SP-063",
