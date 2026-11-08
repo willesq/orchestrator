@@ -640,7 +640,7 @@
       "attempts": 1,
       "criteria_sha256": "6661c2fda808edaffbb0600a5eabe41fc2dcb3e0f425842cf3a9b3ec3da41c07",
       "branch": "feat/sp-003-process-identity",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/140"
     },
     {
       "id": "SP-004",
