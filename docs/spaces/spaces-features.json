@@ -973,10 +973,10 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "8be502b59f5a6d9a9c60770b267fa4c9fec8bc6a",
+      "verified_at": "2026-11-08T21:21:22Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "5fe369bccbe4936845c7b84d433b20c8e15832ddc357a5bb66d4c84a290ba9aa",
