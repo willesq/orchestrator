@@ -885,14 +885,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "0f40238e41e01556fc2cddf2df5fc48e9c503201aa544cde6d176b451e6f5ef1",
-      "branch": null,
+      "branch": "feat/sp-021-org-identity",
       "pr": null
     },
     {
