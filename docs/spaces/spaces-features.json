@@ -637,10 +637,10 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "9d34c14015a99bbd68ae69524c9407ca861085cd",
+      "verified_at": "2026-11-08T16:42:14Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "6661c2fda808edaffbb0600a5eabe41fc2dcb3e0f425842cf3a9b3ec3da41c07",
