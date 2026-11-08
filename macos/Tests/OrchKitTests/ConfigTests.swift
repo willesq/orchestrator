@@ -14,7 +14,8 @@ private let mode = ConfigField(key: "queue.worker.permission_mode", section: "Ta
 
 private final class FakeConfig: ConfigAPI, @unchecked Sendable {
     private let lock = NSLock()
-    var state = ConfigState(fields: [parallel, mode], path: "/h/config.yaml")
+    var state = ConfigState(fields: [parallel, mode], legacyFile: "/h/config.yaml")
+    var removals = 0
     var fail: (any Error)?
     var writes: [(values: [String: String], confirmed: Bool)] = []
     var loads = 0
@@ -38,6 +39,15 @@ private final class FakeConfig: ConfigAPI, @unchecked Sendable {
                 }
             }
             state.restartRequired = true
+            return state
+        }
+    }
+
+    func removeLegacyConfig() async throws -> ConfigState {
+        try lock.withLock {
+            if let fail { throw fail }
+            removals += 1
+            state.legacyFile = ""
             return state
         }
     }
@@ -143,6 +153,23 @@ struct ConfigModelTests {
         await model.changeText(parallel, text: "1")
         await model.resetToDefault(parallel)
         #expect(api.writes.isEmpty)
+    }
+
+    @Test("Removing the legacy config.yaml clears it, and a refusal stays visible")
+    func removeLegacy() async {
+        let api = FakeConfig()
+        let model = await loaded(api)
+        #expect(model.state?.legacyFile == "/h/config.yaml")
+        api.fail = Refused()
+        await model.removeLegacyConfig()
+        #expect(model.legacyError != nil)
+        #expect(model.state?.legacyFile == "/h/config.yaml")
+        api.fail = nil
+        await model.removeLegacyConfig()
+        #expect(api.removals == 1)
+        #expect(model.legacyError == nil)
+        #expect(model.state?.legacyFile.isEmpty == true)
+        #expect(!model.isRemovingLegacy)
     }
 
     @Test("Past the limit stays with the field and never reaches orchd")
@@ -415,7 +442,8 @@ struct SettingsRPCTests {
         unknownType.key = "future"
         unknownType.type = "from-a-newer-orchd"
         service.configState.fields = [field, unknownType]
-        service.configState.path = "/h/config.yaml"
+        service.configState.legacyFile = "/h/config.yaml"
+        service.configState.startupError = "mkdir /x: not a directory"
         service.configState.restartRequired = true
         try await withFakeOrchd(service) { socket in
             let client = try DaemonClient(socketPath: socket)
@@ -425,7 +453,8 @@ struct SettingsRPCTests {
                 runner.cancel()
             }
             let state = try await client.config()
-            #expect(state.path == "/h/config.yaml")
+            #expect(state.legacyFile == "/h/config.yaml")
+            #expect(state.startupError == "mkdir /x: not a directory")
             #expect(state.restartRequired)
             #expect(state.fields[0].range == 0...50)
             #expect(state.fields[0].pendingRestart)
@@ -435,6 +464,9 @@ struct SettingsRPCTests {
             let sent = try #require(service.recorder.last(Orchd_V1_SetConfigRequest.self))
             #expect(sent.values == [field.key: "5"])
             #expect(sent.confirmSensitive)
+            let removed = try await client.removeLegacyConfig()
+            #expect(removed.legacyFile.isEmpty)
+            #expect(service.recorder.last(Orchd_V1_RemoveLegacyConfigRequest.self) != nil)
         }
     }
 

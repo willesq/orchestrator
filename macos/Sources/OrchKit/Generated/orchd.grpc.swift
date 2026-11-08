@@ -605,6 +605,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "RemoveLegacyConfig" metadata.
+        public enum RemoveLegacyConfig: Sendable {
+            /// Request type for "RemoveLegacyConfig".
+            public typealias Input = Orchd_V1_RemoveLegacyConfigRequest
+            /// Response type for "RemoveLegacyConfig".
+            public typealias Output = Orchd_V1_ConfigState
+            /// Descriptor for "RemoveLegacyConfig".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "RemoveLegacyConfig",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -860,6 +873,7 @@ public enum Orchd_V1_Orchd: Sendable {
             PurgeDocs.descriptor,
             GetConfig.descriptor,
             SetConfig.descriptor,
+            RemoveLegacyConfig.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -1927,7 +1941,8 @@ extension Orchd_V1_Orchd {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > GetConfig returns every setting in config.yaml, described for editing.
+        /// > GetConfig returns every setting, described for editing. Settings live in
+        /// > orch.db; this and SetConfig are the only way to change them.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Orchd_V1_GetConfigRequest` message.
@@ -1951,6 +1966,7 @@ extension Orchd_V1_Orchd {
         /// > Source IDL Documentation:
         /// >
         /// > SetConfig validates and writes settings in one write: all of them or none.
+        /// > A value equal to the default resets the setting to follow the default.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Orchd_V1_SetConfigRequest` message.
@@ -1964,6 +1980,30 @@ extension Orchd_V1_Orchd {
         func setConfig<Result>(
             request: GRPCCore.ClientRequest<Orchd_V1_SetConfigRequest>,
             serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetConfigRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ConfigState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RemoveLegacyConfig" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveLegacyConfig deletes the config.yaml orch no longer reads, once its
+        /// > settings were imported.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RemoveLegacyConfigRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RemoveLegacyConfigRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ConfigState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func removeLegacyConfig<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RemoveLegacyConfigRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RemoveLegacyConfigRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ConfigState>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result
@@ -3873,7 +3913,8 @@ extension Orchd_V1_Orchd {
         ///
         /// > Source IDL Documentation:
         /// >
-        /// > GetConfig returns every setting in config.yaml, described for editing.
+        /// > GetConfig returns every setting, described for editing. Settings live in
+        /// > orch.db; this and SetConfig are the only way to change them.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Orchd_V1_GetConfigRequest` message.
@@ -3908,6 +3949,7 @@ extension Orchd_V1_Orchd {
         /// > Source IDL Documentation:
         /// >
         /// > SetConfig validates and writes settings in one write: all of them or none.
+        /// > A value equal to the default resets the setting to follow the default.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Orchd_V1_SetConfigRequest` message.
@@ -3930,6 +3972,41 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.SetConfig.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "RemoveLegacyConfig" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RemoveLegacyConfig deletes the config.yaml orch no longer reads, once its
+        /// > settings were imported.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RemoveLegacyConfigRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RemoveLegacyConfigRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ConfigState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func removeLegacyConfig<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RemoveLegacyConfigRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RemoveLegacyConfigRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ConfigState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.RemoveLegacyConfig.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -5785,7 +5862,8 @@ extension Orchd_V1_Orchd.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > GetConfig returns every setting in config.yaml, described for editing.
+    /// > GetConfig returns every setting, described for editing. Settings live in
+    /// > orch.db; this and SetConfig are the only way to change them.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Orchd_V1_GetConfigRequest` message.
@@ -5815,6 +5893,7 @@ extension Orchd_V1_Orchd.ClientProtocol {
     /// > Source IDL Documentation:
     /// >
     /// > SetConfig validates and writes settings in one write: all of them or none.
+    /// > A value equal to the default resets the setting to follow the default.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Orchd_V1_SetConfigRequest` message.
@@ -5833,6 +5912,36 @@ extension Orchd_V1_Orchd.ClientProtocol {
         try await self.setConfig(
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetConfigRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ConfigState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RemoveLegacyConfig" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RemoveLegacyConfig deletes the config.yaml orch no longer reads, once its
+    /// > settings were imported.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RemoveLegacyConfigRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func removeLegacyConfig<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RemoveLegacyConfigRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.removeLegacyConfig(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RemoveLegacyConfigRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ConfigState>(),
             options: options,
             onResponse: handleResponse
@@ -7778,7 +7887,8 @@ extension Orchd_V1_Orchd.ClientProtocol {
     ///
     /// > Source IDL Documentation:
     /// >
-    /// > GetConfig returns every setting in config.yaml, described for editing.
+    /// > GetConfig returns every setting, described for editing. Settings live in
+    /// > orch.db; this and SetConfig are the only way to change them.
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -7812,6 +7922,7 @@ extension Orchd_V1_Orchd.ClientProtocol {
     /// > Source IDL Documentation:
     /// >
     /// > SetConfig validates and writes settings in one write: all of them or none.
+    /// > A value equal to the default resets the setting to follow the default.
     ///
     /// - Parameters:
     ///   - message: request message to send.
@@ -7834,6 +7945,40 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.setConfig(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RemoveLegacyConfig" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RemoveLegacyConfig deletes the config.yaml orch no longer reads, once its
+    /// > settings were imported.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func removeLegacyConfig<Result>(
+        _ message: Orchd_V1_RemoveLegacyConfigRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RemoveLegacyConfigRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.removeLegacyConfig(
             request: request,
             options: options,
             onResponse: handleResponse

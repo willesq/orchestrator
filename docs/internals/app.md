@@ -9,7 +9,7 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), config.yaml (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
 | `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 
@@ -379,12 +379,20 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
 - **Settings:** the one place to configure orch, as a list of sections beside the section itself.
   The section is kept across launches, and each is in the command palette. A window that last showed
   the old Claude or Safety Net pane reopens on that section.
-  - **Tasks, Docs, GitHub, Memory:** config.yaml, each row built from how orchd describes it (`GetConfig`,
-    [config.md](config.md#schema)): a switch, a number with its range, a picker, or text. Text is written
-    on Return, lists and maps on **Save**, so half-typed values are not sent; what orchd refuses shows
-    under the row. A right-click offers **Reset to Default**. A row an environment variable sets is
-    disabled and says so.
+  - **Overview:** how many settings differ from their defaults, per section (each opens it), and how
+    many wait for a restart. While an older release's `config.yaml` is still on disk, a quiet **Tidy
+    up** row says orch no longer reads it, shows its path and offers **Remove** (`RemoveLegacyConfig`,
+    which keeps a copy in orch's backups);
+    a refusal shows under the row, and the row goes once the file is gone.
+  - **Tasks, Docs, GitHub, Memory:** orch's settings, kept in `orch.db`, each row built from how orchd
+    describes it (`GetConfig`, [config.md](config.md#schema)): a switch, a number with its range, a
+    picker, or text. Text is written on Return, lists and maps on **Save**, so half-typed values are
+    not sent; what orchd refuses shows under the row. A right-click offers **Reset to Default**.
     - **Sensitive settings** carry a shield and ask first, naming the new value.
+    - **orchd could not start:** when a setting stopped orchd's services, it serves only the settings
+      ([config.md](config.md#when-a-setting-stops-orchd)); a red banner above every section shows the
+      error with **Restart orchd…**, the Overview and the sidebar are marked, and the settings stay
+      editable so the one at fault can be fixed.
     - **Restart:** while changes wait, a banner counts them with **Restart orchd…** (confirmed, since
       running tasks are interrupted and resume), and each waiting row says "after restart". It runs
       `orch daemon restart`, like the menu's.
@@ -408,7 +416,7 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
       reloads every 30 s while the tab is open.
     - **Your teams:** from `GetGitHubIdentity`.
   - **Memory:** sources, prompt context, session summaries, search, embedding and the vector store.
-  - **App:** appearance, open at login, and where config.yaml is.
+  - **App:** appearance, the Dock icon, and open at login.
 
   - **Claude:** the managed settings ([settings.md](settings.md)): Claude Code's hooks, permission
     rules and plugins, cc-safety-net's rules, and what orch ships for agents, in seven sections

@@ -18,12 +18,13 @@ enum GitHubSection: String, CaseIterable, Identifiable {
 
 /// The parts of the Settings pane.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case tasks, docs, github, memory, claude, safetyNet, app
+    case overview, tasks, docs, github, memory, claude, safetyNet, app
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .overview: "Overview"
         case .tasks: "Tasks"
         case .docs: "Docs"
         case .github: "GitHub"
@@ -36,6 +37,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .overview: "gauge.with.dots.needle.33percent"
         case .tasks: "checklist"
         case .docs: "doc.text.magnifyingglass"
         case .github: "point.3.connected.trianglepath.dotted"
@@ -46,14 +48,14 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The config.yaml sections this part shows.
+    /// The setting sections this part shows.
     var configSections: [String] {
         switch self {
         case .tasks: ["Tasks", "Task verification", "Codex", "Model routing"]
         case .docs: ["Docs"]
         case .github: ["GitHub"]
         case .memory: ["Sources", "Prompt context", "Session summaries", "Search", "Embedding", "Vector store"]
-        case .claude, .safetyNet, .app: []
+        case .overview, .claude, .safetyNet, .app: []
         }
     }
 }
