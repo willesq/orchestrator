@@ -674,7 +674,14 @@
               "threshold": "complete"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "Recorded 2026-11-08, Claude Code 2.1.309, 16 headless `claude -p --model haiku` sessions in scratch git repos under the session scratchpad (user approved 11 + 5 runs on 2026-11-08). The user chose 'use my real config read-only' over logging in to a temp profile, so the user layer is the unmodified ~/.claude/settings.json; its env key DISABLE_TELEMETRY served as the user-layer marker. Every other layer set a distinct env marker read back with `env | grep`.",
+            "Layering matrix: L2 from checkout root -> user, project settings.json, local settings.local.json. L3 from repo/sub with its own .claude/ -> user, ROOT local, sub project, sub local; root project NOT applied. L4 from repo/sub/deep (no .claude) -> user, ROOT local only; root project NOT applied. L6 (fresh repo2/sub/deep) confirms L4: user + root local only. L5 from a non-git child of a dir with .claude/ -> user only.",
+            "Sandbox: S1 (root of sbx1; project sandbox.enabled=true, allowUnsandboxedCommands=false, filesystem.denyRead=[jobB]; local denyRead=[jobC]) -> `cat` of both fails 'Operation not permitted', so project and local denyRead merge and project enabled=true overrides user enabled=false. S1c same repo -> Read tool RETURNED jobB's file: sandbox denyRead does not block the Read tool. S1b2 (sbx1/sub, --permission-mode default) -> both files printed, consistent with root project settings not applying from a subfolder.",
+            "Read deny: S2 (project deny Read(//<abs jobC>/**), sandbox on) -> Read tool error 'File is in a directory that is denied by your permission settings'. S2b2 same repo, Bash `cat` -> 'Operation not permitted': a Read deny also feeds the sandbox's denied reads. S2c from sbx2/sub -> file read (project settings not applied). S3 single-slash Read(/<abs>/**) -> not blocked (resolved relative to the settings file). S4/S4b (deny in ROOT settings.local.json) -> Read blocked from the root and from a subfolder.",
+            "Separate login: L0 fresh CLAUDE_CONFIG_DIR and L1 temp HOME both exit 1 with 'Not logged in · Please run /login', so a per-space CLAUDE_CONFIG_DIR profile needs its own login; persistence of that login per profile was not tested (the user declined the temp-profile login). S1b/S2b first runs were refused by the user's auto-mode classifier before reaching the sandbox (inconclusive), rerun as S1b2/S2b2 with --permission-mode default.",
+            "Matrix and conclusions recorded in docs/internals/install.md 'Harness sandbox and permission layering'."
+          ]
         },
         {
           "id": "SP-004.2",
@@ -688,7 +695,12 @@
               "threshold": "recorded"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "Recorded 2026-11-08, codex-cli 0.166.0. Result: YES, Codex can deny reads to a folder from shell commands, via a permissions profile: default_permissions=\"job\"; [permissions.job] extends=\":workspace\"; [permissions.job.filesystem] \"<abs dir>\"=\"deny\".",
+            "`codex sandbox` (seatbelt, no model) with temp CODEX_HOMEs: X1 cat of the denied file -> 'Operation not permitted' exit 1; X2 cat of a project file -> ok; X3 no profile -> file printed; X4 symlink from the project, cd into the folder, ls and python open() -> all denied; X6 profile via `-p job` ($CODEX_HOME/job.config.toml) -> denied, without -p -> printed; X7 profile via -c overrides only -> denied; X5 profile defined in a trusted project's .codex/config.toml and selected explicitly with -P job -> denied.",
+            "`codex exec` sessions (user approved 3 on 2026-11-08; real CODEX_HOME for auth, trust and profile only via -c, no config written): E1 project .codex/config.toml with default_permissions=\"job\", project trusted via -c, from root -> header 'sandbox: read-only', denied file READ; E2 same from subfolder -> read-only, READ. So a checkout's own config cannot change permissions (binary string: 'project configuration cannot change permissions'). E3 profile via -c -> header 'sandbox: workspace-write [workdir, /tmp, $TMPDIR]' and the agent declined, citing the denied path (enforcement itself shown by X1-X7).",
+            "Recorded in docs/internals/install.md 'Harness sandbox and permission layering'."
+          ]
         }
       ],
       "status": "in_progress",
