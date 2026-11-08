@@ -1150,14 +1150,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "3db36eb1d0b4067e2568db4d0f867d703bfebd6a838987cb146e93c7bdc27c56",
-      "branch": null,
+      "branch": "feat/sp-010-session-pins",
       "pr": null
     },
     {
