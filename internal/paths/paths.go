@@ -13,7 +13,8 @@ import (
 	"path/filepath"
 )
 
-// ConfigDir returns the directory holding config.yaml.
+// ConfigDir returns orch's config directory: the installed agent instructions,
+// and the config.yaml older releases kept settings in.
 func ConfigDir() string {
 	if d := os.Getenv("ORCH_CONFIG_DIR"); d != "" {
 		return d
@@ -39,8 +40,9 @@ func DataDir() string {
 	return filepath.Join(base, "orch")
 }
 
-// ConfigFile is the absolute path to config.yaml.
-func ConfigFile() string { return filepath.Join(ConfigDir(), "config.yaml") }
+// LegacyConfigFile is the config.yaml older releases kept settings in. orchd
+// imports it into orch.db once and never reads it again.
+func LegacyConfigFile() string { return filepath.Join(ConfigDir(), "config.yaml") }
 
 // DBFile is the absolute path to the orch.db SQLite store.
 func DBFile() string { return filepath.Join(DataDir(), "orch.db") }

@@ -40,12 +40,13 @@ func TestConfigDir(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_CONFIG_DIR", "")
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 			t.Setenv(tt.envKey, tt.envVal)
 			if got := ConfigDir(); got != tt.want {
 				t.Errorf("ConfigDir() = %q, want %q", got, tt.want)
 			}
-			if got := ConfigFile(); got != tt.wantCfg {
-				t.Errorf("ConfigFile() = %q, want %q", got, tt.wantCfg)
+			if got := LegacyConfigFile(); got != tt.wantCfg {
+				t.Errorf("LegacyConfigFile() = %q, want %q", got, tt.wantCfg)
 			}
 		})
 	}

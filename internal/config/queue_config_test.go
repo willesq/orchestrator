@@ -8,8 +8,8 @@ import (
 
 func TestQueueWorkerAllowedTools(t *testing.T) {
 	t.Run("claude gets a read-only default", func(t *testing.T) {
-		t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-		v, err := Load()
+		v := loadTemp(t)
+		var err error
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -28,21 +28,13 @@ func TestQueueWorkerAllowedTools(t *testing.T) {
 		}
 	})
 	t.Run("lists are set per harness from the CLI", func(t *testing.T) {
-		t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-		v, err := Load()
-		if err != nil {
+		loadTemp(t)
+		if err := applyTemp(t, map[string]any{"queue.worker.allowed_tools": map[string]any{
+			"claude": []string{"Bash(make test:*)", "Bash(ls:*)"}, "codex": []string{"shell(ls)"},
+		}}, true); err != nil {
 			t.Fatal(err)
 		}
-		if err := Set(v, "queue.worker.allowed_tools.claude", "Bash(make test:*),Bash(ls:*)"); err != nil {
-			t.Fatal(err)
-		}
-		if err := Set(v, "queue.worker.allowed_tools.codex", "shell(ls)"); err != nil {
-			t.Fatal(err)
-		}
-		if v, err = Load(); err != nil {
-			t.Fatal(err)
-		}
-		s, err := Unmarshal(v)
+		s, err := Unmarshal(reload(t))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,8 +48,8 @@ func TestQueueWorkerAllowedTools(t *testing.T) {
 }
 
 func TestQueueVerifyDefaults(t *testing.T) {
-	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-	v, err := Load()
+	v := loadTemp(t)
+	var err error
 	if err != nil {
 		t.Fatal(err)
 	}

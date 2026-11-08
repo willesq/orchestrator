@@ -2,11 +2,13 @@ package cli
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/config"
+	"github.com/willesq/orchestrator/internal/config/configtest"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
@@ -25,6 +27,7 @@ func collections(t *testing.T) (string, string) {
 
 func TestRAGMigrateHybrid(t *testing.T) {
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	t.Setenv(agentrun.TaskIDEnv, "")
 	orig := fakeMigrate
 	t.Cleanup(func() { fakeMigrate = orig })
@@ -51,13 +54,7 @@ func TestRAGMigrateHybrid(t *testing.T) {
 	if c, _ := collections(t); c != "orchestrator" {
 		t.Fatalf("the CLI wrote config on apply: %s", c)
 	}
-	v, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := config.SetMany(v, map[string]any{"rag.qdrant.collection": "orchestrator-hybrid", "rag.qdrant.backup_collection": "orchestrator"}); err != nil {
-		t.Fatal(err)
-	}
+	configtest.Set(t, map[string]string{"rag.qdrant.collection": `"orchestrator-hybrid"`, "rag.qdrant.backup_collection": `"orchestrator"`})
 	out, err = run(cf, "", "rag", "migrate-hybrid", "--rollback")
 	if err != nil || !strings.Contains(out, "orch restart") {
 		t.Fatalf("rollback: %q, %v", out, err)
@@ -76,6 +73,7 @@ func TestRAGMigrateHybrid(t *testing.T) {
 
 func TestRAGMigrateReportsProblems(t *testing.T) {
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	t.Setenv(agentrun.TaskIDEnv, "")
 	orig := fakeMigrate
 	t.Cleanup(func() { fakeMigrate = orig })
@@ -96,14 +94,9 @@ func TestRAGMigrateReportsProblems(t *testing.T) {
 
 func TestRollbackRejectsBadBackup(t *testing.T) {
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	t.Setenv(agentrun.TaskIDEnv, "")
-	v, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := config.Set(v, "rag.qdrant.backup_collection", "../x"); err != nil {
-		t.Fatal(err)
-	}
+	configtest.Set(t, map[string]string{"rag.qdrant.backup_collection": `"../x"`})
 	if _, err := run(factory(&fakeClient{}, nil), "", "rag", "migrate-hybrid", "--rollback"); err == nil || !strings.Contains(err.Error(), "not a valid name") {
 		t.Fatalf("err = %v", err)
 	}
@@ -111,6 +104,7 @@ func TestRollbackRejectsBadBackup(t *testing.T) {
 
 func TestRollbackWithoutBackup(t *testing.T) {
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	t.Setenv(agentrun.TaskIDEnv, "")
 	if _, err := run(factory(&fakeClient{}, nil), "", "rag", "migrate-hybrid", "--rollback"); err == nil ||
 		!strings.Contains(err.Error(), "no backup") {

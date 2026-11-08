@@ -1,12 +1,10 @@
-// Package config loads orchestrator settings with Viper (defaults < file < env)
-// and persists CLI-driven changes through a canonical writer.
-//
-// We deliberately do NOT use viper.WriteConfig for persistence: it drops comments
-// and key ordering. Instead WriteCanonical marshals the resolved settings to YAML
-// deterministically, which keeps the on-disk file stable across writes.
+// Package config resolves orchestrator settings: the compiled defaults, then
+// the values stored in orch.db (store.go). Only values that differ from a
+// default are stored. Orch.app, through orchd, is where they are changed.
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -14,8 +12,8 @@ import (
 	"strings"
 
 	"github.com/spf13/viper"
-	"gopkg.in/yaml.v3"
 
+	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/mdwalk"
 	"github.com/willesq/orchestrator/internal/paths"
 )
@@ -403,22 +401,37 @@ func setDefaults(v *viper.Viper) {
 	})
 }
 
-// Load builds a Viper with precedence defaults < config file < env (ORCH_*).
-// A missing config file is not an error.
+// Load resolves the config: the compiled defaults, then the values stored in
+// orch.db. It only reads and never migrates the store, so any process may call
+// it; with no store yet, or one older than the settings table, the defaults
+// apply.
 func Load() (*viper.Viper, error) {
-	v := viper.New()
-	setDefaults(v)
-	v.SetConfigFile(paths.ConfigFile())
-	v.SetConfigType("yaml")
-	v.SetEnvPrefix("ORCH")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
-	if err := v.ReadInConfig(); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
+	if _, err := os.Stat(paths.DBFile()); errors.Is(err, os.ErrNotExist) {
+		return Defaults(), nil
 	}
-	return v, nil
+	conn, err := db.OpenReader()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+	v, err := LoadStore(context.Background(), conn)
+	if err != nil && strings.Contains(err.Error(), "no such table") {
+		return Defaults(), nil
+	}
+	return v, err
+}
+
+// Save validates and stores values in one transaction, for orch's own
+// maintenance commands (a store migration recording its switch, say). by
+// names the writer; the operator ran the command, so sensitive keys need no
+// further confirmation.
+func Save(values map[string]any, by string) error {
+	conn, err := db.Open()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	return ApplyStore(context.Background(), conn, values, true, by)
 }
 
 // Unmarshal decodes the resolved config into the typed Settings.
@@ -436,52 +449,3 @@ func Get(v *viper.Viper, key string) any { return v.Get(key) }
 
 // List returns all resolved settings as a nested map.
 func List(v *viper.Viper) map[string]any { return v.AllSettings() }
-
-// Set assigns a dotted key and persists the whole config canonically.
-func Set(v *viper.Viper, key string, value any) error {
-	v.Set(key, value)
-	return WriteCanonical(v)
-}
-
-// SetMany assigns several keys and persists them in one write, so settings
-// that only make sense together never land half-changed.
-func SetMany(v *viper.Viper, kv map[string]any) error {
-	for k, val := range kv {
-		v.Set(k, val)
-	}
-	return WriteCanonical(v)
-}
-
-// WriteCanonical marshals all resolved settings to YAML and writes config.yaml,
-// atomically: a reader, or a crash mid-write, sees the old file or the new one,
-// never a truncated mix.
-func WriteCanonical(v *viper.Viper) error {
-	if err := paths.Ensure(); err != nil {
-		return err
-	}
-	out, err := yaml.Marshal(v.AllSettings())
-	if err != nil {
-		return err
-	}
-	path := paths.ConfigFile()
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*.yaml")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(out); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
-}

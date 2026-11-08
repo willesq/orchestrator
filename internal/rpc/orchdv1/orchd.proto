@@ -127,10 +127,15 @@ service Orchd {
   // PurgeDocs deletes the indexed docs of repos an owner no longer covers.
   // Permanent: needs confirm. Refused while a docs sync runs.
   rpc PurgeDocs(PurgeDocsRequest) returns (PurgeDocsResponse);
-  // GetConfig returns every setting in config.yaml, described for editing.
+  // GetConfig returns every setting, described for editing. Settings live in
+  // orch.db; this and SetConfig are the only way to change them.
   rpc GetConfig(GetConfigRequest) returns (ConfigState);
   // SetConfig validates and writes settings in one write: all of them or none.
+  // A value equal to the default resets the setting to follow the default.
   rpc SetConfig(SetConfigRequest) returns (ConfigState);
+  // RemoveLegacyConfig deletes the config.yaml orch no longer reads, once its
+  // settings were imported.
+  rpc RemoveLegacyConfig(RemoveLegacyConfigRequest) returns (ConfigState);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -815,15 +820,24 @@ message ConfigField {
   double max = 11;
   bool sensitive = 12;   // changing it needs confirm_sensitive
   bool live = 13;        // takes effect without restarting orchd
-  bool env_override = 14; // an environment variable sets it, so it cannot be changed here
+  reserved 14;           // env_override: settings are no longer read from the environment
+  reserved "env_override";
   bool pending_restart = 15; // differs from what orchd started with
+  bool overridden = 16;      // set away from its default
 }
 
 message ConfigState {
   repeated ConfigField fields = 1;
-  string path = 2;              // config.yaml
+  reserved 2;                   // path: settings are no longer kept in a file
+  reserved "path";
   bool restart_required = 3;    // some field is pending_restart
+  string legacy_file = 4;       // a config.yaml orch no longer reads, still on disk; empty if none
+  // Why orchd could not start its services, when it runs only to let the
+  // settings be fixed; empty when it started normally.
+  string startup_error = 5;
 }
+
+message RemoveLegacyConfigRequest {}
 
 message DocRepo {
   string repo = 1;

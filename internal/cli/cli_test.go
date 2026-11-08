@@ -19,6 +19,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/config"
+	"github.com/willesq/orchestrator/internal/config/configtest"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/prs"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
@@ -271,8 +272,11 @@ func TestQdrantStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-			t.Setenv("ORCH_RAG_QDRANT_MODE", tt.mode)
-			t.Setenv("ORCH_RAG_QDRANT_HTTP_PORT", "1") // nothing listening
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+			configtest.Set(t, map[string]string{
+				"rag.qdrant.mode":      strconv.Quote(tt.mode),
+				"rag.qdrant.http_port": "1", // nothing listening
+			})
 			out, err := run(factory(&fakeClient{}, nil), "", "qdrant", "status")
 			if err != nil {
 				t.Fatalf("qdrant status: %v", err)
@@ -289,6 +293,7 @@ func TestQdrantMigrateDryRun(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 			out, err := run(factory(&fakeClient{}, nil), "", "qdrant", "migrate", "/new/path")
 			if err != nil {
 				t.Fatalf("migrate dry-run: %v", err)
@@ -312,7 +317,8 @@ func TestQdrantMigrateApplyErrors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-			t.Setenv("ORCH_RAG_QDRANT_STORAGE", tt.storage)
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+			configtest.Set(t, map[string]string{"rag.qdrant.storage": strconv.Quote(tt.storage)})
 			t.Setenv("HOME", t.TempDir()) // no orchd plist
 			_, err := run(factory(&fakeClient{}, nil), "", "qdrant", "migrate", tt.target, "--apply")
 			if err == nil {
@@ -392,6 +398,7 @@ func TestRunMigrate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 			old := filepath.Join(t.TempDir(), "old")
 			_ = os.MkdirAll(old, 0o755)
 			_ = os.WriteFile(filepath.Join(old, "meta"), []byte("x"), 0o644)
@@ -685,7 +692,8 @@ func TestModelFetchAlreadyPresent(t *testing.T) {
 			_ = os.WriteFile(filepath.Join(dir, "model.onnx"), []byte("m"), 0o644)
 			_ = os.WriteFile(filepath.Join(dir, "tokenizer.json"), []byte("t"), 0o644)
 			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-			t.Setenv("ORCH_EMBEDDER_MODEL_DIR", dir)
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+			configtest.Set(t, map[string]string{"embedder.model_dir": strconv.Quote(dir)})
 			out, err := run(factory(&fakeClient{}, nil), "", "model", "fetch")
 			if err != nil {
 				t.Fatalf("model fetch: %v", err)
@@ -876,12 +884,12 @@ func TestConfigCommand(t *testing.T) {
 	}{
 		{name: "get default", args: []string{"config", "get", "rag.qdrant.mode"}, wantContains: "binary"},
 		{name: "get unknown key errors", args: []string{"config", "get", "nope.nope"}, wantErr: true},
-		{name: "set persists", args: []string{"config", "set", "rag.qdrant.mode", "external"}, wantContains: "external"},
 		{name: "list shows settings", args: []string{"config", "list"}, wantContains: "qdrant"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 			out, err := run(factory(&fakeClient{}, nil), "", tt.args...)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
@@ -1162,39 +1170,71 @@ func (f *fakeClient) SummarizeSession(context.Context, *orchdv1.SummarizeSession
 	return &orchdv1.SummarizeSessionResponse{}, f.err
 }
 
-func TestConfigSetRefusedInATask(t *testing.T) {
-	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-	t.Setenv(agentrun.TaskIDEnv, "task-1")
-	for _, key := range []string{"queue.worker.claude_bin", "routing.kinds.code"} {
-		cmd := newConfigCmd()
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"set", key, "/tmp/x"})
-		if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "queue tasks cannot") {
-			t.Errorf("%s: err = %v", key, err)
+func TestConfigSetIsGone(t *testing.T) {
+	for _, c := range newConfigCmd().Commands() {
+		if c.Name() == "set" {
+			t.Fatal("orch config set still exists; settings are changed in Orch.app")
 		}
 	}
 }
 
-func TestConfigSetChecksKnownKeys(t *testing.T) {
-	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-	v, err := config.Load()
-	if err != nil {
-		t.Fatal(err)
+func TestConfigResetRefusedInATask(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	t.Setenv(agentrun.TaskIDEnv, "task-1")
+	cmd := newConfigCmd()
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"reset", "--all"})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "queue tasks cannot") {
+		t.Errorf("err = %v", err)
 	}
-	for _, tt := range []struct {
-		key, val string
-		ok       bool
+}
+
+func TestConfigReset(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantErr  string
+		wantMode string
+		wantTopK string
 	}{
-		{"queue.worker.max_concurrent", "50", true},
-		{"queue.worker.max_concurrent", "51", false},
-		{"queue.max_active", "0", false},
-		{"queue.worker.permission_mode", "bypassPermissions", false},
-		{"queue.worker.permission_mode", "plan", true},
-		{"routing.kinds.code", "fast", true}, // one entry of a map
-	} {
-		if err := setConfigValue(v, tt.key, tt.val); (err == nil) != tt.ok {
-			t.Errorf("%s=%s: err = %v", tt.key, tt.val, err)
+		{name: "one key", args: []string{"reset", "rag.qdrant.mode"}, wantMode: "binary", wantTopK: "9"},
+		{name: "all", args: []string{"reset", "--all"}, wantMode: "binary", wantTopK: "3"},
+		{name: "neither", args: []string{"reset"}, wantErr: "name the settings"},
+		{name: "both", args: []string{"reset", "--all", "rag.qdrant.mode"}, wantErr: "name the settings"},
+		{name: "unknown key", args: []string{"reset", "nope.nope"}, wantErr: "unknown setting"},
+	}
+	t.Run("nothing to reset", func(t *testing.T) {
+		t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+		out, err := run(factory(&fakeClient{}, nil), "", "config", "reset", "--all")
+		if err != nil || !strings.Contains(out, "already had its default") {
+			t.Fatalf("out = %q, err = %v", out, err)
 		}
+	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+			configtest.Set(t, map[string]string{"rag.qdrant.mode": `"external"`, "hooks.auto_rag.top_k": `9`})
+			out, err := run(factory(&fakeClient{}, nil), "", append([]string{"config"}, tt.args...)...)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("err = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil || !strings.Contains(out, "orch restart") || !strings.Contains(out, "rag.qdrant.mode") {
+				t.Fatalf("out = %q, err = %v", out, err)
+			}
+			v, err := config.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := v.GetString("rag.qdrant.mode"); got != tt.wantMode {
+				t.Errorf("mode = %s, want %s", got, tt.wantMode)
+			}
+			if got := v.GetString("hooks.auto_rag.top_k"); got != tt.wantTopK {
+				t.Errorf("top_k = %s, want %s", got, tt.wantTopK)
+			}
+		})
 	}
 }

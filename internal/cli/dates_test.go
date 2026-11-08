@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
+	"github.com/willesq/orchestrator/internal/config/configtest"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
@@ -77,6 +77,7 @@ func TestBackfillSessions(t *testing.T) {
 
 func TestRAGWhy(t *testing.T) {
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	t.Run("a follow-up is not searched", func(t *testing.T) {
 		fc := &fakeClient{}
 		out, err := run(factory(fc, nil), "", "rag", "why", "Let's merge it.")
@@ -150,12 +151,8 @@ func TestRAGWhy(t *testing.T) {
 		}
 	})
 	t.Run("gate off and disabled are stated", func(t *testing.T) {
-		dir := t.TempDir()
-		t.Setenv("ORCH_CONFIG_DIR", dir)
-		cfg := "hooks:\n  auto_rag:\n    enabled: false\n    gate: off\n"
-		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+		configtest.Set(t, map[string]string{"hooks.auto_rag.enabled": "false", "hooks.auto_rag.gate": `"off"`})
 		out, err := run(factory(&fakeClient{search: &orchdv1.SearchResponse{}}, nil), "", "rag", "why", "Let's merge it right now.")
 		if err != nil || !strings.Contains(out, "gate: off") || !strings.Contains(out, "enabled is off") {
 			t.Fatalf("%q, %v", out, err)

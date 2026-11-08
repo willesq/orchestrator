@@ -88,6 +88,7 @@ func TestModelRegistryCommands(t *testing.T) {
 func TestDefaultModelAdapters(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	var names []string
 	for _, a := range modelAdapters() {
 		names = append(names, a.Name())

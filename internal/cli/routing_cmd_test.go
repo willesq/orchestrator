@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
+	"github.com/willesq/orchestrator/internal/config/configtest"
 	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/models"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
@@ -107,14 +108,13 @@ func TestRoutingWithNoModels(t *testing.T) {
 	}
 }
 
-func TestRoutingRejectsInvalidPolicy(t *testing.T) {
+// Settings are checked before they are stored, so a rank the checks refuse can
+// only come from editing orch.db by hand: it is ignored, and the default used.
+func TestRoutingIgnoresAnInvalidStoredPolicy(t *testing.T) {
 	seedModels(t)
-	t.Setenv("ORCH_ROUTING_RANKS", "0")
-	for _, args := range [][]string{{"routing", "show"}, {"routing", "evaluate"}, {"routing", "apply"},
-		{"routing", "rollback"}, {"routing", "set", "code", "claude-code/opus"}, {"routing", "clear", "code"}} {
-		if _, err := run(nil, "", args...); err == nil || !strings.Contains(err.Error(), "routing.ranks") {
-			t.Fatalf("%v: err = %v", args, err)
-		}
+	configtest.Set(t, map[string]string{"routing.ranks": "0"})
+	if _, err := run(nil, "", "routing", "show"); err != nil {
+		t.Fatalf("show: %v", err)
 	}
 }
 

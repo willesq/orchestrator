@@ -2,27 +2,42 @@ package daemon
 
 import (
 	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/willesq/orchestrator/internal/config"
+	"github.com/willesq/orchestrator/internal/db"
+	"github.com/willesq/orchestrator/internal/paths"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
 func configServer(t *testing.T) *server {
 	t.Helper()
+	return &server{config: configSvc(t)}
+}
+
+// configSvc serves settings from a temporary orch.db, started on the defaults.
+func configSvc(t *testing.T) *configService {
+	t.Helper()
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
-	v, err := config.Load()
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	store, err := db.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
-	started, err := config.Snapshot(v)
+	t.Cleanup(func() { _ = store.Close() })
+	started, err := config.Snapshot(config.Defaults())
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &server{configStart: started}
+	return newConfigService(store, started)
 }
 
 func configField(t *testing.T, st *orchdv1.ConfigState, key string) *orchdv1.ConfigField {
@@ -42,8 +57,8 @@ func TestGetConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.GetRestartRequired() || st.GetPath() == "" {
-		t.Errorf("fresh state = restart %v, path %q", st.GetRestartRequired(), st.GetPath())
+	if st.GetRestartRequired() || st.GetLegacyFile() != "" || st.GetStartupError() != "" {
+		t.Errorf("fresh state = %+v", st)
 	}
 	got := configField(t, st, "queue.worker.max_concurrent")
 	if got.GetValue() != "1" || got.GetDefaultValue() != "1" || got.GetMax() != 50 || !got.GetHasRange() {
@@ -121,12 +136,128 @@ func TestSetConfig(t *testing.T) {
 			t.Errorf("state = %+v", configField(t, st, "hooks.auto_rag.top_k"))
 		}
 	})
-	t.Run("an env override is refused", func(t *testing.T) {
+	t.Run("a change is overridden until set back to its default", func(t *testing.T) {
 		s := configServer(t)
-		t.Setenv("ORCH_QUEUE_WORKER_TIMEOUT", "5m")
-		_, err := s.SetConfig(ctx, &orchdv1.SetConfigRequest{Values: map[string]string{"queue.worker.timeout": `"7m"`}})
-		if grpcstatus.Code(err) != codes.FailedPrecondition {
-			t.Errorf("err = %v", err)
+		st, err := s.SetConfig(ctx, &orchdv1.SetConfigRequest{Values: map[string]string{"hooks.auto_rag.top_k": "7"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !configField(t, st, "hooks.auto_rag.top_k").GetOverridden() || configField(t, st, "hooks.auto_rag.max_chars").GetOverridden() {
+			t.Error("overridden not reported per field")
+		}
+		st, err = s.SetConfig(ctx, &orchdv1.SetConfigRequest{Values: map[string]string{"hooks.auto_rag.top_k": "3"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if configField(t, st, "hooks.auto_rag.top_k").GetOverridden() {
+			t.Error("still overridden after setting the default back")
 		}
 	})
+}
+
+func TestRemoveLegacyConfig(t *testing.T) {
+	ctx := context.Background()
+	s := configServer(t)
+	legacy := paths.LegacyConfigFile()
+	if err := os.WriteFile(legacy, []byte("hooks:\n  auto_rag:\n    top_k: 9\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.GetConfig(ctx, &orchdv1.GetConfigRequest{})
+	if err != nil || st.GetLegacyFile() != legacy {
+		t.Fatalf("legacy file = %q, %v", st.GetLegacyFile(), err)
+	}
+	// Not imported yet: removing it would lose its settings.
+	if _, err := s.RemoveLegacyConfig(ctx, &orchdv1.RemoveLegacyConfigRequest{}); grpcstatus.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("remove before import: %v", err)
+	}
+	if _, err := os.Stat(legacy); err != nil {
+		t.Fatalf("removed before import: %v", err)
+	}
+	importLegacyConfig(ctx, s.config.db)
+	st, err = s.RemoveLegacyConfig(ctx, &orchdv1.RemoveLegacyConfigRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.GetLegacyFile() != "" {
+		t.Errorf("legacy file still reported: %q", st.GetLegacyFile())
+	}
+	if _, err := os.Stat(legacy); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("file still there: %v", err)
+	}
+	backups, _ := filepath.Glob(filepath.Join(paths.DataDir(), "backups", "config.yaml.*"))
+	if len(backups) != 1 {
+		t.Fatalf("backups = %v, want one copy", backups)
+	}
+	if data, _ := os.ReadFile(backups[0]); !strings.Contains(string(data), "top_k: 9") {
+		t.Errorf("backup = %q", data)
+	}
+	if got := configField(t, st, "hooks.auto_rag.top_k").GetValue(); got != "9" {
+		t.Errorf("imported top_k = %s, want 9", got)
+	}
+	// Already gone is fine.
+	if _, err := s.RemoveLegacyConfig(ctx, &orchdv1.RemoveLegacyConfigRequest{}); err != nil {
+		t.Errorf("second remove: %v", err)
+	}
+}
+
+func TestBackUpAndRemoveLeavesASymlinkTarget(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "precious")
+	if err := os.WriteFile(target, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "config.yaml")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	backup, err := backUpAndRemove(link, filepath.Join(dir, "backups"))
+	if err != nil || backup != "" {
+		t.Fatalf("backup = %q, %v", backup, err)
+	}
+	if _, err := os.Lstat(link); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("link still there: %v", err)
+	}
+	if data, err := os.ReadFile(target); err != nil || string(data) != "keep" {
+		t.Errorf("target = %q, %v", data, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "backups")); !errors.Is(err, os.ErrNotExist) {
+		t.Error("a symlink's target was copied into backups")
+	}
+}
+
+func TestRecoveryExitsToRetry(t *testing.T) {
+	svc := configSvc(t)
+	sockDir, err := os.MkdirTemp("", "orchd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(sockDir) })
+	t.Setenv("ORCH_SOCKET", filepath.Join(sockDir, "r.sock"))
+	orig := recoveryRetry
+	recoveryRetry = 50 * time.Millisecond
+	t.Cleanup(func() { recoveryRetry = orig })
+	done := make(chan error, 1)
+	go func() { done <- serveRecovery(context.Background(), svc, errors.New("no network")) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("serveRecovery = %v, want a clean exit to retry", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("recovery never exited to retry the full start")
+	}
+	if svc.startupError != "no network" {
+		t.Errorf("startup error = %q", svc.startupError)
+	}
+}
+
+func TestImportLegacyConfigLogsAFailure(t *testing.T) {
+	svc := configSvc(t)
+	if err := os.WriteFile(paths.LegacyConfigFile(), []byte("hooks: [unclosed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	importLegacyConfig(context.Background(), svc.db)
+	if ok, err := config.LegacyImported(context.Background(), svc.db); err != nil || ok {
+		t.Errorf("a file that failed to import was marked imported: %v, %v", ok, err)
+	}
 }

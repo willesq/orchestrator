@@ -1,7 +1,10 @@
 # Plan: remove config.yaml; settings live in orch.db, edited in Orch.app
 
-Status: phase 1 in progress (branch `feat/config-in-db`), 2026-11-08. Open decisions 1-3 proceed
-with the recommended option unless the user says otherwise.
+Status: implemented on branch `feat/config-in-db`, 2026-11-08, all phases. Decisions 1-3 took the
+recommended option (keep `orch config get`/`list`, add `reset`, remove `set`; import the old file;
+keep migration-written keys in `config_values`). `ResetConfig` was not needed: the app's existing
+"Reset to Default" writes the default, which deletes the key's row. The behavior is documented in
+`docs/internals/config.md`; this plan is kept as the design record.
 
 ## Intent
 
@@ -220,9 +223,14 @@ or before it, so no released build combines "no file" with "orchd dies before li
 
 ## Follow-ups
 
-- 2026-11-08, from the phase 1 security review (Low): `ApplyStore` and `ImportLegacy` open
-  deferred transactions that read before writing, so a write racing another connection's commit
-  can fail with `SQLITE_BUSY_SNAPSHOT` (an error, never a lost update). Take the write lock up
-  front (`BEGIN IMMEDIATE`) or retry, when phase 2 wires orchd and the CLI to the store.
+- 2026-11-08, from the phase 1 security review (Low), **done**: concurrent writers failed with
+  `SQLITE_BUSY`/`SQLITE_BUSY_SNAPSHOT` (95 of 120 in a race test) because each transaction read
+  before writing. `beginWrite` takes the write lock with the first statement, so a second writer
+  waits on `busy_timeout`.
+- 2026-11-08, from the cutover security review (Low, accepted, pre-existing): `orch config reset`
+  writes `orch.db` directly, gated only by `ORCH_TASK_ID` and the Claude Code deny rule, which a
+  queued task can sidestep (`env -u ORCH_TASK_ID orch config reset <key>`). Follow-up: refuse
+  operator-only CLI commands when an ancestor process is orchd, reusing `procstat` as
+  `internal/daemon/callers.go` does; it would cover `orch docs` and `routing` commands too.
 - At cutover, `ORCH_<KEY>` pins stop applying. Note that in the phase 2 release notes, since
   someone may rely on one to force a safe value.

@@ -38,7 +38,7 @@ type ImportReport struct {
 // file is left in place, unread from then on.
 func ImportLegacy(ctx context.Context, db *sql.DB, path string) (ImportReport, error) {
 	var rep ImportReport
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := beginWrite(ctx, db)
 	if err != nil {
 		return rep, err
 	}

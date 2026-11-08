@@ -231,3 +231,7 @@ func (f *fakeClient) GetConfig(context.Context, *orchdv1.GetConfigRequest, ...gr
 func (f *fakeClient) SetConfig(context.Context, *orchdv1.SetConfigRequest, ...grpc.CallOption) (*orchdv1.ConfigState, error) {
 	return &orchdv1.ConfigState{}, nil
 }
+
+func (f *fakeClient) RemoveLegacyConfig(context.Context, *orchdv1.RemoveLegacyConfigRequest, ...grpc.CallOption) (*orchdv1.ConfigState, error) {
+	return &orchdv1.ConfigState{}, nil
+}

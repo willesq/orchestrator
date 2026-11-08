@@ -383,3 +383,74 @@ func TestImportLegacyNothingToDo(t *testing.T) {
 		})
 	}
 }
+
+// Two processes writing settings at once (the app through orchd, a maintenance
+// command) must each wait their turn, not fail on the other's commit.
+func TestApplyStoreConcurrentWriters(t *testing.T) {
+	first := openStore(t)
+	second, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = second.Close() })
+	ctx := context.Background()
+	errs := make(chan error, 40)
+	for i := range 20 {
+		for _, conn := range []*sql.DB{first, second} {
+			go func() {
+				errs <- ApplyStore(ctx, conn, map[string]any{"hooks.auto_rag.top_k": 4 + i%10}, false, "test")
+			}()
+		}
+	}
+	for range 40 {
+		if err := <-errs; err != nil {
+			t.Errorf("concurrent write: %v", err)
+		}
+	}
+}
+
+func TestResetAllStore(t *testing.T) {
+	conn := openStore(t)
+	ctx := context.Background()
+	if err := ApplyStore(ctx, conn, map[string]any{"hooks.auto_rag.top_k": 9, "rag.qdrant.mode": "external"}, true, "app"); err != nil {
+		t.Fatal(err)
+	}
+	keys, err := ResetAllStore(ctx, conn)
+	if err != nil || !slices.Equal(keys, []string{"hooks.auto_rag.top_k", "rag.qdrant.mode"}) {
+		t.Fatalf("reset = %v, %v", keys, err)
+	}
+	if keys, err := ResetAllStore(ctx, conn); err != nil || len(keys) != 0 {
+		t.Errorf("second reset = %v, %v", keys, err)
+	}
+}
+
+// A closed or unmigrated store fails each write cleanly, writing nothing.
+func TestStoreWritesFailOnAnUnusableStore(t *testing.T) {
+	conn := openStore(t)
+	_ = conn.Close()
+	ctx := context.Background()
+	if err := ApplyStore(ctx, conn, map[string]any{"hooks.auto_rag.top_k": 9}, false, "app"); err == nil {
+		t.Error("ApplyStore on a closed store succeeded")
+	}
+	if _, err := ResetAllStore(ctx, conn); err == nil {
+		t.Error("ResetAllStore on a closed store succeeded")
+	}
+	if _, err := ImportLegacy(ctx, conn, writeLegacy(t, legacyYAML)); err == nil {
+		t.Error("ImportLegacy on a closed store succeeded")
+	}
+
+	bare, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "bare.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = bare.Close() })
+	if err := ApplyStore(ctx, bare, map[string]any{"hooks.auto_rag.top_k": 9}, false, "app"); err == nil {
+		t.Error("ApplyStore without the settings table succeeded")
+	}
+	if _, err := LoadStore(ctx, bare); err == nil {
+		t.Error("LoadStore without the settings table succeeded")
+	}
+	if _, err := LegacyImported(ctx, bare); err == nil {
+		t.Error("LegacyImported without the import table succeeded")
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -233,6 +234,7 @@ func TestDispatchAndRun(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+			t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 			if err := Run(tt.args, strings.NewReader(`{"session_id":"s"}`), &bytes.Buffer{}); err != nil {
 				t.Errorf("Run must never error: %v", err)
 			}

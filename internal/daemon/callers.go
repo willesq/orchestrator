@@ -82,8 +82,9 @@ var operatorActions = map[string]string{
 	orchdv1.Orchd_PurgeDocs_FullMethodName:          "delete from the RAG store",
 	// Reason: config sets what tasks may run and how many, so a task must not
 	// be able to widen its own limits or permissions.
-	orchdv1.Orchd_GetConfig_FullMethodName: "read orch's configuration",
-	orchdv1.Orchd_SetConfig_FullMethodName: "change orch's configuration",
+	orchdv1.Orchd_GetConfig_FullMethodName:          "read orch's configuration",
+	orchdv1.Orchd_SetConfig_FullMethodName:          "change orch's configuration",
+	orchdv1.Orchd_RemoveLegacyConfig_FullMethodName: "change orch's configuration",
 	// Reason: every sweep spends the user's GitHub rate limit, and a task can
 	// read the cache instead. Tasks' gh pr mutations still request sweeps
 	// through the hook, within the same one-a-minute limit.

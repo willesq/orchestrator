@@ -300,8 +300,8 @@ func (q queueTools) read(ctx context.Context, req mcp.CallToolRequest) (*mcp.Cal
 }
 
 // workerDisabledNotice explains a dispatch that will not run yet.
-const workerDisabledNotice = "NOTE: the queue worker is disabled, so this task stays pending. Enable it with " +
-	"`orch config set queue.worker.enabled true` and `orch restart`; pending tasks then run."
+const workerDisabledNotice = "NOTE: the queue worker is disabled, so this task stays pending. The user can turn it " +
+	"on in Orch.app (Settings → Tasks → Parallel tasks) and restart orchd; pending tasks then run."
 
 // maxArgInt bounds any caller-supplied count argument.
 const maxArgInt = 10_000

@@ -525,7 +525,7 @@ func TestRunMeasuresFailedRuns(t *testing.T) {
 }
 
 func TestDeniedTools(t *testing.T) {
-	if got := deniedTools("dev"); got != dispatchTools+","+operatorTools || !strings.Contains(got, "Bash(orch config set:*)") {
+	if got := deniedTools("dev"); got != dispatchTools+","+operatorTools || !strings.Contains(got, "Bash(orch config reset:*)") {
 		t.Errorf("dev denied %q", got)
 	}
 	got := deniedTools("pr-verdict")

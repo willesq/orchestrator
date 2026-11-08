@@ -54,17 +54,11 @@ func newQdrantCutoverCmd() *cobra.Command {
 			}
 			fmt.Fprintf(w, "stopped container %s\n", container)
 
-			v, err := config.Load()
-			if err != nil {
-				return err
-			}
-			if err := config.Set(v, "rag.qdrant.storage", storage); err != nil {
-				return err
-			}
-			if err := config.Set(v, "rag.qdrant.collection", "orchestrator"); err != nil {
-				return err
-			}
-			if err := config.Set(v, "rag.qdrant.http_port", port); err != nil {
+			if err := config.Save(map[string]any{
+				"rag.qdrant.storage":    storage,
+				"rag.qdrant.collection": "orchestrator",
+				"rag.qdrant.http_port":  port,
+			}, "cli:cutover"); err != nil {
 				return err
 			}
 			fmt.Fprintf(w, "reconfigured Go engine → existing storage/collection\n")

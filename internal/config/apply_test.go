@@ -1,18 +1,46 @@
 package config
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
+
+	"github.com/willesq/orchestrator/internal/db"
 )
 
+// loadTemp points orch at a temporary data directory and loads the config,
+// which is the defaults until a test stores something.
 func loadTemp(t *testing.T) *viper.Viper {
 	t.Helper()
 	t.Setenv("ORCH_CONFIG_DIR", t.TempDir())
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	v, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+// applyTemp stores values in loadTemp's orch.db, as a client's write does.
+func applyTemp(t *testing.T, values map[string]any, confirm bool) error {
+	t.Helper()
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	return ApplyStore(context.Background(), conn, values, confirm, "test")
+}
+
+// reload loads the config loadTemp's orch.db now holds.
+func reload(t *testing.T) *viper.Viper {
+	t.Helper()
 	v, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -229,13 +257,9 @@ func TestRuns(t *testing.T) {
 }
 
 func TestApply(t *testing.T) {
-	queue := func(t *testing.T, v *viper.Viper) QueueSettings {
+	queue := func(t *testing.T) QueueSettings {
 		t.Helper()
-		reread, err := Load()
-		if err != nil {
-			t.Fatal(err)
-		}
-		s, err := Unmarshal(reread)
+		s, err := Unmarshal(reload(t))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -243,32 +267,30 @@ func TestApply(t *testing.T) {
 	}
 
 	t.Run("raising parallel raises the queue with it", func(t *testing.T) {
-		v := loadTemp(t)
-		if err := Apply(v, map[string]any{keyMaxConcurrent: 30}, false); err != nil {
+		loadTemp(t)
+		if err := applyTemp(t, map[string]any{keyMaxConcurrent: 30}, false); err != nil {
 			t.Fatal(err)
 		}
-		if q := queue(t, v); q.Worker.MaxConcurrent != 30 || q.MaxActive != 30 {
+		if q := queue(t); q.Worker.MaxConcurrent != 30 || q.MaxActive != 30 {
 			t.Errorf("queue = %+v", q)
 		}
 	})
 	t.Run("zero turns the worker off and any slots turn it back on", func(t *testing.T) {
-		v := loadTemp(t)
-		if err := Apply(v, map[string]any{keyMaxConcurrent: 0}, false); err != nil {
+		loadTemp(t)
+		if err := applyTemp(t, map[string]any{keyMaxConcurrent: 0}, false); err != nil {
 			t.Fatal(err)
 		}
-		if q := queue(t, v); q.Worker.Runs() {
+		if q := queue(t); q.Worker.Runs() {
 			t.Errorf("worker still runs: %+v", q)
 		}
-		if got, _ := FieldValue(v, mustField(t, keyMaxConcurrent)); got != "0" {
+		if got, _ := FieldValue(reload(t), mustField(t, keyMaxConcurrent)); got != "0" {
 			t.Errorf("shown as %s", got)
 		}
-		if err := Set(v, keyWorkerEnabled, false); err != nil {
+		seedTemp(t, keyWorkerEnabled, "false")
+		if err := applyTemp(t, map[string]any{keyMaxConcurrent: 2}, false); err != nil {
 			t.Fatal(err)
 		}
-		if err := Apply(v, map[string]any{keyMaxConcurrent: 2}, false); err != nil {
-			t.Fatal(err)
-		}
-		if q := queue(t, v); !q.Worker.Runs() || q.Worker.MaxConcurrent != 2 {
+		if q := queue(t); !q.Worker.Runs() || q.Worker.MaxConcurrent != 2 {
 			t.Errorf("worker off after turning it on: %+v", q)
 		}
 	})
@@ -280,69 +302,79 @@ func TestApply(t *testing.T) {
 		}
 	})
 	t.Run("the queue cannot go below parallel", func(t *testing.T) {
-		v := loadTemp(t)
-		if err := Apply(v, map[string]any{keyMaxConcurrent: 10}, false); err != nil {
+		loadTemp(t)
+		if err := applyTemp(t, map[string]any{keyMaxConcurrent: 10}, false); err != nil {
 			t.Fatal(err)
 		}
-		if err := Apply(v, map[string]any{keyMaxActive: 5}, false); err == nil {
+		if err := applyTemp(t, map[string]any{keyMaxActive: 5}, false); err == nil {
 			t.Fatal("a queue below parallel was accepted")
 		}
-		if err := Apply(v, map[string]any{keyMaxConcurrent: 20, keyMaxActive: 10}, false); err == nil {
+		if err := applyTemp(t, map[string]any{keyMaxConcurrent: 20, keyMaxActive: 10}, false); err == nil {
 			t.Fatal("a batch with the queue below parallel was accepted")
 		}
-		if err := Apply(v, map[string]any{keyMaxConcurrent: 4, keyMaxActive: 5}, false); err != nil {
+		if err := applyTemp(t, map[string]any{keyMaxConcurrent: 4, keyMaxActive: 5}, false); err != nil {
 			t.Fatal(err)
 		}
-		if q := queue(t, v); q.Worker.MaxConcurrent != 4 || q.MaxActive != 5 {
+		if q := queue(t); q.Worker.MaxConcurrent != 4 || q.MaxActive != 5 {
 			t.Errorf("queue = %+v", q)
 		}
 	})
 	t.Run("sensitive needs confirmation and writes nothing without it", func(t *testing.T) {
-		v := loadTemp(t)
-		err := Apply(v, map[string]any{"queue.worker.timeout": "5m", "queue.worker.permission_mode": "plan"}, false)
+		loadTemp(t)
+		err := applyTemp(t, map[string]any{"queue.worker.timeout": "5m", "queue.worker.permission_mode": "plan"}, false)
 		if !errors.Is(err, ErrConfirmSensitive) {
 			t.Fatalf("err = %v", err)
 		}
-		reread, _ := Load()
-		if reread.GetString("queue.worker.timeout") != "60m" {
+		if reload(t).GetString("queue.worker.timeout") != "60m" {
 			t.Errorf("part of a refused batch was written")
 		}
-		if err := Apply(v, map[string]any{"queue.worker.permission_mode": "plan"}, true); err != nil {
+		if err := applyTemp(t, map[string]any{"queue.worker.permission_mode": "plan"}, true); err != nil {
 			t.Fatal(err)
 		}
 	})
-	t.Run("an env override refuses the write", func(t *testing.T) {
-		v := loadTemp(t)
+	t.Run("the environment no longer overrides a setting", func(t *testing.T) {
+		loadTemp(t)
 		t.Setenv("ORCH_QUEUE_WORKER_TIMEOUT", "5m")
-		if err := Apply(v, map[string]any{"queue.worker.timeout": "7m"}, false); !errors.Is(err, ErrEnvOverride) {
-			t.Fatalf("err = %v", err)
+		if got := reload(t).GetString("queue.worker.timeout"); got != "60m" {
+			t.Errorf("timeout = %s, want the default", got)
 		}
 	})
 	t.Run("a whole map replaces the previous one", func(t *testing.T) {
-		v := loadTemp(t)
+		loadTemp(t)
 		f := mustField(t, "rag.search.source_weights")
 		val, err := ParseJSON(f, `{"web":2}`)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := Apply(v, map[string]any{f.Key: val}, false); err != nil {
+		if err := applyTemp(t, map[string]any{f.Key: val}, false); err != nil {
 			t.Fatal(err)
 		}
-		reread, _ := Load()
-		s, _ := Unmarshal(reread)
+		s, _ := Unmarshal(reload(t))
 		if s.RAG.Search.SourceWeights["web"] != 2 {
 			t.Errorf("weights = %v", s.RAG.Search.SourceWeights)
 		}
 	})
 }
 
-func TestEntries(t *testing.T) {
-	v := loadTemp(t)
-	if err := Set(v, "sources.known_roots", "a,b"); err != nil {
+// seedTemp stores a raw JSON value in loadTemp's orch.db, past the checks.
+func seedTemp(t *testing.T, key, raw string) {
+	t.Helper()
+	conn, err := db.Open()
+	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("ORCH_DOCS_DEFAULT_REFRESH", "1h")
-	entries, err := Entries(v, Defaults())
+	defer func() { _ = conn.Close() }()
+	if _, err := conn.Exec(`INSERT OR REPLACE INTO config_values (key, value, updated_at, updated_by) VALUES (?, ?, 'now', 'test')`, key, raw); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEntries(t *testing.T) {
+	loadTemp(t)
+	if err := applyTemp(t, map[string]any{"sources.known_roots": []string{"a", "b"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := Entries(reload(t), Defaults())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,8 +388,8 @@ func TestEntries(t *testing.T) {
 	if got := byKey["sources.known_roots"]; got.Value != `["a","b"]` || got.Default != `["~/code"]` {
 		t.Errorf("known_roots = %+v", got)
 	}
-	if !byKey["docs.default_refresh"].EnvOverride || byKey["docs.scan_interval"].EnvOverride {
-		t.Error("env override not reported per key")
+	if !byKey["sources.known_roots"].Overridden() || byKey["docs.scan_interval"].Overridden() {
+		t.Error("overridden not reported per key")
 	}
 	if got := byKey["rag.search.source_weights"]; !strings.Contains(got.Value, `"web":0.9`) || got.Value != got.Default {
 		t.Errorf("source_weights = %+v", got)
@@ -388,10 +420,10 @@ func TestSnapshotAndPendingRestart(t *testing.T) {
 	if _, has := started["hooks.auto_rag.top_k"]; has {
 		t.Error("a live setting is in the snapshot")
 	}
-	if err := Apply(v, map[string]any{keyMaxConcurrent: 3, "hooks.auto_rag.top_k": 9}, false); err != nil {
+	if err := applyTemp(t, map[string]any{keyMaxConcurrent: 3, "hooks.auto_rag.top_k": 9}, false); err != nil {
 		t.Fatal(err)
 	}
-	now, err := Snapshot(v)
+	now, err := Snapshot(reload(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,22 +432,18 @@ func TestSnapshotAndPendingRestart(t *testing.T) {
 	}
 }
 
-// Writing the file must not read as a change: a false "restart needed" would
-// follow every edit, since each write rewrites the whole config.
+// A write must not read as a change to other settings: a false "restart
+// needed" would follow every edit.
 func TestAWriteChangesNothingElse(t *testing.T) {
 	v := loadTemp(t)
 	before, err := Snapshot(v)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteCanonical(v); err != nil {
+	if err := applyTemp(t, map[string]any{"hooks.auto_rag.top_k": 9}, false); err != nil {
 		t.Fatal(err)
 	}
-	reread, err := Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	after, err := Snapshot(reread)
+	after, err := Snapshot(reload(t))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	"github.com/spf13/viper"
@@ -73,7 +74,7 @@ func ApplyStore(ctx context.Context, db *sql.DB, values map[string]any, confirmS
 		}
 	}
 	values = parsed
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := beginWrite(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -90,6 +91,23 @@ func ApplyStore(ctx context.Context, db *sql.DB, values map[string]any, confirmS
 		return err
 	}
 	return tx.Commit()
+}
+
+// beginWrite opens a transaction that holds the write lock from its first
+// statement. A transaction that reads first and writes later cannot wait for
+// another writer: SQLite fails its upgrade at once (SQLITE_BUSY, or
+// SQLITE_BUSY_SNAPSHOT in WAL mode) instead of honouring busy_timeout. Taking
+// the lock with a write that changes nothing makes a second writer wait.
+func beginWrite(ctx context.Context, db *sql.DB) (*sql.Tx, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM config_values WHERE 0`); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	return tx, nil
 }
 
 // ResetStore puts keys back to their defaults, with the same checks as
@@ -110,6 +128,26 @@ func ResetStore(ctx context.Context, db *sql.DB, keys []string, confirmSensitive
 		values[key] = val
 	}
 	return ApplyStore(ctx, db, values, confirmSensitive, by)
+}
+
+// ResetAllStore puts every setting back to its default and returns the keys
+// it reset, sorted, so the caller can say what changed.
+func ResetAllStore(ctx context.Context, db *sql.DB) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `DELETE FROM config_values RETURNING key`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var keys []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys, rows.Err()
 }
 
 // storeValues upserts each value, or deletes its row when it equals the

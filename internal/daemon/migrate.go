@@ -76,14 +76,10 @@ func (s *server) ReindexKeywords(ctx context.Context, req *orchdv1.ReindexKeywor
 // recordSwitch persists a finished migration in config before orchd switches,
 // so a restart keeps using the new collection and --rollback knows the old one.
 var recordSwitch rag.Commit = func(from, to string) error {
-	v, err := config.Load()
-	if err != nil {
-		return err
-	}
-	return config.SetMany(v, map[string]any{
+	return config.Save(map[string]any{
 		"rag.qdrant.collection":        to,
 		"rag.qdrant.backup_collection": from,
-	})
+	}, "orchd:migrate")
 }
 
 // DropBackup deletes the backup collection recorded in config, then forgets
@@ -134,11 +130,7 @@ func (s *server) DropBackup(ctx context.Context, req *orchdv1.DropBackupRequest)
 
 // clearBackup forgets the recorded backup collection.
 var clearBackup = func() error {
-	v, err := config.Load()
-	if err != nil {
-		return err
-	}
-	return config.SetMany(v, map[string]any{"rag.qdrant.backup_collection": ""})
+	return config.Save(map[string]any{"rag.qdrant.backup_collection": ""}, "orchd:migrate")
 }
 
 // migrationProgress converts a running migration's progress for Status.
