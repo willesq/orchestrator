@@ -1040,14 +1040,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "283fd77410dd0bb0980e0c5a2a9a91b1c286bbaf4ca0dc1bb76de0e704b10ac7",
-      "branch": null,
+      "branch": "feat/sp-063-gh-profiles",
       "pr": null
     },
     {
