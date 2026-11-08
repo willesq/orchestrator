@@ -777,7 +777,13 @@
               "threshold": "3 pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: internal/spaces/validate_test.go TestValidateRules, one subtest per rule, all pass at 4f402f9: org_bound_twice, web_prefix_bound_twice, chat_tenant_bound_twice (org/prefix/tenant bound twice), same_root_bound_twice, nested_root_less_strict, isolated_root_inside_another_isolated_space, isolated_reads_isolated, private_reads_isolated, public_reads_another_space, terms_file_inside_a_git_tree, unknown_kind (11 for the 9 rules); each asserts its own Rule and no other problem. Also unknown_read, duplicate_name, reserved_name, bad_name, relative_root, relative_terms_file, bad_web_prefix, bad_chat_tenant, empty_org; TestValidateLimits, TestDeepOrLongPathsRefused, TestValidateManyNestedRootsIsBounded.",
+            "a2: internal/spaces/engine_test.go TestApplyInvalidKeepsApplied (invalid draft refused with Problems; applied revision and enforced policy unchanged; status error 'draft revision N does not validate', naming no space) and internal/daemon/spaces_rpc_test.go TestApplySpacesErrors (FailedPrecondition through the RPC, policy unchanged). Pass.",
+            "a3: internal/spaces/validate_test.go TestValidateNestedRootsFixture (~/code public, ~/code/willesq private, ~/code/company1 isolated) accepted. Pass.",
+            "a4: internal/spaces/validate_test.go TestIsolatedReadsPrivateWhenListed/listed (accepted, CanRead true) and /not_listed (CanRead false). 2 pass.",
+            "a5: internal/spaces/validate_test.go TestPublicRootSessions/named_private_or_isolated_space, /public_or_unknown_space_refused, /default (one private -> it; none or two -> quarantine). 3 pass."
+          ]
         },
         {
           "id": "SP-020.2",
@@ -805,7 +811,12 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "Design change confirmed by user on 2026-11-08 (D-25): config.yaml was removed in PR #142, so the policy is stored in orch.db as draft/applied revisions; a3 reworded with criteria_sha256 recomputed.",
+            "a1: internal/daemon/spaces_rpc_test.go TestApplySpacesOperatorOnly: refused (PermissionDenied) for an interactive claude session, an interactive codex session, a process orchd started, a queued task, an unreadable ancestry, an unidentified peer, no peer; allowed for the operator (8 subtests pass). TestHarnessAncestor covers detection by kernel name, npm node + script, native installer versions path, npm codex, interpreter with unreadable script (fails closed), no retry of a failed walk. TestDiffSpacesOperatorOnly, TestAgentDraftThroughRPC. Pass.",
+            "a2: internal/spaces/engine_test.go TestApplyRequiresReviewedRevision (older reviewed revision refused with ErrStale, policy unchanged; newest applies) and TestApplySpacesErrors (FailedPrecondition 'newer' via the RPC). Pass.",
+            "a3: internal/spaces/engine_test.go TestDraftWithoutApplyIsDrift (saved draft changes nothing enforced; Status drift ['draft']), TestEditedOutsideOrchdIsDrift (document edited, document+hash edited, apply row inserted: enforced policy unchanged, drift 'changed_outside_orchd'), TestRestartFailsClosed (after a restart an edited/missing/invalid newest apply enforces nothing, never an older one); internal/status/spaces_test.go TestSpacesSection (drift lines visible in orch status); internal/daemon/spaces_rpc_test.go TestDiffSpacesAndStatus (Status.spaces carries drift). Pass."
+          ]
         },
         {
           "id": "SP-020.3",
@@ -819,7 +830,9 @@
               "threshold": "passes unchanged"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: internal/spaces TestNoPolicyIsOneSharedSpace and TestEngineEmptyStoreIsNoPolicy (no policy or an empty one: one implicit 'shared' space, CanRead(shared, shared)); TestSpacesSection/spaces_never_used (orch status has no spaces section, so its output is unchanged). Full suite at 4f402f9: go test ./... exit 0 (53 packages ok), go vet ./... exit 0, make cover 'All files >= 80%'. No existing test's assertions changed; the hook and mcpserver test fakes only gained stub methods for the three new RPCs, which the client interface requires."
+          ]
         }
       ],
       "status": "in_progress",
