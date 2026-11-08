@@ -136,6 +136,18 @@ service Orchd {
   // RemoveLegacyConfig deletes the config.yaml orch no longer reads, once its
   // settings were imported.
   rpc RemoveLegacyConfig(RemoveLegacyConfigRequest) returns (ConfigState);
+  // SetSpacesDraft saves a spaces policy as a new draft revision. It changes
+  // nothing that is enforced; the reply lists the draft's problems.
+  rpc SetSpacesDraft(SetSpacesDraftRequest) returns (SpacesDraft);
+  // DiffSpaces compares the enforced spaces revision with the newest draft.
+  // Operator-only, like ApplySpaces: the policy names every job's orgs and
+  // roots.
+  rpc DiffSpaces(DiffSpacesRequest) returns (SpacesDiff);
+  // ApplySpaces enforces the newest draft. Operator-only: refused to callers
+  // descended from a harness or from orchd, and to any revision but the
+  // newest, so the operator applies exactly what they reviewed. A draft an
+  // agent session saved also needs accept_agent_draft.
+  rpc ApplySpaces(ApplySpacesRequest) returns (ApplySpacesResponse);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -379,6 +391,19 @@ message StatusResponse {
   repeated SubsystemStatus subsystems = 3;
   // migration is set while a hybrid migration runs.
   MigrationProgress migration = 4;
+  SpacesStatus spaces = 5;
+}
+
+// SpacesStatus is the spaces policy orchd enforces and any drift from it. It
+// never names a space, root or org.
+message SpacesStatus {
+  bool configured = 1;        // a policy with at least one space is applied
+  int64 applied_revision = 2; // 0: nothing applied
+  int64 draft_revision = 3;   // newest saved revision when not the applied one
+  // drift: "draft" (a saved draft is not applied) and/or
+  // "changed_outside_orchd" (orch.db's applied revision was edited).
+  repeated string drift = 4;
+  string error = 5;
 }
 
 // MigrationProgress is how far a running hybrid migration has got.
@@ -838,6 +863,57 @@ message ConfigState {
 }
 
 message RemoveLegacyConfigRequest {}
+
+message SetSpacesDraftRequest {
+  string policy_json = 1; // a spaces.Policy document
+}
+
+// SpacesProblem is one check a spaces policy failed.
+message SpacesProblem {
+  string rule = 1;
+  string space = 2;
+  string message = 3;
+}
+
+message SpacesDraft {
+  int64 revision = 1;
+  string sha256 = 2;
+  repeated SpacesProblem problems = 3;
+}
+
+message DiffSpacesRequest {}
+
+// SpacesChange is how one space differs between the applied revision and the
+// draft. An empty space is the policy's own fields.
+message SpacesChange {
+  string space = 1;
+  string kind = 2; // added | removed | changed
+  repeated string fields = 3;
+  repeated string details = 4; // the values, one line per field
+}
+
+message SpacesDiff {
+  int64 applied_revision = 1; // 0: nothing applied
+  string applied_json = 2;
+  int64 draft_revision = 3;   // 0: no draft newer than the applied revision
+  string draft_json = 4;
+  repeated SpacesChange changes = 5;
+  repeated SpacesProblem problems = 6; // the draft's
+  string draft_created_by = 7;
+  int64 draft_created_at = 8;  // unix seconds
+  bool draft_by_operator = 9;  // false: an agent session saved it
+}
+
+message ApplySpacesRequest {
+  int64 reviewed_revision = 1;
+  // accept_agent_draft confirms the operator reviewed a draft an agent
+  // session saved; without it such a draft is refused.
+  bool accept_agent_draft = 2;
+}
+
+message ApplySpacesResponse {
+  int64 applied_revision = 1;
+}
 
 message DocRepo {
   string repo = 1;

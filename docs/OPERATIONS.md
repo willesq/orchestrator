@@ -47,6 +47,22 @@ backup to `~/.local/share/orch/backups`, and refused if the file changed underne
 A file that does not parse shows as an error and blocks changes until it is fixed. State is per
 machine. See [internals/settings.md](internals/settings.md).
 
+## Spaces
+
+```sh
+orch spaces draft < policy.json       # save a draft revision; changes nothing
+orch spaces diff [--full]             # what the newest draft changes, and its problems
+orch spaces apply --revision N        # enforce draft N
+```
+
+The spaces policy lives in `orch.db` as numbered revisions. Diff and apply are yours alone: orchd
+refuses them inside Claude Code or Codex sessions and inside queued tasks, so run them in your own
+terminal (or use Orch.app). Apply takes only the newest draft, the one you reviewed, and only when
+it validates. An agent session may save a draft. The diff says when it did and shows every value
+it changes, and applying it needs `--accept-agent-draft`. A saved draft, or an edit to `orch.db`, changes nothing that is enforced; `orch status`
+shows it in its `spaces` section as drift. See
+[internals/config.md](internals/config.md#spaces-policy).
+
 ## Upgrades
 
 After an upgrade, the `self-update` subsystem notices the new `orchd` binary within a minute

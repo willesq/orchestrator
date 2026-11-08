@@ -49,6 +49,7 @@ import (
 	"github.com/willesq/orchestrator/internal/selfupdate"
 	"github.com/willesq/orchestrator/internal/settings"
 	"github.com/willesq/orchestrator/internal/sources"
+	"github.com/willesq/orchestrator/internal/spaces"
 	"github.com/willesq/orchestrator/internal/supervisor"
 	"github.com/willesq/orchestrator/internal/version"
 	"github.com/willesq/orchestrator/internal/workflows"
@@ -145,7 +146,9 @@ type server struct {
 	docsGH      docs.GitHub
 	docsRefresh int64
 	// config serves the settings in orch.db.
-	config     *configService
+	config *configService
+	// spaces holds the enforced spaces policy; nil when unavailable.
+	spaces     *spaces.Engine
 	sourcesReg *sources.Registry
 	documents  documentReader
 	// nudgeMu guards lastNudge, when RefreshSource last restarted the
@@ -457,11 +460,12 @@ func (s *server) Dispatch(ctx context.Context, req *orchdv1.DispatchRequest) (*o
 }
 
 // Status reports orchd's own liveness plus one entry per supervised subsystem.
-func (s *server) Status(_ context.Context, _ *orchdv1.StatusRequest) (*orchdv1.StatusResponse, error) {
+func (s *server) Status(ctx context.Context, _ *orchdv1.StatusRequest) (*orchdv1.StatusResponse, error) {
 	resp := &orchdv1.StatusResponse{
 		Version:       version.Version,
 		UptimeSeconds: int64(time.Since(s.start).Seconds()),
 		Migration:     s.migrationProgress(),
+		Spaces:        s.spacesStatus(ctx),
 	}
 	if s.sup == nil {
 		return resp, nil
@@ -569,6 +573,15 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	cfg := newConfigService(store, configStart)
+	sp, err := spaces.Open(ctx, store, spaces.DefaultEnv())
+	if err != nil {
+		return err
+	}
+	// Reason: only the load result is logged here. Status would validate the
+	// newest draft, which anyone may save, and must not hold up startup.
+	if _, err := sp.Current(); err != nil {
+		log.Printf("orchd: spaces: %v; no space is readable until a revision is applied again", err)
+	}
 	// Reason: from here a failure is most often a setting (a model folder, a
 	// port, a storage path), and settings can only be changed through orchd.
 	// Exiting would leave nothing to fix them with, so orchd serves them alone.
@@ -697,6 +710,7 @@ func Run(ctx context.Context) error {
 		docsGH:       docs.NewGitHub(),
 		docsRefresh:  refreshSecs(s.Docs.DefaultRefresh),
 		config:       cfg,
+		spaces:       sp,
 		prune:        newPruneGuard(store),
 		sourcesReg:   sources.NewRegistry(store),
 		documents:    svc,

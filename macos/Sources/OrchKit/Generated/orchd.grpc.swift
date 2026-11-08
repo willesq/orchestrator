@@ -618,6 +618,45 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "SetSpacesDraft" metadata.
+        public enum SetSpacesDraft: Sendable {
+            /// Request type for "SetSpacesDraft".
+            public typealias Input = Orchd_V1_SetSpacesDraftRequest
+            /// Response type for "SetSpacesDraft".
+            public typealias Output = Orchd_V1_SpacesDraft
+            /// Descriptor for "SetSpacesDraft".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SetSpacesDraft",
+                type: .unary
+            )
+        }
+        /// Namespace for "DiffSpaces" metadata.
+        public enum DiffSpaces: Sendable {
+            /// Request type for "DiffSpaces".
+            public typealias Input = Orchd_V1_DiffSpacesRequest
+            /// Response type for "DiffSpaces".
+            public typealias Output = Orchd_V1_SpacesDiff
+            /// Descriptor for "DiffSpaces".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "DiffSpaces",
+                type: .unary
+            )
+        }
+        /// Namespace for "ApplySpaces" metadata.
+        public enum ApplySpaces: Sendable {
+            /// Request type for "ApplySpaces".
+            public typealias Input = Orchd_V1_ApplySpacesRequest
+            /// Response type for "ApplySpaces".
+            public typealias Output = Orchd_V1_ApplySpacesResponse
+            /// Descriptor for "ApplySpaces".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ApplySpaces",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -874,6 +913,9 @@ public enum Orchd_V1_Orchd: Sendable {
             GetConfig.descriptor,
             SetConfig.descriptor,
             RemoveLegacyConfig.descriptor,
+            SetSpacesDraft.descriptor,
+            DiffSpaces.descriptor,
+            ApplySpaces.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -2007,6 +2049,81 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ConfigState>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfigState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetSpacesDraft" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetSpacesDraft saves a spaces policy as a new draft revision. It changes
+        /// > nothing that is enforced; the reply lists the draft's problems.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetSpacesDraftRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetSpacesDraftRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SpacesDraft` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setSpacesDraft<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetSpacesDraftRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetSpacesDraftRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SpacesDraft>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpacesDraft>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "DiffSpaces" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DiffSpaces compares the enforced spaces revision with the newest draft.
+        /// > Operator-only, like ApplySpaces: the policy names every job's orgs and
+        /// > roots.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_DiffSpacesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_DiffSpacesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SpacesDiff` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func diffSpaces<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_DiffSpacesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_DiffSpacesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SpacesDiff>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpacesDiff>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ApplySpaces" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ApplySpaces enforces the newest draft. Operator-only: refused to callers
+        /// > descended from a harness or from orchd, and to any revision but the
+        /// > newest, so the operator applies exactly what they reviewed. A draft an
+        /// > agent session saved also needs accept_agent_draft.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ApplySpacesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ApplySpacesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ApplySpacesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func applySpaces<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ApplySpacesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ApplySpacesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ApplySpacesResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ApplySpacesResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListRegisteredSources" method.
@@ -4014,6 +4131,114 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "SetSpacesDraft" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetSpacesDraft saves a spaces policy as a new draft revision. It changes
+        /// > nothing that is enforced; the reply lists the draft's problems.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetSpacesDraftRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetSpacesDraftRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SpacesDraft` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setSpacesDraft<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetSpacesDraftRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetSpacesDraftRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SpacesDraft>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpacesDraft>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SetSpacesDraft.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "DiffSpaces" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > DiffSpaces compares the enforced spaces revision with the newest draft.
+        /// > Operator-only, like ApplySpaces: the policy names every job's orgs and
+        /// > roots.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_DiffSpacesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_DiffSpacesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SpacesDiff` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func diffSpaces<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_DiffSpacesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_DiffSpacesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SpacesDiff>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpacesDiff>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.DiffSpaces.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ApplySpaces" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ApplySpaces enforces the newest draft. Operator-only: refused to callers
+        /// > descended from a harness or from orchd, and to any revision but the
+        /// > newest, so the operator applies exactly what they reviewed. A draft an
+        /// > agent session saved also needs accept_agent_draft.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ApplySpacesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ApplySpacesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ApplySpacesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func applySpaces<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ApplySpacesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ApplySpacesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ApplySpacesResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ApplySpacesResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ApplySpaces.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -5943,6 +6168,99 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RemoveLegacyConfigRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ConfigState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetSpacesDraft" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetSpacesDraft saves a spaces policy as a new draft revision. It changes
+    /// > nothing that is enforced; the reply lists the draft's problems.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SetSpacesDraftRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setSpacesDraft<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SetSpacesDraftRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpacesDraft>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setSpacesDraft(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetSpacesDraftRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SpacesDraft>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "DiffSpaces" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > DiffSpaces compares the enforced spaces revision with the newest draft.
+    /// > Operator-only, like ApplySpaces: the policy names every job's orgs and
+    /// > roots.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_DiffSpacesRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func diffSpaces<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_DiffSpacesRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpacesDiff>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.diffSpaces(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_DiffSpacesRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SpacesDiff>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ApplySpaces" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ApplySpaces enforces the newest draft. Operator-only: refused to callers
+    /// > descended from a harness or from orchd, and to any revision but the
+    /// > newest, so the operator applies exactly what they reviewed. A draft an
+    /// > agent session saved also needs accept_agent_draft.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ApplySpacesRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func applySpaces<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ApplySpacesRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ApplySpacesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.applySpaces(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ApplySpacesRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ApplySpacesResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -7979,6 +8297,111 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.removeLegacyConfig(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetSpacesDraft" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetSpacesDraft saves a spaces policy as a new draft revision. It changes
+    /// > nothing that is enforced; the reply lists the draft's problems.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setSpacesDraft<Result>(
+        _ message: Orchd_V1_SetSpacesDraftRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpacesDraft>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SetSpacesDraftRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setSpacesDraft(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "DiffSpaces" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > DiffSpaces compares the enforced spaces revision with the newest draft.
+    /// > Operator-only, like ApplySpaces: the policy names every job's orgs and
+    /// > roots.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func diffSpaces<Result>(
+        _ message: Orchd_V1_DiffSpacesRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpacesDiff>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_DiffSpacesRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.diffSpaces(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ApplySpaces" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ApplySpaces enforces the newest draft. Operator-only: refused to callers
+    /// > descended from a harness or from orchd, and to any revision but the
+    /// > newest, so the operator applies exactly what they reviewed. A draft an
+    /// > agent session saved also needs accept_agent_draft.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func applySpaces<Result>(
+        _ message: Orchd_V1_ApplySpacesRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ApplySpacesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ApplySpacesRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.applySpaces(
             request: request,
             options: options,
             onResponse: handleResponse

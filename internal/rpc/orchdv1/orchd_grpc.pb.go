@@ -65,6 +65,9 @@ const (
 	Orchd_GetConfig_FullMethodName                = "/orchd.v1.Orchd/GetConfig"
 	Orchd_SetConfig_FullMethodName                = "/orchd.v1.Orchd/SetConfig"
 	Orchd_RemoveLegacyConfig_FullMethodName       = "/orchd.v1.Orchd/RemoveLegacyConfig"
+	Orchd_SetSpacesDraft_FullMethodName           = "/orchd.v1.Orchd/SetSpacesDraft"
+	Orchd_DiffSpaces_FullMethodName               = "/orchd.v1.Orchd/DiffSpaces"
+	Orchd_ApplySpaces_FullMethodName              = "/orchd.v1.Orchd/ApplySpaces"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName               = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName             = "/orchd.v1.Orchd/RemoveSource"
@@ -219,6 +222,18 @@ type OrchdClient interface {
 	// RemoveLegacyConfig deletes the config.yaml orch no longer reads, once its
 	// settings were imported.
 	RemoveLegacyConfig(ctx context.Context, in *RemoveLegacyConfigRequest, opts ...grpc.CallOption) (*ConfigState, error)
+	// SetSpacesDraft saves a spaces policy as a new draft revision. It changes
+	// nothing that is enforced; the reply lists the draft's problems.
+	SetSpacesDraft(ctx context.Context, in *SetSpacesDraftRequest, opts ...grpc.CallOption) (*SpacesDraft, error)
+	// DiffSpaces compares the enforced spaces revision with the newest draft.
+	// Operator-only, like ApplySpaces: the policy names every job's orgs and
+	// roots.
+	DiffSpaces(ctx context.Context, in *DiffSpacesRequest, opts ...grpc.CallOption) (*SpacesDiff, error)
+	// ApplySpaces enforces the newest draft. Operator-only: refused to callers
+	// descended from a harness or from orchd, and to any revision but the
+	// newest, so the operator applies exactly what they reviewed. A draft an
+	// agent session saved also needs accept_agent_draft.
+	ApplySpaces(ctx context.Context, in *ApplySpacesRequest, opts ...grpc.CallOption) (*ApplySpacesResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -746,6 +761,36 @@ func (c *orchdClient) RemoveLegacyConfig(ctx context.Context, in *RemoveLegacyCo
 	return out, nil
 }
 
+func (c *orchdClient) SetSpacesDraft(ctx context.Context, in *SetSpacesDraftRequest, opts ...grpc.CallOption) (*SpacesDraft, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SpacesDraft)
+	err := c.cc.Invoke(ctx, Orchd_SetSpacesDraft_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) DiffSpaces(ctx context.Context, in *DiffSpacesRequest, opts ...grpc.CallOption) (*SpacesDiff, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SpacesDiff)
+	err := c.cc.Invoke(ctx, Orchd_DiffSpaces_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ApplySpaces(ctx context.Context, in *ApplySpacesRequest, opts ...grpc.CallOption) (*ApplySpacesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ApplySpacesResponse)
+	err := c.cc.Invoke(ctx, Orchd_ApplySpaces_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -1042,6 +1087,18 @@ type OrchdServer interface {
 	// RemoveLegacyConfig deletes the config.yaml orch no longer reads, once its
 	// settings were imported.
 	RemoveLegacyConfig(context.Context, *RemoveLegacyConfigRequest) (*ConfigState, error)
+	// SetSpacesDraft saves a spaces policy as a new draft revision. It changes
+	// nothing that is enforced; the reply lists the draft's problems.
+	SetSpacesDraft(context.Context, *SetSpacesDraftRequest) (*SpacesDraft, error)
+	// DiffSpaces compares the enforced spaces revision with the newest draft.
+	// Operator-only, like ApplySpaces: the policy names every job's orgs and
+	// roots.
+	DiffSpaces(context.Context, *DiffSpacesRequest) (*SpacesDiff, error)
+	// ApplySpaces enforces the newest draft. Operator-only: refused to callers
+	// descended from a harness or from orchd, and to any revision but the
+	// newest, so the operator applies exactly what they reviewed. A draft an
+	// agent session saved also needs accept_agent_draft.
+	ApplySpaces(context.Context, *ApplySpacesRequest) (*ApplySpacesResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -1237,6 +1294,15 @@ func (UnimplementedOrchdServer) SetConfig(context.Context, *SetConfigRequest) (*
 }
 func (UnimplementedOrchdServer) RemoveLegacyConfig(context.Context, *RemoveLegacyConfigRequest) (*ConfigState, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveLegacyConfig not implemented")
+}
+func (UnimplementedOrchdServer) SetSpacesDraft(context.Context, *SetSpacesDraftRequest) (*SpacesDraft, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSpacesDraft not implemented")
+}
+func (UnimplementedOrchdServer) DiffSpaces(context.Context, *DiffSpacesRequest) (*SpacesDiff, error) {
+	return nil, status.Error(codes.Unimplemented, "method DiffSpaces not implemented")
+}
+func (UnimplementedOrchdServer) ApplySpaces(context.Context, *ApplySpacesRequest) (*ApplySpacesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ApplySpaces not implemented")
 }
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
@@ -2128,6 +2194,60 @@ func _Orchd_RemoveLegacyConfig_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_SetSpacesDraft_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSpacesDraftRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SetSpacesDraft(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SetSpacesDraft_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SetSpacesDraft(ctx, req.(*SetSpacesDraftRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_DiffSpaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiffSpacesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).DiffSpaces(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_DiffSpaces_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).DiffSpaces(ctx, req.(*DiffSpacesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ApplySpaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ApplySpacesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ApplySpaces(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ApplySpaces_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ApplySpaces(ctx, req.(*ApplySpacesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -2602,6 +2722,18 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveLegacyConfig",
 			Handler:    _Orchd_RemoveLegacyConfig_Handler,
+		},
+		{
+			MethodName: "SetSpacesDraft",
+			Handler:    _Orchd_SetSpacesDraft_Handler,
+		},
+		{
+			MethodName: "DiffSpaces",
+			Handler:    _Orchd_DiffSpaces_Handler,
+		},
+		{
+			MethodName: "ApplySpaces",
+			Handler:    _Orchd_ApplySpaces_Handler,
 		},
 		{
 			MethodName: "ListRegisteredSources",

@@ -131,6 +131,73 @@ does not leave its services down until someone notices. When orchd cannot run at
 | `routing.evaluate.enabled`, `interval` | `true`, `168h` | evaluator subsystem |
 | `routing.auto_apply` | `false` | evaluator only proposes |
 
+## Spaces policy
+
+The spaces policy ([the spaces plan](../spaces/spaces-features.json), D-25) is not a setting in
+`config_values`: it is nested, and it must be reviewed before it takes effect, which `SetConfig`
+does not do. `internal/spaces` keeps it in two tables of `orch.db` (migration `0023`):
+
+- **`spaces_revisions`:** every saved policy, as canonical JSON with its sha256, who saved it,
+  and whether that was the operator (`by_operator`). `SetSpacesDraft` (`orch spaces draft`,
+  JSON on stdin) adds one. Saving the newest revision's policy again, as the same kind of caller,
+  returns that revision. Saving changes nothing that is enforced, and an invalid draft is saved
+  too, with its problems in the reply, so it can be fixed in steps. A policy is limited to 64
+  spaces, 256 entries in any one list, 512 roots, 1024 bytes per value, 64 folders per path and
+  1 MB in all. Validation reports at most 100 problems. orchd caches whether the newest draft
+  validates and never validates a draft at startup. Together these keep one saved draft from
+  stalling orchd.
+- **`spaces_applied`:** every apply, newest last, with the sha256 of what was applied.
+
+`ApplySpaces` (`orch spaces apply --revision N`) enforces revision N only when all of these hold:
+it is the newest revision, so the operator applies exactly what they reviewed (`DiffSpaces`,
+`orch spaces diff`); it validates; and, if an agent session saved it, the operator passed
+`accept_agent_draft` (`--accept-agent-draft`). Otherwise the applied revision stays as it was.
+The stale check alone cannot tell the operator's draft from one a session saved a moment later,
+so the diff names who saved the draft and shows every value it adds or removes.
+
+Apply and diff are the operator's alone. They are refused to queued tasks, to any caller with an
+agent harness among its ancestors, and to a caller orchd cannot place or whose ancestry it cannot
+read ([daemon.md](daemon.md#queued-callers)): the diff names every job's orgs and roots.
+`SetSpacesDraft` is open to interactive sessions (agents may propose a policy, D-25) but refused
+to queued tasks.
+
+**Enforcement and drift.** orchd loads the applied revision once at startup (`spaces.Open`) and
+afterwards changes it only through `ApplySpaces`. At startup only the newest apply counts. Its
+revision must still hash to the sha256 recorded in both tables and still pass the structural
+checks. The filesystem rule (a terms file in a git tree) was checked at apply, and a later change
+on disk does not undo an apply. When the newest apply fails, orchd never falls back to an older
+one, which would let whoever broke it choose the policy. Instead the engine is broken:
+`Current` returns `ErrBroken`, enforcement must fail closed, and status says so until a revision
+is applied again. `Status` reports drift, which `orch status` shows in a `spaces` section once a
+revision exists:
+
+- `draft`: a saved revision differs from the applied one.
+- `changed_outside_orchd`: the newest apply row, or the enforced revision's document, in
+  `orch.db` no longer matches what orchd loaded. Editing `orch.db` therefore changes nothing until
+  the next start. At that point a document edited without its hash breaks the engine (fail
+  closed). One edited together with both recorded hashes would load: the same accepted risk as
+  the settings above, where a process that can write `orch.db` is the harness sandbox's to stop.
+
+`Status` errors never name a space, root or org, since tasks may call `Status`; `DiffSpaces`
+carries the details.
+
+**Validation** (`spaces.Validate`) reports every problem with a rule name: an unknown kind; a
+bad or reserved name (`quarantine`, `shared`); a GitHub org, web prefix (scheme and host compared
+case-insensitively) or chat tenant (`slack:<id>`, `teams:<id>`) bound to two spaces; the same
+root bound twice; a nested root less strict than a root above it (public < private < isolated);
+a root of one isolated space inside another's; an isolated space reading an isolated one; a
+private space reading an isolated one; a public space reading anything; a read of a space that
+does not exist; a terms file inside a git working tree (a `.git` in any parent, after resolving
+symlinks); a policy over the size limits; and a
+`public_root_sessions` that is not a private or isolated space. Roots and terms files may start
+with `~` and must otherwise be absolute. Roots are compared case-insensitively, since macOS
+volumes usually are. With `public_root_sessions` unset, session content from under a public root
+goes to the only private space when there is exactly one, else to quarantine.
+
+**Reads** (`Resolved.CanRead`): a space reads itself, every public space and the spaces it lists.
+Lists do not chain, and nothing reads quarantine. With no policy applied, or one with no spaces,
+everything is in one implicit `shared` space and orch behaves as it did before spaces.
+
 ## Schema
 
 `config.Fields` (`internal/config/schema.go`) describes every key: its section, label, help, type, range or
