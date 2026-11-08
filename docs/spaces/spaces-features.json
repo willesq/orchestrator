@@ -431,7 +431,12 @@
               "threshold": "true"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "scripts/hook-capture.sh setup <dir> builds internal/hook/capture/cmd/hook-capture and installs the logging hook only into project-local settings of a scratch git project (<dir>/project/.claude/settings.local.json, <dir>/project/.codex/hooks.json; both git-excluded). Each event is one JSON line in <dir>/payloads/<harness>.jsonl, labelled by `scenario`; `summary` prints scenario/event/cwd/hook_cwd/tool per line; `clean` removes only directories carrying its marker.",
+            "Never touches the real harness homes: with HOME set to a fake home, setup refused <home>, <home>/.claude/cap, <home>/.codex/a, <home>/.config/orch/x, a symlink into <home>/.claude, and <missing>/../<home>/.claude/cap, all exit 1 with nothing created (2026-11-08). Codex runs with --dangerously-bypass-hook-trust so no hook trust is written to ~/.codex.",
+            "Credentials redacted: redaction runs on every decoded string value (internal/redact), plus scenario and hook_cwd. Tests in internal/hook/capture: TestCaptureAppendsOneLinePerEvent, TestCaptureRedactsSecrets, TestCaptureRedactsTokensAfterJSONEscapes, TestCapturePrivateKeyAcrossFieldsKeepsValidJSON, TestCaptureRedactsScenarioAndHookCwd, TestCaptureTruncatesLargeToolResponse, TestCaptureKeepsNonObjectInput, TestCaptureDeniesMarkedPreToolUse, TestCaptureDenyMarkerOnlyInToolInput, TestCaptureRejectsUnsafeHarnessName, TestCaptureReportsUnwritableDir: all pass; package coverage 91.2%; shellcheck clean.",
+            "security-audit of the capture tool on 2026-11-08: 0 critical/high; 2 medium (dot-dot path past the home guard; redaction on encoded JSON missing tokens after escapes) and lows L1-L6 fixed in this commit with the tests above."
+          ]
         },
         {
           "id": "SP-001.2",
