@@ -47,8 +47,10 @@ abs_dir() {
 # refuse_real_home stops the script from writing anywhere a real harness or orch
 # reads its configuration.
 refuse_real_home() {
-  local d="$1" home
-  home="$(cd "$HOME" && pwd -P)"
+  local d home
+  # Reason: the default macOS volume ignores case, so ~/.CLAUDE is ~/.claude.
+  d="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  home="$(cd "$HOME" && pwd -P | tr '[:upper:]' '[:lower:]')"
   [ "$d" != "$home" ] || die "refusing to use the home directory itself"
   for p in .claude .codex .gemini .config/orch; do
     case "$d/" in "$home/$p/"*) die "refusing to write under ~/$p" ;; esac

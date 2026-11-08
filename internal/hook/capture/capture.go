@@ -92,24 +92,26 @@ func toolInputHasMarker(stdin []byte) bool {
 // sanitize redacts secrets and trims tool_response. Redaction runs on decoded
 // string values: on encoded JSON, an escape such as \n before a token hides its
 // word boundary, and a multi-line match could swallow JSON structure. Input
-// that is not a JSON object is kept as a redacted JSON string, so a malformed
-// payload is still recorded.
+// that is not JSON is kept as a redacted JSON string, so a malformed payload is
+// still recorded.
 func sanitize(raw []byte) (json.RawMessage, int) {
-	var fields map[string]any
+	var v any
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
-	if err := dec.Decode(&fields); err != nil || fields == nil {
+	if err := dec.Decode(&v); err != nil {
 		text, n := redact.Redact(string(raw))
 		b, _ := json.Marshal(text)
 		return b, n
 	}
-	if tr, ok := fields["tool_response"]; ok {
-		if b, _ := json.Marshal(tr); len(b) > maxToolResponse {
-			fields["tool_response"] = fmt.Sprintf("[truncated %d bytes]", len(b))
+	if fields, ok := v.(map[string]any); ok {
+		if tr, ok := fields["tool_response"]; ok {
+			if b, _ := json.Marshal(tr); len(b) > maxToolResponse {
+				fields["tool_response"] = fmt.Sprintf("[truncated %d bytes]", len(b))
+			}
 		}
 	}
 	n := 0
-	clean := redactValue(fields, &n)
+	clean := redactValue(v, &n)
 	b, _ := json.Marshal(clean)
 	return b, n
 }

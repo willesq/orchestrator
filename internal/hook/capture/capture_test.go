@@ -218,3 +218,15 @@ func TestCaptureDenyMarkerOnlyInToolInput(t *testing.T) {
 		t.Errorf("Capture = %q, %v; want no deny", out, err)
 	}
 }
+
+func TestCaptureRedactsNonObjectJSON(t *testing.T) {
+	dir := t.TempDir()
+	tok := "ghp_" + strings.Repeat("d", 36)
+	if _, err := Capture(Options{Dir: dir, Harness: "h", Event: "Stop", Now: now}, []byte(`["a\n`+tok+`"]`)); err != nil {
+		t.Fatal(err)
+	}
+	recs := readRecords(t, filepath.Join(dir, "h.jsonl"))
+	if strings.Contains(string(recs[0].Payload), tok) || recs[0].Redactions != 1 {
+		t.Errorf("record = %+v", recs[0])
+	}
+}

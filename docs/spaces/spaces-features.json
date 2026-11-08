@@ -491,7 +491,11 @@
               "threshold": "2 harnesses (Claude Code, Codex)"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: internal/hook/testdata/payloads/claude-code.jsonl (114 events, scenarios C01-C14) and codex.jsonl (88 events, X01-X11) are committed, with scratch/home paths normalized and Codex's encrypted subagent message replaced. TestRecordedPayloadsParse (internal/hook/payloads_test.go) decodes all 202 payloads (100%) into hook.Payload and asserts that cwd, tool_name and tool_input (compact-JSON equal) are unchanged: PASS.",
+            "a2: docs/internals/hooks.md gains a \"Harness payloads and working directory\" section. Its table has one column per harness (Claude Code, Codex) and rows for: does cwd follow cd, does CwdChanged exist, can PreToolUse deny, and the deny output format. Shared findings and capture-tool usage follow the table.",
+            "security-audit of the full branch diff on 2026-11-08: 0 critical/high/medium. Lows fixed: case-insensitive home-guard bypass (paths are lowercased before the check) and the opaque Fernet blob in the codex fixture (scrubbed). Info items fixed: any JSON value is redacted per string (TestCaptureRedactsNonObjectJSON), and the docs now ask for a secret scan of new fixtures. trufflehog found nothing in the fixtures."
+          ]
         }
       ],
       "status": "in_progress",
