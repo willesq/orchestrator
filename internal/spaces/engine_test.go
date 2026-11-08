@@ -64,7 +64,7 @@ func saveAndApply(t *testing.T, e *Engine, p Policy) Revision {
 	if err != nil || ps != nil {
 		t.Fatalf("SaveDraft: %v %v", err, ps)
 	}
-	if _, err := e.Apply(ctx, r.Number, "test", false); err != nil {
+	if _, err := e.Apply(ctx, r.Number, "test", false, nil); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	return r
@@ -124,7 +124,7 @@ func TestApplyInvalidKeepsApplied(t *testing.T) {
 	if !ps.Has(RuleIsolatedReadsIsolated) {
 		t.Fatalf("SaveDraft problems = %v", ps)
 	}
-	_, err = e.Apply(ctx, bad.Number, "test", false)
+	_, err = e.Apply(ctx, bad.Number, "test", false, nil)
 	var got Problems
 	if !errors.As(err, &got) || !got.Has(RuleIsolatedReadsIsolated) {
 		t.Fatalf("Apply(invalid) = %v, want Problems", err)
@@ -164,16 +164,16 @@ func TestApplyRequiresReviewedRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.Apply(ctx, reviewed.Number, "operator", false); !errors.Is(err, ErrStale) {
+	if _, err := e.Apply(ctx, reviewed.Number, "operator", false, nil); !errors.Is(err, ErrStale) {
 		t.Fatalf("Apply(older) = %v, want ErrStale", err)
 	}
 	if current(t, e) != nil {
 		t.Fatal("stale apply changed the policy")
 	}
-	if _, err := e.Apply(ctx, newer.Number+1, "operator", false); !errors.Is(err, ErrNoRevision) {
+	if _, err := e.Apply(ctx, newer.Number+1, "operator", false, nil); !errors.Is(err, ErrNoRevision) {
 		t.Fatalf("Apply(unsaved) = %v, want ErrNoRevision", err)
 	}
-	if _, err := e.Apply(ctx, newer.Number, "operator", false); err != nil {
+	if _, err := e.Apply(ctx, newer.Number, "operator", false, nil); err != nil {
 		t.Fatalf("Apply(newest) = %v", err)
 	}
 	if !current(t, e).CanRead("globex", "globex") {
@@ -194,13 +194,13 @@ func TestAgentDraftNeedsConfirmation(t *testing.T) {
 	if theirs.Number == mine.Number || theirs.ByOperator {
 		t.Fatalf("an agent's copy of the operator's draft reused it: %+v", theirs)
 	}
-	if _, err := e.Apply(ctx, theirs.Number, "operator", false); !errors.Is(err, ErrAgentDraft) {
+	if _, err := e.Apply(ctx, theirs.Number, "operator", false, nil); !errors.Is(err, ErrAgentDraft) {
 		t.Fatalf("Apply(agent draft) = %v, want ErrAgentDraft", err)
 	}
 	if current(t, e) != nil {
 		t.Fatal("an unconfirmed agent draft was applied")
 	}
-	if _, err := e.Apply(ctx, theirs.Number, "operator", true); err != nil {
+	if _, err := e.Apply(ctx, theirs.Number, "operator", true, nil); err != nil {
 		t.Fatalf("Apply(agent draft, confirmed) = %v", err)
 	}
 	d, err := e.Diff(ctx)
@@ -211,7 +211,7 @@ func TestAgentDraftNeedsConfirmation(t *testing.T) {
 
 func TestApplyWithNoRevision(t *testing.T) {
 	e := openEngine(t, openStore(t))
-	if _, err := e.Apply(context.Background(), 1, "operator", false); !errors.Is(err, ErrNoRevision) {
+	if _, err := e.Apply(context.Background(), 1, "operator", false, nil); !errors.Is(err, ErrNoRevision) {
 		t.Fatalf("Apply = %v, want ErrNoRevision", err)
 	}
 }
@@ -387,7 +387,7 @@ func TestStoreErrors(t *testing.T) {
 	if _, err := SaveDraft(ctx, conn, validPolicy, "x", true, time.Now()); err == nil {
 		t.Error("SaveDraft with a cancelled context succeeded")
 	}
-	if _, err := Apply(ctx, conn, 1, "x", false, time.Now(), testEnv()); err == nil {
+	if _, err := Apply(ctx, conn, 1, "x", false, time.Now(), testEnv(), nil, nil); err == nil {
 		t.Error("Apply with a cancelled context succeeded")
 	}
 	_ = conn.Close()
@@ -424,7 +424,7 @@ func TestDiffUnparseableDraft(t *testing.T) {
 	if st := status(t, e); !strings.Contains(st.Error, "does not validate") {
 		t.Fatalf("status = %+v", st)
 	}
-	if _, err := e.Apply(context.Background(), d.Draft.Number, "operator", false); err == nil {
+	if _, err := e.Apply(context.Background(), d.Draft.Number, "operator", false, nil); err == nil {
 		t.Fatal("unparseable draft applied")
 	}
 }

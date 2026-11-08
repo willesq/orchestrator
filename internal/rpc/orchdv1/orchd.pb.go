@@ -6362,8 +6362,11 @@ type SpacesDiff struct {
 	DraftCreatedBy  string                 `protobuf:"bytes,7,opt,name=draft_created_by,json=draftCreatedBy,proto3" json:"draft_created_by,omitempty"`
 	DraftCreatedAt  int64                  `protobuf:"varint,8,opt,name=draft_created_at,json=draftCreatedAt,proto3" json:"draft_created_at,omitempty"`    // unix seconds
 	DraftByOperator bool                   `protobuf:"varint,9,opt,name=draft_by_operator,json=draftByOperator,proto3" json:"draft_by_operator,omitempty"` // false: an agent session saved it
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Applied GitHub orgs whose new content goes to quarantine: a sync saw a
+	// different node ID, or none was confirmed. Confirm one at the next apply.
+	UnconfirmedGithubOrgs []string `protobuf:"bytes,10,rep,name=unconfirmed_github_orgs,json=unconfirmedGithubOrgs,proto3" json:"unconfirmed_github_orgs,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *SpacesDiff) Reset() {
@@ -6459,14 +6462,25 @@ func (x *SpacesDiff) GetDraftByOperator() bool {
 	return false
 }
 
+func (x *SpacesDiff) GetUnconfirmedGithubOrgs() []string {
+	if x != nil {
+		return x.UnconfirmedGithubOrgs
+	}
+	return nil
+}
+
 type ApplySpacesRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	ReviewedRevision int64                  `protobuf:"varint,1,opt,name=reviewed_revision,json=reviewedRevision,proto3" json:"reviewed_revision,omitempty"`
 	// accept_agent_draft confirms the operator reviewed a draft an agent
 	// session saved; without it such a draft is refused.
 	AcceptAgentDraft bool `protobuf:"varint,2,opt,name=accept_agent_draft,json=acceptAgentDraft,proto3" json:"accept_agent_draft,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// confirm_github_orgs accepts the changed identity (node ID) of these
+	// bound GitHub orgs; without it, an org whose node ID changed since it was
+	// bound is refused.
+	ConfirmGithubOrgs []string `protobuf:"bytes,3,rep,name=confirm_github_orgs,json=confirmGithubOrgs,proto3" json:"confirm_github_orgs,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ApplySpacesRequest) Reset() {
@@ -6511,6 +6525,13 @@ func (x *ApplySpacesRequest) GetAcceptAgentDraft() bool {
 		return x.AcceptAgentDraft
 	}
 	return false
+}
+
+func (x *ApplySpacesRequest) GetConfirmGithubOrgs() []string {
+	if x != nil {
+		return x.ConfirmGithubOrgs
+	}
+	return nil
 }
 
 type ApplySpacesResponse struct {
@@ -11317,7 +11338,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x05space\x18\x01 \x01(\tR\x05space\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06fields\x18\x03 \x03(\tR\x06fields\x12\x18\n" +
-	"\adetails\x18\x04 \x03(\tR\adetails\"\x87\x03\n" +
+	"\adetails\x18\x04 \x03(\tR\adetails\"\xbf\x03\n" +
 	"\n" +
 	"SpacesDiff\x12)\n" +
 	"\x10applied_revision\x18\x01 \x01(\x03R\x0fappliedRevision\x12!\n" +
@@ -11329,10 +11350,13 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\bproblems\x18\x06 \x03(\v2\x17.orchd.v1.SpacesProblemR\bproblems\x12(\n" +
 	"\x10draft_created_by\x18\a \x01(\tR\x0edraftCreatedBy\x12(\n" +
 	"\x10draft_created_at\x18\b \x01(\x03R\x0edraftCreatedAt\x12*\n" +
-	"\x11draft_by_operator\x18\t \x01(\bR\x0fdraftByOperator\"o\n" +
+	"\x11draft_by_operator\x18\t \x01(\bR\x0fdraftByOperator\x126\n" +
+	"\x17unconfirmed_github_orgs\x18\n" +
+	" \x03(\tR\x15unconfirmedGithubOrgs\"\x9f\x01\n" +
 	"\x12ApplySpacesRequest\x12+\n" +
 	"\x11reviewed_revision\x18\x01 \x01(\x03R\x10reviewedRevision\x12,\n" +
-	"\x12accept_agent_draft\x18\x02 \x01(\bR\x10acceptAgentDraft\"@\n" +
+	"\x12accept_agent_draft\x18\x02 \x01(\bR\x10acceptAgentDraft\x12.\n" +
+	"\x13confirm_github_orgs\x18\x03 \x03(\tR\x11confirmGithubOrgs\"@\n" +
 	"\x13ApplySpacesResponse\x12)\n" +
 	"\x10applied_revision\x18\x01 \x01(\x03R\x0fappliedRevision\"\xb6\x01\n" +
 	"\aDocRepo\x12\x12\n" +

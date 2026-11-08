@@ -53,6 +53,7 @@ machine. See [internals/settings.md](internals/settings.md).
 orch spaces draft < policy.json       # save a draft revision; changes nothing
 orch spaces diff [--full]             # what the newest draft changes, and its problems
 orch spaces apply --revision N        # enforce draft N
+orch spaces apply --revision N --confirm-github-org ORG   # also accept ORG's changed GitHub identity
 ```
 
 The spaces policy lives in `orch.db` as numbered revisions. Diff and apply are yours alone: orchd
@@ -60,7 +61,13 @@ refuses them inside Claude Code or Codex sessions and inside queued tasks, so ru
 terminal (or use Orch.app). Apply takes only the newest draft, the one you reviewed, and only when
 it validates. An agent session may save a draft. The diff says when it did and shows every value
 it changes, and applying it needs `--accept-agent-draft`. A saved draft, or an edit to `orch.db`, changes nothing that is enforced; `orch status`
-shows it in its `spaces` section as drift. See
+shows it in its `spaces` section as drift.
+
+Apply looks up every bound GitHub org with `gh` and records its node ID, so it needs GitHub to be
+reachable. If an org's login is later deleted and registered by someone else, the next docs sync
+sees a different node ID. orchd then stops syncing that org, `orch status` reports an unconfirmed
+org, and `orch spaces diff` names it. Check the org on GitHub. If the change is expected, apply the
+newest revision again with `--confirm-github-org ORG`. Until you do, any apply is refused. See
 [internals/config.md](internals/config.md#spaces-policy).
 
 ## Upgrades

@@ -139,9 +139,12 @@ func verify(r *Revision, appliedSHA string, env Env) (*Resolved, error) {
 // Apply makes revision reviewed the enforced one. It refuses with ErrStale
 // when a newer revision was saved since, so the operator applies exactly what
 // they reviewed; with ErrAgentDraft when an agent session saved it and
-// acceptAgentDraft is false; and with Problems when it does not validate. On
-// any error the applied revision is unchanged.
-func Apply(ctx context.Context, db *sql.DB, reviewed int64, by string, acceptAgentDraft bool, now time.Time, env Env) (Applied, error) {
+// acceptAgentDraft is false; with Problems when it does not validate; and
+// with ErrOrgChanged when a bound GitHub org's node ID in orgs differs from
+// its earlier binding and confirmOrgs does not name it. orgs holds the
+// identity of every org the revision binds, keyed by lowercased login. On any
+// error the applied revision and the org bindings are unchanged.
+func Apply(ctx context.Context, db *sql.DB, reviewed int64, by string, acceptAgentDraft bool, now time.Time, env Env, orgs map[string]OrgIdentity, confirmOrgs []string) (Applied, error) {
 	tx, err := beginWrite(ctx, db)
 	if err != nil {
 		return Applied{}, err
@@ -161,6 +164,9 @@ func Apply(ctx context.Context, db *sql.DB, reviewed int64, by string, acceptAge
 	}
 	res, err := verify(latest, "", env)
 	if err != nil {
+		return Applied{}, err
+	}
+	if err := bindOrgs(ctx, tx, res, latest.Number, orgs, confirmOrgs, now); err != nil {
 		return Applied{}, err
 	}
 	if _, err := tx.ExecContext(ctx,

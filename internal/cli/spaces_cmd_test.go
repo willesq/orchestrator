@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -108,6 +109,12 @@ func TestSpacesDiff(t *testing.T) {
 				"orch spaces apply --revision 6 --accept-agent-draft"},
 		},
 		{
+			name: "unconfirmed GitHub orgs",
+			diff: &orchdv1.SpacesDiff{AppliedRevision: 3, UnconfirmedGithubOrgs: []string{"acme", "globex\x1b[2J"}},
+			want: []string{"not confirmed: GitHub org(s) acme, globex [2J", "--confirm-github-org <org>", "no draft newer"},
+			not:  []string{"\x1b"},
+		},
+		{
 			name: "an invalid draft, in full",
 			diff: &orchdv1.SpacesDiff{DraftRevision: 1, DraftByOperator: true, DraftJson: `{"spaces":[1]}`,
 				Problems: []*orchdv1.SpacesProblem{{Rule: "bad", Message: "nope"}}},
@@ -161,6 +168,11 @@ func TestSpacesApply(t *testing.T) {
 	}
 	if spacesFake.applyReq.GetReviewedRevision() != 8 {
 		t.Fatalf("sent %v", spacesFake.applyReq)
+	}
+	if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "apply", "--revision", "9",
+		"--confirm-github-org", "acme", "--confirm-github-org", "globex"); err != nil ||
+		!slices.Equal(spacesFake.applyReq.GetConfirmGithubOrgs(), []string{"acme", "globex"}) {
+		t.Fatalf("apply --confirm-github-org: %v, sent %v", err, spacesFake.applyReq)
 	}
 	spacesFake.err = errors.New("only the operator can apply the spaces policy")
 	if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "apply", "--revision", "7"); err == nil {

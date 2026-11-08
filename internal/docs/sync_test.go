@@ -175,6 +175,25 @@ func TestSyncOwnerEnumerateError(t *testing.T) {
 	}
 }
 
+// TestSyncOwnerCheckRefuses: an owner CheckOwner refuses is neither listed
+// nor cloned, and nothing of it is ingested.
+func TestSyncOwnerCheckRefuses(t *testing.T) {
+	git := &fakeGit{}
+	reg, ing, opts := syncDeps(t, fakeGH{err: errors.New("listed")}, git)
+	var asked string
+	opts.CheckOwner = func(_ context.Context, owner string) error {
+		asked = owner
+		return errors.New("binding not confirmed")
+	}
+	res := SyncOwner(context.Background(), reg, Owner{Owner: "acme"}, ing, opts)
+	if res.Status != "error" || res.Reason != "not synced: binding not confirmed" || asked != "acme" {
+		t.Fatalf("result = %+v (asked %q)", res, asked)
+	}
+	if len(ing.uris) != 0 || len(git.synced) != 0 {
+		t.Fatalf("a refused owner was synced: %v, clones %v", ing.uris, git.synced)
+	}
+}
+
 func TestFileHashSkip(t *testing.T) {
 	tests := []struct{ name string }{{name: "unchanged file skipped on a re-sync of a moved repo"}}
 	for _, tt := range tests {

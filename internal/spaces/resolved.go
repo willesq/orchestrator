@@ -51,3 +51,18 @@ func (r *Resolved) CanRead(reader, target string) bool {
 	}
 	return reader == target || to.Kind == Public || slices.Contains(from.Reads, target)
 }
+
+// GitHubOrgSpace returns the space GitHub account login is bound to.
+// Logins match case-insensitively, as GitHub treats them.
+func (r *Resolved) GitHubOrgSpace(login string) (string, bool) {
+	if !r.Configured() {
+		return "", false
+	}
+	k := orgKey(login)
+	for _, s := range r.Policy.Spaces {
+		if slices.ContainsFunc(s.GitHubOrgs, func(org string) bool { return orgKey(org) == k }) {
+			return s.Name, true
+		}
+	}
+	return "", false
+}

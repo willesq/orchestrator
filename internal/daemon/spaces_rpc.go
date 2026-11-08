@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/peer"
 	grpcstatus "google.golang.org/grpc/status"
 
+	"github.com/willesq/orchestrator/internal/github"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/spaces"
 )
@@ -44,7 +45,7 @@ func (s *server) DiffSpaces(ctx context.Context, _ *orchdv1.DiffSpacesRequest) (
 	if err != nil {
 		return nil, grpcstatus.Error(codes.Internal, err.Error())
 	}
-	out := &orchdv1.SpacesDiff{Problems: problemsProto(d.Problems)}
+	out := &orchdv1.SpacesDiff{Problems: problemsProto(d.Problems), UnconfirmedGithubOrgs: d.UnconfirmedOrgs}
 	if d.Applied != nil {
 		out.AppliedRevision, out.AppliedJson = d.Applied.Number, string(d.Applied.Doc)
 	}
@@ -68,13 +69,17 @@ func (s *server) ApplySpaces(ctx context.Context, req *orchdv1.ApplySpacesReques
 	if req.GetReviewedRevision() <= 0 {
 		return nil, grpcstatus.Error(codes.InvalidArgument, "name the spaces revision you reviewed")
 	}
-	r, err := s.spaces.Apply(ctx, req.GetReviewedRevision(), callerLabel(ctx), req.GetAcceptAgentDraft())
+	r, err := s.spaces.Apply(ctx, req.GetReviewedRevision(), callerLabel(ctx), req.GetAcceptAgentDraft(), req.GetConfirmGithubOrgs())
 	var problems spaces.Problems
 	switch {
 	case errors.Is(err, spaces.ErrStale):
 		return nil, grpcstatus.Error(codes.FailedPrecondition, err.Error()+"; review the newest draft and apply it")
 	case errors.Is(err, spaces.ErrAgentDraft):
 		return nil, grpcstatus.Error(codes.FailedPrecondition, err.Error()+"; review its values, then apply it with accept_agent_draft (orch spaces apply --accept-agent-draft)")
+	case errors.Is(err, spaces.ErrOrgChanged):
+		return nil, grpcstatus.Error(codes.FailedPrecondition, err.Error()+"; if you expected this, apply again confirming it (orch spaces apply --confirm-github-org <org>)")
+	case errors.Is(err, spaces.ErrOrgLookup):
+		return nil, grpcstatus.Error(codes.Unavailable, err.Error())
 	case errors.Is(err, spaces.ErrNoRevision):
 		return nil, grpcstatus.Error(codes.NotFound, err.Error())
 	case errors.As(err, &problems), errors.Is(err, spaces.ErrTampered):
@@ -129,4 +134,35 @@ func callerLabel(ctx context.Context) string {
 		return fmt.Sprintf("process %d in %s", a.pid, a.harness)
 	}
 	return fmt.Sprintf("operator (process %d)", a.pid)
+}
+
+// spacesEnv is the real filesystem plus gh for GitHub org identities.
+func spacesEnv() spaces.Env {
+	env := spaces.DefaultEnv()
+	env.LookupOrg = func(ctx context.Context, login string) (spaces.OrgIdentity, error) {
+		a, err := github.LookupAccount(ctx, github.GH, login)
+		return spaces.OrgIdentity{Login: a.Login, NodeID: a.NodeID}, err
+	}
+	return env
+}
+
+// errOwnerQuarantined stops the docs sync of an owner whose new content
+// would go to quarantine, or whose binding could not be checked. Reason: the
+// docs list and orchd's log are open to tasks, so the reason is the same
+// either way and carries no lookup detail.
+var errOwnerQuarantined = errors.New("its space binding is not confirmed; the operator can see why in 'orch spaces diff'")
+
+// docsOwnerCheck re-checks a docs owner's org binding at each sync. Reason:
+// until content carries its space, quarantining an owner's new content means
+// indexing none of it, so a suspended or unconfirmed binding stops the sync.
+func docsOwnerCheck(sp *spaces.Engine) func(context.Context, string) error {
+	if sp == nil {
+		return nil
+	}
+	return func(ctx context.Context, owner string) error {
+		if space, err := sp.CheckOrg(ctx, owner); err != nil || space == spaces.Quarantine {
+			return errOwnerQuarantined
+		}
+		return nil
+	}
 }

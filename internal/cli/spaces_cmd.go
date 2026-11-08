@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/willesq/orchestrator/internal/github"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
@@ -83,6 +84,14 @@ func newSpacesDiffCmd(cf clientFactory) *cobra.Command {
 					applied = fmt.Sprintf("revision %d", n)
 				}
 				fmt.Fprintf(out, "applied: %s\n", applied)
+				if orgs := d.GetUnconfirmedGithubOrgs(); len(orgs) > 0 {
+					shown := make([]string, len(orgs))
+					for i, org := range orgs {
+						shown[i] = github.Printable(org, 64)
+					}
+					fmt.Fprintf(out, "not confirmed: GitHub org(s) %s; their new content goes to quarantine\n", strings.Join(shown, ", "))
+					fmt.Fprintln(out, "  an org's GitHub identity changed, or was never recorded; if you expect that, apply the newest revision with --confirm-github-org <org>")
+				}
 				if d.GetDraftRevision() == 0 {
 					fmt.Fprintln(out, "no draft newer than the applied policy")
 					return nil
@@ -134,6 +143,7 @@ func newSpacesDiffCmd(cf clientFactory) *cobra.Command {
 func newSpacesApplyCmd(cf clientFactory) *cobra.Command {
 	var revision int64
 	var acceptAgentDraft bool
+	var confirmOrgs []string
 	cmd := &cobra.Command{
 		Use:   "apply",
 		Short: "Enforce the draft revision you reviewed (operator only)",
@@ -144,7 +154,7 @@ func newSpacesApplyCmd(cf clientFactory) *cobra.Command {
 			}
 			return withClient(cf, func(ctx context.Context, client orchdv1.OrchdClient) error {
 				resp, err := client.ApplySpaces(ctx, &orchdv1.ApplySpacesRequest{
-					ReviewedRevision: revision, AcceptAgentDraft: acceptAgentDraft,
+					ReviewedRevision: revision, AcceptAgentDraft: acceptAgentDraft, ConfirmGithubOrgs: confirmOrgs,
 				})
 				if err != nil {
 					return err
@@ -157,6 +167,8 @@ func newSpacesApplyCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().Int64Var(&revision, "revision", 0, "the draft revision you reviewed")
 	cmd.Flags().BoolVar(&acceptAgentDraft, "accept-agent-draft", false,
 		"apply a draft an agent session saved, after reviewing every value in 'orch spaces diff'")
+	cmd.Flags().StringSliceVar(&confirmOrgs, "confirm-github-org", nil,
+		"accept the changed GitHub identity of this bound org (repeatable), after checking it on GitHub")
 	return cmd
 }
 

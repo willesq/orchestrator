@@ -902,6 +902,9 @@ message SpacesDiff {
   string draft_created_by = 7;
   int64 draft_created_at = 8;  // unix seconds
   bool draft_by_operator = 9;  // false: an agent session saved it
+  // Applied GitHub orgs whose new content goes to quarantine: a sync saw a
+  // different node ID, or none was confirmed. Confirm one at the next apply.
+  repeated string unconfirmed_github_orgs = 10;
 }
 
 message ApplySpacesRequest {
@@ -909,6 +912,10 @@ message ApplySpacesRequest {
   // accept_agent_draft confirms the operator reviewed a draft an agent
   // session saved; without it such a draft is refused.
   bool accept_agent_draft = 2;
+  // confirm_github_orgs accepts the changed identity (node ID) of these
+  // bound GitHub orgs; without it, an org whose node ID changed since it was
+  // bound is refused.
+  repeated string confirm_github_orgs = 3;
 }
 
 message ApplySpacesResponse {

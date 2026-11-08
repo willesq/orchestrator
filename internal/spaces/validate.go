@@ -1,6 +1,7 @@
 package spaces
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/willesq/orchestrator/internal/github"
 )
 
 // Rule names the check a policy failed, so the app can mark the line.
@@ -69,13 +72,16 @@ func (ps Problems) Has(rule Rule) bool {
 	return false
 }
 
-// Env is what validation reads outside the policy itself.
+// Env is what validation and apply read outside the policy itself.
 type Env struct {
 	// Home expands a leading "~" in roots and terms files.
 	Home string
 	// InGitTree reports whether path lies inside a git working tree; nil
 	// looks for a .git entry in path's parents.
 	InGitTree func(path string) bool
+	// LookupOrg reads a GitHub account's identity, for apply and sync; nil
+	// refuses to apply a policy that binds any org.
+	LookupOrg func(ctx context.Context, login string) (OrgIdentity, error)
 }
 
 // DefaultEnv reads the user's home and the real filesystem.
@@ -190,8 +196,8 @@ func Validate(p Policy, env Env) (*Resolved, error) {
 	for _, n := range names {
 		s := byName[n]
 		for _, org := range s.GitHubOrgs {
-			if strings.TrimSpace(org) == "" {
-				add(RuleBadBinding, n, "space %q has an empty GitHub org", n)
+			if !github.ValidLogin(org) {
+				add(RuleBadBinding, n, "space %q has GitHub org %q, which is not a GitHub login", n, org)
 				continue
 			}
 			bind(RuleOrgBoundTwice, "GitHub org", strings.ToLower(org), org, n)

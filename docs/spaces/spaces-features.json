@@ -882,18 +882,24 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (commit 64d7a64): internal/spaces TestApplyBindsOrgIdentity passes. With a fake gh lookup, apply stores login and node ID in spaces_org_bindings, and OrgSpace/CheckOrg resolve 'acme-corp', 'ACME-CORP' and 'Acme-Corp' to the same space. Supporting tests: TestApplyRefusesUnconfirmedOrgs (a failed or mismatched lookup refuses apply, nothing changes), TestDroppedOrgReaddedNeedsConfirm, TestGitHubOrgSpace, and internal/github TestLookupAccount (gh args 'api users/<login> --jq {login, node_id}', case-insensitive login check).",
+            "a2 (commit 64d7a64): internal/spaces TestSyncMismatchSuspendsBinding passes. A node ID mismatch at CheckOrg sets suspended_at and seen_node_id, OrgSpace/CheckOrg return quarantine, Status.Error reports '1 bound GitHub org(s) not confirmed' without naming the org, and Diff.UnconfirmedOrgs names it. The binding stays suspended until an apply with confirm_github_orgs. End to end through orchd: internal/daemon TestApplySpacesConfirmsChangedOrg (the docs sync check refuses the owner, the status item appears, apply without confirm returns FailedPrecondition, apply with confirm restores). Also internal/docs TestSyncOwnerCheckRefuses (a refused owner is neither listed nor cloned, and nothing is ingested), TestUnboundAppliedOrgIsQuarantined and TestCheckOrgErrors.",
+            "Gates at 64d7a64: go test ./... exit 0; go vet ./... exit 0; gofmt -l on changed files empty; make cover 'All files >= 80%' (spaces/orgs.go 95.9%, spaces/store.go 87.8%, spaces/engine.go 96.3%, github/identity.go 92.5%, daemon/spaces_rpc.go 97.3%, docs/sync.go 91.7%, cli/spaces_cmd.go 98.9%).",
+            "Security audit (security-audit agent, 2026-11-08): no critical/high. The medium (org names and lookup detail reachable by tasks through the docs list and orchd log) is fixed: the sync reason is generic and the log line names no org. Two lows fixed: org logins are validated, CLI output is sanitized, and dropped-org rows are kept so a re-add needs confirmation. Two lows recorded as proposed follow-ups in the PR: confirm a specific node ID, and checks on other GitHub ingestion paths.",
+            "Independent verifier at 9ef7eeb (2026-11-08): criteria hash, a1, a2 and DOD-1 through DOD-8 PASS. DOD-9: gh pr checks 144 shows app, build and test passing."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "9ef7eebc96d83c1ad2af9a55279b4fbc7ee273cc",
+      "verified_at": "2026-11-08T20:22:10Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "0f40238e41e01556fc2cddf2df5fc48e9c503201aa544cde6d176b451e6f5ef1",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-021-org-identity",
+      "pr": "https://github.com/willesq/orchestrator/pull/144"
     },
     {
       "id": "SP-022",

@@ -95,12 +95,17 @@ func (e *Engine) SaveDraft(ctx context.Context, p Policy, by string, byOperator 
 }
 
 // Apply enforces revision reviewed from now on. acceptAgentDraft confirms
-// the operator reviewed a draft an agent session saved. On any error the
-// enforced policy is unchanged.
-func (e *Engine) Apply(ctx context.Context, reviewed int64, by string, acceptAgentDraft bool) (Revision, error) {
+// the operator reviewed a draft an agent session saved; confirmOrgs names
+// GitHub orgs whose changed identity the operator accepts. Every bound org is
+// looked up on GitHub first. On any error the enforced policy is unchanged.
+func (e *Engine) Apply(ctx context.Context, reviewed int64, by string, acceptAgentDraft bool, confirmOrgs []string) (Revision, error) {
+	ids, err := e.resolveOrgs(ctx, reviewed, acceptAgentDraft)
+	if err != nil {
+		return Revision{}, err
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	a, err := Apply(ctx, e.db, reviewed, by, acceptAgentDraft, e.now(), e.env)
+	a, err := Apply(ctx, e.db, reviewed, by, acceptAgentDraft, e.now(), e.env, ids, confirmOrgs)
 	if err != nil {
 		return Revision{}, err
 	}
@@ -108,13 +113,15 @@ func (e *Engine) Apply(ctx context.Context, reviewed int64, by string, acceptAge
 	return a.Revision, nil
 }
 
-// Diff is the applied revision, the pending draft if any, and the draft's
-// problems.
+// Diff is the applied revision, the pending draft if any, the draft's
+// problems, and the applied GitHub orgs awaiting the operator's confirmation.
 type Diff struct {
 	Applied  *Revision
 	Draft    *Revision
 	Changes  []Change
 	Problems Problems
+	// UnconfirmedOrgs are bound orgs whose new content goes to quarantine.
+	UnconfirmedOrgs []string
 }
 
 // Diff compares the enforced revision with the newest draft.
@@ -124,9 +131,13 @@ func (e *Engine) Diff(ctx context.Context) (Diff, error) {
 	e.mu.RUnlock()
 	var d Diff
 	var from Policy
+	var err error
 	if applied != nil {
 		r := applied.Revision
 		d.Applied, from = &r, applied.Resolved.Policy
+	}
+	if d.UnconfirmedOrgs, err = e.UnconfirmedOrgs(ctx); err != nil {
+		return Diff{}, err
 	}
 	latest, err := Latest(ctx, e.db)
 	if err != nil {
@@ -155,6 +166,13 @@ func (e *Engine) Status(ctx context.Context) (Status, error) {
 	if applied != nil {
 		st.AppliedRevision = applied.Revision.Number
 		st.Configured = applied.Resolved.Configured()
+	}
+	unconfirmed, err := e.UnconfirmedOrgs(ctx)
+	if err != nil {
+		return Status{}, err
+	}
+	if n := len(unconfirmed); n > 0 {
+		st.Error = joinErr(st.Error, fmt.Sprintf("%d bound GitHub org(s) not confirmed, so their new content goes to quarantine; run 'orch spaces diff'", n))
 	}
 	latest, err := Latest(ctx, e.db)
 	if err != nil {

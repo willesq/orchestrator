@@ -573,7 +573,7 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	cfg := newConfigService(store, configStart)
-	sp, err := spaces.Open(ctx, store, spaces.DefaultEnv())
+	sp, err := spaces.Open(ctx, store, spacesEnv())
 	if err != nil {
 		return err
 	}
@@ -658,7 +658,7 @@ func Run(ctx context.Context) error {
 	ghService := github.NewService(github.NewStore(store), github.GH)
 	reviewWatcher := newReviewWatcher(reviews.NewStore(store), disp, tasks, ghService)
 
-	docsSched := newDocsScheduler(s, store, svc)
+	docsSched := newDocsScheduler(s, store, svc, sp)
 	settingsSvc := settingsFor(store)
 	sup := supervisor.New(runCtx)
 	for _, u := range subsystems(deps{

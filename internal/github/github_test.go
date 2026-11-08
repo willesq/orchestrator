@@ -397,3 +397,37 @@ func TestIdentityCopiesAreIndependent(t *testing.T) {
 		t.Error("a caller changed the cached identity")
 	}
 }
+
+func TestLookupAccount(t *testing.T) {
+	answer := func(out string, err error) Runner {
+		return func(_ context.Context, args ...string) ([]byte, error) {
+			if want := []string{"api", "users/ACME", "--jq", "{login, node_id}"}; !slices.Equal(args, want) {
+				t.Fatalf("gh args = %q, want %q", args, want)
+			}
+			return []byte(out), err
+		}
+	}
+	got, err := LookupAccount(context.Background(), answer(`{"login":"acme","node_id":"O_kgDOA1"}`, nil), "ACME")
+	if err != nil || got != (Account{Login: "acme", NodeID: "O_kgDOA1"}) {
+		t.Fatalf("LookupAccount = %+v, %v", got, err)
+	}
+	for _, tc := range []struct {
+		name, out string
+		err       error
+		want      string
+	}{
+		{"gh fails", "", errors.New("gh api: 404"), "404"},
+		{"unparseable", "{nope", nil, "parse GitHub account"},
+		{"other login", `{"login":"acme-evil","node_id":"O_1"}`, nil, `account "acme-evil"`},
+		{"no node id", `{"login":"acme","node_id":""}`, nil, "no usable node ID"},
+		{"control character", `{"login":"acme","node_id":"O_\u0007"}`, nil, "no usable node ID"},
+		{"too long", `{"login":"acme","node_id":"` + strings.Repeat("x", 200) + `"}`, nil, "no usable node ID"},
+	} {
+		if _, err := LookupAccount(context.Background(), answer(tc.out, tc.err), "ACME"); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: err = %v, want %q", tc.name, err, tc.want)
+		}
+	}
+	if _, err := LookupAccount(context.Background(), nil, "bad login"); err == nil || !strings.Contains(err.Error(), "invalid GitHub login") {
+		t.Errorf("invalid login: err = %v", err)
+	}
+}

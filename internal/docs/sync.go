@@ -75,6 +75,9 @@ type SyncOpts struct {
 	Dates func(ctx context.Context, dir string) gitdates.Dates
 	// Guard caps deletions across syncs; nil caps each sync on its own.
 	Guard PruneGuard
+	// CheckOwner, when set, runs before an owner's repos are listed; an
+	// error stops that owner's sync before anything is ingested.
+	CheckOwner func(ctx context.Context, owner string) error
 }
 
 // Result is how one owner's sync went.
@@ -110,6 +113,13 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 	now := opts.Now
 	if now == nil {
 		now = func() int64 { return 0 }
+	}
+	if opts.CheckOwner != nil {
+		if err := opts.CheckOwner(ctx, o.Owner); err != nil {
+			reason := "not synced: " + err.Error()
+			log.Printf("docs: %s: %s", o.Owner, reason)
+			return Result{Status: "error", Reason: reason}
+		}
 	}
 	repos, err := opts.GH.ListRepos(ctx, o.Owner)
 	if err != nil {
