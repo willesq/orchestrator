@@ -893,7 +893,7 @@
       "attempts": 1,
       "criteria_sha256": "0f40238e41e01556fc2cddf2df5fc48e9c503201aa544cde6d176b451e6f5ef1",
       "branch": "feat/sp-021-org-identity",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/144"
     },
     {
       "id": "SP-022",
