@@ -79,6 +79,19 @@ change together in one write. `SetConfig` and `orch config set` on a key the sch
 | `routing.evaluate.enabled`, `interval` | `true`, `168h` | evaluator subsystem |
 | `routing.auto_apply` | `false` | evaluator only proposes |
 
+## Database store (not yet read)
+
+Settings are moving from `config.yaml` into `orch.db` ([plan](../CONFIG_IN_DB_PLAN.md)). Migration
+`0022` adds `config_values` (key, JSON value, `updated_at`, `updated_by`) and `config_import`.
+Only values that differ from the compiled default are stored: `ApplyStore` validates as `Apply` does
+and writes in one transaction, deleting a key's row when its value equals the default, and
+`ResetStore` puts keys back to their defaults with the same sensitive-key check. `LoadStore` layers
+the rows over the defaults; a row naming no setting, or no longer valid, is skipped and logged by key.
+`ImportLegacy` copies a `config.yaml` into the store once: values that differ from today's default
+are imported as they are (the queue limits as the old loader clamped them), invalid and unknown keys
+are reported by name, a `config_import` row stops it from running again, and the file is left in
+place. Nothing calls these yet; orchd, orch-hook and the CLI still read the file.
+
 ## Schema
 
 `config.Fields` (`internal/config/schema.go`) describes every key: its section, label, help, type, range or

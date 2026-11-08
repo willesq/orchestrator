@@ -247,20 +247,32 @@ func checkMap(f Field, val any) (any, error) {
 // and raises the queue limit with it, because a queue smaller than its parallel
 // tasks would refuse the work those slots exist for.
 func Apply(v *viper.Viper, values map[string]any, confirmSensitive bool) error {
+	for key := range values {
+		if EnvOverridden(key) {
+			return fmt.Errorf("%w: %s is set by %s", ErrEnvOverride, key, envName(key))
+		}
+	}
+	writes, err := planWrites(v, values, confirmSensitive)
+	if err != nil {
+		return err
+	}
+	return SetMany(v, writes)
+}
+
+// planWrites checks values against the current config v and returns every key
+// to write, including the queue keys a change to the other drags along.
+func planWrites(v *viper.Viper, values map[string]any, confirmSensitive bool) (map[string]any, error) {
 	writes := make(map[string]any, len(values)+2)
 	for key, val := range values {
 		f, known := FieldFor(key)
 		if known && f.Sensitive && !confirmSensitive {
-			return fmt.Errorf("%w: %s", ErrConfirmSensitive, key)
-		}
-		if EnvOverridden(key) {
-			return fmt.Errorf("%w: %s is set by %s", ErrEnvOverride, key, envName(key))
+			return nil, fmt.Errorf("%w: %s", ErrConfirmSensitive, key)
 		}
 		writes[key] = val
 	}
 	s, err := Unmarshal(v)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	parallel, active := s.Queue.Worker.MaxConcurrent, s.Queue.MaxActive
 	newParallel, setParallel := values[keyMaxConcurrent].(int)
@@ -276,11 +288,11 @@ func Apply(v *viper.Viper, values map[string]any, confirmSensitive bool) error {
 	}
 	if parallel > active {
 		if setActive {
-			return fmt.Errorf("%s (%d) cannot be lower than %s (%d)", keyMaxActive, active, keyMaxConcurrent, parallel)
+			return nil, fmt.Errorf("%s (%d) cannot be lower than %s (%d)", keyMaxActive, active, keyMaxConcurrent, parallel)
 		}
 		writes[keyMaxActive] = parallel
 	}
-	return SetMany(v, writes)
+	return writes, nil
 }
 
 // Entry is a field with its current and default values, as JSON.
