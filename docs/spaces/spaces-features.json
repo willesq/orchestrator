@@ -450,7 +450,10 @@
               "threshold": ">= 12"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "Recorded 2026-11-08 with scripts/hook-capture.sh, Claude Code 2.1.309, headless `claude -p` sessions in a scratch project (user approved headless runs on 2026-11-08). 13 scenarios with cwd observed in PreToolUse, CwdChanged and the next PreToolUse: C01 cd within, C02 cd outside, C03 cd x && cmd, C04 absolute path in Bash, C05 git -C, C06 Read tool outside, C07 subagent cd outside, C08 MAINTAIN_PROJECT_WORKING_DIR=1, C09 =0, C10 resume, C11 compact, C12 EnterWorktree, C14 PreToolUse deny. C13 /cd: not available in headless mode (\"/cd isn't available in this environment\").",
+            "Findings: (1) cd within the project: CwdChanged(old_cwd,new_cwd) fires and the next PreToolUse cwd follows. (2) cd outside the project (C02, C03, C07) or any cd with MAINTAIN_PROJECT_WORKING_DIR=1 (C08): CwdChanged fires with the new dir, then the shell is reset to the project with NO CwdChanged back; the next PreToolUse cwd is the project. CwdChanged's own cwd field was the new dir in C02 but the old dir in C07. (3) Absolute paths, git -C and Read file_path never change cwd; targets exist only in tool_input. (4) Subagent tool calls share the parent session_id and add agent_id/agent_type; a cd inside a subagent did not persist and fired no CwdChanged. (5) Resume restarts in the project root, not the last cwd (source=resume). (6) Compact: PreCompact(trigger=manual), SessionStart(source=compact), PostCompact; cwd unchanged. (7) EnterWorktree moves cwd into .claude/worktrees/<name> with NO CwdChanged. (8) PreToolUse deny (hookSpecificOutput.permissionDecision=deny + reason) blocks the call; no PostToolUse follows and the model sees the reason. (9) Another PreToolUse hook (rtk) rewrote tool_input (ls -> rtk ls), visible only in PostToolUse: a guard must judge the input that actually runs."
+          ]
         },
         {
           "id": "SP-001.3",
