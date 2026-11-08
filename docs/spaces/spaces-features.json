@@ -615,7 +615,10 @@
               "threshold": "< 1 ms"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: internal/procstat/identity_test.go TestStartTimeAndCwd covers this process and a /bin/sleep child started with Dir=t.TempDir(). Its start time falls inside the launch window and reads the same twice, and its cwd equals the temp dir. Related tests: TestIdentityMissingProcess, TestIdentityWithoutPATH (no PATH, so native only), TestNearestAncestor (real tree; a PID with another start time does not match), TestNearestAncestorWalk, TestIdentitySame, TestInvalidPID, TestParseStat, TestParseBootTime. All pass on darwin (Darwin 25.6.0, Apple M3 Max, go 1.26.5) and on linux (golang:1.26.5 container under Docker 28.5.1, linux/arm64), 2026-11-08. CI ubuntu-latest runs them too.",
+            "a2: BenchmarkStartTime, BenchmarkCwd and BenchmarkNearestAncestor (internal/procstat/identity_test.go), -count=3, 2026-11-08. darwin (M3 Max): StartTime 14.7-14.8 us/op, Cwd 1.35-1.39 us/op, full walk from the test process to launchd 0.12-0.13 ms/op. linux (container): StartTime 3.6-3.8 us/op, Cwd 0.49-0.50 us/op, full walk 11.2-11.4 us/op. Every single lookup is well under 1 ms."
+          ]
         },
         {
           "id": "SP-003.2",
