@@ -122,10 +122,7 @@ struct SettingRow: View {
                     Text(note).font(.caption).foregroundStyle(.orange)
                 }
                 if let error = model.itemErrors[item.ref] {
-                    Label { Text(verbatim: displaySafe(error)) } icon: { Image(systemName: "exclamationmark.triangle") }
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .textSelection(.enabled)
+                    ErrorText(displaySafe(error), symbol: "exclamationmark.triangle")
                 }
             }
             Spacer(minLength: 4)
@@ -314,10 +311,7 @@ struct SettingAddForm: View {
             }
             .formStyle(.grouped)
             if let error {
-                Label { Text(verbatim: displaySafe(error)) } icon: { Image(systemName: "exclamationmark.triangle") }
-                    .foregroundStyle(.red)
-                    .font(.callout)
-                    .textSelection(.enabled)
+                ErrorText(displaySafe(error), symbol: "exclamationmark.triangle", font: .callout)
             }
             HStack {
                 Spacer()

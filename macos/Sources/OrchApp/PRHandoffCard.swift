@@ -56,7 +56,7 @@ struct PRHandoffCard: View {
                     }
                 }
                 if let error = handoff.lastError {
-                    Text(verbatim: displaySafe(error)).font(.caption).foregroundStyle(.red)
+                    ErrorText(displaySafe(error))
                 }
             }
         }
@@ -310,7 +310,7 @@ private struct HandoffSheet: View {
             .frame(minHeight: 200, maxHeight: 280)
             .overlay(RoundedRectangle(cornerRadius: 4).stroke(.quaternary))
             if let problem = handoff.dispatch.lastError {
-                Text(verbatim: displaySafe(problem)).font(.callout).foregroundStyle(.red)
+                ErrorText(displaySafe(problem), font: .callout)
             }
             if let queued {
                 VStack(alignment: .leading, spacing: 2) {

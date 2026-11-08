@@ -183,6 +183,42 @@ struct StatusDot: View {
     }
 }
 
+/// A red error message a person can select or copy whole. Errors get pasted
+/// into bug reports and agent chats, so they must not be trapped on screen;
+/// the button matters because a Label's text is hard to drag-select.
+struct ErrorText: View {
+    let text: String
+    var symbol: String?
+    var font: Font = .caption
+
+    init(_ text: String, symbol: String? = nil, font: Font = .caption) {
+        self.text = text
+        self.symbol = symbol
+        self.font = font
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Group {
+                if let symbol {
+                    Label { Text(verbatim: text) } icon: { Image(systemName: symbol) }
+                } else {
+                    Text(verbatim: text)
+                }
+            }
+            .foregroundStyle(.red)
+            .textSelection(.enabled)
+            Button { Clipboard.copy(text) } label: { Image(systemName: "doc.on.doc") }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.secondaryText)
+                .help("Copy error")
+                .accessibilityLabel("Copy error")
+        }
+        .font(font)
+        .contextMenu { Button("Copy Error") { Clipboard.copy(text) } }
+    }
+}
+
 /// An empty pane: what is missing, why, and the action that fills it.
 struct EmptyState: View {
     let symbol: String

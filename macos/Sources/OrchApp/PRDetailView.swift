@@ -29,7 +29,7 @@ struct PRDetailView: View {
                         }
                     } else if let error = prs.detailErrors[url] {
                         Card("Details") {
-                            Text(verbatim: "Could not load the PR from GitHub: \(error)").foregroundStyle(.red)
+                            ErrorText("Could not load the PR from GitHub: \(error)", font: .body)
                             Button("Try again") { Task { await prs.loadDetail(url, refresh: true) } }
                         }
                     } else {

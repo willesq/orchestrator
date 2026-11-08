@@ -161,17 +161,12 @@ private struct ClaudeHeader: View {
                         .help("Choices are kept in this machine's orch.db and are not shared with other machines.")
                 }
                 if !provider.error.isEmpty {
-                    Label { Text(verbatim: displaySafe(provider.error)) } icon: { Image(systemName: "exclamationmark.triangle") }
-                        .foregroundStyle(.red)
-                        .font(.callout)
-                        .textSelection(.enabled)
+                    ErrorText(displaySafe(provider.error), symbol: "exclamationmark.triangle", font: .callout)
                         .help("Nothing is written until the file can be read again")
                 }
             }
             if let error = model.lastError {
-                Label { Text(verbatim: displaySafe(error)) } icon: { Image(systemName: "exclamationmark.triangle") }
-                    .foregroundStyle(.red)
-                    .font(.callout)
+                ErrorText(displaySafe(error), symbol: "exclamationmark.triangle", font: .callout)
             } else if let message = model.message {
                 Text(verbatim: message).textStyle(.supporting).lineLimit(2)
             }

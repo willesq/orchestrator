@@ -17,14 +17,13 @@ struct ScopesColumn: View {
                     .foregroundStyle(Color.secondaryText)
                 }
                 if let error = model.scopesError {
-                    Text(verbatim: "Could not load your accounts: \(error). Retrying.")
-                        .font(.caption).foregroundStyle(.red)
+                    ErrorText("Could not load your accounts: \(error). Retrying.")
                 }
                 if let warning = model.warning {
                     Text(verbatim: warning).font(.caption).foregroundStyle(.orange)
                 }
                 if let error = model.lastError {
-                    Text(verbatim: error).font(.caption).foregroundStyle(.red)
+                    ErrorText(error)
                 }
             }
             Section("Watching") {
@@ -204,13 +203,13 @@ private struct RepoChecklist: View {
             .frame(minHeight: 260)
             if let error = model.repoError(owner) {
                 HStack {
-                    Text(verbatim: "Could not update this list: \(error)").font(.caption).foregroundStyle(.red)
+                    ErrorText("Could not update this list: \(error)")
                     Button("Retry") { Task { await model.loadRepos(owner) } }
                 }
             }
         } else if let error = model.repoError(owner) {
             VStack(spacing: 8) {
-                Text(verbatim: "Could not load repos: \(error)").foregroundStyle(.red)
+                ErrorText("Could not load repos: \(error)", font: .body)
                 Button("Retry") { Task { await model.loadRepos(owner) } }
             }
             .frame(maxWidth: .infinity, minHeight: 260)

@@ -20,9 +20,7 @@ struct LogsView: View {
                     .padding(6)
             }
             if let error = model.lastError {
-                Label("orchd: \(error)", systemImage: "bolt.slash")
-                    .font(.caption)
-                    .foregroundStyle(.red)
+                ErrorText("orchd: \(error)", symbol: "bolt.slash")
                     .padding(6)
             }
             LogLines(lines: visible, follow: !model.paused)
