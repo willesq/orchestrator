@@ -1512,14 +1512,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "8dd4027715c22c248aff3203df028ce15a1f837c4a71338e3932d98e248294de",
-      "branch": null,
+      "branch": "feat/sp-011-caller-session",
       "pr": null
     },
     {
