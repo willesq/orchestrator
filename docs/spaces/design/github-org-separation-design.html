@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>orch Spaces: Separating GitHub Orgs</title>
+<style>
+/* Layout: a design document. Scenario and bottom line, the space concept, a reads matrix you can drive, then placement rules, bleed paths, verification and decisions. */
+:root {
+  color-scheme: light;
+  --ink: #18222b;
+  --muted: #52606d;
+  --paper: #f4f6f7;
+  --surface: #ffffff;
+  --line: #d8dfe5;
+  --accent: #2f6f8f;
+  --accent-soft: #e2eef4;
+  --do: #23764a;  --do-soft: #e3f3ea;
+  --later: #8a6400; --later-soft: #f8f0dc;
+  --no: #a3332b;  --no-soft: #f8e5e3;
+  --pub: #23764a; --pub-soft: #e3f3ea;
+  --acme: #2f6f8f; --acme-soft: #e2eef4;
+  --glob: #7a4fa0; --glob-soft: #efe7f6;
+  --pers: #8a6400; --pers-soft: #f8f0dc;
+  --font-display: "Avenir Next", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #e3eaef; --muted: #a2b0bc; --paper: #0f151a; --surface: #172028; --line: #2a3742;
+    --accent: #7fbfdc; --accent-soft: #16303b;
+    --do: #7fd3a0; --do-soft: #15301f;
+    --later: #e8b75a; --later-soft: #33270f;
+    --no: #f08a80; --no-soft: #3a1c19;
+    --pub: #7fd3a0; --pub-soft: #15301f;
+    --acme: #7fbfdc; --acme-soft: #16303b;
+    --glob: #c9a4ec; --glob-soft: #2c2038;
+    --pers: #e8b75a; --pers-soft: #33270f;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 16px/1.6 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 64rem; margin: 0 auto; padding-block: 2.5rem 4rem; display: grid; gap: 2.75rem; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.2; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(1.9rem, 4.5vw, 2.6rem); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 700; }
+h3 { font-size: 1.12rem; font-weight: 650; }
+p { margin: 0; max-width: 72ch; }
+ul, ol { max-width: 76ch; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: 0.87em; background: var(--accent-soft); padding: 0.05em 0.3em; border-radius: 3px; }
+pre { margin: 0; font: 0.84rem/1.55 var(--font-mono); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; overflow-x: auto; }
+pre .c { color: var(--muted); }
+.eyebrow { font: 600 0.74rem/1 var(--font-body); letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+header { display: grid; gap: 0.8rem; }
+.lede { color: var(--muted); font-size: 1.08rem; }
+section { display: grid; gap: 1rem; }
+nav.toc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.3rem; }
+nav.toc ol { margin: 0; padding-left: 1.2rem; columns: 2 16rem; column-gap: 2rem; font-size: 0.95rem; }
+.bottom, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1.3rem 1.4rem; display: grid; gap: 0.75rem; }
+.bottom ul, .card ul, .card ol { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.35rem; }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 0.9rem 1.1rem; border-radius: 0 10px 10px 0; display: grid; gap: 0.4rem; }
+.callout.warn { border-left-color: var(--later); background: var(--later-soft); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+
+/* Space cards */
+.spaces { display: grid; grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr)); gap: 0.8rem; }
+.space { background: var(--surface); border: 1px solid var(--line); border-top: 5px solid var(--line); border-radius: 10px; padding: 0.95rem 1rem; display: grid; gap: 0.45rem; align-content: start; font-size: 0.93rem; }
+.space h3 { font-size: 1.05rem; }
+.space .kind { font: 700 0.68rem/1 var(--font-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.space ul { margin: 0; padding-left: 1.05rem; display: grid; gap: 0.15rem; }
+.space.pub { border-top-color: var(--pub); }
+.space.acme { border-top-color: var(--acme); }
+.space.glob { border-top-color: var(--glob); }
+.space.pers { border-top-color: var(--pers); }
+
+.tag { display: inline-block; font: 600 0.76rem/1 var(--font-mono); padding: 0.24rem 0.45rem; border-radius: 4px; white-space: nowrap; }
+.tag.pub { color: var(--pub); background: var(--pub-soft); }
+.tag.acme { color: var(--acme); background: var(--acme-soft); }
+.tag.glob { color: var(--glob); background: var(--glob-soft); }
+.tag.pers { color: var(--pers); background: var(--pers-soft); }
+.tag.q { color: var(--no); background: var(--no-soft); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 38rem; font-size: 0.93rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 0.72rem/1.2 var(--font-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+td.y, td.n { text-align: center; font-weight: 700; }
+td.y { color: var(--do); }
+td.n { color: var(--no); }
+table.matrix { min-width: 30rem; }
+table.matrix th, table.matrix td { text-align: center; }
+table.matrix th:first-child, table.matrix td:first-child { text-align: left; }
+
+/* Simulator */
+.sim { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1.2rem 1.3rem; display: grid; gap: 1rem; }
+.seg { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.seg button { font: 600 0.86rem/1 var(--font-body); padding: 0.55rem 0.8rem; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.sim .where { color: var(--muted); font-size: 0.92rem; }
+.items { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0.55rem; }
+.item { border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 0.75rem; display: grid; gap: 0.3rem; font-size: 0.9rem; }
+.item.off { opacity: 0.45; border-style: dashed; }
+.item .top { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
+.item .res { font: 700 0.66rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; }
+.item .res.ok { color: var(--do); }
+.item .res.no { color: var(--no); }
+.item .why { color: var(--muted); font-size: 0.84rem; }
+.count { color: var(--muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+
+ol.order { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.8rem; counter-reset: s; }
+ol.order li { counter-increment: s; display: grid; grid-template-columns: 2rem 1fr; gap: 0.75rem; align-items: start; }
+ol.order li::before { content: counter(s); width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font: 700 0.9rem/1 var(--font-display); background: var(--accent-soft); color: var(--accent); }
+ol.order li > div { display: grid; gap: 0.25rem; }
+.scen { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 0.8rem; }
+.scen .card { padding: 1rem 1.1rem; gap: 0.45rem; }
+.scen .card p { font-size: 0.94rem; }
+.scen .out { font-size: 0.9rem; color: var(--muted); }
+footer { color: var(--muted); font-size: 0.88rem; border-top: 1px solid var(--line); padding-top: 1.2rem; display: grid; gap: 0.5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">orch · memory permissions · design · 8 Nov 2026, updated 9 Nov 2026</span>
+  <h1>Spaces: one open-source org, two employers, no bleed</h1>
+  <p class="lede">How orch keeps two employers' GitHub orgs apart while sharing an open-source org everywhere. Everything orch ingests or shows from GitHub, local checkouts, sessions and chat feeds belongs to a <b>space</b>. orchd decides which space, and enforces it on every read without relying on the AI.</p>
+</header>
+
+<div class="callout">
+  <p><b>Status:</b> Updated 2026-11-09 to match the plan. The authoritative plan is <code>docs/spaces/spaces-features.json</code> (rendered at <a href="../index.html">docs/spaces/index.html</a>); where they disagree, the plan wins. IDs such as D-15, SP-063, INV-13 and RC-25 refer to its decisions, features, invariants and open items.</p>
+</div>
+
+<div class="card">
+  <h3>The scenario</h3>
+  <ul>
+    <li><span class="tag pub">oss-org</span> an open-source GitHub org. Its docs should be readable from any session.</li>
+    <li><span class="tag acme">acme</span> employer A's GitHub org, checked out under <code>~/work/acme</code>.</li>
+    <li><span class="tag glob">globex</span> employer B's GitHub org, checked out under <code>~/work/globex</code>. Nothing may cross between acme and globex in either direction.</li>
+    <li><span class="tag pers">willesq</span> your own repos under <code>~/code</code>.</li>
+  </ul>
+  <p>The org names are placeholders. In the policy you'd use real logins. Spaces cover Claude Code and Codex; no Google harness is in scope, and the existing Gemini adapter is reported as not covered (D-20).</p>
+</div>
+
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#bl">Bottom line</a></li>
+    <li><a href="#spaces">Spaces and their kinds</a></li>
+    <li><a href="#matrix">Who reads what</a></li>
+    <li><a href="#sim">Try it</a></li>
+    <li><a href="#config">Config sketch</a></li>
+    <li><a href="#placement">Placing GitHub content</a></li>
+    <li><a href="#public">What makes something public</a></li>
+    <li><a href="#checkouts">Local checkouts and conflicts</a></li>
+    <li><a href="#bleed">Bleed paths beyond search</a></li>
+    <li><a href="#verify">How orchd verifies it</a></li>
+    <li><a href="#scenarios">Scenarios</a></li>
+    <li><a href="#failclosed">Fail-closed rules</a></li>
+    <li><a href="#questions">Decided</a></li>
+  </ol>
+</nav>
+
+<section aria-labelledby="bl">
+  <h2 id="bl">Bottom line</h2>
+  <div class="bottom">
+    <ul>
+      <li><b>A space is the unit of separation.</b> Each space groups everything that belongs to one context: GitHub orgs, local folders, chat workspaces, and the terms that must not leave it. You'd have four: <span class="tag pub">public</span> <span class="tag acme">acme</span> <span class="tag glob">globex</span> <span class="tag pers">personal</span>.</li>
+      <li><b>Spaces come in three kinds.</b> A <b>public</b> space is readable from everywhere but only accepts verified public content. An <b>isolated</b> space (each job) is readable only from inside itself, and by default reads only itself and public. A <b>private</b> space (personal) is like isolated, and may read other private spaces it lists. A job may opt in to reading a private space such as personal, never another job (D-16).</li>
+      <li><b>Two isolated spaces can never read each other.</b> orchd refuses to apply a policy in which acme lists globex under <code>reads</code>, or the reverse (INV-04). The separation is a property of the space kind, not something you have to remember to leave out of a list.</li>
+      <li><b>The org that owns a repo decides its space.</b> Not its fork parent, not where you cloned it, not what a session claims. A private repo inside the open-source org never becomes public, because orch checks GitHub's <code>private</code> flag on every sync.</li>
+      <li><b>Search isn't the only path between spaces.</b> The session-start PR digest, PR monitoring, task lists, summaries and an agent running <code>gh api</code> against the other employer's org can all carry content across. Each is filtered or guarded by the session's space.</li>
+      <li><b>orchd decides the caller's space from the process tree</b>, and only you can change space policy. The policy lives in <code>orch.db</code> as numbered revisions. An agent may save a draft, but it changes nothing until you review it and run <code>orch spaces apply --revision N</code> from your own terminal or the app (D-25, INV-06).</li>
+      <li><b>Each job has its own GitHub account.</b> orchd makes every GitHub call for a job's orgs with that space's <code>gh</code> profile, so an acme credential never reaches globex (D-18, SP-063).</li>
+    </ul>
+  </div>
+</section>
+
+<section aria-labelledby="spaces">
+  <h2 id="spaces">Spaces and their kinds</h2>
+  <div class="spaces">
+    <div class="space pub">
+      <span class="kind">public</span>
+      <h3>public</h3>
+      <ul>
+        <li>Orgs: <code>oss-org</code></li>
+        <li>Also: public web sources</li>
+        <li>Readable from: <b>every space</b></li>
+        <li>Accepts: only content verified public, or files under a root you declared public. Never sessions or manual notes.</li>
+      </ul>
+    </div>
+    <div class="space acme">
+      <span class="kind">isolated</span>
+      <h3>acme</h3>
+      <ul>
+        <li>Orgs: <code>acme</code></li>
+        <li>Roots: <code>~/work/acme</code></li>
+        <li>Chat: Slack <code>T0ACME</code></li>
+        <li>GitHub account: its own <code>gh</code> profile</li>
+        <li>Reads: itself + public (may opt in to personal, D-16)</li>
+      </ul>
+    </div>
+    <div class="space glob">
+      <span class="kind">isolated</span>
+      <h3>globex</h3>
+      <ul>
+        <li>Orgs: <code>globex</code></li>
+        <li>Roots: <code>~/work/globex</code></li>
+        <li>Chat: Teams <code>globex.onmicrosoft.com</code></li>
+        <li>GitHub account: its own <code>gh</code> profile</li>
+        <li>Reads: itself + public (may opt in to personal, D-16)</li>
+      </ul>
+    </div>
+    <div class="space pers">
+      <span class="kind">private</span>
+      <h3>personal</h3>
+      <ul>
+        <li>Orgs: <code>willesq</code></li>
+        <li>Roots: <code>~/code</code></li>
+        <li>Reads: itself + public</li>
+        <li>May add isolated spaces to <code>reads</code>? No. A job may list personal instead (see <a href="#questions">decided</a>)</li>
+      </ul>
+    </div>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kind</th><th>Who can read it</th><th>What can be written into it</th><th>Can list others in <code>reads</code>?</th></tr></thead>
+    <tbody>
+      <tr><td><b>public</b></td><td>every space, and sessions with no space</td><td>sources orchd has verified as public: public repos of a public-bound org, allowlisted web prefixes from sources refresh, and files under a root you declared public (SP-030). Never sessions, summaries or agent notes.</td><td>no, only itself</td></tr>
+      <tr><td><b>isolated</b></td><td>only sessions located in it</td><td>anything placed there by a binding: org, root, chat tenant, sessions</td><td>public, and private spaces it explicitly lists (off by default, D-16). Never another isolated space.</td></tr>
+      <tr><td><b>private</b></td><td>sessions in it, plus any private or isolated space that lists it</td><td>the same as isolated</td><td>public and other private spaces. Never an isolated one.</td></tr>
+    </tbody>
+  </table></div>
+  <p>The isolated kind is what keeps the two jobs apart. You don't need a <code>deny</code> list, and adding a third job later is one more isolated space with nothing else to update.</p>
+</section>
+
+<section aria-labelledby="matrix">
+  <h2 id="matrix">Who reads what</h2>
+  <div class="table-wrap"><table class="matrix">
+    <thead><tr><th>Session in ↓ · content from →</th><th>public</th><th>acme</th><th>globex</th><th>personal</th><th>quarantine</th></tr></thead>
+    <tbody>
+      <tr><td><b>~/work/acme</b> (acme)</td><td class="y">✓</td><td class="y">✓</td><td class="n">✗</td><td class="n">✗</td><td class="n">✗</td></tr>
+      <tr><td><b>~/work/globex</b> (globex)</td><td class="y">✓</td><td class="n">✗</td><td class="y">✓</td><td class="n">✗</td><td class="n">✗</td></tr>
+      <tr><td><b>~/code</b> (personal)</td><td class="y">✓</td><td class="n">✗</td><td class="n">✗</td><td class="y">✓</td><td class="n">✗</td></tr>
+      <tr><td><b>anywhere else</b> (no space)</td><td class="y">✓</td><td class="n">✗</td><td class="n">✗</td><td class="n">✗</td><td class="n">✗</td></tr>
+      <tr><td><b>you, at a terminal</b></td><td class="y">✓</td><td colspan="3">every space, each result labelled with its space (SP-011, SP-026, D-21)</td><td>only via <code>orch quarantine</code> (SP-028)</td></tr>
+    </tbody>
+  </table></div>
+  <p>The table shows the defaults. A job that lists personal in <code>reads</code> (D-16) also gets a ✓ under personal; it never gets one under the other job. Quarantine holds content orchd couldn't place. No session reads it. You review it and assign it.</p>
+</section>
+
+<section aria-labelledby="sim">
+  <h2 id="sim">Try it</h2>
+  <p>Pick where a session runs and see what orch would return to it, and why.</p>
+  <div class="sim">
+    <div class="seg" role="group" aria-label="Session location" id="seg"></div>
+    <p class="where" id="where" aria-live="polite"></p>
+    <div class="items" id="items"></div>
+  </div>
+</section>
+
+<section aria-labelledby="config">
+  <h2 id="config">Config sketch</h2>
+<pre><span class="c">// spaces policy, stored in orch.db as numbered revisions (D-25).
+// Save it as a draft:  orch spaces draft &lt; policy.json
+// Review it:           orch spaces diff
+// Enforce it:          orch spaces apply --revision N   (operator only)</span>
+{
+  "spaces": [
+    { "name": "public", "kind": "public",
+      "github_orgs": ["oss-org"],
+      "web_prefixes": ["https://go.dev/", "https://docs.python.org/"] },
+
+    { "name": "acme", "kind": "isolated",
+      "github_orgs": ["acme"],            <span class="c">// case-insensitive</span>
+      "roots": ["~/work/acme"],
+      "chat": ["slack:T0ACME"],
+      "terms_file": "~/.config/orch/terms/acme.txt",
+      "gh_config_dir": "~/.config/gh-acme" },  <span class="c">// you log in: GH_CONFIG_DIR=… gh auth login</span>
+
+    { "name": "globex", "kind": "isolated",
+      "github_orgs": ["globex"],
+      "roots": ["~/work/globex"],
+      "chat": ["teams:globex.onmicrosoft.com"],
+      "terms_file": "~/.config/orch/terms/globex.txt",
+      "gh_config_dir": "~/.config/gh-globex" },
+
+    { "name": "personal", "kind": "private",
+      "github_orgs": ["willesq"],
+      "roots": ["~/code"] }
+  ],
+  "public_root_sessions": "personal"     <span class="c">// where sessions under a public root write (D-22)</span>
+}</pre>
+  <p>Field names match <code>internal/spaces/policy.go</code>; unknown fields are refused. A job opts in to reading personal with <code>"reads": ["personal"]</code> (D-16). There is no setting for private repos in a public org: they always go to quarantine.</p>
+  <p>Validation at <code>apply</code> time, which refuses the whole revision if any check fails and keeps the last applied one (SP-020):</p>
+  <ul>
+    <li>An org, root, web prefix or chat tenant belongs to at most one space.</li>
+    <li>Roots may nest. The deepest matching root decides, like CODEOWNERS, and a nested root must be at least as strict as every root above it (public &lt; private &lt; isolated). A root of one job can't sit inside another job's root (D-15, INV-14).</li>
+    <li>An isolated space's <code>reads</code> can't contain another isolated space. A private space's <code>reads</code> can't contain an isolated space. A public space reads nothing else.</li>
+    <li><code>public_root_sessions</code> must name a private or isolated space. If it's unset, orch uses the only private space if there is exactly one, else quarantine (D-22).</li>
+    <li>Term files live outside any git working tree.</li>
+    <li>Each org login is resolved through the GitHub API to its stable node ID, and orch stores both. A deleted org whose login someone else re-registers fails the ID check and its content goes to quarantine, not into your space. You confirm a changed ID with <code>orch spaces apply --revision N --confirm-github-org &lt;org&gt;</code> (SP-021).</li>
+  </ul>
+</section>
+
+<section aria-labelledby="placement">
+  <h2 id="placement">Placing GitHub content</h2>
+  <p><b>One rule covers every case: the org that owns the repo decides the space.</b> orchd applies it to each kind of GitHub content:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>What orch takes from GitHub</th><th>Where it lives today</th><th>Space</th></tr></thead>
+    <tbody>
+      <tr><td>Docs owner sync</td><td><code>internal/docs/sync.go</code>, cloned into orch's cache</td><td>the owner's space, checked per repo for public spaces (next section). A job's orgs sync only through its own <code>gh</code> profile (SP-063).</td></tr>
+      <tr><td>PR monitoring, PR watch, attention</td><td><code>internal/prs</code>, <code>internal/github</code> scopes</td><td>the repo owner's space, stored on each cached PR</td></tr>
+      <tr><td>PR reviews and verdicts</td><td><code>internal/reviews</code></td><td>the PR repo's space. The reviewer task runs located in it.</td></tr>
+      <tr><td>Repos and orgs listed for the GitHub screen</td><td><code>internal/github/identity.go</code></td><td>shown to you in the app, filtered for agents</td></tr>
+      <tr><td>A fork: <code>acme/oss-lib</code> forked from <code>oss-org/oss-lib</code></td><td>—</td><td><span class="tag acme">acme</span>. The fork's owner decides, never the parent. Your employer's patches live there.</td></tr>
+      <tr><td>A repo transferred from <code>oss-org</code> to <code>acme</code></td><td>—</td><td>moves at the next sync. Its chunks leave public before anything else is indexed (SP-030), and relabelling moves stored chunks to the new space (SP-027).</td></tr>
+      <tr><td>An org in no space</td><td>—</td><td>its content goes to quarantine, where you can assign it (<code>internal/spaces/classify.go</code>, SP-028). orchd's GitHub calls about it use your default <code>gh</code> login.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section aria-labelledby="public">
+  <h2 id="public">What makes something public</h2>
+  <p>The public space is the one every session reads, so content gets in only by passing checks orchd makes against GitHub itself:</p>
+  <ol class="order">
+    <li><div><b>The org is bound to a public space</b> in applied config.</div></li>
+    <li><div><b>GitHub reports the repo as not private</b> at sync time. orch already lists repos with <code>private</code> (<code>internal/github/identity.go:177</code>). The docs sync's <code>Repo</code> type needs the same field. A private repo in <code>oss-org</code>, say <code>oss-org/release-keys-infra</code>, goes to quarantine. You can move it with an operator retag, <code>orch spaces retag</code> (SP-071).</div></li>
+    <li><div><b>Visibility is checked again on every sync.</b> If a public repo turns private, its chunks leave the public space in that sync, before anything else is indexed.</div></li>
+    <li><div><b>Writers that aren't sources can't reach it.</b> Sessions, summaries, edit hand-offs and <code>rag_ingest_text</code> are always homed to the caller's space. A session in an <code>oss-org</code> checkout writes to that checkout's root space, never to public. A session pinned under a root you declared public reads public only and writes to <code>public_root_sessions</code> (D-22).</div></li>
+  </ol>
+  <div class="callout">
+    <p><b>Why sessions never go public:</b> a session about an open-source repo still happens <em>somewhere</em>. If you're contributing to <code>oss-org/oss-lib</code> on acme's time from <code>~/work/acme/oss-lib</code>, that transcript may contain acme context. Its space is the space of the folder it ran in.</p>
+  </div>
+</section>
+
+<section aria-labelledby="checkouts">
+  <h2 id="checkouts">Local checkouts and conflicts</h2>
+  <p>Each checkout has two signals: the root it sits under, and the org in its git remote. orchd compares them whenever it places content from a checkout or pins a session in one.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Checkout</th><th>Root says</th><th>Remote says</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td><code>~/work/acme/api</code> → <code>acme/api</code></td><td><span class="tag acme">acme</span></td><td><span class="tag acme">acme</span></td><td>acme</td></tr>
+      <tr><td><code>~/work/acme/oss-lib</code> → <code>oss-org/oss-lib</code></td><td><span class="tag acme">acme</span></td><td><span class="tag pub">public</span></td><td>acme for sessions and local files. The org's synced docs stay public. A public remote under a job root is allowed.</td></tr>
+      <tr><td><code>~/work/acme/billing</code> → <code>globex/billing</code></td><td><span class="tag acme">acme</span></td><td><span class="tag glob">globex</span></td><td><span class="tag q">conflict</span> Nothing is indexed, sessions there get no space, and <code>orch status</code> flags it. Two isolated spaces disagreeing is never resolved automatically.</td></tr>
+      <tr><td><code>~/Downloads/x</code> → <code>acme/x</code></td><td>no root</td><td><span class="tag acme">acme</span></td><td>acme. The remote alone places it in the org's space. This is safe because it can only narrow.</td></tr>
+      <tr><td><code>~/scratch/y</code>, no remote</td><td>no root</td><td>none</td><td>no space: sessions see public only, and writes go to quarantine</td></tr>
+    </tbody>
+  </table></div>
+  <p>The conflict rule matters most. Copying a directory from one job's tree into the other's is exactly how bleed happens by accident, so orchd refuses rather than picking one.</p>
+</section>
+
+<section aria-labelledby="bleed">
+  <h2 id="bleed">Bleed paths beyond search</h2>
+  <p>Filtering RAG search alone would leave several other paths between the two jobs. These are all of them that exist in orch today:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Path</th><th>How it leaks today</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>SessionStart digest and per-prompt updates (<code>internal/hook/updates.go</code>)</td><td>PR babysitter lines from every org are shown to every session. This session started with PRs from three repos.</td><td>filter events by the session's space. Events gain a space when they're emitted.</td></tr>
+      <tr><td><code>ListPRs</code>, <code>ListGitHubItems</code>, <code>GetPRDetail</code>, <code>orch prs</code></td><td>agents may call them (<code>taskCallable</code>) and they return every org</td><td>filtered to the caller's space for agents. You see everything.</td></tr>
+      <tr><td><code>ListTasks</code>, <code>GetTask</code></td><td>task bodies and results from another job's sessions</td><td>tasks carry the space of the session that dispatched them, and listings are filtered</td></tr>
+      <tr><td>Summaries and session records</td><td>the summarizer could combine inputs from several sessions</td><td>summarize one session at a time. The summary inherits that session's space.</td></tr>
+      <tr><td>RAG listings (<code>ListSources</code>, <code>ListDocs</code>, <code>rag_list_sources</code>)</td><td>URIs and titles name the other job's repos</td><td>same filter as search</td></tr>
+      <tr><td>An agent running <code>gh</code> or <code>git</code> against the other org</td><td>an acme session can run <code>gh api repos/globex/…</code> or clone a globex repo directly. No RAG is involved.</td><td>the job's <code>gh</code> profile has no credential for the other org (SP-063). A guard also refuses <code>gh</code>/<code>git</code> commands whose target repo or org is in another isolated space (SP-043, planned).</td></tr>
+      <tr><td>Tool calls into another job's folders</td><td>an acme session can <code>cd ~/work/globex</code>, read a file there by absolute path, or use <code>git -C</code></td><td>the session is pinned to the space of its first directory (D-04, D-09). Every tool call is logged (SP-012 to SP-014). A pre-tool-use guard refuses calls that reach another job, with "block other jobs" as the default mode (D-12, SP-040/041, planned). Generated OS sandbox and file-permission denies for other jobs' roots back it up (SP-046, planned).</td></tr>
+      <tr><td>Outbound text</td><td>an acme term in a globex PR, or in an <code>oss-org</code> PR</td><td>each space's terms are blocked in every destination outside that space. The destination is the target repo's owner (SP-044). A git hook helper applies the same check to your own commits (SP-045). Both are planned.</td></tr>
+      <tr><td>Routing evidence, ratings</td><td>task outcomes inform model routing for everyone</td><td>these are numbers, not content. Make sure no text from the task body is stored with them.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn">
+    <p><b>Each job has its own GitHub account from the start (D-18).</b> Each isolated space names a <code>gh</code> profile directory, <code>gh_config_dir</code>, which you log in to yourself with <code>GH_CONFIG_DIR=&lt;dir&gt; gh auth login</code>. orchd makes every GitHub call for that space's orgs with that profile, including docs sync, PR monitoring, reviews and org checks. It won't sync a job whose profile is missing or logged out, and <code>orch status</code> warns if one account can see another job's org. orch checks a profile only with <code>gh auth status</code> and never reads its tokens (SP-063). Agent sessions get the same <code>GH_CONFIG_DIR</code> from an orch-managed, uncommitted <code>.claude/settings.local.json</code> in each checkout, or from <code>orch run &lt;space&gt; -- claude|codex</code> (D-23, SP-046, planned). The <code>gh</code>/<code>git</code> guard is a second layer. Target extraction is best-effort, so the sandbox rules and separate accounts are the hard boundary (D-28).</p>
+  </div>
+</section>
+
+<section aria-labelledby="verify">
+  <h2 id="verify">How orchd verifies it</h2>
+  <p>Nothing in this design takes the AI's word. orchd decides each of these itself:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Question</th><th>How orchd answers it</th><th>Builds on</th></tr></thead>
+    <tbody>
+      <tr><td>Which space is this caller in?</td><td>The kernel reports the peer PID. orchd walks the parent processes to the harness process registered at SessionStart and uses the space pinned for that session. The <code>cwd</code> in a request is ignored for access decisions.</td><td><code>internal/daemon/callers.go</code>, <code>peer_darwin.go</code> (<code>LOCAL_PEERPID</code>), <code>procstat.Parent</code></td></tr>
+      <tr><td>Can an agent <code>cd ~/work/globex &amp;&amp; orch search</code> from an acme session?</td><td>No. The walk stops at the acme harness, so the leaf's working directory doesn't matter.</td><td>same</td></tr>
+      <tr><td>Which space is this repo's content in?</td><td>Owner org from the sync itself (orchd's own API call), its node ID checked against config, and visibility from GitHub.</td><td><code>internal/docs/sync.go</code>, <code>internal/github/identity.go</code></td></tr>
+      <tr><td>Which space is a queued task in?</td><td>Planned: the space of the session that dispatched it, with the task running pinned to that space (SP-029). Not yet decided for tasks orchd doesn't track, such as verification runs or runs in another worker (RC-25).</td><td>tasks are already identified by descent from orchd (SP-011)</td></tr>
+      <tr><td>Did an agent change the policy?</td><td>Anyone, agents included, may save a draft revision. Only <code>orch spaces apply --revision N</code> or the app enforces one, both refused to callers started by a harness or orchd. A draft an agent saved needs <code>--accept-agent-draft</code>. A pending draft, or an applied row edited in <code>orch.db</code> outside orchd, shows as drift and changes nothing (D-25, SP-020).</td><td>operator-only RPC checks in <code>callers.go</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>Verified: orchd reads a process's start time and working directory on macOS (<code>proc_pidinfo</code>) and Linux (SP-003). How each harness's working directory moves was recorded (SP-001): Claude Code's shell returns to the project after a <code>cd</code> outside it, and Codex never keeps a <code>cd</code>. Pins record the harness PID plus its start time, so a reused PID doesn't match (SP-010). Still open: binding the peer PID to its connection (RC-03), and gating pin-based reads until the guard stops a session from starting a harness outside its tree (RC-01, RC-26).</p>
+</section>
+
+<section aria-labelledby="scenarios">
+  <h2 id="scenarios">Scenarios</h2>
+  <div class="scen">
+    <div class="card"><h3>"How do we deploy?" in acme</h3><p>A session in <code>~/work/acme/api</code> asks a question that matches docs in both jobs.</p><p class="out">acme and public hits only. globex's deploy runbook doesn't exist as far as this session can tell, including in listings.</p></div>
+    <div class="card"><h3>Pasting globex text into an acme session</h3><p>You quote a globex snippet into an acme prompt by mistake.</p><p class="out">Search still returns nothing from globex, but the transcript now contains it and is stored as acme. This is a human mistake orch can't undo. The terms guard keeps globex's terms out of anything acme sends outward.</p></div>
+    <div class="card"><h3>An open-source repo goes private</h3><p><code>oss-org/tooling</code> is made private.</p><p class="out">The next sync sees <code>private: true</code> and moves its chunks out of public before indexing anything else. Sessions everywhere stop seeing them.</p></div>
+    <div class="card"><h3>You leave acme</h3><p><span class="tag q">not yet planned</span> No feature in the plan retires a space.</p><p class="out">A retire command would delete acme's collection, cached PRs, tasks and events and keep its term list as an outbound guard, leaving globex untouched. Each space has its own collection (D-10), which makes this a whole-collection delete.</p></div>
+    <div class="card"><h3>acme acquires globex</h3><p><span class="tag q">not yet planned</span> The plan names an explicit operator merge but no feature builds it.</p><p class="out">Changing a <code>reads</code> list can't do this, because isolated spaces can't list each other. A merge would move globex's points into acme's collection without re-embedding, as a retag does (SP-071).</p></div>
+    <div class="card"><h3>Dispatching a task from acme</h3><p>An acme session queues a dev task.</p><p class="out">Planned (SP-029): the task record carries acme. The task runs in acme's checkout and searches as acme. Its PR, review and result events stay in acme. How tasks orchd doesn't track get a space is still open (RC-25).</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="failclosed">
+  <h2 id="failclosed">Fail-closed rules</h2>
+  <div class="card">
+    <ul>
+      <li>A caller whose space can't be established sees <b>public only</b>.</li>
+      <li>Content that can't be placed goes to <b>quarantine</b>, never to public.</li>
+      <li>A repo's visibility can't be read → it's treated as private.</li>
+      <li>An org's node ID doesn't match the one stored when it was bound → the space binding is suspended for that org until you confirm it.</li>
+      <li>A root conflicts with a remote across two isolated spaces → no space and no indexing, and the conflict is flagged.</li>
+      <li>Config fails validation → orchd keeps the last applied config and reports why.</li>
+      <li>While the tool guard or outbound terms layer is enforcing, a timeout, unreadable pin or unreadable policy → refuse (INV-13).</li>
+      <li>You can switch each layer (memory filtering, tool guard, outbound terms, sandbox rules) off or between modes, optionally for a set time, as operator only. Every change is logged, logging continues, and while any layer is off every session's start digest says so (D-11, SP-070, INV-16).</li>
+    </ul>
+  </div>
+</section>
+
+<section aria-labelledby="questions">
+  <h2 id="questions">Decided</h2>
+  <ol class="order">
+    <li><div><b>Can a job space read <code>personal</code>?</b> Only by opting in: a job lists personal in its <code>reads</code>. It's off by default and never extends to another job (D-16).</div></li>
+    <li><div><b>Where do web pages go?</b> The writer places them at ingest. A page a session ingests takes that session's space. Allowlisted prefixes reach public from sources refresh. You can retag any source, which moves its data without copying it (D-14, SP-030, SP-071).</div></li>
+    <li><div><b>One GitHub account per job, or guards?</b> One account per job from the start, with the <code>gh</code>/<code>git</code> guard as a second layer (D-18, SP-063).</div></li>
+    <li><div><b>Nested roots?</b> Allowed, CODEOWNERS-style: the deepest matching root decides, and a nested root is never less strict than the roots above it (D-15).</div></li>
+    <li><div><b>Where you see everything?</b> The app shows all spaces at once, labelled, with a one-click screen-share-safe mode that hides all but one space (D-21).</div></li>
+  </ol>
+</section>
+
+<footer>
+  <p>This builds on <a href="memory-permissions-design.html">memory-permissions-design.html</a>: a space is that doc's single "home", and the public kind is its <code>shared</code>. Compartments from that doc would only be needed if one chunk must belong to two spaces at once, which isolated spaces rule out.</p>
+  <p>Rechecked on 2026-11-09 against the plan and <code>internal/spaces/policy.go</code>, <code>internal/spaces/classify.go</code>, <code>internal/spaces/validate.go</code>, <code>internal/daemon/ghprofiles.go</code>, <code>internal/cli/spaces_cmd.go</code>; first written against <code>internal/daemon/callers.go</code>, <code>internal/daemon/peer_darwin.go</code>, <code>internal/docs/sync.go</code>, <code>internal/docs/registry.go</code>, <code>internal/github/identity.go</code>, <code>internal/hook/updates.go</code>, and issue <a href="https://github.com/willesq/orchestrator/issues/130">#130</a>.</p>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  var NAMES = { pub: 'public', acme: 'acme', glob: 'globex', pers: 'personal', q: 'quarantine' };
+  var locations = [
+    { id: 'acme', label: '~/work/acme', reads: ['acme', 'pub'] },
+    { id: 'glob', label: '~/work/globex', reads: ['glob', 'pub'] },
+    { id: 'pers', label: '~/code', reads: ['pers', 'pub'] },
+    { id: 'none', label: 'anywhere else', reads: ['pub'] }
+  ];
+  var items = [
+    { t: 'oss-org/oss-lib README', s: 'pub', note: 'public repo in a public org' },
+    { t: 'go.dev page (allowlisted)', s: 'pub', note: 'public web prefix' },
+    { t: 'oss-org/release-infra docs', s: 'q', note: 'private repo inside the open-source org' },
+    { t: 'acme/api runbook', s: 'acme', note: 'docs sync, owner acme' },
+    { t: 'acme/oss-lib fork notes', s: 'acme', note: 'fork owned by acme, parent ignored' },
+    { t: 'Session in ~/work/acme/oss-lib', s: 'acme', note: 'sessions take their folder\'s space' },
+    { t: 'acme Slack DM', s: 'acme', note: 'tenant T0ACME' },
+    { t: 'globex/billing ADRs', s: 'glob', note: 'docs sync, owner globex' },
+    { t: 'globex Teams channel', s: 'glob', note: 'tenant globex.onmicrosoft.com' },
+    { t: 'PR #42 in globex/web (digest line)', s: 'glob', note: 'PR monitoring, owner globex' },
+    { t: 'willesq/game design notes', s: 'pers', note: 'root ~/code, owner willesq' },
+    { t: '~/work/acme/billing → globex remote', s: 'q', note: 'root and remote disagree' }
+  ];
+  var seg = document.getElementById('seg');
+  var where = document.getElementById('where');
+  var box = document.getElementById('items');
+
+  function render(loc) {
+    seg.querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.id === loc.id)); });
+    box.textContent = '';
+    var shown = 0;
+    items.forEach(function (it) {
+      var ok = loc.reads.indexOf(it.s) >= 0;
+      if (ok) shown++;
+      var d = document.createElement('div'); d.className = 'item' + (ok ? '' : ' off');
+      var top = document.createElement('div'); top.className = 'top';
+      var b = document.createElement('b'); b.textContent = it.t;
+      var r = document.createElement('span'); r.className = 'res ' + (ok ? 'ok' : 'no'); r.textContent = ok ? 'Returned' : 'Hidden';
+      top.appendChild(b); top.appendChild(r);
+      var tg = document.createElement('span'); tg.className = 'tag ' + it.s; tg.textContent = NAMES[it.s];
+      var w = document.createElement('span'); w.className = 'why';
+      w.textContent = it.note + (ok ? '' : (it.s === 'q' ? ' · quarantined, no session reads it' : ' · ' + NAMES[it.s] + ' is not readable from here'));
+      var row = document.createElement('div'); row.appendChild(tg);
+      d.appendChild(top); d.appendChild(row); d.appendChild(w);
+      box.appendChild(d);
+    });
+    var names = loc.reads.map(function (s) { return NAMES[s]; }).join(' + ');
+    where.textContent = 'A session in ' + loc.label + ' reads: ' + names + ' · ' + shown + ' of ' + items.length + ' items returned';
+  }
+  locations.forEach(function (loc) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.dataset.id = loc.id; b.textContent = loc.label;
+    b.addEventListener('click', function () { render(loc); });
+    seg.appendChild(b);
+  });
+  render(locations[0]);
+})();
+</script>
+</body>
+</html>

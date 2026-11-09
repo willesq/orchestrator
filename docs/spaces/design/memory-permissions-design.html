@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>orch Memory Permissions Design</title>
+<style>
+/* Layout: a design document. Bottom line, vocabulary, the model, a live policy checker, then options, lifecycle, enforcement and rollout. */
+:root {
+  color-scheme: light;
+  --ink: #18222b;
+  --muted: #52606d;
+  --paper: #f4f6f7;
+  --surface: #ffffff;
+  --line: #d8dfe5;
+  --accent: #2f6f8f;
+  --accent-soft: #e2eef4;
+  --do: #23764a;  --do-soft: #e3f3ea;
+  --next: #2f6f8f; --next-soft: #e2eef4;
+  --later: #8a6400; --later-soft: #f8f0dc;
+  --no: #a3332b;  --no-soft: #f8e5e3;
+  --font-display: "Avenir Next", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #e3eaef; --muted: #a2b0bc; --paper: #0f151a; --surface: #172028; --line: #2a3742;
+    --accent: #7fbfdc; --accent-soft: #16303b;
+    --do: #7fd3a0; --do-soft: #15301f;
+    --next: #7fbfdc; --next-soft: #16303b;
+    --later: #e8b75a; --later-soft: #33270f;
+    --no: #f08a80; --no-soft: #3a1c19;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 16px/1.6 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 64rem; margin: 0 auto; padding-block: 2.5rem 4rem; display: grid; gap: 2.75rem; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.2; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(1.9rem, 4.5vw, 2.6rem); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 700; }
+h3 { font-size: 1.12rem; font-weight: 650; }
+p { margin: 0; max-width: 72ch; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: 0.87em; background: var(--accent-soft); padding: 0.05em 0.3em; border-radius: 3px; }
+pre { margin: 0; font: 0.84rem/1.55 var(--font-mono); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; overflow-x: auto; }
+pre .c { color: var(--muted); }
+.eyebrow { font: 600 0.74rem/1 var(--font-body); letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+header { display: grid; gap: 0.8rem; }
+.lede { color: var(--muted); font-size: 1.08rem; }
+section { display: grid; gap: 1rem; }
+nav.toc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.3rem; }
+nav.toc ol { margin: 0; padding-left: 1.2rem; columns: 2 16rem; column-gap: 2rem; font-size: 0.95rem; }
+.bottom, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1.3rem 1.4rem; display: grid; gap: 0.75rem; }
+.bottom ul, .card ul, .card ol { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.35rem; max-width: 74ch; }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 0.9rem 1.1rem; border-radius: 0 10px 10px 0; display: grid; gap: 0.4rem; }
+.callout.warn { border-left-color: var(--later); background: var(--later-soft); }
+
+/* Three kinds of metadata */
+.kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 0.9rem; }
+.kind { background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; display: grid; gap: 0.5rem; align-content: start; }
+.kind.tags { border-top-color: var(--muted); }
+.kind.origin { border-top-color: var(--accent); }
+.kind.labels { border-top-color: var(--do); }
+.kind dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.7rem; font-size: 0.92rem; }
+.kind dt { color: var(--muted); }
+.kind dd { margin: 0; }
+
+/* Flow diagram */
+.flow { display: grid; gap: 0.6rem; }
+.lane { display: grid; grid-template-columns: 7rem repeat(4, 1fr); gap: 0.5rem; align-items: stretch; }
+@media (max-width: 760px) { .lane { grid-template-columns: 1fr; } .lane .lane-name { padding-top: 0.6rem; } }
+.lane-name { font: 600 0.74rem/1.2 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); align-self: center; }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 0.75rem; font-size: 0.9rem; position: relative; }
+.box b { display: block; font-family: var(--font-display); font-size: 0.95rem; }
+.box span { color: var(--muted); }
+.lane .box + .box::before { content: "→"; position: absolute; left: -0.48rem; top: 50%; transform: translate(-50%, -50%); color: var(--muted); font-weight: 700; }
+@media (max-width: 760px) { .lane .box + .box::before { content: "↓"; left: 50%; top: -0.55rem; } }
+.box.gate { border-color: var(--do); background: var(--do-soft); }
+
+/* Options */
+.options { display: grid; gap: 0.9rem; }
+.opt { background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: 10px; padding: 1.1rem 1.25rem; display: grid; gap: 0.75rem; }
+.opt[data-v="do"] { border-left-color: var(--do); }
+.opt[data-v="next"] { border-left-color: var(--next); }
+.opt[data-v="later"] { border-left-color: var(--later); }
+.opt[data-v="no"] { border-left-color: var(--no); }
+.opt-head { display: flex; flex-wrap: wrap; gap: 0.6rem 0.8rem; align-items: baseline; justify-content: space-between; }
+.opt-head .title { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+.opt .id { font: 600 0.8rem/1 var(--font-mono); color: var(--muted); }
+.summary { color: var(--muted); }
+.cases { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 640px) { .cases { grid-template-columns: 1fr; } }
+.case h4 { margin: 0 0 0.3rem; font: 650 0.8rem/1.2 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; }
+.case.for h4 { color: var(--do); }
+.case.against h4 { color: var(--no); }
+.case ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.25rem; font-size: 0.96rem; }
+.v { display: inline-block; font: 700 0.7rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; padding: 0.35rem 0.55rem; border-radius: 4px; white-space: nowrap; }
+.v.do { color: var(--do); background: var(--do-soft); }
+.v.next { color: var(--next); background: var(--next-soft); }
+.v.later { color: var(--later); background: var(--later-soft); }
+.v.no { color: var(--no); background: var(--no-soft); }
+.chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.chip { font-size: 0.8rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0.22rem 0.6rem; }
+.chip b { color: var(--ink); font-weight: 600; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 38rem; font-size: 0.93rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 0.72rem/1.2 var(--font-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+.lbl { display: inline-block; font: 600 0.76rem/1 var(--font-mono); padding: 0.22rem 0.45rem; border-radius: 4px; margin: 0.08rem 0.15rem 0.08rem 0; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.lbl.lv { background: var(--later-soft); color: var(--later); }
+.lbl.none { background: transparent; border: 1px dashed var(--line); color: var(--muted); }
+
+/* Policy checker */
+.checker { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1.2rem 1.3rem; display: grid; gap: 1rem; }
+.checker .controls { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: center; }
+.checker label { font-weight: 600; font-size: 0.92rem; }
+.checker select { font: inherit; font-size: 0.93rem; padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); max-width: 100%; }
+.clearance { color: var(--muted); font-size: 0.92rem; }
+.res { display: inline-block; font: 700 0.7rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; padding: 0.3rem 0.5rem; border-radius: 4px; white-space: nowrap; }
+.res.ok { color: var(--do); background: var(--do-soft); }
+.res.blocked { color: var(--no); background: var(--no-soft); }
+.why { color: var(--muted); font-size: 0.86rem; }
+
+ol.order { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.8rem; counter-reset: s; }
+ol.order li { counter-increment: s; display: grid; grid-template-columns: 2rem 1fr; gap: 0.75rem; align-items: start; }
+ol.order li::before { content: counter(s); width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font: 700 0.9rem/1 var(--font-display); background: var(--accent-soft); color: var(--accent); }
+ol.order li > div { display: grid; gap: 0.25rem; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+footer { color: var(--muted); font-size: 0.88rem; border-top: 1px solid var(--line); padding-top: 1.2rem; display: grid; gap: 0.5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">orch · memory permissions · design · 8 Nov 2026, updated 9 Nov 2026</span>
+  <h1>Who may read what: a permission model for orch's memory</h1>
+  <div class="callout warn">
+    <p>Updated 2026-11-09 to match the plan. The authoritative plan is <code>docs/spaces/spaces-features.json</code> (rendered at <a href="../index.html">docs/spaces/index.html</a>); where they disagree, the plan wins.</p>
+  </div>
+  <p class="lede">A design for keeping two employers' work, open-source work, personal work, and future chat feeds (Slack, Teams) apart inside one orch memory store. It started from <a href="https://github.com/willesq/orchestrator/issues/130">#130</a> (memory partitions) and folds in the unbuilt <code>docs/RAG_SENSITIVITY_PLAN.md</code>. The first draft proposed compartments and sensitivity levels. The plan settled on <b>spaces</b>: one space per chunk, one Qdrant collection per space. This page describes that model and keeps the rejected options as a record of why.</p>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#bl">Bottom line</a></li>
+    <li><a href="#why">From partitions to spaces</a></li>
+    <li><a href="#vocab">Three kinds of metadata</a></li>
+    <li><a href="#model">The model: spaces</a></li>
+    <li><a href="#check">Try it: policy checker</a></li>
+    <li><a href="#readers">Readers: who is asking</a></li>
+    <li><a href="#rules">The spaces policy</a></li>
+    <li><a href="#feeds">Feeds and connectors</a></li>
+    <li><a href="#derived">Derived content and taint</a></li>
+    <li><a href="#change">Changing the boundaries later</a></li>
+    <li><a href="#egress">Outbound: terms and destinations</a></li>
+    <li><a href="#options">Representation options compared</a></li>
+    <li><a href="#enforce">Enforcement points and fail-closed rules</a></li>
+    <li><a href="#limits">What this does not protect</a></li>
+    <li><a href="#plan">Rollout</a></li>
+    <li><a href="#questions">Decided</a></li>
+  </ol>
+</nav>
+
+<section aria-labelledby="bl">
+  <h2 id="bl">Bottom line</h2>
+  <div class="bottom">
+    <ul>
+      <li><b>Store facts and a space on chunks. Keep policy out of them.</b> orchd stamps each chunk with where it came from (its <em>origin</em>). A pure classifier turns origin into exactly one <em>space</em>, or <code>quarantine</code>. The caller's pinned space decides what it may read. Each layer can change without the others (SP-022, SP-023).</li>
+      <li><b>A space is the unit of separation</b> (D-08). Its kind is <code>public</code> (readable from every space), <code>isolated</code> (one per job, never reads another isolated space) or <code>private</code> (personal). A space owns bindings: GitHub orgs, folder roots, web prefixes, chat tenants, an outbound terms file and a gh profile.</li>
+      <li><b>One space per chunk, one Qdrant collection per space</b>, plus collections for public and quarantine. The payload also stores <code>space</code> as a second layer, and searches fuse the readable collections with RRF (D-10, D-24).</li>
+      <li><b>Sensitivity within a space is a per-content-kind rule, not a level.</b> DMs are stored and searchable on request, but never auto-recalled and never given to tasks (SP-060, D-19).</li>
+      <li><b>Feeds plug in through a common origin schema</b> (system, tenant, container, container kind, participants). Slack and Teams then need a connector and a tenant binding, not a model change (D-07, SP-060).</li>
+      <li><b>Redrawing boundaries is a relabel, not a re-ingest.</b> Chunks labelled under an older policy fail closed until <code>orch rag relabel</code> moves them to the right collection without new embeddings (INV-08, SP-027). Single sources move with a retag (D-14, SP-071).</li>
+      <li><b>Outbound checks look at the destination, not the session.</b> A term from a space is refused in any action whose target repo's owner doesn't belong to that space (SP-044).</li>
+      <li><b>Memory is one layer of several:</b> a pre-tool guard, OS sandbox deny rules, a separate GitHub account per job and git hooks back it up (D-04, D-18, D-23).</li>
+    </ul>
+  </div>
+</section>
+
+<section aria-labelledby="why">
+  <h2 id="why">From partitions to spaces</h2>
+  <p>#130 gives every chunk exactly one partition, chosen by longest-prefix match on a filesystem root. The first draft of this design argued that this breaks once feeds arrive, and proposed several compartments per chunk. The plan kept one label per chunk and answered the two objections differently:</p>
+  <div class="two">
+    <div class="card">
+      <h3>Content belongs to more than one world</h3>
+      <ul>
+        <li>A Slack DM with a coworker about your side project.</li>
+        <li>A session in a job's folder that pulled in personal notes, then got summarized.</li>
+      </ul>
+      <p><b>Resolved:</b> the writer places content (D-14). A chat message takes its tenant's space, and a session's output takes the session's space (SP-029). Content shared by two jobs is exactly what must never exist (INV-04), so combining two jobs is an explicit operator "merge". "Most restrictive" now has an ordering: <code>public &lt; private &lt; isolated</code>.</p>
+    </div>
+    <div class="card">
+      <h3>Not everything comes from a folder</h3>
+      <ul>
+        <li>GitHub-owner docs sync clones into orch's own cache (<code>internal/docs/sync.go</code>), outside any user root.</li>
+        <li><code>web</code> sources are URLs.</li>
+        <li>Slack and Teams have workspaces, tenants and channels, not paths.</li>
+      </ul>
+      <p><b>Kept:</b> root matching is one binding among several. A space binds <code>github_orgs</code>, <code>roots</code>, <code>web_prefixes</code> and <code>chat</code> tenants (SP-020).</p>
+    </div>
+  </div>
+  <p>Sensitivity also cuts across worlds. A personal DM and an employer DM should both stay out of auto-injection. The plan handles that per content kind inside each space (SP-060, SP-052's Recall step, SP-053's per-content-kind policy table), not with a second label dimension.</p>
+</section>
+
+<section aria-labelledby="vocab">
+  <h2 id="vocab">Three kinds of metadata</h2>
+  <p>The core decision is to keep these three separate. Today's payload mixes descriptive and security-relevant fields (<code>scope</code>, <code>tags</code>, <code>trust</code>). The new fields have a clear owner and a clear meaning.</p>
+  <div class="kinds">
+    <div class="kind tags">
+      <h3>Tags (exist today)</h3>
+      <p>Descriptive. Used to narrow a search and nothing else.</p>
+      <dl>
+        <dt>Set by</dt><dd>anyone, including clients and agents</dd>
+        <dt>Changes</dt><dd>freely</dd>
+        <dt>Security role</dt><dd><b>none</b>. A tag can never grant or deny access (SP-023 a3).</dd>
+        <dt>Examples</dt><dd><code>repo:orchestrator</code>, <code>topic:qdrant</code></dd>
+      </dl>
+    </div>
+    <div class="kind origin">
+      <h3>Origin (new, extends <code>writer</code>)</h3>
+      <p>Facts about where a chunk came from, recorded when it's written.</p>
+      <dl>
+        <dt>Set by</dt><dd>orchd and connectors only, never clients</dd>
+        <dt>Changes</dt><dd>never (except corrections during migration)</dd>
+        <dt>Security role</dt><dd>the input the classifier reads</dd>
+        <dt>Examples</dt><dd><code>origin.system=slack</code>, <code>origin.tenant=T0123</code>, <code>origin.path=/Users/…/code/acme/api</code></dd>
+      </dl>
+    </div>
+    <div class="kind labels">
+      <h3>Space label (new)</h3>
+      <p>Derived from origin by the classifier, and what read-time routing and filtering look at.</p>
+      <dl>
+        <dt>Set by</dt><dd>orchd's classifier, from the applied spaces policy</dd>
+        <dt>Changes</dt><dd>on relabel or retag</dd>
+        <dt>Security role</dt><dd><b>all of it</b></dd>
+        <dt>Fields</dt><dd><code>space</code>, <code>labels_v</code>; the chunk label is space × <code>trust</code></dd>
+      </dl>
+    </div>
+  </div>
+  <div class="callout">
+    <p><b>Should we tag chunks or tag spaces?</b> Both, for different jobs. Chunks carry a <em>space</em> (where this content belongs). Spaces are named policy objects that carry <em>attributes</em>: bindings, which other spaces they read, a terms file, a gh profile. Never let a chunk's descriptive tags imply access. That separation is what lets you redraw policy without touching content.</p>
+  </div>
+  <p>Clients can't choose a space. A client-supplied <code>space</code> or a tag claiming one is ignored, and a client <code>Ingest</code> is placed in the caller's pinned space or quarantine (SP-023 a3, INV-02). <code>trust</code> stays server-assigned by writer, as today.</p>
+</section>
+
+<section aria-labelledby="model">
+  <h2 id="model">The model: spaces</h2>
+  <div class="card">
+    <p><b>Readable</b> if and only if:</p>
+    <pre>chunk.space    ∈ reader.readable_spaces   <span class="c"># own space + public + private spaces it lists in reads</span>
+chunk.labels_v = current policy's        <span class="c"># else unreadable until relabelled (INV-08)</span></pre>
+    <p>No caller reads <code>quarantine</code>. With no policy applied, every chunk and caller is in one implicit <code>shared</code> space, so behavior is unchanged (INV-10, <code>internal/spaces/policy.go</code>).</p>
+  </div>
+
+  <div class="flow" aria-label="Write path and read path">
+    <div class="lane">
+      <span class="lane-name">Write</span>
+      <div class="box"><b>Connector / writer</b><span>repo, docs, web, session, hand-off, client, Slack, Teams</span></div>
+      <div class="box"><b>Origin</b><span>stamped by orchd, immutable</span></div>
+      <div class="box gate"><b>Classifier</b><span>origin + policy → space | quarantine | conflict</span></div>
+      <div class="box"><b>Qdrant</b><span>the space's collection; payload origin · space · labels_v · tags</span></div>
+    </div>
+    <div class="lane">
+      <span class="lane-name">Read</span>
+      <div class="box"><b>Caller</b><span>hook, MCP, CLI, task, app</span></div>
+      <div class="box"><b>Identity</b><span>kernel peer PID → pinned harness session</span></div>
+      <div class="box gate"><b>Readable spaces</b><span>resolved in orchd from the pin and policy</span></div>
+      <div class="box"><b>Search</b><span>only those collections, space filter inside each, RRF; caller filters only narrow</span></div>
+    </div>
+  </div>
+
+  <h3>Space kinds</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kind</th><th>Reads</th><th>Accepts</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td><span class="lbl lv">public</span></td><td>itself only; readable from every space</td><td>only verified-public content, never sessions or agent notes (SP-030)</td><td><code>oss-org</code> docs</td></tr>
+      <tr><td><span class="lbl lv">private</span></td><td>itself, public, and private spaces it lists; never isolated</td><td>personal content</td><td>personal projects</td></tr>
+      <tr><td><span class="lbl lv">isolated</span></td><td>itself, public, and private spaces it lists (opt-in, D-16); <b>never another isolated space</b> (INV-04)</td><td>one job's content</td><td><code>acme</code>, <code>globex</code></td></tr>
+      <tr><td><span class="lbl none">quarantine</span></td><td>no caller reads it</td><td>whatever can't be placed (INV-03)</td><td>an unbound remote</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>Roots nest like GitHub CODEOWNERS</b>: the deepest matching root decides, and a nested root may only be at least as strict as every root above it, for example <code>~/code</code> public, <code>~/code/willesq</code> private, <code>~/code/company1</code> isolated (D-15, INV-14). When a checkout's root and its git remote disagree, the stricter one wins. Two different isolated spaces disagreeing is a <b>conflict</b>: nothing is indexed and a session there gets no space (SP-022).</p>
+
+  <div class="callout">
+    <p><b>Considered and rejected: compartments plus levels.</b> The first draft gave each chunk several compartments and a level (<code>normal</code> &lt; <code>private</code> &lt; <code>secret</code>), readable when the reader held every compartment and a high enough level. The plan chose one space per chunk instead (D-08): placement by writer (D-14) and explicit merges replace multi-world chunks, and per-content-kind rules replace levels (SP-060, D-19). One space per chunk is also what makes a collection per space possible without duplicating content.</p>
+  </div>
+
+  <h3>How it maps onto Qdrant</h3>
+  <p>Each space has its own collection, plus one for public and one for quarantine (D-10). Writes route by space. A search queries only the caller's readable collections, applies a <code>space</code> payload filter inside each as a second layer, and fuses the results with reciprocal rank fusion. Migration, reindex, backup and hybrid tooling work per collection, and every content or embedding cache is keyed by space (SP-024, INV-11).</p>
+  <p>The cost was measured, not assumed (SP-002): on 40,000 chunks, searching two of four collections and fusing them is 1.5× (2 segments) to 1.9× (default segments) the p95 of one filtered collection, about +15 ms per hybrid search. D-24 accepts that cost. Physical separation means a forgotten filter can't leak across spaces, and BM25 statistics don't mix spaces.</p>
+  <p>The first draft's single-collection filter relied on Qdrant <code>match.except</code> semantics over an array of compartments. With a single-valued <code>space</code> that question no longer matters for the design, although RC-15 still lists it with the <code>GetDocument</code> and session-recall handlers to check before SP-025.</p>
+</section>
+
+<section aria-labelledby="check">
+  <h2 id="check">Try it: policy checker</h2>
+  <p>Example chunks against example readers, using the policy sketched <a href="#rules">below</a> (<code>oss</code> public, <code>personal</code> private, <code>acme</code> and <code>globex</code> isolated, with <code>globex</code> opting in to read <code>personal</code>). Pick a reader to see what it gets and why. It illustrates planned behavior; read enforcement is SP-025 and not built yet.</p>
+  <div class="checker">
+    <div class="controls">
+      <label for="reader">Reader</label>
+      <select id="reader"></select>
+    </div>
+    <p class="clearance" id="clearance" aria-live="polite"></p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Chunk</th><th>Space · kind</th><th>Result</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </div>
+</section>
+
+<section aria-labelledby="readers">
+  <h2 id="readers">Readers: who is asking</h2>
+  <p>A caller's space is decided by orchd, never by what the request or the agent says. Request fields such as <code>cwd</code> can narrow results but never widen them (INV-02).</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Caller</th><th>How orchd knows</th><th>Readable spaces</th></tr></thead>
+    <tbody>
+      <tr><td><b>Session</b> (Claude Code, Codex)</td><td>the kernel-reported peer PID, walked up the process tree to a harness registered at SessionStart (SP-011). The session is pinned to the space of its <b>first</b> <code>cwd</code> for its whole life, including resume, compact and subagents (SP-010, INV-05, D-09).</td><td>its space, public, and private spaces its space lists in <code>reads</code></td></tr>
+      <tr><td><b>Session under a public root</b></td><td>same pin</td><td>public only; its writes go to <code>public_root_sessions</code> (D-22, SP-022 a3)</td></tr>
+      <tr><td><b>Session with no space</b> (outside every root, or a conflict)</td><td>same pin</td><td>public only (SP-025 a2)</td></tr>
+      <tr><td><b>Queued task</b></td><td>its live run, found from the process tree (SP-011)</td><td>planned: the dispatching session's space (SP-029). Which space a task reads is still open (RC-25).</td></tr>
+      <tr><td><b>Operator</b> (you at a terminal or in Orch.app)</td><td>no harness ancestor and not spawned by orchd (SP-011)</td><td>everything, labelled (SP-026); explicit cross-space reads taint that session (SP-029)</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>Ambient versus explicit reads</b> now differ by content kind, not by a level cap. DMs are explicit interactive search only. Queued tasks may explicitly search chat channels in their own space, never DMs, and nothing from chat is auto-injected into tasks (SP-060, D-19).</p>
+  <div class="callout warn">
+    <p><b>Resolution is not yet trusted to grant reads.</b> A process started outside a session's tree under a kept-alive parent can take a new pin (D-26), and a process that leaves its session's tree resolves as the operator (RC-26). SP-025 must not grant reads by pin or operator resolution alone until the guard (SP-041) or stronger kernel evidence covers these (RC-01).</p>
+  </div>
+</section>
+
+<section aria-labelledby="rules">
+  <h2 id="rules">The spaces policy</h2>
+  <p>There is no <code>config.yaml</code> (removed in PR #142). The policy is a JSON document stored in <code>orch.db</code> as numbered revisions with a content hash: drafts and the applied one (D-25, SP-020). Its schema is <code>internal/spaces/policy.go</code>; unknown fields are refused.</p>
+<pre>{
+  "spaces": [
+    {"name": "oss",      "kind": "public",   "github_orgs": ["oss-org"], "roots": ["~/code"]},
+    {"name": "personal", "kind": "private",  "github_orgs": ["willesq"], "roots": ["~/code/willesq"]},
+    {"name": "acme",     "kind": "isolated", "github_orgs": ["acme"],    "roots": ["~/code/acme"],
+     "web_prefixes": ["https://wiki.acme.example/"], "chat": ["slack:T0ACME"],
+     "terms_file": "~/.config/orch/terms/acme.txt", "gh_config_dir": "~/.config/gh-acme"},
+    {"name": "globex",   "kind": "isolated", "github_orgs": ["globex"],  "roots": ["~/code/globex"],
+     "chat": ["teams:contoso.onmicrosoft.com"], "reads": ["personal"],  <span class="c"># opt-in (D-16)</span>
+     "gh_config_dir": "~/.config/gh-globex"}
+  ],
+  "public_root_sessions": "personal"   <span class="c"># session content pinned under a public root (D-22)</span>
+}</pre>
+  <pre>orch spaces draft &lt; policy.json    <span class="c"># save a draft (changes nothing)</span>
+orch spaces diff                   <span class="c"># compare the draft with what is applied (operator only)</span>
+orch spaces apply --revision N     <span class="c"># enforce draft N (operator only)</span>
+orch spaces why &lt;target&gt;           <span class="c"># where a path, URL, owner/repo or slack:/teams: tenant goes, and why</span></pre>
+  <p>Notes on the shape:</p>
+  <ul>
+    <li><b>Writer bindings and reader permissions are separate.</b> Bindings say where content goes; <code>reads</code> says what a space may read. #130's <code>readable_from</code> merged them.</li>
+    <li><b>Validation rejects</b> an org, prefix or tenant bound twice, the same root bound twice, a nested root less strict than one above it, an isolated root inside another isolated space, isolated reading isolated, private reading isolated, public reading anything else, and a terms file inside a git tree (SP-020.1, INV-04, INV-14).</li>
+    <li><b>Only the operator applies</b>, naming the revision they reviewed. Any caller except a queued task may save a draft; applying an agent's draft needs <code>--accept-agent-draft</code>. A pending draft, or an applied row edited outside orchd, shows as drift and changes nothing enforced (D-25, INV-06).</li>
+    <li><b>GitHub orgs are bound by node ID</b> at apply (<code>--confirm-github-org</code>). A mismatch on a later sync suspends the binding and quarantines new content until the operator confirms (SP-021).</li>
+    <li><b>Each job space names its own gh profile</b> (<code>gh_config_dir</code>), used for that space's docs sync, PR monitoring and reviews. The user logs in with <code>gh</code>; orch never handles the token (D-18, SP-063).</li>
+    <li><b>Quarantine, not shared.</b> An unplaceable write goes where nothing can read it, and <code>orch status</code> shows the count (INV-03, SP-028, SP-031).</li>
+    <li>Root paths may start with <code>~</code> and must otherwise be absolute. Resolving root symlinks before the nesting checks is a follow-up (RC-11).</li>
+  </ul>
+  <div class="callout">
+    <p><b>Considered and rejected: an ordered rule list.</b> The first draft matched origin with ordered rules (<code>path</code>, <code>github_owner</code>, <code>url_prefix</code>, <code>tenant</code>, <code>container_kind</code>, <code>participant</code>, <code>writer</code>, <code>kind</code>) that unioned compartments and raised levels. The plan replaced it with per-space bindings, deepest-root-wins nesting and stricter-of-root-and-remote (D-15, SP-022), and one override per source from retag (D-14).</p>
+  </div>
+</section>
+
+<section aria-labelledby="feeds">
+  <h2 id="feeds">Feeds and connectors</h2>
+  <p>Extensibility comes from one stable <b>origin schema</b>. Every writer fills in the fields that apply to it, and the classifier reads only these fields, so a new feed adds a connector and bindings, with no changes to the model (SP-022, SP-060).</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Writer / connector</th><th>system</th><th>Identifies by</th><th>Space comes from</th></tr></thead>
+    <tbody>
+      <tr><td>repo source (exists)</td><td>fs</td><td>checkout path, git remote</td><td>deepest root, adjusted by the remote's org (stricter wins)</td></tr>
+      <tr><td>docs owner sync (exists)</td><td>github</td><td>owner/repo, visibility, owner node ID</td><td>the org's binding; public only if GitHub reports the repo not private (SP-030)</td></tr>
+      <tr><td>web source (exists)</td><td>web</td><td>URL</td><td>an allowlisted <code>web_prefixes</code> binding; a page a session ingests takes the session's space (D-14)</td></tr>
+      <tr><td>session storage (exists)</td><td>harness</td><td>session id, pinned cwd</td><td>the session's pin (under a public root: <code>public_root_sessions</code>)</td></tr>
+      <tr><td>edit hand-off (exists)</td><td>fs</td><td>file path</td><td>its root; outside any root, the writing session's space (SP-029)</td></tr>
+      <tr><td>client ingest (exists)</td><td>client</td><td>caller</td><td>the caller's pinned space or quarantine; clients can't set space (SP-023)</td></tr>
+      <tr><td>Slack (planned, SP-061)</td><td>slack</td><td>workspace id, channel id, <code>container_kind</code>, participants</td><td>the <code>chat</code> tenant binding; unbound tenants go to quarantine</td></tr>
+      <tr><td>Teams (planned, SP-062)</td><td>teams</td><td>tenant, team/channel or chat id, <code>container_kind</code> (incl. meeting), participants</td><td>the <code>chat</code> tenant binding</td></tr>
+    </tbody>
+  </table></div>
+  <p>Email is not in the plan.</p>
+  <p>Connector rules:</p>
+  <ul>
+    <li><b>A connector reports facts and never decides placement.</b> The Slack connector says "this is a DM in workspace T0ACME". It can't set space or level fields (SP-060 a3). Classification stays in one place.</li>
+    <li><b>Identify by stable IDs, not display names.</b> Channels get renamed and tenants get rebranded. Display names may sit in the text but never in origin fields the classifier reads.</li>
+    <li><b>Connectors are opt-in per container.</b> Sync only what you allowlist (DMs, selected private channels) rather than everything the API can reach. Retention is per space and content kind (SP-060).</li>
+    <li><b>Source URIs carry the system</b> (<code>slack://&lt;tenant&gt;/&lt;channel&gt;/&lt;thread&gt;</code>, <code>teams://…</code>), so the existing per-URI dedupe, replace and delete keep working.</li>
+    <li><b>Listing paths are read paths.</b> <code>ListSources</code>, <code>ListDocs</code> and <code>rag_list_sources</code> return URIs and titles, which can name a channel, customer or repo. They get the same space decision as content search (SP-025, INV-01).</li>
+  </ul>
+</section>
+
+<section aria-labelledby="derived">
+  <h2 id="derived">Derived content and taint</h2>
+  <p>Summaries, session records and anything else orch writes <em>from</em> other memory must not launder the space. Derived content carries the space of what it came from (INV-09, SP-029):</p>
+  <div class="card">
+    <ul>
+      <li><b>Summaries</b> are made from one session at a time and inherit its space. The summarizer never receives text from two sessions in one call.</li>
+      <li><b>Task records</b> carry the dispatching session's space, and tasks run pinned to it (still open as RC-25).</li>
+      <li><b>Files a session writes outside any root</b> (for example in <code>/tmp</code>) are recorded with the session's space, and a later ingest of them uses it.</li>
+      <li><b>The operator's explicit cross-space reads taint that session.</b></li>
+    </ul>
+  </div>
+  <p>Because a session can only read its own space, public and its listed private spaces, the first draft's union-of-every-input taint set and its per-session versus per-turn question no longer arise.</p>
+</section>
+
+<section aria-labelledby="change">
+  <h2 id="change">Changing the boundaries later</h2>
+  <p>This is why origin and space are separate fields. The space is derived data and can be recomputed at any time.</p>
+  <ol class="order">
+    <li><div><b>Draft and apply a new policy revision</b> (D-25). Nothing changes until the operator applies.</div></li>
+    <li><div><b>Stale chunks fail closed at once.</b> A chunk whose <code>labels_v</code> isn't the current policy's is unreadable until relabelled (INV-08). This mirrors how <code>bm25_v</code> marks keyword vectors stale in <code>internal/rag/reindex.go</code>.</div></li>
+    <li><div><b><code>orch rag relabel</code> moves stale chunks into the right collection</b>, using stored origin, <code>source_uri</code>, checkout tags and the session table. No new embeddings, and it resumes after interruption. Unplaceable chunks go to quarantine (SP-027).</div></li>
+    <li><div><b>Preview first.</b> <code>orch rag relabel --dry-run</code> prints counts per transition and space names, never content.</div></li>
+  </ol>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Change</th><th>How</th><th>Data touched</th></tr></thead>
+    <tbody>
+      <tr><td>Add a space, or move a root, org or tenant</td><td>draft, apply, relabel</td><td>chunks move between collections</td></tr>
+      <tr><td>Reclassify one source</td><td><code>orch spaces retag &lt;source_uri&gt; &lt;space&gt;</code> (operator only): copy points, verify the count, delete from the old collection, record a sticky override that refreshes honor. Into public or out of an isolated space needs confirmation (SP-071, D-14).</td><td>moved, never duplicated, no re-embedding (INV-15)</td></tr>
+      <tr><td>Handle unplaced content</td><td><code>orch quarantine list|assign|purge</code> (operator only); assign records an override; purge is dry-run by default (SP-028)</td><td>moved or deleted</td></tr>
+      <tr><td>Combine two jobs</td><td>an explicit operator "merge"; config can never let two isolated spaces read each other (INV-04). No feature implements merge yet.</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <p>Legacy chunks written before origin existed are placed from what is stored (<code>source_uri</code>, <code>checkout:</code> tags, session ids looked up in the session table). The rest go to quarantine. This is #130's <code>reassign-partitions</code>, folded into the same relabel job. The first draft's compartment aliases and <code>orch compartment retire --purge</code> are not in the plan.</p>
+</section>
+
+<section aria-labelledby="egress">
+  <h2 id="egress">Outbound: terms and destinations</h2>
+  <p>#130 asks whether the session's partition allows a term. A better question is whether the <b>destination</b> allows it. Your employer's name belongs in your employer's PRs. The same name in a public personal repo is the leak.</p>
+  <ul>
+    <li><b>Terms attach to spaces.</b> Each space may name a <code>terms_file</code>: one term or <code>re:&lt;regex&gt;</code> per line, case-insensitive, word boundaries. A terms file inside a git tree is refused (SP-044, SP-020).</li>
+    <li><b>The destination is the target repo's owner</b>, mapped to a space through <code>github_orgs</code>; there is no separate destinations config. An action is refused when its text contains a term from a space the destination doesn't hold (SP-044).</li>
+    <li><b>Covered actions:</b> git commit message and staged diff, git push range, <code>git tag -m</code>, <code>gh pr</code> and <code>gh issue</code> create/edit/comment/review, and <code>gh api</code> writes.</li>
+    <li><b>The pre-tool guard is the primary check</b> (SP-044 runs in the guard from SP-040/041). <b>Git hooks back it up:</b> <code>orch guard git-hook --install</code> adds <code>commit-msg</code> and <code>pre-push</code> hooks that run the same check for any committer, including your own terminal (SP-045).</li>
+    <li><b>Refusals never echo the term.</b> They give the term's line number and hash, never the term, and terms never appear in logs, transcripts, the UI or indexed content (INV-07, SP-048).</li>
+  </ul>
+</section>
+
+<section aria-labelledby="options">
+  <h2 id="options">Representation options compared</h2>
+  <div class="options">
+
+    <article class="opt" data-v="do">
+      <div class="opt-head"><div class="title"><span class="id">S</span><h3>One space per chunk, one collection per space</h3></div><span class="v do">Chosen (D-08, D-10, D-24)</span></div>
+      <p class="summary">The model in this document. Origin facts on each chunk, one space from the classifier, a collection per space with a <code>space</code> payload filter as the second layer, the caller's readable collections fused with RRF.</p>
+      <div class="cases">
+        <div class="case for"><h4>For</h4><ul><li>A forgotten filter can't leak across spaces, and BM25 statistics stay per space (SP-024).</li><li>Redrawing boundaries is a relabel or retag, never a re-embed (INV-15).</li><li>Feeds plug in through origin fields and bindings.</li></ul></div>
+        <div class="case against"><h4>Against</h4><ul><li>Measured search cost 1.5–1.9× p95, about +15 ms (SP-002, accepted in D-24).</li><li>Migration, reindex, backup and caches must work per collection (SP-024.2).</li><li>Content can't belong to two spaces; it is placed by writer and moved by retag.</li></ul></div>
+      </div>
+      <div class="chips"><span class="chip">Re-embedding <b>never</b></span><span class="chip">New feeds <b>connector + binding</b></span></div>
+    </article>
+
+    <article class="opt" data-v="no">
+      <div class="opt-head"><div class="title"><span class="id">R1</span><h3>Compartments + level, derived from origin</h3></div><span class="v no">Not chosen</span></div>
+      <p class="summary">The first draft's recommendation: several compartments and a level per chunk, a subset-and-level filter in one collection.</p>
+      <div class="cases">
+        <div class="case for"><h4>For</h4><ul><li>Expresses content in two worlds, and sensitivity within one.</li><li>One Qdrant filter in <code>buildFilter</code>.</li></ul></div>
+        <div class="case against"><h4>Against</h4><ul><li>The plan chose spaces (D-08) and physical separation (D-10); multi-compartment chunks can't live in one collection per space without duplication.</li><li>More concepts: workspace, rules, level, union taint.</li><li>Depended on unverified <code>match.except</code> semantics (RC-15).</li></ul></div>
+      </div>
+    </article>
+
+    <article class="opt" data-v="later">
+      <div class="opt-head"><div class="title"><span class="id">R2</span><h3>Single partition per chunk (#130 as written)</h3></div><span class="v later">Basis of the chosen model</span></div>
+      <p class="summary">One <code>partition</code> string per chunk, assigned by root prefix, with <code>readable_from</code> lists.</p>
+      <div class="cases">
+        <div class="case for"><h4>For</h4><ul><li>Simplest to explain and build.</li><li>The chosen model keeps its one-label-per-chunk shape.</li></ul></div>
+        <div class="case against"><h4>Against</h4><ul><li>Root matching alone misses docs owners, URLs and chat tenants; spaces add those bindings.</li><li>Mixed writer rules with reader permissions; spaces separate bindings from <code>reads</code>.</li></ul></div>
+      </div>
+    </article>
+
+    <article class="opt" data-v="later">
+      <div class="opt-head"><div class="title"><span class="id">R3</span><h3>Materialized reader list on each chunk</h3></div><span class="v later">Not pursued</span></div>
+      <p class="summary">Store <code>readable_by: [ctx-a, ctx-b]</code> on each chunk and filter with <code>match any [my context]</code>.</p>
+      <div class="cases">
+        <div class="case for"><h4>For</h4><ul><li>The cheapest possible filter.</li></ul></div>
+        <div class="case against"><h4>Against</h4><ul><li>Every reader change means a relabel, even when no content changed.</li><li>Collection routing makes it unnecessary.</li></ul></div>
+      </div>
+    </article>
+
+    <article class="opt" data-v="do">
+      <div class="opt-head"><div class="title"><span class="id">R4</span><h3>A Qdrant collection per compartment</h3></div><span class="v do">Adopted, per space (D-10)</span></div>
+      <p class="summary">The first draft kept this for <code>secret</code> only, because it can't hold multi-compartment content. With one space per chunk that objection falls away, and the plan adopted it for every space.</p>
+      <div class="cases">
+        <div class="case for"><h4>For</h4><ul><li>A filter bug can't leak across collections.</li><li>Moving a source is a copy, verify and delete (SP-071).</li></ul></div>
+        <div class="case against"><h4>Against</h4><ul><li>Multiplies migration, reindex, backup and cache tooling.</li><li>Cross-collection ranking needs RRF, at the measured cost.</li></ul></div>
+      </div>
+    </article>
+
+    <article class="opt" data-v="no">
+      <div class="opt-head"><div class="title"><span class="id">R5</span><h3>Reuse descriptive tags for access</h3></div><span class="v no">Don't</span></div>
+      <p class="summary">Add tags like <code>partition:employer</code> to the existing <code>tags</code> field and filter on them.</p>
+      <div class="cases">
+        <div class="case for"><h4>For</h4><ul><li>No schema change, and the tag index already exists.</li></ul></div>
+        <div class="case against"><h4>Against</h4><ul><li>Clients and agents set <code>tags</code> today, so anyone could grant themselves access. A tag claiming a space is ignored (SP-023 a3).</li><li>Mixes search hints with security.</li></ul></div>
+      </div>
+      <div class="chips"><span class="chip">Risk <b>high</b></span></div>
+    </article>
+
+    <article class="opt" data-v="no">
+      <div class="opt-head"><div class="title"><span class="id">R6</span><h3>A general policy engine (Cedar, OPA)</h3></div><span class="v no">Not now</span></div>
+      <p class="summary">Express rules in a policy language and evaluate them per request.</p>
+      <div class="cases">
+        <div class="case for"><h4>For</h4><ul><li>Arbitrary conditions, and well-tested evaluators.</li></ul></div>
+        <div class="case against"><h4>Against</h4><ul><li>Qdrant needs a collection choice and filter <em>before</em> retrieval, so policy would compile down to those anyway.</li><li>A new dependency and language for a single-user tool. OpenAPPA's patterns are copied instead, not the component (D-13).</li></ul></div>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<section aria-labelledby="enforce">
+  <h2 id="enforce">Enforcement points and fail-closed rules</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Path</th><th>Today</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td>Auto-RAG hook (<code>internal/hook/userprompt.go</code>)</td><td>repo-scoped, then an unscoped top-up from the whole store</td><td>orchd searches only the caller's readable collections; DMs are never auto-recalled (SP-025, SP-060). The hook doesn't change.</td></tr>
+      <tr><td><code>Search</code> RPC (<code>internal/rag/search.go</code>)</td><td>caller filters only</td><td>routed to readable collections, <code>space</code> filter inside each, caller filters AND-ed and can only narrow (SP-024, SP-025)</td></tr>
+      <tr><td><code>GetDocument</code>, <code>ListSources</code>, <code>ListDocs</code>, <code>rag_list_sources</code>, <code>rag why</code></td><td>unfiltered</td><td>same space decision; listings hide other spaces' URIs and titles. A registry test fails when a content-returning RPC has no entry (SP-025.2).</td></tr>
+      <tr><td>Session recall, summaries</td><td>unscoped</td><td>space decision on reads; summaries inherit their one session's space (SP-029)</td></tr>
+      <tr><td>Events, start digest, PRs, GitHub items, tasks, PR reviews</td><td>unscoped</td><td>carry a space set at creation, filtered for agent callers (SP-026)</td></tr>
+      <tr><td>All six <code>IngestText</code> writers</td><td>stamp <code>writer</code>/<code>trust</code></td><td>also stamp origin, run the classifier, stamp <code>space</code> and <code>labels_v</code>, route to the space's collection (SP-023)</td></tr>
+      <tr><td>Tool calls (PreToolUse)</td><td>logged (SP-012, SP-014)</td><td>guard refuses calls reaching another isolated space or another job's GitHub org; default mode "block other jobs", "strict" opt-in (SP-040, SP-041, SP-043, D-12); refuses agent writes to orch's own config, data, settings and hooks (SP-042)</td></tr>
+      <tr><td>Agent shells and file tools</td><td>no per-space rules</td><td>generated sandbox <code>denyRead</code>/<code>denyWrite</code>, Read/Edit denies and <code>GH_CONFIG_DIR</code> in each checkout's local settings, or <code>orch run &lt;space&gt; -- claude|codex</code> (D-23, SP-046)</td></tr>
+      <tr><td>App UI (operator)</td><td>sees everything</td><td>still sees everything, labelled by space, with a screen-share-safe mode (SP-026, D-21)</td></tr>
+    </tbody>
+  </table></div>
+  <p>Every layer (memory filtering, tool guard mode, outbound terms, sandbox rules) has an operator-only switch, optionally timed. Turning a layer off is logged and announced in every session's start digest, and logging continues (D-11, SP-070, INV-16).</p>
+  <div class="card">
+    <h3>Fail-closed rules</h3>
+    <ul>
+      <li>A <code>labels_v</code> that isn't the current policy's → unreadable (INV-08).</li>
+      <li>Content that can't be placed → quarantine, never public (INV-03).</li>
+      <li>Root and remote in two different isolated spaces → conflict: nothing indexed, the session gets no space (SP-022).</li>
+      <li>A session with no space → public only (SP-025).</li>
+      <li>A later <code>cwd</code> never changes the session's space. The first pin wins (INV-05).</li>
+      <li>Unreadable repo visibility → treated as private (SP-030).</li>
+      <li>A GitHub org whose node ID changed → binding suspended, new content quarantined (SP-021).</li>
+      <li>While the guard is enforcing: timeout, unreadable pin or unreadable policy → refuse (INV-13).</li>
+      <li>An invalid draft → rejected at apply; the last applied revision stays in force (INV-04, SP-020).</li>
+      <li>A terms file inside a git working tree → rejected (SP-020).</li>
+    </ul>
+  </div>
+</section>
+
+<section aria-labelledby="limits">
+  <h2 id="limits">What this does not protect</h2>
+  <ul>
+    <li><b>Files on disk, fully.</b> The tool guard and generated sandbox rules narrow it, but tool-call target extraction is best-effort (D-28, RC-37, RC-38). The OS sandbox and per-job GitHub accounts are the hard boundary. Codex can still write the shared <code>/tmp</code> from every space (RC-09).</li>
+    <li><b>A hostile local process.</b> Anything running as you can call the orchd socket, start a fake harness under a kept-alive parent (D-26), or read Qdrant's data directory. Pinning and lineage checks raise the bar against a confused agent, not a determined attacker.</li>
+    <li><b>The model provider.</b> Anything injected into a session goes to the harness's provider under that account's retention terms.</li>
+    <li><b>Paraphrase.</b> Term matching is a tripwire. It won't catch "a large Seattle retailer".</li>
+    <li><b>Feed-side permissions.</b> If you can read a Slack channel, the connector can too. orch doesn't re-check the source system's ACLs after ingest, so retention per space and kind matters (SP-060).</li>
+    <li><b>Other harnesses.</b> Spaces cover Claude Code and Codex only; the Gemini adapter is reported as not covered (D-20).</li>
+  </ul>
+</section>
+
+<section aria-labelledby="plan">
+  <h2 id="plan">Rollout</h2>
+  <p>The plan's phases (<code>spaces-features.json</code> → <code>phases</code>). Done as of 2026-11-09: SP-001–004, SP-010–014, SP-020–022 and SP-063.</p>
+  <ol class="order">
+    <li><div><b>P0 Verify assumptions.</b> Hook payload fixtures (SP-001), Qdrant cost of a collection per space (SP-002), process identity (SP-003), harness sandbox layering (SP-004). <em>Done.</em></div></li>
+    <li><div><b>P1 Spaces, pins and an enforcing guard.</b> Spaces policy, validation, apply and drift (SP-020), GitHub org identity (SP-021), placement classifier and <code>orch spaces why</code> (SP-022), session pins (SP-010, SP-011), tool hooks, target extraction and command log (SP-012–014) are done. Liveness, retention, log reading, the guard, switches, self-protection, live GitHub guard, replay and minimal app controls (SP-015–017, SP-040–043, SP-047, SP-070, SP-072) remain.</div></li>
+    <li><div><b>P2 Spaces in memory.</b> Stamp origin and space (SP-023), a collection per space (SP-024), read-path enforcement (SP-025), non-memory bleed paths (SP-026), relabel (SP-027), quarantine (SP-028), derived content (SP-029), public write gate (SP-030), visibility (SP-031), retag (SP-071).</div></li>
+    <li><div><b>P3 Outbound terms and OS sandbox.</b> Terms per space (SP-044), git hook helper (SP-045), per-space harness settings and launcher (SP-046), refusal events (SP-048).</div></li>
+    <li><div><b>P4 Spaces pane in the app.</b> RPCs, overview, setup wizard, advanced editors, activity and review, palette and CLI parity (SP-050–055).</div></li>
+    <li><div><b>P5 Feeds, accounts and interop.</b> Chat connector framework, Slack, Teams (SP-060–062), per-job GitHub accounts (SP-063, <em>done</em>), optional OpenAPPA label source (SP-064), and documentation consolidation, including marking <code>RAG_SENSITIVITY_PLAN.md</code> superseded and updating #130 (SP-065).</div></li>
+  </ol>
+</section>
+
+<section aria-labelledby="questions">
+  <h2 id="questions">Decided</h2>
+  <p>The first draft's open questions, and what settled them.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Question</th><th>Decision</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>Three levels or two?</td><td>Neither: no levels. Spaces with kinds public, isolated, private; sensitivity is per content kind (DMs explicit-only).</td><td>D-08, SP-060</td></tr>
+      <tr><td>Should work sessions read personal memory by default?</td><td>No. A job space reads a private space only by listing it in <code>reads</code>; never another job's space.</td><td>D-16, INV-04</td></tr>
+      <tr><td>Taint per session or per turn?</td><td>Derived content inherits its one session's space; only the operator's explicit cross-space reads taint a session.</td><td>SP-029, INV-09</td></tr>
+      <tr><td>Should queued tasks ever see private content?</td><td>Tasks may explicitly search chat channels in their own space, never DMs; nothing from chat is auto-injected into tasks.</td><td>D-19</td></tr>
+      <tr><td>Word choice: compartment or partition?</td><td>"Space".</td><td>D-08</td></tr>
+      <tr><td>Filtering in one collection or separate collections?</td><td>One collection per space plus public and quarantine, payload filter as a second layer; measured cost accepted.</td><td>D-10, D-24</td></tr>
+      <tr><td>Where is the config?</td><td>In <code>orch.db</code> as draft and applied revisions; operator-only apply.</td><td>D-25</td></tr>
+      <tr><td>Where does content a session ingests go?</td><td>The writer's space; the user can retag any source, which moves it.</td><td>D-14</td></tr>
+      <tr><td>Where does this go next?</td><td>The plan in <code>docs/spaces/</code>. The feasibility comment on <a href="https://github.com/willesq/orchestrator/issues/130">#130</a> is still unposted.</td><td>RC-19</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  <p>First grounded in the code at <code>main</code> (<code>5796fa6</code>); updated against <code>docs/spaces/spaces-features.json</code> and the code at <code>main</code> (<code>ccca489</code>): <code>internal/spaces/policy.go</code> (policy schema), <code>internal/spaces/classify.go</code> (origin and placement), <code>internal/spaces/validate.go</code>, <code>internal/cli/spaces_cmd.go</code>, <code>internal/rag/qdrant.go</code>, <code>internal/rag/search.go</code>, <code>internal/rag/reindex.go</code>, <code>internal/docs/sync.go</code>, <code>internal/hook/userprompt.go</code>, <code>docs/internals/memory.md</code>, and issue <a href="https://github.com/willesq/orchestrator/issues/130">#130</a>.</p>
+  <p>Related design docs: <a href="github-org-separation-design.html">GitHub org separation</a>, <a href="context-isolation-deep-dive.html">context isolation deep dive</a>, <a href="spaces-ui-design.html">Spaces UI design</a>.</p>
+  <p>Still to check before SP-025: the <code>GetDocument</code> and session-recall read paths (RC-15).</p>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  var chunks = [
+    { name: 'acme API repo README', where: '~/code/acme/api', s: 'acme', k: 'doc' },
+    { name: 'acme org docs (owner sync)', where: 'docs cache · github_orgs acme', s: 'acme', k: 'doc' },
+    { name: 'globex wiki page a globex session ingested', where: 'web · writer\'s space (D-14)', s: 'globex', k: 'doc' },
+    { name: 'Personal project notes', where: '~/code/willesq/game', s: 'personal', k: 'doc' },
+    { name: 'oss-org public repo docs', where: 'github · not private', s: 'oss', k: 'doc' },
+    { name: 'Private repo in oss-org', where: 'public org, private repo (SP-030)', s: 'quarantine', k: 'doc' },
+    { name: 'Slack channel thread', where: 'slack · T0ACME', s: 'acme', k: 'channel' },
+    { name: 'Slack DM with a coworker', where: 'slack · T0ACME', s: 'acme', k: 'dm' },
+    { name: 'Summary of an acme session', where: 'derived (SP-029)', s: 'acme', k: 'summary' },
+    { name: 'Checkout under ~/code/acme with a globex remote', where: 'two isolated spaces', s: 'conflict', k: 'doc' },
+    { name: 'Chunk labelled under an older policy', where: 'stale labels_v', s: 'personal', k: 'doc', stale: true }
+  ];
+  var readers = [
+    { name: 'acme session · auto-RAG (ambient)', s: ['acme', 'oss'], ambient: true },
+    { name: 'acme session · explicit rag_search', s: ['acme', 'oss'] },
+    { name: 'globex session · explicit (reads personal)', s: ['globex', 'oss', 'personal'] },
+    { name: 'personal session · explicit', s: ['personal', 'oss'] },
+    { name: 'Queued task from an acme session · explicit', s: ['acme', 'oss'], task: true },
+    { name: 'Session pinned under the public root ~/code', s: ['oss'] },
+    { name: 'Session with no space', s: ['oss'] }
+  ];
+  var sel = document.getElementById('reader');
+  var rows = document.getElementById('rows');
+  var clr = document.getElementById('clearance');
+
+  function lbl(text, cls) {
+    var s = document.createElement('span');
+    s.className = 'lbl' + (cls ? ' ' + cls : '');
+    s.textContent = text;
+    return s;
+  }
+  function verdict(ch, r) {
+    if (ch.s === 'conflict') return 'conflict: nothing is indexed (SP-022)';
+    if (ch.s === 'quarantine') return 'quarantine: no caller reads it';
+    if (ch.stale) return 'labels_v is stale, so it stays unreadable until relabelled';
+    if (r.s.indexOf(ch.s) < 0) return 'space ' + ch.s + ' is not readable from here';
+    if (ch.k === 'dm' && r.ambient) return 'DMs are never auto-recalled (SP-060)';
+    if (ch.k === 'dm' && r.task) return 'DMs are never given to tasks (D-19)';
+    return '';
+  }
+  function render() {
+    var r = readers[Number(sel.value)];
+    clr.textContent = 'Readable spaces: {' + r.s.join(', ') + '}';
+    rows.textContent = '';
+    var ok = 0;
+    chunks.forEach(function (ch) {
+      var tr = document.createElement('tr');
+      var td1 = document.createElement('td');
+      var b = document.createElement('b'); b.textContent = ch.name;
+      var w = document.createElement('div'); w.className = 'why'; w.textContent = ch.where;
+      td1.appendChild(b); td1.appendChild(w);
+      var td2 = document.createElement('td');
+      td2.appendChild(lbl(ch.s, (ch.s === 'quarantine' || ch.s === 'conflict') ? 'none' : ''));
+      td2.appendChild(lbl(ch.k, 'lv'));
+      var td3 = document.createElement('td');
+      var why = verdict(ch, r);
+      var res = document.createElement('span');
+      res.className = 'res ' + (why ? 'blocked' : 'ok');
+      res.textContent = why ? 'Blocked' : 'Readable';
+      td3.appendChild(res);
+      if (why) { var d = document.createElement('div'); d.className = 'why'; d.textContent = why; td3.appendChild(d); } else { ok++; }
+      tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3);
+      rows.appendChild(tr);
+    });
+    clr.textContent += ' · ' + ok + ' of ' + chunks.length + ' readable';
+  }
+  readers.forEach(function (r, i) {
+    var o = document.createElement('option'); o.value = String(i); o.textContent = r.name; sel.appendChild(o);
+  });
+  sel.addEventListener('change', render);
+  render();
+})();
+</script>
+</body>
+</html>

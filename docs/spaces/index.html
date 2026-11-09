@@ -410,7 +410,10 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
     Object.keys(ds.existing_code_anchors).forEach(function (k) { dl.appendChild(el('dt', { text: k.replace(/_/g, ' ') })); dl.appendChild(el('dd', { cls: 'mono', text: ds.existing_code_anchors[k] })); });
     design.appendChild(dl);
     if (d.origin && d.origin.design_docs) {
-      design.appendChild(el('p', { cls: 'muted', text: 'Background docs: ' + d.origin.design_docs.join(', ') + '. ' + (d.origin.design_docs_note || '') }));
+      var bg = el('p', { cls: 'muted' }, ['Background docs: ']);
+      d.origin.design_docs.forEach(function (p, i) { if (i) bg.appendChild(document.createTextNode(', ')); bg.appendChild(el('a', { text: p, attrs: { href: p } })); });
+      bg.appendChild(document.createTextNode('. ' + (d.origin.design_docs_note || '')));
+      design.appendChild(bg);
     }
 
     function featLinks(ids) {
