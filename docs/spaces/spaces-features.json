@@ -585,7 +585,7 @@
         "id": "RC-14",
         "kind": "follow-up",
         "topic": "Test and coverage gate integrity",
-        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks fails intermittently (also on main), and scripts/cover.sh silently drops a package whose tests fail, so 'make cover' can skip internal/daemon. TestRunMeasuresFailedRuns is timing-flaky. Update 2026-11-09 (SP-014 session): seen again: 'make cover' reported 'All files >= 80%' while omitting every internal/daemon file because the RC-39 flake failed the package; SP-014 measured daemon coverage with a direct go test -coverprofile run instead.",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks fails intermittently (also on main), and scripts/cover.sh silently drops a package whose tests fail, so 'make cover' can skip internal/daemon. TestRunMeasuresFailedRuns is timing-flaky. Update 2026-11-09 (SP-014 session): seen again: 'make cover' reported 'All files >= 80%' while omitting every internal/daemon file because the RC-39 flake failed the package; SP-014 measured daemon coverage with a direct go test -coverprofile run instead. Update 2026-11-09 (SP-017 session): seen again; 'make cover' printed 'All files >= 80%' without internal/daemon; SP-017 measured the daemon files with go test -coverprofile directly.",
         "source": "https://github.com/willesq/orchestrator/pull/145",
         "raised": "2026-11-08",
         "affects": [],
@@ -891,7 +891,7 @@
         "id": "RC-39",
         "kind": "follow-up",
         "topic": "Flaky daemon tests seen while verifying SP-013",
-        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go:117, 'WatchTasks ended with context canceled') fails about 1 run in 4 on origin/main 644dcaf as well as on the SP-013 branch (5/20 and 6/20 with -count=20). TestCallerSessionCost failed once (p99 5.5 ms against a 5 ms bound) while a 16-worker fuzz run loaded the CPU. Neither touches SP-013's code. Fix the first; consider making the second tolerant of a loaded machine or skipping it under -short. The SP-013 verifier also saw TestRunMeasuresFailedRuns (internal/agentrun) fail twice on the branch under full-suite load (DurationMS 199 against a 200 ms timeout; never on main in 7 full and 20 isolated runs; the package is untouched by SP-013) and TestToolHookCost once (passes in isolation, p99 about 14 ms against 30 ms). Both look load-sensitive. Update 2026-11-09 (SP-014 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks 3 of 3 times on origin/main 0ff06db and 2 of 3 on the SP-014 branch (0 of 20 each when run alone), so under full-package load it now fails most runs.",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go:117, 'WatchTasks ended with context canceled') fails about 1 run in 4 on origin/main 644dcaf as well as on the SP-013 branch (5/20 and 6/20 with -count=20). TestCallerSessionCost failed once (p99 5.5 ms against a 5 ms bound) while a 16-worker fuzz run loaded the CPU. Neither touches SP-013's code. Fix the first; consider making the second tolerant of a loaded machine or skipping it under -short. The SP-013 verifier also saw TestRunMeasuresFailedRuns (internal/agentrun) fail twice on the branch under full-suite load (DurationMS 199 against a 200 ms timeout; never on main in 7 full and 20 isolated runs; the package is untouched by SP-013) and TestToolHookCost once (passes in isolation, p99 about 14 ms against 30 ms). Both look load-sensitive. Update 2026-11-09 (SP-014 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks 3 of 3 times on origin/main 0ff06db and 2 of 3 on the SP-014 branch (0 of 20 each when run alone), so under full-package load it now fails most runs. Update 2026-11-09 (SP-017 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks ('WatchTasks ended with context canceled') 1 of 2 on origin/main 85b0784 and 6 of 6 on the SP-017 branch (passes alone); TestRunMeasuresFailedRuns (internal/agentrun, untouched) failed once in a full go test ./... and passed alone. The handler appears to return ctx.Err() instead of nil when the client goes away under load.",
         "source": "https://github.com/willesq/orchestrator/pull/151",
         "raised": "2026-11-09",
         "affects": [],
@@ -985,6 +985,85 @@
         "raised": "2026-11-09",
         "affects": [
           "SP-014"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-47",
+        "kind": "decision",
+        "topic": "A resume moves a pin only to a fresh top-level harness in the same space",
+        "detail": "SP-017 moves a pin on SessionStart source=resume only when the new harness process could take a new pin of its own (not inside another session, holding no pin, not an orphan, under 5 minutes old, kernel-verified cwd) and its directory places into the pin's space. orchd cannot tell an in-process /resume from an agent calling PinSession itself to take a dead session of its space and write that session's command log (SP-017 security review, round 1 medium), so an in-process /resume of another process's session is refused and that session's tool events go to the process's own pin. A 'claude --resume' started in a directory of another space is also refused and that session runs unpinned. Confirm, or decide another rule.",
+        "source": "https://github.com/willesq/orchestrator/pull/154",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-017",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-48",
+        "kind": "follow-up",
+        "topic": "What counts as session activity",
+        "detail": "'active' vs 'idle' uses the latest of pinned_at, resumed_at and the session's last tool event in the command log. Other hook events (UserPromptSubmit, Stop) do not reach orchd with a session identity, and with the command log off activity is the pin's own times. Refusals count events with decision 'refused' (toollog.DecisionRefused), which SP-041 must write for a refused call.",
+        "source": "https://github.com/willesq/orchestrator/pull/154",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-017",
+          "SP-041",
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-49",
+        "kind": "decision",
+        "topic": "Which processes the session list shows as unpinned",
+        "detail": "Unpinned rows are every claude, codex or gemini process of the user with no live pin, by kernel name as procstat.FindByName does (plus node/bun/deno and version-named binaries by program). On this Mac that includes Codex's app-server daemon processes and every claude subprocess that keeps the name, not only interactive sessions. Decide whether to filter (e.g. only processes with a TTY, or skip children of a harness).",
+        "source": "https://github.com/willesq/orchestrator/pull/154",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-017",
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-50",
+        "kind": "follow-up",
+        "topic": "SP-017 audit lows",
+        "detail": "Accepted as Low in two SP-017 security reviews and documented in docs/internals/daemon.md: (1) the detached fake harness (D-26) can also resume a dead or ended session of the space whose directory it starts in and write its command log, until SP-041; (2) a process detached from its session resolves as the operator (RC-26) and sees every space and directory in ListSessions; (3) pins are not capped per harness process and never pruned until SP-015, so sweeps and the list read every pin while holding the registry lock, and an agent can insert many copied pins; options: cap pins per process, throttle list-triggered sweeps, sweep by process; (4) the per-connection pin cache is not dropped when a resume moves a pin: ListSessions checks the pin still names the caller's process, and any future session-scoped read of the command log (INV-12) must do the same; (5) a resume between a sweep and its endToolLog leaves an end record in a live chain (re-anchored at the next end).",
+        "source": "https://github.com/willesq/orchestrator/pull/154",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-015",
+          "SP-016",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-51",
+        "kind": "follow-up",
+        "topic": "Sessions of subagents and /clear stay listed until their process exits",
+        "detail": "Pins a subagent or an earlier /clear session copied share the harness process; those that get no SessionEnd show as active or idle rows of their own until the process exits. Consider listing only a process's current session, or marking copied pins.",
+        "source": "https://github.com/willesq/orchestrator/pull/154",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-017",
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-52",
+        "kind": "follow-up",
+        "topic": "Re-run CI for SP-017 once GitHub Actions runs jobs",
+        "detail": "SP-017's DOD-9 (CI green including the macOS ORT build) depends on RC-46. Locally: go test/vet/gofmt pass, make cover passes but omitted internal/daemon because of the RC-39 flake (daemon files measured directly at 87.8-97.4%), and 'swift build --package-path macos --target OrchKit' compiles the regenerated Swift stubs.",
+        "source": "https://github.com/willesq/orchestrator/pull/154",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-017"
         ],
         "status": "open"
       }
@@ -2192,7 +2271,12 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestSessionLivenessStates (internal/daemon/liveness_test.go), fake process table and settable clock, read through ListSessions: alive with a tool event 29 min ago -> active; alive with no event for 30 min (pinned_at the last activity) -> idle; alive with no event for 7 days -> idle, ended_at 0. 3/3 subtests pass; the row also carries tool_events 1 from the command log.",
+            "a2: TestProcessExitEndsSession: claude 400 leaves the fake process table with no SessionEnd; one sweep (sessionSweepEvery = 60 s, asserted <= 1 min) sets ended_at to exactly the clock time of the sweep, a later sweep keeps it, the default list drops the session and --all shows it ended, and the session's command log gets its end record. TestSessionSweepLoop: runSessionSweeps sweeps at start and on every tick and stops with its context. Pass.",
+            "a3: TestReusedPIDEndsSession: PID 400 now has another start time; the sweep ends sess-old (still naming the old identity), currentOf and firstOf find no pin for the new process, PinSession and EndSession from the new process are PermissionDenied, and ListSessions shows sess-old ended and the new process as unpinned. Pass.",
+            "a4: TestResumeRebindsPin (spaces policy applied, session in isolated 'acme'): after claude 400 exits and is swept, SessionStart source=resume from new claude 420 moves the pin to PID 420 and its start time, keeps space acme, first_cwd, policy revision and pinned_at, clears ended_at, sets resumed_at, and lists it active with last activity = resume time; 420 then resolves to the session; a repeated resume changes nothing; the old process's cached caller no longer sees the row. TestResumeRefusals: refused while the old process runs (PermissionDenied), from codex (PermissionDenied), where the new process would be in space 'personal' (FailedPrecondition), nested in another session (FailedPrecondition), and from a harness already holding an acme pin (FailedPrecondition, the round-1 audit's forged-resume case); same-process resume after SessionEnd clears ended_at. internal/hook TestSessionStartPinsEverySource checks the hook sends the source. Pass."
+          ]
         },
         {
           "id": "SP-017.2",
@@ -2227,7 +2311,12 @@
               "threshold": "< 50 ms"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestSessionsListCommand (internal/daemon/liveness_test.go) runs the real 'orch sessions list' (cli.NewRootCmd over orchdclient.Dial) against orchd's gRPC server on a unix socket as the operator: header HARNESS SESSION PID SPACE DIRECTORY STATE LAST ACTIVITY EVENTS REFUSALS (9 columns); default shows sess-active and sess-idle only, --all adds sess-ended; each row's fields checked. TestSessionsList (internal/cli/sessions_cmd_test.go) checks the --all flag, '-' cells for unpinned rows, sanitized directory cells and the empty and error cases. Pass.",
+            "a2: TestUnpinnedHarnessesListed with a fake process table: unpinned = claude 501, codex 502, gemini 503, node running @anthropic-ai/claude-code (claude), version-named native binary under claude/versions (claude), node running @google/gemini-cli (gemini), codex 410 whose only pin ended, and a new process on pinned PID 400 with another start time; not listed: the pinned claude 400, zsh, the 'Claude' desktop app, node running another script or with an unreadable program, a version-named non-harness binary. Without a process table nothing is unpinned. TestProcessesIncludesSelf (internal/procstat) checks the real sysctl table. Pass.",
+            "a3: TestListSessionsCallerScope: the operator sees sess-a, sess-b and unpinned pid 600; session sess-a sees only its row (with and without --all; ended only with --all); a queued task and an unpinned harness see none; queued tasks are also refused at the interceptor (operatorActions, TestEveryRPCIsClassified). Pass.",
+            "a4: TestSessionSweepCost: 50 pins on 50 distinct real processes, start times read from the kernel (procstat.StartTime), on an M3 Max, darwin/arm64: first sweep (ending the 25 with mismatched start times) 1.33-1.51 ms; steady sweeps median 0.87-0.91 ms, max 0.97-1.04 ms over 3 runs of 20 at 8b7ab94. Threshold < 50 ms."
+          ]
         }
       ],
       "status": "in_progress",
