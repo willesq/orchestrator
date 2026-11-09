@@ -13,6 +13,9 @@ import (
 // StatusCancelled is a task the user stopped.
 const StatusCancelled = "cancelled"
 
+// CancelledByUser is a cancelled run's result when no other reason is given.
+const CancelledByUser = "cancelled by the user"
+
 // LiveRun is a task's session while this runner is running it.
 type LiveRun struct {
 	TaskID    string
@@ -34,6 +37,7 @@ type liveEntry struct {
 	LiveRun
 	cancel    context.CancelFunc
 	cancelled bool
+	reason    string // why it was cancelled, the run's result
 }
 
 // liveRuns indexes the runs in flight, for liveness and per-task cancel.
@@ -79,10 +83,11 @@ func (l *liveRuns) setPID(id string, pid int) {
 	}
 }
 
-func (l *liveRuns) wasCancelled(e *liveEntry) bool {
+// wasCancelled reports whether e was cancelled, and why.
+func (l *liveRuns) wasCancelled(e *liveEntry) (bool, string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return e.cancelled
+	return e.cancelled, e.reason
 }
 
 // Live reports the task's run when this runner is running it now.
@@ -114,15 +119,19 @@ func (r *Runner) LiveByProcess(proc procstat.Identity) (LiveRun, bool) {
 }
 
 // Cancel stops the task's run if this runner is running it, reporting whether
-// it was. The run then ends with StatusCancelled rather than as a failure.
-func (r *Runner) Cancel(taskID string) bool {
+// it was. The run then ends with StatusCancelled and reason as its result
+// rather than as a failure; an empty reason is the user's cancel.
+func (r *Runner) Cancel(taskID, reason string) bool {
+	if reason == "" {
+		reason = CancelledByUser
+	}
 	r.live.mu.Lock()
 	defer r.live.mu.Unlock()
 	e, ok := r.live.runs[taskID]
 	if !ok {
 		return false
 	}
-	e.cancelled = true
+	e.cancelled, e.reason = true, reason
 	e.cancel()
 	return true
 }

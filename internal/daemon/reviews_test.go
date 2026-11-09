@@ -39,7 +39,7 @@ func reviewsServer(t *testing.T) (*server, *[3]string, *fakeTasks) {
 		}
 		return nil, nil
 	})
-	w := newReviewWatcher(reviews.NewStore(conn), fakeDispatcher{id: "task-1", got: got, route: route}, tasks, gh, nil)
+	w := newReviewWatcher(reviews.NewStore(conn), fakeDispatcher{id: "task-1", got: got, route: route}, tasks, nil, gh, nil)
 	w.GH = func(_ context.Context, args ...string) ([]byte, error) {
 		if args[0] == "api" {
 			return []byte("OWNER\n"), nil

@@ -181,6 +181,7 @@ public struct PRReview: Sendable, Equatable, Identifiable {
         case "approved": "Approved on GitHub at \(Self.short(headSHA))"
         case "commented": "Comment posted at \(Self.short(headSHA))"
         case "failed": "Posting failed"
+        case "superseded": "Not posted: new commits superseded \(Self.short(headSHA))"
         default: nil
         }
     }

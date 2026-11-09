@@ -230,7 +230,7 @@ struct ReviewCard: View {
                 }
                 Spacer()
                 if let posted = review.postedLabel {
-                    Chip(text: posted, tone: review.posted == "failed" ? .bad : .good)
+                    Chip(text: posted, tone: review.posted == "failed" ? .bad : review.posted == "superseded" ? .warning : .good)
                 }
             }
             Text(verbatim: displaySafeLines(review.reason))

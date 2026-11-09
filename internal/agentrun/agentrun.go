@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -263,11 +264,14 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 	if err == nil && o.Status == StatusComplete && r.Verify.Enabled {
 		o, err = r.verifyAndFix(ctx, t, dir, o)
 	}
-	if r.live.wasCancelled(entry) {
+	if cancelled, reason := r.live.wasCancelled(entry); cancelled {
 		// Reason: a cancelled run's session exited on a signal, which would
 		// otherwise read as a failure or, if the worker was stopping too, an
 		// interruption to resume.
-		o, err = Outcome{Status: StatusCancelled, Result: "cancelled by the user", Metrics: o.Metrics}, nil
+		o, err = Outcome{Status: StatusCancelled, Result: reason, Metrics: o.Metrics}, nil
+		// Cancelled is final, so nothing resumes in the scratch directory; the
+		// session has exited, so what it cloned or downloaded there can go.
+		r.removeScratch(t)
 	}
 	// A finished Codex task has nothing left to resume; an interrupted one
 	// (err set) keeps its thread for the next run.
@@ -511,6 +515,23 @@ func (r *Runner) workDir(t Task) (string, error) {
 		return "", fmt.Errorf("working directory %q is not a directory", t.Cwd)
 	}
 	return t.Cwd, nil
+}
+
+// removeScratch deletes the private scratch directory workDir made for t. A
+// task with its own working directory is the user's checkout and is left
+// alone, as is any path that would not sit directly under ScratchDir.
+func (r *Runner) removeScratch(t Task) {
+	if t.Cwd != "" || r.ScratchDir == "" {
+		return
+	}
+	root := filepath.Clean(r.ScratchDir)
+	dir := filepath.Join(root, t.ID)
+	if filepath.Dir(dir) != root || filepath.Base(dir) != t.ID {
+		return
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		log.Printf("agentrun: remove the scratch directory of cancelled task %s: %v", t.ID, err)
+	}
 }
 
 // transcriptExists reports whether Claude Code has persisted the session, which

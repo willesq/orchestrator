@@ -46,6 +46,16 @@ func TestPRsWatches(t *testing.T) {
 	if strings.Contains(out, "\x1b") {
 		t.Errorf("control character reached the terminal: %q", out)
 	}
+	if strings.Contains(out, "posted=") {
+		t.Errorf("nothing posted, but the line says so: %q", out)
+	}
+
+	resetPRWatches(t, &orchdv1.PRReview{Url: watchedURL, State: "reviewing", Mode: "feedback", Verdict: "changes",
+		Posted: "superseded", Note: "superseded by bbbbbbb: the verdict for aaaaaaa was not posted"})
+	out, err = run(factory(&fakeClient{}, nil), "", "prs", "watches")
+	if err != nil || !strings.Contains(out, "posted=superseded") || !strings.Contains(out, "superseded by bbbbbbb") {
+		t.Errorf("superseded verdict: %q, %v", out, err)
+	}
 
 	prWatches.listErr = errors.New("orchd down")
 	if _, err := run(factory(&fakeClient{}, nil), "", "prs", "watches"); err == nil {

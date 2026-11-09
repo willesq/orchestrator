@@ -52,6 +52,7 @@ private let url2 = "https://github.com/willesq/theCalculator/pull/2"
         #expect(PRReview(url: url1, headSHA: sha, posted: "approved").postedLabel == "Approved on GitHub at aaaaaaa")
         #expect(PRReview(url: url1, headSHA: sha, posted: "commented").postedLabel == "Comment posted at aaaaaaa")
         #expect(PRReview(url: url1, posted: "failed").postedLabel == "Posting failed")
+        #expect(PRReview(url: url1, headSHA: sha, posted: "superseded").postedLabel == "Not posted: new commits superseded aaaaaaa")
         #expect(PRReview(url: url1).postedLabel == nil)
         #expect(PRReview(url: url1, state: .waiting, verdict: .approve).verdictIsStale)
         #expect(!PRReview(url: url1, state: .verdict, verdict: .approve).verdictIsStale)
