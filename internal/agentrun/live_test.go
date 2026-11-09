@@ -2,12 +2,14 @@ package agentrun
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/willesq/orchestrator/internal/procstat"
 	"github.com/willesq/orchestrator/internal/workflows"
 )
 
@@ -120,22 +122,41 @@ func TestLiveRunsRefuseASecondRunAndUntrackOnlyTheirOwn(t *testing.T) {
 	}
 }
 
-func TestLiveByPID(t *testing.T) {
+func TestLiveByProcess(t *testing.T) {
+	t0 := time.Unix(1_790_000_000, 0)
+	starts := map[int]time.Time{7: t0}
+	old := procStart
+	procStart = func(pid int) (time.Time, error) {
+		if s, ok := starts[pid]; ok {
+			return s, nil
+		}
+		return time.Time{}, errors.New("no such process")
+	}
+	t.Cleanup(func() { procStart = old })
+
 	r := &Runner{}
-	if _, ok := r.LiveByPID(7); ok {
+	if _, ok := r.LiveByProcess(procstat.Identity{PID: 7, Started: t0}); ok {
 		t.Fatal("found a run with none tracked")
 	}
 	r.live.track(LiveRun{TaskID: "starting"}, func() {})
 	r.live.track(LiveRun{TaskID: "t"}, func() {})
 	r.live.setPID("t", 7)
-	if lr, ok := r.LiveByPID(7); !ok || lr.TaskID != "t" {
-		t.Errorf("LiveByPID(7) = %+v, %v", lr, ok)
+	if lr, ok := r.LiveByProcess(procstat.Identity{PID: 7, Started: t0}); !ok || lr.TaskID != "t" || !lr.ProcStarted.Equal(t0) {
+		t.Errorf("LiveByProcess(7) = %+v, %v", lr, ok)
 	}
-	// A run whose process has not started has PID 0, which names nothing.
-	for _, pid := range []int{0, -1, 8} {
-		if lr, ok := r.LiveByPID(pid); ok {
-			t.Errorf("LiveByPID(%d) = %+v", pid, lr)
+	// PID 0 (not started), another PID, the same PID with another start time
+	// (a reused PID) and an unknown start time name nothing.
+	for _, id := range []procstat.Identity{{PID: 0, Started: t0}, {PID: -1, Started: t0}, {PID: 8, Started: t0},
+		{PID: 7, Started: t0.Add(time.Second)}, {PID: 7}} {
+		if lr, ok := r.LiveByProcess(id); ok {
+			t.Errorf("LiveByProcess(%+v) = %+v", id, lr)
 		}
+	}
+	// A run whose CLI start time could not be read matches nothing.
+	r.live.track(LiveRun{TaskID: "u"}, func() {})
+	r.live.setPID("u", 9)
+	if lr, ok := r.LiveByProcess(procstat.Identity{PID: 9, Started: t0}); ok {
+		t.Errorf("unreadable start time matched %+v", lr)
 	}
 }
 

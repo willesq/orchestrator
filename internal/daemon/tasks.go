@@ -13,6 +13,7 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
+	"github.com/willesq/orchestrator/internal/procstat"
 	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
@@ -39,13 +40,14 @@ func (l *liveRunner) get() *agentrun.Runner {
 	return l.r
 }
 
-// taskOf returns the run the current runner is running in agent process pid.
-func (l *liveRunner) taskOf(pid int) (agentrun.LiveRun, bool) {
+// taskOf returns the run the current runner is running in agent process
+// proc.
+func (l *liveRunner) taskOf(proc procstat.Identity) (agentrun.LiveRun, bool) {
 	r := l.get()
 	if r == nil {
 		return agentrun.LiveRun{}, false
 	}
-	return r.LiveByPID(pid)
+	return r.LiveByProcess(proc)
 }
 
 // cancel stops a task the current runner is running, reporting whether it was.

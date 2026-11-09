@@ -216,9 +216,10 @@ type callerAuth struct {
 	credentials.CommonAuthInfo
 	pid int
 	// spawned reports that the process descends from orchd; child is then
-	// orchd's own child on its path, which a queued task's agent CLI is.
+	// orchd's own child on its path, which a queued task's agent CLI is,
+	// with its start time read at accept (zero when unread).
 	spawned bool
-	child   int
+	child   procstat.Identity
 	// err says why the process could not be identified.
 	err error
 	// harness names the nearest agent harness process (claude, codex) at or
@@ -295,7 +296,15 @@ func (p peerCredentials) identify(c net.Conn) callerAuth {
 	// retried. A session that exits mid-walk reparents its children to
 	// launchd, and a second walk would then find no harness.
 	harness, hpid, herr := harnessAncestor(pid, p.parent, p.program)
-	a := callerAuth{pid: pid, spawned: spawned, child: child, err: err, harness: harness, harnessErr: herr, conn: &connCaller{}}
+	a := callerAuth{pid: pid, spawned: spawned, err: err, harness: harness, harnessErr: herr, conn: &connCaller{}}
+	if spawned {
+		// Reason: the PID alone may name a later task's CLI by the time the
+		// connection's first call asks for its task.
+		a.child = procstat.Identity{PID: child}
+		if p.started != nil {
+			a.child.Started, _ = p.started(child)
+		}
+	}
 	if harness == "" {
 		return a
 	}

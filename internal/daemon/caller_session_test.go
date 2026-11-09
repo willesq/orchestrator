@@ -205,36 +205,36 @@ func TestResolveIgnoresRequestCwd(t *testing.T) {
 }
 
 func TestResolveOperatorAndTasks(t *testing.T) {
-	runs := map[int]agentrun.LiveRun{77: {TaskID: "task-1", Dir: "/w"}}
+	cli := procstat.Identity{PID: 77, Started: claudeStart}
+	runs := map[procstat.Identity]agentrun.LiveRun{cli: {TaskID: "task-1", Dir: "/w"}}
 	lookups := 0
-	r := &callerResolver{taskOf: func(pid int) (agentrun.LiveRun, bool) {
+	r := &callerResolver{taskOf: func(proc procstat.Identity) (agentrun.LiveRun, bool) {
 		lookups++
-		run, ok := runs[pid]
+		run, ok := runs[proc]
 		return run, ok
 	}}
 	if got := r.resolve(callerCtx(callerAuth{pid: 42})); got.kind != callerOperator {
 		t.Errorf("operator resolved to %+v", got)
 	}
 	// A task's process: orchd's child on its path is the task's agent CLI.
-	conn := &connCaller{}
-	task := callerCtx(callerAuth{pid: 79, spawned: true, child: 77, harness: "claude", conn: conn})
+	task := callerCtx(callerAuth{pid: 79, spawned: true, child: cli, harness: "claude", conn: &connCaller{}})
 	if got := r.resolve(task); got.kind != callerTask || got.task.TaskID != "task-1" {
 		t.Errorf("task resolved to %+v", got)
 	}
 	// Cached for the connection, even after the run ends.
-	delete(runs, 77)
+	delete(runs, cli)
 	if got := r.resolve(task); got.task.TaskID != "task-1" || lookups != 1 {
 		t.Errorf("cached task = %+v after %d lookups", got, lookups)
 	}
 	// A spawned process with no run (a verification run) is a task without a
 	// record.
-	other := callerCtx(callerAuth{pid: 80, spawned: true, child: 78, conn: &connCaller{}})
+	other := callerCtx(callerAuth{pid: 80, spawned: true, child: procstat.Identity{PID: 78, Started: claudeStart}, conn: &connCaller{}})
 	if got := r.resolve(other); got.kind != callerTask || got.task.TaskID != "" {
 		t.Errorf("spawned process without a run = %+v", got)
 	}
 	// A client that reports a task ID is a task, but the ID names no record:
 	// only the process tree does.
-	runs[77] = agentrun.LiveRun{TaskID: "task-1"}
+	runs[cli] = agentrun.LiveRun{TaskID: "task-1"}
 	claimed := metadata.NewIncomingContext(callerCtx(callerAuth{pid: 42}), metadata.Pairs(orchdclient.TaskMetadataKey, "task-1"))
 	if got := r.resolve(claimed); got.kind != callerTask || got.task.TaskID != "" {
 		t.Errorf("reported task = %+v, want a task without a record", got)
@@ -244,9 +244,66 @@ func TestResolveOperatorAndTasks(t *testing.T) {
 		t.Errorf("an empty task ID = %+v, want the operator", got)
 	}
 	// Without a runner, a task has no record.
-	fresh := callerCtx(callerAuth{pid: 79, spawned: true, child: 77})
+	fresh := callerCtx(callerAuth{pid: 79, spawned: true, child: cli})
 	if got := (&callerResolver{}).resolve(fresh); got.kind != callerTask || got.task.TaskID != "" {
 		t.Errorf("task without a runner = %+v", got)
+	}
+}
+
+// TestResolveTaskIgnoresReusedCLIPID: a process that outlived task A and
+// kept a connection opened under A's CLI (PID 77) must not resolve to task B
+// when B's CLI later reuses PID 77.
+func TestResolveTaskIgnoresReusedCLIPID(t *testing.T) {
+	parents := map[int]int{79: 77, 77: 1000, 1000: 1}
+	starts := map[int]time.Time{77: claudeStart}
+	creds := peerCredentials{
+		self:    1000,
+		parent:  func(pid int) (int, error) { return parents[pid], nil },
+		started: procTable{started: starts}.startTime,
+		peerPID: func(net.Conn) (int, error) { return 79, nil },
+	}
+	a := creds.identify(nil)
+	if !a.spawned || a.child != (procstat.Identity{PID: 77, Started: claudeStart}) {
+		t.Fatalf("identify = %+v, want child 77 with its start time", a)
+	}
+	// Task A ended; task B's CLI is PID 77 again, started later.
+	runB := procstat.Identity{PID: 77, Started: claudeStart.Add(time.Hour)}
+	r := &callerResolver{taskOf: func(proc procstat.Identity) (agentrun.LiveRun, bool) {
+		if proc == runB {
+			return agentrun.LiveRun{TaskID: "task-b"}, true
+		}
+		return agentrun.LiveRun{}, false
+	}}
+	if got := r.resolve(callerCtx(a)); got.kind != callerTask || got.task.TaskID != "" {
+		t.Fatalf("survivor of task A resolved to %+v, want a task without a record", got)
+	}
+	// A child whose start time was never read matches no run either.
+	creds.started = procTable{}.startTime
+	if a := creds.identify(nil); !a.child.Started.IsZero() {
+		t.Fatalf("identify with an unreadable start = %+v", a)
+	}
+	creds.started = nil
+	if a := creds.identify(nil); a.child != (procstat.Identity{PID: 77}) {
+		t.Fatalf("identify without start times = %+v", a)
+	}
+}
+
+// TestResolveKeepsOnlyTheNearestHarnessPin: a pin found on an outer harness
+// is not cached, so a nested harness that pins itself later resolves to its
+// own session.
+func TestResolveKeepsOnlyTheNearestHarnessPin(t *testing.T) {
+	r, tr, dirs := pinnedResolver(t)
+	conn := tr.connOf(960)
+	if got := r.resolve(conn); got.pin.SessionID != "sess-a" {
+		t.Fatalf("before the nested claude pins = %+v", got)
+	}
+	inner := procstat.Identity{PID: 420, Started: tr.tbl.started[420]}
+	if err := r.pins.insert(context.Background(), sessionPin{SessionID: "sess-inner", Harness: "claude", Process: inner,
+		FirstCwd: dirs[0], PinnedAt: claudeStart, InheritedFrom: "sess-a"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.resolve(conn); got.pin.SessionID != "sess-inner" {
+		t.Fatalf("after the nested claude pins = %+v, want sess-inner", got)
 	}
 }
 

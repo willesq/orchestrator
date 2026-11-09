@@ -48,10 +48,11 @@ type resolvedCaller struct {
 }
 
 // connCaller caches what a connection resolves to. Only results that cannot
-// change for the connection's life are kept: its pin (a pin never changes
-// but for ended_at) and its task. A harness with no pin yet is looked up
-// again on the next call, since its SessionStart hook may pin it after the
-// connection opened (an MCP server starts with the session).
+// change for the connection's life are kept: its task, and a pin held by the
+// caller's own nearest harness (a pin never changes but for ended_at). A pin
+// found on an outer harness is not kept, nor is a miss: the nearest harness's
+// SessionStart hook may pin it after the connection opened (an MCP server
+// starts with the session).
 type connCaller struct {
 	mu   sync.Mutex
 	pin  *sessionPin
@@ -62,9 +63,9 @@ type connCaller struct {
 // resolves no caller to a session.
 type callerResolver struct {
 	pins *pinRegistry
-	// taskOf returns the queued task whose agent CLI process is pid; nil
+	// taskOf returns the queued task whose agent CLI is process proc; nil
 	// when no tasks run here.
-	taskOf func(pid int) (agentrun.LiveRun, bool)
+	taskOf func(proc procstat.Identity) (agentrun.LiveRun, bool)
 }
 
 type resolvedKey struct{}
@@ -128,14 +129,11 @@ func reportsTask(ctx context.Context) bool {
 }
 
 // task returns the run of the task a's process belongs to. Only orchd's own
-// child on the caller's path can be a task's agent CLI.
+// child on the caller's path, matched by PID and start time, can be a task's
+// agent CLI.
 func (r *callerResolver) task(a callerAuth) agentrun.LiveRun {
-	if a.conn != nil {
-		a.conn.mu.Lock()
-		defer a.conn.mu.Unlock()
-		if a.conn.task != nil {
-			return *a.conn.task
-		}
+	if t := a.conn.cachedTask(); t != nil {
+		return *t
 	}
 	if r == nil || r.taskOf == nil || !a.spawned {
 		return agentrun.LiveRun{}
@@ -144,40 +142,77 @@ func (r *callerResolver) task(a callerAuth) agentrun.LiveRun {
 	if !ok {
 		return agentrun.LiveRun{}
 	}
-	if a.conn != nil {
-		a.conn.task = &run
-	}
-	return run
+	return *a.conn.keepTask(run)
 }
 
 // pin returns the pin of the nearest harness at or above a's process that
 // holds one, matching each by PID and the start time read at accept, so a
 // reused PID never resolves to an earlier process's pin.
 func (r *callerResolver) pin(ctx context.Context, a callerAuth) (sessionPin, bool, error) {
-	if a.conn != nil {
-		a.conn.mu.Lock()
-		defer a.conn.mu.Unlock()
-		if a.conn.pin != nil {
-			return *a.conn.pin, true, nil
-		}
+	if p := a.conn.cachedPin(); p != nil {
+		return *p, true, nil
 	}
-	for _, h := range append([]procstat.Identity{a.harnessProc}, a.outerHarnesses...) {
+	for i, h := range append([]procstat.Identity{a.harnessProc}, a.outerHarnesses...) {
 		if h.PID <= 0 || h.Started.IsZero() {
 			continue
 		}
 		p, ok, err := r.pins.currentOf(ctx, h)
-		if err != nil || !ok {
-			if err != nil {
-				return sessionPin{}, false, err
-			}
+		switch {
+		case err != nil:
+			return sessionPin{}, false, err
+		case !ok:
 			continue
-		}
-		if a.conn != nil {
-			a.conn.pin = &p
+		case i == 0:
+			return *a.conn.keepPin(p), true, nil
 		}
 		return p, true, nil
 	}
 	return sessionPin{}, false, nil
+}
+
+// cachedPin, keepPin, cachedTask and keepTask read and fill c's cache; the
+// lookups run outside its lock, and the first result kept wins. A nil c
+// keeps nothing.
+func (c *connCaller) cachedPin() *sessionPin {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.pin
+}
+
+func (c *connCaller) keepPin(p sessionPin) *sessionPin {
+	if c == nil {
+		return &p
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.pin == nil {
+		c.pin = &p
+	}
+	return c.pin
+}
+
+func (c *connCaller) cachedTask() *agentrun.LiveRun {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.task
+}
+
+func (c *connCaller) keepTask(run agentrun.LiveRun) *agentrun.LiveRun {
+	if c == nil {
+		return &run
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.task == nil {
+		c.task = &run
+	}
+	return c.task
 }
 
 // unary attaches the resolved caller to each unary call's context.
