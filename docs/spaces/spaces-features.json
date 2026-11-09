@@ -2040,7 +2040,7 @@
       "attempts": 1,
       "criteria_sha256": "f6d1c6a76f28bdac3e1409ce65751af30acd36c96b1963d4b5bb539ac45ddb6f",
       "branch": "feat/sp-014-command-log",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/152"
     },
     {
       "id": "SP-017",
