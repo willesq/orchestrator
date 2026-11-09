@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>orch Spaces: Settings UI Design</title>
+<style>
+/* Layout: a design document wrapping an interactive mockup of the macOS app's Spaces pane. Principles first, then the mockup (basic setup and advanced editor), then screen-by-screen notes. */
+:root {
+  color-scheme: light;
+  --ink: #18222b; --muted: #52606d; --paper: #f4f6f7; --surface: #ffffff; --line: #d8dfe5;
+  --accent: #2f6f8f; --accent-soft: #e2eef4;
+  --do: #23764a; --do-soft: #e3f3ea; --later: #8a6400; --later-soft: #f8f0dc; --no: #a3332b; --no-soft: #f8e5e3;
+  --pub: #23764a; --pub-soft: #e3f3ea; --acme: #2f6f8f; --acme-soft: #e2eef4;
+  --glob: #7a4fa0; --glob-soft: #efe7f6; --pers: #8a6400; --pers-soft: #f8f0dc;
+  --win: #ececec; --win-side: #e3e3e6; --win-line: #c9c9ce; --sel: #0a64d6; --sel-ink: #fff;
+  --font-display: "Avenir Next", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #e3eaef; --muted: #a2b0bc; --paper: #0f151a; --surface: #172028; --line: #2a3742;
+    --accent: #7fbfdc; --accent-soft: #16303b;
+    --do: #7fd3a0; --do-soft: #15301f; --later: #e8b75a; --later-soft: #33270f; --no: #f08a80; --no-soft: #3a1c19;
+    --pub: #7fd3a0; --pub-soft: #15301f; --acme: #7fbfdc; --acme-soft: #16303b;
+    --glob: #c9a4ec; --glob-soft: #2c2038; --pers: #e8b75a; --pers-soft: #33270f;
+    --win: #1e1f22; --win-side: #26272b; --win-line: #3a3b40; --sel: #2f7bea;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 16px/1.6 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 72rem; margin: 0 auto; padding-block: 2.5rem 4rem; display: grid; gap: 2.75rem; }
+.narrow { max-width: 64rem; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.2; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(1.9rem, 4.5vw, 2.6rem); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 700; }
+h3 { font-size: 1.12rem; font-weight: 650; }
+p { margin: 0; max-width: 72ch; }
+ul, ol { max-width: 76ch; }
+a { color: var(--accent); text-underline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: 0.87em; background: var(--accent-soft); padding: 0.05em 0.3em; border-radius: 3px; }
+.eyebrow { font: 600 0.74rem/1 var(--font-body); letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+header { display: grid; gap: 0.8rem; }
+.lede { color: var(--muted); font-size: 1.08rem; }
+section { display: grid; gap: 1rem; }
+.bottom, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1.3rem 1.4rem; display: grid; gap: 0.75rem; }
+.bottom ul, .card ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.35rem; }
+.principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 0.8rem; }
+.principles .card { padding: 1rem 1.1rem; gap: 0.35rem; }
+.principles .card p { font-size: 0.94rem; color: var(--muted); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 36rem; font-size: 0.93rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 0.72rem/1.2 var(--font-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+
+/* ---------- Mock window ---------- */
+.window { background: var(--win); border: 1px solid var(--win-line); border-radius: 12px; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,0.14); font: 13px/1.45 var(--font-body); color: var(--ink); }
+.titlebar { display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--win-line); background: var(--win-side); }
+.lights { display: flex; gap: 6px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+.lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+.titlebar .t { flex: 1; text-align: center; font-weight: 600; color: var(--muted); font-size: 12.5px; }
+.modebtn { display: inline-flex; border: 1px solid var(--win-line); border-radius: 7px; overflow: hidden; }
+.modebtn button { font: 600 11.5px/1 var(--font-body); padding: 5px 10px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
+.modebtn button[aria-pressed="true"] { background: var(--sel); color: var(--sel-ink); }
+.body { display: grid; grid-template-columns: 170px 1fr; min-height: 560px; }
+@media (max-width: 760px) { .body { grid-template-columns: 1fr; } .side { display: flex; flex-wrap: wrap; } }
+.side { background: var(--win-side); border-right: 1px solid var(--win-line); padding: 0.6rem 0.45rem; display: grid; align-content: start; gap: 1px; }
+.side .grp { font: 600 10.5px/1 var(--font-body); color: var(--muted); padding: 0.7rem 0.6rem 0.3rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.side button { text-align: left; border: 0; background: transparent; color: var(--ink); font: inherit; padding: 5px 9px; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; gap: 0.4rem; }
+.side button[aria-current="true"] { background: var(--sel); color: var(--sel-ink); }
+.side .dim { opacity: 0.55; cursor: default; }
+.badge { font: 700 10px/1 var(--font-body); background: var(--no); color: #fff; border-radius: 999px; padding: 3px 6px; }
+.pane { padding: 1rem 1.2rem 1.3rem; display: grid; gap: 0.9rem; align-content: start; background: var(--surface); min-width: 0; }
+.pane h4 { margin: 0; font: 650 17px/1.2 var(--font-display); }
+.pane .sub { color: var(--muted); }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; background: var(--win); padding: 2px; border-radius: 8px; width: fit-content; }
+.tabs button { font: 600 12px/1 var(--font-body); border: 0; background: transparent; padding: 6px 11px; border-radius: 6px; cursor: pointer; color: var(--ink); }
+.tabs button[aria-selected="true"] { background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+.screen[hidden] { display: none; }
+.screen { display: grid; gap: 0.85rem; }
+.row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+.spacer { flex: 1; }
+.btn { font: 600 12.5px/1 var(--font-body); padding: 7px 12px; border-radius: 7px; border: 1px solid var(--win-line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.btn.primary { background: var(--sel); color: var(--sel-ink); border-color: var(--sel); }
+.btn.danger { color: var(--no); }
+.btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.mcard { border: 1px solid var(--line); border-radius: 10px; padding: 0.75rem 0.85rem; display: grid; gap: 0.45rem; background: var(--surface); }
+.mgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.6rem; }
+.chipx { display: inline-block; font: 600 11px/1 var(--font-mono); padding: 4px 7px; border-radius: 5px; margin: 1px 2px 1px 0; white-space: nowrap; }
+.chipx.pub { color: var(--pub); background: var(--pub-soft); } .chipx.acme { color: var(--acme); background: var(--acme-soft); }
+.chipx.glob { color: var(--glob); background: var(--glob-soft); } .chipx.pers { color: var(--pers); background: var(--pers-soft); }
+.chipx.q { color: var(--no); background: var(--no-soft); } .chipx.n { color: var(--muted); border: 1px solid var(--line); }
+.kindtag { font: 700 10px/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.mcard .stat { color: var(--muted); font-size: 12px; }
+.mcard.sp-pub { border-top: 4px solid var(--pub); } .mcard.sp-acme { border-top: 4px solid var(--acme); }
+.mcard.sp-glob { border-top: 4px solid var(--glob); } .mcard.sp-pers { border-top: 4px solid var(--pers); }
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 0.55rem 0.75rem; border-radius: 0 8px 8px 0; font-size: 12.5px; }
+.note.warn { border-left-color: var(--later); background: var(--later-soft); }
+.note.bad { border-left-color: var(--no); background: var(--no-soft); }
+.mtable { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 0; }
+.mtable th, .mtable td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.mtable th { font: 600 10.5px/1.2 var(--font-body); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.mtable td.c, .mtable th.c { text-align: center; }
+.mwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.cell { width: 26px; height: 22px; border-radius: 5px; border: 1px solid var(--win-line); background: var(--surface); cursor: pointer; font: 700 12px/1 var(--font-body); color: var(--do); }
+.cell[aria-pressed="true"] { background: var(--do-soft); border-color: var(--do); }
+.cell[aria-pressed="false"] { color: var(--muted); }
+.cell.lock { cursor: not-allowed; background: repeating-linear-gradient(45deg, var(--no-soft), var(--no-soft) 4px, transparent 4px, transparent 8px); color: var(--no); border-color: var(--no-soft); }
+.cell.self { cursor: default; background: var(--do-soft); border-color: var(--do); }
+select.m, input.m { font: inherit; font-size: 12.5px; padding: 5px 7px; border-radius: 6px; border: 1px solid var(--win-line); background: var(--surface); color: var(--ink); }
+input.m { min-width: 14rem; }
+.seg2 { display: inline-flex; border: 1px solid var(--win-line); border-radius: 7px; overflow: hidden; }
+.seg2 button { font: 600 11.5px/1 var(--font-body); padding: 6px 9px; border: 0; border-right: 1px solid var(--win-line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.seg2 button:last-child { border-right: 0; }
+.seg2 button[aria-pressed="true"] { background: var(--sel); color: var(--sel-ink); }
+.steps { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.steps span { font: 600 11.5px/1 var(--font-body); padding: 5px 9px; border-radius: 999px; background: var(--win); color: var(--muted); }
+.steps span.on { background: var(--sel); color: var(--sel-ink); }
+.steps span.done { background: var(--do-soft); color: var(--do); }
+.wstep[hidden] { display: none; }
+.wstep { display: grid; gap: 0.7rem; }
+.found { display: grid; gap: 0.45rem; }
+.found .f { display: grid; grid-template-columns: 1fr auto; gap: 0.6rem; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 0.55rem 0.7rem; }
+.found .f .m { color: var(--muted); font-size: 12px; }
+.mono { font-family: var(--font-mono); font-size: 12px; }
+.ok { color: var(--do); font-weight: 700; } .bad { color: var(--no); font-weight: 700; } .warnc { color: var(--later); font-weight: 700; }
+.tester { display: grid; gap: 0.5rem; }
+.tester .out { font-size: 12.5px; }
+.diff { font: 12px/1.6 var(--font-mono); border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 0.75rem; background: var(--paper); overflow-x: auto; }
+.diff .a { color: var(--do); } .diff .r { color: var(--no); } .diff .c { color: var(--muted); }
+.bar { height: 8px; border-radius: 4px; background: var(--win); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+
+footer { color: var(--muted); font-size: 0.88rem; border-top: 1px solid var(--line); padding-top: 1.2rem; display: grid; gap: 0.5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="narrow">
+  <span class="eyebrow">orch · spaces · UI design · 8 Nov 2026, updated 9 Nov 2026</span>
+  <h1>Spaces in the app: basic setup, full control</h1>
+  <p class="lede">How you configure spaces in the macOS app. The goal is a basic setup that's correct in about two minutes for most people, and an advanced editor that exposes every rule without making it easy to weaken isolation by accident. Background in the earlier drafts beside this file: <a href="memory-permissions-design.html">memory-permissions-design.html</a>, <a href="github-org-separation-design.html">github-org-separation-design.html</a> (the space model) and <a href="context-isolation-deep-dive.html">context-isolation-deep-dive.html</a> (enforcement research). The features are SP-050 to SP-055 (the pane) and SP-072 (minimal controls that ship first).</p>
+  <p class="note">Updated 2026-11-09 to match the plan. The authoritative plan is docs/spaces/spaces-features.json (rendered at <a href="../index.html">docs/spaces/index.html</a>); where they disagree, the plan wins.</p>
+</header>
+
+<section class="narrow" aria-labelledby="pr">
+  <h2 id="pr">Design principles</h2>
+  <div class="principles">
+    <div class="card"><h3>Only you change policy</h3><p>The policy lives in orch.db as numbered revisions. Anyone except a queued task may save a draft, and saving changes nothing. Apply is operator-only, names the revision you reviewed, and is refused to anything descended from a harness or orchd. A draft an agent saved shows as pending (drift) and needs your explicit acceptance to apply (D-25, SP-020).</p></div>
+    <div class="card"><h3>Detect, then confirm</h3><p>Basic setup proposes spaces from what's already on disk and in GitHub: checkouts grouped by remote org, your org memberships, repo visibility. You confirm. You don't type paths.</p></div>
+    <div class="card"><h3>Safe things are easy, risky things are visible</h3><p>Isolated-to-isolated reads aren't a toggle you can flip. They're locked cells that explain why. Combining two jobs is not a setting: the design summary calls it an explicit operator operation, but no feature builds it yet.</p></div>
+    <div class="card"><h3>Preview every effect</h3><p>Before Apply, see the policy diff and how many chunks, PRs and tasks move between spaces (counts only, never content). Each space has its own Qdrant collection (D-10). Moving chunks into it runs in the background without re-embedding, and a chunk stays unreadable until it has moved (SP-027, INV-08).</p></div>
+    <div class="card"><h3>Ask "where would this go?"</h3><p>A tester takes a path, URL, org/repo or chat channel and shows its space and the rule that decided it. The same check backs <code>orch spaces why</code> and the <code>ExplainPlacement</code> RPC, which exist today (SP-022).</p></div>
+    <div class="card"><h3>Secrets stay write-only</h3><p>Term lists can be added to and counted, never displayed. Refusals show a term's line number and hash, not the term (SP-044, INV-07). A one-click screen-share-safe mode also hides every space except one you pick (D-21).</p></div>
+    <div class="card"><h3>Every layer has an off switch</h3><p>Memory filtering, the tool guard, outbound terms and sandbox rules each have an operator-only switch, optionally timed (15 min, 1 h). While a layer is off, a banner, <code>orch status</code> and every session's start digest say so, and logging continues (D-11, SP-070).</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="mock">
+  <h2 id="mock" class="narrow">Interactive mockup: the Spaces pane</h2>
+  <p class="narrow">A new sidebar pane (SP-051). The sidebar below matches the app's current panes (<code>MainWindow.swift</code>); Safety Net lives inside Settings and PRs inside GitHub. Where Spaces sits in the list is illustrative. Before this pane ships, SP-072 adds a minimal Spaces section to Settings and the menu bar: the four enforcement switches with their timers, the "enforcement off" banner and the directory validator. The <b>Basic / Advanced</b> switch in the toolbar changes what's shown. Every view shows the same applied policy, so switching modes never changes anything. Click through the tabs and the setup steps.</p>
+
+  <div class="window" id="win">
+    <div class="titlebar">
+      <div class="lights" aria-hidden="true"><i></i><i></i><i></i></div>
+      <span class="t">Orchestrator — Spaces</span>
+      <div class="modebtn" role="group" aria-label="Mode">
+        <button type="button" data-mode="basic" aria-pressed="true">Basic</button>
+        <button type="button" data-mode="advanced" aria-pressed="false">Advanced</button>
+      </div>
+    </div>
+    <div class="body">
+      <nav class="side" aria-label="App sidebar (mock)">
+        <span class="grp">Orchestrator</span>
+        <button type="button" class="dim" tabindex="-1">Dashboard</button>
+        <button type="button" class="dim" tabindex="-1">System</button>
+        <button type="button" class="dim" tabindex="-1">Memory</button>
+        <button type="button" aria-current="true">Spaces <span class="badge" title="2 items need you">2</span></button>
+        <button type="button" class="dim" tabindex="-1">Docs</button>
+        <button type="button" class="dim" tabindex="-1">Sources</button>
+        <button type="button" class="dim" tabindex="-1">Tasks</button>
+        <button type="button" class="dim" tabindex="-1">GitHub</button>
+        <button type="button" class="dim" tabindex="-1">Settings</button>
+      </nav>
+
+      <div class="pane">
+        <div class="row">
+          <h4>Spaces</h4><span class="spacer"></span>
+          <span class="sub" id="draftState">Applied policy · rev 7</span>
+          <button class="btn" type="button" title="Hide every space except one you pick (D-21)">Screen-share safe…</button>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Spaces sections" id="tabs"></div>
+
+        <!-- Overview -->
+        <div class="screen" data-screen="overview" role="tabpanel">
+          <div class="note bad"><b>Enforcement off:</b> tool guard set to <i>Log</i> for 1 h by you at 13:10 (52 min left). Every session's start digest says so; logging continues (SP-070). <button class="btn" type="button">Turn back on</button></div>
+          <div class="note warn">2 items need you: <b>1 conflict</b> (<span class="mono">~/work/acme/billing</span> has a globex remote, so nothing there is indexed and sessions there get no space) and <b>14 quarantined chunks</b>. Also new: <b>1 refusal</b> (Codex · 9b11…, other job; SP-048).</div>
+          <div class="mgrid">
+            <div class="mcard sp-pub"><span class="kindtag">Public · readable everywhere</span><b>public</b><div><span class="chipx pub">oss-org</span><span class="chipx n">go.dev</span></div><span class="stat">2,310 chunks · 0 sessions</span></div>
+            <div class="mcard sp-acme"><span class="kindtag">Isolated · job</span><b>acme</b><div><span class="chipx acme">acme</span><span class="chipx n">~/work/acme</span><span class="chipx n">Slack T0ACME</span></div><span class="stat">18,904 chunks · 2 live sessions</span></div>
+            <div class="mcard sp-glob"><span class="kindtag">Isolated · job</span><b>globex</b><div><span class="chipx glob">globex</span><span class="chipx n">~/work/globex</span><span class="chipx n">Teams globex</span></div><span class="stat">7,121 chunks · 1 live session</span></div>
+            <div class="mcard sp-pers"><span class="kindtag">Private · personal</span><b>personal</b><div><span class="chipx pers">willesq</span><span class="chipx n">~/code</span></div><span class="stat">9,442 chunks · 0 sessions</span></div>
+          </div>
+          <div class="mwrap"><table class="mtable">
+            <thead><tr><th>Session</th><th>State</th><th>Pinned to</th><th>Space</th><th>Directory moves</th><th>Refusals</th></tr></thead>
+            <tbody>
+              <tr><td>Claude Code · 4f2a…</td><td>active</td><td class="mono">~/work/acme/api</td><td><span class="chipx acme">acme</span></td><td>3 (within acme)</td><td>0</td></tr>
+              <tr><td>Codex · 9b11…</td><td>active</td><td class="mono">~/work/acme/web</td><td><span class="chipx acme">acme</span></td><td>1 → <span class="mono">~/work/globex</span></td><td><span class="bad">1</span></td></tr>
+              <tr><td>Claude Code · 77c0…</td><td>idle (open 3 days)</td><td class="mono">~/work/globex/core</td><td><span class="chipx glob">globex</span></td><td>0</td><td>0</td></tr>
+              <tr><td>Codex · PID 4120</td><td class="warnc">unpinned</td><td class="sub">started before the hooks were installed</td><td class="sub">—</td><td>—</td><td>—</td></tr>
+            </tbody>
+          </table></div>
+          <div class="row"><button class="btn" type="button" data-goto="tester">Where would this go?</button><button class="btn" type="button" data-goto="activity">Open activity log</button></div>
+          <p class="sub">Session states come from the kernel, not from hook events: active, idle (process alive, quiet for 30 min or more; never "ended" while open), ended, and unpinned (SP-017).</p>
+        </div>
+
+        <!-- Setup (basic) -->
+        <div class="screen" data-screen="setup" role="tabpanel" hidden>
+          <div class="steps" id="steps"><span>1 Scan</span><span>2 Spaces</span><span>3 Recall</span><span>4 Guard</span><span>5 Review</span></div>
+
+          <div class="wstep" data-step="0">
+            <p>orch looks at what's already on this Mac and in your GitHub account. Nothing is indexed or changed during setup.</p>
+            <div class="found">
+              <div class="f"><div><b>Git checkouts</b><div class="m">Scanned ~/work, ~/code, ~/src · 66 found, grouped by remote org</div></div><span class="ok">Done</span></div>
+              <div class="f"><div><b>GitHub organizations</b><div class="m">gh api user/orgs with your default login · acme, globex, oss-org, willesq. An org only a job's own gh profile can see shows up once that profile is set (SP-063, RC-10).</div></div><span class="ok">Done</span></div>
+              <div class="f"><div><b>Repo visibility</b><div class="m">oss-org: 23 public, 1 private · acme, globex: all private</div></div><span class="ok">Done</span></div>
+              <div class="f"><div><b>Chat workspaces</b><div class="m">No Slack or Teams connector set up. You can add one later.</div></div><span class="sub">Skipped</span></div>
+            </div>
+          </div>
+
+          <div class="wstep" data-step="1" hidden>
+            <p>Each group became a proposed space. Choose how each one should behave, in plain terms:</p>
+            <div class="mwrap"><table class="mtable">
+              <thead><tr><th>Found</th><th>Evidence</th><th>Behaves as</th></tr></thead>
+              <tbody>
+                <tr><td><b>acme</b><br><span class="mono">~/work/acme</span> · 41 checkouts</td><td>all repos private, you're a member</td><td><div class="seg2" data-group="acme"><button type="button" aria-pressed="true">Job: keep separate</button><button type="button" aria-pressed="false">Personal</button><button type="button" aria-pressed="false">Open</button></div></td></tr>
+                <tr><td><b>globex</b><br><span class="mono">~/work/globex</span> · 12 checkouts</td><td>all repos private, you're a member</td><td><div class="seg2" data-group="globex"><button type="button" aria-pressed="true">Job: keep separate</button><button type="button" aria-pressed="false">Personal</button><button type="button" aria-pressed="false">Open</button></div></td></tr>
+                <tr><td><b>oss-org</b><br>3 checkouts: 2 under <span class="mono">~/code</span>, 1 under <span class="mono">~/work/acme</span></td><td>23 public repos, 1 private</td><td><div class="seg2" data-group="oss"><button type="button" aria-pressed="false">Job: keep separate</button><button type="button" aria-pressed="false">Personal</button><button type="button" aria-pressed="true">Open</button></div></td></tr>
+                <tr><td><b>willesq</b><br><span class="mono">~/code</span> · 9 checkouts</td><td>your own account</td><td><div class="seg2" data-group="pers"><button type="button" aria-pressed="false">Job: keep separate</button><button type="button" aria-pressed="true">Personal</button><button type="button" aria-pressed="false">Open</button></div></td></tr>
+              </tbody>
+            </table></div>
+            <div class="note">"Open" only takes repos GitHub reports as public. The 1 private <span class="mono">oss-org</span> repo goes to quarantine for you to place. The oss-org checkout under <span class="mono">~/work/acme</span> goes to acme: when a folder root and a git remote disagree, the stricter one wins (D-15, rule <span class="mono">root_stricter</span>).</div>
+            <p>Roots nest like CODEOWNERS: the deepest root decides, and a nested root may only be stricter than every root above it (public &lt; private &lt; isolated; INV-14).</p>
+            <div class="diff" aria-label="Roots tree"><span class="c">~/code                 personal  (private)</span>
+<span class="c">~/work/acme            acme      (isolated)</span>
+<span class="r">  └ billing            conflict: globex remote</span>
+<span class="c">~/work/globex          globex    (isolated)</span></div>
+            <p>Each job uses its own GitHub account (D-18). orch checks it only with <span class="mono">gh auth status</span>; you log in yourself.</p>
+            <div class="mwrap"><table class="mtable">
+              <thead><tr><th>Job</th><th>gh profile (GH_CONFIG_DIR)</th><th>Login</th></tr></thead>
+              <tbody>
+                <tr><td><span class="chipx acme">acme</span></td><td class="mono">~/.config/gh-acme</td><td class="ok">logged in</td></tr>
+                <tr><td><span class="chipx glob">globex</span></td><td class="mono">~/.config/gh-globex</td><td class="warnc">not logged in: run <span class="mono">GH_CONFIG_DIR=~/.config/gh-globex gh auth login</span></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="wstep" data-step="2" hidden>
+            <p>What may each kind of content do? These are safe defaults. Advanced mode lets you change them per space.</p>
+            <div class="mwrap"><table class="mtable">
+              <thead><tr><th>Content</th><th class="c">Store it</th><th class="c">Auto-recall in prompts</th><th class="c">Search on request</th><th class="c">Queued tasks</th></tr></thead>
+              <tbody>
+                <tr><td>Repo and GitHub docs</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td></tr>
+                <tr><td>Session summaries</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td><td class="c ok">✓</td></tr>
+                <tr><td>Session transcripts</td><td class="c ok">✓</td><td class="c">—</td><td class="c ok">✓</td><td class="c ok">✓</td></tr>
+                <tr><td>Chat channels</td><td class="c ok">✓</td><td class="c">—</td><td class="c ok">✓</td><td class="c ok">✓</td></tr>
+                <tr><td>Direct messages</td><td class="c ok">✓</td><td class="c">—</td><td class="c ok">✓</td><td class="c bad">never</td></tr>
+              </tbody>
+            </table></div>
+          </div>
+
+          <div class="wstep" data-step="3" hidden>
+            <p>Enforcement is on from the first release (D-11). Each layer has its own switch; only you can change one, and later you can switch a layer off for 15 min or 1 h while debugging.</p>
+            <div class="mwrap"><table class="mtable">
+              <thead><tr><th>Layer</th><th>State</th></tr></thead>
+              <tbody>
+                <tr><td>Memory filtering</td><td><div class="seg2" data-group="lmem"><button type="button" aria-pressed="false">Off</button><button type="button" aria-pressed="true">On</button></div></td></tr>
+                <tr><td>Tool guard</td><td><div class="seg2" data-group="guard"><button type="button" aria-pressed="false">Off</button><button type="button" aria-pressed="false">Log</button><button type="button" aria-pressed="true">Block other jobs (default)</button><button type="button" aria-pressed="false">Strict</button></div></td></tr>
+                <tr><td>Outbound terms</td><td><div class="seg2" data-group="lterms"><button type="button" aria-pressed="false">Off</button><button type="button" aria-pressed="true">On</button></div></td></tr>
+                <tr><td>Sandbox rules</td><td><div class="seg2" data-group="lsbx"><button type="button" aria-pressed="false">Off</button><button type="button" aria-pressed="true">On</button></div></td></tr>
+              </tbody>
+            </table></div>
+            <div class="note">A session's space is fixed at its first directory. <b>Block other jobs</b> refuses tool calls that reach another isolated space's folders, or run <span class="mono">gh</span>/<span class="mono">git</span> against its orgs; everything else is logged. <b>Strict</b> is opt-in (D-12); SP-040 defines exactly what it adds. <b>Sandbox rules</b> are the deny rules orch writes into each checkout's local settings file (SP-046). With a layer off, tool events are still logged, as "not enforced" with the verdict the guard would have given (SP-070).</div>
+            <div class="row"><label class="sub" for="ret">Keep the command log for</label>
+              <select class="m" id="ret"><option>3 days after a session ends</option><option selected>7 days after a session ends</option><option>30 days after a session ends</option></select></div>
+            <p class="sub">Refusals are kept 90 days. A session that is still open is never treated as ended; its log is capped at 50 MB instead, and the whole log at 500 MB (SP-015).</p>
+          </div>
+
+          <div class="wstep" data-step="4" hidden>
+            <p>Ready to apply. Here's what will happen:</p>
+            <div class="mwrap"><table class="mtable">
+              <thead><tr><th>Effect</th><th>Count</th></tr></thead>
+              <tbody>
+                <tr><td>Spaces created</td><td>4 (public, acme, globex, personal)</td></tr>
+                <tr><td>Existing chunks to move into their space's collection</td><td>37,791 (no re-embedding)</td></tr>
+                <tr><td>Chunks to quarantine</td><td>14: unplaceable legacy notes, 1 private oss-org repo</td></tr>
+                <tr><td>Cached PRs and events filtered by space</td><td>63</td></tr>
+                <tr><td>Checkout settings files to write (<span class="mono">.claude/settings.local.json</span>, SP-046)</td><td>62</td></tr>
+                <tr><td>Tool hooks</td><td>Claude Code and Codex wired (from <span class="mono">orch status</span>; set up by <span class="mono">orch install</span>, not by Apply). Gemini CLI: not covered by spaces (D-20).</td></tr>
+                <tr><td>Job gh profiles</td><td>1 of 2 logged in; globex's orgs aren't synced until you log in (SP-063)</td></tr>
+              </tbody>
+            </table></div>
+            <div class="note warn">Until the move finishes (about 2 minutes), sessions see only content that's already in its space's collection (INV-08).</div>
+          </div>
+
+          <div class="row"><button class="btn" type="button" id="wback">Back</button><span class="spacer"></span><button class="btn primary" type="button" id="wnext">Continue</button></div>
+        </div>
+
+        <!-- Spaces (advanced) -->
+        <div class="screen" data-screen="spaces" role="tabpanel" hidden>
+          <div class="row"><select class="m" id="spacePick" aria-label="Space"><option value="acme">acme</option><option value="globex">globex</option><option value="public">public</option><option value="personal">personal</option></select><span class="kindtag" id="spaceKind">Isolated</span><span class="spacer"></span><button class="btn" type="button">New space…</button></div>
+          <div class="mwrap"><table class="mtable">
+            <thead><tr><th>Binding</th><th>Value</th><th>Verified</th><th></th></tr></thead>
+            <tbody id="bindRows"></tbody>
+          </table></div>
+          <div class="row"><button class="btn" type="button">Add GitHub org…</button><button class="btn" type="button">Add folder…</button><button class="btn" type="button">Add chat workspace…</button><button class="btn" type="button">Add web prefix…</button><button class="btn" type="button">Set gh profile…</button></div>
+          <div class="mcard">
+            <b>Outbound terms</b>
+            <span class="stat" id="termStat">12 terms · file <span class="mono">~/.config/orch/terms/acme.txt</span> · sha256 3f9c…a1</span>
+            <div class="row"><input class="m" type="password" placeholder="Add a term (hidden as you type)" aria-label="Add a term"><button class="btn" type="button">Add</button><button class="btn" type="button">Open file in editor</button></div>
+            <span class="stat">Terms are never shown here. Blocked in any destination outside this space.</span>
+          </div>
+          <h4 style="font-size:14px">Sources in this space</h4>
+          <div class="mwrap"><table class="mtable">
+            <thead><tr><th>Source</th><th>Chunks</th><th></th></tr></thead>
+            <tbody id="srcRows"></tbody>
+          </table></div>
+          <p class="sub">Retag moves a source's data to another space's collection (copy, verify the count, delete; no re-embedding) and keeps it there on later refreshes. Retagging into public, or out of an isolated space, asks you to confirm (SP-071, INV-15).</p>
+          <div class="row"><button class="btn danger" type="button" disabled>Retire space… · Later (not planned)</button><button class="btn" type="button" disabled>Merge into… · Later (not planned)</button></div>
+          <p class="sub">No feature builds retire or merge yet. To leave a job today, remove its bindings in a draft and apply it; content no rule places goes to quarantine (INV-03), where you can purge it (<span class="mono">orch quarantine purge</span>, SP-028).</p>
+        </div>
+
+        <!-- Access (advanced) -->
+        <div class="screen" data-screen="access" role="tabpanel" hidden>
+          <p class="sub">Which spaces can a session in each row read? Click a cell to change it. Locked cells (✕) can't be enabled: nothing outside a job reads it, and the public space reads only itself (validation rules <span class="mono">isolated_reads_isolated</span>, <span class="mono">private_reads_isolated</span>, <span class="mono">public_reads</span>; INV-04). A job may read a private space such as personal: off by default, switchable with a warning (D-16, SP-053).</p>
+          <div class="mwrap"><table class="mtable" id="matrix"></table></div>
+          <p class="sub" id="matrixMsg" aria-live="polite"></p>
+          <h4 style="font-size:14px">Per content kind, per space</h4>
+          <p class="sub">Not in the policy schema yet. Per-kind rules and retention for chat arrive with the chat connectors (SP-060, phase P5); DMs are never auto-recalled and never given to tasks (D-19).</p>
+          <div class="mwrap"><table class="mtable">
+            <thead><tr><th>acme ›</th><th class="c">Store</th><th class="c">Auto-recall</th><th class="c">Search</th><th class="c">Tasks</th><th>Retention</th></tr></thead>
+            <tbody>
+              <tr><td>Repo / GitHub docs</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td class="c">✓</td><td>while synced</td></tr>
+              <tr><td>Session transcripts</td><td class="c">✓</td><td class="c">—</td><td class="c">✓</td><td class="c">✓</td><td>365 days</td></tr>
+              <tr><td>Slack DMs</td><td class="c">✓</td><td class="c">—</td><td class="c">✓</td><td class="c">never</td><td>180 days</td></tr>
+              <tr><td>Slack private channels</td><td class="c">✓</td><td class="c">—</td><td class="c">✓</td><td class="c">✓</td><td>365 days</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+
+        <!-- Rules & tester (advanced) -->
+        <div class="screen" data-screen="tester" role="tabpanel" hidden>
+          <div class="mcard">
+            <b>Directory validator</b>
+            <span class="stat">Every bound root, with its effective space. A nesting the validator would reject is marked, and the draft can't be submitted (D-15, SP-053, SP-072).</span>
+            <div class="diff" aria-label="Roots tree"><span class="c">~/code                 personal  (private)</span>
+<span class="c">~/work/acme            acme      (isolated)</span>
+<span class="r">  └ billing            conflict: globex remote</span>
+<span class="c">~/work/globex          globex    (isolated)</span></div>
+          </div>
+          <div class="tester mcard">
+            <b>Where would this go?</b>
+            <div class="row"><input class="m" id="probe" value="~/work/acme/billing" aria-label="Path, URL, org/repo or channel"><button class="btn primary" type="button" id="probeBtn">Check</button></div>
+            <div class="row"><span class="sub">Try:</span>
+              <button class="btn" type="button" data-probe="oss-org/release-infra">oss-org/release-infra</button>
+              <button class="btn" type="button" data-probe="acme/oss-lib">acme/oss-lib</button>
+              <button class="btn" type="button" data-probe="~/work/acme/oss-tools">~/work/acme/oss-tools</button>
+              <button class="btn" type="button" data-probe="https://go.dev/doc/">https://go.dev/doc/</button>
+              <button class="btn" type="button" data-probe="slack://T0ACME/D04">slack://T0ACME/D04</button>
+              <button class="btn" type="button" data-probe="~/scratch/y">~/scratch/y</button></div>
+            <div class="out" id="probeOut" aria-live="polite"></div>
+          </div>
+          <div class="mwrap"><table class="mtable" aria-label="Placement rules (internal/spaces/classify.go)">
+            <thead><tr><th>Rule</th><th>Decides when</th><th>Matches</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">override</td><td>a sticky retag of the source wins over every rule (SP-071)</td><td>0</td></tr>
+              <tr><td class="mono">root</td><td>the deepest bound root holding the path decides</td><td>925</td></tr>
+              <tr><td class="mono">remote</td><td>the GitHub repo's owner org decides; fork parents are ignored</td><td>27,301</td></tr>
+              <tr><td class="mono">root_stricter / remote_stricter</td><td>root and remote disagree: the stricter wins (public &lt; private &lt; isolated)</td><td>12</td></tr>
+              <tr><td class="mono">conflict</td><td>two different isolated spaces disagree: nothing is indexed, sessions get no space</td><td>1</td></tr>
+              <tr><td class="mono">not_verified_public</td><td>it would be public, but GitHub doesn't report the repo public → quarantine</td><td>1</td></tr>
+              <tr><td class="mono">org_unconfirmed</td><td>a bound org's GitHub identity changed → quarantine until you confirm (SP-021)</td><td>0</td></tr>
+              <tr><td class="mono">web_prefix / chat_tenant</td><td>a bound web prefix or chat tenant</td><td>109</td></tr>
+              <tr><td class="mono">writer / public_root_session</td><td>a page or note a session ingested takes its space; sessions under a public root use the default space (D-14, D-22)</td><td>9,443</td></tr>
+              <tr><td class="mono">unmatched</td><td>nothing places it → quarantine, never public (INV-03)</td><td>13</td></tr>
+            </tbody>
+          </table></div>
+        </div>
+
+        <!-- Activity -->
+        <div class="screen" data-screen="activity" role="tabpanel" hidden>
+          <div class="row"><select class="m" aria-label="Session"><option>Codex · 9b11… · pinned ~/work/acme/web</option></select><span class="spacer"></span><span class="sub">Kept until 7 days after the session ends</span></div>
+          <div class="mwrap"><table class="mtable">
+            <thead><tr><th>Time</th><th>Tool</th><th>Directory</th><th>Targets</th><th>Decision</th></tr></thead>
+            <tbody>
+              <tr><td>14:02:11</td><td>Bash</td><td class="mono">~/work/acme/web</td><td class="mono">npm test</td><td class="ok">allow</td></tr>
+              <tr><td>14:03:40</td><td>Read</td><td class="mono">~/work/acme/web</td><td class="mono">~/work/acme/api/openapi.yaml</td><td class="ok">allow</td></tr>
+              <tr><td>14:05:02</td><td>Bash</td><td class="mono">~/work/acme/web</td><td class="mono">cd ~/work/globex/core &amp;&amp; …</td><td class="bad">refuse · other job</td></tr>
+              <tr><td>14:05:09</td><td>Bash</td><td class="mono">~/work/acme/web</td><td class="mono">gh api repos/globex/core</td><td class="bad">refuse · other job's org</td></tr>
+              <tr><td>14:06:30</td><td>Bash</td><td class="mono">/tmp/build</td><td class="mono">make</td><td class="warnc">allow · outside any space, logged</td></tr>
+            </tbody>
+          </table></div>
+          <p class="sub">Command text is credential-redacted and capped at 2 KB before it's stored (D-17). The log lives in its own owner-only file, <span class="mono">toollog.db</span> in orch's data directory (D-29), is hash-chained per session, and isn't indexed into memory (INV-12). While the guard is off, a call is logged as "not enforced" with the verdict it would have got (SP-070); today's logging-only build records "logged" (SP-014). A session may read only its own events (SP-016).</p>
+        </div>
+
+        <!-- Review & apply -->
+        <div class="screen" data-screen="apply" role="tabpanel" hidden>
+          <div class="note warn" id="driftNote"><b>Drift:</b> draft rev 8, saved at 13:58 by a Claude Code session (4f2a…), is pending. Nothing in it is enforced. Review it here or discard it. (Drift also covers an applied revision whose stored hash no longer matches; D-25.)</div>
+          <div class="diff" aria-label="Pending changes, rev 7 → rev 8"><span class="c">  "spaces": [</span>
+<span class="c">    { "name": "acme", "kind": "isolated",</span>
+<span class="r">-     "reads": ["public"] },</span>
+<span class="a">+     "reads": ["public", "globex"] },   ✗ isolated_reads_isolated</span>
+<span class="c">    { "name": "personal", "kind": "private",</span>
+<span class="a">+     "roots": ["~/code", "~/notes"] }</span>
+<span class="c">  ]</span></div>
+          <div class="mwrap"><table class="mtable">
+            <thead><tr><th>Effect once the refused line is dropped (rev 9)</th><th>Count</th></tr></thead>
+            <tbody><tr><td>Chunks moved quarantine → personal (<span class="mono">~/notes</span>)</td><td>312</td></tr><tr><td>Sessions whose space changes</td><td>0 (live sessions keep their pin)</td></tr></tbody>
+          </table></div>
+          <div class="row"><button class="btn" type="button">Discard draft</button><span class="spacer"></span><button class="btn" type="button">Drop refused line (saves rev 9)</button><button class="btn primary" type="button" disabled>Apply rev 9</button></div>
+          <p class="sub">orchd refuses to apply a revision with any problem, so the app leaves refused lines out by saving a new draft that you review and apply (SP-054 a1 says invalid lines are "marked and excluded"; this is how that works against <span class="mono">ApplySpaces</span>). A draft an agent saved also needs your explicit acceptance (<span class="mono">--accept-agent-draft</span> in the CLI). Apply names the revision you reviewed and asks for Touch ID or your password, through the system authentication sheet, before it calls orchd.</p>
+        </div>
+
+        <!-- Coverage -->
+        <div class="screen" data-screen="coverage" role="tabpanel" hidden>
+          <div class="mwrap"><table class="mtable">
+            <thead><tr><th>Harness</th><th>Memory filter</th><th>Directory pin</th><th>Tool guard</th><th>OS sandbox deny</th><th>Read/Edit denies</th><th>gh profile</th><th>Outbound terms</th></tr></thead>
+            <tbody>
+              <tr><td>Claude Code</td><td class="ok">enforced</td><td class="ok">enforced</td><td class="ok">PreToolUse</td><td class="ok">denyRead/denyWrite in each checkout's settings.local.json</td><td class="ok">same file</td><td class="ok">GH_CONFIG_DIR in same file</td><td class="ok">hook + git</td></tr>
+              <tr><td>Codex</td><td class="ok">enforced</td><td class="ok">enforced</td><td class="ok">PreToolUse</td><td class="warnc">permissions profile via <span class="mono">orch run</span> launcher only (RC-09)</td><td class="warnc">launcher only</td><td class="warnc">launcher only</td><td class="warnc">git only</td></tr>
+              <tr><td>Gemini CLI</td><td class="sub" colspan="7">not covered by spaces (D-20); the existing adapter is left as it is</td></tr>
+              <tr><td>Your terminal</td><td class="sub">operator</td><td class="sub">n/a</td><td class="sub">n/a</td><td class="sub">n/a</td><td class="sub">n/a</td><td class="sub">your own</td><td class="ok">git hook</td></tr>
+            </tbody>
+          </table></div>
+          <p class="sub">The memory filter and directory pin are enforced by orchd for every covered harness. SP-004 measured the rest: Claude Code's sandbox denyRead doesn't stop its Read tool, so orch writes <span class="mono">Read(//…)</span>/<span class="mono">Edit(//…)</span> denies too, and Codex can deny reads only through a permissions profile, which has no per-checkout file (SP-046). Today the tool hooks only log (SP-012); the guard enforces from SP-041, and memory reads by a pin's space wait on it (RC-01).</p>
+          <div class="mcard">
+            <b>Enforcement switches</b>
+            <span class="stat">Operator-only, optionally timed; every change is logged (SP-070). Same as Setup → Guard.</span>
+            <div class="row"><span class="sub">Memory filtering</span><div class="seg2" data-group="cmem"><button type="button" aria-pressed="false">Off</button><button type="button" aria-pressed="true">On</button></div>
+              <span class="sub">Tool guard</span><div class="seg2" data-group="cguard"><button type="button" aria-pressed="false">Off</button><button type="button" aria-pressed="true">Log</button><button type="button" aria-pressed="false">Block other jobs</button><button type="button" aria-pressed="false">Strict</button></div></div>
+            <div class="row"><span class="sub">Outbound terms</span><div class="seg2" data-group="cterms"><button type="button" aria-pressed="false">Off</button><button type="button" aria-pressed="true">On</button></div>
+              <span class="sub">Sandbox rules</span><div class="seg2" data-group="csbx"><button type="button" aria-pressed="false">Off</button><button type="button" aria-pressed="true">On</button></div>
+              <select class="m" aria-label="For how long"><option>until I turn it back</option><option>for 15 min</option><option selected>for 1 h</option></select></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="narrow" aria-labelledby="modes">
+  <h2 id="modes">Basic and Advanced</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Tab</th><th>Basic</th><th>Advanced</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td>Overview</td><td>✓</td><td>✓</td><td>spaces at a glance, what needs you (conflicts, quarantine, drift, refusals), sessions and their state, the "enforcement off" banner, screen-share-safe mode</td></tr>
+      <tr><td>Setup</td><td>✓</td><td>✓</td><td>a five-step guided setup. You can run it again, and it only proposes changes.</td></tr>
+      <tr><td>Spaces</td><td></td><td>✓</td><td>edit bindings (orgs, folders, chat, web, gh profile), terms, sources with Retag (SP-071). Retire and merge: later, not planned.</td></tr>
+      <tr><td>Access</td><td></td><td>✓</td><td>reads matrix with locked cells (job → private is opt-in, D-16), and per content kind policy (with SP-060)</td></tr>
+      <tr><td>Rules</td><td></td><td>✓</td><td>directory validator with the roots tree, "where would this go?" tester, placement rules with match counts</td></tr>
+      <tr><td>Activity</td><td>✓</td><td>✓</td><td>per-session command log, directory moves, refusals</td></tr>
+      <tr><td>Review</td><td>✓</td><td>✓</td><td>pending diff, validation, effect counts, drift, Apply</td></tr>
+      <tr><td>Coverage</td><td></td><td>✓</td><td>what each harness actually enforces, and the four enforcement switches</td></tr>
+    </tbody>
+  </table></div>
+  <p>Basic hides editors, not information. A rule that matters, such as a quarantined chunk or a refused command, always appears in Overview regardless of mode.</p>
+</section>
+
+<section class="narrow" aria-labelledby="flows">
+  <h2 id="flows">Key flows</h2>
+  <div class="card">
+    <ul>
+      <li><b>First run.</b> The Spaces pane opens in Setup. Until you apply, orch behaves exactly as it does today (one shared space; INV-10). The sidebar badge says "Not set up", not an error. Before the pane ships, Settings and the menu bar have a minimal Spaces section with the switches and the directory validator (SP-072).</li>
+      <li><b>New job.</b> Setup → Scan finds a new org with private repos and checkouts under a new folder. It proposes "Job: keep separate", and Review shows how many chunks it would claim from quarantine or shared.</li>
+      <li><b>A conflict appears</b> (a checkout under one job with another job's remote). Nothing there is indexed and sessions there get no space. The Overview badge links to the folder in Rules, with two actions: move the checkout, or retag its source to one space (operator-only, moves the data, no re-embedding; SP-071). The policy has no per-path exception rule, and a root of one job can't sit inside another's (INV-14).</li>
+      <li><b>Switching a layer off.</b> Coverage or Setup → Guard, optionally for 15 min or 1 h. The Overview banner, <code>orch status</code> and every session's start digest name the layer and since when; it switches back by itself when the time runs out (SP-070).</li>
+      <li><b>Leaving a job.</b> Retire and merge are later, not planned. Today: remove the job's bindings in a draft and apply it; its content goes to quarantine, and you purge it with <code>orch quarantine purge</code> (SP-028).</li>
+      <li><b>From the terminal.</b> Exists today: <code>orch spaces draft</code> (JSON on stdin), <code>orch spaces diff</code>, <code>orch spaces apply --revision N [--accept-agent-draft] [--confirm-github-org …]</code>, <code>orch spaces why &lt;target&gt;</code>, <code>orch spaces log verify &lt;session&gt;</code>. Planned: <code>orch spaces enforce &lt;layer&gt; &lt;state&gt; [--for 15m|1h]</code> (SP-070), <code>orch spaces log &lt;session&gt;</code> (SP-016), <code>orch spaces retag</code> (SP-071), <code>orch spaces replay</code> (SP-047), <code>orch sessions list</code> (SP-017), <code>orch quarantine list|assign|purge</code> (SP-028), <code>orch rag relabel [--dry-run]</code> (SP-027), <code>orch run &lt;space&gt; -- claude|codex</code> (SP-046). There is no <code>orch spaces list</code>. Diff, apply and enforce refuse callers that descend from a harness or from orchd. SP-055 requires a CLI entry for every pane action.</li>
+      <li><b>Command palette (⌘K).</b> Adds "Where would this go?…", "Review space changes" and each space by name. Like everything else in the palette, it only navigates. Applying always happens in the pane. The companion strip shows the Spaces badge (SP-055).</li>
+    </ul>
+  </div>
+</section>
+
+<section class="narrow" aria-labelledby="build">
+  <h2 id="build">How it maps onto the app and orchd</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Piece</th><th>Where</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>Pane</td><td><code>macos/Sources/…/SpacesView.swift</code></td><td>an <code>AdaptiveSplit</code> like Docs and Sources, so it works in companion width. Uses <code>Theme.swift</code> chips and cards. Shipped first (SP-072): a Spaces section in <code>SettingsView.swift</code> and <code>TrayMenu.swift</code>.</td></tr>
+      <tr><td>Read state</td><td>new <code>ListSpaces</code>, <code>ListToolEvents</code> (SP-050, SP-016); <code>ExplainPlacement</code> exists (SP-022); a session list RPC</td><td><code>ExplainPlacement</code> answers agents only when every space it names is public (<code>callers.go</code>). The plan is inconsistent on the session RPC: SP-050 says <code>ListSessionPins</code>, SP-017 says <code>ListSessions</code>.</td></tr>
+      <tr><td>Draft and apply</td><td><code>SetSpacesDraft</code>, <code>DiffSpaces</code>, <code>ApplySpaces</code> (exist, SP-020)</td><td>Any caller except a queued task may save a draft. Diff and apply are operator-only in <code>callers.go</code>. Apply names the revision you reviewed and is refused for any other, so a stale review can't apply newer edits.</td></tr>
+      <tr><td>Switches and retag</td><td><code>SetEnforcement</code> (SP-070), <code>RetagSource</code> (SP-071)</td><td>operator-only</td></tr>
+      <tr><td>Command log</td><td><code>VerifyToolLog</code> (exists), <code>ListToolEvents</code> (SP-016)</td><td>verify is operator-only; a session may list only its own events</td></tr>
+      <tr><td>Setup scan</td><td><code>ScanSpaces</code></td><td>walks the chosen folders for git remotes and calls <code>gh api user/orgs</code> and repo visibility through orchd's existing GitHub identity code. Read-only (SP-050 a2). Orgs only a job's own gh profile can see need that profile (SP-063, RC-10).</td></tr>
+      <tr><td>Badges</td><td>sidebar, <code>PeriodicRefresh</code></td><td>conflicts, quarantine count, drift, then relabel progress, in that order. Refusals go to Needs-you and the Notifier (SP-048).</td></tr>
+      <tr><td>Touch ID</td><td>LocalAuthentication in the app</td><td>a speed bump against an unattended screen. orchd's lineage check is the real gate.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer class="narrow">
+  <p>Mockup data is illustrative. Org names are placeholders. Fits the app conventions in <code>docs/internals/app.md</code>: sidebar badges, ⌘K palette, companion width, <code>Theme.swift</code>.</p>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  var TABS = [
+    { id: 'overview', label: 'Overview', basic: true },
+    { id: 'setup', label: 'Setup', basic: true },
+    { id: 'spaces', label: 'Spaces', basic: false },
+    { id: 'access', label: 'Access', basic: false },
+    { id: 'tester', label: 'Rules', basic: false },
+    { id: 'activity', label: 'Activity', basic: true },
+    { id: 'apply', label: 'Review', basic: true },
+    { id: 'coverage', label: 'Coverage', basic: false }
+  ];
+  var mode = 'basic', current = 'overview';
+  var tabs = document.getElementById('tabs');
+  var screens = document.querySelectorAll('.screen');
+
+  function renderTabs() {
+    tabs.textContent = '';
+    TABS.forEach(function (t) {
+      if (mode === 'basic' && !t.basic) return;
+      var b = document.createElement('button');
+      b.type = 'button'; b.setAttribute('role', 'tab'); b.textContent = t.label; b.dataset.tab = t.id;
+      b.setAttribute('aria-selected', String(t.id === current));
+      b.addEventListener('click', function () { show(t.id); });
+      tabs.appendChild(b);
+    });
+  }
+  function show(id) {
+    var t = TABS.filter(function (x) { return x.id === id; })[0];
+    if (mode === 'basic' && t && !t.basic) id = 'overview';
+    current = id;
+    screens.forEach(function (s) { s.hidden = s.dataset.screen !== id; });
+    renderTabs();
+  }
+  document.querySelectorAll('.modebtn button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      mode = b.dataset.mode;
+      document.querySelectorAll('.modebtn button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      show(current);
+    });
+  });
+  document.querySelectorAll('[data-goto]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var target = b.dataset.goto;
+      if (target === 'tester' && mode === 'basic') { document.querySelector('.modebtn button[data-mode="advanced"]').click(); }
+      show(target);
+    });
+  });
+
+  // Segmented pickers
+  document.querySelectorAll('.seg2').forEach(function (g) {
+    g.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () { g.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); });
+    });
+  });
+
+  // Wizard
+  var step = 0, steps = document.querySelectorAll('.wstep'), pills = document.querySelectorAll('#steps span');
+  var next = document.getElementById('wnext'), back = document.getElementById('wback');
+  function renderStep() {
+    steps.forEach(function (s, i) { s.hidden = i !== step; });
+    pills.forEach(function (p, i) { p.className = i === step ? 'on' : (i < step ? 'done' : ''); });
+    back.disabled = step === 0;
+    next.textContent = step === steps.length - 1 ? 'Apply (Touch ID)' : 'Continue';
+  }
+  next.addEventListener('click', function () {
+    if (step < steps.length - 1) { step++; renderStep(); }
+    else { next.textContent = 'Applied in mockup'; next.disabled = true; document.getElementById('draftState').textContent = 'Applied policy · rev 8 · moving chunks 0%'; }
+  });
+  back.addEventListener('click', function () { if (step > 0) { step--; next.disabled = false; renderStep(); } });
+  renderStep();
+
+  // Space bindings
+  var SP = {
+    acme: { kind: 'Isolated', rows: [['GitHub org', 'acme', 'node ID confirmed (SP-021)'], ['Folder', '~/work/acme', '41 checkouts, 1 conflict'], ['Chat', 'slack:T0ACME', 'no connector yet'], ['gh profile', '~/.config/gh-acme', 'logged in (gh auth status)'], ['Reads', 'acme, public', 'personal can be opted in (D-16)']],
+      src: [['acme/api · docs sync', '1,204'], ['https://wiki.acme.example/ · ingested by an acme session', '88']] },
+    globex: { kind: 'Isolated', rows: [['GitHub org', 'globex', 'node ID confirmed (SP-021)'], ['Folder', '~/work/globex', '12 checkouts'], ['Chat', 'teams:globex.onmicrosoft.com', 'no connector yet'], ['gh profile', '~/.config/gh-globex', 'not logged in: orgs not synced'], ['Reads', 'globex, public', 'personal can be opted in (D-16)']],
+      src: [['globex/core · docs sync', '3,410']] },
+    public: { kind: 'Public', rows: [['GitHub org', 'oss-org', 'public repos only (23 of 24)'], ['Web prefix', 'https://go.dev/', 'allowlisted'], ['Writers', 'sources only', 'sessions never write here'], ['Sessions under a public root write to', 'personal', 'D-22, retaggable later']],
+      src: [['https://go.dev/doc/ · source refresh', '640'], ['oss-org/release-tools · docs sync', '212']] },
+    personal: { kind: 'Private', rows: [['GitHub org', 'willesq', 'your account'], ['Folder', '~/code', '9 checkouts'], ['Reads', 'personal, public', 'editable']],
+      src: [['willesq/notes · docs sync', '402'], ['~/code/side-project/README.md · hand-off', '6']] }
+  };
+  var pick = document.getElementById('spacePick'), rowsEl = document.getElementById('bindRows'), kindEl = document.getElementById('spaceKind'), srcEl = document.getElementById('srcRows');
+  function renderSpace() {
+    var s = SP[pick.value]; kindEl.textContent = s.kind; rowsEl.textContent = '';
+    s.rows.forEach(function (r) {
+      var tr = document.createElement('tr');
+      [r[0], r[1], r[2]].forEach(function (v, i) { var td = document.createElement('td'); td.textContent = v; if (i === 1) td.className = 'mono'; tr.appendChild(td); });
+      var td = document.createElement('td'); var b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = 'Edit'; td.appendChild(b); tr.appendChild(td);
+      rowsEl.appendChild(tr);
+    });
+    srcEl.textContent = '';
+    s.src.forEach(function (r) {
+      var tr = document.createElement('tr');
+      var a = document.createElement('td'); a.className = 'mono'; a.textContent = r[0]; tr.appendChild(a);
+      var b = document.createElement('td'); b.textContent = r[1]; tr.appendChild(b);
+      var c = document.createElement('td'); var btn = document.createElement('button'); btn.className = 'btn'; btn.type = 'button'; btn.textContent = 'Retag…'; c.appendChild(btn); tr.appendChild(c);
+      srcEl.appendChild(tr);
+    });
+  }
+  pick.addEventListener('change', renderSpace); renderSpace();
+
+  // Reads matrix
+  var NAMES = ['public', 'acme', 'globex', 'personal'];
+  var KIND = { public: 'public', acme: 'isolated', globex: 'isolated', personal: 'private' };
+  var reads = { public: ['public'], acme: ['acme', 'public'], globex: ['globex', 'public'], personal: ['personal', 'public'] };
+  var matrix = document.getElementById('matrix'), msg = document.getElementById('matrixMsg');
+  function locked(r, c) {
+    if (r === c) return 'self';
+    if (KIND[c] === 'public') return r === 'public' ? 'self' : '';
+    if (KIND[r] === 'public') return 'The public space reads only itself (public_reads).';
+    if (KIND[c] === 'isolated') return 'Nothing outside a job reads it (isolated_reads_isolated, private_reads_isolated). Two jobs cannot be combined here.';
+    return '';
+  }
+  function renderMatrix() {
+    matrix.textContent = '';
+    var thead = document.createElement('thead'), hr = document.createElement('tr');
+    var h0 = document.createElement('th'); h0.textContent = 'Session in ↓ reads →'; hr.appendChild(h0);
+    NAMES.forEach(function (n) { var th = document.createElement('th'); th.className = 'c'; th.textContent = n; hr.appendChild(th); });
+    thead.appendChild(hr); matrix.appendChild(thead);
+    var tb = document.createElement('tbody');
+    NAMES.forEach(function (r) {
+      var tr = document.createElement('tr'); var td0 = document.createElement('td'); td0.textContent = r + ' (' + KIND[r] + ')'; tr.appendChild(td0);
+      NAMES.forEach(function (c) {
+        var td = document.createElement('td'); td.className = 'c';
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'cell';
+        var on = reads[r].indexOf(c) >= 0; var lk = locked(r, c);
+        b.setAttribute('aria-pressed', String(on)); b.textContent = on ? '✓' : '·';
+        b.setAttribute('aria-label', r + ' reads ' + c + ': ' + (on ? 'yes' : 'no'));
+        if (lk === 'self') { b.classList.add('self'); b.title = 'Always'; }
+        else if (lk) { b.classList.add('lock'); b.textContent = '✕'; b.title = lk; b.addEventListener('click', function () { msg.textContent = r + ' → ' + c + ': ' + lk; }); }
+        else { b.addEventListener('click', function () {
+          var i = reads[r].indexOf(c); if (i >= 0) reads[r].splice(i, 1); else reads[r].push(c);
+          var warn = (i < 0 && KIND[r] === 'isolated' && KIND[c] === 'private') ? ' Warning: ' + c + ' content becomes readable in ' + r + ' sessions (off by default, D-16).' : '';
+          msg.textContent = 'Draft: ' + r + (i >= 0 ? ' stops reading ' : ' reads ') + c + '.' + warn + ' Review shows the effect before anything applies.';
+          renderMatrix(); }); }
+        td.appendChild(b); tr.appendChild(td);
+      });
+      tb.appendChild(tr);
+    });
+    matrix.appendChild(tb);
+  }
+  renderMatrix();
+
+  // Placement tester
+  var probe = document.getElementById('probe'), out = document.getElementById('probeOut');
+  function explain(v) {
+    v = v.trim();
+    var res;
+    if (/^~\/work\/acme\/billing/.test(v)) res = ['q', 'conflict', 'conflict: root ~/work/acme says acme, git remote globex/billing says globex. Two isolated spaces disagree, so nothing is indexed and sessions here get no space.'];
+    else if (/^~\/work\/acme\/oss-tools/.test(v)) res = ['acme', 'acme', 'root_stricter: root ~/work/acme (isolated) and remote oss-org/oss-tools (public) disagree; the stricter wins.'];
+    else if (/^oss-org\/release-infra/.test(v)) res = ['q', 'quarantine', 'not_verified_public: oss-org is bound to public, but GitHub reports this repo as private, so it is held for you to place.'];
+    else if (/^acme\//.test(v)) res = ['acme', 'acme', 'remote: owner org acme (identity confirmed). Fork parents are ignored.'];
+    else if (/^globex\//.test(v)) res = ['glob', 'globex', 'remote: owner org globex.'];
+    else if (/^oss-org\//.test(v)) res = ['pub', 'public', 'remote: owner org oss-org, and GitHub reports the repo public.'];
+    else if (/^https:\/\/go\.dev\//.test(v)) res = ['pub', 'public', 'web_prefix: https://go.dev/ is bound to the public space.'];
+    else if (/^slack:\/\/T0ACME/.test(v)) res = ['acme', 'acme', 'chat_tenant: slack:T0ACME is bound to acme. A D… channel is a DM: stored, search on request only, never auto-recalled, never given to tasks (D-19).'];
+    else if (/^~\/work\/acme/.test(v)) res = ['acme', 'acme', 'root_and_remote_agree: deepest root ~/work/acme, and the remote agrees.'];
+    else if (/^~\/work\/globex/.test(v)) res = ['glob', 'globex', 'root: deepest root ~/work/globex.'];
+    else if (/^~\/code/.test(v)) res = ['pers', 'personal', 'root: deepest root ~/code.'];
+    else res = ['q', 'no space', 'unmatched: no root holds it. A session started here gets no space and reads public only; content written here goes to quarantine.'];
+    out.textContent = '';
+    var c = document.createElement('span'); c.className = 'chipx ' + res[0]; c.textContent = res[1];
+    var t = document.createElement('span'); t.textContent = ' ' + res[2];
+    out.appendChild(c); out.appendChild(t);
+  }
+  document.getElementById('probeBtn').addEventListener('click', function () { explain(probe.value); });
+  probe.addEventListener('keydown', function (e) { if (e.key === 'Enter') explain(probe.value); });
+  document.querySelectorAll('[data-probe]').forEach(function (b) { b.addEventListener('click', function () { probe.value = b.dataset.probe; explain(b.dataset.probe); }); });
+  explain(probe.value);
+
+  show('overview');
+})();
+</script>
+</body>
+</html>

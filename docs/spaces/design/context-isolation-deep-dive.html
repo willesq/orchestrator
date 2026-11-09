@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>orch Context Isolation: OpenAPPA, Prior Art and the Way Forward</title>
+<style>
+/* Layout: a research-backed design review. Bottom line, OpenAPPA deep dive, prior art, the directory-pinning design, revised recommendations, then a phased plan. */
+:root {
+  color-scheme: light;
+  --ink: #18222b; --muted: #52606d; --paper: #f4f6f7; --surface: #ffffff; --line: #d8dfe5;
+  --accent: #2f6f8f; --accent-soft: #e2eef4;
+  --do: #23764a; --do-soft: #e3f3ea; --next: #2f6f8f; --next-soft: #e2eef4;
+  --later: #8a6400; --later-soft: #f8f0dc; --no: #a3332b; --no-soft: #f8e5e3;
+  --font-display: "Avenir Next", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #e3eaef; --muted: #a2b0bc; --paper: #0f151a; --surface: #172028; --line: #2a3742;
+    --accent: #7fbfdc; --accent-soft: #16303b;
+    --do: #7fd3a0; --do-soft: #15301f; --next: #7fbfdc; --next-soft: #16303b;
+    --later: #e8b75a; --later-soft: #33270f; --no: #f08a80; --no-soft: #3a1c19;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 400 16px/1.6 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 64rem; margin: 0 auto; padding-block: 2.5rem 4rem; display: grid; gap: 2.75rem; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.2; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(1.9rem, 4.5vw, 2.6rem); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 1.45rem; font-weight: 700; }
+h3 { font-size: 1.12rem; font-weight: 650; }
+p { margin: 0; max-width: 72ch; }
+ul, ol { max-width: 76ch; }
+a { color: var(--accent); text-underline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code { font-family: var(--font-mono); font-size: 0.87em; background: var(--accent-soft); padding: 0.05em 0.3em; border-radius: 3px; }
+pre { margin: 0; font: 0.84rem/1.55 var(--font-mono); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1rem 1.1rem; overflow-x: auto; }
+pre .c { color: var(--muted); }
+.eyebrow { font: 600 0.74rem/1 var(--font-body); letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+header { display: grid; gap: 0.8rem; }
+.lede { color: var(--muted); font-size: 1.08rem; }
+section { display: grid; gap: 1rem; }
+nav.toc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.3rem; }
+nav.toc ol { margin: 0; padding-left: 1.2rem; columns: 2 16rem; column-gap: 2rem; font-size: 0.95rem; }
+.bottom, .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1.3rem 1.4rem; display: grid; gap: 0.75rem; }
+.bottom ul, .card ul, .card ol { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.35rem; }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 0.9rem 1.1rem; border-radius: 0 10px 10px 0; display: grid; gap: 0.4rem; }
+.callout.warn { border-left-color: var(--later); background: var(--later-soft); }
+.callout.change { border-left-color: var(--do); background: var(--do-soft); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.8rem; }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0.95rem 1rem; display: grid; gap: 0.3rem; align-content: start; }
+.fact b { font: 700 1.3rem/1.15 var(--font-display); color: var(--accent); font-variant-numeric: tabular-nums; }
+.fact span { color: var(--muted); font-size: 0.92rem; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 38rem; font-size: 0.93rem; }
+th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 0.72rem/1.2 var(--font-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+.v { display: inline-block; font: 700 0.7rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; padding: 0.35rem 0.55rem; border-radius: 4px; white-space: nowrap; }
+.v.do { color: var(--do); background: var(--do-soft); } .v.next { color: var(--next); background: var(--next-soft); }
+.v.later { color: var(--later); background: var(--later-soft); } .v.no { color: var(--no); background: var(--no-soft); }
+.options { display: grid; gap: 0.9rem; }
+.opt { background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: 10px; padding: 1.1rem 1.25rem; display: grid; gap: 0.6rem; }
+.opt[data-v="do"] { border-left-color: var(--do); } .opt[data-v="next"] { border-left-color: var(--next); }
+.opt[data-v="later"] { border-left-color: var(--later); } .opt[data-v="no"] { border-left-color: var(--no); }
+.opt-head { display: flex; flex-wrap: wrap; gap: 0.6rem 0.8rem; align-items: baseline; justify-content: space-between; }
+.opt .id { font: 600 0.8rem/1 var(--font-mono); color: var(--muted); margin-right: 0.5rem; }
+.summary { color: var(--muted); }
+.ok { color: var(--do); font-weight: 700; } .bad { color: var(--no); font-weight: 700; } .warnc { color: var(--later); font-weight: 700; }
+.flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
+@media (max-width: 760px) { .flow { grid-template-columns: 1fr; } }
+.box { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.9rem; position: relative; }
+.box b { display: block; font-family: var(--font-display); }
+.box span { color: var(--muted); }
+.box.gate { border-color: var(--do); background: var(--do-soft); }
+.flow .box + .box::before { content: "→"; position: absolute; left: -0.48rem; top: 50%; transform: translate(-50%, -50%); color: var(--muted); font-weight: 700; }
+@media (max-width: 760px) { .flow .box + .box::before { content: "↓"; left: 50%; top: -0.55rem; } }
+ol.order { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.85rem; counter-reset: s; }
+ol.order li { counter-increment: s; display: grid; grid-template-columns: 2rem 1fr; gap: 0.75rem; align-items: start; }
+ol.order li::before { content: counter(s); width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font: 700 0.9rem/1 var(--font-display); background: var(--accent-soft); color: var(--accent); }
+ol.order li > div { display: grid; gap: 0.25rem; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+.src { font-size: 0.85rem; color: var(--muted); }
+footer { color: var(--muted); font-size: 0.88rem; border-top: 1px solid var(--line); padding-top: 1.2rem; display: grid; gap: 0.5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">orch · memory permissions · deep dive · 8 Nov 2026 · updated 9 Nov 2026</span>
+  <h1>Context isolation: what OpenAPPA and others teach us, and where orch goes next</h1>
+  <p class="lede">The third document in the series. It examines <a href="https://github.com/archestra-ai/openappa">archestra-ai/openappa</a> from its source, surveys how vector stores, enterprise search and agent-security research handle isolation, and designs the session directory pin and command log you asked for. It closes with a revised, phased plan. It builds on <a href="memory-permissions-design.html">memory-permissions-design.html</a> and <a href="github-org-separation-design.html">github-org-separation-design.html</a>. The UI is in <a href="spaces-ui-design.html">spaces-ui-design.html</a>.</p>
+  <div class="callout warn">
+    <p><b>Status:</b> Updated 2026-11-09 to match the plan. The authoritative plan is <code>docs/spaces/spaces-features.json</code> (rendered at <a href="../index.html">docs/spaces/index.html</a>); where they disagree, the plan wins. The OpenAPPA and prior-art research below is kept as written on 8 Nov; only statements about orch's own plan were changed.</p>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Contents">
+  <ol>
+    <li><a href="#bl">Bottom line</a></li>
+    <li><a href="#appa">OpenAPPA from the source</a></li>
+    <li><a href="#appa-use">Can orch use OpenAPPA?</a></li>
+    <li><a href="#prior">How others isolate context</a></li>
+    <li><a href="#changes">What the research changes in our design</a></li>
+    <li><a href="#pin">Directory pin and command log</a></li>
+    <li><a href="#cases">Directory-change cases</a></li>
+    <li><a href="#log">Command log lifecycle</a></li>
+    <li><a href="#layers">Defense in layers</a></li>
+    <li><a href="#plan">The way forward</a></li>
+    <li><a href="#questions">Decided</a></li>
+    <li><a href="#sources">Sources</a></li>
+  </ol>
+</nav>
+
+<section aria-labelledby="bl">
+  <h2 id="bl">Bottom line</h2>
+  <div class="bottom">
+    <ul>
+      <li><b>OpenAPPA is the closest prior art, but don't adopt it as a component yet.</b> It's a well-designed information-flow-control engine (about 12 weeks old, MIT, Rust, weekly breaking releases). Its labels, audience × trust, map almost directly onto orch's space × trust. But it has no memory or RAG concept, no tenancy, an unauthenticated loopback <code>/hook</code>, and Bash coverage that depends on patching each Claude Code release. Copy six of its patterns now, and design orch's labels so an OpenAPPA integration could come later. Adopted as D-13; the optional label source is SP-064.</li>
+      <li><b>The research changes one earlier recommendation: give each space its own Qdrant collection.</b> Qdrant's own guidance is to use separate collections for a small number of tenants that need strict isolation, which describes your spaces. Isolated spaces never share chunks, so the main objection to collections (content in two spaces at once) no longer applies. A forgotten filter on some future RPC then can't leak anything, and BM25/IDF statistics stop crossing spaces. The payload filter stays as a second layer. Adopted as D-10; the measured search cost was accepted in D-24.</li>
+      <li><b>Your directory-pin idea is right, with one adjustment: pin the <em>space</em>, not the exact folder (D-09).</b> The first <code>cwd</code> at SessionStart fixes the space for the session's life (INV-05). The hook <code>cwd</code> is not a reliable record of later moves: SP-001 found that Claude Code undoes a <code>cd</code> outside the project after the call yet still fires <code>CwdChanged</code>, and that Codex keeps no <code>cd</code> between calls and has no <code>CwdChanged</code>. The guard therefore judges each call's own <code>cwd</code> and targets. Moving within the session's space (<code>api</code> → <code>web</code>, both acme) is normal and stays allowed. Reaching into another isolated space is refused, whether by <code>cd</code>, an absolute path, <code>git -C</code> or <code>gh</code>.</li>
+      <li><b>Parsing <code>cd</code> alone can't make it uncircumventable.</b> <code>cd x &amp;&amp; …</code> in one command, absolute paths, scripts and subprocesses all slip past text checks. The guard therefore checks <em>every target</em> of a tool call, not just directory changes. Target extraction is best-effort, not a complete analysis of shell (D-28). The OS sandbox deny rules for the other job's folders (SP-046) and a separate GitHub account per job (SP-063) are the hard boundary. Each layer covers gaps in the others.</li>
+      <li><b>The command log is cheap and bounded.</b> About 150 KB per typical session. It lives in its own owner-only file, <code>toollog.db</code> (D-29), and is kept until 7 days after the session ends, where "ended" comes from the kernel rather than hook events (SP-015, SP-017). It's hash-chained, redacted, and never indexed into memory (INV-12).</li>
+      <li><b>Enforce from the first release (D-11).</b> Phase 1 ships the hooks, the log and the enforcing guard together, replacing the log-only first phase this document first proposed. Each enforcement layer has an operator-only switch (the guard's states are off, log, block-other-jobs and strict), optionally timed. While any layer is off, every session's start digest says so, and logging never stops (SP-070, INV-16).</li>
+    </ul>
+  </div>
+</section>
+
+<section aria-labelledby="appa">
+  <h2 id="appa">OpenAPPA from the source</h2>
+  <p>Read from a shallow clone at <code>acb9853</code> (8 Nov 2026). None of its code was run. The key claims below were checked directly in the files.</p>
+  <div class="facts">
+    <div class="fact"><b>Aug 2026</b><span>created. About 955 commits, 18 contributors, releases v0.36–v0.39 weekly. README: "preview &amp; RFC".</span></div>
+    <div class="fact"><b>MIT</b><span>core licence. The Archestra platform that embeds it is commercial and dual-licensed.</span></div>
+    <div class="fact"><b>~157k LOC</b><span>Rust: <code>appa-engine</code> (~50k) and <code>appa-runtime</code> (~107k), plus Python "batteries".</span></div>
+    <div class="fact"><b>0 memory</b><span>no RAG or long-term memory concept. It governs tool calls, not retrieval stores.</span></div>
+  </div>
+
+  <h3>What it is</h3>
+  <p><b>APPA (Agentic Permissions Policy Algebra)</b> is an information-flow-control engine that sits between an agent and its tools. Before each tool call it asks: may a value derived from these sources flow into this sink?</p>
+  <div class="flow" aria-label="OpenAPPA architecture">
+    <div class="box"><b>Harness</b><span>Claude Code, opencode, amp, kagent</span></div>
+    <div class="box"><b>Adapter</b><span><code>appa hook</code>: translates JSON, no policy</span></div>
+    <div class="box"><b>Runtime</b><span>axum on 127.0.0.1:8787, <code>/hook</code> <code>/mcp</code></span></div>
+    <div class="box gate"><b>Engine</b><span>pure function over the event log: no IO, no clock</span></div>
+    <div class="box"><b>Event log</b><span>SQLite, append-only, compare-and-swap, policy revision stamped</span></div>
+  </div>
+
+  <h3>How it isolates</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Mechanism</th><th>How it works</th><th>Enforced by</th></tr></thead>
+    <tbody>
+      <tr><td><b>Labels</b></td><td>each session ("trajectory") carries <code>audience × trust</code>. Audience is a chain <code>self ⊆ internal ⊆ public</code> plus groups such as <code>@github:repo/o/r/collaborators</code>. Tool results narrow the label (<code>delta</code>), and sinks declare <code>requires</code>.</td><td>code (engine)</td></tr>
+      <tr><td><b>GitHub audiences</b></td><td>a public repo maps to <code>public</code>, a private repo to its collaborators group. <code>internal</code> is mapped explicitly to org members, and "membership in unrelated, open-source, or personal organizations never implies <code>internal</code>" (<code>marketplace/batteries/github/README.md:184</code>).</td><td>annotator script + engine</td></tr>
+      <tr><td><b>Fail-closed coverage</b></td><td>a tool that no rule covers is refused. A missing annotation is an "operational refusal". <code>blocked</code> can't be overridden.</td><td>code</td></tr>
+      <tr><td><b>File taint across sessions</b></td><td>the file tracker records the label a session published onto each file it wrote. A later Read in any session inherits that label. Paths are canonicalised through symlinks.</td><td>code + JSON store</td></tr>
+      <tr><td><b>Path rules</b></td><td>credential paths are <code>audience=self</code>. Instruction files (<code>CLAUDE.md</code>, <code>AGENTS.md</code>, skills, git hooks, shell rc files) need trusted writes. Self-protection files (<code>.claude/settings*</code>, <code>.mcp.json</code>, <code>appa.toml</code>) need human approval.</td><td>code</td></tr>
+      <tr><td><b>Sandbox</b></td><td>none of its own. SafeBash runs commands in Anthropic's <code>srt</code> (Seatbelt / bubblewrap) with declared files and hosts.</td><td>OS</td></tr>
+      <tr><td><b>Quarantined classifier</b></td><td>LLM annotators run <code>claude -p</code> with no tools, a JSON schema, a bounded mandate and a stripped environment. "Nothing the engine folds from the trajectory crosses."</td><td>code (the classifier itself is probabilistic)</td></tr>
+      <tr><td><b>Subagents</b></td><td>child trajectories. The parent declares what the child's return may carry. Refusing reads of child transcript files is admitted to be "a heuristic rather than a guarantee".</td><td>code + heuristic</td></tr>
+      <tr><td><b>Human approval</b></td><td>approves one exact call and doesn't change the label. Rulings sent over the wire are refused unless the host has its own review channel.</td><td>code</td></tr>
+      <tr><td><b>Audit</b></td><td>append-only log, content-addressed policy, <code>appa replay</code> to regression-test policy in CI</td><td>code</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>What it doesn't do</h3>
+  <ul>
+    <li><b>No caller authentication on <code>/hook</code>.</b> Being loopback-only is the whole of its access control (<code>appa-runtime/src/main.rs:395</code>). Any local process can post events for any session. orchd's kernel peer-PID and process-tree identity is stronger.</li>
+    <li><b>No tenants.</b> One runtime serves one config, with a single <code>internal</code> rung. Two employers would be two groups or two deployments, and storage isn't partitioned.</li>
+    <li><b>No memory or context-store isolation.</b> It doesn't inspect the prompt text and has no concept of RAG.</li>
+    <li><b>Fragile Bash coverage.</b> It relies on a <code>BUN_OPTIONS</code> preload into Claude Code that has to be vetted for each release, or on SafeBash. Without its launcher, Bash calls are refused.</li>
+    <li><b>Probabilistic edges.</b> The fallback annotators and the <code>redact-for-public</code> sanitizer are LLM calls, which the policy itself labels as unverified.</li>
+  </ul>
+</section>
+
+<section aria-labelledby="appa-use">
+  <h2 id="appa-use">Can orch use OpenAPPA?</h2>
+  <div class="options">
+    <article class="opt" data-v="do">
+      <div class="opt-head"><h3><span class="id">A1</span>Copy its patterns into orch</h3><span class="v do">Do now</span></div>
+      <ul>
+        <li><b>A pure decision function over an append-only event log, with replay tests.</b> The space guard becomes <code>Decide(policy, sessionPin, toolEvent) → verdict</code> with no IO. Recorded tool events become CI fixtures (<code>orch spaces replay</code>), so a policy change is tested against real sessions.</li>
+        <li><b>Stamp the policy revision on every decision</b> and store policy content-addressed, so the log says which rules refused what.</li>
+        <li><b>Self-protection paths.</b> The guard refuses agent writes to orch's config and data directories, <code>~/.claude/settings*</code>, <code>~/.codex/hooks.json</code>, Gemini settings and git hooks. Otherwise an agent could simply remove orch's hooks.</li>
+        <li><b>Label files on write.</b> A file an acme session writes outside any root (say <code>/tmp/notes.md</code>) records acme. A later ingest of that file goes to acme, not quarantine or shared.</li>
+        <li><b>Map org membership explicitly.</b> Their "unrelated orgs never imply internal" is the same rule as orch's isolated kind.</li>
+        <li><b>Isolate any LLM that orch runs internally.</b> The session summarizer gets one session's content only, a schema-bound output, and no tools. Its output inherits that session's space.</li>
+      </ul>
+      <p class="summary">In the plan: the decision function (SP-040) and replay (SP-047), <code>policy_rev</code> on every logged event (SP-014) and content-hashed policy revisions (D-25), self-protection paths (SP-042), files written outside any root and summaries carrying their session's space (SP-029), and confirmed org bindings (SP-021).</p>
+    </article>
+    <article class="opt" data-v="later">
+      <div class="opt-head"><h3><span class="id">A2</span>Make orch an OpenAPPA label source</h3><span class="v later">When its wire format stabilises</span></div>
+      <p class="summary">OpenAPPA calls "externals" (annotators and audience sources) over HTTP or as a command. orch could ship one that labels the results of <code>rag_search</code> and other orch MCP tools with their space and trust. Someone running OpenAPPA would then get information-flow control across orch memory, and orch would gain sink checks (no acme-derived text into a public PR) without building them. To keep this possible, keep orch's chunk labels shaped as <code>space × trust</code> and expose them on every hit, which <code>trust</code> already is.</p>
+      <p class="summary">In the plan: SP-064 (Phase 5, optional), gated on OpenAPPA reaching a stable wire format and ideally authenticating <code>/hook</code> callers. The user decides then whether to build it or defer it (D-13).</p>
+    </article>
+    <article class="opt" data-v="no">
+      <div class="opt-head"><h3><span class="id">A3</span>Embed or require OpenAPPA as orch's enforcement layer</h3><span class="v no">Not now</span></div>
+      <p class="summary">Rust with no Go or C bindings (the napi bindings live in Archestra), so it would be a second daemon. Its wire format breaks weekly. Its <code>/hook</code> is weaker on identity than orchd. Its Bash story is specific to Claude Code, while orch also supports Codex and Gemini. And it doesn't address memory, which is orch's core problem. Revisit when it reaches 1.0 or adds caller authentication.</p>
+    </article>
+  </div>
+  <div class="callout">
+    <p><b>Convergence worth noting:</b> OpenAPPA's <code>audience × trust</code> and orch's <code>space × trust</code> are the same two-dimensional label. orch already stores <code>trust</code> per chunk, assigned server-side by writer. Adding <code>space</code> keeps the two systems composable.</p>
+  </div>
+</section>
+
+<section aria-labelledby="prior">
+  <h2 id="prior">How others isolate context</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Who</th><th>Approach</th><th>Lesson for orch</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://qdrant.tech/documentation/guides/multiple-partitions/">Qdrant</a></td><td>one collection with payload partitioning for many tenants. "Only create multiple collections when you have a limited number of tenants that need strict isolation." <code>is_tenant</code> is a performance hint, not security. JWT RBAC scopes tokens to collections, not to payload values.</td><td>A handful of strict spaces is the case for collections. Only collections give the database itself a boundary.</td></tr>
+      <tr><td><a href="https://docs.pinecone.io/guides/index-data/implement-multitenancy">Pinecone</a>, <a href="https://docs.weaviate.io/weaviate/manage-collections/multi-tenancy">Weaviate</a></td><td>a namespace or shard per tenant: "physical isolation … reduces the risk of application bugs that could search the wrong tenant's data." Weaviate requires the tenant on every call, and cross-references can only point to the same tenant or a shared collection.</td><td>The same shape as orch's isolated spaces plus a public collection.</td></tr>
+      <tr><td><a href="https://docs.vespa.ai/en/ranking/multivalue-query-operators.html">Vespa</a>, <a href="https://docs.glean.com/security/security-principles">Glean</a></td><td>the access filter is added inside a server-side component, so clients can't drop it. Unknown principals match nobody.</td><td>Filter in orchd, fail closed. This is already the plan.</td></tr>
+      <tr><td><a href="https://github.com/onyx-dot-app/onyx/pull/15990">Onyx</a></td><td>access types per connector, and ACL sync jobs. A real bug: chunks kept stale ACLs after a connector's access type changed.</td><td>Relabelling is where systems actually fail. Version labels, and treat stale ones as unreadable (planned as <code>labels_v</code>).</td></tr>
+      <tr><td><a href="https://learn.microsoft.com/en-us/purview/ai-m365-copilot">Microsoft 365 Copilot</a></td><td>Copilot "does not grant new access". Generated content inherits the highest-priority source label.</td><td>Derived content (summaries, task results) inherits the space of what it was made from.</td></tr>
+      <tr><td><a href="https://arxiv.org/abs/2310.06816">Vec2Text</a>, <a href="https://www.ndss-symposium.org/ndss-paper/i-know-what-you-asked-prompt-leakage-via-kv-cache-sharing-in-multi-tenant-llm-serving/">PROMPTPEEK</a></td><td>embeddings can be inverted (92% of 32-token inputs recovered exactly), and shared caches leak across tenants.</td><td>Vectors are content. Key every cache (embedding, rerank, query) by space.</td></tr>
+      <tr><td><a href="https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/">Lethal trifecta</a>, Agents Rule of Two</td><td>private data, untrusted content and an outbound channel together let an attacker exfiltrate data, and prompt-level guardrails don't close that.</td><td>Enforce in code, at orchd and at the hook. Instructions are not a boundary.</td></tr>
+      <tr><td><a href="https://arxiv.org/abs/2505.23643">FIDES</a>, <a href="https://arxiv.org/abs/2503.18813">CaMeL</a></td><td>information-flow control with confidentiality labels and taint tracking, with policy checked deterministically before each tool call</td><td>orch can't change the harness's planner, but it can apply coarse IFC at its own boundary. The plan does not track a per-session high-water mark. Instead, derived content inherits the space of what it came from (INV-09), and an operator's explicit cross-space reads taint that session (SP-029).</td></tr>
+      <tr><td><a href="https://code.claude.com/docs/en/sandboxing">Claude Code sandbox</a>, <a href="https://learn.chatgpt.com/docs/sandboxing">Codex sandbox</a></td><td>Seatbelt on macOS and bubblewrap on Linux. Claude Code's sandbox covers Bash, not the Read tool, hooks or MCP. Codex calls its hooks "a useful guardrail, not a complete enforcement boundary".</td><td>The OS sandbox is the strongest layer for shell commands. Pair it with permission rules for file tools and the hook for everything else.</td></tr>
+      <tr><td><a href="https://github.com/docker/mcp-gateway/blob/main/docs/profiles.md">Docker MCP gateway</a>, <a href="https://archestra.ai/docs/platform-ai-tool-guardrails">Archestra</a></td><td>tool profiles per project. Archestra applies stricter tool policy once a context is untrusted, but one report says a "Blocked" tool still ran when called directly through its gateway.</td><td>Enforcement has to sit on every path, not just the obvious one.</td></tr>
+      <tr><td>git <code>includeIf</code>, <code>CLAUDE_CONFIG_DIR</code></td><td>per-directory git identity, matched by path or by remote URL, and per-employer harness profiles</td><td>A useful extra layer orch could generate for each space. It's a convenience, not a boundary.</td></tr>
+      <tr><td><a href="https://www.usenix.org/legacy/events/sec09/tech/full_papers/crosby.pdf">Crosby &amp; Wallach</a></td><td>tamper-evident logs need their chain heads anchored and audited, otherwise whoever holds the file can rewrite it</td><td>Hash-chain the command log and anchor the head where agents can't write.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section aria-labelledby="changes">
+  <h2 id="changes">What the research changes in our design</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Earlier position</th><th>Now</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Payload filter in one collection is enough (doc 1, R4 "later")</td><td><b>One Qdrant collection per space</b> plus a public collection, with the payload filter kept as a second layer</td><td>Qdrant's guidance for few, strict tenants. Isolated spaces never share chunks. Physical separation removes the "forgot the filter" class of bug, and BM25/IDF statistics stop crossing spaces. orch's existing reciprocal rank fusion merges the two searches.</td></tr>
+      <tr><td>Reading the harness process's working directory from the kernel was the proposed fallback</td><td><b>The first hook <code>cwd</code> pins the space</b> at SessionStart (SP-010), with the harness PID and start time from the kernel (SP-003). Later moves are not tracked from <code>cwd</code>: the guard judges each call's own <code>cwd</code> and targets.</td><td>SP-001 recorded real payloads (<a href="../../internals/hooks.md">docs/internals/hooks.md</a>). Claude Code undoes a <code>cd</code> outside the project after the call and fires <code>CwdChanged</code> anyway, with no event for the undo; <code>EnterWorktree</code> moves <code>cwd</code> without firing it. Codex has no <code>CwdChanged</code>, <code>cd</code> never carries over, and the shell tool's <code>workdir</code> sets each call's <code>cwd</code>. Gemini is out of scope (D-20).</td></tr>
+      <tr><td>The pre-tool guard was about outbound terms</td><td><b>The guard does four jobs:</b> keep the session in its space (SP-040, SP-041), protect orch's own config (SP-042), refuse other jobs' GitHub targets (SP-043), and check outbound terms (SP-044)</td><td>Your directory-change concern, plus OpenAPPA's self-protection paths</td></tr>
+      <tr><td>Taint was a refinement for later</td><td><b>Taint stays, but matters less</b> (SP-029)</td><td>With isolated spaces a session can't retrieve another job's content at all. Taint then covers operator-explicit reads, pasted text, and files written outside any root.</td></tr>
+      <tr><td>Caches weren't mentioned</td><td><b>Every cache is keyed by space</b> (INV-11)</td><td>embedding inversion and cache-leak research</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section aria-labelledby="pin">
+  <h2 id="pin">Directory pin and command log</h2>
+  <p>Your proposal: a pre-tool hook records every command, detects directory changes, always respects the first directory, and makes the pin impossible to get around. Here's how to build it so it holds up.</p>
+  <div class="flow" aria-label="Guard pipeline">
+    <div class="box"><b>SessionStart</b><span>first <code>cwd</code> → space, pinned by orchd (SP-010)</span></div>
+    <div class="box"><b>PreToolUse</b><span>every tool call, before it runs</span></div>
+    <div class="box"><b>Extract targets</b><span><code>cwd</code>, file paths, <code>cd</code>/<code>git -C</code>/<code>gh -R</code>, absolute paths; best-effort (SP-013, D-28)</span></div>
+    <div class="box gate"><b>Decide</b><span>pure function: policy × pin × enforcement state × event (SP-040)</span></div>
+    <div class="box"><b>Record</b><span><code>RecordToolEvent</code> to orchd, hash-chained in <code>toollog.db</code> (SP-014)</span></div>
+  </div>
+  <div class="two">
+    <div class="card">
+      <h3>What "respect the first directory" means</h3>
+      <ul>
+        <li>The first <code>cwd</code> fixes the session's <b>space</b> for its lifetime, including resume, compact and subagents (INV-05). No later event, hook payload or request field can change it. A resumed session in a new process rebinds the pin to the new PID but keeps its space (SP-017).</li>
+        <li>Moving <b>within</b> the space is allowed and logged (<code>~/work/acme/api</code> → <code>~/work/acme/web</code>). Agents do this constantly for monorepos and sibling repos.</li>
+        <li>Reaching <b>into another isolated space</b> is refused at the tool call that would do it (SP-040). A <code>cd</code> that leaves the project does not carry over in either harness: Claude Code undoes it after the call and Codex never keeps it (SP-001). Each call is therefore judged by its own <code>cwd</code> and targets, not by a tracked current directory.</li>
+        <li>Moving to <b>no space</b> (<code>/tmp</code>, a build cache) is allowed and logged in the default mode. Strict mode, which is opt-in, refuses it (D-12).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Why it checks targets, not just <code>cd</code></h3>
+      <ul>
+        <li>In <code>cd ~/work/globex &amp;&amp; cat x</code>, PreToolUse sees the <code>cwd</code> from <em>before</em> the command. The <code>cd</code> is inside the command.</li>
+        <li><code>cat ~/work/globex/x</code> never changes directory at all.</li>
+        <li><code>git -C</code>, <code>make -C</code>, <code>env -C</code>, <code>pushd</code>, and subshells.</li>
+        <li><code>bash -c "…"</code>, scripts and <code>python -c</code> can construct paths at runtime that no text check sees. That is the job of the OS sandbox layer.</li>
+        <li>Extraction is best-effort (D-28). Forms it can't read, such as <code>eval</code>, <code>python -c</code> or unknown variables, are flagged opaque, and SP-040 decides what each guard state does with them. A path that is an ancestor of another space's root (<code>grep -r ~/code</code>) must count as reaching into it. Both are open in RC-36; known limits are in RC-37 and RC-38.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout warn">
+    <p><b>The hook contract changes.</b> <code>internal/hook/hook.go</code> promises that a hook never blocks the session. The guard is a documented exception (SP-041). While it is in an enforcing state it fails closed: a timeout, an unreadable pin or an unreadable policy means refuse (INV-13). In the off and log states it always allows. To keep that from bricking sessions, the guard decides <b>locally in <code>orch-hook</code></b> from two read-only files orchd writes: the applied policy plus enforcement state, and the session pin. It doesn't wait on an orchd round trip, and the self-protection rules stop agents from writing to either file (SP-042).</p>
+    <p><b>Logging is a separate path.</b> Each event goes to orchd through the <code>RecordToolEvent</code> RPC with a 20 ms budget (<code>internal/hook/tooluse.go</code>). Events dropped from orchd's full intake queue are counted in a "gap" record in the session's chain (D-30). A file spool was rejected because it can't carry the caller's process identity (RC-30), so events lost while orchd is down are accepted while the guard only logs.</p>
+  </div>
+</section>
+
+<section aria-labelledby="cases">
+  <h2 id="cases">Directory-change cases</h2>
+  <p>Session pinned to <code>~/work/acme/api</code> (space acme). "Block other jobs" mode.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Agent does</th><th>What orch sees</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td><code>cd ../web</code></td><td>PreToolUse target <code>~/work/acme/web</code>. Claude Code then fires <code>CwdChanged</code>, and undoes the <code>cd</code> after the call if <code>web</code> is outside the project (SP-001).</td><td><span class="ok">allow</span>, logged as a move within acme</td></tr>
+      <tr><td><code>cd ~/work/globex/core</code></td><td>PreToolUse target in globex</td><td><span class="bad">refuse</span>: another job's folder</td></tr>
+      <tr><td><code>cd ~/work/globex &amp;&amp; ls</code></td><td><code>cwd</code> still acme, but the command's targets include globex</td><td><span class="bad">refuse</span></td></tr>
+      <tr><td><code>cat ~/work/globex/core/README.md</code></td><td>absolute path in globex</td><td><span class="bad">refuse</span></td></tr>
+      <tr><td>Read tool on a globex file</td><td><code>tool_input.file_path</code> in globex</td><td><span class="bad">refuse</span>. A permission deny rule backs this up.</td></tr>
+      <tr><td><code>git -C ~/work/globex/core log</code></td><td><code>-C</code> target in globex</td><td><span class="bad">refuse</span></td></tr>
+      <tr><td><code>gh api repos/globex/core</code>, <code>gh pr list -R globex/x</code></td><td>target org bound to globex</td><td><span class="bad">refuse</span></td></tr>
+      <tr><td><code>bash -c "$(echo Y2F0IH4vd29yay9nbG9iZXg= | base64 -d)"</code></td><td>nothing readable</td><td><span class="warnc">hook can't tell</span>. The OS sandbox's <code>denyRead</code> on <code>~/work/globex</code> stops the read.</td></tr>
+      <tr><td><code>cd /tmp/build &amp;&amp; make</code></td><td>target in no space</td><td><span class="ok">allow</span> and log. Strict mode refuses.</td></tr>
+      <tr><td>Git worktree under <code>~/work/acme.worktrees/…</code>, or Claude Code's <code>EnterWorktree</code></td><td>a path in a linked worktree is also checked at the same place in its main checkout (acme). <code>EnterWorktree</code> moves <code>cwd</code> into <code>.claude/worktrees/&lt;name&gt;</code> without <code>CwdChanged</code>.</td><td><span class="ok">allow</span></td></tr>
+      <tr><td><code>/cd</code> to a new primary directory</td><td>not recorded: <code>/cd</code> isn't available in <code>claude -p</code>, so SP-001 couldn't test it</td><td>the pin is unchanged (INV-05). A target in another job is refused.</td></tr>
+      <tr><td>A subagent spawned in another directory</td><td>its tool calls keep the parent's <code>session_id</code> and add <code>agent_id</code> and <code>agent_type</code> (SP-001)</td><td>inherits the parent's pin. Subagents never set their own (SP-010).</td></tr>
+      <tr><td>Edits <code>~/.claude/settings.json</code> to remove the hook</td><td>a write to a self-protection path</td><td><span class="bad">refuse</span> (SP-042)</td></tr>
+      <tr><td>A session started in <code>~</code></td><td>first <code>cwd</code> in no space</td><td>pinned to no space: public memory only, and it can't later "claim" acme by moving there (INV-05)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section aria-labelledby="log">
+  <h2 id="log">Command log lifecycle</h2>
+  <div class="two">
+    <div class="card">
+      <h3>Each record</h3>
+<pre>{"seq": 412, "ts": "2026-11-08T14:05:02Z",
+ "session": "9b11…", "harness": "codex",
+ "event": "PreToolUse", "tool": "Bash",
+ "cwd": "~/work/acme/web",
+ "targets": ["~/work/globex/core"],
+ "command": "cd ~/work/globex/core &amp;&amp; …",  <span class="c"># credential-redacted, capped at 2 KB</span>
+ "decision": "refuse", "rule": "other-isolated-space",
+ "policy_rev": "sha256:3f9c…",
+ "prev": "sha256:a17e…"}                    <span class="c"># hash chain</span></pre>
+    </div>
+    <div class="card">
+      <h3>Size and retention</h3>
+      <ul>
+        <li><b>Volume:</b> a long session makes about 300–600 tool calls at about 300 bytes each, roughly 100–200 KB. A busy week is a few tens of MB.</li>
+        <li><b>Retention:</b> deleted 7 days after the session ended (configurable: 3, 7 or 30 days). "Ended" comes from the kernel, not hook events: <code>SessionEnd</code>, or the pinned harness process gone or replaced, noticed within a minute (SP-015, SP-017).</li>
+        <li><b>Idle sessions:</b> a session whose process is still alive is never treated as ended, however long it has been idle. Its log is capped at 50 MB instead, oldest non-refusal records first (SP-015).</li>
+        <li><b>Hard cap:</b> a total size cap (default 500 MB) deletes the oldest ended sessions first, so a runaway session can't fill the disk (SP-015).</li>
+        <li><b>Refusals kept longer:</b> refusal records alone are kept 90 days, so a pattern of attempts stays visible.</li>
+        <li><b>Who sweeps:</b> orchd (SP-015, not yet built). Hooks only append.</li>
+      </ul>
+    </div>
+  </div>
+  <ul>
+    <li><b>Stored</b> in its own SQLite file, <code>toollog.db</code> in orch's data directory, created <code>0600</code> together with its <code>-wal</code> and <code>-shm</code> files. It stays out of <code>orch.db</code> and its backups (D-29, SP-014). Self-protection rules cover it (SP-042).</li>
+    <li><b>Who is logged:</b> only events orchd can attribute to a pinned session or a running task. Events from an unpinned harness or the operator are counted and dropped (open: RC-43). A queued task's events are logged under the task orchd resolves, never the <code>session_id</code> the request names (D-31).</li>
+    <li><b>Never indexed into RAG.</b> It's evidence, not memory. Commands can quote another job's paths, and indexing them would itself leak.</li>
+    <li><b>Redacted</b> through <code>internal/redact</code> before it's written. A refusal for an outbound term gives the term's line number and hash, never the term (SP-044, INV-07).</li>
+    <li><b>Hash chain per session</b> (SP-014). It detects modified, deleted and reordered records, and the chain head is anchored at <code>SessionEnd</code>. The anchors currently live in <code>toollog.db</code> itself, so records removed after the last anchor, or a chain rewritten from its first record, can't be detected. Task chains are never anchored, because tasks send no <code>SessionEnd</code>. Where to anchor is open (RC-42). As Crosby &amp; Wallach note, this proves tampering only relative to an anchored head. It doesn't stop the local user.</li>
+    <li><b>The pin itself</b> lives in orchd (SP-010): session id, harness, harness PID and start time, first <code>cwd</code>, main checkout, space, policy revision, <code>pinned_at</code> and <code>ended_at</code>. Pins survive hook crashes and can be checked from the app. Pins grant no memory access yet: a process started outside a session's tree can take its own pin (D-26), and pin-based reads wait on RC-01.</li>
+  </ul>
+</section>
+
+<section aria-labelledby="layers">
+  <h2 id="layers">Defense in layers</h2>
+  <p>No single layer is uncircumventable. Together they cover each other's gaps:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Layer</th><th>Stops</th><th>Misses</th><th>Harnesses</th></tr></thead>
+    <tbody>
+      <tr><td><b>1. orchd memory enforcement</b> (collection per space, filter, identity from the process tree)</td><td>any retrieval of another space's memory, from any client</td><td>files on disk, live GitHub. Caller identity has open gaps: a detached fake harness can take its own pin (D-26), a process that left its session's tree resolves as the operator (RC-26), and PID reuse isn't bound to the connection (RC-03).</td><td>all</td></tr>
+      <tr><td><b>2. Pre-tool guard</b> (targets, pin, self-protection, other jobs' GitHub targets, terms)</td><td>visible paths, <code>cd</code>, <code>git -C</code>, <code>gh</code> targets, file tools, settings tampering</td><td>paths built at runtime, obfuscated or opaque commands (D-28, RC-37)</td><td>Claude Code and Codex: PreToolUse deny verified, same JSON for both (SP-001). Gemini is not covered (D-20).</td></tr>
+      <tr><td><b>3. OS sandbox</b> (generated <code>denyRead</code>/<code>denyWrite</code> on other jobs' roots)</td><td>every shell read or write into those folders, however it's spelled</td><td>Claude Code's Read tool, hooks and MCP (not sandboxed); the shared <code>/tmp</code> and <code>$TMPDIR</code> under Codex's <code>:workspace</code> base (RC-09)</td><td>Claude Code, through the checkout root's <code>settings.local.json</code>. Codex, through a read-deny permissions profile that only the launcher can supply (SP-004). Gemini is not covered (D-20).</td></tr>
+      <tr><td><b>4. Harness permission rules</b> (<code>Read(//…)</code>/<code>Edit(…)</code> denies for other jobs' roots)</td><td>the Read tool into other jobs' folders. With the sandbox on and <code>allowUnsandboxedCommands: false</code>, the same Read deny also blocks sandboxed <code>cat</code> (SP-004).</td><td>shell commands without the sandbox; Grep, Glob and Edit against the Read deny are untested (RC-09)</td><td>Claude Code</td></tr>
+      <tr><td><b>5. Credentials per job</b> (a <code>gh</code> profile per job space via <code>GH_CONFIG_DIR</code>; D-18, SP-063, done)</td><td>live GitHub reads of the other employer's org. orchd's docs sync, PR monitoring and reviews for an isolated space run only as its account; agent shells get it through <code>GH_CONFIG_DIR</code> (SP-046).</td><td>nothing within its scope. It's the strongest layer.</td><td>all</td></tr>
+      <tr><td><b>6. Git hooks for terms</b> (<code>commit-msg</code>, <code>pre-push</code>; SP-045)</td><td>terms in commits from any process, including your own terminal</td><td><code>gh</code> PR and issue text</td><td>all</td></tr>
+    </tbody>
+  </table></div>
+  <p>Layers 3 and 4 need settings that differ by space. SP-004 measured how they layer (<a href="../../internals/install.md">docs/internals/install.md</a>). In Claude Code, the checkout root's <code>settings.local.json</code> applies anywhere in the checkout, but the root <code>settings.json</code> applies only when a session starts in the root. Sandbox <code>denyRead</code> alone doesn't stop the Read tool, the single-slash <code>Read(/…)</code> form doesn't block, and a fresh <code>CLAUDE_CONFIG_DIR</code> starts logged out. Codex has no per-checkout path for its profile.</p>
+  <p>D-23 delivers both options (SP-046). orch keeps the root <code>.claude/settings.local.json</code> of every checkout under a space's roots. It holds <code>sandbox.enabled</code>, <code>allowUnsandboxedCommands: false</code>, the <code>Read(//…)</code> and <code>Edit(…)</code> denies, and <code>GH_CONFIG_DIR</code>. The optional launcher <code>orch run &lt;space&gt; -- claude|codex</code> gives a session the space's full profile from any folder. A launcher profile needs its own Claude login, and Codex coverage depends on the launcher.</p>
+</section>
+
+<section aria-labelledby="plan">
+  <h2 id="plan">The way forward</h2>
+  <p>The phases follow <code>spaces-features.json</code> as of 9 Nov 2026. They replace the phases first proposed here, which started with a log-only period (superseded by D-11).</p>
+  <ol class="order">
+    <li><div><b>Phase 0: verify the assumptions. Done.</b> Real hook payloads for Claude Code and Codex (SP-001), the cost of a collection per space (SP-002), process identity (SP-003), and how sandbox and permission settings layer (SP-004). The results are in <a href="../../internals/hooks.md">docs/internals/hooks.md</a>, <a href="../../internals/install.md">docs/internals/install.md</a> and <a href="../../internals/memory.md">docs/internals/memory.md</a>. Gemini and Antigravity CLI are out of scope (D-20).</div></li>
+    <li><div><b>Phase 1: spaces, pins and an enforcing guard.</b> Done: the spaces policy with nested roots and operator-only apply (SP-020 to SP-022, D-15, D-25), per-job GitHub accounts (SP-063, D-18), session pins and caller resolution (SP-010, SP-011), the tool hooks (SP-012), target extraction (SP-013) and the command log (SP-014). To do: retention (SP-015), reading the log (SP-016), session liveness (SP-017), the guard decision (SP-040), the fail-closed guard (SP-041), self-protection (SP-042), the live GitHub guard (SP-043), policy replay over the SP-001 fixtures in CI (SP-047), enforcement switches (SP-070) and minimal app controls (SP-072).</div></li>
+    <li><div><b>Phase 2: spaces in memory.</b> Origin and space on every write (SP-023), a Qdrant collection per space (SP-024), enforcement on every read path (SP-025), other bleed paths (SP-026), relabelling with <code>labels_v</code> (SP-027), quarantine (SP-028), derived content and taint (SP-029), the public write gate (SP-030), visibility (SP-031) and retagging a source (SP-071).</div></li>
+    <li><div><b>Phase 3: outbound terms and OS sandbox.</b> Terms per space (SP-044), the git-hook helper (SP-045), per-space harness settings and the launcher (SP-046), and refusal events (SP-048).</div></li>
+    <li><div><b>Phase 4: the Spaces pane.</b> RPCs, overview, setup wizard, advanced editors, Activity and Review, and CLI parity (SP-050 to SP-055), as in <a href="spaces-ui-design.html">spaces-ui-design.html</a>.</div></li>
+    <li><div><b>Phase 5: feeds and interop.</b> Slack and Teams connectors (SP-060 to SP-062), an optional OpenAPPA label source (SP-064) and documentation consolidation (SP-065).</div></li>
+  </ol>
+  <div class="callout change">
+    <p><b>Where the plan lives:</b> <code>docs/spaces/spaces-features.json</code> is the source of truth for features, decisions and status, rendered at <a href="../index.html">docs/spaces/index.html</a>. It replaces this document's earlier suggestion to track the work in <a href="https://github.com/willesq/orchestrator/issues/130">#130</a> and a separate issue. The feasibility comment on #130 is still unposted (RC-19).</p>
+  </div>
+</section>
+
+<section aria-labelledby="questions">
+  <h2 id="questions">Decided</h2>
+  <p>The questions this document left open were settled on 8 Nov 2026.</p>
+  <ol class="order">
+    <li><div><b>Default guard mode:</b> "Block other jobs". Strict is opt-in, and the mode is configurable in the UI (D-12).</div></li>
+    <li><div><b>A collection per space,</b> plus public and quarantine collections, with the payload filter as a second layer (D-10). The measured search cost was accepted: 1.5× to 1.9× the p95 of one filtered collection, about +15 ms per hybrid search on 40,000 chunks (D-24).</div></li>
+    <li><div><b>Log contents:</b> the full command text, credential-redacted and capped at 2 KB, plus targets and the decision (D-17).</div></li>
+    <li><div><b>Per-space harness profiles:</b> both. orch keeps a local settings file in every checkout under a space's roots, and the optional launcher <code>orch run &lt;space&gt; -- claude|codex</code> gives a session the full profile from any folder (D-23).</div></li>
+    <li><div><b>OpenAPPA:</b> don't adopt it as a component now. Copy its patterns, and consider an orch label source later (D-13, SP-064).</div></li>
+    <li><div><b>When to enforce:</b> from the first release, with every layer switchable, rather than after a log-only period (D-11).</div></li>
+  </ol>
+</section>
+
+<section aria-labelledby="sources">
+  <h2 id="sources">Sources</h2>
+  <div class="card src">
+    <ul>
+      <li>Plan and measured results (added 9 Nov 2026): <a href="../index.html">docs/spaces/index.html</a> (<code>spaces-features.json</code>), <a href="../../internals/hooks.md">docs/internals/hooks.md</a> (SP-001 payloads), <a href="../../internals/install.md">docs/internals/install.md</a> (SP-004 layering).</li>
+      <li>OpenAPPA source at <code>acb9853</code>: <code>README.md</code>, <code>appa-engine/src/lib.rs</code>, <code>appa-runtime/src/main.rs</code> (loopback-only <code>/hook</code>, line 395), <code>marketplace/batteries/github/appa.toml</code> and <code>README.md:184</code>, <code>appa-file-tracker/file-tracker.toml</code>, <code>external.rs</code>, <code>consult.rs</code>, <code>credentials.rs</code>, <code>protected_launch.rs</code>. Repo metadata via <code>gh</code>.</li>
+      <li>Claude Code: <a href="https://code.claude.com/docs/en/hooks">hooks</a> (the <code>cwd</code> field and <code>CwdChanged</code> quoted and checked), <a href="https://code.claude.com/docs/en/tools-reference">tools reference</a>, <a href="https://code.claude.com/docs/en/permissions">permissions</a>, <a href="https://code.claude.com/docs/en/sandboxing">sandboxing</a>, <a href="https://code.claude.com/docs/en/env-vars">env vars</a>.</li>
+      <li>Codex: <a href="https://learn.chatgpt.com/docs/hooks">hooks</a>, <a href="https://learn.chatgpt.com/docs/sandboxing">sandboxing</a>. Gemini CLI: <a href="https://geminicli.com/docs/hooks/reference/">hooks</a>, <a href="https://geminicli.com/docs/cli/sandbox/">sandbox</a>.</li>
+      <li>Vector stores: <a href="https://qdrant.tech/documentation/guides/multiple-partitions/">Qdrant multitenancy</a>, <a href="https://qdrant.tech/documentation/security/">Qdrant security</a>, <a href="https://docs.pinecone.io/guides/index-data/implement-multitenancy">Pinecone</a>, <a href="https://docs.weaviate.io/weaviate/manage-collections/multi-tenancy">Weaviate</a>, <a href="https://docs.vespa.ai/en/ranking/multivalue-query-operators.html">Vespa</a>.</li>
+      <li>Enterprise: <a href="https://docs.glean.com/security/security-principles">Glean</a>, <a href="https://github.com/onyx-dot-app/onyx/pull/15990">Onyx #15990</a>, <a href="https://learn.microsoft.com/en-us/purview/ai-m365-copilot">Purview and Copilot</a>.</li>
+      <li>Agent security: <a href="https://simonwillison.net/2025/Jun/16/the-lethal-trifecta/">lethal trifecta</a>, <a href="https://arxiv.org/abs/2503.18813">CaMeL</a>, <a href="https://arxiv.org/abs/2505.23643">FIDES</a>, <a href="https://arxiv.org/abs/2310.06816">Vec2Text</a>, <a href="https://www.ndss-symposium.org/ndss-paper/i-know-what-you-asked-prompt-leakage-via-kv-cache-sharing-in-multi-tenant-llm-serving/">PROMPTPEEK</a>, <a href="https://www.usenix.org/legacy/events/sec09/tech/full_papers/crosby.pdf">Crosby &amp; Wallach</a>.</li>
+      <li>Tools: <a href="https://github.com/docker/mcp-gateway/blob/main/docs/profiles.md">Docker MCP gateway profiles</a>, <a href="https://archestra.ai/docs/platform-ai-tool-guardrails">Archestra guardrails</a>, <a href="https://docs.github.com/en/github-cli/github-cli/using-multiple-accounts">gh multiple accounts</a>.</li>
+    </ul>
+    <p>Only the Claude Code hook claims and the OpenAPPA source claims were re-checked first-hand. The rest come from a research pass on 8 Nov 2026. The Meta "Rule of Two" post and the Dual LLM post were cited from secondary sources and not re-fetched.</p>
+  </div>
+</section>
+
+<footer>
+  <p>orch code referenced at <code>main</code> (<code>5796fa6</code>): <code>internal/hook/hook.go</code> (never-block contract and the payload's <code>cwd</code>), <code>internal/install/{claudecode,codex,gemini}.go</code> (installed events), <code>internal/settings/claudecode/hooks.go</code> (known events, including <code>CwdChanged</code>), <code>internal/daemon/callers.go</code> (peer-PID identity), <code>internal/redact</code>.</p>
+  <p>Updated 9 Nov 2026 against the plan and these files: <code>internal/hook/tooluse.go</code> (<code>RecordToolEvent</code>, 20 ms budget) and <code>internal/toollog</code> (the command log store and its anchors).</p>
+</footer>
+
+</div>
+</body>
+</html>

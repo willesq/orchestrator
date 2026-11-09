@@ -111,3 +111,7 @@ configuration, and a build order for a re-implementation.
 Plans that shaped the code, kept for context; the code is the source of truth:
 [GO_REWRITE_PLAN.md](GO_REWRITE_PLAN.md), [MODEL_ROUTING_PLAN.md](MODEL_ROUTING_PLAN.md),
 [RAG_SENSITIVITY_PLAN.md](RAG_SENSITIVITY_PLAN.md).
+
+Memory spaces are planned in [spaces/spaces-features.json](spaces/spaces-features.json)
+(rendered by [spaces/index.html](spaces/index.html)), with the background design docs in
+[spaces/design/](spaces/design/). Where they disagree, the plan JSON wins.

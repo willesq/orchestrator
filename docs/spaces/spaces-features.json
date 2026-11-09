@@ -9,12 +9,12 @@
   "origin": {
     "issue": "https://github.com/willesq/orchestrator/issues/130",
     "design_docs": [
-      "memory-permissions-design.html",
-      "github-org-separation-design.html",
-      "context-isolation-deep-dive.html",
-      "spaces-ui-design.html"
+      "design/memory-permissions-design.html",
+      "design/github-org-separation-design.html",
+      "design/context-isolation-deep-dive.html",
+      "design/spaces-ui-design.html"
     ],
-    "design_docs_note": "The HTML design docs are untracked files in the main checkout's root (/Users/williamesquivel/code/willesq/orchestrator) as of 2026-11-08. This JSON stands alone; where they disagree, this JSON wins."
+    "design_docs_note": "The HTML design docs live in docs/spaces/design/ (paths relative to docs/spaces/). They predate this plan; on 2026-11-09 they were updated to match it and committed. This JSON stands alone; where they disagree, this JSON wins."
   },
   "agent_instructions": [
     "This file is the single source of truth for the spaces project. The reader (docs/spaces/index.html) renders this file and nothing else, so the user and agents see the same content.",
@@ -4354,6 +4354,10 @@
     {
       "date": "2026-11-08",
       "change": "Added decisions.reconvene (RC-01..RC-22), gathered from the PRs and session records of 2026-11-08, and session_procedure step 12 so every session records the user's decisions (confirmed_by_user) and everything deferred to the user (reconvene) until the last feature ships. Recorded D-26 (SP-010's accepted residual risk)."
+    },
+    {
+      "date": "2026-11-09",
+      "change": "Moved the four HTML design docs into docs/spaces/design/ and updated them to match this plan (origin.design_docs and design_docs_note updated). No decision, feature or criteria changed."
     }
   ],
   "plan_location": {
