@@ -1679,14 +1679,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "128033fc1b304383a7d8f6966af3d121a3fb4320821c0352f64adf392162f561",
-      "branch": null,
+      "branch": "feat/sp-012-tool-hooks",
       "pr": null
     },
     {
