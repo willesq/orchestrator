@@ -17,7 +17,7 @@ they name a file.
 
 | Event | Does |
 |---|---|
-| `session-start` | Prints `## Orchestrator digest`: the last 5 events of this session's stream and of `pr-babysitter`, `routing`, `queue`, plus a count of pending-ingest items. After compaction (`source=compact`) it first prints the [resume brief](#resume-brief). Marks the session and `queue` streams seen, so the next prompt's updates skip them. |
+| `session-start` | Asks orchd to pin the session (`PinSession`, 2 s; skipped in queued tasks), sending the session ID, `cwd` and `parent_session_id` for every source: orchd keeps an existing pin, so resume, clear and compact change nothing ([daemon.md](daemon.md#session-pins)). Then prints `## Orchestrator digest`: the last 5 events of this session's stream and of `pr-babysitter`, `routing`, `queue`, plus a count of pending-ingest items. After compaction (`source=compact`) it first prints the [resume brief](#resume-brief). Marks the session and `queue` streams seen, so the next prompt's updates skip them. |
 | `user-prompt-submit` | Prints the [updates block](#updates-block) (not inside queued tasks), then [prompt context](#prompt-context). |
 | `stop` | Parses the transcript (redacted) and writes `sessions/<id>.yaml`. No orchd call. |
 | `pre-compact` | Writes `sessions/<id>.checkpoint.yaml` with the last request and reply. |
@@ -158,6 +158,8 @@ pre-compact checkpoint, restoring live state the harness summary cannot see.
 
 ## Session end
 
+0. Tell orchd the session ended (`EndSession`, 0.5 s; skipped in queued tasks), even when there is
+   no transcript. The pin keeps its row for retention.
 1. Parse the transcript (redacted), write `sessions/<id>.yaml`, delete checkpoint and hook state.
 2. Tag with `checkout:<main checkout>` only; `repo:` is not used for sessions because a repo's own
    `origin` could claim another project's name.

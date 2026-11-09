@@ -670,6 +670,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "PinSession" metadata.
+        public enum PinSession: Sendable {
+            /// Request type for "PinSession".
+            public typealias Input = Orchd_V1_PinSessionRequest
+            /// Response type for "PinSession".
+            public typealias Output = Orchd_V1_SessionPin
+            /// Descriptor for "PinSession".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "PinSession",
+                type: .unary
+            )
+        }
+        /// Namespace for "EndSession" metadata.
+        public enum EndSession: Sendable {
+            /// Request type for "EndSession".
+            public typealias Input = Orchd_V1_EndSessionRequest
+            /// Response type for "EndSession".
+            public typealias Output = Orchd_V1_EndSessionResponse
+            /// Descriptor for "EndSession".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "EndSession",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -930,6 +956,8 @@ public enum Orchd_V1_Orchd: Sendable {
             DiffSpaces.descriptor,
             ApplySpaces.descriptor,
             ExplainPlacement.descriptor,
+            PinSession.descriptor,
+            EndSession.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -2163,6 +2191,58 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PlacementExplanation>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PlacementExplanation>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "PinSession" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PinSession records a session's pin at SessionStart: its harness process,
+        /// > first directory and space. A pin is set once and never changed: a second
+        /// > call returns the existing pin, a subagent gets its parent's, and a new
+        /// > session in a harness process that already holds a live pin gets that one.
+        /// > orchd reads the harness process from the caller's process tree, so only
+        /// > a process inside a harness can pin, and only for that harness.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_PinSessionRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_PinSessionRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SessionPin` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func pinSession<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_PinSessionRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_PinSessionRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SessionPin>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SessionPin>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "EndSession" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > EndSession records that a pinned session ended. The pin stays for
+        /// > retention. Only the pinned harness process can end it.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_EndSessionRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_EndSessionRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_EndSessionResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func endSession<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_EndSessionRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_EndSessionRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_EndSessionResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_EndSessionResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListRegisteredSources" method.
@@ -4314,6 +4394,80 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "PinSession" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PinSession records a session's pin at SessionStart: its harness process,
+        /// > first directory and space. A pin is set once and never changed: a second
+        /// > call returns the existing pin, a subagent gets its parent's, and a new
+        /// > session in a harness process that already holds a live pin gets that one.
+        /// > orchd reads the harness process from the caller's process tree, so only
+        /// > a process inside a harness can pin, and only for that harness.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_PinSessionRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_PinSessionRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SessionPin` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func pinSession<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_PinSessionRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_PinSessionRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SessionPin>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SessionPin>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.PinSession.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "EndSession" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > EndSession records that a pinned session ended. The pin stays for
+        /// > retention. Only the pinned harness process can end it.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_EndSessionRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_EndSessionRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_EndSessionResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func endSession<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_EndSessionRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_EndSessionRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_EndSessionResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_EndSessionResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.EndSession.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -6367,6 +6521,70 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ExplainPlacementRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PlacementExplanation>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "PinSession" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > PinSession records a session's pin at SessionStart: its harness process,
+    /// > first directory and space. A pin is set once and never changed: a second
+    /// > call returns the existing pin, a subagent gets its parent's, and a new
+    /// > session in a harness process that already holds a live pin gets that one.
+    /// > orchd reads the harness process from the caller's process tree, so only
+    /// > a process inside a harness can pin, and only for that harness.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_PinSessionRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func pinSession<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_PinSessionRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SessionPin>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.pinSession(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_PinSessionRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SessionPin>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "EndSession" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > EndSession records that a pinned session ended. The pin stays for
+    /// > retention. Only the pinned harness process can end it.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_EndSessionRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func endSession<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_EndSessionRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_EndSessionResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.endSession(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_EndSessionRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_EndSessionResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -8543,6 +8761,78 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.explainPlacement(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "PinSession" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > PinSession records a session's pin at SessionStart: its harness process,
+    /// > first directory and space. A pin is set once and never changed: a second
+    /// > call returns the existing pin, a subagent gets its parent's, and a new
+    /// > session in a harness process that already holds a live pin gets that one.
+    /// > orchd reads the harness process from the caller's process tree, so only
+    /// > a process inside a harness can pin, and only for that harness.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func pinSession<Result>(
+        _ message: Orchd_V1_PinSessionRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SessionPin>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_PinSessionRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.pinSession(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "EndSession" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > EndSession records that a pinned session ended. The pin stays for
+    /// > retention. Only the pinned harness process can end it.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func endSession<Result>(
+        _ message: Orchd_V1_EndSessionRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_EndSessionResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_EndSessionRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.endSession(
             request: request,
             options: options,
             onResponse: handleResponse

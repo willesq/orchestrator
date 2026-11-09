@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -121,6 +122,11 @@ var operatorActions = map[string]string{
 	orchdv1.Orchd_SetSpacesDraft_FullMethodName: "change the spaces policy",
 	orchdv1.Orchd_DiffSpaces_FullMethodName:     "read the spaces policy",
 	orchdv1.Orchd_ApplySpaces_FullMethodName:    "apply the spaces policy",
+	// Reason: a queued task's identity comes from its task record, so a pin
+	// would only give it a second, self-reported one. Interactive sessions'
+	// hooks still pin (PinSession checks the harness process itself).
+	orchdv1.Orchd_PinSession_FullMethodName: "pin a session",
+	orchdv1.Orchd_EndSession_FullMethodName: "end a session's pin",
 }
 
 // refuseQueued returns the refusal for method when ctx's caller is a queued
@@ -214,8 +220,18 @@ type callerAuth struct {
 	// err says why the process could not be identified.
 	err error
 	// harness names the nearest agent harness process (claude, codex) at or
-	// above the caller, empty when there is none.
-	harness string
+	// above the caller, empty when there is none; harnessProc is that
+	// process. Its start time is zero when it was not read.
+	harness     string
+	harnessProc procstat.Identity
+	// outerHarnesses are the harness processes above harnessProc, nearest
+	// first: set when the caller's harness was started inside another
+	// session.
+	outerHarnesses []procstat.Identity
+	// harnessOrphan reports that the harness's parent is launchd or init: it
+	// was left behind by an exited parent, as a process an agent detaches
+	// from its session is.
+	harnessOrphan bool
 	// harnessErr says why the harness walk failed; such a caller is treated
 	// as if it ran in a harness.
 	harnessErr error
@@ -236,6 +252,9 @@ type peerCredentials struct {
 	// program returns what a process runs; nil means no lookup, so every
 	// caller counts as possibly in a harness.
 	program func(pid int) (procstat.Program, error)
+	// started returns when a process started; nil leaves a harness's start
+	// time unread, so its session cannot be pinned.
+	started func(pid int) (time.Time, error)
 }
 
 func (p peerCredentials) ServerHandshake(c net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -269,8 +288,69 @@ func (p peerCredentials) identify(c net.Conn) callerAuth {
 	// Reason: unlike the orchd walk above, a failed harness walk is not
 	// retried. A session that exits mid-walk reparents its children to
 	// launchd, and a second walk would then find no harness.
-	harness, herr := harnessAncestor(pid, p.parent, p.program)
-	return callerAuth{pid: pid, spawned: spawned, err: err, harness: harness, harnessErr: herr}
+	harness, hpid, herr := harnessAncestor(pid, p.parent, p.program)
+	a := callerAuth{pid: pid, spawned: spawned, err: err, harness: harness, harnessErr: herr}
+	if harness == "" {
+		return a
+	}
+	// Reason: read at accept, while the caller still runs under the
+	// harness, so a later process taking over a PID does not match it.
+	if a.harnessProc, err = p.harnessIdentity(hpid); err != nil {
+		a.harnessErr = err
+		return a
+	}
+	if a.outerHarnesses, err = p.outerHarnesses(hpid); err != nil {
+		a.harnessErr = err
+		return a
+	}
+	if ppid, err := p.parent(hpid); err != nil {
+		a.harnessErr = fmt.Errorf("parent of harness process %d: %w", hpid, err)
+	} else {
+		a.harnessOrphan = ppid <= 1
+	}
+	return a
+}
+
+// harnessIdentity names harness process pid. Without a start-time reader
+// its start time stays zero, so its session cannot be pinned.
+func (p peerCredentials) harnessIdentity(pid int) (procstat.Identity, error) {
+	id := procstat.Identity{PID: pid}
+	if p.started == nil {
+		return id, nil
+	}
+	started, err := p.started(pid)
+	if err != nil {
+		return id, fmt.Errorf("start time of harness process %d: %w", pid, err)
+	}
+	id.Started = started
+	return id, nil
+}
+
+// outerHarnesses walks on from harness process pid and returns every
+// harness above it, nearest first. A harness an agent starts inside its own
+// session (or any program it names claude) is found here, so it cannot take
+// a pin of its own.
+func (p peerCredentials) outerHarnesses(pid int) ([]procstat.Identity, error) {
+	var out []procstat.Identity
+	for range maxAncestry {
+		ppid, err := p.parent(pid)
+		if err != nil {
+			return nil, fmt.Errorf("parent of process %d: %w", pid, err)
+		}
+		if ppid <= 1 || ppid == pid {
+			return out, nil
+		}
+		h, hpid, err := harnessAncestor(ppid, p.parent, p.program)
+		if err != nil || h == "" {
+			return out, err
+		}
+		id, err := p.harnessIdentity(hpid)
+		if err != nil {
+			return nil, err
+		}
+		out, pid = append(out, id), hpid
+	}
+	return nil, fmt.Errorf("process ancestry deeper than %d", maxAncestry)
 }
 
 // harnessNames are the program names of the agent harnesses spaces cover
@@ -314,35 +394,35 @@ func harnessOf(prog procstat.Program) string {
 	return ""
 }
 
-// harnessAncestor returns the name of the nearest harness process at or above
-// pid, or "" when the walk reaches launchd or init without one.
-func harnessAncestor(pid int, parent func(int) (int, error), program func(int) (procstat.Program, error)) (string, error) {
+// harnessAncestor returns the name and PID of the nearest harness process at
+// or above pid, or "" when the walk reaches launchd or init without one.
+func harnessAncestor(pid int, parent func(int) (int, error), program func(int) (procstat.Program, error)) (string, int, error) {
 	if program == nil {
-		return "", errors.New("process programs cannot be read")
+		return "", 0, errors.New("process programs cannot be read")
 	}
 	for range maxAncestry {
 		prog, err := program(pid)
 		if err != nil {
-			return "", fmt.Errorf("program of process %d: %w", pid, err)
+			return "", 0, fmt.Errorf("program of process %d: %w", pid, err)
 		}
 		if h := harnessOf(prog); h != "" {
-			return h, nil
+			return h, pid, nil
 		}
 		// An interpreter's script says what it runs; without its arguments
 		// it could be a harness, so the caller cannot be cleared.
 		if interpreters[prog.Name] && len(prog.Args) < 2 {
-			return "", fmt.Errorf("process %d runs %s, whose script cannot be read", pid, prog.Name)
+			return "", 0, fmt.Errorf("process %d runs %s, whose script cannot be read", pid, prog.Name)
 		}
 		ppid, err := parent(pid)
 		if err != nil {
-			return "", fmt.Errorf("parent of process %d: %w", pid, err)
+			return "", 0, fmt.Errorf("parent of process %d: %w", pid, err)
 		}
 		if ppid <= 1 || ppid == pid {
-			return "", nil
+			return "", 0, nil
 		}
 		pid = ppid
 	}
-	return "", fmt.Errorf("process ancestry deeper than %d", maxAncestry)
+	return "", 0, fmt.Errorf("process ancestry deeper than %d", maxAncestry)
 }
 
 // operator reports whether ctx's caller is the operator, else describes it.

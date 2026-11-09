@@ -2201,6 +2201,96 @@ public nonisolated struct Orchd_V1_PlacementExplanation: Sendable {
   fileprivate var _remote: Orchd_V1_PlacementRemote? = nil
 }
 
+public nonisolated struct Orchd_V1_PinSessionRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// ^[A-Za-z0-9_-]{1,128}$
+  public var sessionID: String = String()
+
+  /// The session's directory as the hook reports it. A new pin is refused
+  /// unless it is the harness process's own working directory.
+  public var cwd: String = String()
+
+  /// Set for a subagent: it gets its parent's pin and cannot set its own.
+  public var parentSessionID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// SessionPin is the identity every later decision about a session uses. It
+/// is written once at SessionStart; only ended_at changes later.
+public nonisolated struct Orchd_V1_SessionPin: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  /// claude | codex
+  public var harness: String = String()
+
+  public var harnessPid: Int64 = 0
+
+  /// The harness process's start time in unix nanoseconds: with the PID it
+  /// names that process for its whole life.
+  public var harnessStarted: Int64 = 0
+
+  public var firstCwd: String = String()
+
+  /// "" outside a git checkout
+  public var mainCheckout: String = String()
+
+  /// The space the session writes to: "" with no spaces policy applied,
+  /// "quarantine" when its directory cannot be placed.
+  public var space: String = String()
+
+  /// the applied spaces revision; 0 for none
+  public var policyRevision: Int64 = 0
+
+  /// unix seconds
+  public var pinnedAt: Int64 = 0
+
+  /// unix seconds; 0 while not ended
+  public var endedAt: Int64 = 0
+
+  /// The session whose pin this one copied (a subagent's parent, or an
+  /// earlier session in the same harness process); "" for its own.
+  public var inheritedFrom: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_EndSessionRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessionID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_EndSessionResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// unix seconds; the first end recorded wins
+  public var endedAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Orchd_V1_DocRepo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -8260,6 +8350,186 @@ nonisolated extension Orchd_V1_PlacementExplanation: SwiftProtobuf.Message, Swif
     if lhs.space != rhs.space {return false}
     if lhs.sessionSpace != rhs.sessionSpace {return false}
     if lhs.sessionReads != rhs.sessionReads {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_PinSessionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PinSessionRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{1}cwd\0\u{3}parent_session_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.cwd) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.parentSessionID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    if !self.cwd.isEmpty {
+      try visitor.visitSingularStringField(value: self.cwd, fieldNumber: 2)
+    }
+    if !self.parentSessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.parentSessionID, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_PinSessionRequest, rhs: Orchd_V1_PinSessionRequest) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.cwd != rhs.cwd {return false}
+    if lhs.parentSessionID != rhs.parentSessionID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SessionPin: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SessionPin"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{1}harness\0\u{3}harness_pid\0\u{3}harness_started\0\u{3}first_cwd\0\u{3}main_checkout\0\u{1}space\0\u{3}policy_revision\0\u{3}pinned_at\0\u{3}ended_at\0\u{3}inherited_from\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.harness) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.harnessPid) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.harnessStarted) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.firstCwd) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.mainCheckout) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.space) }()
+      case 8: try { try decoder.decodeSingularInt64Field(value: &self.policyRevision) }()
+      case 9: try { try decoder.decodeSingularInt64Field(value: &self.pinnedAt) }()
+      case 10: try { try decoder.decodeSingularInt64Field(value: &self.endedAt) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.inheritedFrom) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    if !self.harness.isEmpty {
+      try visitor.visitSingularStringField(value: self.harness, fieldNumber: 2)
+    }
+    if self.harnessPid != 0 {
+      try visitor.visitSingularInt64Field(value: self.harnessPid, fieldNumber: 3)
+    }
+    if self.harnessStarted != 0 {
+      try visitor.visitSingularInt64Field(value: self.harnessStarted, fieldNumber: 4)
+    }
+    if !self.firstCwd.isEmpty {
+      try visitor.visitSingularStringField(value: self.firstCwd, fieldNumber: 5)
+    }
+    if !self.mainCheckout.isEmpty {
+      try visitor.visitSingularStringField(value: self.mainCheckout, fieldNumber: 6)
+    }
+    if !self.space.isEmpty {
+      try visitor.visitSingularStringField(value: self.space, fieldNumber: 7)
+    }
+    if self.policyRevision != 0 {
+      try visitor.visitSingularInt64Field(value: self.policyRevision, fieldNumber: 8)
+    }
+    if self.pinnedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.pinnedAt, fieldNumber: 9)
+    }
+    if self.endedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.endedAt, fieldNumber: 10)
+    }
+    if !self.inheritedFrom.isEmpty {
+      try visitor.visitSingularStringField(value: self.inheritedFrom, fieldNumber: 11)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SessionPin, rhs: Orchd_V1_SessionPin) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.harness != rhs.harness {return false}
+    if lhs.harnessPid != rhs.harnessPid {return false}
+    if lhs.harnessStarted != rhs.harnessStarted {return false}
+    if lhs.firstCwd != rhs.firstCwd {return false}
+    if lhs.mainCheckout != rhs.mainCheckout {return false}
+    if lhs.space != rhs.space {return false}
+    if lhs.policyRevision != rhs.policyRevision {return false}
+    if lhs.pinnedAt != rhs.pinnedAt {return false}
+    if lhs.endedAt != rhs.endedAt {return false}
+    if lhs.inheritedFrom != rhs.inheritedFrom {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_EndSessionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".EndSessionRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_EndSessionRequest, rhs: Orchd_V1_EndSessionRequest) -> Bool {
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_EndSessionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".EndSessionResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ended_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt64Field(value: &self.endedAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.endedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.endedAt, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_EndSessionResponse, rhs: Orchd_V1_EndSessionResponse) -> Bool {
+    if lhs.endedAt != rhs.endedAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -83,6 +83,20 @@ func (e *Engine) Current() (*Resolved, error) {
 	return e.applied.Resolved, nil
 }
 
+// CurrentRevision is Current with the number of the applied revision it
+// enforces, 0 when none is applied.
+func (e *Engine) CurrentRevision() (*Resolved, int64, error) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	switch {
+	case e.broken != "":
+		return nil, 0, ErrBroken
+	case e.applied == nil:
+		return nil, 0, nil
+	}
+	return e.applied.Resolved, e.applied.Revision.Number, nil
+}
+
 // SaveDraft stores p as a new draft and returns it with its problems, if any.
 // byOperator records whether the operator saved it rather than an agent
 // session.

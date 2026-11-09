@@ -1105,7 +1105,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestPinSessionKeepsFirstPin (internal/daemon/pins_test.go) pins sess-1 in dirs[0], then calls PinSession again for sess-1 with dirs[1] while the harness reports dirs[1]: the response equals the original pin and the stored row keeps first_cwd dirs[0]. PASS, go1.27.3 darwin/arm64, 2026-11-08, commit 5e5aa84.",
+            "a2: TestPinSessionValidatesIDs: '', 'a/b', '../x', 'a b', 'a.b', 'é', 'a\\nb', 129 chars and 'sess;rm' are rejected with InvalidArgument as session_id, as parent_session_id and by EndSession; a 128-char ID, a UUID and 'A_b-9' are accepted; exactly 3 rows are stored. PASS.",
+            "a3: TestPinSessionHarnessFromProcessTree drives peerCredentials.identify over a fake process tree (hook 901 -> zsh 902 -> claude 400 -> Terminal 30, plus an unrelated claude 401) and pins through the resulting caller: the pin records harness claude, PID 400 and 400's start time; PinSessionRequest has no pid or harness field (checked by proto reflection); callers outside a harness, with a failed walk, an unknown peer, no start time, or a replaced harness PID are refused PermissionDenied. Related, from the security audit: TestPinSessionChecksCwd (a new pin needs cwd == the harness's kernel cwd), TestNestedHarnessKeepsOuterPin, TestDetachedHarnessGetsNoNewPin, TestNewPinOnlyWhileHarnessIsNew. All PASS."
+          ]
         },
         {
           "id": "SP-010.2",
@@ -1133,7 +1137,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestSessionStartSourcesKeepPin (internal/daemon/pins_test.go) pins sess-life in dirs[0], then sends PinSession for each SessionStart source with the harness reporting dirs[1]: startup, resume and compact (same session ID) and clear (a new session ID in the same process, as Claude Code's /clear does) each return the original first_cwd, space, harness PID and policy revision; clear records inherited_from sess-life. 4 subtests PASS. It also checks that a pin taken after the first session ended keeps the process's pin, and that another process resuming the session is refused. Hook side: TestSessionStartPinsEverySource (internal/hook/pins_test.go) shows each of the 4 sources sends the same PinSession request. PASS.",
+            "a2: TestSubagentInheritsParentPin: a subagent asking for dirs[1] with parent_session_id=parent gets the parent's first_cwd, space and harness with inherited_from=parent; a nested subagent still names the root; a later PinSession for the subagent without a parent keeps the inherited pin; a parent with no pin (FailedPrecondition) or pinned to another harness process (PermissionDenied) gives nothing and stores no row. Hook side: TestSessionStartPinsSubagentWithParent. PASS.",
+            "a3: TestEndSessionKeepsPin: EndSession sets ended_at to the fake clock's time; a second EndSession keeps the first time; the row stays with first_cwd intact and PinSession still returns it with ended_at set; another process (PermissionDenied), an unknown session (NotFound) and the operator (PermissionDenied) cannot end it. Hook side: TestSessionEndEndsPin (session-end sends EndSession even without a transcript). PASS."
+          ]
         },
         {
           "id": "SP-010.3",
@@ -1147,18 +1155,20 @@
               "threshold": "all pass unchanged"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: go test ./internal/hook/ passes 172 tests (2026-11-08, commit 5e5aa84). `git diff --stat origin/main -- internal/hook/*_test.go` lists only the new internal/hook/pins_test.go, so every existing hook test passes unchanged, including TestSessionStart, TestDispatchAllEvents, the TestSessionEnd tests and TestRecordedPayloadsParse. Pinning is added in dispatch around the unchanged sessionStart/sessionEnd handlers and never blocks the session (TestPinHooksNeverBlock). orchd side: TestPinWithoutSpaces shows that with no spaces policy (and with no spaces engine) a pin records space '' and policy_revision 0; TestPinPlacesSession shows a space is set only under an applied policy (acme; personal under a public root, D-22)."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "591ded86b49e51b3627c1ee96b9c2139cf6b2b68",
+      "verified_at": "2026-11-09T00:09:20Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "3db36eb1d0b4067e2568db4d0f867d703bfebd6a838987cb146e93c7bdc27c56",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-010-session-pins",
+      "pr": "https://github.com/willesq/orchestrator/pull/147"
     },
     {
       "id": "SP-011",

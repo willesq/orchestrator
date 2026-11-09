@@ -65,10 +65,12 @@ func dispatch(event string, p Payload, out io.Writer, cf clientFactory) error {
 	case "user-prompt-submit":
 		return userPromptSubmit(loadAutoRAG(), p, out, cf)
 	case "session-start":
+		pinSession(p, cf)
 		return sessionStart(p, out)
 	case "stop":
 		return stop(p)
 	case "session-end":
+		endSession(p, cf)
 		return sessionEnd(p, cf)
 	case "pre-compact":
 		return preCompact(p)

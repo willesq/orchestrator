@@ -152,6 +152,16 @@ service Orchd {
   // owner/repo or chat tenant) goes to and why. Agents get an answer only
   // when every space it names is public; the operator sees all.
   rpc ExplainPlacement(ExplainPlacementRequest) returns (PlacementExplanation);
+  // PinSession records a session's pin at SessionStart: its harness process,
+  // first directory and space. A pin is set once and never changed: a second
+  // call returns the existing pin, a subagent gets its parent's, and a new
+  // session in a harness process that already holds a live pin gets that one.
+  // orchd reads the harness process from the caller's process tree, so only
+  // a process inside a harness can pin, and only for that harness.
+  rpc PinSession(PinSessionRequest) returns (SessionPin);
+  // EndSession records that a pinned session ended. The pin stays for
+  // retention. Only the pinned harness process can end it.
+  rpc EndSession(EndSessionRequest) returns (EndSessionResponse);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -962,6 +972,45 @@ message PlacementExplanation {
   // reads it gets ("" for none: public only).
   string session_space = 8;
   string session_reads = 9;
+}
+
+message PinSessionRequest {
+  string session_id = 1; // ^[A-Za-z0-9_-]{1,128}$
+  // The session's directory as the hook reports it. A new pin is refused
+  // unless it is the harness process's own working directory.
+  string cwd = 2;
+  // Set for a subagent: it gets its parent's pin and cannot set its own.
+  string parent_session_id = 3;
+}
+
+// SessionPin is the identity every later decision about a session uses. It
+// is written once at SessionStart; only ended_at changes later.
+message SessionPin {
+  string session_id = 1;
+  string harness = 2;     // claude | codex
+  int64 harness_pid = 3;
+  // The harness process's start time in unix nanoseconds: with the PID it
+  // names that process for its whole life.
+  int64 harness_started = 4;
+  string first_cwd = 5;
+  string main_checkout = 6; // "" outside a git checkout
+  // The space the session writes to: "" with no spaces policy applied,
+  // "quarantine" when its directory cannot be placed.
+  string space = 7;
+  int64 policy_revision = 8; // the applied spaces revision; 0 for none
+  int64 pinned_at = 9;       // unix seconds
+  int64 ended_at = 10;       // unix seconds; 0 while not ended
+  // The session whose pin this one copied (a subagent's parent, or an
+  // earlier session in the same harness process); "" for its own.
+  string inherited_from = 11;
+}
+
+message EndSessionRequest {
+  string session_id = 1;
+}
+
+message EndSessionResponse {
+  int64 ended_at = 1; // unix seconds; the first end recorded wins
 }
 
 message DocRepo {
