@@ -2238,7 +2238,7 @@
       "attempts": 1,
       "criteria_sha256": "570f513809cc007ea2916a4601bfbba4bcc7f78a394c4e52a52dc4a17464e0b5",
       "branch": "feat/sp-017-session-liveness",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/154"
     },
     {
       "id": "SP-015",
