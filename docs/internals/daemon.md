@@ -223,6 +223,77 @@ operator, the widest result. The connection's peer PID is still taken on trust a
 (see [queued callers](#queued-callers)): a peer that hands its socket to a child and exits leaves
 its PID free for reuse.
 
+### Command log
+
+orchd stores every event the [tool hooks](hooks.md#tool-hooks) hand to `RecordToolEvent`
+(spaces SP-014, D-04, D-17; `internal/toollog`, `internal/daemon/toollog.go`). It is never indexed
+into RAG (INV-12): the log package imports only the standard library, SQLite and `redact`, and
+`TestCommandLogNeverReachesRAG` type-checks the repository and fails if any function reachable
+by calls from the code that takes, stores or reads tool events (`internal/toollog`,
+`internal/daemon/toollog.go`, `toolevents.go`) calls `IngestText`, `Upsert` or `Ingest`, or if
+any function both touches the log and calls one. A call through an interface may reach any
+method of that name; calls through function values are not followed.
+
+- **Where:** `toollog.db` in the data directory, a SQLite file of its own apart from `orch.db`
+  (D-29), created mode 0600; SQLite gives its `-wal` and `-shm` files the same mode, and an older
+  wider file is tightened at open. A symlink or anything but a regular file at that path is
+  refused, and the log is then off (orchd logs why and counts and drops events as before).
+- **Whose:** each record belongs to one chain, keyed by the [caller orchd
+  resolved](#caller-sessions): a session's pin, or a queued task's ID (`task:<id>`, D-31). The
+  `session_id` a hook sends is kept as `claimed_session`; it chooses the chain only when that
+  session is pinned to the same harness process as the caller's pin (an earlier session of the
+  process, before `/clear`), so a hook cannot write into another process's chain. That check
+  reads `orch.db`, so it runs on the log's writer, never on the hook's RPC; dropped events are
+  resolved the same way, so their gap lands in the chain that lost them. Events from
+  the operator, from a task orchd cannot find, or from an unresolved caller are counted by
+  caller kind and not stored (RC-29): they have no owner, and storing them would let any local
+  process grow the log.
+- **What:** per record `seq`, `ts` (when orchd took it) and the hook's `hook_at`, `kind`
+  (`event`, `gap` or `end`), harness, event, tool, tool_use_id, agent_id, agent_type, cwd,
+  old/new cwd, `targets` (the JSON of [`spaces.Targets`](hooks.md#tool-call-targets)), the
+  command, the input size, `decision`, `rule`, `policy_rev` (the applied spaces revision) and
+  the hashes. The command is a shell tool's command (an argv list joined with spaces) or any
+  other tool's input, credential-redacted with `redact.RedactCommand` (the rules RAG ingestion
+  uses plus command-log-only ones that prefer losing text to keeping a secret: any `login -p`
+  or `--password` value, quoted or not, an unquoted YAML `password:` ending its line, a private
+  key with no END line; pattern-based, so best-effort) and then capped at 2 KB with a
+  `…[truncated N bytes]` marker. Every other text field is redacted and capped at 4 KiB; targets
+  over 16 KiB are stored as opaque. Redaction reads at most twice the cap plus 4 KiB of a field,
+  so a secret the cut passes through is still found and a 1 MiB input costs little. Text is made
+  valid UTF-8 (invalid bytes become U+FFFD) before it is stored and hashed. The decision is
+  `logged` until the guard (SP-041) decides. `RecordToolEvent` refuses an event whose fields
+  other than `tool_input` exceed 4 KiB, or that carries protobuf fields orchd does not know.
+- **Off the hook's path:** `RecordToolEvent` only queues the event. The queue holds at most
+  4096 events and 64 MiB (each event counted at its encoded request size plus 512 bytes), and one
+  harness process (all its sessions together) or one task may hold at most a quarter of either,
+  so a session flooding the log, or pinning more sessions, drops its own events, not others'. One writer goroutine reads each call's targets (up to `Targets`' 100 ms
+  budget), builds the record, releases the event's share and stores up to 256 at a time in one
+  transaction, so each chain keeps the order events arrived. Events dropped because the queue,
+  the budget or the owner's share is full, or because a batch could not be stored, are counted
+  per chain; a `gap` record with the count is written just before the chain's next queued record
+  (an end record included), or after the batch, within a second, when none follows (D-30). A
+  session can still hide what it ran by flooding its own share; the gap shows that it did. Events lost before they reach orchd (orchd down, or slower than the hook's 20 ms) leave
+  no trace; the guard fails closed once it enforces.
+- **Integrity:** each record's hash is SHA-256 over its JSON with the previous record's hash, so
+  records chain per owner. At SessionEnd orchd writes an `end` record after the session's queued
+  events and anchors its hash in the `anchors` table, unless the chain is empty or already ends
+  in an end record: a repeated SessionEnd adds nothing, and a resumed session, which continues the
+  same chain, is anchored again at its next SessionEnd. One end per session is in flight at a
+  time; a SessionEnd that arrives meanwhile runs one more after it. `orch spaces log verify <session|task:<id>>` (`VerifyToolLog`, operator-only) recomputes
+  the chain and reports each record whose content no longer matches its hash, that no longer
+  links to the one before it, that is missing from the sequence, and each anchored head that is
+  gone or changed. It cannot see records removed after the last anchor, nor a chain someone
+  rewrote from its first record with the same code: the anchors live in the same file. It is
+  tamper-evidence against edits to the file, not a defense against a process that can write it.
+  Mode 0600 keeps out other users only: an agent running as the user can read the file, so
+  "operator only" holds at orchd's RPCs, and the OS sandbox (SP-046) is what keeps sessions out of
+  the file. `VerifyToolLog` waits at most 10 s for queued events to be stored first.
+- **Cost:** `TestToolLogThroughput` (RecordToolEvent through stored, targets read for each
+  `cd … && git -C … && cat … | grep` command, four sessions) measured 3,500–3,650 events/s on an
+  M3 Max over five runs; the store alone (`TestAppendThroughput`) 37,000–40,000. The gate is 1,000 events/s (SP-014.2.a2).
+- **Not yet:** retention and size caps (SP-015), reading the log (SP-016, `orch spaces log
+  <session>`), liveness (SP-017). Tasks have no end record: their runs send no SessionEnd.
+
 Clients dial `unix://<socket>` lazily (failure surfaces on the first call) and set their own
 deadlines: hooks 0.5 s for writes and 3 s for prompt search; `orch status` 2–3 s; long CLI
 commands up to 2 hours (migration).
@@ -244,8 +315,9 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `Status` | → version, uptime, subsystems, migration progress | — |
 | `Restart` | name (empty = all) → restarted | restarts subsystems in place, never the process; unknown → `NotFound` |
 | `PinSession` | session_id, cwd, parent_session_id → the pin | see [session pins](#session-pins); refused to queued tasks |
-| `EndSession` | session_id → ended_at | sets `ended_at` once; only the pinned harness process; refused to queued tasks |
-| `RecordToolEvent` | event (`pre-tool-use`/`cwd-changed`), session_id, cwd, tool_name, tool_input (≤ 1 MiB), tool_input_size, tool_use_id, agent_id, agent_type, old_cwd, new_cwd, at → — | takes a [tool hook](hooks.md#tool-hooks) event and answers at once; attributed to the [caller orchd resolved](#caller-sessions), never to session_id; open to queued tasks. Until the command log store (spaces plan SP-014) exists, events are counted by caller kind and dropped: nothing is stored, logged or indexed |
+| `EndSession` | session_id → ended_at | sets `ended_at` once; only the pinned harness process; refused to queued tasks; writes the session's [command log](#command-log) end record and anchors its head in the background |
+| `RecordToolEvent` | event (`pre-tool-use`/`cwd-changed`), session_id, cwd, tool_name, tool_input (≤ 1 MiB), tool_input_size, tool_use_id, agent_id, agent_type, old_cwd, new_cwd, at → — | takes a [tool hook](hooks.md#tool-hooks) event and answers at once; attributed to the [caller orchd resolved](#caller-sessions), never to session_id; open to queued tasks. Counted by caller kind and stored in the [command log](#command-log) when its caller is a pinned session or a running task; never indexed |
+| `VerifyToolLog` | owner (session ID or `task:<id>`) → records, anchors, ends, gaps, dropped, problems | recomputes the owner's [command log](#command-log) chain after storing what is queued; operator-only |
 | `SummarizeSession` | session_id, transcript_path, tags → accepted | ID `^[A-Za-z0-9_-]{1,128}$`; path absolute, `.jsonl`, regular file; enqueue only (backlog 32) |
 | `RecommendModel` | task_kind → route, from_table | see [tasks.md](tasks.md) |
 | `RateTask` | id, rating (`good`/`rework`/`bad`) → — | sets the task's rating; with the PR-outcome sweep, the only ledger writes outside the queue |
@@ -365,6 +437,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `<config>/AGENTS.md`, `policy/`, `rag-eval.yaml` | shared agent policy; retrieval golden set |
 | `<data>/landings/<task>.git` | a proposal's commit, in a bare repository with no hooks; pruned after 30 days |
 | `<data>/orch.db` | SQLite: tasks, sources, docs, models, routing, managed settings |
+| `<data>/toollog.db` | SQLite, mode 0600: the [command log](#command-log); never indexed |
 | `<data>/workflows.db` | durable workflow state |
 | `<data>/qdrant/`, `bin/qdrant`, `qdrant-api-key` (0600) | vector store, engine binary, API key |
 | `<data>/models/minilm/` | embedding model |

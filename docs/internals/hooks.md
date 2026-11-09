@@ -43,8 +43,8 @@ is down, refuses or does not answer within 20 ms loses the event and nothing els
 the real binary against orchd's server (`TestToolHookCost`, M3 Max): p50 10.8 ms, p99 13.4 ms from
 process start to exit over 1,000 runs. The tool guard (SP-041) will add refusals to
 `pre-tool-use`. That is why Claude Code runs it synchronously, while `cwd-changed` runs in the
-background ([install.md](install.md#claude-code)). Until the command log store (SP-014) exists,
-orchd counts these events and drops them.
+background ([install.md](install.md#claude-code)). orchd stores the events in its
+[command log](daemon.md#command-log).
 
 ### Tool-call targets
 
@@ -133,8 +133,9 @@ script's own logic beyond literal paths) are out of its reach. The guard's other
 sandbox and per-job accounts, cover those. The table tests hold more than 170 command and tool
 forms, including every bypass from both SP-013 security-review rounds. `FuzzTargets` checks for panics,
 relative targets and pathological slowness. `TestTargetsCorpusBudget` replays the corpus a fuzz
-run leaves and checks the 2 ms per-input budget. `Targets` is not called yet: the command log
-(SP-014) will record its result, and the guard (SP-040/SP-041) will decide on it.
+run leaves and checks the 2 ms per-input budget. The [command log](daemon.md#command-log)
+records its result for each `pre-tool-use` event, read on orchd's log writer, off the hook's
+path; the guard (SP-040/SP-041) will decide on it.
 
 ## Prompt context
 

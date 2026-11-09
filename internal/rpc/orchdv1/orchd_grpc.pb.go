@@ -72,6 +72,7 @@ const (
 	Orchd_PinSession_FullMethodName               = "/orchd.v1.Orchd/PinSession"
 	Orchd_EndSession_FullMethodName               = "/orchd.v1.Orchd/EndSession"
 	Orchd_RecordToolEvent_FullMethodName          = "/orchd.v1.Orchd/RecordToolEvent"
+	Orchd_VerifyToolLog_FullMethodName            = "/orchd.v1.Orchd/VerifyToolLog"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName               = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName             = "/orchd.v1.Orchd/RemoveSource"
@@ -257,6 +258,9 @@ type OrchdClient interface {
 	// the event and never waits on its processing. orchd attributes the event
 	// to the caller it resolved from the connection, never to session_id.
 	RecordToolEvent(ctx context.Context, in *RecordToolEventRequest, opts ...grpc.CallOption) (*RecordToolEventResponse, error)
+	// VerifyToolLog recomputes one session's or task's command log chain and
+	// reports every modified, missing or moved record. Operator only.
+	VerifyToolLog(ctx context.Context, in *VerifyToolLogRequest, opts ...grpc.CallOption) (*VerifyToolLogResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -854,6 +858,16 @@ func (c *orchdClient) RecordToolEvent(ctx context.Context, in *RecordToolEventRe
 	return out, nil
 }
 
+func (c *orchdClient) VerifyToolLog(ctx context.Context, in *VerifyToolLogRequest, opts ...grpc.CallOption) (*VerifyToolLogResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VerifyToolLogResponse)
+	err := c.cc.Invoke(ctx, Orchd_VerifyToolLog_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -1181,6 +1195,9 @@ type OrchdServer interface {
 	// the event and never waits on its processing. orchd attributes the event
 	// to the caller it resolved from the connection, never to session_id.
 	RecordToolEvent(context.Context, *RecordToolEventRequest) (*RecordToolEventResponse, error)
+	// VerifyToolLog recomputes one session's or task's command log chain and
+	// reports every modified, missing or moved record. Operator only.
+	VerifyToolLog(context.Context, *VerifyToolLogRequest) (*VerifyToolLogResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -1397,6 +1414,9 @@ func (UnimplementedOrchdServer) EndSession(context.Context, *EndSessionRequest) 
 }
 func (UnimplementedOrchdServer) RecordToolEvent(context.Context, *RecordToolEventRequest) (*RecordToolEventResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecordToolEvent not implemented")
+}
+func (UnimplementedOrchdServer) VerifyToolLog(context.Context, *VerifyToolLogRequest) (*VerifyToolLogResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VerifyToolLog not implemented")
 }
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
@@ -2414,6 +2434,24 @@ func _Orchd_RecordToolEvent_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_VerifyToolLog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyToolLogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).VerifyToolLog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_VerifyToolLog_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).VerifyToolLog(ctx, req.(*VerifyToolLogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -2916,6 +2954,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecordToolEvent",
 			Handler:    _Orchd_RecordToolEvent_Handler,
+		},
+		{
+			MethodName: "VerifyToolLog",
+			Handler:    _Orchd_VerifyToolLog_Handler,
 		},
 		{
 			MethodName: "ListRegisteredSources",

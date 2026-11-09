@@ -1,0 +1,249 @@
+package daemon
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"sync"
+	"time"
+
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/willesq/orchestrator/internal/redact"
+	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/spaces"
+	"github.com/willesq/orchestrator/internal/toollog"
+)
+
+// The command log (spaces SP-014) stores the events toolEventIntake takes.
+// See docs/internals/daemon.md "Command log".
+
+// decisionLogged is the decision of an event no guard decided: the guard
+// (SP-041) is not enforcing, so the call went ahead.
+const decisionLogged = "logged"
+
+// maxTargetsJSON caps the stored targets. Larger targets are stored as
+// opaque, which a reader must treat as "may reach anything".
+const maxTargetsJSON = 16 << 10
+
+// endAnchorTimeout bounds writing a session's end record after SessionEnd.
+const endAnchorTimeout = 30 * time.Second
+
+// verifyFlushTimeout bounds how long VerifyToolLog waits for queued events
+// to be stored before it checks the chain.
+const verifyFlushTimeout = 10 * time.Second
+
+// toolLog is the command log and its writer; nil when it could not be
+// opened, and then events are counted and dropped as before SP-014.
+type toolLog struct {
+	store  *toollog.Store
+	writer *toollog.Writer
+	// ending holds the sessions whose end record is being written, so a
+	// repeated SessionEnd starts no second writer wait; true means another
+	// SessionEnd came meanwhile and one more End runs after this one.
+	endMu  sync.Mutex
+	ending map[string]bool
+}
+
+// openToolLog opens the command log at path and starts its writer; resolve
+// picks the chain of an event whose hook named another session.
+func openToolLog(path string, resolve toollog.Resolver) (*toolLog, error) {
+	st, err := toollog.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	return &toolLog{store: st, writer: toollog.NewWriter(st, toollog.DefaultQueue, resolve), ending: map[string]bool{}}, nil
+}
+
+// Close stores what is queued and closes the file.
+func (l *toolLog) Close() error {
+	l.writer.Close()
+	return l.store.Close()
+}
+
+// logToolEvent is the intake's sink. Events of callers orchd cannot tie to
+// a pinned session or a running task are not stored (RC-29): their owner is
+// unknown, and storing them would let any local process grow the log. The
+// intake has already counted them.
+func (s *server) logToolEvent(ev toolEvent) {
+	key, harness, ok := s.toolLogKey(ev)
+	if !ok {
+		return
+	}
+	s.toolLog.writer.Enqueue(key, eventSize(ev.req), func() toollog.Record {
+		return s.toolRecord(ev, harness)
+	})
+}
+
+// eventSize is what an event holds in memory while it waits, for the log's
+// byte budget: the whole request as received, plus room for its record.
+func eventSize(req *orchdv1.RecordToolEventRequest) int64 {
+	return int64(proto.Size(req)) + 512
+}
+
+// toolLogKey is whom ev is charged to and whose chain it goes to. A
+// session's share of the queue belongs to its harness process, so pinning
+// more sessions gains no room; its chain is the caller's pin, or the
+// session the hook named when resolveClaim allows it.
+func (s *server) toolLogKey(ev toolEvent) (toollog.Key, string, bool) {
+	switch c := ev.caller; c.kind {
+	case callerSession:
+		return toollog.Key{
+			Quota: fmt.Sprintf("process:%d:%d", c.pin.Process.PID, c.pin.Process.Started.UnixNano()),
+			Owner: toollog.Owner{Kind: toollog.OwnerSession, ID: c.pin.SessionID},
+			Claim: ev.req.GetSessionId(),
+		}, c.pin.Harness, true
+	case callerTask:
+		if c.task.TaskID != "" {
+			o := toollog.Owner{Kind: toollog.OwnerTask, ID: c.task.TaskID}
+			return toollog.Key{Quota: "task:" + c.task.TaskID, Owner: o}, c.task.Provider, true
+		}
+	}
+	return toollog.Key{}, "", false
+}
+
+// resolveClaim is the chain of a session caller's event whose hook named
+// another session: that session when it is pinned to the same harness
+// process as the caller's pin (a session before /clear shares the process),
+// else the caller's pin, with the claim kept as evidence (RC-27). Dropped
+// events are resolved the same way, so their gap lands in the chain that
+// lost them. It reads orch.db, so the log's writer calls it, never the
+// hook's RPC.
+func (s *server) resolveClaim(k toollog.Key) toollog.Owner {
+	if s.pins == nil || k.Owner.Kind != toollog.OwnerSession {
+		return k.Owner
+	}
+	ctx := context.Background()
+	own, ok, err := s.pins.get(ctx, k.Owner.ID)
+	if err != nil || !ok {
+		return k.Owner
+	}
+	if p, ok, err := s.pins.get(ctx, k.Claim); err == nil && ok && p.Process.Same(own.Process) {
+		return toollog.Owner{Kind: toollog.OwnerSession, ID: k.Claim}
+	}
+	return k.Owner
+}
+
+// toolRecord builds ev's record. It runs on the log's writer goroutine, so
+// reading the call's targets (up to spaces' 100 ms budget) never delays the
+// hook.
+func (s *server) toolRecord(ev toolEvent, harness string) toollog.Record {
+	req := ev.req
+	f := func(v string) string { return toollog.Clean(v, toollog.MaxField) }
+	r := toollog.Record{
+		TS: ev.received.UnixNano(), HookAt: req.GetAt(),
+		Harness: f(harness), Event: f(req.GetEvent()), Tool: f(req.GetToolName()),
+		ClaimedSession: f(req.GetSessionId()), ToolUseID: f(req.GetToolUseId()),
+		AgentID: f(req.GetAgentId()), AgentType: f(req.GetAgentType()),
+		Cwd: f(req.GetCwd()), OldCwd: f(req.GetOldCwd()), NewCwd: f(req.GetNewCwd()),
+		InputSize: req.GetToolInputSize(),
+		Decision:  decisionLogged,
+	}
+	if req.GetEvent() == "pre-tool-use" {
+		input := req.GetToolInput()
+		if len(input) == 0 && req.GetToolInputSize() > 0 {
+			r.Command = fmt.Sprintf("[tool input of %d bytes was not sent]", req.GetToolInputSize())
+		} else {
+			r.Command = toollog.Command(req.GetToolName(), input)
+		}
+		r.Targets = targetsJSON(spaces.Targets(req.GetToolName(), input, req.GetCwd()))
+	}
+	if s.spaces != nil {
+		if _, rev, err := s.spaces.CurrentRevision(); err == nil {
+			r.PolicyRev = rev
+		}
+	}
+	return r
+}
+
+// targetsJSON is t as stored: redacted, and replaced by an opaque result
+// when too large to keep.
+func targetsJSON(t spaces.ToolTargets) string {
+	b, err := json.Marshal(t)
+	if err == nil && len(b) <= maxTargetsJSON {
+		// Uncapped: a cut JSON document would not parse.
+		out, _ := redact.Redact(string(b))
+		return out
+	}
+	b, _ = json.Marshal(spaces.ToolTargets{Opaque: true,
+		OpaqueReasons: []string{fmt.Sprintf("targets of %d bytes were not stored", len(b))}})
+	return string(b)
+}
+
+// endToolLog writes a session's end record and anchors its chain head
+// (SessionEnd). It runs in the background: the hook does not wait on it.
+// The writer adds no end record to a chain that already ends in one, so a
+// repeated SessionEnd adds nothing and a resumed session's later records
+// are anchored at its next one.
+func (s *server) endToolLog(id string) {
+	if s.toolLog == nil {
+		return
+	}
+	l := s.toolLog
+	l.endMu.Lock()
+	if _, busy := l.ending[id]; busy {
+		// Records of a resumed session may have been queued after the End
+		// in flight; anchor once more when it is done.
+		l.ending[id] = true
+		l.endMu.Unlock()
+		return
+	}
+	l.ending[id] = false
+	l.endMu.Unlock()
+	go func() {
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), endAnchorTimeout)
+			if err := l.writer.End(ctx, toollog.Owner{Kind: toollog.OwnerSession, ID: id}); err != nil {
+				log.Printf("orchd: command log: anchoring session %s: %v", id, err)
+			}
+			cancel()
+			l.endMu.Lock()
+			again := l.ending[id]
+			if !again {
+				delete(l.ending, id)
+			} else {
+				l.ending[id] = false
+			}
+			l.endMu.Unlock()
+			if !again {
+				return
+			}
+		}
+	}()
+}
+
+// VerifyToolLog recomputes one owner's chain. Only the operator may read
+// the log here (INV-12); a session reading its own events is SP-016's.
+func (s *server) VerifyToolLog(ctx context.Context, req *orchdv1.VerifyToolLogRequest) (*orchdv1.VerifyToolLogResponse, error) {
+	if err := refuseNonOperator(ctx, orchdv1.Orchd_VerifyToolLog_FullMethodName, "read the command log"); err != nil {
+		return nil, err
+	}
+	if s.toolLog == nil {
+		return nil, grpcstatus.Error(codes.Unavailable, "the command log is unavailable; see orchd's log")
+	}
+	owner, err := toollog.ParseOwner(req.GetOwner())
+	if err != nil {
+		return nil, grpcstatus.Error(codes.InvalidArgument, err.Error())
+	}
+	// Events already taken are checked too.
+	fctx, cancel := context.WithTimeout(ctx, verifyFlushTimeout)
+	defer cancel()
+	if err := s.toolLog.writer.Flush(fctx); err != nil {
+		return nil, grpcstatus.Errorf(codes.Unavailable, "command log: %v", err)
+	}
+	rep, err := s.toolLog.store.Verify(ctx, owner)
+	if err != nil {
+		return nil, grpcstatus.Errorf(codes.Internal, "command log: %v", err)
+	}
+	out := &orchdv1.VerifyToolLogResponse{
+		Records: int32(rep.Records), Anchors: int32(rep.Anchors), Ends: int32(rep.Ends),
+		Gaps: int32(rep.Gaps), Dropped: rep.Dropped,
+	}
+	for _, p := range rep.Problems {
+		out.Problems = append(out.Problems, &orchdv1.ToolLogProblem{Seq: p.Seq, Detail: p.Detail})
+	}
+	return out, nil
+}

@@ -101,6 +101,9 @@ func TestDataDir(t *testing.T) {
 			if got := DBFile(); got != tt.wantDB {
 				t.Errorf("DBFile() = %q, want %q", got, tt.wantDB)
 			}
+			if got, want := ToolLogFile(), filepath.Join(filepath.Dir(tt.wantDB), "toollog.db"); got != want {
+				t.Errorf("ToolLogFile() = %q, want %q", got, want)
+			}
 		})
 	}
 }

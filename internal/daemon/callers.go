@@ -126,6 +126,7 @@ var operatorActions = map[string]string{
 	orchdv1.Orchd_SetSpacesDraft_FullMethodName: "change the spaces policy",
 	orchdv1.Orchd_DiffSpaces_FullMethodName:     "read the spaces policy",
 	orchdv1.Orchd_ApplySpaces_FullMethodName:    "apply the spaces policy",
+	orchdv1.Orchd_VerifyToolLog_FullMethodName:  "read the command log",
 	// Reason: a queued task's identity comes from its task record, so a pin
 	// would only give it a second, self-reported one. Interactive sessions'
 	// hooks still pin (PinSession checks the harness process itself).
