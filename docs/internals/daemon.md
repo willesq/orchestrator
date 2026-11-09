@@ -228,8 +228,11 @@ its PID free for reuse.
 orchd stores every event the [tool hooks](hooks.md#tool-hooks) hand to `RecordToolEvent`
 (spaces SP-014, D-04, D-17; `internal/toollog`, `internal/daemon/toollog.go`). It is never indexed
 into RAG (INV-12): the log package imports only the standard library, SQLite and `redact`, and
-`TestCommandLogNeverReachesRAG` fails if any function both touches the log or tool events and
-calls `IngestText`, `Upsert` or `Ingest`.
+`TestCommandLogNeverReachesRAG` type-checks the repository and fails if any function reachable
+by calls from the code that takes, stores or reads tool events (`internal/toollog`,
+`internal/daemon/toollog.go`, `toolevents.go`) calls `IngestText`, `Upsert` or `Ingest`, or if
+any function both touches the log and calls one. A call through an interface may reach any
+method of that name; calls through function values are not followed.
 
 - **Where:** `toollog.db` in the data directory, a SQLite file of its own apart from `orch.db`
   (D-29), created mode 0600; SQLite gives its `-wal` and `-shm` files the same mode, and an older

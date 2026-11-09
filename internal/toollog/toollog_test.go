@@ -742,3 +742,27 @@ func TestEndOnlyAfterNewRecords(t *testing.T) {
 		t.Errorf("empty chain = %+v", rep)
 	}
 }
+
+// TestDropKeysBounded: a hook that names a new session for every dropped
+// event cannot grow the drop counters past maxDropKeys; the overflow is
+// counted under the caller's own chain.
+func TestDropKeysBounded(t *testing.T) {
+	s, _ := openTemp(t)
+	w := newWriter(t, s, 1)
+	release := make(chan struct{})
+	started := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	o := session("flood")
+	w.Enqueue(key(o), 10, func() Record { close(started); <-release; return Record{} })
+	<-started
+	w.Enqueue(Key{Quota: "q", Owner: session("other")}, 10, bashEvent("fills the queue"))
+	for i := range maxDropKeys + 500 {
+		w.Enqueue(Key{Quota: "flood", Owner: o, Claim: fmt.Sprint("claim-", i)}, 10, bashEvent("x"))
+	}
+	w.mu.Lock()
+	n, own := len(w.drops), w.drops[dropKey{owner: o}]
+	w.mu.Unlock()
+	if n > maxDropKeys+1 || own != 500 {
+		t.Errorf("%d drop counters, %d under the caller's chain; want <= %d and 500", n, own, maxDropKeys+1)
+	}
+}

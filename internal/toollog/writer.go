@@ -25,6 +25,11 @@ const MaxQueuedBytes = 64 << 20
 // pins.
 const ownerShare = 4
 
+// maxDropKeys bounds the drop counters. Past it, a drop whose claimed
+// session has no counter yet is counted under the caller's own chain, so a
+// hook naming a new session for every dropped event cannot grow memory.
+const maxDropKeys = 4096
+
 // maxBatch bounds how many queued jobs one transaction stores.
 const maxBatch = 256
 
@@ -157,6 +162,9 @@ func (w *Writer) Enqueue(k Key, size int64, build func() Record) bool {
 			return true
 		default:
 		}
+	}
+	if _, ok := w.drops[dk]; !ok && len(w.drops) >= maxDropKeys {
+		dk = dropKey{owner: k.Owner}
 	}
 	w.drops[dk]++
 	w.dropped.Add(1)
