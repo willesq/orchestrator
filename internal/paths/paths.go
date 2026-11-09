@@ -47,6 +47,10 @@ func LegacyConfigFile() string { return filepath.Join(ConfigDir(), "config.yaml"
 // DBFile is the absolute path to the orch.db SQLite store.
 func DBFile() string { return filepath.Join(DataDir(), "orch.db") }
 
+// ToolLogFile is the command log of tool events (spaces SP-014), kept apart
+// from orch.db so it can be owner-only (D-29).
+func ToolLogFile() string { return filepath.Join(DataDir(), "toollog.db") }
+
 // SessionsDir holds per-session records + checkpoints.
 func SessionsDir() string { return filepath.Join(DataDir(), "sessions") }
 

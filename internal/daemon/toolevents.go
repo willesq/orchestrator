@@ -15,6 +15,10 @@ import (
 // maxToolEventInput matches the hook's own limit (internal/hook maxToolInput).
 const maxToolEventInput = 1 << 20
 
+// maxToolEventField caps every other string field. A path or ID is far
+// shorter; without it only gRPC's 4 MiB message limit bounds them (RC-29).
+const maxToolEventField = 4 << 10
+
 // toolEvent is one pre-tool-use or cwd-changed event with the caller orchd
 // resolved for it (SP-011). The request's session_id is only the harness's
 // claim; caller says whose event it is.
@@ -26,9 +30,9 @@ type toolEvent struct {
 
 // toolEventIntake takes the events the tool hooks hand off (spaces plan
 // SP-012). It answers as soon as an event is taken, so a hook that waits on
-// RecordToolEvent waits for nothing else. Until the command log store
-// (SP-014) is attached as sink, events are counted and dropped: nothing is
-// stored, logged or indexed. The zero value is ready to use.
+// RecordToolEvent waits for nothing else. The command log (SP-014) is the
+// sink; without it events are counted and dropped. Nothing is ever indexed.
+// The zero value is ready to use.
 type toolEventIntake struct {
 	mu sync.RWMutex
 	// sink receives each event; it must not block. nil drops events.
@@ -79,6 +83,17 @@ func (s *server) RecordToolEvent(ctx context.Context, req *orchdv1.RecordToolEve
 	}
 	if len(req.GetToolInput()) > maxToolEventInput {
 		return nil, grpcstatus.Error(codes.InvalidArgument, "tool_input is over 1 MiB; send its size alone")
+	}
+	// Reason: fields this orchd does not know would be held in memory
+	// with the request without being counted or stored.
+	if len(req.ProtoReflect().GetUnknown()) > 0 {
+		return nil, grpcstatus.Error(codes.InvalidArgument, "the request has fields this orchd does not know")
+	}
+	for _, f := range []string{req.GetCwd(), req.GetToolName(), req.GetToolUseId(), req.GetAgentId(),
+		req.GetAgentType(), req.GetOldCwd(), req.GetNewCwd()} {
+		if len(f) > maxToolEventField {
+			return nil, grpcstatus.Error(codes.InvalidArgument, "a tool event field other than tool_input is over 4 KiB")
+		}
 	}
 	s.toolEvents.take(toolEvent{caller: callerOf(ctx), req: req, received: time.Now()})
 	return &orchdv1.RecordToolEventResponse{}, nil

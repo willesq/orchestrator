@@ -167,6 +167,9 @@ service Orchd {
   // the event and never waits on its processing. orchd attributes the event
   // to the caller it resolved from the connection, never to session_id.
   rpc RecordToolEvent(RecordToolEventRequest) returns (RecordToolEventResponse);
+  // VerifyToolLog recomputes one session's or task's command log chain and
+  // reports every modified, missing or moved record. Operator only.
+  rpc VerifyToolLog(VerifyToolLogRequest) returns (VerifyToolLogResponse);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -1038,6 +1041,24 @@ message RecordToolEventRequest {
 }
 
 message RecordToolEventResponse {}
+
+message VerifyToolLogRequest {
+  string owner = 1; // a session ID, or task:<task id>
+}
+
+message ToolLogProblem {
+  int64 seq = 1;
+  string detail = 2;
+}
+
+message VerifyToolLogResponse {
+  int32 records = 1;
+  int32 anchors = 2;          // chain heads anchored at SessionEnd
+  int32 ends = 3;             // SessionEnd records
+  int32 gaps = 4;             // records saying events were dropped
+  int64 dropped = 5;          // events those gap records count
+  repeated ToolLogProblem problems = 6; // empty when the chain is intact
+}
 
 message DocRepo {
   string repo = 1;

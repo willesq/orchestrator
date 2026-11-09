@@ -384,6 +384,7 @@ func (s *server) EndSession(ctx context.Context, req *orchdv1.EndSessionRequest)
 		log.Printf("orchd: EndSession %s: %v", id, err)
 		return nil, pinStatus(err)
 	}
+	s.endToolLog(id)
 	return &orchdv1.EndSessionResponse{EndedAt: at.Unix()}, nil
 }
 

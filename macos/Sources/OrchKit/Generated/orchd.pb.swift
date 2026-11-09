@@ -2351,6 +2351,60 @@ public nonisolated struct Orchd_V1_RecordToolEventResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Orchd_V1_VerifyToolLogRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// a session ID, or task:<task id>
+  public var owner: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ToolLogProblem: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var seq: Int64 = 0
+
+  public var detail: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_VerifyToolLogResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var records: Int32 = 0
+
+  /// chain heads anchored at SessionEnd
+  public var anchors: Int32 = 0
+
+  /// SessionEnd records
+  public var ends: Int32 = 0
+
+  /// records saying events were dropped
+  public var gaps: Int32 = 0
+
+  /// events those gap records count
+  public var dropped: Int64 = 0
+
+  /// empty when the chain is intact
+  public var problems: [Orchd_V1_ToolLogProblem] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Orchd_V1_DocRepo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -8694,6 +8748,126 @@ nonisolated extension Orchd_V1_RecordToolEventResponse: SwiftProtobuf.Message, S
   }
 
   public static func ==(lhs: Orchd_V1_RecordToolEventResponse, rhs: Orchd_V1_RecordToolEventResponse) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_VerifyToolLogRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VerifyToolLogRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_VerifyToolLogRequest, rhs: Orchd_V1_VerifyToolLogRequest) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ToolLogProblem: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ToolLogProblem"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}seq\0\u{1}detail\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt64Field(value: &self.seq) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.detail) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.seq != 0 {
+      try visitor.visitSingularInt64Field(value: self.seq, fieldNumber: 1)
+    }
+    if !self.detail.isEmpty {
+      try visitor.visitSingularStringField(value: self.detail, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ToolLogProblem, rhs: Orchd_V1_ToolLogProblem) -> Bool {
+    if lhs.seq != rhs.seq {return false}
+    if lhs.detail != rhs.detail {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_VerifyToolLogResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".VerifyToolLogResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}records\0\u{1}anchors\0\u{1}ends\0\u{1}gaps\0\u{1}dropped\0\u{1}problems\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.records) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.anchors) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.ends) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.gaps) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.dropped) }()
+      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.problems) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.records != 0 {
+      try visitor.visitSingularInt32Field(value: self.records, fieldNumber: 1)
+    }
+    if self.anchors != 0 {
+      try visitor.visitSingularInt32Field(value: self.anchors, fieldNumber: 2)
+    }
+    if self.ends != 0 {
+      try visitor.visitSingularInt32Field(value: self.ends, fieldNumber: 3)
+    }
+    if self.gaps != 0 {
+      try visitor.visitSingularInt32Field(value: self.gaps, fieldNumber: 4)
+    }
+    if self.dropped != 0 {
+      try visitor.visitSingularInt64Field(value: self.dropped, fieldNumber: 5)
+    }
+    if !self.problems.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.problems, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_VerifyToolLogResponse, rhs: Orchd_V1_VerifyToolLogResponse) -> Bool {
+    if lhs.records != rhs.records {return false}
+    if lhs.anchors != rhs.anchors {return false}
+    if lhs.ends != rhs.ends {return false}
+    if lhs.gaps != rhs.gaps {return false}
+    if lhs.dropped != rhs.dropped {return false}
+    if lhs.problems != rhs.problems {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

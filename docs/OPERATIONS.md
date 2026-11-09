@@ -56,6 +56,7 @@ orch spaces diff [--full]             # what the newest draft changes, and its p
 orch spaces apply --revision N        # enforce draft N
 orch spaces apply --revision N --confirm-github-org ORG   # also accept ORG's changed GitHub identity
 orch spaces why <path|url|owner/repo|slack:ID|teams:ID>   # which space its content goes to, and why
+orch spaces log verify <session|task:ID>   # check a session's command log was not changed
 ```
 
 The spaces policy lives in `orch.db` as numbered revisions. Diff and apply are yours alone: orchd
@@ -82,6 +83,12 @@ shallowest to deepest, what its GitHub remote contributes, the rule that decided
 For a path it also says where a session started there would write and which space it would read
 as. Inside an agent session orchd answers only when every space in the answer is public. See
 [internals/memory.md](internals/memory.md#placement).
+
+orchd keeps a command log of every tool call and directory change Claude Code and Codex sessions
+report, in `~/.local/share/orch/toollog.db` (owner-only, never indexed into RAG). Commands are
+stored credential-redacted and capped at 2 KB. `orch spaces log verify <session>` checks that no
+record was changed, removed or moved since orchd wrote it; it is operator-only. See
+[internals/daemon.md](internals/daemon.md#command-log).
 
 ## Upgrades
 

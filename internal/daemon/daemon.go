@@ -51,6 +51,7 @@ import (
 	"github.com/willesq/orchestrator/internal/sources"
 	"github.com/willesq/orchestrator/internal/spaces"
 	"github.com/willesq/orchestrator/internal/supervisor"
+	"github.com/willesq/orchestrator/internal/toollog"
 	"github.com/willesq/orchestrator/internal/version"
 	"github.com/willesq/orchestrator/internal/workflows"
 )
@@ -153,6 +154,8 @@ type server struct {
 	pins *pinRegistry
 	// toolEvents takes the events pre-tool-use and cwd-changed hooks send.
 	toolEvents toolEventIntake
+	// toolLog stores them (SP-014); nil when it could not be opened.
+	toolLog *toolLog
 	// ghProfiles picks the gh login of each space's GitHub calls; nil runs
 	// every call as the default login.
 	ghProfiles *ghProfiles
@@ -701,8 +704,17 @@ func Run(ctx context.Context) error {
 	}
 
 	pins := newPinRegistry(store)
+	// Reason: the resolver needs the server, which is built after the log;
+	// it runs only once events arrive, after srv is set.
+	var srv *server
+	tlog, err := openToolLog(paths.ToolLogFile(), func(k toollog.Key) toollog.Owner { return srv.resolveClaim(k) })
+	if err != nil {
+		log.Printf("orchd: command log is off: %v", err)
+	} else {
+		defer func() { _ = tlog.Close() }()
+	}
 	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf})
-	orchdv1.RegisterOrchdServer(gs, &server{
+	srv = &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks, ctl: ctl, live: live, home: userHome(), hub: hub,
 		stopping:      runCtx.Done(),
 		workerEnabled: s.Queue.Worker.Runs(),
@@ -732,7 +744,12 @@ func Run(ctx context.Context) error {
 		docsSync:     docsSched,
 		safetyNet:    safetyNetFor(s),
 		settings:     settingsSvc,
-	})
+		toolLog:      tlog,
+	}
+	if tlog != nil {
+		srv.toolEvents.setSink(srv.logToolEvent)
+	}
+	orchdv1.RegisterOrchdServer(gs, srv)
 	go func() {
 		<-runCtx.Done()
 		stopGracefully(gs, gracefulStopTimeout)

@@ -18,6 +18,10 @@ import (
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
+func (f *fakeClient) VerifyToolLog(context.Context, *orchdv1.VerifyToolLogRequest, ...grpc.CallOption) (*orchdv1.VerifyToolLogResponse, error) {
+	return &orchdv1.VerifyToolLogResponse{}, nil
+}
+
 func (f *fakeClient) RecordToolEvent(context.Context, *orchdv1.RecordToolEventRequest, ...grpc.CallOption) (*orchdv1.RecordToolEventResponse, error) {
 	return &orchdv1.RecordToolEventResponse{}, f.err
 }
