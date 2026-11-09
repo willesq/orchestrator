@@ -70,7 +70,9 @@ opened it (`internal/daemon/callers.go`) rather than trusting clients to check `
   such a caller has no identity and so gets no space. On an M3 Max one lookup costs about 15 µs
   (start time) or 1.4 µs (cwd), and a full walk to the root about 0.12 ms.
 - **Harness:** at connect time orchd also walks the peer's ancestry and records the nearest
-  agent harness. `procstat.ReadProgram` reads each process's kernel name and, for the user's own
+  agent harness, its PID and its start time (read at accept, while the caller still runs under
+  it; an unreadable start time is a harness error), then walks on and records every harness
+  above that one. `procstat.ReadProgram` reads each process's kernel name and, for the user's own
   processes, its executable and arguments: sysctl `kern.proc.pid` and `kern.procargs2` on macOS,
   `/proc/<pid>/comm`, `exe` and `cmdline` on Linux. A process is a harness when its name, its
   executable or one of its first two arguments is `claude` or `codex`, or is under
@@ -108,6 +110,70 @@ registry there, not over the socket) and the Qdrant API key file. The harness sa
 or Claude Code's permission rules) is the boundary for those. A PID can also be reused between
 connect and accept; audit tokens (`LOCAL_PEERTOKEN`) or pidfds would close that.
 
+### Session pins
+
+Each interactive session is pinned once, at SessionStart (SP-010, INV-05). The pin is a row in
+`session_pins`: session ID, harness (`claude`/`codex`), the harness process's PID and start
+time, the first directory, its main checkout (from the git layout, not a command), the space a
+session started there writes to, the applied spaces revision, `pinned_at`, `ended_at` and
+`inherited_from`. Nothing but `ended_at` changes after the insert, and a pin stays after its
+session ends so the command log's retention can count from `ended_at` (SP-015).
+
+`PinSession` takes only the session ID, the hook's `cwd` and `parent_session_id`. The harness
+and its PID come from the connection's process tree (above), so a caller cannot name another
+process; a caller outside a harness, one orchd could not walk, or one whose harness has exited
+since it connected (its PID now has another start time) is refused (`PermissionDenied`).
+orchd decides, in order, holding one lock so two hooks cannot both create a pin:
+
+1. The session already has a pin: it is returned unchanged. Only the harness process it names
+   gets it; any other caller is refused, which also covers a session resumed in a new process
+   until SP-017 rebinds pins on resume.
+2. `parent_session_id` is set (a subagent): it gets a copy of the parent's pin, and its own
+   `cwd` is ignored. The parent must be pinned (`FailedPrecondition`) and pinned to the
+   caller's harness process (`PermissionDenied`).
+3. The harness process already holds a pin, ended or not: the new session copies its earliest
+   one. Claude Code's `/clear` starts a new session ID in the same process, so it keeps the
+   process's space.
+4. The caller's harness runs inside another harness (an agent started `claude` in another
+   directory, or ran any program named `claude`): it copies the nearest outer harness's pin,
+   ignoring its own `cwd`, and gets none (`FailedPrecondition`) when no outer harness is pinned.
+   Only a harness with no harness above it takes a new pin.
+5. Otherwise a new pin, refused (`FailedPrecondition`) to a harness whose parent is launchd or
+   init: one command can detach a process named `claude` from the session (a backgrounded
+   subshell that exits), leaving it with no harness above it. A new pin is also only taken within
+   5 minutes of the harness process starting
+   (`FailedPrecondition` after), since SessionStart fires as it starts and an agent might later
+   move the harness's own working directory. `cwd` must be absolute and, with symlinks resolved, equal the harness
+   process's own working directory as the kernel reports it (`FailedPrecondition` otherwise),
+   so a process inside a harness that started without a pin (hooks not yet installed, orchd
+   down at SessionStart) cannot choose its space. The space is the `SystemSession` placement of
+   that directory under the applied policy: `""` with no policy (INV-10), `quarantine` when the
+   applied revision does not verify. Placement runs to its own 10 s deadline, so a hook that
+   gives up waiting does not cost the session its pin.
+
+`EndSession` sets `ended_at` once (a repeat returns the first time); only the pinned harness
+process may call it, and an unknown session is `NotFound`. Session IDs must match
+`^[A-Za-z0-9_-]{1,128}$` (`InvalidArgument`). Both RPCs are refused to queued tasks, whose
+identity comes from their task record (SP-011).
+
+Refusals name no process to the caller; orchd logs why.
+
+**Limits.** Harnesses are recognised by name, executable or first arguments, all of which a
+process can choose (`exec -a claude`). The orphan check looks only at the harness's own parent,
+so a single command in a session can still take a new pin in another directory: a backgrounded
+subshell that exits leaves a shell that stays alive under launchd, and that shell starts a
+process named `claude` there (`( cd /other && sh -c 'exec -a claude …; true' & )`). Opening a
+`.command` file in Terminal, `osascript` or `launchctl submit` do the same, and on Linux so does
+an orphan adopted by a subreaper rather than init. Ancestry alone cannot tell these from a real
+session (tmux's server also runs under launchd). Pins grant nothing yet; nothing that reads
+memory by a pin's space (SP-011, SP-025) may rely on them until the pre-tool guard (SP-041)
+stops a session from starting such a process. Any process in a session can
+end that session's pin early; retention (SP-015) still keeps a live process's log. Codex is not pinned yet: orch's Codex install registers no SessionStart or
+SessionEnd hook. A session resumed in a new process keeps its pin but cannot end it, and two
+sessions in one process can hold pins with different spaces only when one was pinned in
+another process first (an in-process resume); SP-011 and SP-017 resolve callers and liveness
+from these rows.
+
 Clients dial `unix://<socket>` lazily (failure surfaces on the first call) and set their own
 deadlines: hooks 0.5 s for writes and 3 s for prompt search; `orch status` 2–3 s; long CLI
 commands up to 2 hours (migration).
@@ -128,6 +194,8 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `ListTasks` / `GetTask` | filters / id → tasks / task | limit default 50, max 500; missing task → `found=false` |
 | `Status` | → version, uptime, subsystems, migration progress | — |
 | `Restart` | name (empty = all) → restarted | restarts subsystems in place, never the process; unknown → `NotFound` |
+| `PinSession` | session_id, cwd, parent_session_id → the pin | see [session pins](#session-pins); refused to queued tasks |
+| `EndSession` | session_id → ended_at | sets `ended_at` once; only the pinned harness process; refused to queued tasks |
 | `SummarizeSession` | session_id, transcript_path, tags → accepted | ID `^[A-Za-z0-9_-]{1,128}$`; path absolute, `.jsonl`, regular file; enqueue only (backlog 32) |
 | `RecommendModel` | task_kind → route, from_table | see [tasks.md](tasks.md) |
 | `RateTask` | id, rating (`good`/`rework`/`bad`) → — | sets the task's rating; with the PR-outcome sweep, the only ledger writes outside the queue |
@@ -268,6 +336,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `providers`, `models` | provider state; model registry (tier, efforts, visibility, state) |
 | `routing`, `routing_history` | current table (kind, rank, provider, model, effort, rationale, evidence_n, pinned); prior generations |
 | `config_values`, `config_import` | orch's settings that differ from a default (key, JSON value, updated_at, updated_by); whether the old config.yaml was imported ([config.md](config.md)) |
+| `session_pins` | session_id (key), harness, harness_pid, harness_started (unix ns), first_cwd, main_checkout, space, policy_revision, pinned_at, ended_at, inherited_from ([session pins](#session-pins)) |
 | `settings_items` | provider, kind, identity (key), enabled, origin (`orch`/`you`/`found`), payload (JSON), present, removed_at, created_at, updated_at ([settings.md](settings.md)) |
 
 ## Invariants

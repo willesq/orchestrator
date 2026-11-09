@@ -266,16 +266,16 @@ func TestHarnessAncestor(t *testing.T) {
 		{pid: 99, wantErr: true},
 	}
 	for _, tt := range tests {
-		got, err := harnessAncestor(tt.pid, parent, program)
+		got, _, err := harnessAncestor(tt.pid, parent, program)
 		if got != tt.want || (err != nil) != tt.wantErr {
 			t.Errorf("harnessAncestor(%d) = %q, %v", tt.pid, got, err)
 		}
 	}
-	if _, err := harnessAncestor(50, parent, nil); err == nil {
+	if _, _, err := harnessAncestor(50, parent, nil); err == nil {
 		t.Error("no program lookup did not fail closed")
 	}
 	loop := func(pid int) (int, error) { return pid + 1, nil }
-	if _, err := harnessAncestor(2, loop, func(int) (procstat.Program, error) { return procstat.Program{Name: "x"}, nil }); err == nil {
+	if _, _, err := harnessAncestor(2, loop, func(int) (procstat.Program, error) { return procstat.Program{Name: "x"}, nil }); err == nil {
 		t.Error("an endless ancestry did not fail")
 	}
 	creds := peerCredentials{self: 1000, parent: parent, program: program, peerPID: func(net.Conn) (int, error) { return 61, nil }}

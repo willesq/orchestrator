@@ -69,6 +69,8 @@ const (
 	Orchd_DiffSpaces_FullMethodName               = "/orchd.v1.Orchd/DiffSpaces"
 	Orchd_ApplySpaces_FullMethodName              = "/orchd.v1.Orchd/ApplySpaces"
 	Orchd_ExplainPlacement_FullMethodName         = "/orchd.v1.Orchd/ExplainPlacement"
+	Orchd_PinSession_FullMethodName               = "/orchd.v1.Orchd/PinSession"
+	Orchd_EndSession_FullMethodName               = "/orchd.v1.Orchd/EndSession"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName               = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName             = "/orchd.v1.Orchd/RemoveSource"
@@ -239,6 +241,16 @@ type OrchdClient interface {
 	// owner/repo or chat tenant) goes to and why. Agents get an answer only
 	// when every space it names is public; the operator sees all.
 	ExplainPlacement(ctx context.Context, in *ExplainPlacementRequest, opts ...grpc.CallOption) (*PlacementExplanation, error)
+	// PinSession records a session's pin at SessionStart: its harness process,
+	// first directory and space. A pin is set once and never changed: a second
+	// call returns the existing pin, a subagent gets its parent's, and a new
+	// session in a harness process that already holds a live pin gets that one.
+	// orchd reads the harness process from the caller's process tree, so only
+	// a process inside a harness can pin, and only for that harness.
+	PinSession(ctx context.Context, in *PinSessionRequest, opts ...grpc.CallOption) (*SessionPin, error)
+	// EndSession records that a pinned session ended. The pin stays for
+	// retention. Only the pinned harness process can end it.
+	EndSession(ctx context.Context, in *EndSessionRequest, opts ...grpc.CallOption) (*EndSessionResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -806,6 +818,26 @@ func (c *orchdClient) ExplainPlacement(ctx context.Context, in *ExplainPlacement
 	return out, nil
 }
 
+func (c *orchdClient) PinSession(ctx context.Context, in *PinSessionRequest, opts ...grpc.CallOption) (*SessionPin, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SessionPin)
+	err := c.cc.Invoke(ctx, Orchd_PinSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) EndSession(ctx context.Context, in *EndSessionRequest, opts ...grpc.CallOption) (*EndSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EndSessionResponse)
+	err := c.cc.Invoke(ctx, Orchd_EndSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -1118,6 +1150,16 @@ type OrchdServer interface {
 	// owner/repo or chat tenant) goes to and why. Agents get an answer only
 	// when every space it names is public; the operator sees all.
 	ExplainPlacement(context.Context, *ExplainPlacementRequest) (*PlacementExplanation, error)
+	// PinSession records a session's pin at SessionStart: its harness process,
+	// first directory and space. A pin is set once and never changed: a second
+	// call returns the existing pin, a subagent gets its parent's, and a new
+	// session in a harness process that already holds a live pin gets that one.
+	// orchd reads the harness process from the caller's process tree, so only
+	// a process inside a harness can pin, and only for that harness.
+	PinSession(context.Context, *PinSessionRequest) (*SessionPin, error)
+	// EndSession records that a pinned session ended. The pin stays for
+	// retention. Only the pinned harness process can end it.
+	EndSession(context.Context, *EndSessionRequest) (*EndSessionResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -1325,6 +1367,12 @@ func (UnimplementedOrchdServer) ApplySpaces(context.Context, *ApplySpacesRequest
 }
 func (UnimplementedOrchdServer) ExplainPlacement(context.Context, *ExplainPlacementRequest) (*PlacementExplanation, error) {
 	return nil, status.Error(codes.Unimplemented, "method ExplainPlacement not implemented")
+}
+func (UnimplementedOrchdServer) PinSession(context.Context, *PinSessionRequest) (*SessionPin, error) {
+	return nil, status.Error(codes.Unimplemented, "method PinSession not implemented")
+}
+func (UnimplementedOrchdServer) EndSession(context.Context, *EndSessionRequest) (*EndSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method EndSession not implemented")
 }
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
@@ -2288,6 +2336,42 @@ func _Orchd_ExplainPlacement_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_PinSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PinSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).PinSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_PinSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).PinSession(ctx, req.(*PinSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_EndSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EndSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).EndSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_EndSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).EndSession(ctx, req.(*EndSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -2778,6 +2862,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExplainPlacement",
 			Handler:    _Orchd_ExplainPlacement_Handler,
+		},
+		{
+			MethodName: "PinSession",
+			Handler:    _Orchd_PinSession_Handler,
+		},
+		{
+			MethodName: "EndSession",
+			Handler:    _Orchd_EndSession_Handler,
 		},
 		{
 			MethodName: "ListRegisteredSources",

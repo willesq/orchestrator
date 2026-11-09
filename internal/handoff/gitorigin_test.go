@@ -255,6 +255,14 @@ func TestRealGitLayouts(t *testing.T) {
 	if !ok || co.Anonymous || !co.Linked || co.Branch != "feat" {
 		t.Fatalf("relative worktree = %+v", co)
 	}
+	// Every linked worktree names its main checkout, and a main checkout
+	// names itself.
+	if real, _ := filepath.EvalSymlinks(up); co.Main != real {
+		t.Fatalf("relative worktree's main checkout = %q, want %q", co.Main, real)
+	}
+	if co, _ := CheckoutAt(up); co.Main != up {
+		t.Fatalf("main checkout's main = %q, want %q", co.Main, up)
+	}
 
 	sep := filepath.Join(root, "sep")
 	_ = os.MkdirAll(sep, 0o755)

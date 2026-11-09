@@ -44,7 +44,7 @@ func listenSocket() (net.Listener, func(), error) {
 // RPCs can refuse queued tasks however they reach the socket (callers.go).
 func newGRPCServer() *grpc.Server {
 	return grpc.NewServer(
-		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent, program: procstat.ReadProgram}),
+		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent, program: procstat.ReadProgram, started: procstat.StartTime}),
 		grpc.UnaryInterceptor(guardQueuedCallers),
 		grpc.StreamInterceptor(guardQueuedStreams),
 	)

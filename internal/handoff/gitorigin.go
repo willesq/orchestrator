@@ -15,6 +15,10 @@ import (
 type Checkout struct {
 	// Root is the working tree's top directory (a linked worktree's own).
 	Root string
+	// Main is the main checkout every linked worktree of the repository
+	// shares (Root itself when not linked), or the git directory of a bare
+	// repository. It is "" for an anonymous checkout.
+	Main string
 	// Owner and Repo name its origin on GitHub; empty when the origin is not
 	// a GitHub repository or there is none. The origin is whatever the
 	// repository's config says: callers trust it only when it names a repo
@@ -111,6 +115,10 @@ func CheckoutAt(dir string) (Checkout, bool) {
 	if !ok {
 		c.Anonymous = true
 		return c, true
+	}
+	c.Main = common
+	if filepath.Base(common) == ".git" {
+		c.Main = filepath.Dir(common)
 	}
 	c.Owner, c.Repo = githubRepo(originURL(common))
 	head, readable := headRef(gitDir)

@@ -251,3 +251,11 @@ func (f *fakeClient) ApplySpaces(context.Context, *orchdv1.ApplySpacesRequest, .
 func (f *fakeClient) ExplainPlacement(context.Context, *orchdv1.ExplainPlacementRequest, ...grpc.CallOption) (*orchdv1.PlacementExplanation, error) {
 	return &orchdv1.PlacementExplanation{}, nil
 }
+
+func (f *fakeClient) PinSession(context.Context, *orchdv1.PinSessionRequest, ...grpc.CallOption) (*orchdv1.SessionPin, error) {
+	return &orchdv1.SessionPin{}, nil
+}
+
+func (f *fakeClient) EndSession(context.Context, *orchdv1.EndSessionRequest, ...grpc.CallOption) (*orchdv1.EndSessionResponse, error) {
+	return &orchdv1.EndSessionResponse{}, nil
+}

@@ -149,6 +149,8 @@ type server struct {
 	config *configService
 	// spaces holds the enforced spaces policy; nil when unavailable.
 	spaces *spaces.Engine
+	// pins records each session's pin; nil when unavailable.
+	pins *pinRegistry
 	// ghProfiles picks the gh login of each space's GitHub calls; nil runs
 	// every call as the default login.
 	ghProfiles *ghProfiles
@@ -718,6 +720,7 @@ func Run(ctx context.Context) error {
 		docsRefresh:  refreshSecs(s.Docs.DefaultRefresh),
 		config:       cfg,
 		spaces:       sp,
+		pins:         newPinRegistry(store),
 		repos:        newRepoLookups(ghp.Routed()),
 		ghProfiles:   ghp,
 		prune:        newPruneGuard(store),
