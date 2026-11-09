@@ -403,7 +403,7 @@
         "id": "RC-02",
         "kind": "decision",
         "topic": "Codex SessionStart and SessionEnd hooks",
-        "detail": "orch's Codex install registers no SessionStart or SessionEnd hook, so Codex sessions are never pinned. Proposal: register orch-hook session-start and session-end for Codex (D-20 covers Codex).",
+        "detail": "orch's Codex install registers no SessionStart or SessionEnd hook, so Codex sessions are never pinned. Proposal: register orch-hook session-start and session-end for Codex (D-20 covers Codex). Update 2026-11-09 (SP-012 session): the current install code already registers SessionStart and SessionEnd (and the other eventSlugs) in ~/.codex/hooks.json, checked by TestCodexHooksUnchanged; SP-012 keeps them in its Codex event map. If Codex sessions are still unpinned, the installed hooks.json probably predates that or its hooks are untrusted; `orch install --target codex` (dry run) shows the difference.",
         "source": "https://github.com/willesq/orchestrator/pull/147",
         "raised": "2026-11-08",
         "affects": [
@@ -411,8 +411,7 @@
           "SP-011",
           "SP-012"
         ],
-        "status": "open",
-        "note": "2026-11-09 (SP-012 session): the current install code already registers SessionStart and SessionEnd (and the other eventSlugs) in ~/.codex/hooks.json, checked by TestCodexHooksUnchanged; SP-012 keeps them in its Codex event map. If Codex sessions are still unpinned, the installed hooks.json probably predates that or its hooks are untrusted; `orch install --target codex` (dry run) shows the difference."
+        "status": "open"
       },
       {
         "id": "RC-03",
