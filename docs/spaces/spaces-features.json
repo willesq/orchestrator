@@ -788,6 +788,19 @@
           "SP-012"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-34",
+        "kind": "follow-up",
+        "topic": "orch-hook exit status before the guard enforces",
+        "detail": "SP-012's independent verifier noted that Run's recover() covers only the main goroutine: a panic in another goroutine (e.g. inside gRPC) or a Go runtime fatal error exits with status 2, which Claude Code reads as blocking a PreToolUse call. Unlikely with the 8 MiB stdin cap, but SP-041 should decide the exit-status contract explicitly (e.g. a top-level guard in cmd/orch-hook, or treating exit 2 as the intended deny path only when enforcing). Also: RecordToolEvent's 'at' is taken after stdin is parsed, not at process start as the proto comment says; fix the comment or the timing in SP-014.",
+        "source": "https://github.com/willesq/orchestrator/pull/150",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-041",
+          "SP-014"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -1753,10 +1766,10 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "19d8d70c4093db3b6bac14d675c36cb1c17a67e2",
+      "verified_at": "2026-11-09T02:41:25Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "128033fc1b304383a7d8f6966af3d121a3fb4320821c0352f64adf392162f561",
