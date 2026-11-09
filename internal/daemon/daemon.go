@@ -749,6 +749,7 @@ func Run(ctx context.Context) error {
 	if tlog != nil {
 		srv.toolEvents.setSink(srv.logToolEvent)
 	}
+	go srv.runSessionSweeps(runCtx, sessionSweepEvery)
 	orchdv1.RegisterOrchdServer(gs, srv)
 	go func() {
 		<-runCtx.Done()

@@ -71,6 +71,7 @@ const (
 	Orchd_ExplainPlacement_FullMethodName         = "/orchd.v1.Orchd/ExplainPlacement"
 	Orchd_PinSession_FullMethodName               = "/orchd.v1.Orchd/PinSession"
 	Orchd_EndSession_FullMethodName               = "/orchd.v1.Orchd/EndSession"
+	Orchd_ListSessions_FullMethodName             = "/orchd.v1.Orchd/ListSessions"
 	Orchd_RecordToolEvent_FullMethodName          = "/orchd.v1.Orchd/RecordToolEvent"
 	Orchd_VerifyToolLog_FullMethodName            = "/orchd.v1.Orchd/VerifyToolLog"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
@@ -244,15 +245,22 @@ type OrchdClient interface {
 	// when every space it names is public; the operator sees all.
 	ExplainPlacement(ctx context.Context, in *ExplainPlacementRequest, opts ...grpc.CallOption) (*PlacementExplanation, error)
 	// PinSession records a session's pin at SessionStart: its harness process,
-	// first directory and space. A pin is set once and never changed: a second
-	// call returns the existing pin, a subagent gets its parent's, and a new
-	// session in a harness process that already holds a live pin gets that one.
+	// first directory and space. A pin's space and first directory never
+	// change: a second call returns the existing pin, a subagent gets its
+	// parent's, and a new session in a harness process that already holds a
+	// live pin gets that one. A resumed session (source "resume") whose old
+	// harness process is gone moves to the new process, keeping its space.
 	// orchd reads the harness process from the caller's process tree, so only
 	// a process inside a harness can pin, and only for that harness.
 	PinSession(ctx context.Context, in *PinSessionRequest, opts ...grpc.CallOption) (*SessionPin, error)
 	// EndSession records that a pinned session ended. The pin stays for
 	// retention. Only the pinned harness process can end it.
 	EndSession(ctx context.Context, in *EndSessionRequest, opts ...grpc.CallOption) (*EndSessionResponse, error)
+	// ListSessions lists pinned sessions with their liveness, which orchd reads
+	// from the kernel: active, idle or ended, plus running harness processes
+	// with no pin (unpinned). The operator sees every session; any other caller
+	// sees only its own session's row.
+	ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*ListSessionsResponse, error)
 	// RecordToolEvent takes a tool call or directory change that a
 	// pre-tool-use or cwd-changed hook saw. It returns once orchd has queued
 	// the event and never waits on its processing. orchd attributes the event
@@ -848,6 +856,16 @@ func (c *orchdClient) EndSession(ctx context.Context, in *EndSessionRequest, opt
 	return out, nil
 }
 
+func (c *orchdClient) ListSessions(ctx context.Context, in *ListSessionsRequest, opts ...grpc.CallOption) (*ListSessionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSessionsResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListSessions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) RecordToolEvent(ctx context.Context, in *RecordToolEventRequest, opts ...grpc.CallOption) (*RecordToolEventResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RecordToolEventResponse)
@@ -1181,15 +1199,22 @@ type OrchdServer interface {
 	// when every space it names is public; the operator sees all.
 	ExplainPlacement(context.Context, *ExplainPlacementRequest) (*PlacementExplanation, error)
 	// PinSession records a session's pin at SessionStart: its harness process,
-	// first directory and space. A pin is set once and never changed: a second
-	// call returns the existing pin, a subagent gets its parent's, and a new
-	// session in a harness process that already holds a live pin gets that one.
+	// first directory and space. A pin's space and first directory never
+	// change: a second call returns the existing pin, a subagent gets its
+	// parent's, and a new session in a harness process that already holds a
+	// live pin gets that one. A resumed session (source "resume") whose old
+	// harness process is gone moves to the new process, keeping its space.
 	// orchd reads the harness process from the caller's process tree, so only
 	// a process inside a harness can pin, and only for that harness.
 	PinSession(context.Context, *PinSessionRequest) (*SessionPin, error)
 	// EndSession records that a pinned session ended. The pin stays for
 	// retention. Only the pinned harness process can end it.
 	EndSession(context.Context, *EndSessionRequest) (*EndSessionResponse, error)
+	// ListSessions lists pinned sessions with their liveness, which orchd reads
+	// from the kernel: active, idle or ended, plus running harness processes
+	// with no pin (unpinned). The operator sees every session; any other caller
+	// sees only its own session's row.
+	ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error)
 	// RecordToolEvent takes a tool call or directory change that a
 	// pre-tool-use or cwd-changed hook saw. It returns once orchd has queued
 	// the event and never waits on its processing. orchd attributes the event
@@ -1411,6 +1436,9 @@ func (UnimplementedOrchdServer) PinSession(context.Context, *PinSessionRequest) 
 }
 func (UnimplementedOrchdServer) EndSession(context.Context, *EndSessionRequest) (*EndSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EndSession not implemented")
+}
+func (UnimplementedOrchdServer) ListSessions(context.Context, *ListSessionsRequest) (*ListSessionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSessions not implemented")
 }
 func (UnimplementedOrchdServer) RecordToolEvent(context.Context, *RecordToolEventRequest) (*RecordToolEventResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecordToolEvent not implemented")
@@ -2416,6 +2444,24 @@ func _Orchd_EndSession_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_ListSessions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSessionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListSessions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListSessions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListSessions(ctx, req.(*ListSessionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_RecordToolEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RecordToolEventRequest)
 	if err := dec(in); err != nil {
@@ -2950,6 +2996,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "EndSession",
 			Handler:    _Orchd_EndSession_Handler,
+		},
+		{
+			MethodName: "ListSessions",
+			Handler:    _Orchd_ListSessions_Handler,
 		},
 		{
 			MethodName: "RecordToolEvent",

@@ -23,8 +23,9 @@ import (
 
 // Session pins (SP-010) fix the identity every later decision about a
 // session uses: the harness process, the first directory and its space. A
-// pin is written once at SessionStart and only ended_at changes after that
-// (INV-05). See docs/internals/daemon.md "Session pins".
+// pin is written at SessionStart. Its space and first directory never change
+// (INV-05); a resume moves it to a new harness process and ended_at records
+// the end (SP-017). See docs/internals/daemon.md "Session pins".
 
 // sessionIDPattern is the session IDs orchd accepts. Both harnesses use
 // UUIDs, and the bound keeps an ID safe in log lines and file names.
@@ -46,6 +47,7 @@ type sessionPin struct {
 	PinnedAt      time.Time
 	EndedAt       time.Time // zero while not ended
 	InheritedFrom string
+	ResumedAt     time.Time // zero for a session never resumed
 }
 
 func (p sessionPin) proto() *orchdv1.SessionPin {
@@ -69,13 +71,18 @@ type pinRegistry struct {
 	// from the kernel; tests replace them with a fake process table.
 	started func(pid int) (time.Time, error)
 	cwd     func(pid int) (string, error)
+	// procs and program read the process table and a process's program,
+	// to find harness processes with no pin.
+	procs   func() ([]procstat.Process, error)
+	program func(pid int) (procstat.Program, error)
 	// mu makes each pin decision and its write one step, so two SessionStart
 	// hooks of one harness process cannot both create a pin.
 	mu sync.Mutex
 }
 
 func newPinRegistry(db *sql.DB) *pinRegistry {
-	return &pinRegistry{db: db, now: time.Now, started: procstat.StartTime, cwd: procstat.Cwd}
+	return &pinRegistry{db: db, now: time.Now, started: procstat.StartTime, cwd: procstat.Cwd,
+		procs: procstat.Processes, program: procstat.ReadProgram}
 }
 
 // placeFunc decides the space and policy revision of a new pin's directory.
@@ -91,6 +98,8 @@ var (
 	errOuterUnpinned   = errors.New("the harness runs inside another session that has no pin")
 	errPinTooLate      = errors.New("the harness process started too long ago to take a new pin")
 	errOrphanHarness   = errors.New("the harness process was detached from the process that started it")
+	errResumeSpace     = errors.New("the session was resumed where it would have another space")
+	errResumeHere      = errors.New("only a newly started harness that is not inside another session can resume a session from another process")
 )
 
 // newPinWindow is how long after its harness process starts a session may
@@ -99,19 +108,20 @@ var (
 const newPinWindow = 5 * time.Minute
 
 // pin returns id's pin, creating it when there is none. The rules, in order:
-// an existing pin is returned unchanged; a subagent copies its parent's pin;
-// a new session in a harness process that already holds a pin (Claude Code's
-// /clear) copies that one; a harness started inside another session copies
-// the nearest outer harness's pin, and gets none when that session has none;
-// otherwise cwd, which must be the harness process's own working directory,
-// is pinned while the harness is new. A pin is only ever returned to the
+// an existing pin is returned unchanged, or moved to this harness process
+// when source is "resume" (see resume); a subagent copies its parent's pin;
+// otherwise the session gets newPin's pin. A pin is only ever returned to the
 // harness process it names.
-func (r *pinRegistry) pin(ctx context.Context, id, parent string, c harnessCaller, cwd string, place placeFunc) (sessionPin, error) {
-	harness, proc := c.name, c.proc
+func (r *pinRegistry) pin(ctx context.Context, id, parent, source string, c harnessCaller, cwd string, place placeFunc) (sessionPin, error) {
+	proc := c.proc
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if existing, ok, err := r.get(ctx, id); err != nil || ok {
-		if err == nil && !existing.Process.Same(proc) {
+		switch {
+		case err != nil:
+		case source == "resume":
+			return r.resume(ctx, existing, c, cwd, place)
+		case !existing.Process.Same(proc):
 			err = errPinnedElsewhere
 		}
 		return existing, err
@@ -128,26 +138,40 @@ func (r *pinRegistry) pin(ctx context.Context, id, parent string, c harnessCalle
 		}
 		return r.insertCopy(ctx, id, pp)
 	}
+	p, copied, err := r.newPin(ctx, c, cwd, place)
+	if err != nil {
+		return sessionPin{}, err
+	}
+	if copied {
+		return r.insertCopy(ctx, id, p)
+	}
+	p.SessionID = id
+	return p, r.insert(ctx, p)
+}
+
+// newPin is the pin a new session in harness process c gets. A harness
+// process that already holds a pin (Claude Code's /clear) gives a copy of
+// that one; a harness started inside another session copies the nearest
+// outer harness's pin, and gets none when that session has none; otherwise
+// cwd, which must be the harness process's own working directory, is placed
+// while the harness is new. copied reports a copy; the pin's SessionID is
+// left for the caller.
+func (r *pinRegistry) newPin(ctx context.Context, c harnessCaller, cwd string, place placeFunc) (p sessionPin, copied bool, err error) {
+	harness, proc := c.name, c.proc
 	if earlier, ok, err := r.firstOf(ctx, proc); err != nil || ok {
-		if err != nil {
-			return sessionPin{}, err
-		}
-		return r.insertCopy(ctx, id, earlier)
+		return earlier, ok, err
 	}
 	// Reason: a harness an agent starts in another directory, or any
 	// program it names claude, is nested in the agent's own session. It
 	// keeps that session's space rather than choosing one by its cwd.
 	for _, outer := range c.outer {
 		if p, ok, err := r.firstOf(ctx, outer); err != nil || ok {
-			if err != nil {
-				return sessionPin{}, err
-			}
 			p.Harness, p.Process = harness, proc
-			return r.insertCopy(ctx, id, p)
+			return p, ok, err
 		}
 	}
 	if len(c.outer) > 0 {
-		return sessionPin{}, errOuterUnpinned
+		return sessionPin{}, false, errOuterUnpinned
 	}
 	// Reason: a process an agent detaches from its session (a backgrounded
 	// subshell that exits) is reparented to launchd and has no harness above
@@ -155,27 +179,74 @@ func (r *pinRegistry) pin(ctx context.Context, id, parent string, c harnessCalle
 	// Accepted risk (2026-11-08): a detached shell kept alive above the fake
 	// harness still passes; see docs/internals/daemon.md, Session pins.
 	if c.orphan {
-		return sessionPin{}, errOrphanHarness
+		return sessionPin{}, false, errOrphanHarness
 	}
 	if r.now().Sub(proc.Started) > newPinWindow {
-		return sessionPin{}, errPinTooLate
+		return sessionPin{}, false, errPinTooLate
 	}
 	// Reason: the hook's cwd is only a report. Checking it against the
 	// kernel's view of the harness process keeps a process inside a harness
 	// that started without a pin from choosing its own space.
 	first, err := r.verifyCwd(proc.PID, cwd)
 	if err != nil {
-		return sessionPin{}, err
+		return sessionPin{}, false, err
 	}
 	space, rev, err := place(ctx, first)
 	if err != nil {
-		return sessionPin{}, err
+		return sessionPin{}, false, err
 	}
-	p := sessionPin{
-		SessionID: id, Harness: harness, Process: proc, FirstCwd: first,
+	return sessionPin{
+		Harness: harness, Process: proc, FirstCwd: first,
 		MainCheckout: mainCheckout(first), Space: space, Revision: rev, PinnedAt: r.now().UTC(),
+	}, false, nil
+}
+
+// resume moves existing's pin to harness process c when its session is
+// resumed (SessionStart source=resume), keeping its space, first directory
+// and policy revision (INV-05). The move is refused while the old process
+// still runs the session, to another harness program, and when a new session
+// in c would get another space: a resume can then never widen what the
+// process reads. Resuming in the same process clears ended_at.
+//
+// Only a harness that could take a new pin of its own may take a pin from
+// another process: new, not inside another session, and holding no pin.
+// Reason: orchd cannot tell a real in-process /resume from an agent calling
+// PinSession itself, which would otherwise move any dead session of its
+// space onto its own process and write that session's command log (SP-017
+// security review). An in-process /resume of another process's session is
+// refused, and its events go to the process's own pin.
+func (r *pinRegistry) resume(ctx context.Context, existing sessionPin, c harnessCaller, cwd string, place placeFunc) (sessionPin, error) {
+	if !existing.Process.Same(c.proc) {
+		if existing.Harness != c.name || (existing.EndedAt.IsZero() && r.alive(existing.Process)) {
+			return existing, errPinnedElsewhere
+		}
+		if len(c.outer) > 0 {
+			return existing, errResumeHere
+		}
+		if _, held, err := r.firstOf(ctx, c.proc); err != nil || held {
+			if err == nil {
+				err = errResumeHere
+			}
+			return existing, err
+		}
+		p, _, err := r.newPin(ctx, c, cwd, place)
+		if err != nil {
+			return existing, err
+		}
+		if p.Space != existing.Space {
+			return existing, errResumeSpace
+		}
+	} else if existing.EndedAt.IsZero() {
+		return existing, nil
 	}
-	return p, r.insert(ctx, p)
+	now := r.now().UTC()
+	if _, err := r.db.ExecContext(ctx, `UPDATE session_pins
+		SET harness_pid = ?, harness_started = ?, ended_at = NULL, resumed_at = ? WHERE session_id = ?`,
+		c.proc.PID, c.proc.Started.UnixNano(), now.Format(time.RFC3339Nano), existing.SessionID); err != nil {
+		return existing, err
+	}
+	existing.Process, existing.EndedAt, existing.ResumedAt = c.proc, time.Time{}, now
+	return existing, nil
 }
 
 // verifyCwd returns cwd when it is pid's working directory, comparing the
@@ -236,7 +307,7 @@ func (r *pinRegistry) end(ctx context.Context, id string, proc procstat.Identity
 }
 
 const pinColumns = `session_id, harness, harness_pid, harness_started, first_cwd, main_checkout,
-	space, policy_revision, pinned_at, ended_at, inherited_from`
+	space, policy_revision, pinned_at, ended_at, inherited_from, resumed_at`
 
 func (r *pinRegistry) get(ctx context.Context, id string) (sessionPin, bool, error) {
 	return scanPin(r.db.QueryRowContext(ctx, `SELECT `+pinColumns+` FROM session_pins WHERE session_id = ?`, id))
@@ -265,9 +336,10 @@ func scanPin(row *sql.Row) (sessionPin, bool, error) {
 		started  int64
 		pinnedAt string
 		endedAt  sql.NullString
+		resumed  sql.NullString
 	)
 	err := row.Scan(&p.SessionID, &p.Harness, &pid, &started, &p.FirstCwd, &p.MainCheckout,
-		&p.Space, &p.Revision, &pinnedAt, &endedAt, &p.InheritedFrom)
+		&p.Space, &p.Revision, &pinnedAt, &endedAt, &p.InheritedFrom, &resumed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return sessionPin{}, false, nil
 	}
@@ -283,13 +355,18 @@ func scanPin(row *sql.Row) (sessionPin, bool, error) {
 			return sessionPin{}, false, fmt.Errorf("pin %s: ended_at: %w", p.SessionID, err)
 		}
 	}
+	if resumed.Valid {
+		if p.ResumedAt, err = time.Parse(time.RFC3339Nano, resumed.String); err != nil {
+			return sessionPin{}, false, fmt.Errorf("pin %s: resumed_at: %w", p.SessionID, err)
+		}
+	}
 	return p, true, nil
 }
 
 // insertCopy pins id to everything from's pin fixes.
 func (r *pinRegistry) insertCopy(ctx context.Context, id string, from sessionPin) (sessionPin, error) {
 	p := from
-	p.SessionID, p.PinnedAt, p.EndedAt = id, r.now().UTC(), time.Time{}
+	p.SessionID, p.PinnedAt, p.EndedAt, p.ResumedAt = id, r.now().UTC(), time.Time{}, time.Time{}
 	if p.InheritedFrom == "" {
 		p.InheritedFrom = from.SessionID
 	}
@@ -298,7 +375,7 @@ func (r *pinRegistry) insertCopy(ctx context.Context, id string, from sessionPin
 
 func (r *pinRegistry) insert(ctx context.Context, p sessionPin) error {
 	_, err := r.db.ExecContext(ctx, `INSERT INTO session_pins (`+pinColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL)`,
 		p.SessionID, p.Harness, p.Process.PID, p.Process.Started.UnixNano(), p.FirstCwd, p.MainCheckout,
 		p.Space, p.Revision, p.PinnedAt.Format(time.RFC3339Nano), p.InheritedFrom)
 	return err
@@ -358,7 +435,7 @@ func (s *server) PinSession(ctx context.Context, req *orchdv1.PinSessionRequest)
 	// pin, so placement runs to its own deadline.
 	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), pinPlaceTimeout)
 	defer cancel()
-	p, err := s.pins.pin(pctx, id, parent, caller, req.GetCwd(), s.placeSession)
+	p, err := s.pins.pin(pctx, id, parent, req.GetSource(), caller, req.GetCwd(), s.placeSession)
 	if err != nil {
 		log.Printf("orchd: PinSession %s: %v", id, err)
 		return nil, pinStatus(err)
@@ -396,7 +473,8 @@ func pinStatus(err error) error {
 	case errors.Is(err, errNoPin):
 		return grpcstatus.Error(codes.NotFound, err.Error())
 	case errors.Is(err, errParentUnpinned), errors.Is(err, errCwdMismatch),
-		errors.Is(err, errOuterUnpinned), errors.Is(err, errPinTooLate), errors.Is(err, errOrphanHarness):
+		errors.Is(err, errOuterUnpinned), errors.Is(err, errPinTooLate), errors.Is(err, errOrphanHarness),
+		errors.Is(err, errResumeSpace), errors.Is(err, errResumeHere):
 		return grpcstatus.Error(codes.FailedPrecondition, err.Error())
 	}
 	return grpcstatus.Error(codes.Internal, "the session pin could not be recorded")

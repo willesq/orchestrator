@@ -132,6 +132,9 @@ var operatorActions = map[string]string{
 	// hooks still pin (PinSession checks the harness process itself).
 	orchdv1.Orchd_PinSession_FullMethodName: "pin a session",
 	orchdv1.Orchd_EndSession_FullMethodName: "end a session's pin",
+	// Reason: a task has no session row, and the list names other sessions'
+	// spaces and directories (ListSessions also answers a task with none).
+	orchdv1.Orchd_ListSessions_FullMethodName: "list sessions",
 }
 
 // refuseQueued returns the refusal for method when ctx's caller is a queued

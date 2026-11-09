@@ -34,6 +34,10 @@ const (
 	OwnerTask    = "task"
 )
 
+// DecisionRefused is the decision of a call the tool guard refused. Only
+// the enforcing guard (SP-041) writes it; the session list counts it.
+const DecisionRefused = "refused"
+
 // MaxCommand caps the stored command, marker included (D-17).
 const MaxCommand = 2048
 

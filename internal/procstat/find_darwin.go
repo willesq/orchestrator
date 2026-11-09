@@ -5,6 +5,7 @@ package procstat
 import (
 	"bytes"
 	"os"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -29,6 +30,29 @@ func FindByName(name string) (int, error) {
 		}
 	}
 	return pid, nil
+}
+
+// Processes returns the current user's processes with their kernel names,
+// from one sysctl. Their start times match StartTime's, so an entry's
+// Identity can be compared with one stored earlier.
+func Processes() ([]Process, error) {
+	procs, err := unix.SysctlKinfoProcSlice("kern.proc.all")
+	if err != nil {
+		return nil, err
+	}
+	uid := uint32(os.Getuid())
+	out := make([]Process, 0, len(procs))
+	for _, k := range procs {
+		if k.Eproc.Ucred.Uid != uid || k.Proc.P_pid <= 0 {
+			continue
+		}
+		tv := k.Proc.P_starttime
+		out = append(out, Process{
+			Identity: Identity{PID: int(k.Proc.P_pid), Started: time.Unix(tv.Sec, int64(tv.Usec)*int64(time.Microsecond))},
+			Name:     commName(k.Proc.P_comm[:]),
+		})
+	}
+	return out, nil
 }
 
 // commName reads the kernel's NUL-terminated command name. The buffer can hold

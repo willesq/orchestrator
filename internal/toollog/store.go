@@ -192,6 +192,33 @@ func (s *Store) Records(ctx context.Context, o Owner) ([]Record, error) {
 	return out, rows.Err()
 }
 
+// Activity sums one session's chain for the session list (SP-017).
+type Activity struct {
+	Events  int64 // tool events (gap and end records excluded)
+	Refused int64 // of those, calls the guard refused
+	Last    int64 // when orchd took the latest event, unix nanoseconds
+}
+
+// SessionActivity returns the activity of each session in ids that has
+// logged an event. Each lookup reads only that session's records.
+func (s *Store) SessionActivity(ctx context.Context, ids []string) (map[string]Activity, error) {
+	out := make(map[string]Activity, len(ids))
+	for _, id := range ids {
+		var a Activity
+		var last sql.NullInt64
+		if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(decision = ?), 0), MAX(ts)
+			FROM events WHERE owner_kind = ? AND owner_id = ? AND kind = ?`,
+			DecisionRefused, OwnerSession, id, KindEvent).Scan(&a.Events, &a.Refused, &last); err != nil {
+			return nil, err
+		}
+		if a.Events > 0 {
+			a.Last = last.Int64
+			out[id] = a
+		}
+	}
+	return out, nil
+}
+
 // Problem is one break in a chain.
 type Problem struct {
 	Seq    int64

@@ -57,6 +57,7 @@ orch spaces apply --revision N        # enforce draft N
 orch spaces apply --revision N --confirm-github-org ORG   # also accept ORG's changed GitHub identity
 orch spaces why <path|url|owner/repo|slack:ID|teams:ID>   # which space its content goes to, and why
 orch spaces log verify <session|task:ID>   # check a session's command log was not changed
+orch sessions list [--all]   # sessions and their state: active, idle, ended (with --all), unpinned
 ```
 
 The spaces policy lives in `orch.db` as numbered revisions. Diff and apply are yours alone: orchd
@@ -89,6 +90,13 @@ report, in `~/.local/share/orch/toollog.db` (owner-only, never indexed into RAG)
 stored credential-redacted and capped at 2 KB. `orch spaces log verify <session>` checks that no
 record was changed, removed or moved since orchd wrote it; it is operator-only. See
 [internals/daemon.md](internals/daemon.md#command-log).
+
+`orch sessions list` shows each pinned session's space, directory and state. orchd reads it from
+the kernel: a session left open without `/exit` stays `idle` for as long as its claude or codex
+process runs, and is marked `ended` within a minute of the process exiting, even without
+SessionEnd. `claude --resume` in a new process keeps the session's pin and space. Running claude,
+codex or gemini processes with no pin (started before the hooks were installed) show as
+`unpinned`. See [internals/daemon.md](internals/daemon.md#session-liveness).
 
 ## Upgrades
 

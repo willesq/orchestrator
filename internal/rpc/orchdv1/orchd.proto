@@ -153,15 +153,22 @@ service Orchd {
   // when every space it names is public; the operator sees all.
   rpc ExplainPlacement(ExplainPlacementRequest) returns (PlacementExplanation);
   // PinSession records a session's pin at SessionStart: its harness process,
-  // first directory and space. A pin is set once and never changed: a second
-  // call returns the existing pin, a subagent gets its parent's, and a new
-  // session in a harness process that already holds a live pin gets that one.
+  // first directory and space. A pin's space and first directory never
+  // change: a second call returns the existing pin, a subagent gets its
+  // parent's, and a new session in a harness process that already holds a
+  // live pin gets that one. A resumed session (source "resume") whose old
+  // harness process is gone moves to the new process, keeping its space.
   // orchd reads the harness process from the caller's process tree, so only
   // a process inside a harness can pin, and only for that harness.
   rpc PinSession(PinSessionRequest) returns (SessionPin);
   // EndSession records that a pinned session ended. The pin stays for
   // retention. Only the pinned harness process can end it.
   rpc EndSession(EndSessionRequest) returns (EndSessionResponse);
+  // ListSessions lists pinned sessions with their liveness, which orchd reads
+  // from the kernel: active, idle or ended, plus running harness processes
+  // with no pin (unpinned). The operator sees every session; any other caller
+  // sees only its own session's row.
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
   // RecordToolEvent takes a tool call or directory change that a
   // pre-tool-use or cwd-changed hook saw. It returns once orchd has queued
   // the event and never waits on its processing. orchd attributes the event
@@ -989,10 +996,15 @@ message PinSessionRequest {
   string cwd = 2;
   // Set for a subagent: it gets its parent's pin and cannot set its own.
   string parent_session_id = 3;
+  // Why SessionStart fired: startup | resume | clear | compact. Only
+  // "resume" lets an existing pin move to a new harness process.
+  string source = 4;
 }
 
 // SessionPin is the identity every later decision about a session uses. It
-// is written once at SessionStart; only ended_at changes later.
+// is written at SessionStart. Its space and first directory never change; a
+// resume moves it to a new harness process, and ended_at is set when the
+// session ends.
 message SessionPin {
   string session_id = 1;
   string harness = 2;     // claude | codex
@@ -1019,6 +1031,33 @@ message EndSessionRequest {
 
 message EndSessionResponse {
   int64 ended_at = 1; // unix seconds; the first end recorded wins
+}
+
+message ListSessionsRequest {
+  bool all = 1; // include ended sessions
+}
+
+// SessionInfo is one row of ListSessions.
+message SessionInfo {
+  string harness = 1;    // claude | codex | gemini
+  string session_id = 2; // "" when unpinned
+  int64 harness_pid = 3;
+  string space = 4;      // "" with no spaces policy applied, or unpinned
+  string first_cwd = 5;  // the pinned directory; "" when unpinned
+  // active: the process runs and a hook event came in the last 30 minutes;
+  // idle: it runs with no event for 30 minutes or more; ended: SessionEnd
+  // came or the process is gone; unpinned: a harness process with no pin.
+  string state = 6;
+  // Unix seconds of the latest of: the pin, its last resume, and its last
+  // logged tool event; 0 when unpinned.
+  int64 last_activity = 7;
+  int64 tool_events = 8; // tool events in the command log
+  int64 refusals = 9;    // of those, calls the tool guard refused
+  int64 ended_at = 10;   // unix seconds; 0 while not ended
+}
+
+message ListSessionsResponse {
+  repeated SessionInfo sessions = 1;
 }
 
 // RecordToolEventRequest is one hook event as the harness reported it. Every

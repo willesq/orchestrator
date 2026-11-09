@@ -116,18 +116,32 @@ Each interactive session is pinned once, at SessionStart (SP-010, INV-05). The p
 `session_pins`: session ID, harness (`claude`/`codex`), the harness process's PID and start
 time, the first directory, its main checkout (from the git layout, not a command), the space a
 session started there writes to, the applied spaces revision, `pinned_at`, `ended_at` and
-`inherited_from`. Nothing but `ended_at` changes after the insert, and a pin stays after its
-session ends so the command log's retention can count from `ended_at` (SP-015).
+`inherited_from`, plus `resumed_at`. The space, first directory, main checkout and revision
+never change after the insert; a resume moves the pin to its new harness process (below), and
+`ended_at` records the end. A pin stays after its session ends so the command log's retention
+can count from `ended_at` (SP-015).
 
-`PinSession` takes only the session ID, the hook's `cwd` and `parent_session_id`. The harness
+`PinSession` takes only the session ID, the hook's `cwd`, `parent_session_id` and the
+SessionStart `source` (`startup`, `resume`, `clear`, `compact`). The harness
 and its PID come from the connection's process tree (above), so a caller cannot name another
 process; a caller outside a harness, one orchd could not walk, or one whose harness has exited
 since it connected (its PID now has another start time) is refused (`PermissionDenied`).
 orchd decides, in order, holding one lock so two hooks cannot both create a pin:
 
 1. The session already has a pin: it is returned unchanged. Only the harness process it names
-   gets it; any other caller is refused, which also covers a session resumed in a new process
-   until SP-017 rebinds pins on resume.
+   gets it; any other caller is refused (`PermissionDenied`), unless `source` is `resume`
+   (SP-017). A resume in a new harness process moves the pin there: `harness_pid` and
+   `harness_started` become the new process's, `ended_at` is cleared and `resumed_at` set, and
+   the space, first directory and revision stay (INV-05). It is refused while the old process
+   still runs the session (not ended and alive, `PermissionDenied`), from another harness
+   program (`PermissionDenied`), and to any harness that could not take a new pin of its own
+   (`FailedPrecondition`): one that already holds a pin or runs inside another session, an
+   orphan, or one older than 5 minutes. The new process's own working directory must then place
+   into the pin's space (`FailedPrecondition` otherwise), so a resume never widens what a process
+   reads. orchd cannot tell a real in-process `/resume` from an agent calling `PinSession` itself
+   to take a dead session of its space, so a harness holding a pin cannot resume another
+   process's session; its events stay in its own pin's chain. A resume in the pin's own process
+   only clears `ended_at`.
 2. `parent_session_id` is set (a subagent): it gets a copy of the parent's pin, and its own
    `cwd` is ignored. The parent must be pinned (`FailedPrecondition`) and pinned to the
    caller's harness process (`PermissionDenied`).
@@ -168,11 +182,49 @@ an orphan adopted by a subreaper rather than init. Ancestry alone cannot tell th
 session (tmux's server also runs under launchd). Pins grant nothing yet; nothing that reads
 memory by a pin's space (SP-011, SP-025) may rely on them until the pre-tool guard (SP-041)
 stops a session from starting such a process. Any process in a session can
-end that session's pin early; retention (SP-015) still keeps a live process's log. Codex is not pinned yet: orch's Codex install registers no SessionStart or
-SessionEnd hook. A session resumed in a new process keeps its pin but cannot end it, and two
-sessions in one process can hold pins with different spaces only when one was pinned in
-another process first (an in-process resume); SP-011 (below) and SP-017 resolve callers and
-liveness from these rows.
+end that session's pin early; retention (SP-015) still keeps a live process's log, and a
+resume in the same process clears the end. The detached fake harness above can also resume a
+dead or ended session of any space whose directory it starts in, and then write that session's
+command log, until SP-041 stops it. Codex is not pinned yet: orch's Codex install registers no SessionStart or
+SessionEnd hook. SP-011 (below) resolves callers from these rows, and
+[session liveness](#session-liveness) follows their processes.
+
+### Session liveness
+
+Whether a pinned session still runs comes from the kernel, never from hook events (SP-017;
+`internal/daemon/liveness.go`): its harness PID must exist with the start time the pin
+recorded. A PID the kernel gave to another process has another start time, so a pin never
+follows it. A sweep runs when orchd starts and every 60 s (and before each `ListSessions`); it
+sets `ended_at` to the time it noticed on every pin not yet ended whose process is gone or
+unreadable, and writes the session's [command log](#command-log) end record as SessionEnd
+would. The sessions of one harness process are read once per sweep; a sweep of 50 pins takes
+about 1 ms.
+
+A session's state, computed when listed:
+
+| State | Meaning |
+|---|---|
+| `active` | the harness process runs and the session's last activity was under 30 minutes ago |
+| `idle` | the process runs with no activity for 30 minutes or more, however long (a session left open for a week stays idle) |
+| `ended` | SessionEnd came, or the process is gone or its PID reused |
+| `unpinned` | a running `claude`, `codex` or `gemini` process holding no pin not yet ended, e.g. started before the hooks were installed or whose `PinSession` failed |
+
+Last activity is the latest of `pinned_at`, `resumed_at` and the session's last tool event in
+the command log (the hook events orchd records per session); with the log off it is the pin's
+own times. Unpinned processes come from the process table (`procstat.Processes`, one sysctl;
+none outside macOS), matched by kernel name as `procstat.FindByName` does. A process named
+`node`, `bun`, `deno` or for a version number (Claude Code's native binary) is matched by its
+program, as [caller resolution](#queued-callers) does.
+
+`ListSessions` (all → sessions) returns, per row, the harness, session ID, PID, space, pinned
+directory, state, last activity, tool-event count, refusals (events whose decision is
+`refused`, which only the enforcing guard SP-041 writes) and `ended_at`, newest activity first.
+Ended sessions appear only with `all`. The operator sees every pin and every unpinned process;
+a session's caller sees only its own row (the pin caller resolution names, RC-27); any other
+caller gets an empty list, and queued tasks are refused. A process an agent detaches from its
+session resolves as the operator (RC-26) and so sees every space and directory here, as with
+other operator reads. Pins are not yet capped per process or pruned (SP-015), so the sweep and
+the list read every pin.
 
 ### Caller sessions
 
@@ -314,9 +366,10 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `ListTasks` / `GetTask` | filters / id → tasks / task | limit default 50, max 500; missing task → `found=false` |
 | `Status` | → version, uptime, subsystems, migration progress | — |
 | `Restart` | name (empty = all) → restarted | restarts subsystems in place, never the process; unknown → `NotFound` |
-| `PinSession` | session_id, cwd, parent_session_id → the pin | see [session pins](#session-pins); refused to queued tasks |
+| `PinSession` | session_id, cwd, parent_session_id, source → the pin | see [session pins](#session-pins); `source` `resume` moves a pin to a new harness process; refused to queued tasks |
 | `EndSession` | session_id → ended_at | sets `ended_at` once; only the pinned harness process; refused to queued tasks; writes the session's [command log](#command-log) end record and anchors its head in the background |
 | `RecordToolEvent` | event (`pre-tool-use`/`cwd-changed`), session_id, cwd, tool_name, tool_input (≤ 1 MiB), tool_input_size, tool_use_id, agent_id, agent_type, old_cwd, new_cwd, at → — | takes a [tool hook](hooks.md#tool-hooks) event and answers at once; attributed to the [caller orchd resolved](#caller-sessions), never to session_id; open to queued tasks. Counted by caller kind and stored in the [command log](#command-log) when its caller is a pinned session or a running task; never indexed |
+| `ListSessions` | all → sessions (harness, session_id, harness_pid, space, first_cwd, state, last_activity, tool_events, refusals, ended_at) | runs a [liveness](#session-liveness) sweep first; the operator sees every session and unpinned harness process, a session only its own row, anyone else none; refused to queued tasks; ended sessions only with `all` |
 | `VerifyToolLog` | owner (session ID or `task:<id>`) → records, anchors, ends, gaps, dropped, problems | recomputes the owner's [command log](#command-log) chain after storing what is queued; operator-only |
 | `SummarizeSession` | session_id, transcript_path, tags → accepted | ID `^[A-Za-z0-9_-]{1,128}$`; path absolute, `.jsonl`, regular file; enqueue only (backlog 32) |
 | `RecommendModel` | task_kind → route, from_table | see [tasks.md](tasks.md) |
@@ -459,7 +512,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `providers`, `models` | provider state; model registry (tier, efforts, visibility, state) |
 | `routing`, `routing_history` | current table (kind, rank, provider, model, effort, rationale, evidence_n, pinned); prior generations |
 | `config_values`, `config_import` | orch's settings that differ from a default (key, JSON value, updated_at, updated_by); whether the old config.yaml was imported ([config.md](config.md)) |
-| `session_pins` | session_id (key), harness, harness_pid, harness_started (unix ns), first_cwd, main_checkout, space, policy_revision, pinned_at, ended_at, inherited_from ([session pins](#session-pins)) |
+| `session_pins` | session_id (key), harness, harness_pid, harness_started (unix ns), first_cwd, main_checkout, space, policy_revision, pinned_at, ended_at, inherited_from, resumed_at ([session pins](#session-pins)) |
 | `settings_items` | provider, kind, identity (key), enabled, origin (`orch`/`you`/`found`), payload (JSON), present, removed_at, created_at, updated_at ([settings.md](settings.md)) |
 
 ## Invariants
