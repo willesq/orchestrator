@@ -1155,7 +1155,9 @@
               "threshold": "all pass unchanged"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: go test ./internal/hook/ passes 172 tests (2026-11-08, commit 5e5aa84). `git diff --stat origin/main -- internal/hook/*_test.go` lists only the new internal/hook/pins_test.go, so every existing hook test passes unchanged, including TestSessionStart, TestDispatchAllEvents, the TestSessionEnd tests and TestRecordedPayloadsParse. Pinning is added in dispatch around the unchanged sessionStart/sessionEnd handlers and never blocks the session (TestPinHooksNeverBlock). orchd side: TestPinWithoutSpaces shows that with no spaces policy (and with no spaces engine) a pin records space '' and policy_revision 0; TestPinPlacesSession shows a space is set only under an applied policy (acme; personal under a public root, D-22)."
+          ]
         }
       ],
       "status": "in_progress",
