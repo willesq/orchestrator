@@ -249,6 +249,15 @@ func (r *pinRegistry) firstOf(ctx context.Context, proc procstat.Identity) (sess
 		proc.PID, proc.Started.UnixNano()))
 }
 
+// currentOf returns harness process proc's current session: its latest pin
+// not yet ended, else its latest pin. Every pin a process holds has one space
+// (it took its first and copied that), so this picks only the session ID.
+func (r *pinRegistry) currentOf(ctx context.Context, proc procstat.Identity) (sessionPin, bool, error) {
+	return scanPin(r.db.QueryRowContext(ctx, `SELECT `+pinColumns+` FROM session_pins
+		WHERE harness_pid = ? AND harness_started = ? ORDER BY ended_at IS NULL DESC, rowid DESC LIMIT 1`,
+		proc.PID, proc.Started.UnixNano()))
+}
+
 func scanPin(row *sql.Row) (sessionPin, bool, error) {
 	var (
 		p        sessionPin

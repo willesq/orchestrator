@@ -85,6 +85,23 @@ func (r *Runner) Live(taskID string) (LiveRun, bool) {
 	return e.LiveRun, true
 }
 
+// LiveByPID reports the run whose agent CLI process is pid. orchd started
+// that process and reaps it before the run is untracked, so a tracked PID
+// cannot name a later process.
+func (r *Runner) LiveByPID(pid int) (LiveRun, bool) {
+	if pid <= 0 {
+		return LiveRun{}, false
+	}
+	r.live.mu.Lock()
+	defer r.live.mu.Unlock()
+	for _, e := range r.live.runs {
+		if e.PID == pid {
+			return e.LiveRun, true
+		}
+	}
+	return LiveRun{}, false
+}
+
 // Cancel stops the task's run if this runner is running it, reporting whether
 // it was. The run then ends with StatusCancelled rather than as a failure.
 func (r *Runner) Cancel(taskID string) bool {

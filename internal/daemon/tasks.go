@@ -39,6 +39,15 @@ func (l *liveRunner) get() *agentrun.Runner {
 	return l.r
 }
 
+// taskOf returns the run the current runner is running in agent process pid.
+func (l *liveRunner) taskOf(pid int) (agentrun.LiveRun, bool) {
+	r := l.get()
+	if r == nil {
+		return agentrun.LiveRun{}, false
+	}
+	return r.LiveByPID(pid)
+}
+
 // cancel stops a task the current runner is running, reporting whether it was.
 func (l *liveRunner) cancel(taskID string) bool {
 	r := l.get()

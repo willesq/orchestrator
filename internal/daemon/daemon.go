@@ -698,7 +698,8 @@ func Run(ctx context.Context) error {
 		log.Printf("orchd: model routing is off: %v", routerErr)
 	}
 
-	gs := newGRPCServer()
+	pins := newPinRegistry(store)
+	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf})
 	orchdv1.RegisterOrchdServer(gs, &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks, ctl: ctl, live: live, home: userHome(), hub: hub,
 		stopping:      runCtx.Done(),
@@ -720,7 +721,7 @@ func Run(ctx context.Context) error {
 		docsRefresh:  refreshSecs(s.Docs.DefaultRefresh),
 		config:       cfg,
 		spaces:       sp,
-		pins:         newPinRegistry(store),
+		pins:         pins,
 		repos:        newRepoLookups(ghp.Routed()),
 		ghProfiles:   ghp,
 		prune:        newPruneGuard(store),

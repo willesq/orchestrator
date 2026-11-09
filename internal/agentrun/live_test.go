@@ -120,6 +120,25 @@ func TestLiveRunsRefuseASecondRunAndUntrackOnlyTheirOwn(t *testing.T) {
 	}
 }
 
+func TestLiveByPID(t *testing.T) {
+	r := &Runner{}
+	if _, ok := r.LiveByPID(7); ok {
+		t.Fatal("found a run with none tracked")
+	}
+	r.live.track(LiveRun{TaskID: "starting"}, func() {})
+	r.live.track(LiveRun{TaskID: "t"}, func() {})
+	r.live.setPID("t", 7)
+	if lr, ok := r.LiveByPID(7); !ok || lr.TaskID != "t" {
+		t.Errorf("LiveByPID(7) = %+v, %v", lr, ok)
+	}
+	// A run whose process has not started has PID 0, which names nothing.
+	for _, pid := range []int{0, -1, 8} {
+		if lr, ok := r.LiveByPID(pid); ok {
+			t.Errorf("LiveByPID(%d) = %+v", pid, lr)
+		}
+	}
+}
+
 func TestRunRefusesADuplicateSession(t *testing.T) {
 	f := newFixture(t)
 	f.reply(t, `{"result":"x","is_error":false}`)
