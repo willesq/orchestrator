@@ -270,7 +270,8 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
 
     var stats = document.getElementById('stats'); clear(stats);
     [[done.length + ' / ' + feats.length, 'features done'], [cpsDone + ' / ' + cps, 'checkpoints with evidence'], [accDone + ' / ' + acc, 'acceptance checks covered'],
-     [inprog.length, 'in progress'], [blocked.length, 'blocked'], [d.decisions.open.length, 'open decisions']].forEach(function (x) {
+     [inprog.length, 'in progress'], [blocked.length, 'blocked'], [d.decisions.open.length, 'open decisions'],
+     [(d.decisions.reconvene || []).filter(function (r) { return r.status === 'open'; }).length, 'to reconvene on']].forEach(function (x) {
       stats.appendChild(el('div', { cls: 'stat' }, [el('b', { text: x[0] }), el('span', { text: x[1] })]));
     });
     var meters = document.getElementById('meters'); clear(meters);
@@ -449,6 +450,15 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
       { h: 'ID', f: function (r) { return el('td', { cls: 'mono', text: r.id }); } },
       { h: 'Recommendation', f: function (r) { return el('td', { text: r.decision }); } },
       { h: 'Affects', f: function (r) { return el('td', {}, [featLinks(r.affects)]); } }]));
+    // Reconvene items never block work; they are reviewed with the user at the end.
+    dec.appendChild(decTable('Reconvene at the end (does not block work)', d.decisions.reconvene || [], [
+      { h: 'ID', f: function (r) { return el('td', { cls: 'mono', text: r.id }); } },
+      { h: 'Item', f: function (r) {
+        return el('td', {}, [el('b', { text: r.topic }), ' ', pill(r.kind, r.kind === 'user-action' ? 'open' : 'todo'),
+          el('p', { cls: 'muted', text: r.detail }), el('p', { cls: 'muted mono', text: r.source + ' · ' + r.raised })]);
+      } },
+      { h: 'Affects', f: function (r) { return el('td', {}, [featLinks(r.affects)]); } },
+      { h: 'Status', f: function (r) { return el('td', {}, [pill(r.status, r.status === 'open' ? 'open' : 'pass')]); } }]));
     dec.appendChild(decTable('Confirmed by you', d.decisions.confirmed_by_user, [
       { h: 'ID', f: function (r) { return el('td', { cls: 'mono', text: r.id }); } },
       { h: 'Decision', f: function (r) { return el('td', { text: r.decision }); } },
