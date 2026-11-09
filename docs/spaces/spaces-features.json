@@ -1160,10 +1160,10 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "591ded86b49e51b3627c1ee96b9c2139cf6b2b68",
+      "verified_at": "2026-11-09T00:09:20Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "3db36eb1d0b4067e2568db4d0f867d703bfebd6a838987cb146e93c7bdc27c56",
