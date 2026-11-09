@@ -22,7 +22,8 @@
     "Before starting, read design_summary, invariants, definition_of_done, decisions and changelog. All decisions in confirmed_by_user are settled; don't reopen them.",
     "A checkpoint is complete only when every acceptance item's 'measure' meets its 'threshold'. Evidence goes in the checkpoint's 'evidence' array.",
     "Follow AGENTS.md and internal/install/agent-instructions.md: gofmt, go test ./..., go vet ./..., make cover (80% per eligible file), signed Conventional Commits with no co-author lines, docs/internals updated for changed behavior, a security-audit review before each commit.",
-    "Background for decisions: rag_search 'memory spaces' and the design docs listed under origin. This file wins wherever they disagree."
+    "Background for decisions: rag_search 'memory spaces' and the design docs listed under origin. This file wins wherever they disagree.",
+    "Record decision-making in this file until the last feature is done: anything the user decides goes to decisions.confirmed_by_user (next D-id); anything proposed, deferred, accepted as a risk, or left for the user goes to decisions.reconvene (next RC-id) with its source. Reconvene items never block a feature; they are reviewed with the user at the end."
   ],
   "design_summary": {
     "problem": "One Mac holds work for two employers (e.g. GitHub orgs 'acme' and 'globex'), an open-source org ('oss-org') and personal projects. orch's single RAG store, session capture, PR digests and task lists currently mix all of them. Content from one employer must never reach a session working for the other; open-source docs should be readable everywhere. Enforcement must be in orchd code, never in prompts.",
@@ -369,10 +370,284 @@
         "id": "D-25",
         "decision": "config.yaml was removed (settings live in orch.db, PR #142). The spaces policy is stored in orch.db as numbered draft and applied revisions with a content hash; SetSpacesDraft is open to any caller except queued tasks, and drafts record whether the operator saved them; DiffSpaces and ApplySpaces are operator-only and names the reviewed revision, and drift means a pending draft or an applied row that no longer matches its hash. SP-020.2.a3 reworded accordingly.",
         "date": "2026-11-08"
+      },
+      {
+        "id": "D-26",
+        "decision": "Accept SP-010's residual audit finding as a documented risk: a process started outside a session's tree under a kept-alive parent can take a new pin in its own directory. Pins grant nothing yet; access by a pin's space is gated on RC-01.",
+        "date": "2026-11-08"
       }
     ],
     "recommended_pending_confirmation": [],
-    "open": []
+    "open": [],
+    "reconvene": [
+      {
+        "id": "RC-01",
+        "kind": "decision",
+        "topic": "Gate pin-based access on the tool guard",
+        "detail": "SP-011 and SP-025 must not grant memory reads by a pin's space until SP-041 stops a session from starting a harness outside its tree, or until there is stronger evidence of a real top-level harness (kernel executable path, session and tty checks). Today one command can start a fake 'claude' under a kept-alive shell and pin it in another directory (accepted risk, D-26).",
+        "source": "https://github.com/willesq/orchestrator/pull/147",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-011",
+          "SP-025",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-02",
+        "kind": "decision",
+        "topic": "Codex SessionStart and SessionEnd hooks",
+        "detail": "orch's Codex install registers no SessionStart or SessionEnd hook, so Codex sessions are never pinned. Proposal: register orch-hook session-start and session-end for Codex (D-20 covers Codex).",
+        "source": "https://github.com/willesq/orchestrator/pull/147",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-010",
+          "SP-011",
+          "SP-012"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-03",
+        "kind": "decision",
+        "topic": "Bind the peer PID to its connection (proposed SP-011 acceptance item)",
+        "detail": "NearestAncestor trusts its starting PID; a peer that forks, hands its socket to a child and exits leaves its PID free for reuse under another space's harness. Bound the walk by the accept time, or identify the peer by kernel token (LOCAL_PEERTOKEN, SO_PEERPIDFD). Not found must mean no space, never a default.",
+        "source": "https://github.com/willesq/orchestrator/pull/140 (and RAG orch://spaces/sp-003/process-identity-security-notes)",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-011"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-04",
+        "kind": "decision",
+        "topic": "Pins across orchd restarts on Linux",
+        "detail": "Optional: key pins on raw start ticks plus boot_id instead of wall-clock start time if pins must survive restarts on Linux.",
+        "source": "https://github.com/willesq/orchestrator/pull/140",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-010",
+          "SP-017"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-05",
+        "kind": "decision",
+        "topic": "Proof for non-GitHub or remoteless checkouts under a public root",
+        "detail": "A checkout whose remote is not on GitHub (GitLab, local-only) has no remote fact, so under a public root the root rule places it public. Decide whether such content needs proof before SP-023 writers use the classifier.",
+        "source": "https://github.com/willesq/orchestrator/pull/145",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-022",
+          "SP-023",
+          "SP-030"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-06",
+        "kind": "decision",
+        "topic": "Confirm a specific GitHub node ID",
+        "detail": "--confirm-github-org accepts whatever node ID GitHub returns at apply time. Proposal: confirm org=node_id and show old, new and seen node IDs in 'orch spaces diff'.",
+        "source": "https://github.com/willesq/orchestrator/pull/144",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-021"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-07",
+        "kind": "decision",
+        "topic": "Org identity checks on every GitHub ingestion path",
+        "detail": "Only docs sync re-checks org bindings. Sources, the review watcher and PR monitoring should call CheckOrg, and a long sync should re-check between repos. May fit SP-023 or SP-043 rather than a new feature.",
+        "source": "https://github.com/willesq/orchestrator/pull/144",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-023",
+          "SP-043"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-08",
+        "kind": "decision",
+        "topic": "Where the command log is stored",
+        "detail": "SP-014 does not say where the command log lives; orch.db is mode 0644. Decide the store and its file mode before SP-014.",
+        "source": "session://46e55792-1605-40ed-8c85-d3caec057e00 (SP-001 session)",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-014"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-09",
+        "kind": "decision",
+        "topic": "SP-046 follow-ups and the shared /tmp channel",
+        "detail": "Write sandbox.enabled, allowUnsandboxedCommands=false and the Read(//...) denies together in the root settings.local.json and test that combination from a subfolder, plus Grep, Glob and Edit against the Read deny. SP-046.1 a5 needs a login in a temp profile (user step). Codex has no per-checkout path, so its coverage depends on the launcher. Codex ':workspace' still lets every space write the shared /tmp and $TMPDIR, a cross-space channel read denies don't close.",
+        "source": "https://github.com/willesq/orchestrator/pull/141",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-10",
+        "kind": "decision",
+        "topic": "SP-063 follow-ups",
+        "detail": "Proposed: GitHub scopes for profile-only orgs; stricter gh_config_dir checks; refuse calls a space's profile cannot read; a quota cap for isolated accounts. Known gaps: profile-only orgs cannot be PR-watched yet, and the repo picker and PR-outcome tracker still use the default login.",
+        "source": "https://github.com/willesq/orchestrator/pull/146",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-063",
+          "SP-043"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-11",
+        "kind": "follow-up",
+        "topic": "SP-020 audit lows",
+        "detail": "Prune old draft revisions; normalise roots (NFC/NFD, symlinks) and web prefixes the way enforcement will match; clearer refusal when a bare node/bun/deno above 'orch' makes orchd refuse the operator, and don't count doubled '/' toward the depth limit; a session can keep saving drafts so the operator's apply is always stale; 'orch status' should say nothing is readable when the newest apply fails to verify; resolve root symlinks before nesting checks; transient changed_outside_orchd during an apply.",
+        "source": "https://github.com/willesq/orchestrator/pull/143",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-020",
+          "SP-022"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-12",
+        "kind": "follow-up",
+        "topic": "SP-022 lows",
+        "detail": "The repo lookup cache and its 30-a-minute budget are shared by agents and the operator (timing side channel; agents can starve the operator). Agent-supplied paths reach the handoff checkout reader, which has no timeout or concurrency cap. Paths match case-insensitively but URL paths case-sensitively, and IDN/punycode hosts are not unified. An applied policy binding both spellings of a web prefix to different spaces fails to load at the next orchd start.",
+        "source": "https://github.com/willesq/orchestrator/pull/145",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-022",
+          "SP-025"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-13",
+        "kind": "follow-up",
+        "topic": "SP-010 lows",
+        "detail": "The PinSession comment in orchd.proto says 'live pin' though the rule also applies to an ended pin; the registry lock is held while placement waits on GitHub (up to 10 s); a harness can claim a not-yet-pinned session ID first (denial of service only); the harness start time is read just after the walk; a session can end its own pin early.",
+        "source": "https://github.com/willesq/orchestrator/pull/147",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-010",
+          "SP-011",
+          "SP-015",
+          "SP-017"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-14",
+        "kind": "follow-up",
+        "topic": "Test and coverage gate integrity",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks fails intermittently (also on main), and scripts/cover.sh silently drops a package whose tests fail, so 'make cover' can skip internal/daemon. TestRunMeasuresFailedRuns is timing-flaky.",
+        "source": "https://github.com/willesq/orchestrator/pull/145",
+        "raised": "2026-11-08",
+        "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-15",
+        "kind": "follow-up",
+        "topic": "Unverified assumptions to check before memory enforcement",
+        "detail": "Qdrant match.except on array fields, and the GetDocument and session-recall handlers' read paths, were assumed in the design but not checked.",
+        "source": "session://e38cc90a-ebe1-43d0-9bba-bfef289d8c8f (design session)",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-025",
+          "SP-026"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-16",
+        "kind": "follow-up",
+        "topic": "hook-capture.sh summary on non-object payloads",
+        "detail": "'scripts/hook-capture.sh summary' errors on payloads that are not JSON objects.",
+        "source": "https://github.com/willesq/orchestrator/pull/138",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-001"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-17",
+        "kind": "user-action",
+        "topic": "Rotate ORCA_AGENT_HOOK_TOKEN",
+        "detail": "The token was printed into a session transcript on 2026-11-08 (SP-001 session). Rotate it; the transcript is also indexed in RAG.",
+        "source": "session://46e55792-1605-40ed-8c85-d3caec057e00",
+        "raised": "2026-11-08",
+        "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-18",
+        "kind": "user-action",
+        "topic": "Re-apply spaces policies applied before SP-021",
+        "detail": "Their orgs are unconfirmed, so those owners' docs syncs stay stopped until 'orch spaces apply' runs again.",
+        "source": "https://github.com/willesq/orchestrator/pull/144",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-021"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-19",
+        "kind": "user-action",
+        "topic": "Issue #130 feasibility comment",
+        "detail": "The feasibility comment for the issue that started this project was never posted; awaiting your go-ahead.",
+        "source": "https://github.com/willesq/orchestrator/issues/130",
+        "raised": "2026-11-08",
+        "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-20",
+        "kind": "user-action",
+        "topic": "PR #111 (test/landing-sandbox)",
+        "detail": "Still open; close it or keep it.",
+        "source": "https://github.com/willesq/orchestrator/pull/111",
+        "raised": "2026-11-08",
+        "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-21",
+        "kind": "user-action",
+        "topic": "Settings screens and config-in-db follow-up",
+        "detail": "The Settings screens moved to orch.db (v0.44.0) were never checked by hand in the running app, and the env-var reset bypass has an accepted-risk follow-up.",
+        "source": "https://github.com/willesq/orchestrator/pull/142",
+        "raised": "2026-11-08",
+        "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-22",
+        "kind": "user-action",
+        "topic": "Observability research leftovers",
+        "detail": "Decide whether to save the three drafted RAG entries; verify four reported defects (subagent-stop hook reads the wrong field names, pr-babysitter events have empty timestamps, queue events have an empty task ID, token detail is discarded); try Codex [otel] export live.",
+        "source": "session://bdd8786f-58da-4777-8a71-4185518d555a",
+        "raised": "2026-11-08",
+        "affects": [],
+        "status": "open"
+      }
+    ]
   },
   "phases": [
     {
@@ -3699,6 +3974,10 @@
     {
       "date": "2026-11-08",
       "change": "config.yaml removed by design (PR #142). D-25: the spaces policy lives in orch.db as draft/applied revisions. Reworded SP-020 summary and SP-020.2.a3 (criteria_sha256 recomputed with the user's approval), the design_summary drift rule and SP-054's summary."
+    },
+    {
+      "date": "2026-11-08",
+      "change": "Added decisions.reconvene (RC-01..RC-22), gathered from the PRs and session records of 2026-11-08, and session_procedure step 12 so every session records the user's decisions (confirmed_by_user) and everything deferred to the user (reconvene) until the last feature ships. Recorded D-26 (SP-010's accepted residual risk)."
     }
   ],
   "plan_location": {
@@ -3749,7 +4028,8 @@
     "8. When every checkpoint has evidence meeting its threshold, run every definition_of_done check yourself. Then spawn an independent verifier: a fresh subagent that gets only the diff (origin/main...HEAD), this feature's JSON, the invariants it appears in, and definition_of_done. It re-runs every test, command and metric itself and reports pass or fail for each acceptance item and each DOD check. It does not see your reasoning.",
     "9. If the verifier reports any failure, fix it and verify again, up to 3 rounds; after that, set 'blocked'. If everything passes, set status 'done', passes=true, verified_sha to the commit that was verified, verified_at to the current UTC time (ISO 8601). Commit that change (signed) and push. Leave the PR as a draft; the user marks it ready and merges.",
     "10. Never delete, renumber or reorder features, checkpoints or acceptance items, and never edit acceptance criteria (criteria_sha256 detects it). Only the user may mark a feature 'superseded'. If you discover new work, describe it under 'Proposed new features' in the PR body; it is appended to the plan, with the next free ID, only after the user approves.",
-    "11. Finish with a short report: the feature, its PR link, the verification result, what is waiting on the user, and which feature step 2 will pick next once this one is merged. Leave the live progress file with the final status ('done', 'blocked' or 'idle') and a note matching your report."
+    "11. Finish with a short report: the feature, its PR link, the verification result, what is waiting on the user, and which feature step 2 will pick next once this one is merged. Leave the live progress file with the final status ('done', 'blocked' or 'idle') and a note matching your report.",
+    "12. Record decisions as you go, until the last feature is done. A decision the user makes goes to decisions.confirmed_by_user with the next D-id and the date. Everything else that needs the user later goes to decisions.reconvene with the next RC-id: proposed features or acceptance items (also listed in the PR body per step 10), low or accepted security findings, deferred follow-ups, unverified assumptions, and actions the user must take. Give each a kind (decision, follow-up or user-action), topic, detail, source (PR, issue or session URI), raised date, affects and status 'open'. Reconvene items never block work; an item the user settles moves to confirmed_by_user (or becomes a feature) and its status becomes 'resolved' with a note. Before reporting in step 11, check that your session's items are recorded."
   ],
   "local_safety": [
     "This Mac runs the orch you are changing. Exercise install changes with a temporary --home only; never write to the real ~/.claude, ~/.codex, ~/.gemini, ~/.config/orch, or any repo's git hooks.",
