@@ -2230,14 +2230,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "570f513809cc007ea2916a4601bfbba4bcc7f78a394c4e52a52dc4a17464e0b5",
-      "branch": null,
+      "branch": "feat/sp-017-session-liveness",
       "pr": null
     },
     {
