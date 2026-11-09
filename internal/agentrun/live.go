@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/willesq/orchestrator/internal/procstat"
 )
 
 // StatusCancelled is a task the user stopped.
@@ -18,10 +20,15 @@ type LiveRun struct {
 	Model     string
 	SessionID string
 	Dir       string
-	// PID is the agent CLI's process, 0 until it has started.
-	PID     int
-	Started time.Time
+	// PID is the agent CLI's process, 0 until it has started; ProcStarted
+	// is when the kernel says that process started, zero when unread.
+	PID         int
+	ProcStarted time.Time
+	Started     time.Time
 }
+
+// procStart reads a process's start time; tests replace it.
+var procStart = procstat.StartTime
 
 type liveEntry struct {
 	LiveRun
@@ -61,10 +68,14 @@ func (l *liveRuns) untrack(e *liveEntry) {
 }
 
 func (l *liveRuns) setPID(id string, pid int) {
+	var started time.Time
+	if pid > 0 {
+		started, _ = procStart(pid)
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if e := l.runs[id]; e != nil {
-		e.PID = pid
+		e.PID, e.ProcStarted = pid, started
 	}
 }
 
@@ -83,6 +94,23 @@ func (r *Runner) Live(taskID string) (LiveRun, bool) {
 		return LiveRun{}, false
 	}
 	return e.LiveRun, true
+}
+
+// LiveByProcess reports the run whose agent CLI is process proc, matched by
+// PID and start time: a PID recorded earlier may since name a later task's
+// CLI. A process whose start time is unknown matches nothing.
+func (r *Runner) LiveByProcess(proc procstat.Identity) (LiveRun, bool) {
+	if proc.PID <= 0 || proc.Started.IsZero() {
+		return LiveRun{}, false
+	}
+	r.live.mu.Lock()
+	defer r.live.mu.Unlock()
+	for _, e := range r.live.runs {
+		if e.PID == proc.PID && !e.ProcStarted.IsZero() && e.ProcStarted.Equal(proc.Started) {
+			return e.LiveRun, true
+		}
+	}
+	return LiveRun{}, false
 }
 
 // Cancel stops the task's run if this runner is running it, reporting whether

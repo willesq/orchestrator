@@ -215,8 +215,11 @@ var errPeerUnsupported = errors.New("socket peer credentials are not supported o
 type callerAuth struct {
 	credentials.CommonAuthInfo
 	pid int
-	// spawned reports that the process descends from orchd.
+	// spawned reports that the process descends from orchd; child is then
+	// orchd's own child on its path, which a queued task's agent CLI is,
+	// with its start time read at accept (zero when unread).
 	spawned bool
+	child   procstat.Identity
 	// err says why the process could not be identified.
 	err error
 	// harness names the nearest agent harness process (claude, codex) at or
@@ -235,6 +238,9 @@ type callerAuth struct {
 	// harnessErr says why the harness walk failed; such a caller is treated
 	// as if it ran in a harness.
 	harnessErr error
+	// conn caches what this connection resolves to (caller_session.go); nil
+	// resolves on every call.
+	conn *connCaller
 }
 
 func (callerAuth) AuthType() string { return "orchd-peer" }
@@ -279,17 +285,26 @@ func (p peerCredentials) identify(c net.Conn) callerAuth {
 		log.Printf("orchd: socket peer is in another PID namespace; trusting its client's report")
 		return callerAuth{err: errPeerUnsupported}
 	}
-	spawned, err := descendsFrom(pid, p.self, p.parent)
+	child, err := childOnPath(pid, p.self, p.parent)
 	if err != nil {
 		// An ancestor that exits mid-walk breaks it; a second walk sees the
 		// reparented tree instead of refusing the operator.
-		spawned, err = descendsFrom(pid, p.self, p.parent)
+		child, err = childOnPath(pid, p.self, p.parent)
 	}
+	spawned := child > 0
 	// Reason: unlike the orchd walk above, a failed harness walk is not
 	// retried. A session that exits mid-walk reparents its children to
 	// launchd, and a second walk would then find no harness.
 	harness, hpid, herr := harnessAncestor(pid, p.parent, p.program)
-	a := callerAuth{pid: pid, spawned: spawned, err: err, harness: harness, harnessErr: herr}
+	a := callerAuth{pid: pid, spawned: spawned, err: err, harness: harness, harnessErr: herr, conn: &connCaller{}}
+	if spawned {
+		// Reason: the PID alone may name a later task's CLI by the time the
+		// connection's first call asks for its task.
+		a.child = procstat.Identity{PID: child}
+		if p.started != nil {
+			a.child.Started, _ = p.started(child)
+		}
+	}
 	if harness == "" {
 		return a
 	}
@@ -499,24 +514,26 @@ func connPeerPID(c net.Conn) (int, error) {
 // maxAncestry bounds the walk up a process's parents.
 const maxAncestry = 256
 
-// descendsFrom reports whether pid is a descendant of ancestor. A process is
-// not its own descendant, so orchd calling itself is the operator.
-func descendsFrom(pid, ancestor int, parent func(int) (int, error)) (bool, error) {
+// childOnPath returns ancestor's child on the walk up from pid (pid itself
+// when ancestor is its parent), or 0 when pid does not descend from ancestor.
+// A process is not its own descendant, so orchd calling itself is the
+// operator.
+func childOnPath(pid, ancestor int, parent func(int) (int, error)) (int, error) {
 	if pid == ancestor {
-		return false, nil
+		return 0, nil
 	}
 	for range maxAncestry {
 		ppid, err := parent(pid)
 		if err != nil {
-			return false, fmt.Errorf("parent of process %d: %w", pid, err)
+			return 0, fmt.Errorf("parent of process %d: %w", pid, err)
 		}
 		switch {
 		case ppid == ancestor:
-			return true, nil
+			return pid, nil
 		case ppid <= 1 || ppid == pid:
-			return false, nil
+			return 0, nil
 		}
 		pid = ppid
 	}
-	return false, fmt.Errorf("process ancestry deeper than %d", maxAncestry)
+	return 0, fmt.Errorf("process ancestry deeper than %d", maxAncestry)
 }

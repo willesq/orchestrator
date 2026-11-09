@@ -171,8 +171,57 @@ stops a session from starting such a process. Any process in a session can
 end that session's pin early; retention (SP-015) still keeps a live process's log. Codex is not pinned yet: orch's Codex install registers no SessionStart or
 SessionEnd hook. A session resumed in a new process keeps its pin but cannot end it, and two
 sessions in one process can hold pins with different spaces only when one was pinned in
-another process first (an in-process resume); SP-011 and SP-017 resolve callers and liveness
-from these rows.
+another process first (an in-process resume); SP-011 (below) and SP-017 resolve callers and
+liveness from these rows.
+
+### Caller sessions
+
+Every RPC learns whom it serves before its handler runs (SP-011, INV-02, INV-05;
+`internal/daemon/caller_session.go`). A unary and a stream interceptor, after the queued-caller
+guard, attach one of four results to the call's context:
+
+- **task:** a process orchd started, or a client that reports `orch-task-id`. Its record (the
+  live run: task ID, directory, session) comes only from the process tree: orchd's own child on
+  the caller's path, with the PID and start time read at accept, must be a running task's agent
+  CLI, whose start time the runner reads when the CLI starts. Matching the start time matters
+  because a process that escaped a finished task can keep its connection until a later task's
+  CLI reuses the PID; an unreadable start time matches no run. A reported task ID only marks the
+  caller as a task, which narrows it; it never selects a record.
+  A spawned process that is no task's agent (a verification run) is a task with no record.
+- **operator:** identified, not started by orchd, and with no agent harness above it.
+- **session:** the nearest harness at or above the caller, among the ones recorded at accept
+  (the caller's harness, then each harness above it), that holds a pin, matched by PID and the
+  start time read at accept. The pin is that process's current one: its latest pin not ended,
+  else its latest. All pins of one process share a space (the process took its first pin and
+  copied it for every later session, subagents and `/clear` included), so the resolved session
+  ID means "a session of this harness process", not necessarily the caller's own; nothing may key
+  per-session data on it without telling those apart. A harness an agent started without a pin
+  resolves to the pinned session above it.
+- **none:** everything else: no peer information, an ancestry orchd could not read, a platform
+  without peer lookup or start times, a harness no session has pinned (also when its PID was
+  reused by a later process), or a pin store that cannot be read (logged). Once spaces are
+  enforced such a caller reads only public content.
+
+Nothing in a request takes part, so an agent that runs `cd elsewhere && orch search` (or sends
+another `cwd`) resolves to its own session. Each connection caches its task once found, and a pin
+once found on its nearest harness. A pin found on an outer harness, and a miss, are looked up
+again on the next call, since an MCP server can connect before its session's SessionStart hook
+pins it, and a nested harness may pin itself after the connection opened. Lookups run outside
+the connection's lock. Resolving a new connection, including
+orchd's walk of the real process table at accept, measured p50 0.57 ms and p99 0.79 ms on an M3
+Max (`TestResolveCost`, 1000 connections, 300 other pins in the store); the pin lookup alone is
+p99 about 0.05 ms, so the walk dominates, and a cached call costs about 0.1 µs. A shared Linux CI
+runner testing other packages in parallel measured p99 6.5 ms, so the test holds the 5 ms bound
+only on macOS. The recovery server resolves nothing, so every call there is `none`.
+
+Nothing grants access by the result yet. Memory reads by a session's space (SP-025) wait until
+the pre-tool guard (SP-041) closes two gaps: the detached-harness case described under
+[session pins](#session-pins), and a process that leaves the session's tree before orchd accepts
+its connection (a double fork, `launchctl submit`, `open`, `osascript`; see
+[queued callers](#queued-callers)), which has no harness above it and so resolves to the
+operator, the widest result. The connection's peer PID is still taken on trust at accept
+(see [queued callers](#queued-callers)): a peer that hands its socket to a child and exits leaves
+its PID free for reuse.
 
 Clients dial `unix://<socket>` lazily (failure surfaces on the first call) and set their own
 deadlines: hooks 0.5 s for writes and 3 s for prompt search; `orch status` 2–3 s; long CLI

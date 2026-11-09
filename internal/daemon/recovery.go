@@ -41,12 +41,18 @@ func listenSocket() (net.Listener, func(), error) {
 }
 
 // newGRPCServer attributes each connection to its process so operator-only
-// RPCs can refuse queued tasks however they reach the socket (callers.go).
-func newGRPCServer() *grpc.Server {
+// RPCs can refuse queued tasks however they reach the socket (callers.go),
+// and, with a resolver, tells each call whom it serves (caller_session.go).
+func newGRPCServer(res *callerResolver) *grpc.Server {
+	unary := []grpc.UnaryServerInterceptor{guardQueuedCallers}
+	stream := []grpc.StreamServerInterceptor{guardQueuedStreams}
+	if res != nil {
+		unary, stream = append(unary, res.unary), append(stream, res.stream)
+	}
 	return grpc.NewServer(
 		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent, program: procstat.ReadProgram, started: procstat.StartTime}),
-		grpc.UnaryInterceptor(guardQueuedCallers),
-		grpc.StreamInterceptor(guardQueuedStreams),
+		grpc.ChainUnaryInterceptor(unary...),
+		grpc.ChainStreamInterceptor(stream...),
 	)
 }
 
@@ -94,7 +100,7 @@ func serveRecovery(ctx context.Context, cfg *configService, cause error) error {
 	defer closeSocket()
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
-	gs := newGRPCServer()
+	gs := newGRPCServer(nil)
 	orchdv1.RegisterOrchdServer(gs, &recoveryServer{config: cfg, start: time.Now(), restart: stop})
 	retry := time.AfterFunc(recoveryRetry, func() {
 		log.Printf("orchd: exiting to try the full start again")

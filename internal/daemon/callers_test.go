@@ -24,7 +24,7 @@ import (
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
-func TestDescendsFrom(t *testing.T) {
+func TestChildOnPath(t *testing.T) {
 	// orchd is 100; 200 is its child and 300 its grandchild; 400 is a terminal
 	// shell; 600 and 700 are each other's parent.
 	tree := map[int]int{100: 1, 200: 100, 300: 200, 400: 50, 50: 1, 500: 500, 600: 700, 700: 600}
@@ -37,12 +37,12 @@ func TestDescendsFrom(t *testing.T) {
 	tests := []struct {
 		name    string
 		pid     int
-		want    bool
+		want    int
 		wantErr bool
 	}{
 		{name: "orchd itself is the operator", pid: 100},
-		{name: "a session orchd started", pid: 200, want: true},
-		{name: "a command that session ran", pid: 300, want: true},
+		{name: "a session orchd started", pid: 200, want: 200},
+		{name: "a command that session ran", pid: 300, want: 200},
 		{name: "a terminal outside orchd", pid: 400},
 		{name: "its own parent", pid: 500},
 		{name: "a process that is gone", pid: 999, wantErr: true},
@@ -50,12 +50,12 @@ func TestDescendsFrom(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := descendsFrom(tt.pid, 100, parent)
+			got, err := childOnPath(tt.pid, 100, parent)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}
 			if got != tt.want {
-				t.Errorf("descendsFrom(%d) = %v, want %v", tt.pid, got, tt.want)
+				t.Errorf("childOnPath(%d) = %d, want %d", tt.pid, got, tt.want)
 			}
 		})
 	}
