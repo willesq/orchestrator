@@ -49,7 +49,9 @@ type resolvedCaller struct {
 
 // connCaller caches what a connection resolves to. Only results that cannot
 // change for the connection's life are kept: its task, and a pin held by the
-// caller's own nearest harness (a pin never changes but for ended_at). A pin
+// caller's own nearest harness (a pin's space never changes; a resume can
+// move it to another process, so readers of per-session data check that the
+// pin still names the caller's process). A pin
 // found on an outer harness is not kept, nor is a miss: the nearest harness's
 // SessionStart hook may pin it after the connection opened (an MCP server
 // starts with the session).

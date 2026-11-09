@@ -15,11 +15,12 @@ import (
 const pinTimeout = 2 * time.Second
 
 // pinSession asks orchd to pin the session at SessionStart (SP-010). orchd
-// reads the harness process itself and keeps an existing pin, so every
-// SessionStart source (startup, resume, clear, compact) sends the same
-// request. Like every hook it never blocks the session: an unreachable orchd
-// or a refusal leaves the session unpinned. Queued tasks are identified by
-// their task record instead, and orchd refuses them the call.
+// reads the harness process itself and keeps an existing pin; the source
+// (startup, resume, clear, compact) only lets a resumed session's pin move to
+// its new harness process (SP-017). Like every hook it never blocks the
+// session: an unreachable orchd or a refusal leaves the session unpinned.
+// Queued tasks are identified by their task record instead, and orchd
+// refuses them the call.
 func pinSession(p Payload, cf clientFactory) {
 	if p.SessionID == "" || os.Getenv(agentrun.TaskIDEnv) != "" {
 		return
@@ -32,7 +33,7 @@ func pinSession(p Payload, cf clientFactory) {
 	ctx, cancel := context.WithTimeout(context.Background(), pinTimeout)
 	defer cancel()
 	_, _ = client.PinSession(ctx, &orchdv1.PinSessionRequest{
-		SessionId: p.SessionID, Cwd: p.Cwd, ParentSessionId: p.ParentSessionID,
+		SessionId: p.SessionID, Cwd: p.Cwd, ParentSessionId: p.ParentSessionID, Source: p.Source,
 	})
 }
 

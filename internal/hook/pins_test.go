@@ -46,7 +46,8 @@ func pinTestEnv(t *testing.T) {
 }
 
 // TestSessionStartPinsEverySource: each SessionStart source sends the same
-// PinSession; orchd decides to keep the existing pin (SP-010.2.a1).
+// PinSession, naming its source; orchd decides to keep the existing pin
+// (SP-010.2.a1) or, for a resume, to move it (SP-017.1.a4).
 func TestSessionStartPinsEverySource(t *testing.T) {
 	for _, source := range []string{"startup", "resume", "clear", "compact"} {
 		t.Run(source, func(t *testing.T) {
@@ -56,7 +57,8 @@ func TestSessionStartPinsEverySource(t *testing.T) {
 			if err := dispatch("session-start", p, &bytes.Buffer{}, factory(c, nil)); err != nil {
 				t.Fatal(err)
 			}
-			if len(c.pins) != 1 || c.pins[0].GetSessionId() != "sid" || c.pins[0].GetCwd() != "/work/repo" || c.pins[0].GetParentSessionId() != "" {
+			if len(c.pins) != 1 || c.pins[0].GetSessionId() != "sid" || c.pins[0].GetCwd() != "/work/repo" || c.pins[0].GetParentSessionId() != "" ||
+				c.pins[0].GetSource() != source {
 				t.Fatalf("pin requests = %v", c.pins)
 			}
 		})

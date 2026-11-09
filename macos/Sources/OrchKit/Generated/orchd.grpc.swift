@@ -696,6 +696,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ListSessions" metadata.
+        public enum ListSessions: Sendable {
+            /// Request type for "ListSessions".
+            public typealias Input = Orchd_V1_ListSessionsRequest
+            /// Response type for "ListSessions".
+            public typealias Output = Orchd_V1_ListSessionsResponse
+            /// Descriptor for "ListSessions".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListSessions",
+                type: .unary
+            )
+        }
         /// Namespace for "RecordToolEvent" metadata.
         public enum RecordToolEvent: Sendable {
             /// Request type for "RecordToolEvent".
@@ -984,6 +997,7 @@ public enum Orchd_V1_Orchd: Sendable {
             ExplainPlacement.descriptor,
             PinSession.descriptor,
             EndSession.descriptor,
+            ListSessions.descriptor,
             RecordToolEvent.descriptor,
             VerifyToolLog.descriptor,
             ListRegisteredSources.descriptor,
@@ -2226,9 +2240,11 @@ extension Orchd_V1_Orchd {
         /// > Source IDL Documentation:
         /// >
         /// > PinSession records a session's pin at SessionStart: its harness process,
-        /// > first directory and space. A pin is set once and never changed: a second
-        /// > call returns the existing pin, a subagent gets its parent's, and a new
-        /// > session in a harness process that already holds a live pin gets that one.
+        /// > first directory and space. A pin's space and first directory never
+        /// > change: a second call returns the existing pin, a subagent gets its
+        /// > parent's, and a new session in a harness process that already holds a
+        /// > live pin gets that one. A resumed session (source "resume") whose old
+        /// > harness process is gone moves to the new process, keeping its space.
         /// > orchd reads the harness process from the caller's process tree, so only
         /// > a process inside a harness can pin, and only for that harness.
         ///
@@ -2271,6 +2287,32 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_EndSessionResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_EndSessionResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListSessions" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListSessions lists pinned sessions with their liveness, which orchd reads
+        /// > from the kernel: active, idle or ended, plus running harness processes
+        /// > with no pin (unpinned). The operator sees every session; any other caller
+        /// > sees only its own session's row.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListSessionsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListSessionsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListSessionsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listSessions<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListSessionsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListSessionsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListSessionsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSessionsResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "RecordToolEvent" method.
@@ -4477,9 +4519,11 @@ extension Orchd_V1_Orchd {
         /// > Source IDL Documentation:
         /// >
         /// > PinSession records a session's pin at SessionStart: its harness process,
-        /// > first directory and space. A pin is set once and never changed: a second
-        /// > call returns the existing pin, a subagent gets its parent's, and a new
-        /// > session in a harness process that already holds a live pin gets that one.
+        /// > first directory and space. A pin's space and first directory never
+        /// > change: a second call returns the existing pin, a subagent gets its
+        /// > parent's, and a new session in a harness process that already holds a
+        /// > live pin gets that one. A resumed session (source "resume") whose old
+        /// > harness process is gone moves to the new process, keeping its space.
         /// > orchd reads the harness process from the caller's process tree, so only
         /// > a process inside a harness can pin, and only for that harness.
         ///
@@ -4539,6 +4583,43 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.EndSession.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListSessions" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListSessions lists pinned sessions with their liveness, which orchd reads
+        /// > from the kernel: active, idle or ended, plus running harness processes
+        /// > with no pin (unpinned). The operator sees every session; any other caller
+        /// > sees only its own session's row.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListSessionsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListSessionsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListSessionsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listSessions<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListSessionsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListSessionsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListSessionsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSessionsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListSessions.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -6681,9 +6762,11 @@ extension Orchd_V1_Orchd.ClientProtocol {
     /// > Source IDL Documentation:
     /// >
     /// > PinSession records a session's pin at SessionStart: its harness process,
-    /// > first directory and space. A pin is set once and never changed: a second
-    /// > call returns the existing pin, a subagent gets its parent's, and a new
-    /// > session in a harness process that already holds a live pin gets that one.
+    /// > first directory and space. A pin's space and first directory never
+    /// > change: a second call returns the existing pin, a subagent gets its
+    /// > parent's, and a new session in a harness process that already holds a
+    /// > live pin gets that one. A resumed session (source "resume") whose old
+    /// > harness process is gone moves to the new process, keeping its space.
     /// > orchd reads the harness process from the caller's process tree, so only
     /// > a process inside a harness can pin, and only for that harness.
     ///
@@ -6735,6 +6818,38 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_EndSessionRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_EndSessionResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListSessions" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListSessions lists pinned sessions with their liveness, which orchd reads
+    /// > from the kernel: active, idle or ended, plus running harness processes
+    /// > with no pin (unpinned). The operator sees every session; any other caller
+    /// > sees only its own session's row.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListSessionsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listSessions<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListSessionsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSessionsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listSessions(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListSessionsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListSessionsResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -8984,9 +9099,11 @@ extension Orchd_V1_Orchd.ClientProtocol {
     /// > Source IDL Documentation:
     /// >
     /// > PinSession records a session's pin at SessionStart: its harness process,
-    /// > first directory and space. A pin is set once and never changed: a second
-    /// > call returns the existing pin, a subagent gets its parent's, and a new
-    /// > session in a harness process that already holds a live pin gets that one.
+    /// > first directory and space. A pin's space and first directory never
+    /// > change: a second call returns the existing pin, a subagent gets its
+    /// > parent's, and a new session in a harness process that already holds a
+    /// > live pin gets that one. A resumed session (source "resume") whose old
+    /// > harness process is gone moves to the new process, keeping its space.
     /// > orchd reads the harness process from the caller's process tree, so only
     /// > a process inside a harness can pin, and only for that harness.
     ///
@@ -9045,6 +9162,42 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.endSession(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListSessions" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListSessions lists pinned sessions with their liveness, which orchd reads
+    /// > from the kernel: active, idle or ended, plus running harness processes
+    /// > with no pin (unpinned). The operator sees every session; any other caller
+    /// > sees only its own session's row.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listSessions<Result>(
+        _ message: Orchd_V1_ListSessionsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSessionsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListSessionsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listSessions(
             request: request,
             options: options,
             onResponse: handleResponse

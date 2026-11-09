@@ -2221,13 +2221,19 @@ public nonisolated struct Orchd_V1_PinSessionRequest: Sendable {
   /// Set for a subagent: it gets its parent's pin and cannot set its own.
   public var parentSessionID: String = String()
 
+  /// Why SessionStart fired: startup | resume | clear | compact. Only
+  /// "resume" lets an existing pin move to a new harness process.
+  public var source: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 }
 
 /// SessionPin is the identity every later decision about a session uses. It
-/// is written once at SessionStart; only ended_at changes later.
+/// is written at SessionStart. Its space and first directory never change; a
+/// resume moves it to a new harness process, and ended_at is set when the
+/// session ends.
 public nonisolated struct Orchd_V1_SessionPin: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2290,6 +2296,74 @@ public nonisolated struct Orchd_V1_EndSessionResponse: Sendable {
 
   /// unix seconds; the first end recorded wins
   public var endedAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListSessionsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// include ended sessions
+  public var all: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// SessionInfo is one row of ListSessions.
+public nonisolated struct Orchd_V1_SessionInfo: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// claude | codex | gemini
+  public var harness: String = String()
+
+  /// "" when unpinned
+  public var sessionID: String = String()
+
+  public var harnessPid: Int64 = 0
+
+  /// "" with no spaces policy applied, or unpinned
+  public var space: String = String()
+
+  /// the pinned directory; "" when unpinned
+  public var firstCwd: String = String()
+
+  /// active: the process runs and a hook event came in the last 30 minutes;
+  /// idle: it runs with no event for 30 minutes or more; ended: SessionEnd
+  /// came or the process is gone; unpinned: a harness process with no pin.
+  public var state: String = String()
+
+  /// Unix seconds of the latest of: the pin, its last resume, and its last
+  /// logged tool event; 0 when unpinned.
+  public var lastActivity: Int64 = 0
+
+  /// tool events in the command log
+  public var toolEvents: Int64 = 0
+
+  /// of those, calls the tool guard refused
+  public var refusals: Int64 = 0
+
+  /// unix seconds; 0 while not ended
+  public var endedAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListSessionsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sessions: [Orchd_V1_SessionInfo] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -8471,7 +8545,7 @@ nonisolated extension Orchd_V1_PlacementExplanation: SwiftProtobuf.Message, Swif
 
 nonisolated extension Orchd_V1_PinSessionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PinSessionRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{1}cwd\0\u{3}parent_session_id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{1}cwd\0\u{3}parent_session_id\0\u{1}source\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -8482,6 +8556,7 @@ nonisolated extension Orchd_V1_PinSessionRequest: SwiftProtobuf.Message, SwiftPr
       case 1: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.cwd) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.parentSessionID) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.source) }()
       default: break
       }
     }
@@ -8497,6 +8572,9 @@ nonisolated extension Orchd_V1_PinSessionRequest: SwiftProtobuf.Message, SwiftPr
     if !self.parentSessionID.isEmpty {
       try visitor.visitSingularStringField(value: self.parentSessionID, fieldNumber: 3)
     }
+    if !self.source.isEmpty {
+      try visitor.visitSingularStringField(value: self.source, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -8504,6 +8582,7 @@ nonisolated extension Orchd_V1_PinSessionRequest: SwiftProtobuf.Message, SwiftPr
     if lhs.sessionID != rhs.sessionID {return false}
     if lhs.cwd != rhs.cwd {return false}
     if lhs.parentSessionID != rhs.parentSessionID {return false}
+    if lhs.source != rhs.source {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -8644,6 +8723,141 @@ nonisolated extension Orchd_V1_EndSessionResponse: SwiftProtobuf.Message, SwiftP
 
   public static func ==(lhs: Orchd_V1_EndSessionResponse, rhs: Orchd_V1_EndSessionResponse) -> Bool {
     if lhs.endedAt != rhs.endedAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListSessionsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListSessionsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}all\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.all) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.all != false {
+      try visitor.visitSingularBoolField(value: self.all, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListSessionsRequest, rhs: Orchd_V1_ListSessionsRequest) -> Bool {
+    if lhs.all != rhs.all {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SessionInfo"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}harness\0\u{3}session_id\0\u{3}harness_pid\0\u{1}space\0\u{3}first_cwd\0\u{1}state\0\u{3}last_activity\0\u{3}tool_events\0\u{1}refusals\0\u{3}ended_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.harness) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.harnessPid) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.space) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.firstCwd) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.state) }()
+      case 7: try { try decoder.decodeSingularInt64Field(value: &self.lastActivity) }()
+      case 8: try { try decoder.decodeSingularInt64Field(value: &self.toolEvents) }()
+      case 9: try { try decoder.decodeSingularInt64Field(value: &self.refusals) }()
+      case 10: try { try decoder.decodeSingularInt64Field(value: &self.endedAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.harness.isEmpty {
+      try visitor.visitSingularStringField(value: self.harness, fieldNumber: 1)
+    }
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 2)
+    }
+    if self.harnessPid != 0 {
+      try visitor.visitSingularInt64Field(value: self.harnessPid, fieldNumber: 3)
+    }
+    if !self.space.isEmpty {
+      try visitor.visitSingularStringField(value: self.space, fieldNumber: 4)
+    }
+    if !self.firstCwd.isEmpty {
+      try visitor.visitSingularStringField(value: self.firstCwd, fieldNumber: 5)
+    }
+    if !self.state.isEmpty {
+      try visitor.visitSingularStringField(value: self.state, fieldNumber: 6)
+    }
+    if self.lastActivity != 0 {
+      try visitor.visitSingularInt64Field(value: self.lastActivity, fieldNumber: 7)
+    }
+    if self.toolEvents != 0 {
+      try visitor.visitSingularInt64Field(value: self.toolEvents, fieldNumber: 8)
+    }
+    if self.refusals != 0 {
+      try visitor.visitSingularInt64Field(value: self.refusals, fieldNumber: 9)
+    }
+    if self.endedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.endedAt, fieldNumber: 10)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SessionInfo, rhs: Orchd_V1_SessionInfo) -> Bool {
+    if lhs.harness != rhs.harness {return false}
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.harnessPid != rhs.harnessPid {return false}
+    if lhs.space != rhs.space {return false}
+    if lhs.firstCwd != rhs.firstCwd {return false}
+    if lhs.state != rhs.state {return false}
+    if lhs.lastActivity != rhs.lastActivity {return false}
+    if lhs.toolEvents != rhs.toolEvents {return false}
+    if lhs.refusals != rhs.refusals {return false}
+    if lhs.endedAt != rhs.endedAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListSessionsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListSessionsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sessions\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.sessions) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sessions.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.sessions, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListSessionsResponse, rhs: Orchd_V1_ListSessionsResponse) -> Bool {
+    if lhs.sessions != rhs.sessions {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -21,6 +21,13 @@ func (a Identity) Same(b Identity) bool {
 	return a.PID == b.PID && a.Started.Equal(b.Started)
 }
 
+// Process is one entry of the process table: a process and its kernel
+// (short) command name.
+type Process struct {
+	Identity
+	Name string
+}
+
 // proc is one kernel snapshot of a process: its start time and parent read
 // together, so a PID reused between two reads cannot mix two processes.
 type proc struct {

@@ -2,7 +2,10 @@
 
 package procstat
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestCommName(t *testing.T) {
 	tests := []struct {
@@ -21,4 +24,28 @@ func TestCommName(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestProcessesIncludesSelf: the table lists this test process under its
+// kernel name, with the start time StartTime reads, so an entry matches a
+// stored identity.
+func TestProcessesIncludesSelf(t *testing.T) {
+	procs, err := Processes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	self := os.Getpid()
+	want, err := StartTime(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range procs {
+		if p.PID == self {
+			if !p.Same(Identity{PID: self, Started: want}) || p.Name == "" {
+				t.Fatalf("self = %+v, want start %v and a name", p, want)
+			}
+			return
+		}
+	}
+	t.Fatalf("process %d missing from %d processes", self, len(procs))
 }
