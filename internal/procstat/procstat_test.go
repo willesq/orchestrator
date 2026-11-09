@@ -98,3 +98,14 @@ func TestReadWithoutPATH(t *testing.T) {
 		t.Fatalf("Read with no PATH: %v", err)
 	}
 }
+
+// TestProcessesUnsupported: off macOS the process table cannot be read, so
+// callers list no processes (TestProcessesIncludesSelf covers macOS).
+func TestProcessesUnsupported(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("covered by TestProcessesIncludesSelf")
+	}
+	if procs, err := Processes(); err != ErrUnsupported || procs != nil {
+		t.Errorf("Processes() = %v, %v; want nil, ErrUnsupported", procs, err)
+	}
+}
