@@ -208,9 +208,11 @@ once found on its nearest harness. A pin found on an outer harness, and a miss, 
 again on the next call, since an MCP server can connect before its session's SessionStart hook
 pins it, and a nested harness may pin itself after the connection opened. Lookups run outside
 the connection's lock. Resolving a new connection, including
-orchd's walk of the real process table at accept, measured p50 0.57 ms and p99 0.78 ms on an M3
-Max (`TestResolveCost`, 1000 connections, 300 other pins in the store); a cached call costs about
-0.1 µs. The recovery server resolves nothing, so every call there is `none`.
+orchd's walk of the real process table at accept, measured p50 0.57 ms and p99 0.79 ms on an M3
+Max (`TestResolveCost`, 1000 connections, 300 other pins in the store); the pin lookup alone is
+p99 about 0.05 ms, so the walk dominates, and a cached call costs about 0.1 µs. A shared Linux CI
+runner testing other packages in parallel measured p99 6.5 ms, so the test holds the 5 ms bound
+only on macOS. The recovery server resolves nothing, so every call there is `none`.
 
 Nothing grants access by the result yet. Memory reads by a session's space (SP-025) wait until
 the pre-tool guard (SP-041) closes two gaps: the detached-harness case described under

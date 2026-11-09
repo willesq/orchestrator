@@ -713,6 +713,18 @@
           "SP-017"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-28",
+        "kind": "decision",
+        "topic": "SP-011.2 cost bound on Linux",
+        "detail": "Resolving a new connection is p99 0.79 ms on the M3 Max but p99 6.5 ms on CI's shared linux/amd64 runner under the parallel suite; almost all of it is SP-010's process walk at accept (the pin lookup is about 0.05 ms). TestResolveCost enforces 5 ms only on macOS (50 ms elsewhere). Confirm the bound applies to the Macs orch runs on, or ask for the walk to be cut (one pass instead of three over the ancestry) so Linux meets it too.",
+        "source": "https://github.com/willesq/orchestrator/pull/149",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-011"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -1582,7 +1594,7 @@
             }
           ],
           "evidence": [
-            "a1: TestResolveCost (internal/daemon/caller_session_cost_test.go) re-executes the test binary as a program named claude, which starts a child; for 1000 new connections it runs orchd's identify over the real process table (procstat.Parent/ReadProgram/StartTime, walking to launchd) and resolves to the pin in a temp orch.db holding 301 pins: p50 0.56 ms, p99 0.79 ms, max 1.15 ms per connection; cached calls on that connection p50 83 ns, p99 125 ns. Threshold p99 < 5 ms: met. Apple M3 Max, go1.27.3 darwin/arm64, 2026-11-08, commit 7229821. Earlier runs: p99 0.75-0.83 ms. TestResolverOnSocket shows newGRPCServer resolves every call served over a real socket."
+            "a1: TestResolveCost (internal/daemon/caller_session_cost_test.go) re-executes the test binary as a program named claude, which starts a child; for 1000 new connections it runs orchd's identify over the real process table (procstat.Parent/ReadProgram/StartTime, walking to launchd) and resolves to the pin in a temp orch.db holding 301 pins. Apple M3 Max, go1.27.3 darwin/arm64, 2026-11-08: p50 0.57 ms, p99 0.79 ms, max 1.68 ms per connection, of which the resolver's pin lookup p50 0.016 ms, p99 0.047 ms; cached calls p50 83 ns, p99 125 ns. Threshold p99 < 5 ms: met (earlier runs p99 0.75-0.83 ms). On CI's shared linux/amd64 runner during the full parallel suite (run https://github.com/willesq/orchestrator/actions/runs/42544779394, commit aedada2) the same measure was p50 2.7 ms, p99 6.5 ms, so the test enforces 5 ms on macOS and a 50 ms regression guard elsewhere (RC-28). TestResolverOnSocket shows newGRPCServer resolves every call served over a real socket."
           ]
         }
       ],
