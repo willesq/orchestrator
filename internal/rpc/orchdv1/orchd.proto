@@ -162,6 +162,11 @@ service Orchd {
   // EndSession records that a pinned session ended. The pin stays for
   // retention. Only the pinned harness process can end it.
   rpc EndSession(EndSessionRequest) returns (EndSessionResponse);
+  // RecordToolEvent takes a tool call or directory change that a
+  // pre-tool-use or cwd-changed hook saw. It returns once orchd has queued
+  // the event and never waits on its processing. orchd attributes the event
+  // to the caller it resolved from the connection, never to session_id.
+  rpc RecordToolEvent(RecordToolEventRequest) returns (RecordToolEventResponse);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -1012,6 +1017,27 @@ message EndSessionRequest {
 message EndSessionResponse {
   int64 ended_at = 1; // unix seconds; the first end recorded wins
 }
+
+// RecordToolEventRequest is one hook event as the harness reported it. Every
+// field is the harness's claim; orchd decides whom it belongs to.
+message RecordToolEventRequest {
+  string event = 1;      // pre-tool-use | cwd-changed
+  string session_id = 2; // ^[A-Za-z0-9_-]{1,128}$
+  string cwd = 3;
+  string tool_name = 4;  // pre-tool-use only
+  // The tool's input JSON as the harness sent it; empty when larger than
+  // 1 MiB, with tool_input_size still set.
+  bytes tool_input = 5;
+  int64 tool_input_size = 6;
+  string tool_use_id = 7;
+  string agent_id = 8;   // set for a subagent's tool call
+  string agent_type = 9;
+  string old_cwd = 10;   // cwd-changed only
+  string new_cwd = 11;   // cwd-changed only
+  int64 at = 12;         // unix nanoseconds when the hook started
+}
+
+message RecordToolEventResponse {}
 
 message DocRepo {
   string repo = 1;

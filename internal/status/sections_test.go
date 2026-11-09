@@ -715,3 +715,38 @@ func TestHarnessSectionSafetyNet(t *testing.T) {
 		t.Errorf("empty section note %q", sec.Note)
 	}
 }
+
+// TestToolHooksLines is SP-012.2.a2: orch status reports, per harness,
+// whether its tool-call hooks reach orchd, and lists Gemini as not covered by
+// spaces.
+func TestToolHooksLines(t *testing.T) {
+	infos := []HarnessInfo{
+		{Name: "claude-code", ToolHooks: &ToolHooks{Covered: true, Wired: []string{"PreToolUse", "CwdChanged"}}},
+		{Name: "codex", ToolHooks: &ToolHooks{Covered: true, Missing: []string{"PreToolUse"}}},
+		{Name: "gemini", ToolHooks: &ToolHooks{}},
+		{Name: "other", ToolHooks: &ToolHooks{Covered: true, Err: "parse hooks.json: bad"}},
+		{Name: "older"}, // not inspected: no line
+	}
+	d := healthyDeps(t)
+	d.Harness = func() []HarnessInfo { return infos }
+	sec := section(t, Collect(context.Background(), d), "harness wiring")
+	tests := []struct {
+		name, value, level, has string
+	}{
+		{"claude-code tool hooks", "wired", LevelOK, "PreToolUse, CwdChanged"},
+		{"codex tool hooks", "missing PreToolUse", LevelWarn, "orch install --target codex --apply"},
+		{"gemini tool hooks", "not covered by spaces", LevelInfo, "Claude Code and Codex only"},
+		{"other tool hooks", "unknown", LevelWarn, "parse hooks.json: bad"},
+	}
+	for _, tt := range tests {
+		got := line(t, sec, tt.name)
+		if got.Value != tt.value || got.Level != tt.level || !strings.Contains(got.Detail, tt.has) {
+			t.Errorf("%s = %+v, want %s/%s with %q", tt.name, got, tt.value, tt.level, tt.has)
+		}
+	}
+	for _, l := range sec.Lines {
+		if l.Name == "older tool hooks" {
+			t.Errorf("uninspected harness got a tool hooks line: %+v", l)
+		}
+	}
+}

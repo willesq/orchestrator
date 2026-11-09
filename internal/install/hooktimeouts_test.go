@@ -48,8 +48,10 @@ func TestClaudeHookTimeouts(t *testing.T) {
 		{event: "Stop", wantSecs: 5},
 		{event: "SessionEnd", wantSecs: 15},
 		{event: "PreCompact", wantSecs: 15},
+		{event: "PreToolUse", wantSecs: 5},
 		{event: "PostToolUse", wantSecs: 5, wantAsync: true},
 		{event: "SubagentStop", wantSecs: 5},
+		{event: "CwdChanged", wantSecs: 5, wantAsync: true},
 	}
 	if len(tests) != len(eventSlugs) {
 		t.Fatalf("table covers %d events, installer wires %d", len(tests), len(eventSlugs))
@@ -128,7 +130,7 @@ func TestCodexHooksUnchanged(t *testing.T) {
 		t.Fatalf("Apply: %v", err)
 	}
 	root := readJSON(t, filepath.Join(home, ".codex", "hooks.json"))
-	for _, ev := range eventSlugs {
+	for _, ev := range codexEvents {
 		cmd := orchCommand(t, root, ev.Event)
 		if cmd == nil {
 			t.Fatalf("no orch-hook entry for %s", ev.Event)

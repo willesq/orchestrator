@@ -31,15 +31,30 @@ type Payload struct {
 	// stdout and stderr.
 	ToolResponse json.RawMessage `json:"tool_response"`
 	// Source says why a SessionStart fired: startup, resume, clear or compact.
-	Source string `json:"source"`
+	Source    string `json:"source"`
+	ToolUseID string `json:"tool_use_id"`
+	// AgentID and AgentType are set on a subagent's events; its session_id
+	// is the parent's.
+	AgentID   string `json:"agent_id"`
+	AgentType string `json:"agent_type"`
+	// OldCwd and NewCwd are a CwdChanged event's directories.
+	OldCwd string `json:"old_cwd"`
+	NewCwd string `json:"new_cwd"`
 }
+
+// maxPayload is the most of a hook payload Run reads.
+const maxPayload = 8 << 20
 
 // clientFactory dials orchd; injected so handlers are testable without a daemon.
 type clientFactory func() (orchdv1.OrchdClient, func(), error)
 
 // Run dispatches the hook event named by args[0], reading the payload from in and
 // writing any injected context to out. It never returns a session-blocking error.
-func Run(args []string, in io.Reader, out io.Writer) (err error) {
+func Run(args []string, in io.Reader, out io.Writer) error {
+	return run(args, in, out, orchdclient.Dial)
+}
+
+func run(args []string, in io.Reader, out io.Writer, cf clientFactory) (err error) {
 	// A panic would exit with a status harnesses can read as blocking the prompt.
 	defer func() {
 		if r := recover(); r != nil {
@@ -49,7 +64,10 @@ func Run(args []string, in io.Reader, out io.Writer) (err error) {
 	if len(args) == 0 {
 		return nil
 	}
-	data, err := io.ReadAll(in)
+	// Reason: pre-tool-use reads before every tool call, so a huge payload
+	// (a Write of a large file) is not held whole; cut short, it no longer
+	// parses and the handlers run without its fields.
+	data, err := io.ReadAll(io.LimitReader(in, maxPayload))
 	if err != nil {
 		return nil
 	}
@@ -57,7 +75,7 @@ func Run(args []string, in io.Reader, out io.Writer) (err error) {
 	if len(data) > 0 {
 		_ = json.Unmarshal(data, &p)
 	}
-	return dispatch(args[0], p, out, orchdclient.Dial)
+	return dispatch(args[0], p, out, cf)
 }
 
 func dispatch(event string, p Payload, out io.Writer, cf clientFactory) error {
@@ -78,6 +96,9 @@ func dispatch(event string, p Payload, out io.Writer, cf clientFactory) error {
 		return subagentStop(p)
 	case "post-tool-use":
 		return postToolUse(p)
+	case "pre-tool-use", "cwd-changed":
+		recordToolEvent(event, p, cf)
+		return nil
 	default:
 		return nil
 	}

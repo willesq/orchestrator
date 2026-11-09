@@ -151,6 +151,8 @@ type server struct {
 	spaces *spaces.Engine
 	// pins records each session's pin; nil when unavailable.
 	pins *pinRegistry
+	// toolEvents takes the events pre-tool-use and cwd-changed hooks send.
+	toolEvents toolEventIntake
 	// ghProfiles picks the gh login of each space's GitHub calls; nil runs
 	// every call as the default login.
 	ghProfiles *ghProfiles

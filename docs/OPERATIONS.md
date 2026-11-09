@@ -4,7 +4,8 @@
 
 `orch status` reports on everything: `orchd` and each subsystem (last tick, restarts), the
 vector store, on-disk stores and their freshness, harness wiring drift (items you turned off in orch are reported as `N disabled by you`, not
-drift), the `safety-net` line
+drift), a `<harness> tool hooks` line per harness (whether its tool calls reach orchd for spaces;
+Gemini is listed as not covered by spaces), the `safety-net` line
 (cc-safety-net installed at the pinned version and the `orch-guards` rules active; anything else
 is a warning naming the fix), preconditions, and how much instruction text each harness loads
 per session. It works with `orchd` down and always

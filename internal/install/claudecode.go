@@ -24,8 +24,10 @@ var eventSlugs = []struct{ Slug, Event string }{
 	{"stop", "Stop"},
 	{"session-end", "SessionEnd"},
 	{"pre-compact", "PreCompact"},
+	{"pre-tool-use", "PreToolUse"},
 	{"post-tool-use", "PostToolUse"},
 	{"subagent-stop", "SubagentStop"},
+	{"cwd-changed", "CwdChanged"},
 }
 
 // Edits implements Adapter: settings.json (hooks, MCP, permissions,
@@ -130,30 +132,34 @@ type hookFieldsFunc func(slug string) map[string]any
 // raises that budget to match the largest per-hook SessionEnd timeout, up to
 // 60 s. The values are ceilings well above normal run times: the transcript
 // parsers (session-end, pre-compact) get the most, the prompt and start hooks,
-// which make bounded orchd and git calls, get 10 s, and the pure file writers 5 s.
+// which make bounded orchd and git calls, get 10 s, and the pure file writers
+// and the tool hooks (one orchd call with a 20 ms deadline) 5 s.
 var hookTimeoutSeconds = map[string]int{
 	"session-start":      10,
 	"user-prompt-submit": 10,
 	"stop":               5,
 	"session-end":        15,
 	"pre-compact":        15,
+	"pre-tool-use":       5,
 	"post-tool-use":      5,
 	"subagent-stop":      5,
+	"cwd-changed":        5,
 }
 
 // claudeHookFields sets Claude Code's per-hook timeout (seconds) and runs
-// post-tool-use in the background.
+// post-tool-use and cwd-changed in the background.
 //
-// Reason for async: post-tool-use only drops hand-off files for orchd and
-// prints nothing, so there is no decision or context for Claude to wait on.
-// Claude Code does not enforce timeout on an async hook; it is written anyway
-// so the bound still holds if async is ever removed.
+// Reason for async: both only hand events to orchd and print nothing, so
+// there is no decision or context for Claude to wait on. Claude Code does not
+// enforce timeout on an async hook; it is written anyway so the bound still
+// holds if async is ever removed. pre-tool-use stays synchronous: only a hook
+// Claude waits for can deny a call, which the tool guard (SP-041) needs.
 func claudeHookFields(slug string) map[string]any {
 	f := map[string]any{}
 	if s, ok := hookTimeoutSeconds[slug]; ok {
 		f["timeout"] = s
 	}
-	if slug == "post-tool-use" {
+	if slug == "post-tool-use" || slug == "cwd-changed" {
 		f["async"] = true
 	}
 	return f

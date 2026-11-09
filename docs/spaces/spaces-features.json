@@ -403,7 +403,7 @@
         "id": "RC-02",
         "kind": "decision",
         "topic": "Codex SessionStart and SessionEnd hooks",
-        "detail": "orch's Codex install registers no SessionStart or SessionEnd hook, so Codex sessions are never pinned. Proposal: register orch-hook session-start and session-end for Codex (D-20 covers Codex).",
+        "detail": "orch's Codex install registers no SessionStart or SessionEnd hook, so Codex sessions are never pinned. Proposal: register orch-hook session-start and session-end for Codex (D-20 covers Codex). Update 2026-11-09 (SP-012 session): the current install code already registers SessionStart and SessionEnd (and the other eventSlugs) in ~/.codex/hooks.json, checked by TestCodexHooksUnchanged; SP-012 keeps them in its Codex event map. If Codex sessions are still unpinned, the installed hooks.json probably predates that or its hooks are untrusted; `orch install --target codex` (dry run) shows the difference.",
         "source": "https://github.com/willesq/orchestrator/pull/147",
         "raised": "2026-11-08",
         "affects": [
@@ -723,6 +723,82 @@
         "raised": "2026-11-08",
         "affects": [
           "SP-011"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-29",
+        "kind": "follow-up",
+        "topic": "SP-012 audit lows for the command log store",
+        "detail": "The SP-012 security audit found no critical/high/medium issues. Its lows L2-L4 apply once SP-014 stores events: cap each RecordToolEvent string field (e.g. 4 KiB; only gRPC's 4 MiB bounds them now); treat events from unresolved callers (callerNone) as untrusted or drop them, and bound the intake (a buffered channel that drops when full, with a count) so a flood cannot build up memory; redact tool_input with the ingest scrubber before storing it and never log the request. L1 (uncapped hook stdin) was fixed with an 8 MiB cap.",
+        "source": "https://github.com/willesq/orchestrator/pull/150",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-014"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-30",
+        "kind": "decision",
+        "topic": "Tool events lost while orchd is down or slow",
+        "detail": "pre-tool-use gives orchd 20 ms; when orchd is down, refuses or is slower, the event is lost (the tool call still runs). A file spool fallback was not added because a spool cannot carry the caller's process identity, so its events could not be attributed (INV-02). Decide whether SP-014 should record gaps (e.g. orchd counting hook connections it did not finish, or a per-session sequence number) or accept the loss while the guard is off. SP-041 fails closed while enforcing, so this matters only for logging.",
+        "source": "https://github.com/willesq/orchestrator/pull/150",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-014",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-31",
+        "kind": "decision",
+        "topic": "Queued tasks may call RecordToolEvent",
+        "detail": "RecordToolEvent was added to taskCallable so tool calls of Claude Code/Codex runs started by the queue are logged; without it orchd's queued-caller guard refused them. The event is attributed to the task orchd resolved, never to the session_id it names. Confirm.",
+        "source": "https://github.com/willesq/orchestrator/pull/150",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-014",
+          "SP-025"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-32",
+        "kind": "decision",
+        "topic": "The tool hooks can be turned off in orch settings",
+        "detail": "pre-tool-use and cwd-changed are Claude Code hooks like the others, so `orch settings` can turn them off (install then leaves them alone and status shows the harness's tool hooks as missing, a warning). That silently stops the command log and, after SP-041, the guard. Decide whether SP-042 (self-protection) or SP-070 (operator-only switches) should stop them from being toggled, or make turning them off operator-only.",
+        "source": "https://github.com/willesq/orchestrator/pull/150",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-042",
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-33",
+        "kind": "user-action",
+        "topic": "Wire the tool hooks on this Mac after release",
+        "detail": "Once a release contains SP-012: run `orch install --target claude-code --apply` and `orch install --target codex --apply` (dry run first), then review and trust the new PreToolUse entry in Codex. `orch status` shows '<harness> tool hooks wired' when done. Until then nothing is logged.",
+        "source": "https://github.com/willesq/orchestrator/pull/150",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-012"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-34",
+        "kind": "follow-up",
+        "topic": "orch-hook exit status before the guard enforces",
+        "detail": "SP-012's independent verifier noted that Run's recover() covers only the main goroutine: a panic in another goroutine (e.g. inside gRPC) or a Go runtime fatal error exits with status 2, which Claude Code reads as blocking a PreToolUse call. Unlikely with the 8 MiB stdin cap, but SP-041 should decide the exit-status contract explicitly (e.g. a top-level guard in cmd/orch-hook, or treating exit 2 as the intended deny path only when enforcing). Also: RecordToolEvent's 'at' is taken after stdin is parsed, not at process start as the proto comment says; fix the comment or the timing in SP-014.",
+        "source": "https://github.com/willesq/orchestrator/pull/150",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-041",
+          "SP-014"
         ],
         "status": "open"
       }
@@ -1655,7 +1731,13 @@
               "threshold": "3 pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestToolHooksHandEveryFixtureToOrchd (internal/hook/tooluse_test.go) runs every recorded PreToolUse and CwdChanged payload through run() (stdin decode to dispatch): 52/52 fixtures (claude-code PreToolUse 25, CwdChanged 6; codex PreToolUse 21) each hand exactly one RecordToolEvent to orchd carrying session_id, cwd, tool_name, tool_input (JSON-equal), tool_use_id, agent_id, agent_type, old_cwd, new_cwd and the hook's start time, and print nothing (allow). 100%. The guard does not exist yet (SP-041/SP-070), so 'switched off' is the only state. TestRecordedPayloadsParse still passes.",
+            "a1 (orchd side): TestRecordToolEvent (internal/daemon/toolevents_test.go): orchd takes every valid event and attributes it to the caller resolved from the connection (a request naming another session_id is still the resolved session's), and refuses a bad event name, a malformed session ID or tool_input over 1 MiB with InvalidArgument. RecordToolEvent is added to taskCallable so queued tasks' events are not refused by the queued-caller guard (found by TestToolHookCost).",
+            "a2: TestToolHookCost (internal/daemon/toolevents_test.go) builds the real orch-hook, serves orchd's real peer identification + guardQueuedCallers + caller resolver on a unix socket, and runs `orch-hook pre-tool-use` 1,000 times from a fake harness process named claude holding a pin: p50 10.81 ms, p90 11.53 ms, p99 13.42 ms, max 371 ms (n=1000, darwin/arm64, M3 Max, 2026-11-09). p99 < 30 ms. All 1,000 events reached orchd attributed to the pinned session. The hook waits only for orchd to take the event (RPC deadline 20 ms), never for its processing.",
+            "a3: TestToolHooksAlwaysAllow (internal/hook/tooluse_test.go), for both pre-tool-use and cwd-changed: panic in the handler, bad JSON, unreachable orchd (real orchdclient.Dial to a missing socket), plus dial failure, orchd refusing, orchd hanging (returns at the 20 ms deadline), empty input and a payload over the 8 MiB stdin cap: each returns nil, prints nothing and finishes within 200 ms. 3/3 required cases pass (16 subtests in all).",
+            "Gates on 2026-11-09: gofmt clean; go vet ./... exit 0; make cover exit 0 (tooluse.go 100%, toolevents.go 95.5%, hook.go 90.9%, callers.go 96.4%); go test ./... failed only TestWatchTasksStreamsSnapshotChangesAndTicks, the known intermittent test (RC-14), which passed 5/5 on rerun. security-audit: 0 critical/high/medium; low L1 (uncapped hook stdin) fixed with an 8 MiB cap; L2-L4 recorded as RC-29."
+          ]
         },
         {
           "id": "SP-012.2",
@@ -1676,18 +1758,23 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestToolHookInstall (internal/install/toolhooks_test.go), one subtest per harness with a temp --home holding an install from before SP-012 plus a third-party hook on each new event: claude-code (PreToolUse sync timeout 5, CwdChanged async timeout 5) and codex (PreToolUse; no CwdChanged, which Codex lacks). Each checks the 4 properties: dry run by default (Print reports MODIFY and the file is byte-identical), backup of the original on apply, idempotent repeat (no file changes, no backups), and the third-party hook kept first with its fields. 2 harnesses x 4 properties pass. TestClaudeToolHookFields, TestClaudeHookTimeouts and TestCodexHooksUnchanged updated for the new events.",
+            "a1 (CLI smoke, 2026-11-09): built orch with ORCH_DATA_DIR/ORCH_CONFIG_DIR in a scratch dir; `orch install --home <tmp> --target claude-code` (dry run) lists PreToolUse timeout=5 and CwdChanged async=true timeout=5 and writes nothing; `--target codex --apply` writes hooks.json with PreToolUse and no CwdChanged, and a repeat apply says 'already fully installed'. claude-code --apply was not run because its steps invoke the real claude CLI.",
+            "a2: TestToolHooksLines (internal/status/sections_test.go): orch status prints '<harness> tool hooks' under harness wiring: 'wired' with the events, 'missing <events>' (warn, naming orch install --target <h> --apply), 'unknown' on an unreadable hooks file, and Gemini as 'not covered by spaces'. TestToolHooksCoverage covers install.ToolHooks (Gemini not covered, missing/malformed/unreadable hooks file, look-alike command not counted). Smoke: `HOME=<tmp> orch status` showed 'codex tool hooks wired (PreToolUse)', 'claude-code tool hooks missing PreToolUse, CwdChanged', 'gemini tool hooks not covered by spaces'.",
+            "Gates: as for SP-012.1; toolhooks.go 100%, status.go 97.0%, status_cmd.go 90.6%, claudecode.go 94.6%, codex.go 94.1%. Docs: docs/internals/install.md (events, timeouts, Codex map, 'Tool hook coverage'), docs/internals/hooks.md, docs/OPERATIONS.md."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "19d8d70c4093db3b6bac14d675c36cb1c17a67e2",
+      "verified_at": "2026-11-09T02:41:25Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "128033fc1b304383a7d8f6966af3d121a3fb4320821c0352f64adf392162f561",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-012-tool-hooks",
+      "pr": "https://github.com/willesq/orchestrator/pull/150"
     },
     {
       "id": "SP-013",
