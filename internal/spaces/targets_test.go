@@ -221,8 +221,9 @@ func targetCases() []targetCase {
 		// file tools
 		tc("Read", func() (string, string) { return toolIn("Read", `{"file_path":"/scratch/outside/file.txt"}`) },
 			targetCase{paths: []string{"/scratch/outside/file.txt"}}),
-		tc("Write relative", func() (string, string) { return toolIn("Write", `{"file_path":"a/b.go","content":"/etc/x"}`) },
-			targetCase{paths: []string{"/scratch/project/a/b.go"}, notPaths: []string{"/etc/x"}}),
+		tc("Write relative, content searched", func() (string, string) {
+			return toolIn("Write", `{"file_path":"a/b.go","content":"see /z/x"}`)
+		}, targetCase{paths: []string{"/scratch/project/a/b.go", "/z/x"}}),
 		tc("Edit", func() (string, string) {
 			return toolIn("Edit", `{"file_path":"/a/x.go","old_string":"a","new_string":"b"}`)
 		}, targetCase{paths: []string{"/a/x.go"}}),

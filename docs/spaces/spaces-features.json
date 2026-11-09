@@ -867,7 +867,7 @@
         "id": "RC-39",
         "kind": "follow-up",
         "topic": "Flaky daemon tests seen while verifying SP-013",
-        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go:117, 'WatchTasks ended with context canceled') fails about 1 run in 4 on origin/main 644dcaf as well as on the SP-013 branch (5/20 and 6/20 with -count=20). TestCallerSessionCost failed once (p99 5.5 ms against a 5 ms bound) while a 16-worker fuzz run loaded the CPU. Neither touches SP-013's code. Fix the first; consider making the second tolerant of a loaded machine or skipping it under -short.",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go:117, 'WatchTasks ended with context canceled') fails about 1 run in 4 on origin/main 644dcaf as well as on the SP-013 branch (5/20 and 6/20 with -count=20). TestCallerSessionCost failed once (p99 5.5 ms against a 5 ms bound) while a 16-worker fuzz run loaded the CPU. Neither touches SP-013's code. Fix the first; consider making the second tolerant of a loaded machine or skipping it under -short. The SP-013 verifier also saw TestRunMeasuresFailedRuns (internal/agentrun) fail twice on the branch under full-suite load (DurationMS 199 against a 200 ms timeout; never on main in 7 full and 20 isolated runs; the package is untouched by SP-013) and TestToolHookCost once (passes in isolation, p99 about 14 ms against 30 ms). Both look load-sensitive.",
         "source": "https://github.com/willesq/orchestrator/pull/151",
         "raised": "2026-11-09",
         "affects": [],
