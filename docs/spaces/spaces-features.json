@@ -1844,7 +1844,7 @@
       "attempts": 1,
       "criteria_sha256": "4470493d234020d46f8d683c7f1775be07bef546273e9988e3a82d08ad7e8bd1",
       "branch": "feat/sp-013-tool-targets",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/151"
     },
     {
       "id": "SP-014",
