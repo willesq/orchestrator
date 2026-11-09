@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/pelletier/go-toml/v2"
 )
 
 // Codex wires the orchestrator into OpenAI Codex CLI: MCP in ~/.codex/config.toml
 // (TOML) and hooks in ~/.codex/hooks.json (JSON). Codex's hook engine uses the
-// same event names as Claude ("Claude-style engine"), so the event map is reused.
+// same event names as Claude ("Claude-style engine"), so the event map is
+// reused, less the events Codex lacks (codexEvents).
 //
 // Non-managed hooks require review and trust in Codex before they execute.
 type Codex struct{}
@@ -27,6 +29,12 @@ func (c Codex) Edits(bins Bins, home string) []Edit {
 		plistEdit(bins.Orchd, home),
 	}...)
 }
+
+// codexEvents are the Claude Code events Codex also has. Codex has no
+// CwdChanged: its shell calls never carry a cd over (docs/internals/hooks.md).
+var codexEvents = slices.DeleteFunc(slices.Clone(eventSlugs), func(e struct{ Slug, Event string }) bool {
+	return e.Event == "CwdChanged"
+})
 
 func codexTOMLEdit(bins Bins, home string) Edit {
 	path := filepath.Join(home, ".codex", "config.toml")
@@ -74,7 +82,7 @@ func codexHooksEdit(bins Bins, home string) Edit {
 					return nil, "", fmt.Errorf("parse codex hooks.json: %w", err)
 				}
 			}
-			summary := applyHooksWithEvents(root, bins.OrchHook, eventSlugs, nil, nil)
+			summary := applyHooksWithEvents(root, bins.OrchHook, codexEvents, nil, nil)
 			out, err := marshalJSON(root)
 			if err != nil {
 				return nil, "", err

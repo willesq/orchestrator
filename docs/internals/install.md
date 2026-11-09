@@ -30,21 +30,25 @@ Each adapter returns a plan of edits: `{Path, Compute(old) → new, summary, Nor
 
 **Hooks:** for each event, `hooks.<Event>` gets
 `{"hooks": [{"type": "command", "command": "<bin>/orch-hook <slug>"}]}`. Events: `SessionStart`,
-`UserPromptSubmit`, `Stop`, `SessionEnd`, `PreCompact`, `PostToolUse`, `SubagentStop`, mapped to
-the slugs in [hooks.md](hooks.md). An entry is ours if its command contains the bin path,
+`UserPromptSubmit`, `Stop`, `SessionEnd`, `PreCompact`, `PreToolUse`, `PostToolUse`,
+`SubagentStop`, `CwdChanged`, mapped to the slugs in [hooks.md](hooks.md). The entries carry no
+`matcher`, so `PreToolUse` runs before every tool call. An entry is ours if its command contains the bin path,
 `orch-hook`, or `orchestrator/hooks/`; ours is updated in place, duplicates removed, and other
 tools' entries kept in order.
 
 Each command also carries a `timeout` in seconds, so a stalled orchd cannot hold a turn for
 Claude Code's 600 s default (30 s on `UserPromptSubmit`): `SessionStart` and `UserPromptSubmit`
-10, `Stop`, `PostToolUse` and `SubagentStop` 5, `SessionEnd` and `PreCompact` 15. SessionEnd
+10, `Stop`, `PreToolUse`, `PostToolUse`, `SubagentStop` and `CwdChanged` 5, `SessionEnd` and
+`PreCompact` 15. SessionEnd
 hooks otherwise share a 1.5 s budget, which Claude Code raises to the largest per-hook SessionEnd
 `timeout` (up to 60 s), so the explicit 15 s keeps session capture from being cut off.
-`PostToolUse` is also `"async": true`: it only writes hand-off files and prints nothing, so Claude
-does not wait for it (Claude Code does not enforce `timeout` on async hooks; it is kept as a
+`PostToolUse` and `CwdChanged` are also `"async": true`: they only hand work to orchd and print
+nothing, so Claude does not wait for them (Claude Code does not enforce `timeout` on async hooks; it is kept as a
 bound if async is removed). In `claude -p`, an async hook still running at teardown is killed;
 the hand-off write takes milliseconds, so this is not expected to lose work. An install from
-before these fields reads as drift, and `--apply` adds them in place.
+before these fields reads as drift, and `--apply` adds them in place. `PreToolUse` stays
+synchronous: only a hook Claude waits for can deny a call, which the spaces tool guard needs. It
+is fast because it makes one orchd call with a 20 ms deadline ([hooks.md](hooks.md#tool-hooks)).
 
 **MCP servers:** `mcpServers.rag = {"command": "<orch>", "args": ["mcp", "rag"]}`, likewise `queue`.
 
@@ -169,8 +173,9 @@ rule case through the pinned analyzer's `explain --json` (it analyzes and execut
 
 - `~/.codex/config.toml`: `[mcp_servers.orch_rag]` and `[mcp_servers.orch_queue]` with the same
   command and args.
-- `~/.codex/hooks.json`: same hook shape and events as Claude Code, without the `timeout` and
-  `async` fields, which have not been checked against Codex's hook schema. Codex runs hooks only
+- `~/.codex/hooks.json`: same hook shape and events as Claude Code except `CwdChanged`, which
+  Codex does not have, and without the `timeout` and `async` fields, which have not been checked
+  against Codex's hook schema. Codex runs hooks only
   after the user reviews and trusts them.
 - `~/.codex/AGENTS.md` (or a nonempty `AGENTS.override.md`, which Codex prefers): a managed block
   telling the agent to read the shared policy, since Codex does not expand `@` imports.
@@ -185,6 +190,16 @@ configuration documents only `type`, `command`, `name`, `timeout` and `descripti
 is written; Gemini does not wait for `SessionEnd` hooks at all (best effort), so that timeout only
 bounds the process. Gemini's payload schema is assumed to match Claude Code's; this is not
 verified.
+
+## Tool hook coverage
+
+Spaces (the command log and the tool guard) see a harness's tool calls only through its
+`PreToolUse` hook, plus `CwdChanged` for Claude Code. `orch status` reads each harness's hooks
+file and prints a `<harness> tool hooks` line under harness wiring: `wired` with the events,
+`missing <events>` (a warning naming the `orch install` that fixes it), or, for Gemini,
+`not covered by spaces`. Spaces cover Claude Code and Codex only (D-20), so the Gemini adapter
+installs no tool hooks. A hook counts as wired only when its command is exactly
+`<bin>/orch-hook <slug>`; a hook turned off in orch's settings reads as missing.
 
 ## Common
 

@@ -80,6 +80,18 @@ type HarnessInfo struct {
 	// this machine; any is a warning, since agents then lack that policy.
 	SecurityOff []string `json:"security_off,omitempty"`
 	Err         string   `json:"error,omitempty"`
+	// ToolHooks reports the tool-call hooks spaces depend on; nil when not
+	// inspected.
+	ToolHooks *ToolHooks `json:"tool_hooks,omitempty"`
+}
+
+// ToolHooks is whether a harness hands its tool calls to orchd (spaces plan
+// SP-012). Spaces cover only some harnesses (D-20).
+type ToolHooks struct {
+	Covered bool     `json:"covered"`
+	Wired   []string `json:"wired,omitempty"`
+	Missing []string `json:"missing,omitempty"`
+	Err     string   `json:"error,omitempty"`
 }
 
 // Deps are the seams Collect reads the world through; the CLI wires the real ones
@@ -294,9 +306,31 @@ func harnessSection(d Deps) Section {
 			addDetail("security instructions off: " + strings.Join(h.SecurityOff, ", "))
 		}
 		sec.Lines = append(sec.Lines, l)
+		if h.ToolHooks != nil {
+			sec.Lines = append(sec.Lines, toolHooksLine(h.Name, *h.ToolHooks))
+		}
 	}
 	sec.Lines = append(sec.Lines, safety...)
 	return sec
+}
+
+// toolHooksLine reports a harness's tool-call hooks: the command log and the
+// tool guard see only the calls of harnesses whose hooks are wired.
+func toolHooksLine(harness string, t ToolHooks) Line {
+	l := Line{Name: harness + " tool hooks"}
+	switch {
+	case t.Err != "":
+		l.Value, l.Level, l.Detail = "unknown", LevelWarn, t.Err
+	case !t.Covered:
+		l.Value, l.Level = "not covered by spaces", LevelInfo
+		l.Detail = "spaces cover Claude Code and Codex only; this harness's tool calls are not logged or guarded"
+	case len(t.Missing) > 0:
+		l.Value, l.Level = "missing "+strings.Join(t.Missing, ", "), LevelWarn
+		l.Detail = "tool calls are not logged — run: orch install --target " + harness + " --apply"
+	default:
+		l.Value, l.Level, l.Detail = "wired", LevelOK, strings.Join(t.Wired, ", ")
+	}
+	return l
 }
 
 func subsystemSection(d Deps, resp *orchdv1.StatusResponse, err error) Section {
