@@ -1562,7 +1562,12 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestResolveCLIToAncestorPin (internal/daemon/caller_session_test.go): identify over a fake tree (orch CLI 950 -> zsh 902 -> claude 400 -> Terminal 30), with the CLI's own cwd in dirs[1] where codex 410's session sess-c is pinned, resolves to claude 400's pin sess-a (first_cwd dirs[0]); a CLI under a nested, unpinned claude 420 also resolves to sess-a; after /clear the process's live pin sess-a2 is named. Related: TestResolveKeepsOnlyTheNearestHarnessPin, TestResolveCachesPerConnection. PASS, go1.27.3 darwin/arm64, 2026-11-08, commit 7229821.",
+            "a2: TestResolveIgnoresReusedPID: claude 400's PID now has a start time one hour later, so identify records the new identity and the caller resolves to 'none', not sess-a; a hand-built identity with an earlier start time also resolves to 'none'. For tasks: TestResolveTaskIgnoresReusedCLIPID (a task CLI PID 77 reused by a later task's CLI resolves to a task without a record) and TestLiveByProcess (internal/agentrun/live_test.go). PASS, go1.27.3 darwin/arm64, 2026-11-08, commit 7229821.",
+            "a3: TestResolveNoSession, 3 subtests PASS: 'broken lineage' (shell 902 missing mid-walk -> identify error -> none; a harness-walk error alone -> none), 'unknown harness' (CLI 970 under unpinned claude 401 -> none), 'unsupported platform' (errPeerUnsupported -> none; no start-time reader -> none). Also TestResolveFailsClosed (no peer, foreign auth, unknown process, unresolved context, nil resolver, unreadable pin store -> none). go1.27.3 darwin/arm64, 2026-11-08, commit 7229821.",
+            "a4: TestResolveIgnoresRequestCwd: through the unary interceptor, a DispatchRequest whose cwd is dirs[1] (where another session is pinned) from the CLI under claude 400 resolves to sess-a; through the stream interceptor, a call carrying 'cwd' metadata of dirs[1] also resolves to sess-a. The resolver reads no request field (callerResolver.unary ignores req). TestResolveOperatorAndTasks: a reported orch-task-id only marks a task and never selects a record. PASS, go1.27.3 darwin/arm64, 2026-11-08, commit 7229821."
+          ]
         },
         {
           "id": "SP-011.2",
@@ -1576,7 +1581,9 @@
               "threshold": "< 5 ms"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestResolveCost (internal/daemon/caller_session_cost_test.go) re-executes the test binary as a program named claude, which starts a child; for 1000 new connections it runs orchd's identify over the real process table (procstat.Parent/ReadProgram/StartTime, walking to launchd) and resolves to the pin in a temp orch.db holding 301 pins: p50 0.56 ms, p99 0.79 ms, max 1.15 ms per connection; cached calls on that connection p50 83 ns, p99 125 ns. Threshold p99 < 5 ms: met. Apple M3 Max, go1.27.3 darwin/arm64, 2026-11-08, commit 7229821. Earlier runs: p99 0.75-0.83 ms. TestResolverOnSocket shows newGRPCServer resolves every call served over a real socket."
+          ]
         }
       ],
       "status": "in_progress",
