@@ -2109,11 +2109,11 @@
           ]
         }
       ],
-      "status": "in_progress",
+      "status": "blocked",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": null,
+      "blocked_reason": "Waiting on CI (DOD-9) only. Independent verifier round 2 at 5c004d8 passed every acceptance item and DOD-1..DOD-8; the Linux test job passed (run 42672241228), but GitHub Actions did not start the macOS jobs: the ci workflow's ORT build job (macos-latest) was never created and cannot be re-run, and the app workflow (macos-26) fails at startup with 'workflow file issue' on two attempts (run 42672241331), with no workflow change on the branch and the same app.yml passing at 9bf3551. Likely an account-side limit (e.g. the Actions spending limit for macOS minutes); the user needs to check it. Once macOS jobs run green, mark done with verified_sha 5c004d8 or a re-verified later commit.",
       "attempts": 1,
       "criteria_sha256": "f6d1c6a76f28bdac3e1409ce65751af30acd36c96b1963d4b5bb539ac45ddb6f",
       "branch": "feat/sp-014-command-log",
