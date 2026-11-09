@@ -380,6 +380,11 @@
         "id": "D-27",
         "decision": "After an SP-011 test wrote to the real orch.db (migrating it from schema 22 to 25 and adding 301 test rows to session_pins), delete only the test rows and keep schema 25; the new tables stay empty until a release uses them.",
         "date": "2026-11-08"
+      },
+      {
+        "id": "D-28",
+        "decision": "Tool-call target extraction (SP-013) is best-effort, not a complete analysis of shell. After two security-audit rounds kept finding new ways around it (62 in round 2), fix the broad classes and record the rest as accepted risk. Targets is advisory evidence for the guard; the OS sandbox deny rules (SP-046) and per-job GitHub accounts (SP-063) are the hard boundary, and SP-040 decides how far to trust Targets.",
+        "date": "2026-11-09"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -799,6 +804,85 @@
         "affects": [
           "SP-041",
           "SP-014"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-35",
+        "kind": "decision",
+        "topic": "New dependency mvdan.cc/sh/v3 for parsing shell commands",
+        "detail": "SP-013 parses Bash tool commands with mvdan.cc/sh/v3 v3.14.1 (pure Go, BSD-3-Clause, the standard Go bash parser; used for its syntax and expand packages only, with command substitution, globbing and ~user lookups disabled). A hand-written tokenizer would be easy to bypass with quoting, $(...), subshells, braces or nested bash -c. Confirm the dependency is acceptable, or ask for a hand-written parser instead.",
+        "source": "https://github.com/willesq/orchestrator/pull/151",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-013",
+          "SP-040",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-36",
+        "kind": "follow-up",
+        "topic": "How the guard reads Targets: ancestors, prefixes and opaque calls",
+        "detail": "From the SP-013 security review. (1) A path or prefix that is an ancestor of another space's root (grep -r ~/code, find ~/code -exec ...) reaches into that space; SP-040 must treat it so, since Targets reports such paths as plain paths. (2) Targets flags many forms opaque (eval, python -c, unknown variables, git -c outside an allowlist, a cd in a loop, ...). SP-040 must decide what 'block other jobs' mode does with an opaque call, and should measure how often ordinary agent commands come back opaque before choosing. (3) Targets stops at 100 ms or 512 targets and flags the call opaque; with INV-13 the enforcing guard must refuse when that happens, not allow.",
+        "source": "https://github.com/willesq/orchestrator/pull/151",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-040",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-37",
+        "kind": "follow-up",
+        "topic": "Known limits of tool-call target extraction",
+        "detail": "Accepted for SP-013 under D-28 and documented in docs/internals/hooks.md: paths a program computes at run time (compiled tools, interpreter logic beyond literal paths, commands found on PATH whose scripts are not read) are not seen; string arguments of unknown programs and commands inside unknown wrappers are walked only as a guess, so what cannot be read there does not make the call opaque; a single-component link created by archive extraction, cp or mv and used by bare name in the same call is not flagged; the parser follows bash, and of zsh only two-operand cd, $var[...] subscripts, cdpath and running the last pipeline stage in the current shell are handled; ssh host aliases count as GitHub only when the alias contains 'github' (~/.ssh/config is not read), and ssh commands are walked as if run in this machine's $HOME; whether Codex fires PreToolUse for write_stdin is unverified (Targets flags it opaque). See RC-38 for what cannot be verified at all.",
+        "source": "https://github.com/willesq/orchestrator/pull/151",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-040",
+          "SP-041",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-38",
+        "kind": "follow-up",
+        "topic": "What the tool guard cannot verify today: candidates for more security layers",
+        "detail": "Recorded at the user's request (2026-11-09) to revisit when adding layers. Targets reads only the tool input, so none of these can be verified from it: (1) code a command runs that is not in the input: git hooks, Makefile recipes, npm/package scripts, test runners, compiled tools, and scripts found on PATH; (2) shell state from earlier calls or the user's rc files: functions and aliases Claude Code's shell snapshot loads, exported variables, shopt/setopt options, a cwd changed in a previous call; (3) variables and config that make tools run code or change where they read: PAGER/EDITOR/VISUAL/LESSOPEN/PS4-style variables, ~/.gitconfig and repo .git/config (aliases, hooks, url rewrites), ssh config host aliases; (4) paths computed at run time by interpreters or tools, and files changed by earlier calls or by other processes between check and use; (5) zsh-only syntax, since the parser follows bash; (6) GitHub targets named indirectly: numeric repo IDs, GraphQL, search, org-wide listings, and API calls made by MCP servers or tools themselves; (7) MCP servers' own semantics (relative paths resolve against the server's project, not the cwd); (8) unverified harness facts: whether Codex fires PreToolUse for write_stdin and exec_command's shell field, and whether hook payloads ever omit the tool input. Candidate layers: OS sandbox deny rules per job (SP-046), per-job GitHub accounts (SP-063), outbound-term git hooks (SP-044/SP-045), a guard 'strict' mode that refuses opaque calls (D-12), running jobs under separate macOS users or containers, and auditing the command log for opaque calls.",
+        "source": "https://github.com/willesq/orchestrator/pull/151",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-040",
+          "SP-041",
+          "SP-046",
+          "SP-063"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-39",
+        "kind": "follow-up",
+        "topic": "Flaky daemon tests seen while verifying SP-013",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go:117, 'WatchTasks ended with context canceled') fails about 1 run in 4 on origin/main 644dcaf as well as on the SP-013 branch (5/20 and 6/20 with -count=20). TestCallerSessionCost failed once (p99 5.5 ms against a 5 ms bound) while a 16-worker fuzz run loaded the CPU. Neither touches SP-013's code. Fix the first; consider making the second tolerant of a loaded machine or skipping it under -short.",
+        "source": "https://github.com/willesq/orchestrator/pull/151",
+        "raised": "2026-11-09",
+        "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-40",
+        "kind": "follow-up",
+        "topic": "SP-013 audit lows and ordinary commands that come back opaque",
+        "detail": "From the third SP-013 security review (all high and medium findings fixed). Left as low: (1) os.Lstat/Stat can block on an autofs or stale network mount, and the 100 ms deadline cannot interrupt a blocked syscall; (2) ordinary forms that are opaque by design and may matter for SP-040's opaque policy: 'for f in *.go; do ... \"$f\"; done' (loop variable), scripts that start with cd \"$(dirname \"$0\")/..\", '| xargs', 'make test V=1', backticks inside a double-quoted commit message (bash runs them), 'echo {1..10}'; (3) npm/package.json/pyproject scripts and 'python -m <module>' code are not followed (RC-38). Decide in SP-040 whether to model any of (2) before the guard enforces.",
+        "source": "https://github.com/willesq/orchestrator/pull/151",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-040",
+          "SP-041"
         ],
         "status": "open"
       }

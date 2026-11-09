@@ -46,6 +46,96 @@ process start to exit over 1,000 runs. The tool guard (SP-041) will add refusals
 background ([install.md](install.md#claude-code)). Until the command log store (SP-014) exists,
 orchd counts these events and drops them.
 
+### Tool-call targets
+
+`spaces.Targets(tool, tool_input, cwd)` (`internal/spaces/targets*.go`, SP-013) lists everything
+a tool call reaches, for the command log and the tool guard: `paths`, `cd_dest`, `git_dirs`,
+`gh_repos` (lowercase `owner/repo`), `prefixes` and `opaque` with `opaque_reasons`. Checking `cd`
+alone would be easy to get around, so it reads every form the call can take, and it flags what
+it cannot read rather than returning less. It is best-effort by decision (D-28): no static
+reading of shell is complete, so it is evidence for the guard, and the OS sandbox and per-job
+accounts remain the hard boundary.
+
+- **Shell tools.** `Bash`, `shell`, Codex `exec_command` (`cmd`), a `command` string or argument
+  vector, and `workdir` are parsed as bash with `mvdan.cc/sh/v3`. Each argument, `--opt=value`,
+  path-like `-Xvalue` and redirection target is a path. So is every absolute, `~`, `file://` or
+  `a/b`-style path written *inside* an argument or here-document, which catches code passed as a
+  string (`awk`, `sed`, `docker -v src:dst`, `watch '…'`). Quotes, braces, `~`, `$HOME`, `$PWD`
+  and variables the line itself sets are expanded. `~user` is never looked up.
+- **Working directory.** The walker keeps the set of directories the shell may be in, and relative
+  paths are reported against each one. A `cd` can fail or sit in a branch that does not run, so
+  the directory before it stays possible. A subshell, pipeline stage or background job keeps its
+  `cd` to itself. A `cd` in a loop or a function, `cd -`/`popd` to a directory set before the
+  call, and more than 16 possible directories make the cwd unknown, and any later relative path
+  is opaque. A pipeline's last stage runs in the current shell, as in zsh. Builtins that set
+  variables (`read`, `printf -v`, `unset`, `let`, a `for` variable) make the line's variables
+  unknown again. `env -C`, `sudo -D` (also attached, `-D/dir`), `make -C` and `pushd` move the
+  command.
+- **Commands.** The wrappers `sudo`, `env`, `timeout`, `nice`, `nohup`, `setsid`, `chroot`,
+  `exec`, `command`, `xargs`, `rtk` and similar are stripped. `git -C` (cumulative),
+  `--git-dir`, `--work-tree` and `GIT_DIR` are git dirs. `gh -R`/`--repo`, `GH_REPO`,
+  `gh api repos/<o>/<r>`, `gh repo <cmd> <o>/<r>`, git remotes on a host whose name contains
+  `github` (including ssh aliases such as `git@github-acme:`) and github.com URLs are repos.
+  `bash -c '<literal>'`, `su -c`, `watch`, `trap` and `find -exec` are walked as nested commands,
+  up to 4 deep. For any other program, a shell, git or other known command among its arguments
+  (`arch -arm64 sh -c …`, `uv run git …`) and any argument that reads as a command line
+  (`ssh host 'cd x; …'`, `tmux new '…'`) are walked too. These are guesses, since the word may be
+  data, so they add targets but never make the call opaque. An `ssh` command is walked as if run in
+  `$HOME`. `make` also searches the makefile for paths. A script the call runs (`bash x.sh`, `./x.sh`, `source x.sh`, `--rcfile`) is read
+  (64 KB each, 256 KB per call) and walked; `source` keeps its `cd`. A script in another language
+  (by its `#!` line) or run by `python`, `node` and similar is searched for paths. A compiled
+  program (ELF or Mach-O magic) is not read; any other file, even with NUL bytes, is. A script
+  written by the call, through a redirection or `cp`, `mv`, `tee`, `sed -i`, `curl` and other
+  writers, is opaque, since it cannot be read ahead.
+- **File and other tools.** `file_path`, `notebook_path`, `path`, `Glob`'s pattern, and any field
+  whose name contains `path`, `file`, `dir`, `folder`, `cwd` or `root`, or is `source`, `dest`,
+  `target`, `from` or `to`, are paths. Every other string field, including `Write` content, is
+  searched for absolute paths, `file://` URIs and GitHub URLs. `EnterWorktree` is a `cd` into
+  `.claude/worktrees/<name>`. Codex's `apply_patch` (as a tool, an argument or a here-document)
+  lists its files on `*** Add|Update|Delete File:` and `*** Move to:` lines. `Agent` and other
+  tools without file access are skipped; a subagent's own calls are guarded.
+- **Paths are physical.** Symlinks are resolved one component at a time, so `link/..` is the
+  parent of the link's target. A `cd` follows the logical path first, as bash's `cd -L` does. A
+  path inside a linked git worktree is listed twice: as it is, and at the same place in the main
+  checkout (the worktree's `.git` file names its git dir, whose `commondir` is the main `.git`).
+  The guard checks both. A glob, or a word known only up to a variable or substitution, adds the
+  directory it may reach anything under to `prefixes`: `cat ~/code/*/x` gives `~/code`. A
+  variable holding glob characters globs too.
+- **Opaque.** Opaque means part of the call cannot be analysed: `eval`, `alias`, a shell or
+  interpreter reading code from stdin (also `/dev/stdin`), inline interpreter code (`python -c`,
+  `perl -le`, `node -pe`), `base64 -d`, `xxd -r`, `xargs`, `env -S`, `flock`, non-POSIX shells
+  (`pwsh`, `nu`), `awk` programs using `system`, `getline` or pipes, `sqlite3 .shell`,
+  `make --eval`, and `git -c` or `git config` with a key that can run code or redirect git (all
+  but a short allowlist such as `user.*`), git flags and subcommands that run a command
+  (`rebase -x`, `fetch --upload-pack`, `bisect run`, `submodule foreach`, `filter-branch`),
+  `make VAR=…` and `make -f -`, `sed`'s `e` command, `shopt`/`setopt`/`set -o`, `gh search`,
+  `gh alias`, `gh extension`, `gh repo list` and `gh api` endpoints outside `repos/<o>/<r>` (other
+  than a few about the signed-in account). Also: variables that run code or redirect tools
+  (`CDPATH`, `PS4`, `EDITOR`, `VISUAL`, `PAGER`, `LESSOPEN`, `HOME`, `GIT_SSH*`, `GIT_CONFIG*`,
+  `BASH_ENV`, anything ending in `_COMMAND`, `EDITOR` or `PAGER`); namerefs; zsh `$var[…]`
+  subscripts; command, process and arithmetic substitution; unknown
+  variables; `~user`; zsh's two-operand `cd`; `ln`; a path that does not exist yet used after
+  archive extraction or a git checkout in the same call; a script the call wrote; a git remote on
+  another host; syntax that does not parse; more than 512 targets; a path longer than 4 KB or 256
+  components; more than 8 brace groups in a word; a variable over 64 KB; text over 512 KB to
+  search; and more than 100 ms of work. Paths found by searching inside text, and commands walked
+  as guesses, add targets but never make a call opaque. `"$(cat <<'EOF' … EOF)"` with a quoted
+  delimiter, as agents write commit messages, is read as its literal text.
+
+It never runs anything. It reads the filesystem only to resolve links (at most 40 per path),
+worktrees (4 KB per `.git` file) and scripts, opening without blocking and only regular files,
+so a FIFO or device cannot hang the hook. The parser follows bash, while Claude Code on macOS
+runs commands in the user's shell, usually zsh. zsh's `cd old new` is flagged, but other zsh-only
+syntax is read as bash would read it. What cannot be verified from a tool call at all (code in hooks,
+makefiles and package scripts, shell state from earlier calls, tool config files) is listed in the
+spaces plan's RC-38 as candidates for further layers. Paths a program computes at run time (a compiled tool, a
+script's own logic beyond literal paths) are out of its reach. The guard's other layers, the OS
+sandbox and per-job accounts, cover those. The table tests hold more than 170 command and tool
+forms, including every bypass from both SP-013 security-review rounds. `FuzzTargets` checks for panics,
+relative targets and pathological slowness. `TestTargetsCorpusBudget` replays the corpus a fuzz
+run leaves and checks the 2 ms per-input budget. `Targets` is not called yet: the command log
+(SP-014) will record its result, and the guard (SP-040/SP-041) will decide on it.
+
 ## Prompt context
 
 1. Skip if disabled or the prompt is shorter than `min_prompt_chars`. With `gate: evidence` (the
