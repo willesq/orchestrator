@@ -580,7 +580,7 @@
         "id": "RC-14",
         "kind": "follow-up",
         "topic": "Test and coverage gate integrity",
-        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks fails intermittently (also on main), and scripts/cover.sh silently drops a package whose tests fail, so 'make cover' can skip internal/daemon. TestRunMeasuresFailedRuns is timing-flaky.",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks fails intermittently (also on main), and scripts/cover.sh silently drops a package whose tests fail, so 'make cover' can skip internal/daemon. TestRunMeasuresFailedRuns is timing-flaky. Update 2026-11-09 (SP-014 session): seen again: 'make cover' reported 'All files >= 80%' while omitting every internal/daemon file because the RC-39 flake failed the package; SP-014 measured daemon coverage with a direct go test -coverprofile run instead.",
         "source": "https://github.com/willesq/orchestrator/pull/145",
         "raised": "2026-11-08",
         "affects": [],
@@ -757,7 +757,8 @@
         "affects": [
           "SP-014"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Done in SP-014 (PR #152), 2026-11-09: fields other than tool_input capped at 4 KiB and unknown protobuf fields refused; operator, unresolved and untracked-task events are counted and not stored; the intake is bounded by count, bytes and a per-process share, with drops written as gap records; commands and every text field are redacted before storage, and requests are never logged."
       },
       {
         "id": "RC-30",
@@ -885,7 +886,7 @@
         "id": "RC-39",
         "kind": "follow-up",
         "topic": "Flaky daemon tests seen while verifying SP-013",
-        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go:117, 'WatchTasks ended with context canceled') fails about 1 run in 4 on origin/main 644dcaf as well as on the SP-013 branch (5/20 and 6/20 with -count=20). TestCallerSessionCost failed once (p99 5.5 ms against a 5 ms bound) while a 16-worker fuzz run loaded the CPU. Neither touches SP-013's code. Fix the first; consider making the second tolerant of a loaded machine or skipping it under -short. The SP-013 verifier also saw TestRunMeasuresFailedRuns (internal/agentrun) fail twice on the branch under full-suite load (DurationMS 199 against a 200 ms timeout; never on main in 7 full and 20 isolated runs; the package is untouched by SP-013) and TestToolHookCost once (passes in isolation, p99 about 14 ms against 30 ms). Both look load-sensitive.",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go:117, 'WatchTasks ended with context canceled') fails about 1 run in 4 on origin/main 644dcaf as well as on the SP-013 branch (5/20 and 6/20 with -count=20). TestCallerSessionCost failed once (p99 5.5 ms against a 5 ms bound) while a 16-worker fuzz run loaded the CPU. Neither touches SP-013's code. Fix the first; consider making the second tolerant of a loaded machine or skipping it under -short. The SP-013 verifier also saw TestRunMeasuresFailedRuns (internal/agentrun) fail twice on the branch under full-suite load (DurationMS 199 against a 200 ms timeout; never on main in 7 full and 20 isolated runs; the package is untouched by SP-013) and TestToolHookCost once (passes in isolation, p99 about 14 ms against 30 ms). Both look load-sensitive. Update 2026-11-09 (SP-014 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks 3 of 3 times on origin/main 0ff06db and 2 of 3 on the SP-014 branch (0 of 20 each when run alone), so under full-package load it now fails most runs.",
         "source": "https://github.com/willesq/orchestrator/pull/151",
         "raised": "2026-11-09",
         "affects": [],
@@ -901,6 +902,72 @@
         "affects": [
           "SP-040",
           "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-41",
+        "kind": "follow-up",
+        "topic": "SP-014 audit lows for the command log",
+        "detail": "Accepted as Low in the five SP-014 security reviews: (1) Open checks the path with Lstat, then Chmod and SQLite reopen it by name (a same-user process could swap it; use O_NOFOLLOW and Fchmod), and the data directory is 0755; (2) gap records can land slightly out of order relative to an owner's already-queued later events (counts stay right), and drops recorded under a claimed session are not taken by that session's End; (3) the writer's chain-head cache is not pruned for tasks or sessions that never send SessionEnd; (4) every event whose hook names a session other than the caller's pin costs two orch.db reads on the single writer goroutine, so a hook doing that on purpose slows storage for everyone; (5) four flooding harness processes can still fill the whole queue (each may take a quarter); (6) VerifyToolLog loads a whole chain into memory; (7) redaction of a large RAG document costs about 0.3-0.6 s per MiB on adversarial input (linear).",
+        "source": "https://github.com/willesq/orchestrator/pull/152",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-015",
+          "SP-016",
+          "SP-017"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-42",
+        "kind": "decision",
+        "topic": "How strong the command log's tamper evidence should be",
+        "detail": "SP-014's chain detects modified, deleted and reordered records, but the anchors live in toollog.db itself: records removed after the last anchor, or a chain rewritten from its first record, cannot be detected, and task chains are never anchored (tasks send no SessionEnd). Options: copy each anchor's (seq, hash) into orch.db or another store the guard protects (SP-042), anchor a task's chain when it reaches a terminal state, or accept file-level tamper evidence and rely on the OS sandbox (SP-046) to keep sessions out of the file.",
+        "source": "https://github.com/willesq/orchestrator/pull/152",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-042",
+          "SP-046",
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-43",
+        "kind": "decision",
+        "topic": "Tool events of unpinned sessions are not logged",
+        "detail": "SP-014 stores only events orchd can attribute to a pinned session or a running task; events from a harness with no pin (started before the hooks were installed, or whose PinSession failed), from the operator, or from a task orchd cannot find are counted by caller kind and dropped. Decide whether SP-017's 'unpinned' sessions should get a chain keyed by their harness process.",
+        "source": "https://github.com/willesq/orchestrator/pull/152",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-016",
+          "SP-017"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-44",
+        "kind": "decision",
+        "topic": "Review the broader redaction rules shared with RAG ingestion",
+        "detail": "SP-014 added rules to internal/redact used by docs sync, sources, handoffs, summaries and Ingest: AWS secrets after a space or JSON-escaped quote, Authorization with %20, URL user info, *PASSWORD/SECRET/TOKEN/API_KEY* environment assignments, 'password=' or quoted 'password: \"x\"', query secrets, X-Api-Key/Cookie headers, curl/wget -u, mysql -p, docker-style 'login -p', long --token values, npm/GitLab/Google/Slack refresh tokens. More aggressive rules (any 'login -p', any --password, unquoted YAML password, an unterminated private key) apply to the command log only (redact.RedactCommand), because they damaged ordinary docs in review. Residual false positives in docs are possible (e.g. 'password = example', GH_TOKEN_FILE=...), and a page with more than 25 matches is skipped as a keystore (redact.Threshold). Review whether the shared set is right for RAG. Redaction is pattern-based and so best-effort: each of the five SP-014 review rounds found further credential forms, all fixed with regression tests in internal/redact/redact_test.go. Known remaining command-log gaps (Low): a password starting with '-' after -p (kept so the rule does not swallow the next flag), unquoted YAML values containing spaces or a backslash, and targets JSON redacted with the shared rules only (a path-shaped password could survive in targets). Decide whether to keep extending patterns or treat the OS sandbox and per-job accounts as the boundary, as D-28 did for target extraction.",
+        "source": "https://github.com/willesq/orchestrator/pull/152",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-023"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-45",
+        "kind": "decision",
+        "topic": "A session can hide what it ran by flooding its own queue share",
+        "detail": "Each harness process may hold a quarter of the command log's queue; once it is full its further events are dropped and only a gap record with the count remains. Accepted while the guard only logs (D-30); SP-041 fails closed when enforcing, so a refused call is still decided. Confirm, or decide whether refusals and guard decisions must never be dropped.",
+        "source": "https://github.com/willesq/orchestrator/pull/152",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-041",
+          "SP-048"
         ],
         "status": "open"
       }
@@ -2008,7 +2075,14 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestToolEventsLoggedInOrder (internal/daemon/toollog_test.go) sends 20 interleaved Bash events each from a claude and a codex pinned session plus a cwd-changed through RecordToolEvent; every session's records come back in order with seq 1..n, its harness, tool, cwd, targets JSON (the cat target listed), decision 'logged', and toollog.db is mode 0600. TestEventsStoredInOrderOwnerOnly (internal/toollog/toollog_test.go) checks 2x50 interleaved events per chain and that toollog.db, -wal and -shm are all 0600; TestOpenTightensAndRefuses tightens a 0644 file set to 0600 and refuses a symlink or directory. TestToolLogAttribution, TestResolverRoutesClaimsAndGaps and TestToolLogQuotaPerProcess check that events go only to the caller orchd resolved (or a session of the same harness process) and that operator, unresolved and untracked-task events are not stored. All pass (go test ./internal/toollog ./internal/daemon, darwin/arm64, 2026-11-09; daemon tests also under -race).",
+            "a2: TestCredentialFixturesRedacted stores 14 credential fixtures as Bash commands and as another tool's JSON input (gh classic, gh fine-grained, gh in a header, AWS key ID, AWS secret, AWS session token, AWS secret after a space, Anthropic key, JWT in a header and bare, private key, URL password, curl -u, PGPASSWORD) and reads them back: 14/14 redacted (100%), logged by the test. Further forms are covered by TestRedact, TestRedactCommand and TestRedactKeepsJSONEscapes (internal/redact) and TestToolRecordFields (daemon), from five security-review rounds.",
+            "a3: TestLongCommandTruncated: a 5,005-byte command is stored at <= 2,048 bytes ending '…[truncated 5005 bytes]'; short commands are untouched, cuts never split a UTF-8 character. TestCleanLargeAndInvalid: a 1 MiB field is redacted near the cut only and still names its full length. Pass.",
+            "a4: TestCommandLogNeverReachesRAG (internal/toollog/norag_test.go) parses every non-test Go file under internal/ and cmd/: it found 12 RAG-writing functions (IngestText/Upsert/Ingest calls) and 15 functions touching the command log or tool events, and no function does both; internal/toollog imports only the standard library, modernc.org/sqlite and internal/redact. A planted IngestText call in logToolEvent made it fail as expected. Pass.",
+            "Gates on 519f0b4: gofmt clean; go vet ./... exit 0; go test ./... exit 0 (54 packages ok); make cover 'All files >= 80%' (toollog record 97.6%, store 86.7%, writer 92.8%, redact 100%, cli/spaces_log 100%, paths 89.7%); make cover omitted internal/daemon because the RC-39 flake failed it, so a direct go test -coverprofile run measured daemon/toollog.go 93.3%, toolevents.go 96.3%, callers.go 96.4%, pins.go 92.5%, daemon.go 90.8%.",
+            "Security audit (security-audit agent, five rounds, 2026-11-09): round 1 2 high, 3 medium; round 2 1 high, 2 medium; round 3 1 medium; round 4 1 medium; round 5 1 medium; all fixed with regression tests. 0 critical/high/medium open; lows recorded as RC-41, RC-44, RC-45, design limits as RC-42, RC-43."
+          ]
         },
         {
           "id": "SP-014.2",
@@ -2029,7 +2103,10 @@
               "threshold": ">= 1,000"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestSpacesLogVerifyCommand (internal/daemon/toollog_test.go) runs the real 'orch spaces log verify <session>' (cli.NewRootCmd over orchdclient.Dial) against orchd's gRPC server on a unix socket: an untouched chain prints 'chain intact' and exits 0; a modified record ('record 2: content does not match its hash'), a deleted record ('record 3: record 2 before it is missing') and two swapped records (link and hash problems) each print 'chain broken' and exit non-zero: 3/3 tamper cases detected. TestVerifyDetectsTampering (internal/toollog) also detects a modified decision, a deleted run, a deleted anchored head and a reorder with hashes moved; TestVerifyToolLogRPC checks the same through VerifyToolLog and that only the operator may call it. Pass.",
+            "a2: TestToolLogThroughput: RecordToolEvent through stored, targets read for each 'cd … && git -C … && cat … | grep' command, four harness processes: 2,834 events/s on the final run (3,526-3,643 over five earlier runs) on an M3 Max, darwin/arm64, all 3,000 events stored, none dropped. TestAppendThroughput (store alone): 31,486 events/s (37,000-40,000 earlier). Threshold >= 1,000."
+          ]
         }
       ],
       "status": "in_progress",
