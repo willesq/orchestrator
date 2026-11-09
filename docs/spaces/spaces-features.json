@@ -877,7 +877,7 @@
         "id": "RC-40",
         "kind": "follow-up",
         "topic": "SP-013 audit lows and ordinary commands that come back opaque",
-        "detail": "From the third SP-013 security review (all high and medium findings fixed). Left as low: (1) os.Lstat/Stat can block on an autofs or stale network mount, and the 100 ms deadline cannot interrupt a blocked syscall; (2) ordinary forms that are opaque by design and may matter for SP-040's opaque policy: 'for f in *.go; do ... \"$f\"; done' (loop variable), scripts that start with cd \"$(dirname \"$0\")/..\", '| xargs', 'make test V=1', backticks inside a double-quoted commit message (bash runs them), 'echo {1..10}'; (3) npm/package.json/pyproject scripts and 'python -m <module>' code are not followed (RC-38). Decide in SP-040 whether to model any of (2) before the guard enforces.",
+        "detail": "From the third SP-013 security review (all high and medium findings fixed). Left as low: (1) os.Lstat/Stat can block on an autofs or stale network mount, and the 100 ms deadline cannot interrupt a blocked syscall; (2) ordinary forms that are opaque by design and may matter for SP-040's opaque policy: 'for f in *.go; do ... \"$f\"; done' (loop variable), scripts that start with cd \"$(dirname \"$0\")/..\", '| xargs', 'make test V=1', backticks inside a double-quoted commit message (bash runs them), 'echo {1..10}'; (3) npm/package.json/pyproject scripts and 'python -m <module>' code are not followed (RC-38). Decide in SP-040 whether to model any of (2) before the guard enforces. Also: the table case 'Agent has no targets' asserts /etc/x is absent, which is only meaningful on Linux (on macOS /etc resolves to /private/etc); switch it to a path such as /z/x (noted by the SP-013 verifier).",
         "source": "https://github.com/willesq/orchestrator/pull/151",
         "raised": "2026-11-09",
         "affects": [
@@ -1927,10 +1927,10 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "2e44a2843f3656e32f48d411c62b29ff8fcc020b",
+      "verified_at": "2026-11-09T16:13:40Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "4470493d234020d46f8d683c7f1775be07bef546273e9988e3a82d08ad7e8bd1",
