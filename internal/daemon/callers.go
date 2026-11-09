@@ -59,6 +59,10 @@ var taskCallable = map[string]bool{
 	orchdv1.Orchd_ListSettings_FullMethodName:          true,
 	// ExplainPlacement answers agents only about public placements.
 	orchdv1.Orchd_ExplainPlacement_FullMethodName: true,
+	// Reason: a queued task's tool calls belong in the command log like any
+	// session's; the event is attributed to the task orchd resolved, never to
+	// the session it names.
+	orchdv1.Orchd_RecordToolEvent_FullMethodName: true,
 }
 
 // operatorActions says what each operator-only RPC would do, for the refusal.

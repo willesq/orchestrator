@@ -1655,7 +1655,13 @@
               "threshold": "3 pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestToolHooksHandEveryFixtureToOrchd (internal/hook/tooluse_test.go) runs every recorded PreToolUse and CwdChanged payload through run() (stdin decode to dispatch): 52/52 fixtures (claude-code PreToolUse 25, CwdChanged 6; codex PreToolUse 21) each hand exactly one RecordToolEvent to orchd carrying session_id, cwd, tool_name, tool_input (JSON-equal), tool_use_id, agent_id, agent_type, old_cwd, new_cwd and the hook's start time, and print nothing (allow). 100%. The guard does not exist yet (SP-041/SP-070), so 'switched off' is the only state. TestRecordedPayloadsParse still passes.",
+            "a1 (orchd side): TestRecordToolEvent (internal/daemon/toolevents_test.go): orchd takes every valid event and attributes it to the caller resolved from the connection (a request naming another session_id is still the resolved session's), and refuses a bad event name, a malformed session ID or tool_input over 1 MiB with InvalidArgument. RecordToolEvent is added to taskCallable so queued tasks' events are not refused by the queued-caller guard (found by TestToolHookCost).",
+            "a2: TestToolHookCost (internal/daemon/toolevents_test.go) builds the real orch-hook, serves orchd's real peer identification + guardQueuedCallers + caller resolver on a unix socket, and runs `orch-hook pre-tool-use` 1,000 times from a fake harness process named claude holding a pin: p50 10.81 ms, p90 11.53 ms, p99 13.42 ms, max 371 ms (n=1000, darwin/arm64, M3 Max, 2026-11-09). p99 < 30 ms. All 1,000 events reached orchd attributed to the pinned session. The hook waits only for orchd to take the event (RPC deadline 20 ms), never for its processing.",
+            "a3: TestToolHooksAlwaysAllow (internal/hook/tooluse_test.go), for both pre-tool-use and cwd-changed: panic in the handler, bad JSON, unreachable orchd (real orchdclient.Dial to a missing socket), plus dial failure, orchd refusing, orchd hanging (returns at the 20 ms deadline), empty input and a payload over the 8 MiB stdin cap: each returns nil, prints nothing and finishes within 200 ms. 3/3 required cases pass (16 subtests in all).",
+            "Gates on 2026-11-09: gofmt clean; go vet ./... exit 0; make cover exit 0 (tooluse.go 100%, toolevents.go 95.5%, hook.go 90.9%, callers.go 96.4%); go test ./... failed only TestWatchTasksStreamsSnapshotChangesAndTicks, the known intermittent test (RC-14), which passed 5/5 on rerun. security-audit: 0 critical/high/medium; low L1 (uncapped hook stdin) fixed with an 8 MiB cap; L2-L4 recorded as RC-29."
+          ]
         },
         {
           "id": "SP-012.2",

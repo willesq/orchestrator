@@ -259,3 +259,7 @@ func (f *fakeClient) PinSession(context.Context, *orchdv1.PinSessionRequest, ...
 func (f *fakeClient) EndSession(context.Context, *orchdv1.EndSessionRequest, ...grpc.CallOption) (*orchdv1.EndSessionResponse, error) {
 	return &orchdv1.EndSessionResponse{}, nil
 }
+
+func (f *fakeClient) RecordToolEvent(context.Context, *orchdv1.RecordToolEventRequest, ...grpc.CallOption) (*orchdv1.RecordToolEventResponse, error) {
+	return &orchdv1.RecordToolEventResponse{}, nil
+}

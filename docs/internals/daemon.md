@@ -245,6 +245,7 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `Restart` | name (empty = all) → restarted | restarts subsystems in place, never the process; unknown → `NotFound` |
 | `PinSession` | session_id, cwd, parent_session_id → the pin | see [session pins](#session-pins); refused to queued tasks |
 | `EndSession` | session_id → ended_at | sets `ended_at` once; only the pinned harness process; refused to queued tasks |
+| `RecordToolEvent` | event (`pre-tool-use`/`cwd-changed`), session_id, cwd, tool_name, tool_input (≤ 1 MiB), tool_input_size, tool_use_id, agent_id, agent_type, old_cwd, new_cwd, at → — | takes a [tool hook](hooks.md#tool-hooks) event and answers at once; attributed to the [caller orchd resolved](#caller-sessions), never to session_id; open to queued tasks. Until the command log store (spaces plan SP-014) exists, events are counted by caller kind and dropped: nothing is stored, logged or indexed |
 | `SummarizeSession` | session_id, transcript_path, tags → accepted | ID `^[A-Za-z0-9_-]{1,128}$`; path absolute, `.jsonl`, regular file; enqueue only (backlog 32) |
 | `RecommendModel` | task_kind → route, from_table | see [tasks.md](tasks.md) |
 | `RateTask` | id, rating (`good`/`rework`/`bad`) → — | sets the task's rating; with the PR-outcome sweep, the only ledger writes outside the queue |

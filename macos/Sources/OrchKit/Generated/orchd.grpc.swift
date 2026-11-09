@@ -696,6 +696,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "RecordToolEvent" metadata.
+        public enum RecordToolEvent: Sendable {
+            /// Request type for "RecordToolEvent".
+            public typealias Input = Orchd_V1_RecordToolEventRequest
+            /// Response type for "RecordToolEvent".
+            public typealias Output = Orchd_V1_RecordToolEventResponse
+            /// Descriptor for "RecordToolEvent".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "RecordToolEvent",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -958,6 +971,7 @@ public enum Orchd_V1_Orchd: Sendable {
             ExplainPlacement.descriptor,
             PinSession.descriptor,
             EndSession.descriptor,
+            RecordToolEvent.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -2243,6 +2257,32 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_EndSessionResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_EndSessionResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RecordToolEvent" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RecordToolEvent takes a tool call or directory change that a
+        /// > pre-tool-use or cwd-changed hook saw. It returns once orchd has queued
+        /// > the event and never waits on its processing. orchd attributes the event
+        /// > to the caller it resolved from the connection, never to session_id.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RecordToolEventRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RecordToolEventRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RecordToolEventResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func recordToolEvent<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RecordToolEventRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RecordToolEventRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RecordToolEventResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RecordToolEventResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListRegisteredSources" method.
@@ -4468,6 +4508,43 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "RecordToolEvent" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RecordToolEvent takes a tool call or directory change that a
+        /// > pre-tool-use or cwd-changed hook saw. It returns once orchd has queued
+        /// > the event and never waits on its processing. orchd attributes the event
+        /// > to the caller it resolved from the connection, never to session_id.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RecordToolEventRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RecordToolEventRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RecordToolEventResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func recordToolEvent<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RecordToolEventRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RecordToolEventRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RecordToolEventResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RecordToolEventResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.RecordToolEvent.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -6585,6 +6662,38 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_EndSessionRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_EndSessionResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RecordToolEvent" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RecordToolEvent takes a tool call or directory change that a
+    /// > pre-tool-use or cwd-changed hook saw. It returns once orchd has queued
+    /// > the event and never waits on its processing. orchd attributes the event
+    /// > to the caller it resolved from the connection, never to session_id.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RecordToolEventRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func recordToolEvent<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RecordToolEventRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RecordToolEventResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.recordToolEvent(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RecordToolEventRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RecordToolEventResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -8833,6 +8942,42 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.endSession(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RecordToolEvent" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RecordToolEvent takes a tool call or directory change that a
+    /// > pre-tool-use or cwd-changed hook saw. It returns once orchd has queued
+    /// > the event and never waits on its processing. orchd attributes the event
+    /// > to the caller it resolved from the connection, never to session_id.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func recordToolEvent<Result>(
+        _ message: Orchd_V1_RecordToolEventRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RecordToolEventResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RecordToolEventRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.recordToolEvent(
             request: request,
             options: options,
             onResponse: handleResponse

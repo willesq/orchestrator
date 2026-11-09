@@ -8,6 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -2285,6 +2290,61 @@ public nonisolated struct Orchd_V1_EndSessionResponse: Sendable {
 
   /// unix seconds; the first end recorded wins
   public var endedAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// RecordToolEventRequest is one hook event as the harness reported it. Every
+/// field is the harness's claim; orchd decides whom it belongs to.
+public nonisolated struct Orchd_V1_RecordToolEventRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// pre-tool-use | cwd-changed
+  public var event: String = String()
+
+  /// ^[A-Za-z0-9_-]{1,128}$
+  public var sessionID: String = String()
+
+  public var cwd: String = String()
+
+  /// pre-tool-use only
+  public var toolName: String = String()
+
+  /// The tool's input JSON as the harness sent it; empty when larger than
+  /// 1 MiB, with tool_input_size still set.
+  public var toolInput: Data = Data()
+
+  public var toolInputSize: Int64 = 0
+
+  public var toolUseID: String = String()
+
+  /// set for a subagent's tool call
+  public var agentID: String = String()
+
+  public var agentType: String = String()
+
+  /// cwd-changed only
+  public var oldCwd: String = String()
+
+  /// cwd-changed only
+  public var newCwd: String = String()
+
+  /// unix nanoseconds when the hook started
+  public var at: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_RecordToolEventResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -8530,6 +8590,110 @@ nonisolated extension Orchd_V1_EndSessionResponse: SwiftProtobuf.Message, SwiftP
 
   public static func ==(lhs: Orchd_V1_EndSessionResponse, rhs: Orchd_V1_EndSessionResponse) -> Bool {
     if lhs.endedAt != rhs.endedAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RecordToolEventRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RecordToolEventRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}event\0\u{3}session_id\0\u{1}cwd\0\u{3}tool_name\0\u{3}tool_input\0\u{3}tool_input_size\0\u{3}tool_use_id\0\u{3}agent_id\0\u{3}agent_type\0\u{3}old_cwd\0\u{3}new_cwd\0\u{1}at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.event) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.sessionID) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.cwd) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.toolName) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self.toolInput) }()
+      case 6: try { try decoder.decodeSingularInt64Field(value: &self.toolInputSize) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.toolUseID) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.agentID) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.agentType) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.oldCwd) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.newCwd) }()
+      case 12: try { try decoder.decodeSingularInt64Field(value: &self.at) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.event.isEmpty {
+      try visitor.visitSingularStringField(value: self.event, fieldNumber: 1)
+    }
+    if !self.sessionID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sessionID, fieldNumber: 2)
+    }
+    if !self.cwd.isEmpty {
+      try visitor.visitSingularStringField(value: self.cwd, fieldNumber: 3)
+    }
+    if !self.toolName.isEmpty {
+      try visitor.visitSingularStringField(value: self.toolName, fieldNumber: 4)
+    }
+    if !self.toolInput.isEmpty {
+      try visitor.visitSingularBytesField(value: self.toolInput, fieldNumber: 5)
+    }
+    if self.toolInputSize != 0 {
+      try visitor.visitSingularInt64Field(value: self.toolInputSize, fieldNumber: 6)
+    }
+    if !self.toolUseID.isEmpty {
+      try visitor.visitSingularStringField(value: self.toolUseID, fieldNumber: 7)
+    }
+    if !self.agentID.isEmpty {
+      try visitor.visitSingularStringField(value: self.agentID, fieldNumber: 8)
+    }
+    if !self.agentType.isEmpty {
+      try visitor.visitSingularStringField(value: self.agentType, fieldNumber: 9)
+    }
+    if !self.oldCwd.isEmpty {
+      try visitor.visitSingularStringField(value: self.oldCwd, fieldNumber: 10)
+    }
+    if !self.newCwd.isEmpty {
+      try visitor.visitSingularStringField(value: self.newCwd, fieldNumber: 11)
+    }
+    if self.at != 0 {
+      try visitor.visitSingularInt64Field(value: self.at, fieldNumber: 12)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RecordToolEventRequest, rhs: Orchd_V1_RecordToolEventRequest) -> Bool {
+    if lhs.event != rhs.event {return false}
+    if lhs.sessionID != rhs.sessionID {return false}
+    if lhs.cwd != rhs.cwd {return false}
+    if lhs.toolName != rhs.toolName {return false}
+    if lhs.toolInput != rhs.toolInput {return false}
+    if lhs.toolInputSize != rhs.toolInputSize {return false}
+    if lhs.toolUseID != rhs.toolUseID {return false}
+    if lhs.agentID != rhs.agentID {return false}
+    if lhs.agentType != rhs.agentType {return false}
+    if lhs.oldCwd != rhs.oldCwd {return false}
+    if lhs.newCwd != rhs.newCwd {return false}
+    if lhs.at != rhs.at {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RecordToolEventResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RecordToolEventResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RecordToolEventResponse, rhs: Orchd_V1_RecordToolEventResponse) -> Bool {
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

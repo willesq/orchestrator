@@ -6,11 +6,11 @@ event JSON from stdin and writes context for the agent to stdout as plain Markdo
 **Contract:** a hook never fails and never blocks the agent. Every handler returns success, a
 panic is recovered and exits zero; slow
 work is handed to orchd ([hand-offs](#hand-offs)); each orchd call has a short deadline (0.5 s for
-writes, 3 s for prompt search). Unknown events, empty input and read errors are no-ops.
+writes, 3 s for prompt search, 20 ms for [tool hooks](#tool-hooks)). Unknown events, empty input and read errors are no-ops.
 
 Payload fields read: `session_id`, `parent_session_id`, `prompt`, `transcript_path`, `cwd`,
-`subagent_type`, `final_response`, `tool_name`, `tool_input`, `source`
-(`startup`/`resume`/`clear`/`compact`). Session IDs must match `^[A-Za-z0-9_-]{1,128}$` before
+`subagent_type`, `final_response`, `tool_name`, `tool_input`, `tool_use_id`, `agent_id`,
+`agent_type`, `old_cwd`, `new_cwd`, `source` (`startup`/`resume`/`clear`/`compact`). Session IDs must match `^[A-Za-z0-9_-]{1,128}$` before
 they name a file.
 
 ## Events
@@ -23,7 +23,28 @@ they name a file.
 | `pre-compact` | Writes `sessions/<id>.checkpoint.yaml` with the last request and reply. |
 | `session-end` | See [session end](#session-end). |
 | `subagent-stop` | Appends `{kind: complete, source: subagent_type, summary}` (redacted, 200 bytes) to the parent session's event stream. |
+| `pre-tool-use` | Hands the tool call to orchd for the command log and prints nothing, so the call goes ahead. See [tool hooks](#tool-hooks). Claude Code and Codex. |
+| `cwd-changed` | Hands the directory change (`old_cwd`, `new_cwd`) to orchd and prints nothing. See [tool hooks](#tool-hooks). Claude Code only; Codex has no such event. |
 | `post-tool-use` | After `gh pr create\|ready\|close\|merge\|reopen\|edit`, requests a PR refresh, and after `gh pr create` (also `rtk gh pr create`) registers the PR with PR Watch (below). After `Edit`/`Write`/`MultiEdit` of markdown or a file under `~/.claude/`, hands the file off to be stored again. |
+
+## Tool hooks
+
+`pre-tool-use` (before every tool call) and `cwd-changed` record what an agent does for the spaces
+command log (spaces plan SP-012, D-04). Each sends one `RecordToolEvent` to orchd with the
+payload's `session_id`, `cwd`, `tool_name`, `tool_input` (as raw JSON, or only its size when over
+1 MiB), `tool_use_id`, `agent_id`, `agent_type`, `old_cwd`, `new_cwd` and the time the hook ran.
+orchd takes the event and answers at once; it decides whose event it is from the connection's
+process ([caller sessions](daemon.md#caller-sessions)), never from `session_id`. Queued tasks send
+their events too.
+
+They always allow: the hooks print nothing, which Claude Code and Codex read as no decision, so
+the call runs as it would without them. A panic, a payload that does not parse, or an orchd that
+is down, refuses or does not answer within 20 ms loses the event and nothing else. Measured with
+the real binary against orchd's server (`TestToolHookCost`, M3 Max): p50 10.8 ms, p99 13.4 ms from
+process start to exit over 1,000 runs. The tool guard (SP-041) will add refusals to
+`pre-tool-use`. That is why Claude Code runs it synchronously, while `cwd-changed` runs in the
+background ([install.md](install.md#claude-code)). Until the command log store (SP-014) exists,
+orchd counts these events and drops them.
 
 ## Prompt context
 
