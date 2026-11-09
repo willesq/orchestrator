@@ -3,7 +3,7 @@
   "plan_id": "orch-memory-spaces",
   "title": "orch memory spaces: isolation of memory, sessions and tools across contexts",
   "created": "2026-11-08",
-  "updated": "2026-11-08",
+  "updated": "2026-11-09",
   "repo": "willesq/orchestrator",
   "base_commit": "5796fa6",
   "origin": {
@@ -385,6 +385,21 @@
         "id": "D-28",
         "decision": "Tool-call target extraction (SP-013) is best-effort, not a complete analysis of shell. After two security-audit rounds kept finding new ways around it (62 in round 2), fix the broad classes and record the rest as accepted risk. Targets is advisory evidence for the guard; the OS sandbox deny rules (SP-046) and per-job GitHub accounts (SP-063) are the hard boundary, and SP-040 decides how far to trust Targets.",
         "date": "2026-11-09"
+      },
+      {
+        "id": "D-29",
+        "decision": "The command log lives in its own SQLite file, toollog.db in orch's data directory, created mode 0600 together with its -wal and -shm files. orch.db's mode is unchanged; the log's growth stays out of orch.db and its backups, and SP-015's total size cap can be measured on the file (was RC-08).",
+        "date": "2026-11-09"
+      },
+      {
+        "id": "D-30",
+        "decision": "Tool events lost before orchd stores them are recorded where orchd can see them: the intake is a bounded queue, and when it is full the dropped events are counted and written as a 'gap' record in the session's chain. Events lost while orchd is down or slower than the hook's budget are accepted while the guard only logs; SP-041 fails closed once it enforces (was RC-30).",
+        "date": "2026-11-09"
+      },
+      {
+        "id": "D-31",
+        "decision": "Queued tasks may call RecordToolEvent; their tool calls are logged under the task orchd resolves, never under the session_id the request names (was RC-31).",
+        "date": "2026-11-09"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -492,7 +507,8 @@
         "affects": [
           "SP-014"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-09 in the SP-014 session; see D-29."
       },
       {
         "id": "RC-09",
@@ -754,7 +770,8 @@
           "SP-014",
           "SP-041"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-09 in the SP-014 session; see D-30."
       },
       {
         "id": "RC-31",
@@ -767,7 +784,8 @@
           "SP-014",
           "SP-025"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-09 in the SP-014 session; see D-31."
       },
       {
         "id": "RC-32",
@@ -2014,14 +2032,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f6d1c6a76f28bdac3e1409ce65751af30acd36c96b1963d4b5bb539ac45ddb6f",
-      "branch": null,
+      "branch": "feat/sp-014-command-log",
       "pr": null
     },
     {
