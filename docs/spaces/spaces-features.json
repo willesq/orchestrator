@@ -375,6 +375,11 @@
         "id": "D-26",
         "decision": "Accept SP-010's residual audit finding as a documented risk: a process started outside a session's tree under a kept-alive parent can take a new pin in its own directory. Pins grant nothing yet; access by a pin's space is gated on RC-01.",
         "date": "2026-11-08"
+      },
+      {
+        "id": "D-27",
+        "decision": "After an SP-011 test wrote to the real orch.db (migrating it from schema 22 to 25 and adding 301 test rows to session_pins), delete only the test rows and keep schema 25; the new tables stay empty until a release uses them.",
+        "date": "2026-11-08"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -645,6 +650,41 @@
         "source": "session://bdd8786f-58da-4777-8a71-4185518d555a",
         "raised": "2026-11-08",
         "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-23",
+        "kind": "follow-up",
+        "topic": "Real orch.db is at schema 25 ahead of installed orch 0.44.0",
+        "detail": "On 2026-11-08 an SP-011 test opened ~/.local/share/orch/orch.db without a temp ORCH_DATA_DIR and migrated it from 22 to 25 (spaces_revisions, spaces_applied, spaces_org_bindings, session_pins, all empty after cleanup per D-27). Unverified: that orchd 0.44.0 restarts cleanly when the database is ahead of its own migrations. Check at the next restart, or ignore once a release with the spaces migrations is installed.",
+        "source": "session://3c609f46-c69f-4e98-8d61-3c25d42bee45 and https://github.com/willesq/orchestrator/pull/149",
+        "raised": "2026-11-08",
+        "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-24",
+        "kind": "follow-up",
+        "topic": "Guard tests against the real data directory",
+        "detail": "internal/daemon tests that call db.Open() without setting ORCH_DATA_DIR use the developer's real orch.db (how RC-23 happened). Proposal: a TestMain in packages that open orch.db sets a temporary ORCH_DATA_DIR, or db.Open refuses the default path under go test.",
+        "source": "session://3c609f46-c69f-4e98-8d61-3c25d42bee45 and https://github.com/willesq/orchestrator/pull/149",
+        "raised": "2026-11-08",
+        "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-25",
+        "kind": "decision",
+        "topic": "Which space a queued task reads and writes",
+        "detail": "SP-011 resolves a task's process to its live run (task ID, directory, session) from the process tree; a reported orch-task-id only marks a caller as a task. No feature decides a task's space (the dispatching session's pin, the placement of its cwd, or a space named at dispatch), and a task whose run orchd is not tracking (a verification run, a run in another worker) has no record and so resolves to no space. Decide before SP-025 enforces reads.",
+        "source": "session://3c609f46-c69f-4e98-8d61-3c25d42bee45 and https://github.com/willesq/orchestrator/pull/149",
+        "raised": "2026-11-08",
+        "affects": [
+          "SP-011",
+          "SP-023",
+          "SP-025",
+          "SP-029"
+        ],
         "status": "open"
       }
     ]
