@@ -1137,7 +1137,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestSessionStartSourcesKeepPin (internal/daemon/pins_test.go) pins sess-life in dirs[0], then sends PinSession for each SessionStart source with the harness reporting dirs[1]: startup, resume and compact (same session ID) and clear (a new session ID in the same process, as Claude Code's /clear does) each return the original first_cwd, space, harness PID and policy revision; clear records inherited_from sess-life. 4 subtests PASS. It also checks that a pin taken after the first session ended keeps the process's pin, and that another process resuming the session is refused. Hook side: TestSessionStartPinsEverySource (internal/hook/pins_test.go) shows each of the 4 sources sends the same PinSession request. PASS.",
+            "a2: TestSubagentInheritsParentPin: a subagent asking for dirs[1] with parent_session_id=parent gets the parent's first_cwd, space and harness with inherited_from=parent; a nested subagent still names the root; a later PinSession for the subagent without a parent keeps the inherited pin; a parent with no pin (FailedPrecondition) or pinned to another harness process (PermissionDenied) gives nothing and stores no row. Hook side: TestSessionStartPinsSubagentWithParent. PASS.",
+            "a3: TestEndSessionKeepsPin: EndSession sets ended_at to the fake clock's time; a second EndSession keeps the first time; the row stays with first_cwd intact and PinSession still returns it with ended_at set; another process (PermissionDenied), an unknown session (NotFound) and the operator (PermissionDenied) cannot end it. Hook side: TestSessionEndEndsPin (session-end sends EndSession even without a transcript). PASS."
+          ]
         },
         {
           "id": "SP-010.3",
