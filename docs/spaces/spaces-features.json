@@ -3,7 +3,7 @@
   "plan_id": "orch-memory-spaces",
   "title": "orch memory spaces: isolation of memory, sessions and tools across contexts",
   "created": "2026-11-08",
-  "updated": "2026-11-09",
+  "updated": "2026-11-10",
   "repo": "willesq/orchestrator",
   "base_commit": "5796fa6",
   "origin": {
@@ -405,6 +405,116 @@
         "id": "D-32",
         "decision": "Admin-merge SP-014 (PR #152) without review while GitHub Actions starts no jobs for the repo (RC-46). DOD-9 is overridden for SP-014: the Linux test job passed at 5c004d8 but the macOS ORT build never ran on the branch; every acceptance item and DOD-1..8 passed independent verification at 5c004d8. Re-run CI on main once Actions works again.",
         "date": "2026-11-09"
+      },
+      {
+        "id": "D-33",
+        "decision": "Retention counts a session as ended only when its pin has ended_at and orchd has seen its harness process exit (exited_at); the clock starts at the latest of ended_at, exited_at and the last record. A /clear'd or early-ended session keeps its log (cut to the per-session cap) until its process exits. Deletion happens within one 10-minute sweep after day N (was RC-53).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-34",
+        "decision": "The total cap removes from the chains that ended first only what expiry would: never refusals under 90 days and never a running session's records, so the file may stay over the cap (logged). Retention (3d/7d/30d) and the total cap stay Sensitive settings read at orchd start. The per-session cap (50 MB, per chain) becomes a setting too (SP-073) (was RC-54).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-35",
+        "decision": "Command log tamper evidence is strengthened: each anchor (seq, hash) is also copied into orch.db and verify compares the two, and a queued task's chain is anchored when the task reaches a terminal state (SP-073) (was RC-42).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-36",
+        "decision": "Tool events from a harness process with no pin are logged in a chain keyed by that process (PID and start time) instead of being dropped; retention ends the chain when the process exits (SP-073) (was RC-43).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-37",
+        "decision": "Refusals and other guard decisions are never dropped from the command log: queue room is reserved for them, and only ordinary logged events may drop with a gap record when a share is full (SP-041.1.a4) (was RC-45).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-38",
+        "decision": "Memory reads are never widened by a session pin's space until the enforcing guard (SP-041) stops a session from starting a harness outside its process tree: SP-025 depends on SP-041 (was RC-01).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-39",
+        "decision": "A caller resolved as the operator by process tree alone does not get operator-scope memory reads: SP-025 requires evidence of a real operator (a controlling terminal, or Orch.app); otherwise the caller reads public only. A process that left its session's tree therefore loses operator reads (was RC-26).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-40",
+        "decision": "Turning off the tool hooks (pre-tool-use, cwd-changed) is an SP-070 enforcement switch: operator-only, logged with time and caller, and announced in every session's start digest; orch settings cannot turn them off silently (was RC-32).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-41",
+        "decision": "Confirmed as built in SP-017: a resume moves a pin only to a fresh top-level harness whose directory places into the pin's space; an in-process /resume of another process's session is refused and its events go to the process's own pin; a 'claude --resume' started in another space's directory runs unpinned (was RC-47).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-42",
+        "decision": "The dependency mvdan.cc/sh/v3 (pure Go, BSD-3-Clause) is kept for parsing shell commands in tool-call target extraction, with command substitution, globbing and ~user lookups disabled (was RC-35).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-43",
+        "decision": "Codex pinning is checked by the user after the next release (RC-57), not by a new acceptance item (was RC-02).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-44",
+        "decision": "Before the guard enforces, orchd identifies a connection's peer by a kernel token (LOCAL_PEERTOKEN on macOS, SO_PEERPIDFD on Linux) rather than its PID alone, so a PID reused after a process handed off its socket cannot be mistaken for the original peer; a peer that cannot be identified gets no space, never a default (SP-041.1.a5) (was RC-03).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-45",
+        "decision": "Connection resolution has no cost bound of its own: SP-011.2's 5 ms bound is retired, and the cost is covered by the tool hooks' 20 ms budget and SP-041's decision-latency check (p99 < 50 ms). TestResolveCost's bound is removed as a follow-up (RC-58) (was RC-28).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-46",
+        "decision": "A queued task reads and writes the space of the session that dispatched it; a task the operator dispatched takes the placement of its working directory; a task orchd cannot find (not tracked by its runner) gets no space and reads public only (SP-025.1.a8) (was RC-25).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-47",
+        "decision": "Redaction stays best-effort and is maintained, not systematically extended: concrete misses are fixed with regression tests as they are found, and the OS sandbox (SP-046) and per-job GitHub accounts (SP-063) are the boundary, as D-28 decided for target extraction (was RC-44).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-48",
+        "decision": "The session list's unpinned rows skip processes whose parent is a harness (subprocesses that keep the harness's name) and known daemons such as Codex's app-server; top-level harness processes are listed even without a TTY (RC-59) (was RC-49).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-49",
+        "decision": "Pins are not made to survive orchd restarts on Linux; orch runs on macOS (was RC-04).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-50",
+        "decision": "Under a public root, content from a checkout with no verifiable public remote (not on GitHub, or no remote) is quarantined until the operator retags it or declares that folder public; a public root alone is not proof (SP-030.1 new item) (was RC-05).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-51",
+        "decision": "The operator confirms a specific GitHub node ID for an org binding (org=node_id), and 'orch spaces diff' shows the old, new and seen node IDs (RC-61) (was RC-06).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-52",
+        "decision": "Every GitHub ingestion path (docs sync, sources, the review watcher, PR monitoring) re-checks the org binding before writing, and a long sync re-checks between repos (SP-023 new item) (was RC-07).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-53",
+        "decision": "Each space gets its own TMPDIR from the launcher and per-checkout settings, with other spaces' temp dirs denied; the combined root settings.local.json (sandbox on, unsandboxed commands off, Read denies) is tested from a subfolder with Read, Grep, Glob and Edit. The shared /tmp stays a documented residual (SP-046 new items) (was RC-09).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-54",
+        "decision": "All four SP-063 follow-ups become planned work in SP-074: scopes and PR watching for profile-only orgs; refusing GitHub calls a space's profile cannot read, with stricter gh_config_dir checks; the repo picker and PR-outcome tracker using the space's profile; a GitHub API quota cap per isolated account (was RC-10).",
+        "date": "2026-11-10"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -422,7 +532,8 @@
           "SP-025",
           "SP-041"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: SP-025 depends on SP-041; see D-38 and SP-025.1.a6."
       },
       {
         "id": "RC-02",
@@ -436,7 +547,8 @@
           "SP-011",
           "SP-012"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: checked after the next release; see D-43 and RC-57."
       },
       {
         "id": "RC-03",
@@ -448,7 +560,8 @@
         "affects": [
           "SP-011"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: identify peers by kernel token before enforcement; see D-44 and SP-041.1.a5."
       },
       {
         "id": "RC-04",
@@ -461,7 +574,8 @@
           "SP-010",
           "SP-017"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: not needed; see D-49."
       },
       {
         "id": "RC-05",
@@ -475,7 +589,8 @@
           "SP-023",
           "SP-030"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: quarantine without proof; see D-50."
       },
       {
         "id": "RC-06",
@@ -487,7 +602,8 @@
         "affects": [
           "SP-021"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: confirm a specific node ID; see D-51 and RC-61."
       },
       {
         "id": "RC-07",
@@ -500,7 +616,8 @@
           "SP-023",
           "SP-043"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: added to SP-023; see D-52."
       },
       {
         "id": "RC-08",
@@ -525,7 +642,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: per-space TMPDIR and the combined settings test; see D-53."
       },
       {
         "id": "RC-10",
@@ -538,7 +656,8 @@
           "SP-063",
           "SP-043"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: all four planned in SP-074; see D-54."
       },
       {
         "id": "RC-11",
@@ -624,7 +743,8 @@
         "source": "session://46e55792-1605-40ed-8c85-d3caec057e00",
         "raised": "2026-11-08",
         "affects": [],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: rotation not needed (accepted)."
       },
       {
         "id": "RC-18",
@@ -636,7 +756,8 @@
         "affects": [
           "SP-021"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: no spaces policy had been applied before SP-021, so there is nothing to re-apply."
       },
       {
         "id": "RC-19",
@@ -646,7 +767,8 @@
         "source": "https://github.com/willesq/orchestrator/issues/130",
         "raised": "2026-11-08",
         "affects": [],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: dropped; the plan and the feature PRs record the project's progress, so no comment is posted on issue #130."
       },
       {
         "id": "RC-20",
@@ -656,7 +778,8 @@
         "source": "https://github.com/willesq/orchestrator/pull/111",
         "raised": "2026-11-08",
         "affects": [],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: PR #111 closed unmerged (branch kept)."
       },
       {
         "id": "RC-21",
@@ -666,7 +789,8 @@
         "source": "https://github.com/willesq/orchestrator/pull/142",
         "raised": "2026-11-08",
         "affects": [],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10 after a hand check of Orch.app 0.45.1 driven through accessibility: all eight Settings sections (Overview, Tasks, Docs, GitHub, Memory, Claude, Safety Net, App) render with values from orch.db. Found one bug, filed as https://github.com/willesq/orchestrator/issues/162 ('Open at login' disabled for an installed app). The Command log section (SP-015) ships in the next release. The env-var reset bypass stays the accepted risk documented in docs/internals/config.md."
       },
       {
         "id": "RC-22",
@@ -676,7 +800,8 @@
         "source": "session://bdd8786f-58da-4777-8a71-4185518d555a",
         "raised": "2026-11-08",
         "affects": [],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: all four reported defects verified as real and filed: https://github.com/willesq/orchestrator/issues/158 (subagent-stop field names), https://github.com/willesq/orchestrator/issues/159 (pr-babysitter timestamps), https://github.com/willesq/orchestrator/issues/160 (queue task_id), https://github.com/willesq/orchestrator/issues/161 (token usage discarded). The three drafted RAG entries and the Codex [otel] test are dropped."
       },
       {
         "id": "RC-23",
@@ -711,7 +836,8 @@
           "SP-025",
           "SP-029"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: the dispatcher's space; see D-46 and SP-025.1.a8."
       },
       {
         "id": "RC-26",
@@ -725,7 +851,8 @@
           "SP-025",
           "SP-041"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: operator-scope reads need a terminal or Orch.app; see D-39 and SP-025.1.a7."
       },
       {
         "id": "RC-27",
@@ -750,7 +877,8 @@
         "affects": [
           "SP-011"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: drop the bound; see D-45 and RC-58."
       },
       {
         "id": "RC-29",
@@ -804,13 +932,14 @@
           "SP-042",
           "SP-070"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: the tool hooks become an operator-only SP-070 switch; see D-40 and SP-070.1.a4."
       },
       {
         "id": "RC-33",
         "kind": "user-action",
         "topic": "Wire the tool hooks on this Mac after release",
-        "detail": "Once a release contains SP-012: run `orch install --target claude-code --apply` and `orch install --target codex --apply` (dry run first), then review and trust the new PreToolUse entry in Codex. `orch status` shows '<harness> tool hooks wired' when done. Until then nothing is logged.",
+        "detail": "Once a release contains SP-012: run `orch install --target claude-code --apply` and `orch install --target codex --apply` (dry run first), then review and trust the new PreToolUse entry in Codex. `orch status` shows '<harness> tool hooks wired' when done. Until then nothing is logged. Update 2026-11-10 (decision review): orch 0.45.1 is installed and contains SP-012, but orch status shows the tool hooks missing. Dry runs are clean: ~/.claude/settings.json gains PreToolUse and CwdChanged (19 third-party entries kept) and ~/.codex/hooks.json gains PreToolUse (6 kept). The user will run the two --apply commands and trust the Codex entry.",
         "source": "https://github.com/willesq/orchestrator/pull/150",
         "raised": "2026-11-09",
         "affects": [
@@ -843,7 +972,8 @@
           "SP-040",
           "SP-041"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: keep the dependency; see D-42."
       },
       {
         "id": "RC-36",
@@ -936,7 +1066,8 @@
           "SP-046",
           "SP-047"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: anchors copied into orch.db and task chains anchored at their end; see D-35 and SP-073."
       },
       {
         "id": "RC-43",
@@ -949,7 +1080,8 @@
           "SP-016",
           "SP-017"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: unpinned processes get a chain of their own; see D-36 and SP-073."
       },
       {
         "id": "RC-44",
@@ -961,7 +1093,8 @@
         "affects": [
           "SP-023"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: maintain, with the sandbox and per-job accounts as the boundary; see D-47. Documentation note tracked in RC-60."
       },
       {
         "id": "RC-45",
@@ -974,7 +1107,8 @@
           "SP-041",
           "SP-048"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: refusals and guard decisions are never dropped; see D-37 and SP-041.1.a4."
       },
       {
         "id": "RC-46",
@@ -986,7 +1120,8 @@
         "affects": [
           "SP-014"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: Actions has run full CI again since about 20:50 UTC on 2026-11-09; PRs #154 and #157 ran test, the macOS ORT build and app green on code containing SP-014, which covers SP-014's missing macOS build (CI does not run on main itself). The cause was not confirmed."
       },
       {
         "id": "RC-47",
@@ -999,7 +1134,8 @@
           "SP-017",
           "SP-041"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: confirmed as built; see D-41."
       },
       {
         "id": "RC-48",
@@ -1026,7 +1162,8 @@
           "SP-017",
           "SP-051"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: skip harness children and known daemons; see D-48 and RC-59."
       },
       {
         "id": "RC-50",
@@ -1080,7 +1217,8 @@
           "SP-016",
           "SP-041"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: confirmed as built; see D-33."
       },
       {
         "id": "RC-54",
@@ -1093,7 +1231,8 @@
           "SP-015",
           "SP-070"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: confirmed, with the per-session cap made a setting; see D-34 and SP-073."
       },
       {
         "id": "RC-55",
@@ -1120,6 +1259,72 @@
           "SP-015",
           "SP-016",
           "SP-017"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-57",
+        "kind": "user-action",
+        "topic": "Check that Codex sessions are pinned",
+        "detail": "After the next release is installed, open a Codex session, then run `orch install --target codex` (dry run; it should show no difference in ~/.codex/hooks.json) and `orch sessions list`: the Codex session should be listed with a space, not as unpinned. If it is unpinned, the installed hooks.json predates the SessionStart/SessionEnd registration or Codex does not trust the hooks.",
+        "source": "RC-02; decision review 2026-11-10",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-010",
+          "SP-011",
+          "SP-012"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-58",
+        "kind": "follow-up",
+        "topic": "Remove TestResolveCost's 5 ms bound",
+        "detail": "D-45 retires SP-011.2's per-connection cost bound. Drop the bound from TestResolveCost (internal/daemon) or turn it into a reported measurement, and say in docs/internals/daemon.md that the hook budget and SP-041's latency check cover the cost. Small; can ride along with SP-041.",
+        "source": "RC-28; decision review 2026-11-10",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-011",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-59",
+        "kind": "follow-up",
+        "topic": "Filter unpinned rows in the session list",
+        "detail": "D-48: ListSessions' unpinned rows should skip processes whose parent is a harness process and known daemons (Codex app-server), keeping top-level harnesses even without a TTY. Small change in internal/daemon/liveness.go (unpinned) with a test; can ride along with SP-016 or SP-051.",
+        "source": "RC-49; decision review 2026-11-10",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-017",
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-60",
+        "kind": "follow-up",
+        "topic": "Say redaction is best-effort in the docs",
+        "detail": "D-47: state in docs/internals (ingestion and command log sections) that redaction is pattern-based and best-effort, and that the OS sandbox and per-job accounts are the boundary; list the known gaps from RC-44. Docs only.",
+        "source": "RC-44; decision review 2026-11-10",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-023",
+          "SP-065"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-61",
+        "kind": "follow-up",
+        "topic": "Confirm a specific GitHub node ID",
+        "detail": "D-51: --confirm-github-org takes org=node_id, and 'orch spaces diff' shows old, new and seen node IDs for each binding. SP-021 is done; this can ride along with SP-053 (advanced editors) or SP-074.",
+        "source": "RC-06; decision review 2026-11-10",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-021",
+          "SP-053"
         ],
         "status": "open"
       }
@@ -2505,6 +2710,84 @@
       "pr": null
     },
     {
+      "id": "SP-073",
+      "phase": "P1",
+      "priority": 16.5,
+      "title": "Command log hardening",
+      "summary": "Follow-ups to SP-014/SP-015 decided on 2026-11-10: anchors copied into orch.db and compared by verify; queued tasks' chains anchored when the task ends; events from unpinned harness processes logged in a per-process chain; the per-session cap as a setting.",
+      "why": "D-34, D-35, D-36.",
+      "depends_on": [
+        "SP-014",
+        "SP-015",
+        "SP-016",
+        "SP-017"
+      ],
+      "touches": [
+        "internal/toollog/",
+        "internal/daemon/toollog.go",
+        "internal/daemon/liveness.go",
+        "internal/config/schema.go",
+        "internal/db/migrations/"
+      ],
+      "docs_to_update": [
+        "docs/internals/daemon.md",
+        "docs/internals/config.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-073.1",
+          "title": "Anchors",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Every anchor written to toollog.db is also stored in orch.db; verify reports a chain whose records after the last in-file anchor were removed, or that was rewritten from its first record, when the orch.db copy disagrees; an anchor present in only one store is reported.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "A queued task's chain gets an end record and an anchor when the task reaches a terminal state (complete, failed, cancelled, timed out); a retried task continues the same chain and is anchored again at its next end.",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
+        },
+        {
+          "id": "SP-073.2",
+          "title": "Coverage and settings",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Events from a harness process holding no pin are stored in a chain keyed by that process (PID and start time), visible to the operator in the command log and the session list; retention ends the chain when the process exits; a session pinned later in that process does not read it.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "sessions.command_log.max_session_mb (default 50, Sensitive, bounded range) sets the per-session cap retention applies; an out-of-range value keeps the default.",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "75ec414b2dc8e3f89b8904df10fe958a44fa16b522421a801ae451083fe97105",
+      "branch": null,
+      "pr": null
+    },
+    {
       "id": "SP-040",
       "phase": "P1",
       "priority": 17,
@@ -2601,6 +2884,13 @@
               "check": "With a fake clock, a timed switch reverts to its previous state at expiry and emits an event.",
               "measure": "test",
               "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "The tool hooks (pre-tool-use, cwd-changed) are one of the switches: orch settings and install cannot turn them off; only the operator can, the change is logged with time and caller, and every session's start digest says the tool hooks are off while they are (D-40).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -2633,7 +2923,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "0215afcb5b6591f0551e283866bfe0ceb32b8344f73094d6a7c459357da77003",
+      "criteria_sha256": "d51436cafcfd5be71cd5c5cbb9c23cb70d246bfbaab59d97dd4b548431c44ba9",
       "branch": null,
       "pr": null
     },
@@ -2681,6 +2971,20 @@
               "check": "Decision latency including file reads.",
               "measure": "p99",
               "threshold": "< 50 ms"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "With the session's queue share full (flooded with ordinary events), a call the guard refuses is still stored in the command log with its decision; ordinary events past the share drop with a gap record (D-37).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a5",
+              "type": "test",
+              "check": "orchd identifies each connection's peer by a kernel token (LOCAL_PEERTOKEN on macOS, SO_PEERPIDFD on Linux): a peer that hands its socket to a child and exits, with its PID then reused by a harness in another space, is not resolved to that harness's session; a peer that cannot be identified gets no space (D-44).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -2713,7 +3017,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "e97956721af6d019462e72eb001f5216cc19debcfbdd2d27dbffeecc19119a37",
+      "criteria_sha256": "59c0d955dc641ee5e9676b8779dc98ae509c7ecc89abc2fcf839a19da0e763cc",
       "branch": null,
       "pr": null
     },
@@ -2807,6 +3111,82 @@
       "blocked_reason": null,
       "attempts": 0,
       "criteria_sha256": "c237bfdccd1c0dea479609bdb5c5b2caf19389502654c7d8effada1b73456941",
+      "branch": null,
+      "pr": null
+    },
+    {
+      "id": "SP-074",
+      "phase": "P1",
+      "priority": 21.5,
+      "title": "Per-job GitHub account follow-ups",
+      "summary": "Follow-ups to SP-063 decided on 2026-11-10 (D-54): scopes and PR watching for orgs reachable only through a space's profile; GitHub calls a space's profile cannot read are refused, with stricter gh_config_dir checks; the repo picker and PR-outcome tracker use the space's profile; a GitHub API quota cap per isolated account.",
+      "why": "D-54.",
+      "depends_on": [
+        "SP-063",
+        "SP-043"
+      ],
+      "touches": [
+        "internal/github/",
+        "internal/daemon/ghprofiles.go",
+        "internal/reviews/",
+        "internal/prs/",
+        "internal/config/schema.go"
+      ],
+      "docs_to_update": [
+        "docs/internals/daemon.md",
+        "docs/OPERATIONS.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-074.1",
+          "title": "Profiles everywhere",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "An org reachable only through a space's gh profile can be added to GitHub scopes and its PRs are watched and reviewed through that profile, never the default login.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "A GitHub call made for a space through a profile that cannot read the target (repo or org outside the profile's access) is refused with a clear error, never retried with another login; gh_config_dir must be an absolute, owner-only directory under the user's home or the call is refused.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "The repo picker and the PR-outcome tracker use the space's profile for that space's repos; a test shows the default login is not used for an isolated space's repo.",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
+        },
+        {
+          "id": "SP-074.2",
+          "title": "Quota",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Each isolated account has a configurable GitHub API budget per hour; past it orchd defers that account's sync and watch calls (logged), while other accounts are unaffected.",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "64dfe8fa4b93ec62bf243535b8f8d41a15cbbdafbcdcab2c948ff91ed70e4ded",
       "branch": null,
       "pr": null
     },
@@ -2972,6 +3352,13 @@
               "check": "A client-supplied 'space' or tag claiming a space is ignored; the chunk lands in the caller's pinned space or quarantine.",
               "measure": "test",
               "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "Docs sync, sources, the review watcher and PR monitoring each re-check the GitHub org binding (CheckOrg) before writing content; a sync of several repos re-checks between repos, and content from an org whose identity changed is not written (D-52).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -2983,7 +3370,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "18303e54d9433d8286c43bd56fa98241a18dd46b81ddcddf5f67b0609ada8c49",
+      "criteria_sha256": "119d6446a5c77ae087c787bf967eab9387ea82c8fdf1a638a62bd7be84eb027e",
       "branch": null,
       "pr": null
     },
@@ -3089,7 +3476,8 @@
       "why": "INV-01, INV-02.",
       "depends_on": [
         "SP-024",
-        "SP-070"
+        "SP-070",
+        "SP-041"
       ],
       "touches": [
         "internal/daemon/daemon.go",
@@ -3142,6 +3530,27 @@
               "check": "A job session reads personal only when its space opted in (D-16); it never reads another job's space either way.",
               "measure": "tests",
               "threshold": "2 pass"
+            },
+            {
+              "id": "a6",
+              "type": "test",
+              "check": "A session pinned through a harness started outside its session's process tree (a detached fake 'claude' pinned in another space's directory) reads no memory beyond what its original session may read; the SP-041 guard refusing that start is the precondition and is exercised in the test (D-38).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a7",
+              "type": "test",
+              "check": "A caller resolved as the operator with no controlling terminal and not Orch.app (a process that double-forked or used launchctl/open/osascript out of a session) reads public memory only; the operator at a terminal and Orch.app keep operator-scope reads (D-39).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a8",
+              "type": "test",
+              "check": "A queued task reads only what the session that dispatched it may read (its pin's space, public, and private spaces that space lists) and writes to that space; a task the operator dispatched uses the placement of its working directory; a task orchd does not track reads public only (D-46).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -3167,7 +3576,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "6f354f71eee4576497159554c9211db9e50463c6b76699b2576308a244ed4836",
+      "criteria_sha256": "b1af57cfe7ce23368c77882ead3d99ad6081ed3e2eb32334e37edc4dccd2ca93",
       "branch": null,
       "pr": null
     },
@@ -3562,6 +3971,13 @@
               "check": "Session, summary, hand-off and client writers can never target public.",
               "measure": "test per writer",
               "threshold": "4 pass"
+            },
+            {
+              "id": "a5",
+              "type": "test",
+              "check": "Under a public root, content from a checkout whose remote is not GitHub, or that has no remote, is quarantined, not placed public; it becomes public only when the operator retags it or declares that folder public (D-50).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -3573,7 +3989,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "648365717adebaf15739fa696eaa5c269db9e25faffa1e486ba422fef87de4dd",
+      "criteria_sha256": "285ce77da8c1a9b5024a92a920ea21f2b54cf013a465814d3808d27d29495726",
       "branch": null,
       "pr": null
     },
@@ -3797,6 +4213,20 @@
               "check": "In a temp home, a sandboxed 'cat' of a file in another job's root fails, and 'gh auth status' in the agent shell shows the space's account.",
               "measure": "observed",
               "threshold": "both true"
+            },
+            {
+              "id": "a6",
+              "type": "test",
+              "check": "'orch run <space>' and the per-checkout settings give each space its own TMPDIR and deny other spaces' temp directories; a session in one space cannot read a file another space's session wrote under its TMPDIR (D-53).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a7",
+              "type": "test",
+              "check": "With sandbox.enabled, allowUnsandboxedCommands=false and the Read(//...) denies written together in a checkout's root settings.local.json, a Claude Code session started in a subfolder is refused Read, Grep, Glob and Edit on another space's root (D-53).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -3850,7 +4280,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "dc35cbd2cf5d37cc04fca785ff5cbf3b168d1b1776a804c7be87917ac1d90232",
+      "criteria_sha256": "0ed90500129ff80453d9ab01f9e541da7d9f62defe2a9d070c09806eae31aa3a",
       "branch": null,
       "pr": null
     },
@@ -4511,6 +4941,34 @@
     {
       "date": "2026-11-09",
       "change": "Moved the four HTML design docs into docs/spaces/design/ and updated them to match this plan (origin.design_docs and design_docs_note updated). No decision, feature or criteria changed."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 1 (command log): D-33..D-37 recorded from RC-53, RC-54, RC-42, RC-43, RC-45. Added SP-073 'Command log hardening' (priority 16.5, after SP-016) and SP-041.1.a4 (refusals never dropped); SP-041's criteria_sha256 recomputed with the user's approval (e97956721af6 -> 19be87147a72)."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 2 (caller trust): D-38..D-41 recorded from RC-01, RC-26, RC-32, RC-47. SP-025 now depends on SP-041 and gains SP-025.1.a6-a7; SP-070 gains SP-070.1.a4. criteria_sha256 recomputed with the user's approval (SP-025 6f354f71eee4 -> 7287b0cb632e, SP-070 0215afcb5b65 -> d51436cafcfd)."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 3 (identity and dependencies): D-42..D-45 recorded from RC-35, RC-02, RC-03, RC-28; RC-57 (user action) and RC-58 (follow-up) added. SP-041 gains SP-041.1.a5; criteria_sha256 recomputed with the user's approval (19be87147a72 -> 59c0d955dc64). SP-011.2's criterion is left as verified history; D-45 retires its bound."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 4 (tasks, redaction, session list, Linux): D-46..D-49 recorded from RC-25, RC-44, RC-49, RC-04; RC-59 and RC-60 (follow-ups) added. SP-025 gains SP-025.1.a8; criteria_sha256 recomputed with the user's approval (7287b0cb632e -> b1af57cfe7ce)."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 5 (GitHub and sandbox): D-50..D-54 recorded from RC-05, RC-06, RC-07, RC-09, RC-10; RC-61 (follow-up) added; SP-074 'Per-job GitHub account follow-ups' added (priority 21.5, after SP-043). New acceptance items with criteria_sha256 recomputed with the user's approval: SP-030 648365717ade -> 285ce77da8c1; SP-023 18303e54d943 -> 119d6446a5c7; SP-046 dc35cbd2cf5d -> cfe689cda20b; SP-046 cfe689cda20b -> 0ed90500129f."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 6 (user actions): RC-46, RC-20 (PR #111 closed) and RC-19 (dropped) resolved; RC-33 updated with the clean dry runs, left open until the user applies them."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 7 (user actions): RC-17, RC-18, RC-21 and RC-22 resolved; issues #158-#162 filed for the defects found."
     }
   ],
   "plan_location": {
