@@ -450,6 +450,26 @@
         "id": "D-41",
         "decision": "Confirmed as built in SP-017: a resume moves a pin only to a fresh top-level harness whose directory places into the pin's space; an in-process /resume of another process's session is refused and its events go to the process's own pin; a 'claude --resume' started in another space's directory runs unpinned (was RC-47).",
         "date": "2026-11-10"
+      },
+      {
+        "id": "D-42",
+        "decision": "The dependency mvdan.cc/sh/v3 (pure Go, BSD-3-Clause) is kept for parsing shell commands in tool-call target extraction, with command substitution, globbing and ~user lookups disabled (was RC-35).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-43",
+        "decision": "Codex pinning is checked by the user after the next release (RC-57), not by a new acceptance item (was RC-02).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-44",
+        "decision": "Before the guard enforces, orchd identifies a connection's peer by a kernel token (LOCAL_PEERTOKEN on macOS, SO_PEERPIDFD on Linux) rather than its PID alone, so a PID reused after a process handed off its socket cannot be mistaken for the original peer; a peer that cannot be identified gets no space, never a default (SP-041.1.a5) (was RC-03).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-45",
+        "decision": "Connection resolution has no cost bound of its own: SP-011.2's 5 ms bound is retired, and the cost is covered by the tool hooks' 20 ms budget and SP-041's decision-latency check (p99 < 50 ms). TestResolveCost's bound is removed as a follow-up (RC-58) (was RC-28).",
+        "date": "2026-11-10"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -482,7 +502,8 @@
           "SP-011",
           "SP-012"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: checked after the next release; see D-43 and RC-57."
       },
       {
         "id": "RC-03",
@@ -494,7 +515,8 @@
         "affects": [
           "SP-011"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: identify peers by kernel token before enforcement; see D-44 and SP-041.1.a5."
       },
       {
         "id": "RC-04",
@@ -797,7 +819,8 @@
         "affects": [
           "SP-011"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: drop the bound; see D-45 and RC-58."
       },
       {
         "id": "RC-29",
@@ -891,7 +914,8 @@
           "SP-040",
           "SP-041"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: keep the dependency; see D-42."
       },
       {
         "id": "RC-36",
@@ -1174,6 +1198,33 @@
           "SP-015",
           "SP-016",
           "SP-017"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-57",
+        "kind": "user-action",
+        "topic": "Check that Codex sessions are pinned",
+        "detail": "After the next release is installed, open a Codex session, then run `orch install --target codex` (dry run; it should show no difference in ~/.codex/hooks.json) and `orch sessions list`: the Codex session should be listed with a space, not as unpinned. If it is unpinned, the installed hooks.json predates the SessionStart/SessionEnd registration or Codex does not trust the hooks.",
+        "source": "RC-02; decision review 2026-11-10",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-010",
+          "SP-011",
+          "SP-012"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-58",
+        "kind": "follow-up",
+        "topic": "Remove TestResolveCost's 5 ms bound",
+        "detail": "D-45 retires SP-011.2's per-connection cost bound. Drop the bound from TestResolveCost (internal/daemon) or turn it into a reported measurement, and say in docs/internals/daemon.md that the hook budget and SP-041's latency check cover the cost. Small; can ride along with SP-041.",
+        "source": "RC-28; decision review 2026-11-10",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-011",
+          "SP-041"
         ],
         "status": "open"
       }
@@ -2827,6 +2878,13 @@
               "check": "With the session's queue share full (flooded with ordinary events), a call the guard refuses is still stored in the command log with its decision; ordinary events past the share drop with a gap record (D-37).",
               "measure": "test",
               "threshold": "passes"
+            },
+            {
+              "id": "a5",
+              "type": "test",
+              "check": "orchd identifies each connection's peer by a kernel token (LOCAL_PEERTOKEN on macOS, SO_PEERPIDFD on Linux): a peer that hands its socket to a child and exits, with its PID then reused by a harness in another space, is not resolved to that harness's session; a peer that cannot be identified gets no space (D-44).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -2859,7 +2917,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "19be87147a72c71135a256cecae47424651682f80f91f4add2d499326a02cfbd",
+      "criteria_sha256": "59c0d955dc641ee5e9676b8779dc98ae509c7ecc89abc2fcf839a19da0e763cc",
       "branch": null,
       "pr": null
     },
@@ -4680,6 +4738,10 @@
     {
       "date": "2026-11-10",
       "change": "Decision review batch 2 (caller trust): D-38..D-41 recorded from RC-01, RC-26, RC-32, RC-47. SP-025 now depends on SP-041 and gains SP-025.1.a6-a7; SP-070 gains SP-070.1.a4. criteria_sha256 recomputed with the user's approval (SP-025 6f354f71eee4 -> 7287b0cb632e, SP-070 0215afcb5b65 -> d51436cafcfd)."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 3 (identity and dependencies): D-42..D-45 recorded from RC-35, RC-02, RC-03, RC-28; RC-57 (user action) and RC-58 (follow-up) added. SP-041 gains SP-041.1.a5; criteria_sha256 recomputed with the user's approval (19be87147a72 -> 59c0d955dc64). SP-011.2's criterion is left as verified history; D-45 retires its bound."
     }
   ],
   "plan_location": {
