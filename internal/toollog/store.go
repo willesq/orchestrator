@@ -269,19 +269,7 @@ func records(ctx context.Context, tx *sql.Tx, o Owner) ([]Record, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	var out []Record
-	for rows.Next() {
-		var r Record
-		if err := rows.Scan(&r.OwnerKind, &r.OwnerID, &r.Seq, &r.TS, &r.HookAt, &r.Kind, &r.Harness,
-			&r.Event, &r.Tool, &r.ClaimedSession, &r.ToolUseID, &r.AgentID, &r.AgentType, &r.Cwd,
-			&r.OldCwd, &r.NewCwd, &r.Targets, &r.Command, &r.InputSize, &r.Decision, &r.Rule,
-			&r.PolicyRev, &r.Dropped, &r.PrevHash, &r.Hash); err != nil {
-			return nil, err
-		}
-		out = append(out, r)
-	}
-	return out, rows.Err()
+	return scanRecords(rows)
 }
 
 // Activity sums one session's chain for the session list (SP-017).

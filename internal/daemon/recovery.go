@@ -40,6 +40,9 @@ func listenSocket() (net.Listener, func(), error) {
 	return lis, closeSocket, nil
 }
 
+// maxStreamsPerConn caps the calls one connection has open at once.
+const maxStreamsPerConn = 128
+
 // newGRPCServer attributes each connection to its process so operator-only
 // RPCs can refuse queued tasks however they reach the socket (callers.go),
 // and, with a resolver, tells each call whom it serves (caller_session.go).
@@ -51,6 +54,10 @@ func newGRPCServer(res *callerResolver) *grpc.Server {
 	}
 	return grpc.NewServer(
 		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent, program: procstat.ReadProgram, started: procstat.StartTime}),
+		// Reason: gRPC keeps each reply until its client reads it, so a
+		// client that sends calls and never reads would make orchd hold
+		// every reply. orch's clients use a few streams per connection.
+		grpc.MaxConcurrentStreams(maxStreamsPerConn),
 		grpc.ChainUnaryInterceptor(unary...),
 		grpc.ChainStreamInterceptor(stream...),
 	)

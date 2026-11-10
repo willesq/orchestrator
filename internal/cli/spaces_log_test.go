@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -71,5 +72,148 @@ func TestSpacesLogVerify(t *testing.T) {
 	if _, err := runLogVerify(t, nil, errors.New("only the operator can read the command log"), "task:task-1"); err == nil ||
 		!strings.Contains(err.Error(), "operator") {
 		t.Errorf("refusal = %v", err)
+	}
+}
+
+// eventsFake is what fakeClient's ListToolEvents and SummarizeToolLog answer
+// and record.
+var eventsFake struct {
+	reqs    []*orchdv1.ListToolEventsRequest
+	pages   []*orchdv1.ListToolEventsResponse
+	err     error
+	sumReq  *orchdv1.SummarizeToolLogRequest
+	summary *orchdv1.ToolLogSummary
+}
+
+func (f *fakeClient) ListToolEvents(_ context.Context, req *orchdv1.ListToolEventsRequest, _ ...grpc.CallOption) (*orchdv1.ListToolEventsResponse, error) {
+	eventsFake.reqs = append(eventsFake.reqs, req)
+	if eventsFake.err != nil {
+		return nil, eventsFake.err
+	}
+	page := eventsFake.pages[0]
+	eventsFake.pages = eventsFake.pages[1:]
+	return page, nil
+}
+
+func (f *fakeClient) SummarizeToolLog(_ context.Context, req *orchdv1.SummarizeToolLogRequest, _ ...grpc.CallOption) (*orchdv1.ToolLogSummary, error) {
+	eventsFake.sumReq = req
+	return eventsFake.summary, eventsFake.err
+}
+
+func resetEventsFake(t *testing.T) {
+	t.Helper()
+	reset := func() {
+		eventsFake.reqs, eventsFake.pages, eventsFake.err = nil, nil, nil
+		eventsFake.sumReq, eventsFake.summary = nil, nil
+	}
+	reset()
+	t.Cleanup(reset)
+}
+
+func TestSpacesLogShowsEvents(t *testing.T) {
+	resetEventsFake(t)
+	at := time.Date(2026, 11, 10, 9, 30, 0, 0, time.Local).UnixNano()
+	eventsFake.pages = []*orchdv1.ListToolEventsResponse{
+		{Owner: "sess-1", Pruned: 2, More: true, Events: []*orchdv1.ToolEvent{
+			{Seq: 3, At: at, Kind: "event", Event: "pre-tool-use", Tool: "Bash", Decision: "logged", Command: "git status"},
+			{Seq: 4, At: at, Kind: "event", Event: "cwd-changed", Decision: "logged", OldCwd: "/w", NewCwd: "/w/sub"},
+		}},
+		{Owner: "sess-1", Events: []*orchdv1.ToolEvent{
+			{Seq: 5, At: at, Kind: "gap", Dropped: 7},
+			{Seq: 6, At: at, Kind: "end"},
+		}},
+	}
+	out, err := run(factory(&fakeClient{}, nil), "", "spaces", "log", "sess-1")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	for _, w := range []string{"records up to 2 were deleted by retention", "SEQ", "2026-11-10 09:30:00",
+		"pre-tool-use", "git status", "/w -> /w/sub", "7 event(s) dropped", "end"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("output lacks %q:\n%s", w, out)
+		}
+	}
+	if len(eventsFake.reqs) != 2 || eventsFake.reqs[0].GetOwner() != "sess-1" || eventsFake.reqs[1].GetAfterSeq() != 4 {
+		t.Errorf("requests = %v, want two pages of sess-1, the second after 4", eventsFake.reqs)
+	}
+}
+
+func TestSpacesLogOwnAndLimit(t *testing.T) {
+	resetEventsFake(t)
+	eventsFake.pages = []*orchdv1.ListToolEventsResponse{{Owner: "sess-me", More: true, Events: []*orchdv1.ToolEvent{
+		{Seq: 11, Kind: "event", Event: "pre-tool-use", Tool: "Read", Command: "{\"file_path\":\"/x\"}"},
+		{Seq: 12, Kind: "event", Event: "pre-tool-use", Tool: "Read", Command: "{}"},
+	}}}
+	out, err := run(factory(&fakeClient{}, nil), "", "spaces", "log", "--after", "10", "--limit", "2")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if r := eventsFake.reqs; len(r) != 1 || r[0].GetOwner() != "" || r[0].GetAfterSeq() != 10 || r[0].GetLimit() != 2 {
+		t.Errorf("requests = %v, want one for the caller's own log after 10, limit 2", r)
+	}
+	if !strings.Contains(out, "file_path") {
+		t.Errorf("output:\n%s", out)
+	}
+
+	// A page that says more but holds nothing ends the listing.
+	resetEventsFake(t)
+	eventsFake.pages = []*orchdv1.ListToolEventsResponse{
+		{Owner: "sess-me", More: true, Events: []*orchdv1.ToolEvent{{Seq: 1, Kind: "end"}}},
+		{Owner: "sess-me", More: true},
+	}
+	if out, err := run(factory(&fakeClient{}, nil), "", "spaces", "log", "sess-me"); err != nil || len(eventsFake.reqs) != 2 {
+		t.Errorf("empty page with more: %v, %d requests\n%s", err, len(eventsFake.reqs), out)
+	}
+
+	resetEventsFake(t)
+	eventsFake.pages = []*orchdv1.ListToolEventsResponse{{Owner: "task:t-1"}}
+	if out, err := run(factory(&fakeClient{}, nil), "", "spaces", "log", "task:t-1"); err != nil || !strings.Contains(out, "task:t-1: no records") {
+		t.Errorf("empty log: %v\n%s", err, out)
+	}
+
+	resetEventsFake(t)
+	eventsFake.err = errors.New("a session can read only its own command log")
+	if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "log", "sess-other"); err == nil || !strings.Contains(err.Error(), "only its own") {
+		t.Errorf("refusal = %v", err)
+	}
+}
+
+func TestSpacesLogSummary(t *testing.T) {
+	resetEventsFake(t)
+	eventsFake.summary = &orchdv1.ToolLogSummary{Since: 1, Until: 2, UnplacedMoves: 3, Spaces: []*orchdv1.SpaceToolActivity{
+		{Space: "", Sessions: 1, ToolCalls: 4},
+		{Space: "acme", Sessions: 2, ToolCalls: 40, DirectoryMoves: 6, CrossSpaceMoves: 2, Refusals: 1},
+	}}
+	before := time.Now()
+	out, err := run(factory(&fakeClient{}, nil), "", "spaces", "log", "summary")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if got := eventsFake.sumReq.GetSince(); got < before.Add(-7*24*time.Hour-time.Second).Unix() || got > before.Add(-7*24*time.Hour+time.Minute).Unix() {
+		t.Errorf("since = %d, want a week ago", got)
+	}
+	for _, w := range []string{"SPACE", "INTO ANOTHER SPACE", "acme   2         40          6                2                   1",
+		"3 directory move(s) were not checked"} {
+		if !strings.Contains(out, w) {
+			t.Errorf("output lacks %q:\n%s", w, out)
+		}
+	}
+	if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "log", "summary", "--since", "24h"); err != nil {
+		t.Fatal(err)
+	}
+	if got := eventsFake.sumReq.GetSince(); got < time.Now().Add(-25*time.Hour).Unix() {
+		t.Errorf("--since 24h sent %d", got)
+	}
+	if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "log", "summary", "--since", "0s"); err == nil {
+		t.Error("--since 0s accepted")
+	}
+
+	eventsFake.summary = &orchdv1.ToolLogSummary{}
+	if out, err := run(factory(&fakeClient{}, nil), "", "spaces", "log", "summary"); err != nil || !strings.Contains(out, "no tool events") {
+		t.Errorf("empty summary: %v\n%s", err, out)
+	}
+	eventsFake.err = errors.New("only the operator can summarize the command log")
+	if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "log", "summary"); err == nil {
+		t.Error("refusal not returned")
 	}
 }

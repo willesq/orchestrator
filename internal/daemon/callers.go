@@ -63,6 +63,8 @@ var taskCallable = map[string]bool{
 	// session's; the event is attributed to the task orchd resolved, never to
 	// the session it names.
 	orchdv1.Orchd_RecordToolEvent_FullMethodName: true,
+	// ListToolEvents gives a task only its own task's command log.
+	orchdv1.Orchd_ListToolEvents_FullMethodName: true,
 }
 
 // operatorActions says what each operator-only RPC would do, for the refusal.
@@ -127,6 +129,8 @@ var operatorActions = map[string]string{
 	orchdv1.Orchd_DiffSpaces_FullMethodName:     "read the spaces policy",
 	orchdv1.Orchd_ApplySpaces_FullMethodName:    "apply the spaces policy",
 	orchdv1.Orchd_VerifyToolLog_FullMethodName:  "read the command log",
+	// Reason: the summary names every space and its activity.
+	orchdv1.Orchd_SummarizeToolLog_FullMethodName: "summarize the command log",
 	// Reason: a queued task's identity comes from its task record, so a pin
 	// would only give it a second, self-reported one. Interactive sessions'
 	// hooks still pin (PinSession checks the harness process itself).

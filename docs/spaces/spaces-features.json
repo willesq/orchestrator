@@ -1021,7 +1021,7 @@
         "id": "RC-39",
         "kind": "follow-up",
         "topic": "Flaky daemon tests seen while verifying SP-013",
-        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go:117, 'WatchTasks ended with context canceled') fails about 1 run in 4 on origin/main 644dcaf as well as on the SP-013 branch (5/20 and 6/20 with -count=20). TestCallerSessionCost failed once (p99 5.5 ms against a 5 ms bound) while a 16-worker fuzz run loaded the CPU. Neither touches SP-013's code. Fix the first; consider making the second tolerant of a loaded machine or skipping it under -short. The SP-013 verifier also saw TestRunMeasuresFailedRuns (internal/agentrun) fail twice on the branch under full-suite load (DurationMS 199 against a 200 ms timeout; never on main in 7 full and 20 isolated runs; the package is untouched by SP-013) and TestToolHookCost once (passes in isolation, p99 about 14 ms against 30 ms). Both look load-sensitive. Update 2026-11-09 (SP-014 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks 3 of 3 times on origin/main 0ff06db and 2 of 3 on the SP-014 branch (0 of 20 each when run alone), so under full-package load it now fails most runs. Update 2026-11-09 (SP-017 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks ('WatchTasks ended with context canceled') 1 of 2 on origin/main 85b0784 and 6 of 6 on the SP-017 branch (passes alone); TestRunMeasuresFailedRuns (internal/agentrun, untouched) failed once in a full go test ./... and passed alone. The handler appears to return ctx.Err() instead of nil when the client goes away under load. Update 2026-11-09 (SP-015 session): TestWatchTasksStreamsSnapshotChangesAndTicks failed 2 of 20 isolated runs on both origin/main cf031dc and the SP-015 branch, and in 3 of 5 full go test ./... runs on the branch (a fourth failing run's test was not captured); TestRunExitsWhenANewBuildIsInstalled (internal/daemon run_test.go:120, 'grpc: the server has been stopped') fails 3 of 3 under go test -race on both main cf031dc and the branch (CI does not run -race). In CI on PR #157 (run 42753605190, attempt 1) TestRunMeasuresFailedRuns failed again (DurationMS 199 against a 200 ms timeout) and passed on the re-run.",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go:117, 'WatchTasks ended with context canceled') fails about 1 run in 4 on origin/main 644dcaf as well as on the SP-013 branch (5/20 and 6/20 with -count=20). TestCallerSessionCost failed once (p99 5.5 ms against a 5 ms bound) while a 16-worker fuzz run loaded the CPU. Neither touches SP-013's code. Fix the first; consider making the second tolerant of a loaded machine or skipping it under -short. The SP-013 verifier also saw TestRunMeasuresFailedRuns (internal/agentrun) fail twice on the branch under full-suite load (DurationMS 199 against a 200 ms timeout; never on main in 7 full and 20 isolated runs; the package is untouched by SP-013) and TestToolHookCost once (passes in isolation, p99 about 14 ms against 30 ms). Both look load-sensitive. Update 2026-11-09 (SP-014 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks 3 of 3 times on origin/main 0ff06db and 2 of 3 on the SP-014 branch (0 of 20 each when run alone), so under full-package load it now fails most runs. Update 2026-11-09 (SP-017 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks ('WatchTasks ended with context canceled') 1 of 2 on origin/main 85b0784 and 6 of 6 on the SP-017 branch (passes alone); TestRunMeasuresFailedRuns (internal/agentrun, untouched) failed once in a full go test ./... and passed alone. The handler appears to return ctx.Err() instead of nil when the client goes away under load. Update 2026-11-09 (SP-015 session): TestWatchTasksStreamsSnapshotChangesAndTicks failed 2 of 20 isolated runs on both origin/main cf031dc and the SP-015 branch, and in 3 of 5 full go test ./... runs on the branch (a fourth failing run's test was not captured); TestRunExitsWhenANewBuildIsInstalled (internal/daemon run_test.go:120, 'grpc: the server has been stopped') fails 3 of 3 under go test -race on both main cf031dc and the branch (CI does not run -race). In CI on PR #157 (run 42753605190, attempt 1) TestRunMeasuresFailedRuns failed again (DurationMS 199 against a 200 ms timeout) and passed on the re-run. Update 2026-11-10 (SP-016 session): in CI on PR #164 (run 42877529008, attempt 1) TestToolHookCost failed differently from before: 998 of 1000 events taken, but some attributed to no session ('' instead of sess-hook), i.e. a hook caller resolved as unidentified under load; it passed on the re-run and 8 of 8 local runs. The test builds its own gRPC server and the SP-016 diff does not touch that path. Worth investigating as a possible intermittent caller-resolution bug, not only a timing flake.",
         "source": "https://github.com/willesq/orchestrator/pull/151",
         "raised": "2026-11-09",
         "affects": [],
@@ -1325,6 +1325,61 @@
         "affects": [
           "SP-021",
           "SP-053"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-62",
+        "kind": "decision",
+        "topic": "What the weekly command-log summary counts",
+        "detail": "SP-016's 'orch spaces log summary' counts directory moves only from cwd-changed events: Codex sends none, and a Bash 'cd' (a target SP-013 extracts) or a tool call reaching another space's files is not counted as a move. Queued tasks have no space until SP-023 and are summed under '' with sessions pinned with no policy and chains whose pin is gone; their moves are not compared. A move counts as 'into another space' when a session started in the new directory would be pinned to a different space under the policy applied now, not the revision recorded on the event (policy_rev), and placement answers GitHub lookups from the cache only, so an uncached repo is placed by the owner its remote names and may differ from what PinSession would decide. Decide whether the summary should count calls whose targets reach another space (likely once SP-040 decides per call), place by the recorded revision, and count cache misses as unplaced.",
+        "source": "https://github.com/willesq/orchestrator/pull/164",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-016",
+          "SP-040",
+          "SP-054",
+          "SP-023"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-63",
+        "kind": "decision",
+        "topic": "Replies a client never reads (second SP-016 audit, residual)",
+        "detail": "gRPC keeps a unary reply in memory until the client reads it, after the handler returns. SP-016 caps an agent's ListToolEvents page at 512 KiB, allows one read per chain at a time, and caps every orchd connection at 128 open calls (grpc.MaxConcurrentStreams, maxStreamsPerConn). A local process that opens many connections and sends calls without reading replies can still make orchd hold them; this applies to every agent-callable RPC with large replies (GetDocument, ListDocs, Search, ListToolEvents), not only the command log. Options: cap connections per process in peerCredentials, a server-wide budget for unsent replies, or accept it with the OS sandbox and orchd's restart as the bound.",
+        "source": "https://github.com/willesq/orchestrator/pull/164",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-016",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-64",
+        "kind": "decision",
+        "topic": "Which of a harness process's sessions a session may read",
+        "detail": "ListToolEvents gives a session only the current session of its harness process (the pin caller resolution picks, RC-27), and only while that is still the pin its connection resolved: after /clear, or once a subagent's pin is newer, an earlier session's log is readable only by the operator, and an older connection is refused until it reconnects (the CLI always reconnects). The command log's writer already treats sessions of one process as related (resolveClaim). Confirm, or let a session read every chain pinned to its own harness process.",
+        "source": "https://github.com/willesq/orchestrator/pull/164",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-016",
+          "SP-054"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-65",
+        "kind": "follow-up",
+        "topic": "SP-016 audit lows and notes",
+        "detail": "From the two SP-016 security reviews, accepted as Low or informational: (1) a process reparented out of the harness tree (launchd, open, osascript) counts as the operator, as documented under Caller sessions; reading the command log makes that bypass more rewarding, and the OS sandbox (SP-046) is the boundary; (2) a session that runs 'orch spaces log' puts its own redacted log into its transcript, which the session-end summary ingests into RAG; the text is the session's own commands, already in its transcript, but decide whether INV-12 should refuse the table inside a harness; (3) 'orch spaces log verify' prints the owner and problem details without cell(); (4) the CLI buffers every page and shares one 30 s deadline, so a very large log can time out having printed nothing (flush per page or stream); (5) the shared flush is best effort (a reader joining a running flush may miss events taken just before it called); (6) the summary's placing deadline cannot interrupt a stat that blocks (an autofs or dead network mount under /net or /Volumes); consider skipping non-local filesystems. (7) no test pins grpc.MaxConcurrentStreams in newGRPCServer, so a refactor could drop it silently; (8) two 'orch spaces log' runs from one session at the same moment: the second is refused (ResourceExhausted) with no retry.",
+        "source": "https://github.com/willesq/orchestrator/pull/164",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-016",
+          "SP-046",
+          "SP-054"
         ],
         "status": "open"
       }
@@ -2696,18 +2751,26 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestListToolEventsCallerScope (internal/daemon/toollog_read_test.go) passes at 2c9c8ff: session sess-a reading '', 'sess-a' or 'session:sess-a' gets exactly its own events (a-0,a-1,a-2); naming sess-b, session:sess-b, task:t-1 or an unknown session is refused with PermissionDenied and the same message whether or not the chain exists; a pin of another process, an unpinned harness and a task with no record are refused; task t-1 reads only task:t-1; the operator reads any chain and must name one.",
+            "a1 (regressions from the security audits): TestListToolEventsAfterClear (a connection that resolved its pin before /clear can no longer read the replaced session; a fresh one reads the new session; the operator still reads both), TestListToolEventsOneReadPerChain (a second concurrent agent read is ResourceExhausted while the operator's read proceeds), TestListToolEventsByteBudget (300 records of 16 KiB targets come back in several pages each under 4 MiB; an agent's page is at most 512 KiB plus one record), TestListToolEventsPages, TestPage and TestActivitySince (internal/toollog/read_test.go).",
+            "a2: TestSummarizeToolLogPerSpace passes at 2c9c8ff with fixtures in the plan's layout (oss public root, personal private, acme isolated): acme sessions=1 calls=4 moves=4 cross=3 refusals=1 (moves within acme, twice into personal, once under the public root whose sessions are personal's); personal sessions=1 calls=1 moves=2 cross=1 (events 8 days old excluded from the default 7-day window, included with since=9 days); tasks and an unpinned chain under '' with moves not compared; the 500-directory budget counts the rest as unplaced. TestSummarizeToolLogAccess: operator-only (session and queued task refused), since must be in the past, with no policy everything is under '' and no move crosses spaces. TestSummaryPlacingDeadline and TestSummaryPlacesFromCache: past the placing deadline the summary still answers with moves unplaced, and placement makes no gh calls.",
+            "a2 (command): TestSpacesLogCommands runs 'orch spaces log sess-acme' and 'orch spaces log summary' through the real CLI against orchd on a temporary socket; the summary prints 'acme   1         1           1                1                   0'. CLI tests TestSpacesLogShowsEvents, TestSpacesLogOwnAndLimit, TestSpacesLogSummary (internal/cli/spaces_log_test.go).",
+            "DOD at 2c9c8ff: go test ./... exit 0; go vet ./... exit 0; gofmt -l on changed Go files: 0 lines; make cover 'All files >= 80%' with internal/daemon included (35 daemon files listed): toollog_read.go 89.7%, toollog/read.go 90.9%, cli/spaces_log.go 98.9%, callers.go 96.4%, placement_rpc.go 97.9%, recovery.go 88.7%, daemon/toollog.go 93.5%, toollog/store.go 85.8%.",
+            "Security: three security-audit rounds on the diff. Round 1: 1 medium (pages bounded by count, not bytes) and 3 lows (pre-/clear connection could read the replaced session; summary placement spent GitHub lookups and had no deadline; uncoalesced flushes); all fixed with tests. Round 2: 2 mediums (global read semaphore let agents starve the operator; replies gRPC holds after the handler returns) and lows; fixed (per-chain agent reads, operator exempt; 512 KiB agent pages; MaxConcurrentStreams 128; separate placing context; flush failure no longer fails reads), residual recorded as RC-63. Round 3: no critical/high/medium; lows reworded or recorded in RC-65. Open questions RC-62..RC-65.",
+            "Docs: docs/internals/cli.md (spaces log, spaces log summary), docs/internals/daemon.md (Command log, Reading), docs/OPERATIONS.md (Spaces)."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "329cdb5c866746d5e754d147980ef33cfed300d1",
+      "verified_at": "2026-11-10T18:56:58Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "222e6b26c7a27f71b0ccd2e02fea3f15fe4a0f923426f4f9089083f81988a994",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-016-read-log",
+      "pr": "https://github.com/willesq/orchestrator/pull/164"
     },
     {
       "id": "SP-073",

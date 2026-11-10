@@ -285,7 +285,7 @@ orchd stores every event the [tool hooks](hooks.md#tool-hooks) hand to `RecordTo
 into RAG (INV-12): the log package imports only the standard library, SQLite and `redact`, and
 `TestCommandLogNeverReachesRAG` type-checks the repository and fails if any function reachable
 by calls from the code that takes, stores or reads tool events (`internal/toollog`,
-`internal/daemon/toollog.go`, `toolevents.go`) calls `IngestText`, `Upsert` or `Ingest`, or if
+`internal/daemon/toollog.go`, `toollog_read.go`, `toolevents.go`) calls `IngestText`, `Upsert` or `Ingest`, or if
 any function both touches the log and calls one. A call through an interface may reach any
 method of that name; calls through function values are not followed.
 
@@ -407,8 +407,40 @@ method of that name; calls through function values are not followed.
     a prefix up to a record whose hash is copied); `verify` then shows the cut, and orchd's log has
     no line for it. A large delete holds the write lock for its whole statement; the writer waits
     for it, and events that overflow the queue meanwhile are dropped and recorded as a gap. Pins are not pruned here (RC-50), and the policy is read when orchd starts.
-- **Not yet:** reading the log (SP-016, `orch spaces log <session>`). Tasks have no end record:
-  their runs send no SessionEnd.
+- **Reading** (SP-016, INV-12; `internal/daemon/toollog_read.go`, `toollog.Store.Page`,
+  `toollog.Store.ActivitySince`): `ListToolEvents` returns one chain's records in sequence order
+  after an `after_seq`, with the chain's pruned head: up to 1000 per call, and fewer once a page
+  holds about 3 MiB for the operator or 512 KiB for an agent (a record can hold about 55 KiB;
+  always at least one), so a reply stays under gRPC's 4 MiB limit. An agent's handler reads one
+  page of a chain at a time; a call while one runs is refused (`ResourceExhausted`), never
+  queued, so agents cannot pile up reads or delay the operator's. That bounds work, not memory: Before reading it flushes the writer, best effort:
+  concurrent readers share one flush, so reading cannot pile control jobs on the writer's queue,
+  a reader joining a running flush may miss events taken just before it called, and a flush that
+  fails or times out is logged and what is stored is served anyway. gRPC keeps a reply until its
+  client reads it, after the handler returns, so orchd caps every connection at 128 open calls
+  (`maxStreamsPerConn`), at most 64 MiB of agent pages per connection; a client that opens many
+  connections and reads no replies can still make orchd hold them (RC-63). The operator reads any chain and must name it. A pinned session reads only
+  its own: the current session of the harness process its [resolved pin](#caller-sessions) names
+  (RC-27), and only while that is still the connection's pin, so a pin a resume moved to another
+  process (RC-50), or a session `/clear` (or a later subagent's pin) has since replaced, is no
+  longer readable from a connection that resolved it earlier; a new connection reads the current
+  session. A session `/clear` replaced is readable only by the operator. A queued task reads only `task:<its id>` (`ListToolEvents` is in
+  `taskCallable`; the handler narrows it). Any other caller (an unpinned harness, a task orchd
+  cannot find), and any request naming another chain, gets the same `PermissionDenied` whether or
+  not that chain exists. `SummarizeToolLog` (operator-only) sums every chain's `event` records
+  taken in a window (7 days unless `since` names an earlier time) per space: sessions and tasks
+  with events, tool calls (`pre-tool-use`), refusals, directory moves (`cwd-changed`) and moves
+  into another space, which are moves whose new directory a session would be pinned to a
+  different space for under the policy applied now (`placeSession`, with GitHub lookups answered
+  from the cache alone: the directories are whatever sessions reported, so placing them spends
+  none of the lookups pinning relies on, and an uncached repo keeps the owner its remote names).
+  Placing stops after 20 seconds. A session counts in the
+  space it is pinned to; tasks, which have no space yet, sessions pinned with no policy applied,
+  and chains with no pin are under `""`, and their moves are not compared. One summary places at
+  most 500 distinct directories; moves past that or the time limit are counted as unplaced. Moves a Bash `cd` makes without a `cwd-changed` event (Codex
+  sends none) are not counted. CLI: `orch spaces log [<session>|task:<id>]`, `orch spaces log
+  summary [--since 168h]`.
+- **Not yet:** tasks have no end record: their runs send no SessionEnd.
 
 Clients dial `unix://<socket>` lazily (failure surfaces on the first call) and set their own
 deadlines: hooks 0.5 s for writes and 3 s for prompt search; `orch status` 2–3 s; long CLI

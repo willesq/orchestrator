@@ -268,6 +268,14 @@ func (f *fakeClient) VerifyToolLog(context.Context, *orchdv1.VerifyToolLogReques
 	return &orchdv1.VerifyToolLogResponse{}, nil
 }
 
+func (f *fakeClient) ListToolEvents(context.Context, *orchdv1.ListToolEventsRequest, ...grpc.CallOption) (*orchdv1.ListToolEventsResponse, error) {
+	return &orchdv1.ListToolEventsResponse{}, nil
+}
+
+func (f *fakeClient) SummarizeToolLog(context.Context, *orchdv1.SummarizeToolLogRequest, ...grpc.CallOption) (*orchdv1.ToolLogSummary, error) {
+	return &orchdv1.ToolLogSummary{}, nil
+}
+
 func (f *fakeClient) RecordToolEvent(context.Context, *orchdv1.RecordToolEventRequest, ...grpc.CallOption) (*orchdv1.RecordToolEventResponse, error) {
 	return &orchdv1.RecordToolEventResponse{}, nil
 }

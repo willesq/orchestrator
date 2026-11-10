@@ -174,6 +174,14 @@ func newRepoLookups(gh github.Runner) *repoLookups {
 	return &repoLookups{gh: gh, now: time.Now, entries: map[string]repoEntry{}}
 }
 
+type cachedRepoLookupsKey struct{}
+
+// withCachedRepoLookups makes repo lookups under ctx answer from the cache
+// alone, so placing paths a session chose spends none of GitHub's budget.
+func withCachedRepoLookups(ctx context.Context) context.Context {
+	return context.WithValue(ctx, cachedRepoLookupsKey{}, true)
+}
+
 func (l *repoLookups) lookup(ctx context.Context, owner, name string) *spaces.Repo {
 	fallback := &spaces.Repo{Owner: owner, Name: name}
 	// Invalid names are refused before they spend the lookup budget.
@@ -187,6 +195,10 @@ func (l *repoLookups) lookup(ctx context.Context, owner, name string) *spaces.Re
 		l.mu.Unlock()
 		r := e.repo
 		return &r
+	}
+	if ctx.Value(cachedRepoLookupsKey{}) != nil {
+		l.mu.Unlock()
+		return fallback
 	}
 	if now.Sub(l.window) >= time.Minute {
 		l.window, l.spent = now, 0

@@ -735,6 +735,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ListToolEvents" metadata.
+        public enum ListToolEvents: Sendable {
+            /// Request type for "ListToolEvents".
+            public typealias Input = Orchd_V1_ListToolEventsRequest
+            /// Response type for "ListToolEvents".
+            public typealias Output = Orchd_V1_ListToolEventsResponse
+            /// Descriptor for "ListToolEvents".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListToolEvents",
+                type: .unary
+            )
+        }
+        /// Namespace for "SummarizeToolLog" metadata.
+        public enum SummarizeToolLog: Sendable {
+            /// Request type for "SummarizeToolLog".
+            public typealias Input = Orchd_V1_SummarizeToolLogRequest
+            /// Response type for "SummarizeToolLog".
+            public typealias Output = Orchd_V1_ToolLogSummary
+            /// Descriptor for "SummarizeToolLog".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SummarizeToolLog",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -1000,6 +1026,8 @@ public enum Orchd_V1_Orchd: Sendable {
             ListSessions.descriptor,
             RecordToolEvent.descriptor,
             VerifyToolLog.descriptor,
+            ListToolEvents.descriptor,
+            SummarizeToolLog.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -2363,6 +2391,56 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_VerifyToolLogResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_VerifyToolLogResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListToolEvents" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListToolEvents reads one session's or task's command log in sequence
+        /// > order, a page at a time. The operator reads any; a session reads only
+        /// > its own events and a queued task only its own task's, and naming
+        /// > another is refused (INV-12).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListToolEventsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListToolEventsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListToolEventsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listToolEvents<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListToolEventsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListToolEventsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListToolEventsResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListToolEventsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SummarizeToolLog" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SummarizeToolLog sums the command log per space over a window: tool
+        /// > calls, directory moves and moves into another space. Operator only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SummarizeToolLogRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SummarizeToolLogRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ToolLogSummary` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func summarizeToolLog<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SummarizeToolLogRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SummarizeToolLogRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ToolLogSummary>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ToolLogSummary>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListRegisteredSources" method.
@@ -4699,6 +4777,78 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "ListToolEvents" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListToolEvents reads one session's or task's command log in sequence
+        /// > order, a page at a time. The operator reads any; a session reads only
+        /// > its own events and a queued task only its own task's, and naming
+        /// > another is refused (INV-12).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListToolEventsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListToolEventsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListToolEventsResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listToolEvents<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListToolEventsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListToolEventsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListToolEventsResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListToolEventsResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListToolEvents.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SummarizeToolLog" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SummarizeToolLog sums the command log per space over a window: tool
+        /// > calls, directory moves and moves into another space. Operator only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SummarizeToolLogRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SummarizeToolLogRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ToolLogSummary` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func summarizeToolLog<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SummarizeToolLogRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SummarizeToolLogRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ToolLogSummary>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ToolLogSummary>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SummarizeToolLog.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -6912,6 +7062,68 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_VerifyToolLogRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_VerifyToolLogResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListToolEvents" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListToolEvents reads one session's or task's command log in sequence
+    /// > order, a page at a time. The operator reads any; a session reads only
+    /// > its own events and a queued task only its own task's, and naming
+    /// > another is refused (INV-12).
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListToolEventsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listToolEvents<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListToolEventsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListToolEventsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listToolEvents(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListToolEventsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListToolEventsResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SummarizeToolLog" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SummarizeToolLog sums the command log per space over a window: tool
+    /// > calls, directory moves and moves into another space. Operator only.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SummarizeToolLogRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func summarizeToolLog<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SummarizeToolLogRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ToolLogSummary>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.summarizeToolLog(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SummarizeToolLogRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ToolLogSummary>(),
             options: options,
             onResponse: handleResponse
         )
@@ -9268,6 +9480,76 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.verifyToolLog(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListToolEvents" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListToolEvents reads one session's or task's command log in sequence
+    /// > order, a page at a time. The operator reads any; a session reads only
+    /// > its own events and a queued task only its own task's, and naming
+    /// > another is refused (INV-12).
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listToolEvents<Result>(
+        _ message: Orchd_V1_ListToolEventsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListToolEventsResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListToolEventsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listToolEvents(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SummarizeToolLog" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SummarizeToolLog sums the command log per space over a window: tool
+    /// > calls, directory moves and moves into another space. Operator only.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func summarizeToolLog<Result>(
+        _ message: Orchd_V1_SummarizeToolLogRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ToolLogSummary>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SummarizeToolLogRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.summarizeToolLog(
             request: request,
             options: options,
             onResponse: handleResponse
