@@ -7662,6 +7662,7 @@ type VerifyToolLogResponse struct {
 	Gaps          int32                  `protobuf:"varint,4,opt,name=gaps,proto3" json:"gaps,omitempty"`        // records saying events were dropped
 	Dropped       int64                  `protobuf:"varint,5,opt,name=dropped,proto3" json:"dropped,omitempty"`  // events those gap records count
 	Problems      []*ToolLogProblem      `protobuf:"bytes,6,rep,name=problems,proto3" json:"problems,omitempty"` // empty when the chain is intact
+	Pruned        int64                  `protobuf:"varint,7,opt,name=pruned,proto3" json:"pruned,omitempty"`    // retention (SP-015) may have deleted records up to this seq; 0 for none
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7736,6 +7737,13 @@ func (x *VerifyToolLogResponse) GetProblems() []*ToolLogProblem {
 		return x.Problems
 	}
 	return nil
+}
+
+func (x *VerifyToolLogResponse) GetPruned() int64 {
+	if x != nil {
+		return x.Pruned
+	}
+	return 0
 }
 
 type DocRepo struct {
@@ -12613,14 +12621,15 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x05owner\x18\x01 \x01(\tR\x05owner\":\n" +
 	"\x0eToolLogProblem\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x03R\x03seq\x12\x16\n" +
-	"\x06detail\x18\x02 \x01(\tR\x06detail\"\xc3\x01\n" +
+	"\x06detail\x18\x02 \x01(\tR\x06detail\"\xdb\x01\n" +
 	"\x15VerifyToolLogResponse\x12\x18\n" +
 	"\arecords\x18\x01 \x01(\x05R\arecords\x12\x18\n" +
 	"\aanchors\x18\x02 \x01(\x05R\aanchors\x12\x12\n" +
 	"\x04ends\x18\x03 \x01(\x05R\x04ends\x12\x12\n" +
 	"\x04gaps\x18\x04 \x01(\x05R\x04gaps\x12\x18\n" +
 	"\adropped\x18\x05 \x01(\x03R\adropped\x124\n" +
-	"\bproblems\x18\x06 \x03(\v2\x18.orchd.v1.ToolLogProblemR\bproblems\"\xb6\x01\n" +
+	"\bproblems\x18\x06 \x03(\v2\x18.orchd.v1.ToolLogProblemR\bproblems\x12\x16\n" +
+	"\x06pruned\x18\a \x01(\x03R\x06pruned\"\xb6\x01\n" +
 	"\aDocRepo\x12\x12\n" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x19\n" +
 	"\bhead_sha\x18\x02 \x01(\tR\aheadSha\x12\x1f\n" +

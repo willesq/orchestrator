@@ -2,6 +2,7 @@ package toollog
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"log"
 	"sync"
@@ -492,15 +493,7 @@ func (w *Writer) takeDrops() map[dropKey]int64 {
 	return d
 }
 
-// inTx runs fn in one transaction.
+// inTx runs fn in one write transaction.
 func (s *Store) inTx(ctx context.Context, fn func(execer) error) error {
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := fn(tx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	return tx.Commit()
+	return s.write(ctx, func(tx *sql.Tx) error { return fn(tx) })
 }

@@ -45,11 +45,16 @@ session.`,
 }
 
 func printToolLogReport(out io.Writer, owner string, rep *orchdv1.VerifyToolLogResponse) error {
-	if rep.GetRecords() == 0 && len(rep.GetProblems()) == 0 {
+	if rep.GetRecords() == 0 && len(rep.GetProblems()) == 0 && rep.GetPruned() == 0 {
 		fmt.Fprintf(out, "%s: no records\n", owner)
 		return nil
 	}
 	fmt.Fprintf(out, "%s: %d record(s), %d chain head(s) anchored at SessionEnd\n", owner, rep.GetRecords(), rep.GetAnchors())
+	if n := rep.GetPruned(); n > 0 {
+		// Reason: the cut is recorded in the same file, so orchd's log of
+		// each cut is the record to compare it with.
+		fmt.Fprintf(out, "records up to %d: deleted by retention except refusals (orchd's log names each cut)\n", n)
+	}
 	if rep.GetGaps() > 0 {
 		fmt.Fprintf(out, "%d gap record(s): %d event(s) were dropped before orchd could store them\n",
 			rep.GetGaps(), rep.GetDropped())

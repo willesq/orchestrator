@@ -88,8 +88,12 @@ as. Inside an agent session orchd answers only when every space in the answer is
 orchd keeps a command log of every tool call and directory change Claude Code and Codex sessions
 report, in `~/.local/share/orch/toollog.db` (owner-only, never indexed into RAG). Commands are
 stored credential-redacted and capped at 2 KB. `orch spaces log verify <session>` checks that no
-record was changed, removed or moved since orchd wrote it; it is operator-only. See
-[internals/daemon.md](internals/daemon.md#command-log).
+record was changed, removed or moved since orchd wrote it; it is operator-only. A session's
+records are deleted 7 days after it ends and its process has exited (Settings, "Command log":
+3, 7 or 30 days); refused calls are kept 90 days. A running session is never deleted, however
+long it sits idle, only cut to its newest 50 MB, and past 500 MB in total the sessions that
+ended first go early, all but their refused calls. `verify` shows how far retention cut a
+session, and orchd's log names every cut. See [internals/daemon.md](internals/daemon.md#command-log).
 
 `orch sessions list` shows each pinned session's space, directory and state. orchd reads it from
 the kernel: a session left open without `/exit` stays `idle` for as long as its claude or codex

@@ -312,6 +312,9 @@ func TestResumeRebindsPin(t *testing.T) {
 	if r := listSessions(t, s, operatorCtx, true)["sess-r"]; r.GetState() != stateEnded {
 		t.Fatalf("before the resume = %v, want ended", r)
 	}
+	if p, _, _ := s.pins.get(context.Background(), "sess-r"); !p.ExitedAt.Equal(p.EndedAt) || p.ExitedAt.IsZero() {
+		t.Fatalf("swept pin = %+v, want exited_at = ended_at (SP-015)", p)
+	}
 	// `claude --resume` starts claude 420 in the same directory.
 	now := s.pins.now()
 	resumed := now.Add(-10 * time.Second)
@@ -329,7 +332,7 @@ func TestResumeRebindsPin(t *testing.T) {
 		t.Fatalf("resumed pin = %v, original %v", pin, orig)
 	}
 	stored, _, err := s.pins.get(context.Background(), "sess-r")
-	if err != nil || !stored.ResumedAt.Equal(now) || !stored.EndedAt.IsZero() {
+	if err != nil || !stored.ResumedAt.Equal(now) || !stored.EndedAt.IsZero() || !stored.ExitedAt.IsZero() {
 		t.Fatalf("stored pin = %+v, %v", stored, err)
 	}
 	r := listSessions(t, s, operatorCtx, false)["sess-r"]

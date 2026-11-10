@@ -54,7 +54,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .tasks: ["Tasks", "Task verification", "Codex", "Model routing"]
         case .docs: ["Docs"]
         case .github: ["GitHub"]
-        case .memory: ["Sources", "Prompt context", "Session summaries", "Search", "Embedding", "Vector store"]
+        case .memory: ["Sources", "Prompt context", "Session summaries", "Command log", "Search", "Embedding", "Vector store"]
         case .overview, .claude, .safetyNet, .app: []
         }
     }

@@ -2474,6 +2474,9 @@ public nonisolated struct Orchd_V1_VerifyToolLogResponse: Sendable {
   /// empty when the chain is intact
   public var problems: [Orchd_V1_ToolLogProblem] = []
 
+  /// retention (SP-015) may have deleted records up to this seq; 0 for none
+  public var pruned: Int64 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -9034,7 +9037,7 @@ nonisolated extension Orchd_V1_ToolLogProblem: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Orchd_V1_VerifyToolLogResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VerifyToolLogResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}records\0\u{1}anchors\0\u{1}ends\0\u{1}gaps\0\u{1}dropped\0\u{1}problems\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}records\0\u{1}anchors\0\u{1}ends\0\u{1}gaps\0\u{1}dropped\0\u{1}problems\0\u{1}pruned\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9048,6 +9051,7 @@ nonisolated extension Orchd_V1_VerifyToolLogResponse: SwiftProtobuf.Message, Swi
       case 4: try { try decoder.decodeSingularInt32Field(value: &self.gaps) }()
       case 5: try { try decoder.decodeSingularInt64Field(value: &self.dropped) }()
       case 6: try { try decoder.decodeRepeatedMessageField(value: &self.problems) }()
+      case 7: try { try decoder.decodeSingularInt64Field(value: &self.pruned) }()
       default: break
       }
     }
@@ -9072,6 +9076,9 @@ nonisolated extension Orchd_V1_VerifyToolLogResponse: SwiftProtobuf.Message, Swi
     if !self.problems.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.problems, fieldNumber: 6)
     }
+    if self.pruned != 0 {
+      try visitor.visitSingularInt64Field(value: self.pruned, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -9082,6 +9089,7 @@ nonisolated extension Orchd_V1_VerifyToolLogResponse: SwiftProtobuf.Message, Swi
     if lhs.gaps != rhs.gaps {return false}
     if lhs.dropped != rhs.dropped {return false}
     if lhs.problems != rhs.problems {return false}
+    if lhs.pruned != rhs.pruned {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -70,6 +70,7 @@ const (
 	SectionGitHub    = "GitHub"
 	SectionContext   = "Prompt context"
 	SectionSummaries = "Session summaries"
+	SectionLog       = "Command log"
 	SectionSearch    = "Search"
 	SectionEmbedding = "Embedding"
 	SectionStore     = "Vector store"
@@ -183,6 +184,13 @@ func buildFields() []Field {
 		{Key: "sessions.summarize.enabled", Section: SectionSummaries, Label: "Summarize finished sessions", Type: TypeBool},
 		{Key: "sessions.summarize.model", Section: SectionSummaries, Label: "Model", Type: TypeString},
 		{Key: "sessions.summarize.timeout", Section: SectionSummaries, Label: "Timeout", Type: TypeDuration},
+
+		// Command log retention.
+		{Key: "sessions.command_log.retention", Section: SectionLog, Label: "Keep ended sessions", Type: TypeEnum, Sensitive: true,
+			Options: []string{"3d", "7d", "30d"},
+			Help:    "How long a session's tool calls are kept after it ends. Refused calls are kept 90 days; a running session is never deleted, only cut to 50 MB."},
+		ranged(Field{Key: "sessions.command_log.max_total_mb", Section: SectionLog, Label: "Total size (MB)", Type: TypeInt, Sensitive: true,
+			Help: "Past this the sessions that ended first are deleted, never a running one."}, 100, 100000),
 
 		// Search.
 		{Key: "rag.search.mode", Section: SectionSearch, Label: "Mode", Type: TypeEnum, Options: []string{"hybrid", "dense"}},

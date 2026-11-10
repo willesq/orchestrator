@@ -226,7 +226,19 @@ type AutoRAGSettings struct {
 
 // SessionsSettings controls what orchd does with finished sessions.
 type SessionsSettings struct {
-	Summarize SessionSummarySettings `mapstructure:"summarize"`
+	Summarize  SessionSummarySettings `mapstructure:"summarize"`
+	CommandLog CommandLogSettings     `mapstructure:"command_log"`
+}
+
+// CommandLogSettings controls how long orchd keeps the command log
+// (spaces SP-015).
+type CommandLogSettings struct {
+	// Retention is how long an ended session's records are kept: 3d, 7d
+	// or 30d. Refusals are kept 90 days whatever it is.
+	Retention string `mapstructure:"retention"`
+	// MaxTotalMB caps the log file; the sessions that ended first are
+	// deleted to fit, never a running one.
+	MaxTotalMB int `mapstructure:"max_total_mb"`
 }
 
 // SessionSummarySettings controls the model-written summary of each finished
@@ -367,6 +379,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("sessions.summarize.enabled", true)
 	v.SetDefault("sessions.summarize.model", "haiku")
 	v.SetDefault("sessions.summarize.timeout", "2m")
+	// Command log retention (spaces SP-015).
+	v.SetDefault("sessions.command_log.retention", "7d")
+	v.SetDefault("sessions.command_log.max_total_mb", 500)
 	// Queue worker: on, so a dispatched task runs. It acts only on tasks that
 	// were dispatched, in a permission mode that keeps the guard rails
 	// (bypassPermissions is refused), with dispatch denied to its sessions.

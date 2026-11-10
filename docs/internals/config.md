@@ -107,6 +107,8 @@ does not leave its services down until someone notices. When orchd cannot run at
 | `sessions.summarize.enabled` | `true` | model-written session summaries |
 | `sessions.summarize.model` | `haiku` | model for summaries |
 | `sessions.summarize.timeout` | `2m` | per summary |
+| `sessions.command_log.retention` | `7d` | how long an ended session's [command log](daemon.md#command-log) records are kept: `3d`, `7d` or `30d`; refusals are kept 90 days, a running session's log is never expired (only cut to 50 MB). Sensitive; another value keeps `7d` |
+| `sessions.command_log.max_total_mb` | `500` | cap on `toollog.db`'s pages in use; the sessions that ended first lose their records to fit, never a running one's and never refusals under 90 days, so the file can stay over it. 100 to 100000; sensitive |
 | `queue.max_active` | `20` | pending + running tasks; dispatch fails beyond. 1 to 50, never below `max_concurrent` |
 | `queue.worker.enabled` | `true` | run dispatched tasks (never with `bypassPermissions`; sessions cannot dispatch more) |
 | `queue.worker.claude_bin` | found automatically | Claude Code binary |

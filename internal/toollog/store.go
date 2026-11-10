@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" driver (pure Go)
@@ -14,7 +15,7 @@ import (
 // fileMode is the command log's mode, and its -wal and -shm files' (D-29).
 const fileMode fs.FileMode = 0o600
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 const schema = `
 CREATE TABLE IF NOT EXISTS events (
@@ -53,6 +54,14 @@ CREATE TABLE IF NOT EXISTS anchors (
 	hash       TEXT    NOT NULL,
 	at         INTEGER NOT NULL,
 	PRIMARY KEY (owner_kind, owner_id, seq)
+);
+CREATE TABLE IF NOT EXISTS pruned (
+	owner_kind TEXT    NOT NULL,
+	owner_id   TEXT    NOT NULL,
+	seq        INTEGER NOT NULL,
+	hash       TEXT    NOT NULL,
+	kind       TEXT    NOT NULL,
+	PRIMARY KEY (owner_kind, owner_id)
 );`
 
 const recordColumns = `owner_kind, owner_id, seq, ts, hook_at, kind, harness, event, tool,
@@ -63,6 +72,9 @@ const recordColumns = `owner_kind, owner_id, seq, ts, hook_at, kind, harness, ev
 type Store struct {
 	db   *sql.DB
 	path string
+	// wsem serialises orchd's write transactions on the log (see write);
+	// a channel so a caller can stop waiting when its context ends.
+	wsem chan struct{}
 }
 
 // Open opens or creates the command log at path, owner-only. It refuses a
@@ -73,12 +85,12 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	dsn := "file:" + path +
-		"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
+		"?_pragma=journal_mode(WAL)&_pragma=journal_size_limit(67108864)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{db: db, path: path}
+	s := &Store{db: db, path: path, wsem: make(chan struct{}, 1)}
 	if err := s.init(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -119,39 +131,110 @@ func ownerOnly(path string, create bool) error {
 }
 
 func (s *Store) init() error {
+	// Reason: auto_vacuum takes effect only on the connection that creates
+	// the first table, and not in the connection string, where every new
+	// connection would take the write lock to set it.
+	ctx := context.Background()
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("command log: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
 	var v int
-	if err := s.db.QueryRow(`PRAGMA user_version`).Scan(&v); err != nil {
+	if err := conn.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&v); err != nil {
 		return fmt.Errorf("command log: %w", err)
 	}
 	if v > schemaVersion {
 		return fmt.Errorf("command log: schema %d is newer than this orchd (%d)", v, schemaVersion)
 	}
-	if _, err := s.db.Exec(schema); err != nil {
+	if _, err := conn.ExecContext(ctx, `PRAGMA auto_vacuum = INCREMENTAL`); err != nil {
 		return fmt.Errorf("command log: %w", err)
 	}
-	_, err := s.db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion))
+	if _, err := conn.ExecContext(ctx, schema); err != nil {
+		return fmt.Errorf("command log: %w", err)
+	}
+	var vacuum int
+	if err := conn.QueryRowContext(ctx, `PRAGMA auto_vacuum`).Scan(&vacuum); err != nil {
+		return fmt.Errorf("command log: %w", err)
+	}
+	if vacuum != 2 {
+		// Reason: a log created before retention (SP-015) has auto_vacuum
+		// off, so deleted records would never shrink the file. VACUUM
+		// needs the file to itself and room for a copy; a log that cannot
+		// be converted still works, it only stays large.
+		if _, err := conn.ExecContext(ctx, `VACUUM`); err != nil {
+			log.Printf("orchd: command log: converting to incremental vacuum: %v; deleted records will not shrink the file", err)
+		}
+	}
+	_, err = conn.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion))
 	return err
 }
 
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
 
+// write runs fn in a transaction that holds the write lock from its first
+// statement, and commits it. The writer and retention both write the log
+// from orchd: wsem makes them take turns, since SQLite's busy wait lets one
+// that commits continuously starve the other. The lock is still taken
+// first with a write that changes nothing: in WAL mode a transaction that
+// reads first and writes later cannot wait for another writer, and fails
+// at once (SQLITE_BUSY_SNAPSHOT).
+func (s *Store) write(ctx context.Context, fn func(*sql.Tx) error) error {
+	if err := s.lockWrite(ctx); err != nil {
+		return err
+	}
+	defer s.unlockWrite()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM pruned WHERE 0`); err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// lockWrite takes the turn to write, or gives up when ctx ends.
+func (s *Store) lockWrite(ctx context.Context) error {
+	select {
+	case s.wsem <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *Store) unlockWrite() { <-s.wsem }
+
 type execer interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// head returns the owner's last record's sequence number, hash and kind;
-// the zero head when the owner has no records.
+// head returns the owner's last record's sequence number, hash and kind,
+// or retention's pruned head when that is later (the chain's records were
+// deleted); the zero head when the owner has neither.
 func head(ctx context.Context, q execer, o Owner) (chainHead, error) {
 	var h chainHead
 	err := q.QueryRowContext(ctx,
 		`SELECT seq, hash, kind FROM events WHERE owner_kind = ? AND owner_id = ? ORDER BY seq DESC LIMIT 1`,
 		o.Kind, o.ID).Scan(&h.seq, &h.hash, &h.kind)
-	if errors.Is(err, sql.ErrNoRows) {
-		return chainHead{}, nil
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return chainHead{}, err
 	}
-	return h, err
+	p, err := prunedHead(ctx, q, o)
+	if err != nil {
+		return chainHead{}, err
+	}
+	if p.seq > h.seq {
+		return p, nil
+	}
+	return h, nil
 }
 
 func insert(ctx context.Context, q execer, r Record) error {
@@ -172,7 +255,16 @@ func anchor(ctx context.Context, q execer, r Record) error {
 
 // Records returns the owner's records in sequence order.
 func (s *Store) Records(ctx context.Context, o Owner) ([]Record, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+recordColumns+` FROM events
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	return records(ctx, tx, o)
+}
+
+func records(ctx context.Context, tx *sql.Tx, o Owner) ([]Record, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT `+recordColumns+` FROM events
 		WHERE owner_kind = ? AND owner_id = ? ORDER BY seq`, o.Kind, o.ID)
 	if err != nil {
 		return nil, err
@@ -231,9 +323,12 @@ type Report struct {
 	Anchors int
 	// Ends counts KindEnd records; Gaps counts KindGap records and Dropped
 	// the events they say were lost. Neither is a problem.
-	Ends     int
-	Gaps     int
-	Dropped  int64
+	Ends    int
+	Gaps    int
+	Dropped int64
+	// Pruned is the sequence number up to which retention (SP-015) may
+	// have deleted records; 0 when it has deleted none.
+	Pruned   int64
 	Problems []Problem
 }
 
@@ -246,18 +341,46 @@ func (r Report) OK() bool { return len(r.Problems) == 0 }
 // sequence, and a moved one fails its hash or its link. Records removed
 // after the last anchor, or a chain rewritten from its first record, are
 // not detectable from the file alone; see docs/internals/daemon.md.
+//
+// Up to the chain's pruned head, retention may have deleted records: there
+// a missing record is no problem, and a record links only to one kept just
+// before it. Retention leaves only refusals there, so any other record kept
+// at or before the head is reported, as is a head whose own record is kept
+// with another hash. The first record after the pruned head must link to it.
 func (s *Store) Verify(ctx context.Context, o Owner) (Report, error) {
-	recs, err := s.Records(ctx, o)
+	// One read transaction, so a cut committed meanwhile is seen whole or
+	// not at all.
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return Report{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	recs, err := records(ctx, tx, o)
+	if err != nil {
+		return Report{}, err
+	}
+	cut, err := prunedHead(ctx, tx, o)
 	if err != nil {
 		return Report{}, err
 	}
 	var rep Report
 	rep.Records = len(recs)
+	rep.Pruned = cut.seq
 	bySeq := make(map[int64]string, len(recs))
 	var want int64 = 1
 	prev := ""
 	for _, r := range recs {
+		if r.Seq > cut.seq && want <= cut.seq {
+			// The first record past the cut follows the pruned head.
+			want, prev = cut.seq+1, cut.hash
+		}
 		switch {
+		case r.Seq <= cut.seq && (r.Kind != KindEvent || r.Decision != DecisionRefused):
+			rep.add(r.Seq, "kept before the pruned head, where retention keeps only refusals")
+		case r.Seq == cut.seq && r.Hash != cut.hash:
+			rep.add(r.Seq, "does not match the pruned head retention recorded")
+		case r.Seq <= cut.seq && r.Seq != want:
+			// Records before it were deleted by retention.
 		case r.Seq > want:
 			rep.add(r.Seq, missing(want, r.Seq-1))
 		case r.PrevHash != prev:
@@ -276,7 +399,7 @@ func (s *Store) Verify(ctx context.Context, o Owner) (Report, error) {
 		bySeq[r.Seq] = r.Hash
 		want, prev = r.Seq+1, r.Hash
 	}
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := tx.QueryContext(ctx,
 		`SELECT seq, hash FROM anchors WHERE owner_kind = ? AND owner_id = ? ORDER BY seq`, o.Kind, o.ID)
 	if err != nil {
 		return Report{}, err
@@ -290,6 +413,8 @@ func (s *Store) Verify(ctx context.Context, o Owner) (Report, error) {
 		}
 		rep.Anchors++
 		switch got, ok := bySeq[seq]; {
+		case !ok && seq <= cut.seq:
+			// Deleted by retention; the anchor is kept.
 		case !ok:
 			rep.add(seq, "the anchored chain head is missing")
 		case got != hash:

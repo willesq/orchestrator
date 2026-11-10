@@ -48,6 +48,9 @@ type sessionPin struct {
 	EndedAt       time.Time // zero while not ended
 	InheritedFrom string
 	ResumedAt     time.Time // zero for a session never resumed
+	// ExitedAt is when orchd first saw the harness process gone; zero
+	// while it runs.
+	ExitedAt time.Time
 }
 
 func (p sessionPin) proto() *orchdv1.SessionPin {
@@ -241,11 +244,11 @@ func (r *pinRegistry) resume(ctx context.Context, existing sessionPin, c harness
 	}
 	now := r.now().UTC()
 	if _, err := r.db.ExecContext(ctx, `UPDATE session_pins
-		SET harness_pid = ?, harness_started = ?, ended_at = NULL, resumed_at = ? WHERE session_id = ?`,
+		SET harness_pid = ?, harness_started = ?, ended_at = NULL, exited_at = NULL, resumed_at = ? WHERE session_id = ?`,
 		c.proc.PID, c.proc.Started.UnixNano(), now.Format(time.RFC3339Nano), existing.SessionID); err != nil {
 		return existing, err
 	}
-	existing.Process, existing.EndedAt, existing.ResumedAt = c.proc, time.Time{}, now
+	existing.Process, existing.EndedAt, existing.ExitedAt, existing.ResumedAt = c.proc, time.Time{}, time.Time{}, now
 	return existing, nil
 }
 
@@ -307,7 +310,7 @@ func (r *pinRegistry) end(ctx context.Context, id string, proc procstat.Identity
 }
 
 const pinColumns = `session_id, harness, harness_pid, harness_started, first_cwd, main_checkout,
-	space, policy_revision, pinned_at, ended_at, inherited_from, resumed_at`
+	space, policy_revision, pinned_at, ended_at, inherited_from, resumed_at, exited_at`
 
 func (r *pinRegistry) get(ctx context.Context, id string) (sessionPin, bool, error) {
 	return scanPin(r.db.QueryRowContext(ctx, `SELECT `+pinColumns+` FROM session_pins WHERE session_id = ?`, id))
@@ -337,9 +340,10 @@ func scanPin(row *sql.Row) (sessionPin, bool, error) {
 		pinnedAt string
 		endedAt  sql.NullString
 		resumed  sql.NullString
+		exited   sql.NullString
 	)
 	err := row.Scan(&p.SessionID, &p.Harness, &pid, &started, &p.FirstCwd, &p.MainCheckout,
-		&p.Space, &p.Revision, &pinnedAt, &endedAt, &p.InheritedFrom, &resumed)
+		&p.Space, &p.Revision, &pinnedAt, &endedAt, &p.InheritedFrom, &resumed, &exited)
 	if errors.Is(err, sql.ErrNoRows) {
 		return sessionPin{}, false, nil
 	}
@@ -360,13 +364,18 @@ func scanPin(row *sql.Row) (sessionPin, bool, error) {
 			return sessionPin{}, false, fmt.Errorf("pin %s: resumed_at: %w", p.SessionID, err)
 		}
 	}
+	if exited.Valid {
+		if p.ExitedAt, err = time.Parse(time.RFC3339Nano, exited.String); err != nil {
+			return sessionPin{}, false, fmt.Errorf("pin %s: exited_at: %w", p.SessionID, err)
+		}
+	}
 	return p, true, nil
 }
 
 // insertCopy pins id to everything from's pin fixes.
 func (r *pinRegistry) insertCopy(ctx context.Context, id string, from sessionPin) (sessionPin, error) {
 	p := from
-	p.SessionID, p.PinnedAt, p.EndedAt, p.ResumedAt = id, r.now().UTC(), time.Time{}, time.Time{}
+	p.SessionID, p.PinnedAt, p.EndedAt, p.ResumedAt, p.ExitedAt = id, r.now().UTC(), time.Time{}, time.Time{}, time.Time{}
 	if p.InheritedFrom == "" {
 		p.InheritedFrom = from.SessionID
 	}
@@ -375,7 +384,7 @@ func (r *pinRegistry) insertCopy(ctx context.Context, id string, from sessionPin
 
 func (r *pinRegistry) insert(ctx context.Context, p sessionPin) error {
 	_, err := r.db.ExecContext(ctx, `INSERT INTO session_pins (`+pinColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL)`,
 		p.SessionID, p.Harness, p.Process.PID, p.Process.Started.UnixNano(), p.FirstCwd, p.MainCheckout,
 		p.Space, p.Revision, p.PinnedAt.Format(time.RFC3339Nano), p.InheritedFrom)
 	return err

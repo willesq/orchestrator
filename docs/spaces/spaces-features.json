@@ -891,7 +891,7 @@
         "id": "RC-39",
         "kind": "follow-up",
         "topic": "Flaky daemon tests seen while verifying SP-013",
-        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go:117, 'WatchTasks ended with context canceled') fails about 1 run in 4 on origin/main 644dcaf as well as on the SP-013 branch (5/20 and 6/20 with -count=20). TestCallerSessionCost failed once (p99 5.5 ms against a 5 ms bound) while a 16-worker fuzz run loaded the CPU. Neither touches SP-013's code. Fix the first; consider making the second tolerant of a loaded machine or skipping it under -short. The SP-013 verifier also saw TestRunMeasuresFailedRuns (internal/agentrun) fail twice on the branch under full-suite load (DurationMS 199 against a 200 ms timeout; never on main in 7 full and 20 isolated runs; the package is untouched by SP-013) and TestToolHookCost once (passes in isolation, p99 about 14 ms against 30 ms). Both look load-sensitive. Update 2026-11-09 (SP-014 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks 3 of 3 times on origin/main 0ff06db and 2 of 3 on the SP-014 branch (0 of 20 each when run alone), so under full-package load it now fails most runs. Update 2026-11-09 (SP-017 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks ('WatchTasks ended with context canceled') 1 of 2 on origin/main 85b0784 and 6 of 6 on the SP-017 branch (passes alone); TestRunMeasuresFailedRuns (internal/agentrun, untouched) failed once in a full go test ./... and passed alone. The handler appears to return ctx.Err() instead of nil when the client goes away under load.",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go:117, 'WatchTasks ended with context canceled') fails about 1 run in 4 on origin/main 644dcaf as well as on the SP-013 branch (5/20 and 6/20 with -count=20). TestCallerSessionCost failed once (p99 5.5 ms against a 5 ms bound) while a 16-worker fuzz run loaded the CPU. Neither touches SP-013's code. Fix the first; consider making the second tolerant of a loaded machine or skipping it under -short. The SP-013 verifier also saw TestRunMeasuresFailedRuns (internal/agentrun) fail twice on the branch under full-suite load (DurationMS 199 against a 200 ms timeout; never on main in 7 full and 20 isolated runs; the package is untouched by SP-013) and TestToolHookCost once (passes in isolation, p99 about 14 ms against 30 ms). Both look load-sensitive. Update 2026-11-09 (SP-014 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks 3 of 3 times on origin/main 0ff06db and 2 of 3 on the SP-014 branch (0 of 20 each when run alone), so under full-package load it now fails most runs. Update 2026-11-09 (SP-017 session): full internal/daemon runs failed on TestWatchTasksStreamsSnapshotChangesAndTicks ('WatchTasks ended with context canceled') 1 of 2 on origin/main 85b0784 and 6 of 6 on the SP-017 branch (passes alone); TestRunMeasuresFailedRuns (internal/agentrun, untouched) failed once in a full go test ./... and passed alone. The handler appears to return ctx.Err() instead of nil when the client goes away under load. Update 2026-11-09 (SP-015 session): TestWatchTasksStreamsSnapshotChangesAndTicks failed 2 of 20 isolated runs on both origin/main cf031dc and the SP-015 branch, and in 3 of 5 full go test ./... runs on the branch (a fourth failing run's test was not captured); TestRunExitsWhenANewBuildIsInstalled (internal/daemon run_test.go:120, 'grpc: the server has been stopped') fails 3 of 3 under go test -race on both main cf031dc and the branch (CI does not run -race).",
         "source": "https://github.com/willesq/orchestrator/pull/151",
         "raised": "2026-11-09",
         "affects": [],
@@ -1067,6 +1067,61 @@
         ],
         "status": "resolved",
         "note": "2026-11-09: CI ran green on 0691cb7 including the macOS ORT build (https://github.com/willesq/orchestrator/actions/runs/42704166756) and app (https://github.com/willesq/orchestrator/actions/runs/42704166851); the first run at 851310e failed only the Linux coverage gate (procstat/find_other.go), fixed by TestProcessesUnsupported."
+      },
+      {
+        "id": "RC-53",
+        "kind": "decision",
+        "topic": "When retention counts a session as ended",
+        "detail": "SP-015 treats a session as ended only when its pin has ended_at and the liveness sweep has seen its harness process gone (new session_pins.exited_at, migration 0027); the clock starts at the latest of ended_at, exited_at and the chain's last record. Reason: docs/internals/daemon.md already promised that ending a pin early (any process in the session can call EndSession) does not expire a running process's log, and the audit showed an early end would otherwise delete a log the moment its process exits. Consequences to confirm: a session ended by /clear keeps its log (cut to 50 MB) until the harness process exits; a normal SessionEnd counts from the exit seen up to a minute later; a session whose exit is not yet seen counts as running; sweeps run every 10 minutes, so 'deleted at day N' happens within 10 minutes after it.",
+        "source": "https://github.com/willesq/orchestrator/pull/157",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-015",
+          "SP-016",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-54",
+        "kind": "decision",
+        "topic": "Total cap and settings for the command log",
+        "detail": "The total cap (sessions.command_log.max_total_mb, default 500, 100-100000) removes from the chains that ended first only what expiry would: never refusals under 90 days and never a running session's records, so the file can stay over the cap (orchd logs it). The spec's 'deletes the oldest ended sessions first' is read that way after the audit showed whole-chain deletion let a flood erase other sessions' refusals. The 50 MB cap is per chain (a process holding several /clear'd sessions can keep several) and a constant, not a setting. Retention (3d/7d/30d) and the cap are Sensitive settings in a new 'Command log' section, read when orchd starts; another value keeps the default.",
+        "source": "https://github.com/willesq/orchestrator/pull/157",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-015",
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-55",
+        "kind": "follow-up",
+        "topic": "SP-015 audit lows and documented limits",
+        "detail": "Accepted as Low over three SP-015 security reviews and documented in docs/internals/daemon.md: (1) expiry and the cap delete a chain in one statement, so a very large delete holds the write turn and the writer's queue can overflow into a gap (chunk deletes); (2) task chains look ended when no runner exists (at startup before the worker starts, or with the worker off); (3) every sweep scans all records to size chains (keep sizes in a side table); (4) wall-clock jumps move expiry; (5) the one-time VACUUM converting an SP-014 log runs before orchd serves and is retried on every start after a failure; (6) the writer builds records inside its write transaction, so slow work added to toolRecord would hold the write turn; (7) a pruned head written into the file by hand still excuses a chain deleted whole, or a prefix up to a record whose hash is copied: verify shows the cut and orchd's log has no matching line; (8) flooding the log (busy sessions, or an agent) pushes ended sessions' records other than refusals out early through the total cap; (9) a running chain's refusals are never cut, so a refusal flood is bounded only once its session ends.",
+        "source": "https://github.com/willesq/orchestrator/pull/157",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-015",
+          "SP-016",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-56",
+        "kind": "follow-up",
+        "topic": "Session pins are still never pruned",
+        "detail": "SP-015 deletes command-log records but keeps every session_pins row, because retention counts from ended_at/exited_at and a resume continues a deleted chain from its pruned head. RC-50 (3) remains: sweeps and ListSessions read every pin. Proposal: delete a pin (and its pruned head) once its chain has no records left and it ended more than 90 days ago, or cap pins per harness process.",
+        "source": "https://github.com/willesq/orchestrator/pull/157",
+        "raised": "2026-11-09",
+        "affects": [
+          "SP-015",
+          "SP-016",
+          "SP-017"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -2376,7 +2431,14 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestLogRetentionThroughSessions (internal/daemon/logretention_test.go), default 7 days, settable clock, fake process table, real pins and RecordToolEvent: sess-ended (SessionEnd, then its process exits and the liveness sweep sees it 30 s later) keeps all 4 records plus its refusal at end+7d-1s and only the refusal at end+7d; sess-exited (codex 410 exits with no SessionEnd, noticed 2 days later) keeps everything until 7 days after the detection, not after its last record, and loses it at detection+7d; sess-idle, alive 14 days with no activity, keeps all 3 events and lists as idle; the refusal is kept at day 90 minus a minute and gone after day 90; every chain still verifies through VerifyToolLog with the cut shown. TestRetentionEndedSession runs the same rules at the store for 3d, 7d and 30d (subtests); TestRetentionCountsFromDetection, TestRetentionKeepsIdleLiveSession (14 and 120 days idle), TestEarlyEndKeepsLiveLog (a pin ended early stays live while its process runs and gets the full 7 days after the exit is seen), TestLogRetentionTasks, TestLogRetentionUnpinnedAndUnknown, TestLogPolicyFromSettings, TestToolLogSweepLoop. Pass (darwin/arm64, 2026-11-09).",
+            "a2: TestLiveSessionCappedOldestFirst with the default 50 MB cap: a live chain of 5,600 records of about 10 KiB with a refusal every 500 (12) went from 58,675,638 to 52,420,977 bytes (cap 52,428,800): the 597 oldest logged records were deleted, all 12 refusals kept, the logged records left are exactly the newest ones, the chain verifies and continues. TestLiveSessionOnlyRefusalsOverCap: refusals are never cut from a live chain. TestTotalCapDropsOldestEnded: over the total cap the session that ended first is cut first (200 records, its refusal kept), the next two only when the cap still is not met, and the live chain (400 logged, 2 refused) is never touched even with a 1-byte cap (OverCap reported). Pass.",
+            "a3: TestSweepTwiceChangesNothing: after a first sweep that expired two ended chains and trimmed a live one, a second sweep at the same time deletes 0 records and leaves the events, anchors and pruned tables identical (row-by-row dump); both deleted sessions' anchored chain heads are kept, every chain verifies, and a resumed deleted session continues at seq 7 after its pruned head 6 with both anchors. TestVerifyAfterRetentionStillDetects (4 tamper cases after a cut) and TestVerifyRejectsForgedPrunedHead (audit case) show the cut does not hide tampering. Pass.",
+            "Concurrency and storage (from the security audits): TestSweepWhileWriting (30 sweeps trimming a chain the writer appends to at about 5,000 events/s: no error, no dropped event, chain intact; passes under -race; without the write-lock-first fix it fails with 'database is locked (517)'), TestReadOnNewConnectionDuringWrite (a read on a new connection while a write is held returns at once; with auto_vacuum in the connection string it blocked 5.08 s and failed), TestWriteTurnHonoursContext, TestRetentionShrinksOldFile (an SP-014 log is converted to incremental auto_vacuum at open and shrinks after a sweep), TestSpacesLogVerify (CLI prints the cut), TestResumeRebindsPin (exited_at set by the sweep, cleared by a resume).",
+            "Gates on the committed tree: gofmt clean; go vet ./... exit 0; go test ./...: 53 packages ok, internal/daemon failed only on the RC-39 flake TestWatchTasksStreamsSnapshotChangesAndTicks (2/20 isolated on both origin/main cf031dc and this branch; the package passed whole in a separate run, 503 tests); go test -race ./internal/toollog ok; make cover 'All files >= 80%' with internal/daemon included (toollog retention.go 88.5%, store.go 85.9%, writer.go 93.2%, daemon toollog.go 93.5%, liveness.go 87.5%, pins.go 92.6%, daemon.go 90.9%, config.go 89.6%, schema.go 100%, cli/spaces_log.go 100%); swift build --target OrchApp complete (Navigator section list and regenerated OrchKit stubs).",
+            "Security audit (security-audit agent, three rounds, 2026-11-09): round 1 0 critical/high, 4 medium (sweep transactions failing under concurrent writes, a forged pruned head excusing deletions, the total cap deleting refusals, an early-ended session deleted at exit), 6 low; round 2 confirmed the four closed and found 1 medium (auto_vacuum in the connection string locking new connections) and lows; round 3 confirmed those closed, 0 critical/high/medium, 1 low (wait for the write turn ignored the context) fixed. Remaining lows and documented limits recorded as RC-55."
+          ]
         }
       ],
       "status": "in_progress",

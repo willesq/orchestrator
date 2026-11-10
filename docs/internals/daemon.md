@@ -197,7 +197,9 @@ recorded. A PID the kernel gave to another process has another start time, so a 
 follows it. A sweep runs when orchd starts and every 60 s (and before each `ListSessions`); it
 sets `ended_at` to the time it noticed on every pin not yet ended whose process is gone or
 unreadable, and writes the session's [command log](#command-log) end record as SessionEnd
-would. The sessions of one harness process are read once per sweep; a sweep of 50 pins takes
+would. It also sets `exited_at` (migration `0027`), the time it noticed the process gone, on those
+pins and on pins SessionEnd ended earlier whose process has since exited; retention counts from
+it. A resume clears it with `ended_at`. The sessions of one harness process are read once per sweep; a sweep of 50 pins takes
 about 1 ms.
 
 A session's state, computed when listed:
@@ -223,8 +225,9 @@ Ended sessions appear only with `all`. The operator sees every pin and every unp
 a session's caller sees only its own row (the pin caller resolution names, RC-27); any other
 caller gets an empty list, and queued tasks are refused. A process an agent detaches from its
 session resolves as the operator (RC-26) and so sees every space and directory here, as with
-other operator reads. Pins are not yet capped per process or pruned (SP-015), so the sweep and
-the list read every pin.
+other operator reads. Pins are not capped per process or pruned, so the sweep and the list read
+every pin (RC-50); [retention](#command-log) deletes command-log records but keeps the pins, whose
+`ended_at` it counts from.
 
 ### Caller sessions
 
@@ -337,14 +340,75 @@ method of that name; calls through function values are not followed.
   gone or changed. It cannot see records removed after the last anchor, nor a chain someone
   rewrote from its first record with the same code: the anchors live in the same file. It is
   tamper-evidence against edits to the file, not a defense against a process that can write it.
+  Up to a chain's pruned head (retention, below) a missing record is no problem and a kept record
+  links only to one kept just before it; retention keeps only refusals there, so any other record
+  at or before the head is reported, as is a kept head record whose hash is not the head's. The
+  first record after the head must link to the head's hash, and every kept record must still
+  match its own hash. An anchor at or before the head may be gone with its record; the `anchors`
+  rows themselves are never deleted. `VerifyToolLog` returns the head as `pruned` and the CLI
+  prints it.
   Mode 0600 keeps out other users only: an agent running as the user can read the file, so
   "operator only" holds at orchd's RPCs, and the OS sandbox (SP-046) is what keeps sessions out of
   the file. `VerifyToolLog` waits at most 10 s for queued events to be stored first.
 - **Cost:** `TestToolLogThroughput` (RecordToolEvent through stored, targets read for each
   `cd … && git -C … && cat … | grep` command, four sessions) measured 3,500–3,650 events/s on an
   M3 Max over five runs; the store alone (`TestAppendThroughput`) 37,000–40,000. The gate is 1,000 events/s (SP-014.2.a2).
-- **Not yet:** retention and size caps (SP-015), reading the log (SP-016, `orch spaces log
-  <session>`), liveness (SP-017). Tasks have no end record: their runs send no SessionEnd.
+- **Retention** (SP-015, D-05; `toollog.Store.Sweep`, `server.sweepToolLog`): orchd sweeps the
+  log when it starts and every 10 minutes. A chain is *ended* when its owner no longer runs: a
+  session once its pin has `ended_at` (SessionEnd, or the [liveness sweep](#session-liveness))
+  and the liveness sweep has seen its harness process gone (`exited_at`); a queued task once the
+  runner no longer runs it. A session ended early while its process runs (any process in it can
+  call `EndSession`, and Claude Code's `/clear` ends one) is still running here, so the log of a
+  process that keeps working is never expired, and an agent cannot start the clock on its own
+  log. The end time is the latest of `ended_at`, `exited_at` and the chain's last record: for a
+  session that ended normally that is within a minute of SessionEnd, and one ended early gets its
+  full retention after its process exits. A task, which has no end record, and a session chain
+  with no pin ended at their last record.
+  - An ended chain loses every record except refusals `sessions.command_log.retention` after it
+    ended (`3d`, `7d` or `30d`; default `7d`, [config.md](config.md)). A refusal (decision
+    `refused`, written by the guard, SP-041) goes once it is also 90 days old.
+  - A running chain is never expired, however long it is idle. Over 50 MB of records (the stored
+    text plus 64 bytes a record) it loses its oldest records except refusals until it fits.
+  - Then, while the file's pages in use exceed `sessions.command_log.max_total_mb` (default 500),
+    the chains that ended first lose, early, what an expired chain loses: everything but
+    refusals under 90 days old. A running chain is never cut for it, and refusals under 90 days
+    are never deleted, so the file can stay over the cap; orchd then logs that it is.
+  - Each cut moves the chain's *pruned head* (table `pruned`: the last record the cut reached, its
+    hash and kind) forward, so `verify` still checks what is left (above), shows how far records
+    were cut, and a resumed session's next record continues the chain from it. Anchored heads are
+    kept. orchd logs every cut (reason, owner, records deleted, the pruned head after it and its
+    hash) to its own log, a record outside `toollog.db` to compare a pruned head with: the latest
+    line for an owner names its head. `verify` reads the records, the head and the anchors in one
+    read transaction, so a cut committed meanwhile is seen whole or not at all.
+  - A sweep never deletes past the records a chain had when it read the owner's state, so a
+    session resumed meanwhile keeps what it writes, and a second sweep at the same time deletes
+    nothing. The writer and the sweep take turns for each write transaction, and a sweep stops
+    waiting when orchd stops (SQLite's busy wait lets one that commits continuously starve the
+    other), and each transaction still
+    takes the write lock with its first statement, since in WAL mode a transaction that reads first
+    cannot wait for another writer (it fails at once with `SQLITE_BUSY_SNAPSHOT`). A chain whose
+    owner's state cannot be read, or that fails to cut, is logged and left for the next sweep; the
+    rest are swept.
+  - Freed pages go back to the file system (`auto_vacuum` incremental, then `incremental_vacuum`
+    in steps of 2,048 pages, each taking its turn with the writer, after a sweep that deleted
+    anything) and `journal_size_limit` keeps the `-wal` file to 64 MiB once checkpointed.
+    `auto_vacuum` is set once, on the connection that creates the tables, never in the
+    connection string, where every new connection would take the write lock to set it and a read
+    would wait behind any write. A log created before SP-015 is converted with one `VACUUM` at
+    open (schema version 2), before orchd serves; when that fails (no room for a copy, the file
+    held open) orchd logs it, the log works on without shrinking, and the next start tries again.
+  - **Limits.** The total cap is the one place retention deletes records before their time, and
+    anything that writes the log fills it: ten sessions busy at once, or an agent flooding events
+    push the ended sessions' records other than refusals out early. Each chain of a running
+    process may keep 50 MB, and a process keeps a chain for every session it ended early
+    (each `/clear`), so one long-lived process can hold several. A pruned head written into the
+    file by hand still excuses any records deleted before it, refusals included, when nothing
+    other than refusals is kept there and the next record links to it (a chain deleted whole, or
+    a prefix up to a record whose hash is copied); `verify` then shows the cut, and orchd's log has
+    no line for it. A large delete holds the write lock for its whole statement; the writer waits
+    for it, and events that overflow the queue meanwhile are dropped and recorded as a gap. Pins are not pruned here (RC-50), and the policy is read when orchd starts.
+- **Not yet:** reading the log (SP-016, `orch spaces log <session>`). Tasks have no end record:
+  their runs send no SessionEnd.
 
 Clients dial `unix://<socket>` lazily (failure surfaces on the first call) and set their own
 deadlines: hooks 0.5 s for writes and 3 s for prompt search; `orch status` 2–3 s; long CLI
@@ -490,7 +554,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `<config>/AGENTS.md`, `policy/`, `rag-eval.yaml` | shared agent policy; retrieval golden set |
 | `<data>/landings/<task>.git` | a proposal's commit, in a bare repository with no hooks; pruned after 30 days |
 | `<data>/orch.db` | SQLite: tasks, sources, docs, models, routing, managed settings |
-| `<data>/toollog.db` | SQLite, mode 0600: the [command log](#command-log); never indexed |
+| `<data>/toollog.db` | SQLite, mode 0600: the [command log](#command-log); never indexed; trimmed by retention |
 | `<data>/workflows.db` | durable workflow state |
 | `<data>/qdrant/`, `bin/qdrant`, `qdrant-api-key` (0600) | vector store, engine binary, API key |
 | `<data>/models/minilm/` | embedding model |
@@ -512,7 +576,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `providers`, `models` | provider state; model registry (tier, efforts, visibility, state) |
 | `routing`, `routing_history` | current table (kind, rank, provider, model, effort, rationale, evidence_n, pinned); prior generations |
 | `config_values`, `config_import` | orch's settings that differ from a default (key, JSON value, updated_at, updated_by); whether the old config.yaml was imported ([config.md](config.md)) |
-| `session_pins` | session_id (key), harness, harness_pid, harness_started (unix ns), first_cwd, main_checkout, space, policy_revision, pinned_at, ended_at, inherited_from, resumed_at ([session pins](#session-pins)) |
+| `session_pins` | session_id (key), harness, harness_pid, harness_started (unix ns), first_cwd, main_checkout, space, policy_revision, pinned_at, ended_at, inherited_from, resumed_at, exited_at ([session pins](#session-pins)) |
 | `settings_items` | provider, kind, identity (key), enabled, origin (`orch`/`you`/`found`), payload (JSON), present, removed_at, created_at, updated_at ([settings.md](settings.md)) |
 
 ## Invariants
