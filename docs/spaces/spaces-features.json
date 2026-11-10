@@ -430,6 +430,26 @@
         "id": "D-37",
         "decision": "Refusals and other guard decisions are never dropped from the command log: queue room is reserved for them, and only ordinary logged events may drop with a gap record when a share is full (SP-041.1.a4) (was RC-45).",
         "date": "2026-11-10"
+      },
+      {
+        "id": "D-38",
+        "decision": "Memory reads are never widened by a session pin's space until the enforcing guard (SP-041) stops a session from starting a harness outside its process tree: SP-025 depends on SP-041 (was RC-01).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-39",
+        "decision": "A caller resolved as the operator by process tree alone does not get operator-scope memory reads: SP-025 requires evidence of a real operator (a controlling terminal, or Orch.app); otherwise the caller reads public only. A process that left its session's tree therefore loses operator reads (was RC-26).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-40",
+        "decision": "Turning off the tool hooks (pre-tool-use, cwd-changed) is an SP-070 enforcement switch: operator-only, logged with time and caller, and announced in every session's start digest; orch settings cannot turn them off silently (was RC-32).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-41",
+        "decision": "Confirmed as built in SP-017: a resume moves a pin only to a fresh top-level harness whose directory places into the pin's space; an in-process /resume of another process's session is refused and its events go to the process's own pin; a 'claude --resume' started in another space's directory runs unpinned (was RC-47).",
+        "date": "2026-11-10"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -447,7 +467,8 @@
           "SP-025",
           "SP-041"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: SP-025 depends on SP-041; see D-38 and SP-025.1.a6."
       },
       {
         "id": "RC-02",
@@ -750,7 +771,8 @@
           "SP-025",
           "SP-041"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: operator-scope reads need a terminal or Orch.app; see D-39 and SP-025.1.a7."
       },
       {
         "id": "RC-27",
@@ -829,7 +851,8 @@
           "SP-042",
           "SP-070"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: the tool hooks become an operator-only SP-070 switch; see D-40 and SP-070.1.a4."
       },
       {
         "id": "RC-33",
@@ -1027,7 +1050,8 @@
           "SP-017",
           "SP-041"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: confirmed as built; see D-41."
       },
       {
         "id": "RC-48",
@@ -2709,6 +2733,13 @@
               "check": "With a fake clock, a timed switch reverts to its previous state at expiry and emits an event.",
               "measure": "test",
               "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "The tool hooks (pre-tool-use, cwd-changed) are one of the switches: orch settings and install cannot turn them off; only the operator can, the change is logged with time and caller, and every session's start digest says the tool hooks are off while they are (D-40).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -2741,7 +2772,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "0215afcb5b6591f0551e283866bfe0ceb32b8344f73094d6a7c459357da77003",
+      "criteria_sha256": "d51436cafcfd5be71cd5c5cbb9c23cb70d246bfbaab59d97dd4b548431c44ba9",
       "branch": null,
       "pr": null
     },
@@ -3204,7 +3235,8 @@
       "why": "INV-01, INV-02.",
       "depends_on": [
         "SP-024",
-        "SP-070"
+        "SP-070",
+        "SP-041"
       ],
       "touches": [
         "internal/daemon/daemon.go",
@@ -3257,6 +3289,20 @@
               "check": "A job session reads personal only when its space opted in (D-16); it never reads another job's space either way.",
               "measure": "tests",
               "threshold": "2 pass"
+            },
+            {
+              "id": "a6",
+              "type": "test",
+              "check": "A session pinned through a harness started outside its session's process tree (a detached fake 'claude' pinned in another space's directory) reads no memory beyond what its original session may read; the SP-041 guard refusing that start is the precondition and is exercised in the test (D-38).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a7",
+              "type": "test",
+              "check": "A caller resolved as the operator with no controlling terminal and not Orch.app (a process that double-forked or used launchctl/open/osascript out of a session) reads public memory only; the operator at a terminal and Orch.app keep operator-scope reads (D-39).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -3282,7 +3328,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "6f354f71eee4576497159554c9211db9e50463c6b76699b2576308a244ed4836",
+      "criteria_sha256": "7287b0cb632ee012a2f398ecd60d5a7c9c25c763833713b062dc5f986245f2f1",
       "branch": null,
       "pr": null
     },
@@ -4630,6 +4676,10 @@
     {
       "date": "2026-11-10",
       "change": "Decision review batch 1 (command log): D-33..D-37 recorded from RC-53, RC-54, RC-42, RC-43, RC-45. Added SP-073 'Command log hardening' (priority 16.5, after SP-016) and SP-041.1.a4 (refusals never dropped); SP-041's criteria_sha256 recomputed with the user's approval (e97956721af6 -> 19be87147a72)."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 2 (caller trust): D-38..D-41 recorded from RC-01, RC-26, RC-32, RC-47. SP-025 now depends on SP-041 and gains SP-025.1.a6-a7; SP-070 gains SP-070.1.a4. criteria_sha256 recomputed with the user's approval (SP-025 6f354f71eee4 -> 7287b0cb632e, SP-070 0215afcb5b65 -> d51436cafcfd)."
     }
   ],
   "plan_location": {
