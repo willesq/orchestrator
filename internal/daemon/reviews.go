@@ -10,6 +10,7 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/willesq/orchestrator/internal/github"
+	"github.com/willesq/orchestrator/internal/queue"
 	"github.com/willesq/orchestrator/internal/reviews"
 	"github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/supervisor"
@@ -25,9 +26,9 @@ const UnitReviews = "pr-reviews"
 const reviewsTick = 15 * time.Second
 
 // newReviewWatcher wires the watcher to the dispatch queue, the ledger and the
-// shared GitHub identity.
-func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, gh *github.Service, ghp *ghProfiles) *reviews.Watcher {
-	return &reviews.Watcher{
+// shared GitHub identity. A nil ctl leaves reviews running when their PR moves.
+func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, ctl *queue.Control, gh *github.Service, ghp *ghProfiles) *reviews.Watcher {
+	w := &reviews.Watcher{
 		Store: store,
 		GH:    ghp.Routed(),
 		Post:  reviews.NewGHPoster(ghp.Env),
@@ -45,6 +46,19 @@ func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, g
 			return id.Login, err
 		},
 	}
+	if ctl != nil {
+		w.Cancel = func(ctx context.Context, id, reason string) error {
+			_, err := ctl.CancelFor(ctx, id, reason)
+			return err
+		}
+	}
+	return w
+}
+
+// reviewsPoll is pr_reviews.poll_interval, never below the unit's tick, which
+// would only read as the tick anyway.
+func reviewsPoll(spec string) time.Duration {
+	return max(interval(spec, reviews.DefaultPoll), reviewsTick)
 }
 
 func reviewsUnit(w *reviews.Watcher) supervisor.Unit {

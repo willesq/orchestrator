@@ -37,8 +37,12 @@ func newPRsWatchesCmd(cf clientFactory) *cobra.Command {
 			}
 			for _, r := range resp.GetReviews() {
 				// Notes and verdicts can quote other people's text.
-				fmt.Fprintf(out, "%-9s mode=%-8s verdict=%-7s %s\n", r.GetState(), r.GetMode(), orNone(r.GetVerdict()),
-					github.Printable(r.GetUrl(), 300))
+				posted := ""
+				if p := r.GetPosted(); p != "" {
+					posted = " posted=" + github.Printable(p, 20)
+				}
+				fmt.Fprintf(out, "%-9s mode=%-8s verdict=%-7s%s %s\n", r.GetState(), r.GetMode(), orNone(r.GetVerdict()),
+					posted, github.Printable(r.GetUrl(), 300))
 				if note := r.GetNote(); note != "" {
 					fmt.Fprintf(out, "  %s\n", github.Printable(note, 300))
 				}

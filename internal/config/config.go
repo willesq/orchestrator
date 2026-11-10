@@ -26,6 +26,7 @@ type Settings struct {
 	Sources      SourcesSettings      `mapstructure:"sources"`
 	Docs         DocsSettings         `mapstructure:"docs"`
 	PRBabysitter PRBabysitterSettings `mapstructure:"pr_babysitter"`
+	PRReviews    PRReviewsSettings    `mapstructure:"pr_reviews"`
 	Ingest       IngestSettings       `mapstructure:"ingest"`
 	Queue        QueueSettings        `mapstructure:"queue"`
 	Sessions     SessionsSettings     `mapstructure:"sessions"`
@@ -181,6 +182,13 @@ type IngestSettings struct {
 // PRBabysitterSettings controls the PR-polling daemon.
 type PRBabysitterSettings struct {
 	Enabled      bool   `mapstructure:"enabled"`
+	PollInterval string `mapstructure:"poll_interval"`
+}
+
+// PRReviewsSettings controls the PR review watch.
+type PRReviewsSettings struct {
+	// PollInterval is how often each watched PR is read: for readiness, and
+	// during a review for new commits or a close, either of which cancels it.
 	PollInterval string `mapstructure:"poll_interval"`
 }
 
@@ -353,6 +361,8 @@ func setDefaults(v *viper.Viper) {
 	// PR babysitter: poll open PRs via gh and cache their state.
 	v.SetDefault("pr_babysitter.enabled", true)
 	v.SetDefault("pr_babysitter.poll_interval", "10m")
+	// PR review watch: how often each watched PR is read from GitHub.
+	v.SetDefault("pr_reviews.poll_interval", "2m")
 	// Session summaries: one small, tool-less model call per finished session.
 	v.SetDefault("sessions.summarize.enabled", true)
 	v.SetDefault("sessions.summarize.model", "haiku")

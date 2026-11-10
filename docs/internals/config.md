@@ -103,6 +103,7 @@ does not leave its services down until someone notices. When orchd cannot run at
 | `docs.include_archived`, `include_forks` | `false` | repo filters |
 | `pr_babysitter.enabled` | `true` | PR cache refresh |
 | `pr_babysitter.poll_interval` | `10m` | sweep cadence |
+| `pr_reviews.poll_interval` | `2m` | how often each PR watched for review is read; at least the unit's 15 s tick |
 | `sessions.summarize.enabled` | `true` | model-written session summaries |
 | `sessions.summarize.model` | `haiku` | model for summaries |
 | `sessions.summarize.timeout` | `2m` | per summary |

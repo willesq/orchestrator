@@ -120,6 +120,7 @@ public enum ActivityFeed {
             var detail = "Verdict: \(verdict.label)"
             if review.posted == "approved" || review.posted == "commented" { detail += " · posted" }
             if review.posted == "failed" { detail += " · posting failed" }
+            if review.posted == "superseded" { detail += " · superseded, not posted" }
             return ActivityEvent(id: "review:\(review.url)", kind: .review, date: date, title: name,
                                  detail: detail, outcome: review.posted == "failed" ? .failed : outcome,
                                  symbol: verdict.symbolName, target: .pr(review.url))

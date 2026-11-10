@@ -46,22 +46,87 @@ func TestLiveRunAndCancel(t *testing.T) {
 	if lr.SessionID != SessionID("task-live") || lr.Dir != dir || lr.Started.IsZero() {
 		t.Errorf("live run = %+v", lr)
 	}
-	if f.runner.Cancel("nope") {
+	if f.runner.Cancel("nope", "") {
 		t.Error("cancelled a task that is not running")
 	}
-	if !f.runner.Cancel("task-live") {
+	if !f.runner.Cancel("task-live", "") {
 		t.Fatal("Cancel did not find the running task")
 	}
 	select {
 	case o := <-done:
-		if o.Status != StatusCancelled {
-			t.Errorf("status = %s, want cancelled", o.Status)
+		if o.Status != StatusCancelled || o.Result != CancelledByUser {
+			t.Errorf("outcome = %s %q, want cancelled by the user", o.Status, o.Result)
 		}
 	case <-time.After(20 * time.Second):
 		t.Fatal("the cancelled run did not end")
 	}
 	if _, ok := f.runner.Live("task-live"); ok {
 		t.Error("a finished run is still listed as live")
+	}
+	if _, err := os.Stat(dir); err != nil {
+		t.Errorf("the task's own working directory was touched: %v", err)
+	}
+}
+
+func TestCancelRemovesScratchDirectoryAndRecordsReason(t *testing.T) {
+	f := newFixture(t)
+	f.reply(t, `{"result":"never","is_error":false}`)
+	t.Setenv("FAKE_SLEEP", "30")
+	sibling := filepath.Join(f.runner.ScratchDir, "task-other")
+	if err := os.MkdirAll(sibling, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan Outcome, 1)
+	go func() {
+		o, _ := f.runner.Run(context.Background(), Task{ID: "task-scratch", Agent: "dev", Body: "b"})
+		done <- o
+	}()
+	waitFor(t, "the run to report its process", func() bool {
+		lr, ok := f.runner.Live("task-scratch")
+		return ok && lr.PID > 0
+	})
+	lr, _ := f.runner.Live("task-scratch")
+	if err := os.WriteFile(filepath.Join(lr.Dir, "clone.txt"), []byte("downloaded"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !f.runner.Cancel("task-scratch", "cancelled: the PR head moved") {
+		t.Fatal("Cancel did not find the running task")
+	}
+	select {
+	case o := <-done:
+		if o.Status != StatusCancelled || o.Result != "cancelled: the PR head moved" {
+			t.Errorf("outcome = %s %q", o.Status, o.Result)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("the cancelled run did not end")
+	}
+	if _, err := os.Stat(lr.Dir); !os.IsNotExist(err) {
+		t.Errorf("scratch directory %s still there: %v", lr.Dir, err)
+	}
+	if _, err := os.Stat(sibling); err != nil {
+		t.Errorf("another task's scratch directory was removed: %v", err)
+	}
+}
+
+func TestRemoveScratchStaysInsideScratchDir(t *testing.T) {
+	root := t.TempDir()
+	scratch := filepath.Join(root, "tasks")
+	keep := filepath.Join(root, "keep")
+	for _, d := range []string{scratch, keep} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := &Runner{ScratchDir: scratch}
+	for _, id := range []string{"..", "../keep", ".", "", "a/../../keep"} {
+		r.removeScratch(Task{ID: id})
+	}
+	r.removeScratch(Task{ID: "x", Cwd: keep})
+	(&Runner{}).removeScratch(Task{ID: "keep"})
+	for _, d := range []string{scratch, keep} {
+		if _, err := os.Stat(d); err != nil {
+			t.Errorf("%s removed: %v", d, err)
+		}
 	}
 }
 

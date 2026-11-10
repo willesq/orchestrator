@@ -57,6 +57,9 @@ const (
 	// PostedNone is a verdict with nothing to post: it approves, and no earlier
 	// comment needed updating.
 	PostedNone = "none"
+	// PostedSuperseded is a verdict not posted because new commits reached the
+	// PR first; the note names the new head.
+	PostedSuperseded = "superseded"
 )
 
 // ValidMode reports whether m is a mode a client may set.

@@ -50,10 +50,11 @@ func (l *liveRunner) taskOf(proc procstat.Identity) (agentrun.LiveRun, bool) {
 	return r.LiveByProcess(proc)
 }
 
-// cancel stops a task the current runner is running, reporting whether it was.
-func (l *liveRunner) cancel(taskID string) bool {
+// cancel stops a task the current runner is running, with reason as its
+// result, reporting whether it was.
+func (l *liveRunner) cancel(taskID, reason string) bool {
 	r := l.get()
-	return r != nil && r.Cancel(taskID)
+	return r != nil && r.Cancel(taskID, reason)
 }
 
 // reconcileTasks settles the tasks a stopped worker left behind; the worker

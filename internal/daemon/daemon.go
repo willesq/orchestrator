@@ -670,7 +670,8 @@ func Run(ctx context.Context) error {
 	// One GitHub service, so the server and the PR watcher share the identity
 	// cache.
 	ghService := github.NewService(github.NewStore(store), ghp.Routed())
-	reviewWatcher := newReviewWatcher(reviews.NewStore(store), disp, tasks, ghService, ghp)
+	reviewWatcher := newReviewWatcher(reviews.NewStore(store), disp, tasks, ctl, ghService, ghp)
+	reviewWatcher.Poll = reviewsPoll(s.PRReviews.PollInterval)
 
 	docsSched := newDocsScheduler(s, store, svc, sp, ghp)
 	settingsSvc := settingsFor(store)

@@ -39,7 +39,7 @@ func reviewsServer(t *testing.T) (*server, *[3]string, *fakeTasks) {
 		}
 		return nil, nil
 	})
-	w := newReviewWatcher(reviews.NewStore(conn), fakeDispatcher{id: "task-1", got: got, route: route}, tasks, gh, nil)
+	w := newReviewWatcher(reviews.NewStore(conn), fakeDispatcher{id: "task-1", got: got, route: route}, tasks, nil, gh, nil)
 	w.GH = func(_ context.Context, args ...string) ([]byte, error) {
 		if args[0] == "api" {
 			return []byte("OWNER\n"), nil
@@ -259,5 +259,20 @@ func TestSetPRReviewUpdateInPlace(t *testing.T) {
 	w, err = s.WatchPRReview(ctx, &orchdv1.WatchPRReviewRequest{Url: reviewURL, Mode: "verdict", SetUpdateInPlace: true})
 	if err != nil || w.GetUpdateInPlace() {
 		t.Fatalf("set off: %+v, %v", w, err)
+	}
+}
+
+func TestReviewsPoll(t *testing.T) {
+	for spec, want := range map[string]time.Duration{
+		"":     reviews.DefaultPoll,
+		"soon": reviews.DefaultPoll,
+		"-1m":  reviews.DefaultPoll,
+		"30s":  30 * time.Second,
+		"10m":  10 * time.Minute,
+		"1s":   reviewsTick,
+	} {
+		if got := reviewsPoll(spec); got != want {
+			t.Errorf("reviewsPoll(%q) = %v, want %v", spec, got, want)
+		}
 	}
 }

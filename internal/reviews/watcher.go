@@ -34,6 +34,9 @@ type Dispatcher func(ctx context.Context, body string) (string, error)
 // TaskLookup reads a task's status and result from the dispatch ledger.
 type TaskLookup func(ctx context.Context, id string) (status, result string, found bool, err error)
 
+// TaskCanceller cancels a queued or running task, recording reason.
+type TaskCanceller func(ctx context.Context, id, reason string) error
+
 // ErrNotFound is returned for a PR that is not watched.
 var ErrNotFound = errors.New("that PR is not watched")
 
@@ -50,6 +53,9 @@ type Watcher struct {
 	Post     Poster
 	Dispatch Dispatcher
 	Task     TaskLookup
+	// Cancel stops a review task with reason as its result; nil leaves a
+	// review whose PR moved on to finish, unposted.
+	Cancel TaskCanceller
 	// Login is the user's GitHub login; GitHub refuses to let them approve
 	// their own PRs.
 	Login func(ctx context.Context) (string, error)
@@ -241,9 +247,8 @@ func (w *Watcher) Tick(ctx context.Context) {
 			continue
 		}
 		if r.State == StateReviewing {
-			// Before collecting: a new verdict replaces the comment asked for.
-			if post := planStale(r); post != nil {
-				w.send(ctx, r.URL, *post)
+			if w.Cancel != nil && w.isDue(r.URL) && w.supersede(ctx, r.URL) {
+				continue
 			}
 			w.collect(ctx, r.URL)
 			continue
@@ -266,8 +271,8 @@ func (w *Watcher) isDue(url string) bool {
 
 // Schedule reports when orchd last read url's PR from GitHub and when it reads
 // it next; both are zero for a review it no longer checks, and checked is zero
-// before the first read since orchd started. A review under way is not read
-// from GitHub, so next is zero for it too.
+// before the first read since orchd started. A review under way is read only
+// to see whether new commits replaced it, which needs Cancel.
 func (w *Watcher) Schedule(r Review) (checked, next time.Time) {
 	if !r.Active() {
 		return time.Time{}, time.Time{}
@@ -275,7 +280,7 @@ func (w *Watcher) Schedule(r Review) (checked, next time.Time) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	checked = w.checked[r.URL]
-	if r.State == StateReviewing {
+	if r.State == StateReviewing && w.Cancel == nil {
 		return checked, time.Time{}
 	}
 	if w.due[r.URL] || checked.IsZero() {
@@ -393,10 +398,16 @@ func (w *Watcher) check(ctx context.Context, url string) {
 			return true
 		}
 		if st.Head != r.HeadSHA {
-			post = planStale(*r)
+			superseded := ""
+			if wouldPost(*r) {
+				// The verdict covers a commit the PR moved past: posting it
+				// would raise findings the new commits may already fix.
+				r.Posted = PostedSuperseded
+				superseded = supersededNote(r.HeadSHA, st.Head) + "; "
+			}
 			if !st.Ready() {
-				r.State, r.Note = StateWaiting, st.Waiting()
-				if r.HeadSHA != "" && r.Verdict != "" {
+				r.State, r.Note = StateWaiting, superseded+st.Waiting()
+				if superseded == "" && r.HeadSHA != "" && r.Verdict != "" {
 					r.Note = "new commits since the verdict; " + r.Note
 				}
 				return true
@@ -455,8 +466,6 @@ func (w *Watcher) expire(r *Review) bool {
 type posting struct {
 	event, commit, posted string
 	note                  string
-	// stale posts a verdict for a commit that is no longer the PR's head.
-	stale bool
 }
 
 // plan decides what to post for r's verdict now that the PR's head is still
@@ -517,31 +526,92 @@ func commentEvent(r Review) string {
 	return "COMMENT"
 }
 
-// planStale decides what to post for a verdict on a commit the PR has moved
-// past. The comment stays pinned to the reviewed commit, and an older commit
-// is never approved, nor are its findings replaced with approving text while
-// the new commit is unreviewed. A verdict with no HeadSHA is being redone at
-// the user's request, so it is not posted.
-func planStale(r Review) *posting {
-	if r.HeadSHA == "" || r.Verdict == "" {
-		return nil
+// wouldPost reports whether r's verdict still has something to post for its
+// commit under r's mode.
+func wouldPost(r Review) bool {
+	if r.HeadSHA == "" || r.Verdict == "" || r.Posted != "" {
+		return false
 	}
-	p := planComment(r)
-	if p == nil || p.event == EventRefresh {
-		return nil
+	return (approves(r.Mode) && r.Verdict == VerdictApprove) || planComment(r) != nil
+}
+
+func supersededNote(reviewed, head string) string {
+	return fmt.Sprintf("superseded by %s: the verdict for %s was not posted", shortSHA(head), shortSHA(reviewed))
+}
+
+func shortSHA(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
 	}
-	p.stale = true
-	return p
+	return sha
+}
+
+// supersede cancels url's review task once it no longer matters, so no tokens
+// go on it, and reports whether it did: a PR merged or closed ends the watch,
+// and new commits past the one under review are reviewed next, once ready.
+func (w *Watcher) supersede(ctx context.Context, url string) bool {
+	r, ok := w.update(ctx, url, func(*Review) bool { return false })
+	if !ok || r.State != StateReviewing {
+		return false
+	}
+	st, err := FetchStatus(ctx, w.GH, url)
+	w.mu.Lock()
+	w.checkedNow(url)
+	w.mu.Unlock()
+	if err != nil {
+		return false
+	}
+	closed := st.State != "OPEN"
+	if !closed && st.Head == r.PendingSHA {
+		return false
+	}
+	var reason, note string
+	if closed {
+		how := strings.ToLower(st.State)
+		reason = "cancelled: the PR was " + how + " before the review finished"
+		note = fmt.Sprintf("the PR is %s; cancelled the review of %s", how, shortSHA(r.PendingSHA))
+	} else {
+		reason = fmt.Sprintf("cancelled: the PR head moved from %s to %s before the review finished",
+			shortSHA(r.PendingSHA), shortSHA(st.Head))
+		note = fmt.Sprintf("cancelled the review of %s: new commits moved the head to %s",
+			shortSHA(r.PendingSHA), shortSHA(st.Head))
+	}
+	if err := w.Cancel(ctx, r.TaskID, reason); err != nil {
+		// Most likely it just ended; collect records the verdict, and the
+		// check after it closes the watch or holds the post back.
+		log.Printf("pr-reviews: cancel the review of %s at %s: %v", url, shortSHA(r.PendingSHA), err)
+		return false
+	}
+	log.Printf("pr-reviews: %s; cancelled review task %s of %s", reason, r.TaskID, url)
+	w.update(ctx, url, func(cur *Review) bool {
+		if cur.State != StateReviewing || cur.TaskID != r.TaskID {
+			return false
+		}
+		cur.State, cur.PendingSHA, cur.Nonce, cur.Note = StateWaiting, "", "", note
+		if closed {
+			// Closed rows are no longer read: the watch ends here.
+			cur.State = StateClosed
+		}
+		return true
+	})
+	if !closed {
+		w.mu.Lock()
+		w.markDue(url)
+		w.mu.Unlock()
+	}
+	return true
 }
 
 // send submits p with the comment as stored now, unless the user changed
-// their choice or new commits arrived meanwhile. While it posts, the user's
-// changes to the PR are refused (ErrPosting), and the outcome is recorded
-// whatever state the row is in, so the app never shows less than was posted.
+// their choice or new commits arrived meanwhile: the PR's head is read again
+// right before posting, and a verdict for any other commit is kept, marked
+// superseded, and never posted. While it posts, the user's changes to the PR
+// are refused (ErrPosting), and the outcome is recorded whatever state the
+// row is in, so the app never shows less than was posted.
 func (w *Watcher) send(ctx context.Context, url string, p posting) {
 	w.mu.Lock()
 	r, found, err := w.Store.Get(ctx, url)
-	if err != nil || !found || r.HeadSHA != p.commit || (r.State != StateVerdict && !(p.stale && r.Active())) ||
+	if err != nil || !found || r.HeadSHA != p.commit || r.State != StateVerdict ||
 		(p.event == "APPROVE" && !approves(r.Mode)) || (p.event != "APPROVE" && !comments(r.Mode)) ||
 		(p.event == EventRefresh && !r.UpdateInPlace) || w.unrecorded[url] == p.commit {
 		w.mu.Unlock()
@@ -557,6 +627,14 @@ func (w *Watcher) send(ctx context.Context, url string, p posting) {
 	w.posting[url] = true
 	w.mu.Unlock()
 
+	// Accepted risk: GitHub has no compare-and-set for reviews, so a push
+	// between this read and the post can still land after it. The review stays
+	// pinned to p.commit, and branch protection's "dismiss stale approvals"
+	// drops an approval the push made stale.
+	if head, herr := w.liveHead(ctx, url); herr != nil || head != p.commit {
+		w.holdBack(ctx, url, p.commit, head, herr)
+		return
+	}
 	err = w.Post(ctx, r.Repo, r.Number, p.event, p.commit, r.Comment)
 	if err == nil && p.event == "APPROVE" && comments(r.Mode) && r.UpdateInPlace {
 		// The approval stands either way, so a stale comment is not its failure.
@@ -582,11 +660,7 @@ func (w *Watcher) send(ctx context.Context, url string, p posting) {
 	} else if err != nil {
 		r.Posted, r.Note = PostedFailed, "could not post to GitHub: "+github.Printable(err.Error(), 300)
 	} else {
-		r.Posted = p.posted
-		if !p.stale {
-			// A stale verdict's note says what the new commit is waiting for.
-			r.Note = ""
-		}
+		r.Posted, r.Note = p.posted, ""
 		if r.Mode == ModeComment {
 			// An asked-for comment is one-shot: later verdicts post nothing
 			// until asked again.
@@ -597,6 +671,41 @@ func (w *Watcher) send(ctx context.Context, url string, p posting) {
 	if perr := w.Store.Put(ctx, &r); perr != nil {
 		log.Printf("pr-reviews: record %s on %s: %v", p.event, url, perr)
 		w.markUnrecorded(url, p.commit, err)
+	}
+}
+
+// liveHead reads the PR's head commit from GitHub.
+func (w *Watcher) liveHead(ctx context.Context, url string) (string, error) {
+	st, err := FetchStatus(ctx, w.GH, url)
+	if err != nil {
+		return "", err
+	}
+	if st.Head == "" {
+		return "", errors.New("GitHub returned no head commit")
+	}
+	return st.Head, nil
+}
+
+// holdBack records a post send did not make: the head moved to head, or it
+// could not be read (err), in which case the next check tries again.
+func (w *Watcher) holdBack(ctx context.Context, url, commit, head string, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.posting, url)
+	ctx = context.WithoutCancel(ctx)
+	r, found, gerr := w.Store.Get(ctx, url)
+	if gerr != nil || !found || r.HeadSHA != commit {
+		return
+	}
+	if err != nil {
+		r.Note = "not posted: could not confirm the PR's head: " + github.Printable(err.Error(), 300)
+	} else {
+		log.Printf("pr-reviews: %s moved to %s before posting the verdict for %s", url, shortSHA(head), shortSHA(commit))
+		r.Posted, r.Note = PostedSuperseded, supersededNote(commit, head)
+		w.markDue(url)
+	}
+	if perr := w.Store.Put(ctx, &r); perr != nil {
+		log.Printf("pr-reviews: record the held-back post on %s: %v", url, perr)
 	}
 }
 

@@ -67,9 +67,9 @@ func (s *SQLTaskStore) unsettled(ctx context.Context) ([]unsettledTask, error) {
 type Control struct {
 	Store *SQLTaskStore
 	Runs  *Runs
-	// CancelLive stops a task this process is running now, reporting whether
-	// it was; nil means no run is ever live here.
-	CancelLive func(taskID string) bool
+	// CancelLive stops a task this process is running now, with reason as
+	// its result, reporting whether it was; nil means no run is ever live here.
+	CancelLive func(taskID, reason string) bool
 	// MaxActive caps pending plus running tasks for a retry, as for a
 	// dispatch; 0 means no cap.
 	MaxActive int
@@ -247,6 +247,15 @@ func (c *Control) Retry(ctx context.Context, id string) (string, error) {
 // cancelled), a run still waiting for a worker is cancelled, and a task with
 // no active run is marked cancelled.
 func (c *Control) Cancel(ctx context.Context, id string) (string, error) {
+	return c.CancelFor(ctx, id, CancelledByUser)
+}
+
+// CancelledByUser is the result of a task the user cancelled.
+const CancelledByUser = "cancelled by the user"
+
+// CancelFor is Cancel with reason recorded as the task's result, for a task
+// orch stops on its own.
+func (c *Control) CancelFor(ctx context.Context, id, reason string) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	t, found, err := c.Store.Get(ctx, id)
@@ -259,8 +268,8 @@ func (c *Control) Cancel(ctx context.Context, id string) (string, error) {
 	if !Unsettled(t.Status) {
 		return "", fmt.Errorf("%w: %s already ended (%s)", ErrState, id, t.Status)
 	}
-	if c.CancelLive != nil && c.CancelLive(id) {
-		log.Printf("tasks: %s cancelled while running", id)
+	if c.CancelLive != nil && c.CancelLive(id, reason) {
+		log.Printf("tasks: %s cancelled while running: %s", id, reason)
 		return "stopping its running session", nil
 	}
 	run, ok, err := c.Runs.Latest(ctx, id)
@@ -272,13 +281,13 @@ func (c *Control) Cancel(ctx context.Context, id string) (string, error) {
 			return "", err
 		}
 	}
-	log.Printf("tasks: %s cancelled before it ran", id)
-	if err := c.Store.End(ctx, id, StatusCancelled, "cancelled by the user"); err != nil {
+	log.Printf("tasks: %s cancelled before it ran: %s", id, reason)
+	if err := c.Store.End(ctx, id, StatusCancelled, reason); err != nil {
 		return "", err
 	}
 	// Reason: a worker may have started the session between the checks above
 	// and the ledger write; stop it too. The row is final either way.
-	if c.CancelLive != nil && c.CancelLive(id) {
+	if c.CancelLive != nil && c.CancelLive(id, reason) {
 		return "stopping its session, which had just started", nil
 	}
 	return "cancelled before it ran", nil

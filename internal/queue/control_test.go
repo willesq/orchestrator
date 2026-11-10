@@ -191,7 +191,7 @@ func TestRetryAndCancel(t *testing.T) {
 	if err := h.store.Create(ctx, task("task-live", "dev", "x")); err != nil {
 		t.Fatal(err)
 	}
-	h.ctl.CancelLive = func(id string) bool { return id == "task-live" }
+	h.ctl.CancelLive = func(id, _ string) bool { return id == "task-live" }
 	if msg, err := h.ctl.Cancel(ctx, "task-live"); err != nil || !strings.Contains(msg, "running session") {
 		t.Errorf("live cancel = %q, %v", msg, err)
 	}
@@ -209,6 +209,33 @@ func TestRetryAndCancel(t *testing.T) {
 	}
 	if _, err := h.ctl.Retry(ctx, "task-norun"); !errors.Is(err, ErrState) {
 		t.Errorf("retry with no recorded run = %v, want ErrState", err)
+	}
+}
+
+func TestCancelForRecordsTheReason(t *testing.T) {
+	h := newControlHarness(t)
+	ctx := context.Background()
+	const why = "cancelled: the PR head moved"
+	if err := h.store.Create(ctx, task("task-queued", "dev", "x")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.ctl.CancelFor(ctx, "task-queued", why); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := h.store.Get(ctx, "task-queued"); got.Status != StatusCancelled || got.Result != why {
+		t.Errorf("task = %s %q", got.Status, got.Result)
+	}
+
+	if err := h.store.Create(ctx, task("task-live", "dev", "x")); err != nil {
+		t.Fatal(err)
+	}
+	var gave string
+	h.ctl.CancelLive = func(_, reason string) bool { gave = reason; return true }
+	if _, err := h.ctl.CancelFor(ctx, "task-live", why); err != nil || gave != why {
+		t.Errorf("live cancel reason = %q, %v", gave, err)
+	}
+	if _, err := h.ctl.Cancel(ctx, "task-live"); err != nil || gave != CancelledByUser {
+		t.Errorf("user cancel reason = %q, %v", gave, err)
 	}
 }
 
@@ -409,7 +436,7 @@ func TestCancelledIsFinal(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	h.ctl.CancelLive = func(string) bool { calls++; return calls > 1 }
+	h.ctl.CancelLive = func(string, string) bool { calls++; return calls > 1 }
 	if msg, err := h.ctl.Cancel(ctx, "task-g"); err != nil || !strings.Contains(msg, "just started") {
 		t.Errorf("cancel with a late-starting session = %q %v", msg, err)
 	}

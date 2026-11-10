@@ -141,12 +141,12 @@ func TestLiveRunnerAndHelpers(t *testing.T) {
 		t.Error("a nil liveRunner returned a runner")
 	}
 	l := &liveRunner{}
-	if l.cancel("x") {
+	if l.cancel("x", "") {
 		t.Error("cancelled with no runner")
 	}
 	r := &agentrun.Runner{}
 	l.set(r)
-	if l.get() != r || l.cancel("x") {
+	if l.get() != r || l.cancel("x", "") {
 		t.Error("liveRunner did not hold the runner, or cancelled a task it is not running")
 	}
 	if resumeCommand("", "") != "" || resumeCommand("/a b", "sid") != `cd '/a b' && claude --resume sid` {

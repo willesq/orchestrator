@@ -162,6 +162,8 @@ func buildFields() []Field {
 		{Key: "pr_babysitter.enabled", Section: SectionGitHub, Label: "Watch GitHub", Type: TypeBool,
 			Help: "Keep the cache of PRs and issues in your enabled scopes fresh."},
 		{Key: "pr_babysitter.poll_interval", Section: SectionGitHub, Label: "Sweep interval", Type: TypeDuration},
+		{Key: "pr_reviews.poll_interval", Section: SectionGitHub, Label: "Review watch check interval", Type: TypeDuration,
+			Help: "How often each PR watched for review is read: whether it is ready, and during a review whether new commits or a close cancel it. At least 15s."},
 
 		// Prompt context, read by orch-hook on every prompt.
 		{Key: "hooks.auto_rag.enabled", Section: SectionContext, Label: "Add memory to prompts", Type: TypeBool, Live: true},
