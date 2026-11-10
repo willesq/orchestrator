@@ -765,7 +765,8 @@
         "source": "https://github.com/willesq/orchestrator/issues/130",
         "raised": "2026-11-08",
         "affects": [],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: dropped; the plan and the feature PRs record the project's progress, so no comment is posted on issue #130."
       },
       {
         "id": "RC-20",
@@ -775,7 +776,8 @@
         "source": "https://github.com/willesq/orchestrator/pull/111",
         "raised": "2026-11-08",
         "affects": [],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: PR #111 closed unmerged (branch kept)."
       },
       {
         "id": "RC-21",
@@ -933,7 +935,7 @@
         "id": "RC-33",
         "kind": "user-action",
         "topic": "Wire the tool hooks on this Mac after release",
-        "detail": "Once a release contains SP-012: run `orch install --target claude-code --apply` and `orch install --target codex --apply` (dry run first), then review and trust the new PreToolUse entry in Codex. `orch status` shows '<harness> tool hooks wired' when done. Until then nothing is logged.",
+        "detail": "Once a release contains SP-012: run `orch install --target claude-code --apply` and `orch install --target codex --apply` (dry run first), then review and trust the new PreToolUse entry in Codex. `orch status` shows '<harness> tool hooks wired' when done. Until then nothing is logged. Update 2026-11-10 (decision review): orch 0.45.1 is installed and contains SP-012, but orch status shows the tool hooks missing. Dry runs are clean: ~/.claude/settings.json gains PreToolUse and CwdChanged (19 third-party entries kept) and ~/.codex/hooks.json gains PreToolUse (6 kept). The user will run the two --apply commands and trust the Codex entry.",
         "source": "https://github.com/willesq/orchestrator/pull/150",
         "raised": "2026-11-09",
         "affects": [
@@ -1114,7 +1116,8 @@
         "affects": [
           "SP-014"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: Actions has run full CI again since about 20:50 UTC on 2026-11-09; PRs #154 and #157 ran test, the macOS ORT build and app green on code containing SP-014, which covers SP-014's missing macOS build (CI does not run on main itself). The cause was not confirmed."
       },
       {
         "id": "RC-47",
@@ -4954,6 +4957,10 @@
     {
       "date": "2026-11-10",
       "change": "Decision review batch 5 (GitHub and sandbox): D-50..D-54 recorded from RC-05, RC-06, RC-07, RC-09, RC-10; RC-61 (follow-up) added; SP-074 'Per-job GitHub account follow-ups' added (priority 21.5, after SP-043). New acceptance items with criteria_sha256 recomputed with the user's approval: SP-030 648365717ade -> 285ce77da8c1; SP-023 18303e54d943 -> 119d6446a5c7; SP-046 dc35cbd2cf5d -> cfe689cda20b; SP-046 cfe689cda20b -> 0ed90500129f."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 6 (user actions): RC-46, RC-20 (PR #111 closed) and RC-19 (dropped) resolved; RC-33 updated with the clean dry runs, left open until the user applies them."
     }
   ],
   "plan_location": {
