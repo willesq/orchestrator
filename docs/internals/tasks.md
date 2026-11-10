@@ -467,14 +467,18 @@ closed by then reads as `closed`. A go-ahead for an untrusted author does not ca
 `StopPRReview` with `forget` deletes the row. Stopping does not cancel a review task already running; that task is cancelled on its own, and its verdict is not collected.
 
 **The `pr-reviews` unit** ticks every 15 s:
-- A `reviewing` row reads its task from the ledger, so a PR closed during a review, or a limit
-  reached during one, is acted on once the review ends, before anything is posted for it. Every
-  2 minutes it also reads the PR (`gh pr view`): when new commits moved the head past the commit
-  under review, orchd cancels the review task (`CancelFor`, the result naming both commits), so no
-  tokens go on a superseded commit. The row goes back to `waiting` with a note, keeps the
-  cancelled `task_id`, and the new head is reviewed once it is ready. A task that ended before
-  the cancel is collected as usual, and its verdict is not posted. A failed read leaves the review
-  running. Each review gets a random token
+- A `reviewing` row reads its task from the ledger, so a limit reached during a review is acted
+  on once the review ends, before anything is posted for it. Every poll
+  (`pr_reviews.poll_interval`, 2 minutes by default, at least the 15 s tick; read when orchd
+  starts) it also reads the PR (`gh pr view`), and cancels the review task (`CancelFor`, the
+  result saying why) once it no longer matters, so no tokens go on it:
+  - A PR merged or closed: the row becomes `closed`, ending the watch, with a note.
+  - New commits past the one under review: the row goes back to `waiting` with a note naming
+    both commits, and the new head is reviewed once it is ready.
+
+  The row keeps the cancelled `task_id`. A task that ended before the cancel is collected as
+  usual; the check that follows closes the watch or holds its verdict back. A failed read leaves
+  the review running. Each review gets a random token
   (`nonce`, stored on the row and given only in the task prompt). The result must end with exactly
   one `ORCH-VERDICT-BEGIN <token> … ORCH-VERDICT-END <token>` block holding JSON
   `{verdict, reason, comment, for_user}`; a fence around it is allowed, nothing after it. A block quoted from
@@ -482,7 +486,7 @@ closed by then reads as `closed`. A go-ahead for an untrusted author does not ca
   block, so neither counts. The verdict must be `approve`, `wait` or `changes` with a reason. Reason (≤ 2000 bytes) and comment (≤ 60000) have control and bidi
   characters dropped. A failed, missing or unparseable review settles that head as `failed`: it is
   not rerun on its own. A new commit, or the user changing the watch, retries it.
-- Other active rows read the PR with one `gh pr view` every 2 minutes, or right after the user
+- Other active rows read the PR with one `gh pr view` every poll, or right after the user
   changes the watch. `ListPRReviews` reports when each was last read (since orchd started) and
   when it is read next, for the app's progress row. When no CI ran, one
   `gh api repos/<repo>/pulls/<n>` call adds the author's association, which `gh pr view` does

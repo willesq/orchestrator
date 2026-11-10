@@ -546,10 +546,9 @@ func shortSHA(sha string) string {
 	return sha
 }
 
-// supersede cancels url's review task when the PR's head has moved past the
-// commit under review, so no tokens go on findings the new commits may fix,
-// and reports whether it did. The next check reviews the new head once it is
-// ready.
+// supersede cancels url's review task once it no longer matters, so no tokens
+// go on it, and reports whether it did: a PR merged or closed ends the watch,
+// and new commits past the one under review are reviewed next, once ready.
 func (w *Watcher) supersede(ctx context.Context, url string) bool {
 	r, ok := w.update(ctx, url, func(*Review) bool { return false })
 	if !ok || r.State != StateReviewing {
@@ -559,30 +558,47 @@ func (w *Watcher) supersede(ctx context.Context, url string) bool {
 	w.mu.Lock()
 	w.checkedNow(url)
 	w.mu.Unlock()
-	if err != nil || st.Head == "" || st.Head == r.PendingSHA {
+	if err != nil {
 		return false
 	}
-	reason := fmt.Sprintf("cancelled: the PR head moved from %s to %s before the review finished",
-		shortSHA(r.PendingSHA), shortSHA(st.Head))
+	closed := st.State != "OPEN"
+	if !closed && st.Head == r.PendingSHA {
+		return false
+	}
+	var reason, note string
+	if closed {
+		how := strings.ToLower(st.State)
+		reason = "cancelled: the PR was " + how + " before the review finished"
+		note = fmt.Sprintf("the PR is %s; cancelled the review of %s", how, shortSHA(r.PendingSHA))
+	} else {
+		reason = fmt.Sprintf("cancelled: the PR head moved from %s to %s before the review finished",
+			shortSHA(r.PendingSHA), shortSHA(st.Head))
+		note = fmt.Sprintf("cancelled the review of %s: new commits moved the head to %s",
+			shortSHA(r.PendingSHA), shortSHA(st.Head))
+	}
 	if err := w.Cancel(ctx, r.TaskID, reason); err != nil {
-		// Most likely it just ended; collect records the verdict, and send
-		// will not post it for the old commit.
+		// Most likely it just ended; collect records the verdict, and the
+		// check after it closes the watch or holds the post back.
 		log.Printf("pr-reviews: cancel the review of %s at %s: %v", url, shortSHA(r.PendingSHA), err)
 		return false
 	}
-	log.Printf("pr-reviews: %s moved to %s; cancelled review task %s", url, shortSHA(st.Head), r.TaskID)
+	log.Printf("pr-reviews: %s; cancelled review task %s of %s", reason, r.TaskID, url)
 	w.update(ctx, url, func(cur *Review) bool {
 		if cur.State != StateReviewing || cur.TaskID != r.TaskID {
 			return false
 		}
-		cur.State, cur.PendingSHA, cur.Nonce = StateWaiting, "", ""
-		cur.Note = fmt.Sprintf("cancelled the review of %s: new commits moved the head to %s",
-			shortSHA(r.PendingSHA), shortSHA(st.Head))
+		cur.State, cur.PendingSHA, cur.Nonce, cur.Note = StateWaiting, "", "", note
+		if closed {
+			// Closed rows are no longer read: the watch ends here.
+			cur.State = StateClosed
+		}
 		return true
 	})
-	w.mu.Lock()
-	w.markDue(url)
-	w.mu.Unlock()
+	if !closed {
+		w.mu.Lock()
+		w.markDue(url)
+		w.mu.Unlock()
+	}
 	return true
 }
 

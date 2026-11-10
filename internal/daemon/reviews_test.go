@@ -261,3 +261,18 @@ func TestSetPRReviewUpdateInPlace(t *testing.T) {
 		t.Fatalf("set off: %+v, %v", w, err)
 	}
 }
+
+func TestReviewsPoll(t *testing.T) {
+	for spec, want := range map[string]time.Duration{
+		"":     reviews.DefaultPoll,
+		"soon": reviews.DefaultPoll,
+		"-1m":  reviews.DefaultPoll,
+		"30s":  30 * time.Second,
+		"10m":  10 * time.Minute,
+		"1s":   reviewsTick,
+	} {
+		if got := reviewsPoll(spec); got != want {
+			t.Errorf("reviewsPoll(%q) = %v, want %v", spec, got, want)
+		}
+	}
+}

@@ -671,6 +671,7 @@ func Run(ctx context.Context) error {
 	// cache.
 	ghService := github.NewService(github.NewStore(store), ghp.Routed())
 	reviewWatcher := newReviewWatcher(reviews.NewStore(store), disp, tasks, ctl, ghService, ghp)
+	reviewWatcher.Poll = reviewsPoll(s.PRReviews.PollInterval)
 
 	docsSched := newDocsScheduler(s, store, svc, sp, ghp)
 	settingsSvc := settingsFor(store)

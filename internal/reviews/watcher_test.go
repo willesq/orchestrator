@@ -1109,6 +1109,58 @@ func TestReviewCancelledWhenHeadMoves(t *testing.T) {
 		}
 	})
 
+	for _, how := range []string{"MERGED", "CLOSED"} {
+		t.Run("a "+strings.ToLower(how)+" PR cancels the review and ends the watch", func(t *testing.T) {
+			e, w, reasons := startReview(t, ModeAuto)
+			e.pr.state = how
+			e.clock = e.clock.Add(DefaultPoll)
+			w.Tick(ctx)
+			if len(e.cancelled) != 1 || !strings.Contains((*reasons)[0], "was "+strings.ToLower(how)) {
+				t.Fatalf("cancelled %v: %v", e.cancelled, *reasons)
+			}
+			r := get(t, w)
+			if r.State != StateClosed || r.Active() || r.PendingSHA != "" || !strings.Contains(r.Note, "cancelled the review of aaaaaaa") {
+				t.Fatalf("%+v", r)
+			}
+			calls := e.ghCalls
+			e.clock = e.clock.Add(DefaultPoll)
+			w.Tick(ctx)
+			if e.ghCalls != calls || len(e.dispatched) != 1 || len(e.posts) != 0 {
+				t.Fatalf("a closed watch was read again: gh %d -> %d, dispatched %d, posts %+v",
+					calls, e.ghCalls, len(e.dispatched), e.posts)
+			}
+		})
+	}
+
+	t.Run("a PR closed as the review ended posts nothing", func(t *testing.T) {
+		e, w, _ := startReview(t, ModeAuto)
+		e.cancelErr = errors.New("task-1 already ended (complete)")
+		finish(t, w, e, "task-1", VerdictApprove, "good")
+		e.pr.state = "MERGED"
+		e.clock = e.clock.Add(DefaultPoll)
+		w.Tick(ctx)
+		w.Tick(ctx)
+		if r := get(t, w); len(e.posts) != 0 || r.State != StateClosed || r.Verdict != VerdictApprove {
+			t.Fatalf("%+v %+v", e.posts, r)
+		}
+	})
+
+	t.Run("a configured poll paces the reads", func(t *testing.T) {
+		e, w, _ := startReview(t, ModeFeedback)
+		w.Poll = 30 * time.Second
+		e.pr.head = shaB
+		e.clock = e.clock.Add(29 * time.Second)
+		w.Tick(ctx)
+		if len(e.cancelled) != 0 {
+			t.Fatal("read before the configured poll")
+		}
+		e.clock = e.clock.Add(time.Second)
+		w.Tick(ctx)
+		if len(e.cancelled) != 1 {
+			t.Fatal("not read at the configured poll")
+		}
+	})
+
 	t.Run("without Cancel the review runs on", func(t *testing.T) {
 		e, w := newEnv(t)
 		_, _ = w.Watch(ctx, testURL, ModeFeedback, nil)

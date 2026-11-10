@@ -55,6 +55,12 @@ func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, c
 	return w
 }
 
+// reviewsPoll is pr_reviews.poll_interval, never below the unit's tick, which
+// would only read as the tick anyway.
+func reviewsPoll(spec string) time.Duration {
+	return max(interval(spec, reviews.DefaultPoll), reviewsTick)
+}
+
 func reviewsUnit(w *reviews.Watcher) supervisor.Unit {
 	return supervisor.Unit{
 		Name:     UnitReviews,
