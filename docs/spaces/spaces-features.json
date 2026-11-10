@@ -1327,6 +1327,61 @@
           "SP-053"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-62",
+        "kind": "decision",
+        "topic": "What the weekly command-log summary counts",
+        "detail": "SP-016's 'orch spaces log summary' counts directory moves only from cwd-changed events: Codex sends none, and a Bash 'cd' (a target SP-013 extracts) or a tool call reaching another space's files is not counted as a move. Queued tasks have no space until SP-023 and are summed under '' with sessions pinned with no policy and chains whose pin is gone; their moves are not compared. A move counts as 'into another space' when a session started in the new directory would be pinned to a different space under the policy applied now, not the revision recorded on the event (policy_rev), and placement answers GitHub lookups from the cache only, so an uncached repo is placed by the owner its remote names and may differ from what PinSession would decide. Decide whether the summary should count calls whose targets reach another space (likely once SP-040 decides per call), place by the recorded revision, and count cache misses as unplaced.",
+        "source": "https://github.com/willesq/orchestrator/pull/164",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-016",
+          "SP-040",
+          "SP-054",
+          "SP-023"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-63",
+        "kind": "decision",
+        "topic": "Replies a client never reads (second SP-016 audit, residual)",
+        "detail": "gRPC keeps a unary reply in memory until the client reads it, after the handler returns. SP-016 caps an agent's ListToolEvents page at 512 KiB, allows one read per chain at a time, and caps every orchd connection at 128 open calls (grpc.MaxConcurrentStreams, maxStreamsPerConn). A local process that opens many connections and sends calls without reading replies can still make orchd hold them; this applies to every agent-callable RPC with large replies (GetDocument, ListDocs, Search, ListToolEvents), not only the command log. Options: cap connections per process in peerCredentials, a server-wide budget for unsent replies, or accept it with the OS sandbox and orchd's restart as the bound.",
+        "source": "https://github.com/willesq/orchestrator/pull/164",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-016",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-64",
+        "kind": "decision",
+        "topic": "Which of a harness process's sessions a session may read",
+        "detail": "ListToolEvents gives a session only the current session of its harness process (the pin caller resolution picks, RC-27), and only while that is still the pin its connection resolved: after /clear, or once a subagent's pin is newer, an earlier session's log is readable only by the operator, and an older connection is refused until it reconnects (the CLI always reconnects). The command log's writer already treats sessions of one process as related (resolveClaim). Confirm, or let a session read every chain pinned to its own harness process.",
+        "source": "https://github.com/willesq/orchestrator/pull/164",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-016",
+          "SP-054"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-65",
+        "kind": "follow-up",
+        "topic": "SP-016 audit lows and notes",
+        "detail": "From the two SP-016 security reviews, accepted as Low or informational: (1) a process reparented out of the harness tree (launchd, open, osascript) counts as the operator, as documented under Caller sessions; reading the command log makes that bypass more rewarding, and the OS sandbox (SP-046) is the boundary; (2) a session that runs 'orch spaces log' puts its own redacted log into its transcript, which the session-end summary ingests into RAG; the text is the session's own commands, already in its transcript, but decide whether INV-12 should refuse the table inside a harness; (3) 'orch spaces log verify' prints the owner and problem details without cell(); (4) the CLI buffers every page and shares one 30 s deadline, so a very large log can time out having printed nothing (flush per page or stream); (5) the shared flush is best effort (a reader joining a running flush may miss events taken just before it called); (6) the summary's placing deadline cannot interrupt a stat that blocks (an autofs or dead network mount under /net or /Volumes); consider skipping non-local filesystems. (7) no test pins grpc.MaxConcurrentStreams in newGRPCServer, so a refactor could drop it silently; (8) two 'orch spaces log' runs from one session at the same moment: the second is refused (ResourceExhausted) with no retry.",
+        "source": "https://github.com/willesq/orchestrator/pull/164",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-016",
+          "SP-046",
+          "SP-054"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -2707,7 +2762,7 @@
       "attempts": 1,
       "criteria_sha256": "222e6b26c7a27f71b0ccd2e02fea3f15fe4a0f923426f4f9089083f81988a994",
       "branch": "feat/sp-016-read-log",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/164"
     },
     {
       "id": "SP-073",

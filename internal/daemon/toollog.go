@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -54,6 +55,11 @@ type toolLog struct {
 	policy toollog.Policy
 	// running reports whether a task runs; nil asks the current runner.
 	running func(taskID string) bool
+	// flushes shares one writer flush among concurrent readers.
+	flushes singleflight.Group
+	// reading holds the chains an agent is reading now (ListToolEvents).
+	readMu  sync.Mutex
+	reading map[toollog.Owner]bool
 }
 
 // openToolLog opens the command log at path and starts its writer; resolve
@@ -335,8 +341,8 @@ func (s *server) endToolLog(id string) {
 	}()
 }
 
-// VerifyToolLog recomputes one owner's chain. Only the operator may read
-// the log here (INV-12); a session reading its own events is SP-016's.
+// VerifyToolLog recomputes one owner's chain. Only the operator may verify
+// a chain; a session reads its own events through ListToolEvents (INV-12).
 func (s *server) VerifyToolLog(ctx context.Context, req *orchdv1.VerifyToolLogRequest) (*orchdv1.VerifyToolLogResponse, error) {
 	if err := refuseNonOperator(ctx, orchdv1.Orchd_VerifyToolLog_FullMethodName, "read the command log"); err != nil {
 		return nil, err

@@ -177,6 +177,14 @@ service Orchd {
   // VerifyToolLog recomputes one session's or task's command log chain and
   // reports every modified, missing or moved record. Operator only.
   rpc VerifyToolLog(VerifyToolLogRequest) returns (VerifyToolLogResponse);
+  // ListToolEvents reads one session's or task's command log in sequence
+  // order, a page at a time. The operator reads any; a session reads only
+  // its own events and a queued task only its own task's, and naming
+  // another is refused (INV-12).
+  rpc ListToolEvents(ListToolEventsRequest) returns (ListToolEventsResponse);
+  // SummarizeToolLog sums the command log per space over a window: tool
+  // calls, directory moves and moves into another space. Operator only.
+  rpc SummarizeToolLog(SummarizeToolLogRequest) returns (ToolLogSummary);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -1098,6 +1106,72 @@ message VerifyToolLogResponse {
   int64 dropped = 5;          // events those gap records count
   repeated ToolLogProblem problems = 6; // empty when the chain is intact
   int64 pruned = 7;           // retention (SP-015) may have deleted records up to this seq; 0 for none
+}
+
+message ListToolEventsRequest {
+  // A session ID or task:<task id>; "" for the caller's own session or task.
+  string owner = 1;
+  int64 after_seq = 2; // records after this sequence number; 0 from the start
+  int32 limit = 3;     // at most this many; 0 or above 1000 means 1000
+}
+
+// ToolEvent is one record of a command log, as stored: text fields are
+// credential-redacted and capped.
+message ToolEvent {
+  int64 seq = 1;
+  int64 at = 2;          // unix nanoseconds when orchd took the event
+  string kind = 3;       // event | gap | end
+  string harness = 4;
+  string event = 5;      // pre-tool-use | cwd-changed
+  string tool = 6;
+  string agent_id = 7;   // set for a subagent's tool call
+  string agent_type = 8;
+  string cwd = 9;
+  string old_cwd = 10;   // cwd-changed only
+  string new_cwd = 11;   // cwd-changed only
+  string command = 12;
+  string targets = 13;   // the call's targets as JSON
+  string decision = 14;  // logged | refused
+  string rule = 15;
+  int64 dropped = 16;    // gap records: events lost before they were stored
+  // The session the hook named, when orchd attributed the event elsewhere.
+  string claimed_session = 17;
+}
+
+message ListToolEventsResponse {
+  string owner = 1; // the chain read, as "<session id>" or "task:<id>"
+  repeated ToolEvent events = 2;
+  // Records after the last one returned remain. A page holds fewer than
+  // the limit when its records reach about 3 MiB (512 KiB for an agent).
+  bool more = 3;
+  int64 pruned = 4; // retention may have deleted records up to this seq
+}
+
+message SummarizeToolLogRequest {
+  int64 since = 1; // unix seconds; 0 for the last 7 days
+}
+
+// SpaceToolActivity is one space's line of the summary. Sessions are
+// counted in the space they are pinned to; queued tasks, which have no
+// space yet, and sessions pinned with no policy applied are under "".
+message SpaceToolActivity {
+  string space = 1;
+  int32 sessions = 2;          // sessions and tasks with events in the window
+  int64 tool_calls = 3;        // pre-tool-use events
+  int64 directory_moves = 4;   // cwd-changed events
+  // Moves whose new directory a session would be pinned to another space
+  // for, under the policy applied now.
+  int64 cross_space_moves = 5;
+  int64 refusals = 6;          // calls the tool guard refused
+}
+
+message ToolLogSummary {
+  int64 since = 1; // unix seconds
+  int64 until = 2; // unix seconds
+  repeated SpaceToolActivity spaces = 3;
+  // Directory moves not checked for a space change because the window
+  // names too many distinct directories.
+  int64 unplaced_moves = 4;
 }
 
 message DocRepo {

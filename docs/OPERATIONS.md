@@ -56,6 +56,8 @@ orch spaces diff [--full]             # what the newest draft changes, and its p
 orch spaces apply --revision N        # enforce draft N
 orch spaces apply --revision N --confirm-github-org ORG   # also accept ORG's changed GitHub identity
 orch spaces why <path|url|owner/repo|slack:ID|teams:ID>   # which space its content goes to, and why
+orch spaces log [<session>|task:ID]   # a session's command log, in order
+orch spaces log summary [--since 168h]   # per space: tool calls, directory moves, moves into another space
 orch spaces log verify <session|task:ID>   # check a session's command log was not changed
 orch sessions list [--all]   # sessions and their state: active, idle, ended (with --all), unpinned
 ```
@@ -87,7 +89,10 @@ as. Inside an agent session orchd answers only when every space in the answer is
 
 orchd keeps a command log of every tool call and directory change Claude Code and Codex sessions
 report, in `~/.local/share/orch/toollog.db` (owner-only, never indexed into RAG). Commands are
-stored credential-redacted and capped at 2 KB. `orch spaces log verify <session>` checks that no
+stored credential-redacted and capped at 2 KB. `orch spaces log <session>` prints a session's
+records; inside an agent session it prints only that session's own. `orch spaces log summary`
+sums the last week per space, including moves into a directory of another space; it is
+operator-only. `orch spaces log verify <session>` checks that no
 record was changed, removed or moved since orchd wrote it; it is operator-only. A session's
 records are deleted 7 days after it ends and its process has exited (Settings, "Command log":
 3, 7 or 30 days); refused calls are kept 90 days. A running session is never deleted, however

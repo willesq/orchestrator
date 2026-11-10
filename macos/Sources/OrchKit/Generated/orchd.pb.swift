@@ -2482,6 +2482,222 @@ public nonisolated struct Orchd_V1_VerifyToolLogResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Orchd_V1_ListToolEventsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// A session ID or task:<task id>; "" for the caller's own session or task.
+  public var owner: String = String()
+
+  /// records after this sequence number; 0 from the start
+  public var afterSeq: Int64 = 0
+
+  /// at most this many; 0 or above 1000 means 1000
+  public var limit: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// ToolEvent is one record of a command log, as stored: text fields are
+/// credential-redacted and capped.
+public nonisolated struct Orchd_V1_ToolEvent: @unchecked Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var seq: Int64 {
+    get {_storage._seq}
+    set {_uniqueStorage()._seq = newValue}
+  }
+
+  /// unix nanoseconds when orchd took the event
+  public var at: Int64 {
+    get {_storage._at}
+    set {_uniqueStorage()._at = newValue}
+  }
+
+  /// event | gap | end
+  public var kind: String {
+    get {_storage._kind}
+    set {_uniqueStorage()._kind = newValue}
+  }
+
+  public var harness: String {
+    get {_storage._harness}
+    set {_uniqueStorage()._harness = newValue}
+  }
+
+  /// pre-tool-use | cwd-changed
+  public var event: String {
+    get {_storage._event}
+    set {_uniqueStorage()._event = newValue}
+  }
+
+  public var tool: String {
+    get {_storage._tool}
+    set {_uniqueStorage()._tool = newValue}
+  }
+
+  /// set for a subagent's tool call
+  public var agentID: String {
+    get {_storage._agentID}
+    set {_uniqueStorage()._agentID = newValue}
+  }
+
+  public var agentType: String {
+    get {_storage._agentType}
+    set {_uniqueStorage()._agentType = newValue}
+  }
+
+  public var cwd: String {
+    get {_storage._cwd}
+    set {_uniqueStorage()._cwd = newValue}
+  }
+
+  /// cwd-changed only
+  public var oldCwd: String {
+    get {_storage._oldCwd}
+    set {_uniqueStorage()._oldCwd = newValue}
+  }
+
+  /// cwd-changed only
+  public var newCwd: String {
+    get {_storage._newCwd}
+    set {_uniqueStorage()._newCwd = newValue}
+  }
+
+  public var command: String {
+    get {_storage._command}
+    set {_uniqueStorage()._command = newValue}
+  }
+
+  /// the call's targets as JSON
+  public var targets: String {
+    get {_storage._targets}
+    set {_uniqueStorage()._targets = newValue}
+  }
+
+  /// logged | refused
+  public var decision: String {
+    get {_storage._decision}
+    set {_uniqueStorage()._decision = newValue}
+  }
+
+  public var rule: String {
+    get {_storage._rule}
+    set {_uniqueStorage()._rule = newValue}
+  }
+
+  /// gap records: events lost before they were stored
+  public var dropped: Int64 {
+    get {_storage._dropped}
+    set {_uniqueStorage()._dropped = newValue}
+  }
+
+  /// The session the hook named, when orchd attributed the event elsewhere.
+  public var claimedSession: String {
+    get {_storage._claimedSession}
+    set {_uniqueStorage()._claimedSession = newValue}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+public nonisolated struct Orchd_V1_ListToolEventsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// the chain read, as "<session id>" or "task:<id>"
+  public var owner: String = String()
+
+  public var events: [Orchd_V1_ToolEvent] = []
+
+  /// Records after the last one returned remain. A page holds fewer than
+  /// the limit when its records reach about 3 MiB (512 KiB for an agent).
+  public var more: Bool = false
+
+  /// retention may have deleted records up to this seq
+  public var pruned: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SummarizeToolLogRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// unix seconds; 0 for the last 7 days
+  public var since: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// SpaceToolActivity is one space's line of the summary. Sessions are
+/// counted in the space they are pinned to; queued tasks, which have no
+/// space yet, and sessions pinned with no policy applied are under "".
+public nonisolated struct Orchd_V1_SpaceToolActivity: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var space: String = String()
+
+  /// sessions and tasks with events in the window
+  public var sessions: Int32 = 0
+
+  /// pre-tool-use events
+  public var toolCalls: Int64 = 0
+
+  /// cwd-changed events
+  public var directoryMoves: Int64 = 0
+
+  /// Moves whose new directory a session would be pinned to another space
+  /// for, under the policy applied now.
+  public var crossSpaceMoves: Int64 = 0
+
+  /// calls the tool guard refused
+  public var refusals: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ToolLogSummary: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// unix seconds
+  public var since: Int64 = 0
+
+  /// unix seconds
+  public var until: Int64 = 0
+
+  public var spaces: [Orchd_V1_SpaceToolActivity] = []
+
+  /// Directory moves not checked for a space change because the window
+  /// names too many distinct directories.
+  public var unplacedMoves: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Orchd_V1_DocRepo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -9090,6 +9306,399 @@ nonisolated extension Orchd_V1_VerifyToolLogResponse: SwiftProtobuf.Message, Swi
     if lhs.dropped != rhs.dropped {return false}
     if lhs.problems != rhs.problems {return false}
     if lhs.pruned != rhs.pruned {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListToolEventsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListToolEventsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{3}after_seq\0\u{1}limit\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.afterSeq) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.limit) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    if self.afterSeq != 0 {
+      try visitor.visitSingularInt64Field(value: self.afterSeq, fieldNumber: 2)
+    }
+    if self.limit != 0 {
+      try visitor.visitSingularInt32Field(value: self.limit, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListToolEventsRequest, rhs: Orchd_V1_ListToolEventsRequest) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.afterSeq != rhs.afterSeq {return false}
+    if lhs.limit != rhs.limit {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ToolEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ToolEvent"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}seq\0\u{1}at\0\u{1}kind\0\u{1}harness\0\u{1}event\0\u{1}tool\0\u{3}agent_id\0\u{3}agent_type\0\u{1}cwd\0\u{3}old_cwd\0\u{3}new_cwd\0\u{1}command\0\u{1}targets\0\u{1}decision\0\u{1}rule\0\u{1}dropped\0\u{3}claimed_session\0")
+
+  fileprivate class _StorageClass {
+    var _seq: Int64 = 0
+    var _at: Int64 = 0
+    var _kind: String = String()
+    var _harness: String = String()
+    var _event: String = String()
+    var _tool: String = String()
+    var _agentID: String = String()
+    var _agentType: String = String()
+    var _cwd: String = String()
+    var _oldCwd: String = String()
+    var _newCwd: String = String()
+    var _command: String = String()
+    var _targets: String = String()
+    var _decision: String = String()
+    var _rule: String = String()
+    var _dropped: Int64 = 0
+    var _claimedSession: String = String()
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _seq = source._seq
+      _at = source._at
+      _kind = source._kind
+      _harness = source._harness
+      _event = source._event
+      _tool = source._tool
+      _agentID = source._agentID
+      _agentType = source._agentType
+      _cwd = source._cwd
+      _oldCwd = source._oldCwd
+      _newCwd = source._newCwd
+      _command = source._command
+      _targets = source._targets
+      _decision = source._decision
+      _rule = source._rule
+      _dropped = source._dropped
+      _claimedSession = source._claimedSession
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularInt64Field(value: &_storage._seq) }()
+        case 2: try { try decoder.decodeSingularInt64Field(value: &_storage._at) }()
+        case 3: try { try decoder.decodeSingularStringField(value: &_storage._kind) }()
+        case 4: try { try decoder.decodeSingularStringField(value: &_storage._harness) }()
+        case 5: try { try decoder.decodeSingularStringField(value: &_storage._event) }()
+        case 6: try { try decoder.decodeSingularStringField(value: &_storage._tool) }()
+        case 7: try { try decoder.decodeSingularStringField(value: &_storage._agentID) }()
+        case 8: try { try decoder.decodeSingularStringField(value: &_storage._agentType) }()
+        case 9: try { try decoder.decodeSingularStringField(value: &_storage._cwd) }()
+        case 10: try { try decoder.decodeSingularStringField(value: &_storage._oldCwd) }()
+        case 11: try { try decoder.decodeSingularStringField(value: &_storage._newCwd) }()
+        case 12: try { try decoder.decodeSingularStringField(value: &_storage._command) }()
+        case 13: try { try decoder.decodeSingularStringField(value: &_storage._targets) }()
+        case 14: try { try decoder.decodeSingularStringField(value: &_storage._decision) }()
+        case 15: try { try decoder.decodeSingularStringField(value: &_storage._rule) }()
+        case 16: try { try decoder.decodeSingularInt64Field(value: &_storage._dropped) }()
+        case 17: try { try decoder.decodeSingularStringField(value: &_storage._claimedSession) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      if _storage._seq != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._seq, fieldNumber: 1)
+      }
+      if _storage._at != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._at, fieldNumber: 2)
+      }
+      if !_storage._kind.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._kind, fieldNumber: 3)
+      }
+      if !_storage._harness.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._harness, fieldNumber: 4)
+      }
+      if !_storage._event.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._event, fieldNumber: 5)
+      }
+      if !_storage._tool.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._tool, fieldNumber: 6)
+      }
+      if !_storage._agentID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._agentID, fieldNumber: 7)
+      }
+      if !_storage._agentType.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._agentType, fieldNumber: 8)
+      }
+      if !_storage._cwd.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._cwd, fieldNumber: 9)
+      }
+      if !_storage._oldCwd.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._oldCwd, fieldNumber: 10)
+      }
+      if !_storage._newCwd.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._newCwd, fieldNumber: 11)
+      }
+      if !_storage._command.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._command, fieldNumber: 12)
+      }
+      if !_storage._targets.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._targets, fieldNumber: 13)
+      }
+      if !_storage._decision.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._decision, fieldNumber: 14)
+      }
+      if !_storage._rule.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._rule, fieldNumber: 15)
+      }
+      if _storage._dropped != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._dropped, fieldNumber: 16)
+      }
+      if !_storage._claimedSession.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._claimedSession, fieldNumber: 17)
+      }
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ToolEvent, rhs: Orchd_V1_ToolEvent) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._seq != rhs_storage._seq {return false}
+        if _storage._at != rhs_storage._at {return false}
+        if _storage._kind != rhs_storage._kind {return false}
+        if _storage._harness != rhs_storage._harness {return false}
+        if _storage._event != rhs_storage._event {return false}
+        if _storage._tool != rhs_storage._tool {return false}
+        if _storage._agentID != rhs_storage._agentID {return false}
+        if _storage._agentType != rhs_storage._agentType {return false}
+        if _storage._cwd != rhs_storage._cwd {return false}
+        if _storage._oldCwd != rhs_storage._oldCwd {return false}
+        if _storage._newCwd != rhs_storage._newCwd {return false}
+        if _storage._command != rhs_storage._command {return false}
+        if _storage._targets != rhs_storage._targets {return false}
+        if _storage._decision != rhs_storage._decision {return false}
+        if _storage._rule != rhs_storage._rule {return false}
+        if _storage._dropped != rhs_storage._dropped {return false}
+        if _storage._claimedSession != rhs_storage._claimedSession {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListToolEventsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListToolEventsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{1}events\0\u{1}more\0\u{1}pruned\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.events) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.more) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.pruned) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    if !self.events.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.events, fieldNumber: 2)
+    }
+    if self.more != false {
+      try visitor.visitSingularBoolField(value: self.more, fieldNumber: 3)
+    }
+    if self.pruned != 0 {
+      try visitor.visitSingularInt64Field(value: self.pruned, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListToolEventsResponse, rhs: Orchd_V1_ListToolEventsResponse) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.events != rhs.events {return false}
+    if lhs.more != rhs.more {return false}
+    if lhs.pruned != rhs.pruned {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SummarizeToolLogRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SummarizeToolLogRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}since\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt64Field(value: &self.since) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.since != 0 {
+      try visitor.visitSingularInt64Field(value: self.since, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SummarizeToolLogRequest, rhs: Orchd_V1_SummarizeToolLogRequest) -> Bool {
+    if lhs.since != rhs.since {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SpaceToolActivity: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SpaceToolActivity"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}space\0\u{1}sessions\0\u{3}tool_calls\0\u{3}directory_moves\0\u{3}cross_space_moves\0\u{1}refusals\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.space) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.sessions) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.toolCalls) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.directoryMoves) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.crossSpaceMoves) }()
+      case 6: try { try decoder.decodeSingularInt64Field(value: &self.refusals) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.space.isEmpty {
+      try visitor.visitSingularStringField(value: self.space, fieldNumber: 1)
+    }
+    if self.sessions != 0 {
+      try visitor.visitSingularInt32Field(value: self.sessions, fieldNumber: 2)
+    }
+    if self.toolCalls != 0 {
+      try visitor.visitSingularInt64Field(value: self.toolCalls, fieldNumber: 3)
+    }
+    if self.directoryMoves != 0 {
+      try visitor.visitSingularInt64Field(value: self.directoryMoves, fieldNumber: 4)
+    }
+    if self.crossSpaceMoves != 0 {
+      try visitor.visitSingularInt64Field(value: self.crossSpaceMoves, fieldNumber: 5)
+    }
+    if self.refusals != 0 {
+      try visitor.visitSingularInt64Field(value: self.refusals, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SpaceToolActivity, rhs: Orchd_V1_SpaceToolActivity) -> Bool {
+    if lhs.space != rhs.space {return false}
+    if lhs.sessions != rhs.sessions {return false}
+    if lhs.toolCalls != rhs.toolCalls {return false}
+    if lhs.directoryMoves != rhs.directoryMoves {return false}
+    if lhs.crossSpaceMoves != rhs.crossSpaceMoves {return false}
+    if lhs.refusals != rhs.refusals {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ToolLogSummary: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ToolLogSummary"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}since\0\u{1}until\0\u{1}spaces\0\u{3}unplaced_moves\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt64Field(value: &self.since) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.until) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.spaces) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.unplacedMoves) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.since != 0 {
+      try visitor.visitSingularInt64Field(value: self.since, fieldNumber: 1)
+    }
+    if self.until != 0 {
+      try visitor.visitSingularInt64Field(value: self.until, fieldNumber: 2)
+    }
+    if !self.spaces.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.spaces, fieldNumber: 3)
+    }
+    if self.unplacedMoves != 0 {
+      try visitor.visitSingularInt64Field(value: self.unplacedMoves, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ToolLogSummary, rhs: Orchd_V1_ToolLogSummary) -> Bool {
+    if lhs.since != rhs.since {return false}
+    if lhs.until != rhs.until {return false}
+    if lhs.spaces != rhs.spaces {return false}
+    if lhs.unplacedMoves != rhs.unplacedMoves {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
