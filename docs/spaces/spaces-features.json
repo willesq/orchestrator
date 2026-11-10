@@ -789,7 +789,8 @@
         "source": "https://github.com/willesq/orchestrator/pull/142",
         "raised": "2026-11-08",
         "affects": [],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10 after a hand check of Orch.app 0.45.1 driven through accessibility: all eight Settings sections (Overview, Tasks, Docs, GitHub, Memory, Claude, Safety Net, App) render with values from orch.db. Found one bug, filed as https://github.com/willesq/orchestrator/issues/162 ('Open at login' disabled for an installed app). The Command log section (SP-015) ships in the next release. The env-var reset bypass stays the accepted risk documented in docs/internals/config.md."
       },
       {
         "id": "RC-22",
@@ -799,7 +800,8 @@
         "source": "session://bdd8786f-58da-4777-8a71-4185518d555a",
         "raised": "2026-11-08",
         "affects": [],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: all four reported defects verified as real and filed: https://github.com/willesq/orchestrator/issues/158 (subagent-stop field names), https://github.com/willesq/orchestrator/issues/159 (pr-babysitter timestamps), https://github.com/willesq/orchestrator/issues/160 (queue task_id), https://github.com/willesq/orchestrator/issues/161 (token usage discarded). The three drafted RAG entries and the Codex [otel] test are dropped."
       },
       {
         "id": "RC-23",
@@ -4963,6 +4965,10 @@
     {
       "date": "2026-11-10",
       "change": "Decision review batch 6 (user actions): RC-46, RC-20 (PR #111 closed) and RC-19 (dropped) resolved; RC-33 updated with the clean dry runs, left open until the user applies them."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 7 (user actions): RC-17, RC-18, RC-21 and RC-22 resolved; issues #158-#162 filed for the defects found."
     }
   ],
   "plan_location": {
