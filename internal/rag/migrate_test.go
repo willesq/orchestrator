@@ -156,6 +156,7 @@ func TestMigrateHybridLiveIngestWins(t *testing.T) {
 			}
 		}()
 	}
+	before := strings.Join(f.collection("orchestrator").texts()["repo://a/README.md"], " ")
 	if _, err := svc.MigrateHybrid(context.Background(), "", true, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -163,10 +164,15 @@ func TestMigrateHybridLiveIngestWins(t *testing.T) {
 	if !emb.fired.Load() {
 		t.Fatal("the live ingest never ran")
 	}
-	for _, name := range []string{"orchestrator-hybrid", "orchestrator"} {
-		if got := strings.Join(f.collection(name).texts()["repo://a/README.md"], " "); got != "the newest readme" {
-			t.Fatalf("%s holds %q; the live write must win", name, got)
-		}
+	if got := strings.Join(f.collection("orchestrator-hybrid").texts()["repo://a/README.md"], " "); got != "the newest readme" {
+		t.Fatalf("orchestrator-hybrid holds %q; the live write must win", got)
+	}
+	// The ingest waits out the copy, then embeds outside the lock; on a slow
+	// machine the migration can switch first, and the write then reaches only
+	// the new active collection. The old one is never modified after the
+	// switch, so it holds the live write or its original text, nothing else.
+	if got := strings.Join(f.collection("orchestrator").texts()["repo://a/README.md"], " "); got != "the newest readme" && got != before {
+		t.Fatalf("orchestrator holds %q; want the live write or its original text", got)
 	}
 }
 
