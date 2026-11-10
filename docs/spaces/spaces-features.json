@@ -490,6 +490,31 @@
         "id": "D-49",
         "decision": "Pins are not made to survive orchd restarts on Linux; orch runs on macOS (was RC-04).",
         "date": "2026-11-10"
+      },
+      {
+        "id": "D-50",
+        "decision": "Under a public root, content from a checkout with no verifiable public remote (not on GitHub, or no remote) is quarantined until the operator retags it or declares that folder public; a public root alone is not proof (SP-030.1 new item) (was RC-05).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-51",
+        "decision": "The operator confirms a specific GitHub node ID for an org binding (org=node_id), and 'orch spaces diff' shows the old, new and seen node IDs (RC-61) (was RC-06).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-52",
+        "decision": "Every GitHub ingestion path (docs sync, sources, the review watcher, PR monitoring) re-checks the org binding before writing, and a long sync re-checks between repos (SP-023 new item) (was RC-07).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-53",
+        "decision": "Each space gets its own TMPDIR from the launcher and per-checkout settings, with other spaces' temp dirs denied; the combined root settings.local.json (sandbox on, unsandboxed commands off, Read denies) is tested from a subfolder with Read, Grep, Glob and Edit. The shared /tmp stays a documented residual (SP-046 new items) (was RC-09).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-54",
+        "decision": "All four SP-063 follow-ups become planned work in SP-074: scopes and PR watching for profile-only orgs; refusing GitHub calls a space's profile cannot read, with stricter gh_config_dir checks; the repo picker and PR-outcome tracker using the space's profile; a GitHub API quota cap per isolated account (was RC-10).",
+        "date": "2026-11-10"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -564,7 +589,8 @@
           "SP-023",
           "SP-030"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: quarantine without proof; see D-50."
       },
       {
         "id": "RC-06",
@@ -576,7 +602,8 @@
         "affects": [
           "SP-021"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: confirm a specific node ID; see D-51 and RC-61."
       },
       {
         "id": "RC-07",
@@ -589,7 +616,8 @@
           "SP-023",
           "SP-043"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: added to SP-023; see D-52."
       },
       {
         "id": "RC-08",
@@ -614,7 +642,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: per-space TMPDIR and the combined settings test; see D-53."
       },
       {
         "id": "RC-10",
@@ -627,7 +656,8 @@
           "SP-063",
           "SP-043"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: all four planned in SP-074; see D-54."
       },
       {
         "id": "RC-11",
@@ -1275,6 +1305,19 @@
         "affects": [
           "SP-023",
           "SP-065"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-61",
+        "kind": "follow-up",
+        "topic": "Confirm a specific GitHub node ID",
+        "detail": "D-51: --confirm-github-org takes org=node_id, and 'orch spaces diff' shows old, new and seen node IDs for each binding. SP-021 is done; this can ride along with SP-053 (advanced editors) or SP-074.",
+        "source": "RC-06; decision review 2026-11-10",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-021",
+          "SP-053"
         ],
         "status": "open"
       }
@@ -3065,6 +3108,82 @@
       "pr": null
     },
     {
+      "id": "SP-074",
+      "phase": "P1",
+      "priority": 21.5,
+      "title": "Per-job GitHub account follow-ups",
+      "summary": "Follow-ups to SP-063 decided on 2026-11-10 (D-54): scopes and PR watching for orgs reachable only through a space's profile; GitHub calls a space's profile cannot read are refused, with stricter gh_config_dir checks; the repo picker and PR-outcome tracker use the space's profile; a GitHub API quota cap per isolated account.",
+      "why": "D-54.",
+      "depends_on": [
+        "SP-063",
+        "SP-043"
+      ],
+      "touches": [
+        "internal/github/",
+        "internal/daemon/ghprofiles.go",
+        "internal/reviews/",
+        "internal/prs/",
+        "internal/config/schema.go"
+      ],
+      "docs_to_update": [
+        "docs/internals/daemon.md",
+        "docs/OPERATIONS.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-074.1",
+          "title": "Profiles everywhere",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "An org reachable only through a space's gh profile can be added to GitHub scopes and its PRs are watched and reviewed through that profile, never the default login.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "A GitHub call made for a space through a profile that cannot read the target (repo or org outside the profile's access) is refused with a clear error, never retried with another login; gh_config_dir must be an absolute, owner-only directory under the user's home or the call is refused.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "The repo picker and the PR-outcome tracker use the space's profile for that space's repos; a test shows the default login is not used for an isolated space's repo.",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
+        },
+        {
+          "id": "SP-074.2",
+          "title": "Quota",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Each isolated account has a configurable GitHub API budget per hour; past it orchd defers that account's sync and watch calls (logged), while other accounts are unaffected.",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "64dfe8fa4b93ec62bf243535b8f8d41a15cbbdafbcdcab2c948ff91ed70e4ded",
+      "branch": null,
+      "pr": null
+    },
+    {
       "id": "SP-047",
       "phase": "P1",
       "priority": 22,
@@ -3226,6 +3345,13 @@
               "check": "A client-supplied 'space' or tag claiming a space is ignored; the chunk lands in the caller's pinned space or quarantine.",
               "measure": "test",
               "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "Docs sync, sources, the review watcher and PR monitoring each re-check the GitHub org binding (CheckOrg) before writing content; a sync of several repos re-checks between repos, and content from an org whose identity changed is not written (D-52).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -3237,7 +3363,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "18303e54d9433d8286c43bd56fa98241a18dd46b81ddcddf5f67b0609ada8c49",
+      "criteria_sha256": "119d6446a5c77ae087c787bf967eab9387ea82c8fdf1a638a62bd7be84eb027e",
       "branch": null,
       "pr": null
     },
@@ -3838,6 +3964,13 @@
               "check": "Session, summary, hand-off and client writers can never target public.",
               "measure": "test per writer",
               "threshold": "4 pass"
+            },
+            {
+              "id": "a5",
+              "type": "test",
+              "check": "Under a public root, content from a checkout whose remote is not GitHub, or that has no remote, is quarantined, not placed public; it becomes public only when the operator retags it or declares that folder public (D-50).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -3849,7 +3982,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "648365717adebaf15739fa696eaa5c269db9e25faffa1e486ba422fef87de4dd",
+      "criteria_sha256": "285ce77da8c1a9b5024a92a920ea21f2b54cf013a465814d3808d27d29495726",
       "branch": null,
       "pr": null
     },
@@ -4073,6 +4206,20 @@
               "check": "In a temp home, a sandboxed 'cat' of a file in another job's root fails, and 'gh auth status' in the agent shell shows the space's account.",
               "measure": "observed",
               "threshold": "both true"
+            },
+            {
+              "id": "a6",
+              "type": "test",
+              "check": "'orch run <space>' and the per-checkout settings give each space its own TMPDIR and deny other spaces' temp directories; a session in one space cannot read a file another space's session wrote under its TMPDIR (D-53).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a7",
+              "type": "test",
+              "check": "With sandbox.enabled, allowUnsandboxedCommands=false and the Read(//...) denies written together in a checkout's root settings.local.json, a Claude Code session started in a subfolder is refused Read, Grep, Glob and Edit on another space's root (D-53).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -4126,7 +4273,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "dc35cbd2cf5d37cc04fca785ff5cbf3b168d1b1776a804c7be87917ac1d90232",
+      "criteria_sha256": "0ed90500129ff80453d9ab01f9e541da7d9f62defe2a9d070c09806eae31aa3a",
       "branch": null,
       "pr": null
     },
@@ -4803,6 +4950,10 @@
     {
       "date": "2026-11-10",
       "change": "Decision review batch 4 (tasks, redaction, session list, Linux): D-46..D-49 recorded from RC-25, RC-44, RC-49, RC-04; RC-59 and RC-60 (follow-ups) added. SP-025 gains SP-025.1.a8; criteria_sha256 recomputed with the user's approval (7287b0cb632e -> b1af57cfe7ce)."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 5 (GitHub and sandbox): D-50..D-54 recorded from RC-05, RC-06, RC-07, RC-09, RC-10; RC-61 (follow-up) added; SP-074 'Per-job GitHub account follow-ups' added (priority 21.5, after SP-043). New acceptance items with criteria_sha256 recomputed with the user's approval: SP-030 648365717ade -> 285ce77da8c1; SP-023 18303e54d943 -> 119d6446a5c7; SP-046 dc35cbd2cf5d -> cfe689cda20b; SP-046 cfe689cda20b -> 0ed90500129f."
     }
   ],
   "plan_location": {
