@@ -470,6 +470,26 @@
         "id": "D-45",
         "decision": "Connection resolution has no cost bound of its own: SP-011.2's 5 ms bound is retired, and the cost is covered by the tool hooks' 20 ms budget and SP-041's decision-latency check (p99 < 50 ms). TestResolveCost's bound is removed as a follow-up (RC-58) (was RC-28).",
         "date": "2026-11-10"
+      },
+      {
+        "id": "D-46",
+        "decision": "A queued task reads and writes the space of the session that dispatched it; a task the operator dispatched takes the placement of its working directory; a task orchd cannot find (not tracked by its runner) gets no space and reads public only (SP-025.1.a8) (was RC-25).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-47",
+        "decision": "Redaction stays best-effort and is maintained, not systematically extended: concrete misses are fixed with regression tests as they are found, and the OS sandbox (SP-046) and per-job GitHub accounts (SP-063) are the boundary, as D-28 decided for target extraction (was RC-44).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-48",
+        "decision": "The session list's unpinned rows skip processes whose parent is a harness (subprocesses that keep the harness's name) and known daemons such as Codex's app-server; top-level harness processes are listed even without a TTY (RC-59) (was RC-49).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-49",
+        "decision": "Pins are not made to survive orchd restarts on Linux; orch runs on macOS (was RC-04).",
+        "date": "2026-11-10"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -529,7 +549,8 @@
           "SP-010",
           "SP-017"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: not needed; see D-49."
       },
       {
         "id": "RC-05",
@@ -779,7 +800,8 @@
           "SP-025",
           "SP-029"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: the dispatcher's space; see D-46 and SP-025.1.a8."
       },
       {
         "id": "RC-26",
@@ -1035,7 +1057,8 @@
         "affects": [
           "SP-023"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: maintain, with the sandbox and per-job accounts as the boundary; see D-47. Documentation note tracked in RC-60."
       },
       {
         "id": "RC-45",
@@ -1102,7 +1125,8 @@
           "SP-017",
           "SP-051"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: skip harness children and known daemons; see D-48 and RC-59."
       },
       {
         "id": "RC-50",
@@ -1225,6 +1249,32 @@
         "affects": [
           "SP-011",
           "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-59",
+        "kind": "follow-up",
+        "topic": "Filter unpinned rows in the session list",
+        "detail": "D-48: ListSessions' unpinned rows should skip processes whose parent is a harness process and known daemons (Codex app-server), keeping top-level harnesses even without a TTY. Small change in internal/daemon/liveness.go (unpinned) with a test; can ride along with SP-016 or SP-051.",
+        "source": "RC-49; decision review 2026-11-10",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-017",
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-60",
+        "kind": "follow-up",
+        "topic": "Say redaction is best-effort in the docs",
+        "detail": "D-47: state in docs/internals (ingestion and command log sections) that redaction is pattern-based and best-effort, and that the OS sandbox and per-job accounts are the boundary; list the known gaps from RC-44. Docs only.",
+        "source": "RC-44; decision review 2026-11-10",
+        "raised": "2026-11-10",
+        "affects": [
+          "SP-023",
+          "SP-065"
         ],
         "status": "open"
       }
@@ -3361,6 +3411,13 @@
               "check": "A caller resolved as the operator with no controlling terminal and not Orch.app (a process that double-forked or used launchctl/open/osascript out of a session) reads public memory only; the operator at a terminal and Orch.app keep operator-scope reads (D-39).",
               "measure": "test",
               "threshold": "passes"
+            },
+            {
+              "id": "a8",
+              "type": "test",
+              "check": "A queued task reads only what the session that dispatched it may read (its pin's space, public, and private spaces that space lists) and writes to that space; a task the operator dispatched uses the placement of its working directory; a task orchd does not track reads public only (D-46).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -3386,7 +3443,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "7287b0cb632ee012a2f398ecd60d5a7c9c25c763833713b062dc5f986245f2f1",
+      "criteria_sha256": "b1af57cfe7ce23368c77882ead3d99ad6081ed3e2eb32334e37edc4dccd2ca93",
       "branch": null,
       "pr": null
     },
@@ -4742,6 +4799,10 @@
     {
       "date": "2026-11-10",
       "change": "Decision review batch 3 (identity and dependencies): D-42..D-45 recorded from RC-35, RC-02, RC-03, RC-28; RC-57 (user action) and RC-58 (follow-up) added. SP-041 gains SP-041.1.a5; criteria_sha256 recomputed with the user's approval (19be87147a72 -> 59c0d955dc64). SP-011.2's criterion is left as verified history; D-45 retires its bound."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 4 (tasks, redaction, session list, Linux): D-46..D-49 recorded from RC-25, RC-44, RC-49, RC-04; RC-59 and RC-60 (follow-ups) added. SP-025 gains SP-025.1.a8; criteria_sha256 recomputed with the user's approval (7287b0cb632e -> b1af57cfe7ce)."
     }
   ],
   "plan_location": {
