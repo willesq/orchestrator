@@ -2387,7 +2387,7 @@
       "attempts": 1,
       "criteria_sha256": "ff34d5c15cb5a27f973d995523e381606c40c0736ca379b9b826ea985b4e4126",
       "branch": "feat/sp-015-log-retention",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/157"
     },
     {
       "id": "SP-016",
