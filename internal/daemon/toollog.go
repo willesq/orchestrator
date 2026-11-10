@@ -12,6 +12,7 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/redact"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/spaces"
@@ -36,6 +37,9 @@ const endAnchorTimeout = 30 * time.Second
 // to be stored before it checks the chain.
 const verifyFlushTimeout = 10 * time.Second
 
+// logSweepEvery is how often retention runs over the command log (SP-015).
+const logSweepEvery = 10 * time.Minute
+
 // toolLog is the command log and its writer; nil when it could not be
 // opened, and then events are counted and dropped as before SP-014.
 type toolLog struct {
@@ -46,6 +50,10 @@ type toolLog struct {
 	// SessionEnd came meanwhile and one more End runs after this one.
 	endMu  sync.Mutex
 	ending map[string]bool
+	// policy is what retention keeps (SP-015).
+	policy toollog.Policy
+	// running reports whether a task runs; nil asks the current runner.
+	running func(taskID string) bool
 }
 
 // openToolLog opens the command log at path and starts its writer; resolve
@@ -55,7 +63,119 @@ func openToolLog(path string, resolve toollog.Resolver) (*toolLog, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &toolLog{store: st, writer: toollog.NewWriter(st, toollog.DefaultQueue, resolve), ending: map[string]bool{}}, nil
+	return &toolLog{store: st, writer: toollog.NewWriter(st, toollog.DefaultQueue, resolve), ending: map[string]bool{},
+		policy: toollog.DefaultPolicy()}, nil
+}
+
+// logPolicy is the command log's retention from the settings. A value
+// outside what the settings offer keeps its default, so a hand-edited
+// setting cannot make retention delete sooner than 3 days.
+func logPolicy(c config.CommandLogSettings) toollog.Policy {
+	p := toollog.DefaultPolicy()
+	known := false
+	for _, d := range toollog.RetentionDays {
+		if c.Retention == fmt.Sprintf("%dd", d) {
+			p.Retention, known = time.Duration(d)*24*time.Hour, true
+		}
+	}
+	if !known && c.Retention != "" {
+		log.Printf("orchd: command log: retention %q is not 3d, 7d or 30d; keeping 7d", c.Retention)
+	}
+	switch {
+	case c.MaxTotalMB >= 100 && c.MaxTotalMB <= 100000:
+		p.TotalCap = int64(c.MaxTotalMB) << 20
+	case c.MaxTotalMB != 0:
+		log.Printf("orchd: command log: max_total_mb %d is outside 100-100000; keeping %d", c.MaxTotalMB, p.TotalCap>>20)
+	}
+	return p
+}
+
+// chainState is whether a chain's owner still runs (SP-015). A session runs
+// until its pin has an ended_at (SessionEnd, or the liveness sweep of
+// SP-017) and its harness process is gone: any process in a session can end
+// its pin early, and that must not start the clock on a log the process
+// keeps writing. So an idle session left open is never expired, and a
+// session ended by /clear keeps its log until its process exits. It ended
+// at the later of ended_at and exited_at (when the liveness sweep saw the
+// process gone); until the sweep has seen that, it still runs here. A task runs while the current runner runs it; it has
+// no end record, so it ended at its last record. A session with no pin
+// ended at its last record too.
+func (s *server) chainState(ctx context.Context, o toollog.Owner) (toollog.ChainState, error) {
+	switch o.Kind {
+	case toollog.OwnerSession:
+		if s.pins == nil {
+			return toollog.ChainState{}, nil
+		}
+		pin, ok, err := s.pins.get(ctx, o.ID)
+		if err != nil || !ok {
+			return toollog.ChainState{}, err
+		}
+		if pin.EndedAt.IsZero() || pin.ExitedAt.IsZero() || s.pins.alive(pin.Process) {
+			return toollog.ChainState{Live: true}, nil
+		}
+		end := pin.EndedAt
+		if pin.ExitedAt.After(end) {
+			end = pin.ExitedAt
+		}
+		return toollog.ChainState{Ended: end}, nil
+	case toollog.OwnerTask:
+		return toollog.ChainState{Live: s.taskRunning(o.ID)}, nil
+	}
+	return toollog.ChainState{}, fmt.Errorf("unknown owner kind %q", o.Kind)
+}
+
+func (s *server) taskRunning(id string) bool {
+	if s.toolLog != nil && s.toolLog.running != nil {
+		return s.toolLog.running(id)
+	}
+	r := s.live.get()
+	if r == nil {
+		return false
+	}
+	_, ok := r.Live(id)
+	return ok
+}
+
+// sweepToolLog applies retention to the command log at time now.
+func (s *server) sweepToolLog(ctx context.Context, now time.Time) {
+	if s.toolLog == nil {
+		return
+	}
+	res, err := s.toolLog.store.Sweep(ctx, now, s.toolLog.policy, s.chainState)
+	if err != nil {
+		// Reason: chains that failed are retried next sweep; the rest
+		// were swept.
+		log.Printf("orchd: command log retention: %v", err)
+	}
+	// Each cut is logged here, outside the file, so a pruned head written
+	// into toollog.db by hand has no matching line (RC: SP-015 audit).
+	for _, c := range res.Cuts {
+		log.Printf("orchd: command log retention: %s %s: %d record(s) up to %d deleted, pruned head %s",
+			c.Reason, c.Owner, c.Deleted, c.Seq, c.Hash)
+	}
+	if res.OverCap {
+		log.Printf("orchd: command log retention: %d MB in use is over the %d MB cap; only running sessions and refusals under 90 days are left",
+			res.Used>>20, s.toolLog.policy.TotalCap>>20)
+	}
+	if res.Records > 0 {
+		log.Printf("orchd: command log retention: deleted %d record(s): %d ended chain(s) expired, %d running cut to size, %d deleted for the total cap; %d MB in use",
+			res.Records, res.Expired, res.Trimmed, res.Capped, res.Used>>20)
+	}
+}
+
+// runToolLogSweeps applies retention at start and then every interval
+// until ctx ends.
+func (s *server) runToolLogSweeps(ctx context.Context, every time.Duration) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		s.sweepToolLog(ctx, time.Now())
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
 }
 
 // Close stores what is queued and closes the file.
@@ -240,7 +360,7 @@ func (s *server) VerifyToolLog(ctx context.Context, req *orchdv1.VerifyToolLogRe
 	}
 	out := &orchdv1.VerifyToolLogResponse{
 		Records: int32(rep.Records), Anchors: int32(rep.Anchors), Ends: int32(rep.Ends),
-		Gaps: int32(rep.Gaps), Dropped: rep.Dropped,
+		Gaps: int32(rep.Gaps), Dropped: rep.Dropped, Pruned: rep.Pruned,
 	}
 	for _, p := range rep.Problems {
 		out.Problems = append(out.Problems, &orchdv1.ToolLogProblem{Seq: p.Seq, Detail: p.Detail})

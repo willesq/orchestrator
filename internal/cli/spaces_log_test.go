@@ -46,6 +46,10 @@ func TestSpacesLogVerify(t *testing.T) {
 		{"gaps", &orchdv1.VerifyToolLogResponse{Records: 5, Gaps: 2, Dropped: 7},
 			[]string{"2 gap record(s): 7 event(s) were dropped", "chain intact"}, false},
 		{"empty", &orchdv1.VerifyToolLogResponse{}, []string{"sess-1: no records"}, false},
+		{"pruned", &orchdv1.VerifyToolLogResponse{Records: 2, Anchors: 1, Pruned: 9},
+			[]string{"sess-1: 2 record(s)", "records up to 9: deleted by retention", "chain intact"}, false},
+		{"pruned whole", &orchdv1.VerifyToolLogResponse{Anchors: 1, Pruned: 6},
+			[]string{"sess-1: 0 record(s)", "records up to 6: deleted by retention", "chain intact"}, false},
 		{"broken", &orchdv1.VerifyToolLogResponse{Records: 4, Problems: []*orchdv1.ToolLogProblem{
 			{Seq: 3, Detail: "content does not match its hash (modified or moved)"},
 			{Seq: 5, Detail: "record 4 before it is missing"}}},

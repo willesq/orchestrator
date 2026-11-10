@@ -1097,6 +1097,7 @@ message VerifyToolLogResponse {
   int32 gaps = 4;             // records saying events were dropped
   int64 dropped = 5;          // events those gap records count
   repeated ToolLogProblem problems = 6; // empty when the chain is intact
+  int64 pruned = 7;           // retention (SP-015) may have deleted records up to this seq; 0 for none
 }
 
 message DocRepo {

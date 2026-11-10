@@ -48,16 +48,19 @@ func (r *pinRegistry) alive(proc procstat.Identity) bool {
 }
 
 // sweep ends every pin not yet ended whose harness process is gone, with
-// ended_at the time orchd noticed, and returns their session IDs.
+// ended_at the time orchd noticed, and returns their session IDs. It also
+// sets exited_at, the time orchd noticed the process gone, on those pins
+// and on pins ended earlier whose process has since exited (SP-015).
 func (r *pinRegistry) sweep(ctx context.Context) ([]string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT session_id, harness_pid, harness_started FROM session_pins WHERE ended_at IS NULL`)
+		`SELECT session_id, harness_pid, harness_started, ended_at IS NOT NULL FROM session_pins
+		WHERE ended_at IS NULL OR exited_at IS NULL`)
 	if err != nil {
 		return nil, err
 	}
-	var gone []string
+	var gone, exited []string
 	// Reason: the sessions of one harness process (/clear, subagents)
 	// share it, so each process is read once.
 	seen := map[procKey]bool{}
@@ -66,8 +69,9 @@ func (r *pinRegistry) sweep(ctx context.Context) ([]string, error) {
 			id      string
 			pid     int
 			started int64
+			ended   bool
 		)
-		if err := rows.Scan(&id, &pid, &started); err != nil {
+		if err := rows.Scan(&id, &pid, &started, &ended); err != nil {
 			_ = rows.Close()
 			return nil, err
 		}
@@ -77,7 +81,11 @@ func (r *pinRegistry) sweep(ctx context.Context) ([]string, error) {
 			live = r.alive(proc)
 			seen[keyOf(proc)] = live
 		}
-		if !live {
+		switch {
+		case live:
+		case ended:
+			exited = append(exited, id)
+		default:
 			gone = append(gone, id)
 		}
 	}
@@ -86,7 +94,7 @@ func (r *pinRegistry) sweep(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	_ = rows.Close()
-	if len(gone) == 0 {
+	if len(gone)+len(exited) == 0 {
 		return nil, nil
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -97,7 +105,13 @@ func (r *pinRegistry) sweep(ctx context.Context) ([]string, error) {
 	now := r.now().UTC().Format(time.RFC3339Nano)
 	for _, id := range gone {
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE session_pins SET ended_at = ? WHERE session_id = ? AND ended_at IS NULL`, now, id); err != nil {
+			`UPDATE session_pins SET ended_at = ?, exited_at = ? WHERE session_id = ? AND ended_at IS NULL`, now, now, id); err != nil {
+			return nil, err
+		}
+	}
+	for _, id := range exited {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE session_pins SET exited_at = ? WHERE session_id = ? AND exited_at IS NULL`, now, id); err != nil {
 			return nil, err
 		}
 	}

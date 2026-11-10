@@ -713,6 +713,7 @@ func Run(ctx context.Context) error {
 		log.Printf("orchd: command log is off: %v", err)
 	} else {
 		defer func() { _ = tlog.Close() }()
+		tlog.policy = logPolicy(s.Sessions.CommandLog)
 	}
 	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf})
 	srv = &server{
@@ -751,6 +752,7 @@ func Run(ctx context.Context) error {
 		srv.toolEvents.setSink(srv.logToolEvent)
 	}
 	go srv.runSessionSweeps(runCtx, sessionSweepEvery)
+	go srv.runToolLogSweeps(runCtx, logSweepEvery)
 	orchdv1.RegisterOrchdServer(gs, srv)
 	go func() {
 		<-runCtx.Done()
