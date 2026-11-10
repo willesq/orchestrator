@@ -743,7 +743,8 @@
         "source": "session://46e55792-1605-40ed-8c85-d3caec057e00",
         "raised": "2026-11-08",
         "affects": [],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: rotation not needed (accepted)."
       },
       {
         "id": "RC-18",
@@ -755,7 +756,8 @@
         "affects": [
           "SP-021"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved by the user on 2026-11-10: no spaces policy had been applied before SP-021, so there is nothing to re-apply."
       },
       {
         "id": "RC-19",
