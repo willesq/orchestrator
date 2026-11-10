@@ -3,7 +3,7 @@
   "plan_id": "orch-memory-spaces",
   "title": "orch memory spaces: isolation of memory, sessions and tools across contexts",
   "created": "2026-11-08",
-  "updated": "2026-11-09",
+  "updated": "2026-11-10",
   "repo": "willesq/orchestrator",
   "base_commit": "5796fa6",
   "origin": {
@@ -405,6 +405,31 @@
         "id": "D-32",
         "decision": "Admin-merge SP-014 (PR #152) without review while GitHub Actions starts no jobs for the repo (RC-46). DOD-9 is overridden for SP-014: the Linux test job passed at 5c004d8 but the macOS ORT build never ran on the branch; every acceptance item and DOD-1..8 passed independent verification at 5c004d8. Re-run CI on main once Actions works again.",
         "date": "2026-11-09"
+      },
+      {
+        "id": "D-33",
+        "decision": "Retention counts a session as ended only when its pin has ended_at and orchd has seen its harness process exit (exited_at); the clock starts at the latest of ended_at, exited_at and the last record. A /clear'd or early-ended session keeps its log (cut to the per-session cap) until its process exits. Deletion happens within one 10-minute sweep after day N (was RC-53).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-34",
+        "decision": "The total cap removes from the chains that ended first only what expiry would: never refusals under 90 days and never a running session's records, so the file may stay over the cap (logged). Retention (3d/7d/30d) and the total cap stay Sensitive settings read at orchd start. The per-session cap (50 MB, per chain) becomes a setting too (SP-073) (was RC-54).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-35",
+        "decision": "Command log tamper evidence is strengthened: each anchor (seq, hash) is also copied into orch.db and verify compares the two, and a queued task's chain is anchored when the task reaches a terminal state (SP-073) (was RC-42).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-36",
+        "decision": "Tool events from a harness process with no pin are logged in a chain keyed by that process (PID and start time) instead of being dropped; retention ends the chain when the process exits (SP-073) (was RC-43).",
+        "date": "2026-11-10"
+      },
+      {
+        "id": "D-37",
+        "decision": "Refusals and other guard decisions are never dropped from the command log: queue room is reserved for them, and only ordinary logged events may drop with a gap record when a share is full (SP-041.1.a4) (was RC-45).",
+        "date": "2026-11-10"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -936,7 +961,8 @@
           "SP-046",
           "SP-047"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: anchors copied into orch.db and task chains anchored at their end; see D-35 and SP-073."
       },
       {
         "id": "RC-43",
@@ -949,7 +975,8 @@
           "SP-016",
           "SP-017"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: unpinned processes get a chain of their own; see D-36 and SP-073."
       },
       {
         "id": "RC-44",
@@ -974,7 +1001,8 @@
           "SP-041",
           "SP-048"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: refusals and guard decisions are never dropped; see D-37 and SP-041.1.a4."
       },
       {
         "id": "RC-46",
@@ -1080,7 +1108,8 @@
           "SP-016",
           "SP-041"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: confirmed as built; see D-33."
       },
       {
         "id": "RC-54",
@@ -1093,7 +1122,8 @@
           "SP-015",
           "SP-070"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-10: confirmed, with the per-session cap made a setting; see D-34 and SP-073."
       },
       {
         "id": "RC-55",
@@ -2505,6 +2535,84 @@
       "pr": null
     },
     {
+      "id": "SP-073",
+      "phase": "P1",
+      "priority": 16.5,
+      "title": "Command log hardening",
+      "summary": "Follow-ups to SP-014/SP-015 decided on 2026-11-10: anchors copied into orch.db and compared by verify; queued tasks' chains anchored when the task ends; events from unpinned harness processes logged in a per-process chain; the per-session cap as a setting.",
+      "why": "D-34, D-35, D-36.",
+      "depends_on": [
+        "SP-014",
+        "SP-015",
+        "SP-016",
+        "SP-017"
+      ],
+      "touches": [
+        "internal/toollog/",
+        "internal/daemon/toollog.go",
+        "internal/daemon/liveness.go",
+        "internal/config/schema.go",
+        "internal/db/migrations/"
+      ],
+      "docs_to_update": [
+        "docs/internals/daemon.md",
+        "docs/internals/config.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-073.1",
+          "title": "Anchors",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Every anchor written to toollog.db is also stored in orch.db; verify reports a chain whose records after the last in-file anchor were removed, or that was rewritten from its first record, when the orch.db copy disagrees; an anchor present in only one store is reported.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "A queued task's chain gets an end record and an anchor when the task reaches a terminal state (complete, failed, cancelled, timed out); a retried task continues the same chain and is anchored again at its next end.",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
+        },
+        {
+          "id": "SP-073.2",
+          "title": "Coverage and settings",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Events from a harness process holding no pin are stored in a chain keyed by that process (PID and start time), visible to the operator in the command log and the session list; retention ends the chain when the process exits; a session pinned later in that process does not read it.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "sessions.command_log.max_session_mb (default 50, Sensitive, bounded range) sets the per-session cap retention applies; an out-of-range value keeps the default.",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "75ec414b2dc8e3f89b8904df10fe958a44fa16b522421a801ae451083fe97105",
+      "branch": null,
+      "pr": null
+    },
+    {
       "id": "SP-040",
       "phase": "P1",
       "priority": 17,
@@ -2681,6 +2789,13 @@
               "check": "Decision latency including file reads.",
               "measure": "p99",
               "threshold": "< 50 ms"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "With the session's queue share full (flooded with ordinary events), a call the guard refuses is still stored in the command log with its decision; ordinary events past the share drop with a gap record (D-37).",
+              "measure": "test",
+              "threshold": "passes"
             }
           ],
           "evidence": []
@@ -2713,7 +2828,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "e97956721af6d019462e72eb001f5216cc19debcfbdd2d27dbffeecc19119a37",
+      "criteria_sha256": "19be87147a72c71135a256cecae47424651682f80f91f4add2d499326a02cfbd",
       "branch": null,
       "pr": null
     },
@@ -4511,6 +4626,10 @@
     {
       "date": "2026-11-09",
       "change": "Moved the four HTML design docs into docs/spaces/design/ and updated them to match this plan (origin.design_docs and design_docs_note updated). No decision, feature or criteria changed."
+    },
+    {
+      "date": "2026-11-10",
+      "change": "Decision review batch 1 (command log): D-33..D-37 recorded from RC-53, RC-54, RC-42, RC-43, RC-45. Added SP-073 'Command log hardening' (priority 16.5, after SP-016) and SP-041.1.a4 (refusals never dropped); SP-041's criteria_sha256 recomputed with the user's approval (e97956721af6 -> 19be87147a72)."
     }
   ],
   "plan_location": {
