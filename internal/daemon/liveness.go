@@ -228,7 +228,8 @@ func (r *pinRegistry) unpinned(pins []sessionPin) []procstat.Process {
 }
 
 // sweepSessions runs one liveness sweep and closes the command log chains
-// of the sessions it ended, as SessionEnd would.
+// of the sessions it ended, as SessionEnd would, and of the unpinned
+// harness processes that exited (D-36).
 func (s *server) sweepSessions(ctx context.Context) {
 	gone, err := s.pins.sweep(ctx)
 	if err != nil {
@@ -238,6 +239,7 @@ func (s *server) sweepSessions(ctx context.Context) {
 	for _, id := range gone {
 		s.endToolLog(id)
 	}
+	s.endExitedProcesses(ctx)
 }
 
 // runSessionSweeps sweeps at start and then every interval until ctx ends.
@@ -293,9 +295,7 @@ func (s *server) ListSessions(ctx context.Context, req *orchdv1.ListSessionsRequ
 	}
 	rows := s.sessionRows(ctx, pins, req.GetAll())
 	if isOperator {
-		for _, p := range s.pins.unpinned(pins) {
-			rows = append(rows, &orchdv1.SessionInfo{Harness: p.Name, HarnessPid: int64(p.PID), State: stateUnpinned})
-		}
+		rows = append(rows, s.processRows(ctx, pins, req.GetAll())...)
 	}
 	return &orchdv1.ListSessionsResponse{Sessions: rows}, nil
 }

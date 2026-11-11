@@ -37,6 +37,8 @@ func TestSessionsList(t *testing.T) {
 		{Harness: "claude", SessionId: "sess-1", HarnessPid: 400, Space: "acme", FirstCwd: "/code/company1/app",
 			State: "active", LastActivity: at.Unix(), ToolEvents: 12, Refusals: 1},
 		{Harness: "codex", HarnessPid: 410, State: "unpinned"},
+		// An unpinned process's own log (SP-073).
+		{Harness: "claude", HarnessPid: 501, State: "unpinned", LastActivity: at.Unix(), ToolEvents: 3},
 		// A directory name may hold any character; it must not drive the
 		// terminal or break the table.
 		{Harness: "claude", SessionId: "sess-2", HarnessPid: 420, FirstCwd: "/tmp/a\tb\n\x1b]52;c;evil\x07",
@@ -50,20 +52,21 @@ func TestSessionsList(t *testing.T) {
 		t.Errorf("--all was not sent: %v", sessionsFake.req)
 	}
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if len(lines) != 4 {
+	if len(lines) != 5 {
 		t.Fatalf("output:\n%s", out)
 	}
 	for i, want := range []string{
 		"HARNESS SESSION PID SPACE DIRECTORY STATE LAST ACTIVITY EVENTS REFUSALS",
 		"claude sess-1 400 acme /code/company1/app active 2026-11-09 14:05 12 1",
 		"codex - 410 - - unpinned - - -",
+		"claude - 501 - - unpinned 2026-11-09 14:05 3 0",
 	} {
 		if got := strings.Join(strings.Fields(lines[i]), " "); got != want {
 			t.Errorf("line %d = %q, want %q", i, got, want)
 		}
 	}
-	if strings.ContainsAny(lines[3], "\x1b\x07") || !strings.Contains(lines[3], "/tmp/a b") {
-		t.Errorf("unsafe directory cell: %q", lines[3])
+	if strings.ContainsAny(lines[4], "\x1b\x07") || !strings.Contains(lines[4], "/tmp/a b") {
+		t.Errorf("unsafe directory cell: %q", lines[4])
 	}
 
 	if _, err := runSessionsList(t, &orchdv1.ListSessionsResponse{}, nil); err != nil || sessionsFake.req.GetAll() {

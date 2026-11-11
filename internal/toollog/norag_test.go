@@ -34,13 +34,16 @@ var toollogImports = map[string]bool{
 
 // rootFiles hold the code that takes, stores or reads tool events.
 var rootFiles = map[string]bool{
-	"internal/toollog/record.go":      true,
-	"internal/toollog/store.go":       true,
-	"internal/toollog/writer.go":      true,
-	"internal/toollog/read.go":        true,
-	"internal/daemon/toollog.go":      true,
-	"internal/daemon/toolevents.go":   true,
-	"internal/daemon/toollog_read.go": true,
+	"internal/toollog/record.go":         true,
+	"internal/toollog/store.go":          true,
+	"internal/toollog/writer.go":         true,
+	"internal/toollog/read.go":           true,
+	"internal/daemon/toollog.go":         true,
+	"internal/daemon/toolevents.go":      true,
+	"internal/daemon/toollog_read.go":    true,
+	"internal/toollog/anchors.go":        true,
+	"internal/daemon/toollog_anchors.go": true,
+	"internal/daemon/toollog_chains.go":  true,
 }
 
 func repoRoot(t *testing.T) string {

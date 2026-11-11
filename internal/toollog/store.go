@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"sort"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" driver (pure Go)
 )
@@ -75,7 +76,15 @@ type Store struct {
 	// wsem serialises orchd's write transactions on the log (see write);
 	// a channel so a caller can stop waiting when its context ends.
 	wsem chan struct{}
+	// onCut, when set, is given each retention cut once it is committed
+	// (SetCutHook).
+	onCut func(Cut)
 }
+
+// SetCutHook makes every later retention cut be handed to fn once it is
+// committed, so orchd can copy the pruned head into orch.db (D-35). Set it
+// before the first Sweep; fn runs on the sweeping goroutine.
+func (s *Store) SetCutHook(fn func(Cut)) { s.onCut = fn }
 
 // Open opens or creates the command log at path, owner-only. It refuses a
 // path that is a symlink or not a regular file, so a planted link cannot
@@ -316,7 +325,10 @@ type Report struct {
 	Dropped int64
 	// Pruned is the sequence number up to which retention (SP-015) may
 	// have deleted records; 0 when it has deleted none.
-	Pruned   int64
+	Pruned int64
+	// Copies counts the anchors orch.db holds for the chain, when they
+	// were compared (VerifyCopies).
+	Copies   int
 	Problems []Problem
 }
 
@@ -328,7 +340,8 @@ func (r Report) OK() bool { return len(r.Problems) == 0 }
 // A modified record fails its hash, a deleted one leaves a gap in the
 // sequence, and a moved one fails its hash or its link. Records removed
 // after the last anchor, or a chain rewritten from its first record, are
-// not detectable from the file alone; see docs/internals/daemon.md.
+// not detectable from the file alone (VerifyCopies compares orch.db's
+// copies of the anchors); see docs/internals/daemon.md.
 //
 // Up to the chain's pruned head, retention may have deleted records: there
 // a missing record is no problem, and a record links only to one kept just
@@ -336,6 +349,30 @@ func (r Report) OK() bool { return len(r.Problems) == 0 }
 // at or before the head is reported, as is a head whose own record is kept
 // with another hash. The first record after the pruned head must link to it.
 func (s *Store) Verify(ctx context.Context, o Owner) (Report, error) {
+	return s.verify(ctx, o, nil)
+}
+
+// Copies is what orch.db holds of one owner's chain (D-35): its anchors, and
+// the pruned head of retention's last cut (a zero Cut when none).
+type Copies struct {
+	Anchors []Anchor
+	Cut     Cut
+}
+
+// VerifyCopies verifies the owner's chain as Verify does and compares it
+// with copies, the owner's anchors and pruned head as orch.db holds them
+// (D-35). The copies catch what the file alone cannot: a chain whose
+// records after its last anchor in the file were removed, with that anchor,
+// or that was rewritten from its first record, disagrees with them. An
+// anchor in only one of the two stores is reported, and so is a pruned
+// head that differs from orch.db's; the chain is then checked against
+// orch.db's, so records deleted under a pruned head written into the file
+// by hand are reported missing.
+func (s *Store) VerifyCopies(ctx context.Context, o Owner, copies Copies) (Report, error) {
+	return s.verify(ctx, o, &copies)
+}
+
+func (s *Store) verify(ctx context.Context, o Owner, copies *Copies) (Report, error) {
 	// One read transaction, so a cut committed meanwhile is seen whole or
 	// not at all.
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -352,6 +389,13 @@ func (s *Store) Verify(ctx context.Context, o Owner) (Report, error) {
 		return Report{}, err
 	}
 	var rep Report
+	if copies != nil {
+		if trusted := (chainHead{seq: copies.Cut.Seq, hash: copies.Cut.Hash}); cut.seq != trusted.seq || cut.hash != trusted.hash {
+			at := max(cut.seq, trusted.seq)
+			rep.add(at, fmt.Sprintf("the pruned head in toollog.db (record %d) does not match orch.db's copy (record %d): retention did not cut it", cut.seq, trusted.seq))
+			cut = trusted
+		}
+	}
 	rep.Records = len(recs)
 	rep.Pruned = cut.seq
 	bySeq := make(map[int64]string, len(recs))
@@ -393,6 +437,7 @@ func (s *Store) Verify(ctx context.Context, o Owner) (Report, error) {
 		return Report{}, err
 	}
 	defer func() { _ = rows.Close() }()
+	inFile := map[int64]string{}
 	for rows.Next() {
 		var seq int64
 		var hash string
@@ -400,16 +445,65 @@ func (s *Store) Verify(ctx context.Context, o Owner) (Report, error) {
 			return Report{}, err
 		}
 		rep.Anchors++
-		switch got, ok := bySeq[seq]; {
-		case !ok && seq <= cut.seq:
-			// Deleted by retention; the anchor is kept.
+		inFile[seq] = hash
+		rep.checkHead(seq, hash, bySeq, cut, "does not match the chain head anchored at its end")
+	}
+	if err := rows.Err(); err != nil {
+		return Report{}, err
+	}
+	if copies != nil {
+		rep.compareCopies(inFile, copies.Anchors, bySeq, cut)
+	}
+	return rep, nil
+}
+
+// checkHead reports an anchored head at seq whose record is missing (and
+// not deleted by retention) or has another hash than hash.
+func (r *Report) checkHead(seq int64, hash string, bySeq map[int64]string, cut chainHead, mismatch string) {
+	switch got, ok := bySeq[seq]; {
+	case !ok && seq < cut.seq:
+		// Deleted by retention; the anchor is kept.
+	case !ok && seq == cut.seq:
+		// Retention keeps the deleted head's hash.
+		if cut.hash != hash {
+			r.add(seq, mismatch)
+		}
+	case !ok:
+		r.add(seq, "the anchored chain head is missing (records after it were removed)")
+	case got != hash:
+		r.add(seq, mismatch)
+	}
+}
+
+// compareCopies checks the file's anchors (seq to hash) against orch.db's
+// copies, and the records against every copy.
+func (r *Report) compareCopies(inFile map[int64]string, copies []Anchor, bySeq map[int64]string, cut chainHead) {
+	seen := make(map[int64]bool, len(copies))
+	for _, c := range copies {
+		if seen[c.Seq] {
+			continue
+		}
+		seen[c.Seq] = true
+		r.Copies++
+		h, ok := inFile[c.Seq]
+		switch {
 		case !ok:
-			rep.add(seq, "the anchored chain head is missing")
-		case got != hash:
-			rep.add(seq, "does not match the chain head anchored at SessionEnd")
+			r.add(c.Seq, "anchored in orch.db but the anchor is missing from toollog.db")
+		case h != c.Hash:
+			r.add(c.Seq, "the anchors in toollog.db and orch.db disagree (the chain was rewritten)")
+		}
+		if !ok || h != c.Hash {
+			// Reason: a missing or rewritten file anchor proves nothing
+			// about the records; check them against the copy too.
+			r.checkHead(c.Seq, c.Hash, bySeq, cut, "does not match the chain head anchored in orch.db (the chain was rewritten)")
 		}
 	}
-	return rep, rows.Err()
+	for seq := range inFile {
+		if !seen[seq] {
+			r.add(seq, "anchored in toollog.db but orch.db has no copy of the anchor")
+		}
+	}
+	sort.SliceStable(r.Problems, func(i, j int) bool { return r.Problems[i].Seq < r.Problems[j].Seq })
 }
 
 func (r *Report) add(seq int64, detail string) {

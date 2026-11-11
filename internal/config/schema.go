@@ -188,9 +188,11 @@ func buildFields() []Field {
 		// Command log retention.
 		{Key: "sessions.command_log.retention", Section: SectionLog, Label: "Keep ended sessions", Type: TypeEnum, Sensitive: true,
 			Options: []string{"3d", "7d", "30d"},
-			Help:    "How long a session's tool calls are kept after it ends. Refused calls are kept 90 days; a running session is never deleted, only cut to 50 MB."},
+			Help:    "How long a session's tool calls are kept after it ends. Refused calls are kept 90 days; a running session is never deleted, only cut to its size cap."},
 		ranged(Field{Key: "sessions.command_log.max_total_mb", Section: SectionLog, Label: "Total size (MB)", Type: TypeInt, Sensitive: true,
 			Help: "Past this the sessions that ended first are deleted, never a running one."}, 100, 100000),
+		ranged(Field{Key: "sessions.command_log.max_session_mb", Section: SectionLog, Label: "Running session size (MB)", Type: TypeInt, Sensitive: true,
+			Help: "A running session's log is cut to this, oldest calls first; refused calls are kept."}, 10, 1000),
 
 		// Search.
 		{Key: "rag.search.mode", Section: SectionSearch, Label: "Mode", Type: TypeEnum, Options: []string{"hybrid", "dense"}},
