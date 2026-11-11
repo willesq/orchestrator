@@ -172,7 +172,7 @@ func TestDecideCases(t *testing.T) {
 				if mode == GuardStrict {
 					w = c.strict
 				}
-				got := Decide(pol, c.pin, Enforcement{Guard: mode}, c.ev)
+				got := Decide(pol, c.pin, GuardEnforcement{Guard: mode}, c.ev)
 				// Reason: spelled out rather than taken from Enforcing, so the
 				// test checks that off and log never refuse.
 				enforced := (mode == GuardBlockOtherJobs || mode == GuardStrict) && c.ev.Kind == EventPreToolUse
@@ -192,16 +192,16 @@ func TestDecideCases(t *testing.T) {
 func TestDecideModeDefaults(t *testing.T) {
 	f := newGuardFixture(t)
 	ev := f.event("Read", `{"file_path":"`+f.globexApp+`/secret.txt"}`, f.acmeApp)
-	if d := Decide(f.pol, acmePin, Enforcement{}, ev); d.Mode != GuardBlockOtherJobs || d.Verdict != Refuse {
+	if d := Decide(f.pol, acmePin, GuardEnforcement{}, ev); d.Mode != GuardBlockOtherJobs || d.Verdict != Refuse {
 		t.Errorf("default mode: %+v, want block-other-jobs refusing", d)
 	}
 	opaque := f.event("Bash", `{"command":"eval \"$X\""}`, f.acmeApp)
-	if d := Decide(f.pol, acmePin, Enforcement{Guard: "bogus"}, opaque); d.Mode != GuardStrict || d.Rule != RuleOpaqueStrict {
+	if d := Decide(f.pol, acmePin, GuardEnforcement{Guard: "bogus"}, opaque); d.Mode != GuardStrict || d.Rule != RuleOpaqueStrict {
 		t.Errorf("unknown mode: %+v, want it read as strict", d)
 	}
 	for _, kind := range []GuardEventKind{"", "PreToolUse", "bogus"} {
 		ev.Kind = kind
-		if d := Decide(f.pol, acmePin, Enforcement{}, ev); !d.Enforced || d.Verdict != Refuse {
+		if d := Decide(f.pol, acmePin, GuardEnforcement{}, ev); !d.Enforced || d.Verdict != Refuse {
 			t.Errorf("kind %q: %+v, want the refusal enforced", kind, d)
 		}
 	}
@@ -234,12 +234,12 @@ func TestDecideSymlinkedRoots(t *testing.T) {
 	} {
 		ev := GuardEvent{Kind: EventPreToolUse, Tool: c.tool, Cwd: f.acmeApp,
 			Targets: extractTargets(c.tool, json.RawMessage(c.in), f.acmeApp, link)}
-		if d := Decide(pol, acmePin, Enforcement{}, ev); d.Verdict != Refuse || d.Rule != c.rule {
+		if d := Decide(pol, acmePin, GuardEnforcement{}, ev); d.Verdict != Refuse || d.Rule != c.rule {
 			t.Errorf("%s %s: %+v, want %s (targets %+v)", c.tool, c.in, d, c.rule, ev.Targets)
 		}
 	}
 	own := GuardEvent{Kind: EventPreToolUse, Tool: "Read", Cwd: f.acmeApp, Targets: ToolTargets{Paths: []string{f.acmeApp + "/main.go"}}}
-	if d := Decide(pol, acmePin, Enforcement{}, own); d.Verdict != Allow {
+	if d := Decide(pol, acmePin, GuardEnforcement{}, own); d.Verdict != Allow {
 		t.Errorf("own space through the link: %+v", d)
 	}
 }
@@ -260,7 +260,7 @@ func TestDecideUnicodeSpelling(t *testing.T) {
 		t.Fatal(err)
 	}
 	ev := GuardEvent{Kind: EventPreToolUse, Tool: "Read", Cwd: "/w/acme", Targets: ToolTargets{Paths: []string{"/w/CAFE\u0301/x"}}}
-	if d := Decide(pol, acmePin, Enforcement{}, ev); d.Verdict != Refuse || d.Rule != RuleOtherJobPath {
+	if d := Decide(pol, acmePin, GuardEnforcement{}, ev); d.Verdict != Refuse || d.Rule != RuleOtherJobPath {
 		t.Errorf("Decide = %+v, want other_job_path", d)
 	}
 }
@@ -279,14 +279,14 @@ func TestDecideLimitReasons(t *testing.T) {
 	if !slices.Contains(ev.Targets.OpaqueReasons, "too many targets") {
 		t.Fatalf("reasons %v, want too many targets", ev.Targets.OpaqueReasons)
 	}
-	if d := Decide(f.pol, acmePin, Enforcement{}, ev); d.Rule != RuleAnalysisLimit || d.Verdict != Refuse {
+	if d := Decide(f.pol, acmePin, GuardEnforcement{}, ev); d.Rule != RuleAnalysisLimit || d.Verdict != Refuse {
 		t.Errorf("Decide = %+v, want an analysis_limit refusal", d)
 	}
-	if d := Decide(f.pol, acmePin, Enforcement{}, f.event("Bash", `{"command":"ls"}`, "rel")); d.Rule != RuleMalformedTarget {
+	if d := Decide(f.pol, acmePin, GuardEnforcement{}, f.event("Bash", `{"command":"ls"}`, "rel")); d.Rule != RuleMalformedTarget {
 		t.Errorf("relative cwd: %+v", d)
 	}
 	ev = GuardEvent{Kind: EventPreToolUse, Tool: "Bash", Cwd: f.acmeApp, Targets: extractTargets("Bash", json.RawMessage(`{"command":"cat ~/x"}`), f.acmeApp, "")}
-	if d := Decide(f.pol, acmePin, Enforcement{}, ev); d.Rule != RuleAnalysisLimit {
+	if d := Decide(f.pol, acmePin, GuardEnforcement{}, ev); d.Rule != RuleAnalysisLimit {
 		t.Errorf("unknown home: %+v (reasons %v)", d, ev.Targets.OpaqueReasons)
 	}
 	deep := ""
@@ -334,7 +334,7 @@ func TestDecideDeterministic(t *testing.T) {
 		if rng.Intn(3) == 0 {
 			ev.Targets.Opaque, ev.Targets.OpaqueReasons = true, pick(reasons)
 		}
-		pol, pin, enf := pols[rng.Intn(len(pols))], pins[rng.Intn(len(pins))], Enforcement{Guard: modes[rng.Intn(len(modes))]}
+		pol, pin, enf := pols[rng.Intn(len(pols))], pins[rng.Intn(len(pins))], GuardEnforcement{Guard: modes[rng.Intn(len(modes))]}
 		before := deepCopyEvent(ev)
 		first := Decide(pol, pin, enf, ev)
 		seen[first.Rule] = true
@@ -429,7 +429,7 @@ func TestDecideAliasedRoots(t *testing.T) {
 		}
 		for _, target := range []string{filepath.Join(vendor, "x"), filepath.Join(f.globexApp, "secret.txt")} {
 			ev := GuardEvent{Kind: EventPreToolUse, Tool: "Read", Cwd: f.acmeApp, Targets: ToolTargets{Paths: []string{target}}}
-			if d := Decide(pol, acmePin, Enforcement{}, ev); d.Verdict != Refuse || d.Rule != RuleOtherJobPath {
+			if d := Decide(pol, acmePin, GuardEnforcement{}, ev); d.Verdict != Refuse || d.Rule != RuleOtherJobPath {
 				t.Errorf("%s, %s: %+v, want other_job_path", order, target, d)
 			}
 		}
@@ -449,7 +449,7 @@ func TestDecideRuleRankIgnoresTargetOrder(t *testing.T) {
 	globex := GuardPin{Found: true, Space: "globex"}
 	for _, paths := range [][]string{{"rel", f.personal}, {f.personal, "rel"}} {
 		ev := GuardEvent{Kind: EventPreToolUse, Tool: "Read", Cwd: f.globexApp, Targets: ToolTargets{Paths: paths}}
-		if d := Decide(f.pol, globex, Enforcement{Guard: GuardStrict}, ev); d.Rule != RuleUnreadableSpace {
+		if d := Decide(f.pol, globex, GuardEnforcement{Guard: GuardStrict}, ev); d.Rule != RuleUnreadableSpace {
 			t.Errorf("%v: %+v, want unreadable_space", paths, d)
 		}
 	}

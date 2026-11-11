@@ -94,19 +94,25 @@ func (s *server) ApplySpaces(ctx context.Context, req *orchdv1.ApplySpacesReques
 
 // spacesStatus is the spaces part of Status; nil when spaces are unavailable.
 func (s *server) spacesStatus(ctx context.Context) *orchdv1.SpacesStatus {
+	relaxed, enfErr := s.relaxedSwitches(ctx)
 	if s.spaces == nil {
-		return nil
+		if len(relaxed) == 0 && enfErr == "" {
+			return nil
+		}
+		return &orchdv1.SpacesStatus{Relaxed: relaxed, EnforcementError: enfErr}
 	}
 	st, err := s.spaces.Status(ctx)
 	if err != nil {
-		return &orchdv1.SpacesStatus{Error: "could not read the spaces policy: " + err.Error()}
+		return &orchdv1.SpacesStatus{Error: "could not read the spaces policy: " + err.Error(), Relaxed: relaxed, EnforcementError: enfErr}
 	}
 	out := &orchdv1.SpacesStatus{
-		Configured:      st.Configured,
-		AppliedRevision: st.AppliedRevision,
-		DraftRevision:   st.DraftRevision,
-		Drift:           st.Drift,
-		Error:           st.Error,
+		Configured:       st.Configured,
+		AppliedRevision:  st.AppliedRevision,
+		DraftRevision:    st.DraftRevision,
+		Drift:            st.Drift,
+		Error:            st.Error,
+		Relaxed:          relaxed,
+		EnforcementError: enfErr,
 	}
 	if probs := s.ghProfiles.problems(ctx); len(probs) > 0 {
 		// Reason: Status is open to every caller and the problems name

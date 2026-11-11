@@ -95,6 +95,9 @@ func (s *server) SetSettingEnabled(ctx context.Context, req *orchdv1.SetSettingE
 	if s.settings == nil {
 		return nil, settingsUnavailable
 	}
+	if err := refuseToolHookSetting(req.GetProvider(), req.GetKind(), req.GetIdentity()); err != nil {
+		return nil, err
+	}
 	r, err := s.settings.SetEnabled(ctx, req.GetProvider(), req.GetKind(), req.GetIdentity(), req.GetEnabled())
 	if err != nil {
 		return nil, settingsError(err)

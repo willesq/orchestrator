@@ -305,6 +305,16 @@ goes to the only private space when there is exactly one, else to quarantine.
 Lists do not chain, and nothing reads quarantine. With no policy applied, or one with no spaces,
 everything is in one implicit `shared` space and orch behaves as it did before spaces.
 
+**Enforcement switches** (SP-070; `spaces_enforcement` and `spaces_enforcement_log`, migration
+`0029`). Like the policy, the switches are not settings in `config_values`: `SetConfig` and orch
+settings cannot change them, and the tool hooks they cover cannot be turned off through orch
+settings either (D-40). Each layer (`memory`, `guard`, `terms`, `sandbox`, `hooks`) is switched
+only by the operator, with `SetEnforcement` (`orch spaces enforce <layer> <state> [--for 15m]`),
+optionally for a time after which it reverts. The defaults are memory on, guard
+`block-other-jobs`, terms on, sandbox on and hooks on. Every change is logged with time and
+caller; while a layer is off, `orch status` and every session's start digest say so. See
+[daemon.md](daemon.md#enforcement-switches).
+
 ## Schema
 
 `config.Fields` (`internal/config/schema.go`) describes every key: its section, label, help, type, range or

@@ -17,7 +17,7 @@ they name a file.
 
 | Event | Does |
 |---|---|
-| `session-start` | Asks orchd to pin the session (`PinSession`, 2 s; skipped in queued tasks), sending the session ID, `cwd` and `parent_session_id` for every source: orchd keeps an existing pin, so resume, clear and compact change nothing ([daemon.md](daemon.md#session-pins)). Then prints `## Orchestrator digest`: the last 5 events of this session's stream and of `pr-babysitter`, `routing`, `queue`, plus a count of pending-ingest items. After compaction (`source=compact`) it first prints the [resume brief](#resume-brief). Marks the session and `queue` streams seen, so the next prompt's updates skip them. |
+| `session-start` | Asks orchd to pin the session (`PinSession`, 2 s; skipped in queued tasks), sending the session ID, `cwd` and `parent_session_id` for every source: orchd keeps an existing pin, so resume, clear and compact change nothing ([daemon.md](daemon.md#session-pins)). Then prints `## Orchestrator digest`: the last 5 events of this session's stream and of `pr-babysitter`, `routing`, `queue`, plus a count of pending-ingest items. After compaction (`source=compact`) it first prints the [resume brief](#resume-brief). Marks the session and `queue` streams seen, so the next prompt's updates skip them. Before the events, the digest names each [enforcement layer](daemon.md#enforcement-switches) the operator switched off (or the guard set to `log`), with since when and when a timed switch reverts, plus a tool-hooks layer that does not enforce though its switch is on and any drift orchd reports. It asks orchd (`GetEnforcement`, 0.5 s); when orchd does not answer it reads `orch.db`'s switches read-only and marks the lines "read from orch.db", and says when it cannot read them either. Queued tasks get it too. |
 | `user-prompt-submit` | Prints the [updates block](#updates-block) (not inside queued tasks), then [prompt context](#prompt-context). |
 | `stop` | Parses the transcript (redacted) and writes `sessions/<id>.yaml`. No orchd call. |
 | `pre-compact` | Writes `sessions/<id>.checkpoint.yaml` with the last request and reply. |
@@ -45,6 +45,14 @@ process start to exit over 1,000 runs. The tool guard (SP-041) will add refusals
 `pre-tool-use`. That is why Claude Code runs it synchronously, while `cwd-changed` runs in the
 background ([install.md](install.md#claude-code)). orchd stores the events in its
 [command log](daemon.md#command-log).
+
+The tool hooks are an [enforcement switch](daemon.md#enforcement-switches) (D-40): orch settings
+cannot turn them off or on (`SetSettingEnabled` refuses), and `orch install` writes them whatever a
+settings toggle says. Only the operator can, with `orch spaces enforce hooks off [--for 15m]`,
+which turns Claude Code's two entries off in its settings (Codex's `hooks.json` is not managed by
+orch settings, so its `pre-tool-use` stays), is logged with time and caller, and is named in
+every session's start digest while it lasts. With the guard switched off, events are still
+stored, with decision `not enforced`.
 
 ### Tool-call targets
 

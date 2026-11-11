@@ -334,7 +334,11 @@ method of that name; calls through function values are not followed.
   over 16 KiB are stored as opaque. Redaction reads at most twice the cap plus 4 KiB of a field,
   so a secret the cut passes through is still found and a 1 MiB input costs little. Text is made
   valid UTF-8 (invalid bytes become U+FFFD) before it is stored and hashed. The decision is
-  `logged` until the guard (SP-041) decides. `RecordToolEvent` refuses an event whose fields
+  `logged` until the guard (SP-041) decides. While the guard's [enforcement
+  switch](#enforcement-switches) is `off` the decision is `not enforced`; while it is `off` or
+  `log`, `rule` holds the verdict the guard would have given (`would refuse (<rule>)`, `would
+  allow`) once a guard verdict is wired in (`server.guardVerdict`, SP-040/SP-041; empty until
+  then). Logging never stops: every switch state stores every event. `RecordToolEvent` refuses an event whose fields
   other than `tool_input` exceed 4 KiB, or that carries protobuf fields orchd does not know.
 - **Off the hook's path:** `RecordToolEvent` only queues the event. The queue holds at most
   4096 events and 64 MiB (each event counted at its encoded request size plus 512 bytes), and one
@@ -500,6 +504,80 @@ Clients dial `unix://<socket>` lazily (failure surfaces on the first call) and s
 deadlines: hooks 0.5 s for writes and 3 s for prompt search; `orch status` 2–3 s; long CLI
 commands up to 2 hours (migration).
 
+### Enforcement switches
+
+Each layer of spaces enforcement has an operator-only switch (spaces SP-070, D-11, D-12, D-40,
+INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enforcement.go`):
+
+| Layer | States (default first) | What it switches |
+|---|---|---|
+| `memory` | `on`, `off` | memory filtering by space (SP-025) |
+| `guard` | `block-other-jobs`, `off`, `log`, `strict` | the pre-tool-use guard's mode (SP-040, SP-041) |
+| `terms` | `on`, `off` | outbound term checks (SP-044, SP-045) |
+| `sandbox` | `on`, `off` | generated sandbox deny rules (SP-046) |
+| `hooks` | `on`, `off` | the tool hooks themselves (pre-tool-use, cwd-changed) |
+
+- **Stored** in `orch.db` (migration `0029`): `spaces_enforcement` holds one row per switched
+  layer (state, set_at, set_by, and for a timed switch `until` and the state it reverts to); a
+  layer with no row is at its default. `spaces_enforcement_log` appends every change with its
+  time, caller (`callerLabel`, or `timer` for a revert) and whether a timer expired, in the same
+  transaction as the row.
+- **orchd's copy wins:** orchd loads the switches once at startup (`spaces.LoadVerified`) and
+  afterwards keeps them in memory, writing each change to `orch.db` before it takes effect. At
+  startup a layer whose row does not match its newest log entry (state, time, caller, timer and,
+  for a timed switch, the state it reverts to; a row written, or an entry appended, outside
+  orchd), whose state it does not have, or whose time cannot be read starts at its default, which
+  enforces; a timer that cannot be read reads as expired. While orchd runs, an edit to `orch.db` changes
+  nothing; `GetEnforcement` and `orch status` report it as drift until orchd rewrites the layer.
+  Switches that cannot be read at startup are the defaults.
+- **Set** by `SetEnforcement` (`orch spaces enforce <layer> <state> [--for 15m]`). It is
+  operator-only: refused to queued tasks and to any caller with a harness or orchd among its
+  ancestors, or whose ancestry orchd cannot read (`refuseNonOperator`). `--for` (more than 0, at
+  most 24 h) makes a timed switch, which reverts to the state before it; a timed switch set over
+  another keeps the first one's revert state, and an untimed set replaces any timer. Setting the
+  state a layer already has changes nothing.
+- **Timers:** every read (`GetEnforcement`, `Status`) reverts expired switches first, and orchd
+  checks every 5 s so the revert's event arrives on time. The command log's writer only reads
+  (`enforcement.state`): it sees an expired switch as reverted without writing.
+- **Announced:** every change is logged by orchd and appended to the `spaces` event stream
+  (`[info] enforcement: <layer> switched from X to Y by <caller> [until T]`, plus what a hooks
+  switch could not do to Claude Code's settings). Sessions do not read that stream:
+  `GetEnforcement` is open to every caller, queued tasks included, and the SessionStart digest of
+  every session names each layer that is off, or the guard in `log`, and since when, and any
+  drift ([hooks.md](hooks.md#events)). When orchd does not answer, the digest reads `orch.db`'s
+  switches read-only (`spaces.ReadEnforcement`), so stopping orchd does not hide a switched-off
+  layer. `orch status` names them in its `spaces` section, with who set them for the operator.
+- **The hooks switch** (D-40): orch settings cannot turn the Claude Code tool hooks on or off
+  (`SetSettingEnabled` refuses them with `FailedPrecondition`), and `orch install` writes them
+  whatever a settings toggle says ([install.md](install.md#claude-code)). Switching `hooks` off
+  turns Claude Code's `PreToolUse` and `CwdChanged` orch-hook entries off through the settings
+  service, and on again when switched back or when the timer reverts it; install then leaves them
+  out while the switch is off. Codex's `hooks.json` is not managed by orch settings, so its
+  `pre-tool-use` hook stays and its events are still logged. While the switch is on, a tool hook
+  orch installed that is now turned off, or missing or removed from `settings.json` (by hand,
+  outside orch), makes the hooks layer read as not enforcing, with the reason (`problem`), in the
+  digest and status, as does a settings listing or sync orchd cannot read. With a spaces policy
+  applied and orch's session-start hook (which prints the digest) in Claude Code's settings, a
+  tool hook with no settings row at all counts as not installed, so deleting its row from
+  `orch.db` does not hide it; the check goes by the items' identities, which each sync derives
+  from the file, never by their stored origin. With every orch hook gone from Claude Code's
+  settings, no digest runs and the layer reads as enforcing (`orch status` lists the tool hooks as
+  missing under harness wiring). The check reads Claude
+  Code's settings through the settings service, under its own 5 s deadline, and is reused for 5 s. `orch spaces enforce hooks on`
+  puts them back even though the switch is already on.
+- **Limits:** operator-only rests on the [caller checks](#queued-callers), so a process an agent
+  detaches from its session (whose parent exits, so it is reparented to launchd) passes as the
+  operator, as for `ApplySpaces`. A process running as the user can also write both tables
+  consistently while orchd is stopped, which the next start takes. Either way the switch shows in
+  every digest and in `orch status`. Self-protection paths (SP-042) are the guard's answer to
+  both. A `"disableAllHooks": true` in a project's Claude Code settings turns off every hook,
+  the digest included, without any switch; the hooks check reads only the user's
+  `~/.claude/settings.json`. When orchd does not answer, the digest's fallback reads only the
+  switches in `orch.db`, not whether the tool hooks are still in `settings.json`.
+- **Not yet:** the layers' consumers come with their features. Today the guard switch marks
+  command log records (above); memory filtering, terms, sandbox rules and the enforcing guard
+  read `enforcement.state` when SP-025, SP-044, SP-046 and SP-041 land.
+
 ## gRPC API
 
 Service `orchd.v1.Orchd` (`internal/rpc/orchdv1/orchd.proto`; regenerate with `make proto`).
@@ -520,6 +598,8 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `EndSession` | session_id → ended_at | sets `ended_at` once; only the pinned harness process; refused to queued tasks; writes the session's [command log](#command-log) end record and anchors its head in the background |
 | `RecordToolEvent` | event (`pre-tool-use`/`cwd-changed`), session_id, cwd, tool_name, tool_input (≤ 1 MiB), tool_input_size, tool_use_id, agent_id, agent_type, old_cwd, new_cwd, at → — | takes a [tool hook](hooks.md#tool-hooks) event and answers at once; attributed to the [caller orchd resolved](#caller-sessions), never to session_id; open to queued tasks. Counted by caller kind and stored in the [command log](#command-log) when its caller is a pinned session, a running task or a harness process holding no pin; never indexed |
 | `ListSessions` | all → sessions (harness, session_id, harness_pid, space, first_cwd, state, last_activity, tool_events, refusals, ended_at) | runs a [liveness](#session-liveness) sweep first; the operator sees every session and unpinned harness process (with its command log chain's counts and last event), a session only its own row, anyone else none; refused to queued tasks; ended sessions, and the chains of unpinned processes that exited or were pinned since, only with `all` |
+| `GetEnforcement` | → switches (layer, title, state, default, states, relaxed, set_at, set_by, until, reverts_to), error | every [enforcement switch](#enforcement-switches); open to every caller, queued tasks included; `set_by` only for the operator; switches that cannot be read are returned as the defaults with `error` |
+| `SetEnforcement` | layer, state, for_seconds → current switch, changed, notes | operator-only (refused to callers descended from a harness or orchd); unknown layer or state, or `for_seconds` outside 0–86400 → `InvalidArgument`; logged with time and caller and emitted on the `spaces` stream; `notes` say what the hooks switch did to Claude Code's settings |
 | `VerifyToolLog` | owner (session ID, `task:<id>` or `process:<pid>[-<start>]`) → records, anchors, ends, gaps, dropped, problems | recomputes the owner's [command log](#command-log) chain after storing what is queued, and compares its anchors with orch.db's copies; operator-only |
 | `SummarizeSession` | session_id, transcript_path, tags → accepted | ID `^[A-Za-z0-9_-]{1,128}$`; path absolute, `.jsonl`, regular file; enqueue only (backlog 32) |
 | `RecommendModel` | task_kind → route, from_table | see [tasks.md](tasks.md) |
@@ -663,6 +743,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `routing`, `routing_history` | current table (kind, rank, provider, model, effort, rationale, evidence_n, pinned); prior generations |
 | `config_values`, `config_import` | orch's settings that differ from a default (key, JSON value, updated_at, updated_by); whether the old config.yaml was imported ([config.md](config.md)) |
 | `session_pins` | session_id (key), harness, harness_pid, harness_started (unix ns), first_cwd, main_checkout, space, policy_revision, pinned_at, ended_at, inherited_from, resumed_at, exited_at ([session pins](#session-pins)) |
+| `spaces_enforcement`, `spaces_enforcement_log` | layer (key), state, set_at, set_by, until, previous; every change with at, layer, state, previous, by, until, expired ([enforcement switches](#enforcement-switches)) |
 | `settings_items` | provider, kind, identity (key), enabled, origin (`orch`/`you`/`found`), payload (JSON), present, removed_at, created_at, updated_at ([settings.md](settings.md)) |
 
 ## Invariants

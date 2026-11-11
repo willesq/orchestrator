@@ -99,9 +99,18 @@ func eventDetail(e *orchdv1.ToolEvent) string {
 	case e.GetKind() == "gap":
 		return fmt.Sprintf("%d event(s) dropped before orchd could store them", e.GetDropped())
 	case e.GetEvent() == "cwd-changed":
-		return e.GetOldCwd() + " -> " + e.GetNewCwd()
+		return withRule(e.GetOldCwd()+" -> "+e.GetNewCwd(), e.GetRule())
 	}
-	return e.GetCommand()
+	return withRule(e.GetCommand(), e.GetRule())
+}
+
+// withRule adds the guard's rule to a record's detail: the rule it refused
+// by, or, while it did not enforce, the verdict it would have given.
+func withRule(detail, rule string) string {
+	if rule == "" {
+		return detail
+	}
+	return detail + " [" + rule + "]"
 }
 
 func newSpacesLogSummaryCmd(cf clientFactory) *cobra.Command {

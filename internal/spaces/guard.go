@@ -167,8 +167,8 @@ type GuardPin struct {
 	Space string
 }
 
-// Enforcement is the enforcement state the guard reads (SP-070).
-type Enforcement struct {
+// GuardEnforcement is the enforcement state the guard reads (SP-070).
+type GuardEnforcement struct {
 	// Guard is the mode. "" is the default, GuardBlockOtherJobs; a value
 	// the guard does not know is read as GuardStrict, so a damaged state
 	// never enforces less.
@@ -232,7 +232,7 @@ var limitReasons = map[string]bool{
 // function: it reads nothing but its arguments, so a logged event can be
 // replayed and gives the same verdict and rule. Moving within the
 // session's own space is allowed (D-09).
-func Decide(pol GuardPolicy, pin GuardPin, enf Enforcement, ev GuardEvent) GuardDecision {
+func Decide(pol GuardPolicy, pin GuardPin, enf GuardEnforcement, ev GuardEvent) GuardDecision {
 	mode := enf.Guard
 	switch mode {
 	case "":

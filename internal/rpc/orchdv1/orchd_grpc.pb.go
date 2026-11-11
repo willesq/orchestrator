@@ -76,6 +76,8 @@ const (
 	Orchd_VerifyToolLog_FullMethodName            = "/orchd.v1.Orchd/VerifyToolLog"
 	Orchd_ListToolEvents_FullMethodName           = "/orchd.v1.Orchd/ListToolEvents"
 	Orchd_SummarizeToolLog_FullMethodName         = "/orchd.v1.Orchd/SummarizeToolLog"
+	Orchd_GetEnforcement_FullMethodName           = "/orchd.v1.Orchd/GetEnforcement"
+	Orchd_SetEnforcement_FullMethodName           = "/orchd.v1.Orchd/SetEnforcement"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName               = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName             = "/orchd.v1.Orchd/RemoveSource"
@@ -279,6 +281,15 @@ type OrchdClient interface {
 	// SummarizeToolLog sums the command log per space over a window: tool
 	// calls, directory moves and moves into another space. Operator only.
 	SummarizeToolLog(ctx context.Context, in *SummarizeToolLogRequest, opts ...grpc.CallOption) (*ToolLogSummary, error)
+	// GetEnforcement lists every enforcement layer's switch (SP-070). Open to
+	// every caller, so every session's start digest can name a layer that is
+	// off; who set a switch is shown to the operator only.
+	GetEnforcement(ctx context.Context, in *GetEnforcementRequest, opts ...grpc.CallOption) (*EnforcementState, error)
+	// SetEnforcement switches one enforcement layer, optionally for a time
+	// after which it reverts by itself. Operator-only: refused to callers
+	// descended from a harness or from orchd. Every change is logged with its
+	// time and caller and emits an event on the "spaces" stream.
+	SetEnforcement(ctx context.Context, in *SetEnforcementRequest, opts ...grpc.CallOption) (*SetEnforcementResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -916,6 +927,26 @@ func (c *orchdClient) SummarizeToolLog(ctx context.Context, in *SummarizeToolLog
 	return out, nil
 }
 
+func (c *orchdClient) GetEnforcement(ctx context.Context, in *GetEnforcementRequest, opts ...grpc.CallOption) (*EnforcementState, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnforcementState)
+	err := c.cc.Invoke(ctx, Orchd_GetEnforcement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) SetEnforcement(ctx context.Context, in *SetEnforcementRequest, opts ...grpc.CallOption) (*SetEnforcementResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetEnforcementResponse)
+	err := c.cc.Invoke(ctx, Orchd_SetEnforcement_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -1261,6 +1292,15 @@ type OrchdServer interface {
 	// SummarizeToolLog sums the command log per space over a window: tool
 	// calls, directory moves and moves into another space. Operator only.
 	SummarizeToolLog(context.Context, *SummarizeToolLogRequest) (*ToolLogSummary, error)
+	// GetEnforcement lists every enforcement layer's switch (SP-070). Open to
+	// every caller, so every session's start digest can name a layer that is
+	// off; who set a switch is shown to the operator only.
+	GetEnforcement(context.Context, *GetEnforcementRequest) (*EnforcementState, error)
+	// SetEnforcement switches one enforcement layer, optionally for a time
+	// after which it reverts by itself. Operator-only: refused to callers
+	// descended from a harness or from orchd. Every change is logged with its
+	// time and caller and emits an event on the "spaces" stream.
+	SetEnforcement(context.Context, *SetEnforcementRequest) (*SetEnforcementResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -1489,6 +1529,12 @@ func (UnimplementedOrchdServer) ListToolEvents(context.Context, *ListToolEventsR
 }
 func (UnimplementedOrchdServer) SummarizeToolLog(context.Context, *SummarizeToolLogRequest) (*ToolLogSummary, error) {
 	return nil, status.Error(codes.Unimplemented, "method SummarizeToolLog not implemented")
+}
+func (UnimplementedOrchdServer) GetEnforcement(context.Context, *GetEnforcementRequest) (*EnforcementState, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEnforcement not implemented")
+}
+func (UnimplementedOrchdServer) SetEnforcement(context.Context, *SetEnforcementRequest) (*SetEnforcementResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetEnforcement not implemented")
 }
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
@@ -2578,6 +2624,42 @@ func _Orchd_SummarizeToolLog_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_GetEnforcement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEnforcementRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetEnforcement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetEnforcement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetEnforcement(ctx, req.(*GetEnforcementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_SetEnforcement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetEnforcementRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SetEnforcement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SetEnforcement_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SetEnforcement(ctx, req.(*SetEnforcementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -3096,6 +3178,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SummarizeToolLog",
 			Handler:    _Orchd_SummarizeToolLog_Handler,
+		},
+		{
+			MethodName: "GetEnforcement",
+			Handler:    _Orchd_GetEnforcement_Handler,
+		},
+		{
+			MethodName: "SetEnforcement",
+			Handler:    _Orchd_SetEnforcement_Handler,
 		},
 		{
 			MethodName: "ListRegisteredSources",

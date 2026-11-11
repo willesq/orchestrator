@@ -279,3 +279,11 @@ func (f *fakeClient) SummarizeToolLog(context.Context, *orchdv1.SummarizeToolLog
 func (f *fakeClient) RecordToolEvent(context.Context, *orchdv1.RecordToolEventRequest, ...grpc.CallOption) (*orchdv1.RecordToolEventResponse, error) {
 	return &orchdv1.RecordToolEventResponse{}, nil
 }
+
+func (f *fakeClient) GetEnforcement(context.Context, *orchdv1.GetEnforcementRequest, ...grpc.CallOption) (*orchdv1.EnforcementState, error) {
+	return &orchdv1.EnforcementState{}, nil
+}
+
+func (f *fakeClient) SetEnforcement(context.Context, *orchdv1.SetEnforcementRequest, ...grpc.CallOption) (*orchdv1.SetEnforcementResponse, error) {
+	return &orchdv1.SetEnforcementResponse{}, nil
+}

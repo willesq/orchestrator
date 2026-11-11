@@ -761,6 +761,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "GetEnforcement" metadata.
+        public enum GetEnforcement: Sendable {
+            /// Request type for "GetEnforcement".
+            public typealias Input = Orchd_V1_GetEnforcementRequest
+            /// Response type for "GetEnforcement".
+            public typealias Output = Orchd_V1_EnforcementState
+            /// Descriptor for "GetEnforcement".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetEnforcement",
+                type: .unary
+            )
+        }
+        /// Namespace for "SetEnforcement" metadata.
+        public enum SetEnforcement: Sendable {
+            /// Request type for "SetEnforcement".
+            public typealias Input = Orchd_V1_SetEnforcementRequest
+            /// Response type for "SetEnforcement".
+            public typealias Output = Orchd_V1_SetEnforcementResponse
+            /// Descriptor for "SetEnforcement".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SetEnforcement",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -1028,6 +1054,8 @@ public enum Orchd_V1_Orchd: Sendable {
             VerifyToolLog.descriptor,
             ListToolEvents.descriptor,
             SummarizeToolLog.descriptor,
+            GetEnforcement.descriptor,
+            SetEnforcement.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -2441,6 +2469,57 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ToolLogSummary>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ToolLogSummary>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetEnforcement" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetEnforcement lists every enforcement layer's switch (SP-070). Open to
+        /// > every caller, so every session's start digest can name a layer that is
+        /// > off; who set a switch is shown to the operator only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetEnforcementRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetEnforcementRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_EnforcementState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getEnforcement<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetEnforcementRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetEnforcementRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_EnforcementState>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_EnforcementState>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetEnforcement" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetEnforcement switches one enforcement layer, optionally for a time
+        /// > after which it reverts by itself. Operator-only: refused to callers
+        /// > descended from a harness or from orchd. Every change is logged with its
+        /// > time and caller and emits an event on the "spaces" stream.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetEnforcementRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetEnforcementRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SetEnforcementResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setEnforcement<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetEnforcementRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetEnforcementRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SetEnforcementResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetEnforcementResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListRegisteredSources" method.
@@ -4849,6 +4928,79 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "GetEnforcement" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetEnforcement lists every enforcement layer's switch (SP-070). Open to
+        /// > every caller, so every session's start digest can name a layer that is
+        /// > off; who set a switch is shown to the operator only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetEnforcementRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetEnforcementRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_EnforcementState` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getEnforcement<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetEnforcementRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetEnforcementRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_EnforcementState>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_EnforcementState>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetEnforcement.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SetEnforcement" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetEnforcement switches one enforcement layer, optionally for a time
+        /// > after which it reverts by itself. Operator-only: refused to callers
+        /// > descended from a harness or from orchd. Every change is logged with its
+        /// > time and caller and emits an event on the "spaces" stream.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetEnforcementRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetEnforcementRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SetEnforcementResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setEnforcement<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetEnforcementRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetEnforcementRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SetEnforcementResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetEnforcementResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SetEnforcement.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -7124,6 +7276,69 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SummarizeToolLogRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ToolLogSummary>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetEnforcement" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetEnforcement lists every enforcement layer's switch (SP-070). Open to
+    /// > every caller, so every session's start digest can name a layer that is
+    /// > off; who set a switch is shown to the operator only.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetEnforcementRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getEnforcement<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetEnforcementRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_EnforcementState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getEnforcement(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetEnforcementRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_EnforcementState>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetEnforcement" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetEnforcement switches one enforcement layer, optionally for a time
+    /// > after which it reverts by itself. Operator-only: refused to callers
+    /// > descended from a harness or from orchd. Every change is logged with its
+    /// > time and caller and emits an event on the "spaces" stream.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SetEnforcementRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setEnforcement<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SetEnforcementRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetEnforcementResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setEnforcement(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetEnforcementRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SetEnforcementResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -9550,6 +9765,77 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.summarizeToolLog(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetEnforcement" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetEnforcement lists every enforcement layer's switch (SP-070). Open to
+    /// > every caller, so every session's start digest can name a layer that is
+    /// > off; who set a switch is shown to the operator only.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getEnforcement<Result>(
+        _ message: Orchd_V1_GetEnforcementRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_EnforcementState>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetEnforcementRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getEnforcement(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetEnforcement" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetEnforcement switches one enforcement layer, optionally for a time
+    /// > after which it reverts by itself. Operator-only: refused to callers
+    /// > descended from a harness or from orchd. Every change is logged with its
+    /// > time and caller and emits an event on the "spaces" stream.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setEnforcement<Result>(
+        _ message: Orchd_V1_SetEnforcementRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetEnforcementResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SetEnforcementRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setEnforcement(
             request: request,
             options: options,
             onResponse: handleResponse

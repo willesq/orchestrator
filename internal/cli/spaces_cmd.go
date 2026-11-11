@@ -32,13 +32,16 @@ operator applied.
                                      tenant's content goes, and why
   orch spaces log verify <session>   check a session's command log was not
                                      changed (operator only)
+  orch spaces enforce [<layer> <state>] [--for 15m]
+                                     show or switch an enforcement layer
+                                     (switching is operator only)
 
-Diff, apply and log verify are refused inside an agent session (Claude Code, Codex) and
+Diff, apply, log verify and enforce <layer> <state> are refused inside an agent session (Claude Code, Codex) and
 inside tasks orchd runs: run them in your own terminal or use Orch.app. An
 agent session may save a draft; applying one needs --accept-agent-draft.`,
 	}
 	cmd.AddCommand(newSpacesDraftCmd(cf), newSpacesDiffCmd(cf), newSpacesApplyCmd(cf), newSpacesWhyCmd(cf),
-		newSpacesLogCmd(cf))
+		newSpacesLogCmd(cf), newSpacesEnforceCmd(cf))
 	return cmd
 }
 

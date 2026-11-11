@@ -126,11 +126,15 @@ func subagentStop(p Payload) error {
 }
 
 // sharedStreams are event streams every session reads, never a session's own.
-var sharedStreams = map[string]bool{"queue": true, "routing": true, "pr-babysitter": true}
+var sharedStreams = map[string]bool{"queue": true, "routing": true, "pr-babysitter": true, "spaces": true}
 
 // sessionStart prints a compact digest of recent events + pending ingests.
-func sessionStart(p Payload, out io.Writer) error {
-	var lines []string
+func sessionStart(p Payload, out io.Writer) error { return sessionStartWith(p, out, nil) }
+
+// sessionStartWith is sessionStart with notice lines leading the digest:
+// the enforcement layers switched off.
+func sessionStartWith(p Payload, out io.Writer, notice []string) error {
+	lines := append([]string(nil), notice...)
 	// "queue" carries finished background tasks, so their results reach the next
 	// session without anyone polling the ledger.
 	for _, stream := range []string{p.SessionID, "pr-babysitter", "routing", taskEventStream} {

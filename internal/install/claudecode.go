@@ -171,9 +171,15 @@ func applyHooks(root map[string]any, orchHookBin string) string {
 }
 
 // applyClaudeHooks registers orch-hook for Claude Code, leaving alone each
-// event whose orch-hook handler the user turned off in orch.
+// event whose orch-hook handler the user turned off in orch. The tool hooks
+// (pre-tool-use, cwd-changed) are the exception: a settings toggle cannot
+// keep them out; only the operator's hooks switch does (D-40).
 func applyClaudeHooks(root map[string]any, orchHookBin string, t settings.Toggles) string {
+	hooksOff := toolHooksOff()
 	skip := func(event, slug string) bool {
+		if isToolHookEvent(event, slug) {
+			return hooksOff
+		}
 		return t.Disabled(ProviderClaudeCode, KindHook, HookIdentity(event, slug))
 	}
 	return applyHooksWithEvents(root, orchHookBin, eventSlugs, claudeHookFields, skip)

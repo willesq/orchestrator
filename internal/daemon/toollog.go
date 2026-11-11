@@ -361,6 +361,7 @@ func (s *server) toolRecord(ev toolEvent, harness string) toollog.Record {
 			r.PolicyRev = rev
 		}
 	}
+	s.markGuardState(&r)
 	return r
 }
 

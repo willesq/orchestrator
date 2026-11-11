@@ -1517,6 +1517,118 @@
           "SP-046"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-86",
+        "kind": "follow-up",
+        "topic": "Wire the guard verdict into not-enforced records",
+        "detail": "SP-070.2.a2 records, while the guard is off or in log, the verdict the guard would have given ('would refuse (<rule>)' in the rule field). SP-040's Decide is not on main yet, so orchd's seam server.guardVerdict is nil and such records carry only decision 'not enforced' with an empty rule; the test drives the seam with a fake verdict. SP-040 or SP-041 must set server.guardVerdict from Decide(policy, pin, enforcement, event). The rule column holds the would-be verdict rather than a new column, to avoid a command-log schema change while SP-073 changes that store.",
+        "source": "https://github.com/willesq/orchestrator/pull/167",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-040",
+          "SP-041",
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-87",
+        "kind": "decision",
+        "topic": "What the hooks switch does",
+        "detail": "D-40 made the tool hooks a switch. Implemented as a fifth layer 'hooks' (on/off) beside the four of SP-070.1.a1. orch settings refuse turning the Claude Code tool hooks on or off; orch install writes them whatever a settings toggle says and leaves them out only while the switch is off (or when the switches cannot be read, it writes them). Switching hooks off has orchd turn Claude Code's PreToolUse and CwdChanged orch-hook entries off through the settings service, and on again when switched back or when a timer reverts. Codex's hooks.json is not managed by orch settings, so the switch does not remove Codex's pre-tool-use hook; Codex events keep being logged. Confirm this, or ask for Codex coverage.",
+        "source": "https://github.com/willesq/orchestrator/pull/167",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-070",
+          "SP-041",
+          "SP-072"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-88",
+        "kind": "decision",
+        "topic": "What counts as a layer being off",
+        "detail": "The digest and orch status name a layer when its switch is off, when the guard is in 'log' (it records but does not enforce), and when the hooks switch is on but Claude Code's tool hooks are turned off, missing or removed in settings.json (or cannot be checked). With a spaces policy applied, a tool hook with no settings row at all also counts, judged by whether orch's session-start hook is in Claude Code's settings. 'strict' is not named. With no policy applied, a never-installed tool hook is not named in the digest (orch status lists it under harness wiring), so orch behaves as before spaces. Confirm.",
+        "source": "https://github.com/willesq/orchestrator/pull/167",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-070",
+          "SP-072"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-89",
+        "kind": "follow-up",
+        "topic": "Layers that read the switches",
+        "detail": "Today only the guard switch changes behavior (command log records while off; the digest and status for all layers). Memory filtering (SP-025), outbound terms (SP-044, SP-045), generated sandbox rules (SP-046) and the enforcing guard (SP-041, which must fail closed in enforcing states per INV-13 and needs the enforcement state in the read-only file it reads) must read enforcement.state for their layer when they land. The app's switches and banner are SP-072.",
+        "source": "https://github.com/willesq/orchestrator/pull/167",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-025",
+          "SP-041",
+          "SP-044",
+          "SP-045",
+          "SP-046",
+          "SP-072"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-90",
+        "kind": "follow-up",
+        "topic": "SP-070 security review lows and accepted limits",
+        "detail": "From four security-audit rounds on PR #167 (all critical/high/medium fixed): (1) operator-only rests on refuseNonOperator, so a process an agent detaches from its session (reparented to launchd) passes as the operator, as for ApplySpaces; (2) a process running as the user can write spaces_enforcement and its log consistently while orchd is stopped, which the next start takes (the switch still shows in every digest and status); (3) a project-level Claude Code 'disableAllHooks' turns off every hook including the digest, outside any switch; (4) when orchd does not answer, the digest's fallback reads orch.db's switches but not whether the tool hooks are still in settings.json; (5) with every orch hook gone from Claude Code's settings no digest runs and the hooks layer reads as enforcing (orch status lists the tool hooks as missing); (6) markGuardState labels an event with the guard state when orchd stores it, a few milliseconds after the hook ran, and the log's writer waits on the switches' lock while a switch writes settings.json; (7) GetEnforcement is open to every caller and checks Claude Code's settings at most every 5 s; (8) settings.Service.List ignores a sync error except through the provider state, which the hooks check now reads. Self-protection paths (SP-042) and the OS sandbox (SP-046) are the answers to (1)-(3).",
+        "source": "https://github.com/willesq/orchestrator/pull/167",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-070",
+          "SP-041",
+          "SP-042",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-91",
+        "kind": "decision",
+        "topic": "Timed switch limits",
+        "detail": "A timed switch lasts from 1 s to 24 h ('--for 15m'); an untimed switch has no limit and shows in every digest until switched back. A timed switch set over another keeps the first one's revert state, so a chain ends where it began; an untimed set replaces any timer. Confirm the 24 h cap, or choose another.",
+        "source": "https://github.com/willesq/orchestrator/pull/167",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-070",
+          "SP-072"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-92",
+        "kind": "follow-up",
+        "topic": "Flaky TestWatchTasksStreamsSnapshotChangesAndTicks",
+        "detail": "internal/daemon's TestWatchTasksStreamsSnapshotChangesAndTicks fails under load from parallel test runs ('WatchTasks ended with context canceled', taskwatch_test.go:117): about 4 of 16 full package runs on the SP-070 branch while three feature agents tested on this machine, 0 of 3 on main and 0 of 4 on the branch when the machine was quieter, 10 of 10 alone. The test and internal/daemon/taskwatch.go are untouched by SP-070. Likely cause: when the client cancels while WatchTasks is sending a tick or a change (the test's tick is 50 ms), the send returns the context error instead of WatchTasks returning nil. Fix in WatchTasks (return nil when ctx.Err() is set after a failed send) or add to the flaky list with RC-39.",
+        "source": "https://github.com/willesq/orchestrator/pull/167",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-93",
+        "kind": "follow-up",
+        "topic": "Flaky tests after the parallel SP-040/SP-073/SP-070 merges",
+        "detail": "Seen on 2026-11-11 while merging main into SP-070 (coordinator session). (1) TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon) fails 'WatchTasks ended with context canceled' in 2 of 2 package runs on main at faa84d2 (after SP-073) and in 3 of 4 runs on the SP-070 merge on this Mac, but passes 20/20 run alone and passed CI on Linux; more often than RC-66's 'about 1 in 5', so SP-073's task-anchor follower (it holds one task hub watcher slot, RC-67) may make it worse. See RC-66 and RC-92 for the cause and fix. (2) TestDecideCases (internal/spaces, SP-040) failed once under the full parallel suite: Targets hit its time budget ('analysis took too long'), so the case 'session pinned to no space reads a private space' got analysis_limit instead of within_space; it passes alone (3/3). The table test should give Targets a budget that load cannot exhaust, or retry on a limit reason.",
+        "source": "https://github.com/willesq/orchestrator/pull/167",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-040",
+          "SP-073",
+          "SP-070"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -3106,7 +3218,12 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestSetEnforcementEveryLayerState (internal/daemon/enforcement_test.go) passes at 10a0cd0: GetEnforcement lists 5 layers at their defaults (memory on, guard block-other-jobs, terms on, sandbox on, hooks on; never switched); SetEnforcement sets each layer to each of its states, 12 layer x state cases, each read back with the right relaxed flag; a repeated state reports changed=false; unknown layer, wrong state and for_seconds outside 0..86400 are InvalidArgument. TestSetSwitchEveryLayerState and TestEnforcementDefaults (internal/spaces/enforce_test.go) cover the same 12 cases at the store, each logged with time and caller; TestSpacesEnforceSet and TestSpacesEnforceList (internal/cli/spaces_enforce_test.go) cover 'orch spaces enforce [<layer> <state>] [--for]'.",
+            "a2: TestSetEnforcementOperatorOnly passes at 10a0cd0: SetEnforcement is PermissionDenied for an interactive claude session, an interactive codex session, a process orchd started, a queued task, an unreadable ancestry, an unidentified peer and no peer, and the guard stays block-other-jobs with no event emitted; GetEnforcement stays open to sessions and tasks with set_by hidden from them, and the operator sees 'operator (process 42)'.",
+            "a3: TestTimedSwitchReverts passes at 10a0cd0 with a fake clock: 'guard off for 15m' is still off one second before expiry; at expiry it reverts to block-other-jobs and emits a second event (Expired, by timer, at the clock's time); a chain of timed switches ends where it began; an untimed switch replaces a timer. Also TestEnforcementRunRevertsOnTime (orchd's tick reverts without a reader), TestTimedSwitchExpires and TestEnforcementAt (store), TestTimerRevertAnnouncesFailedHooks.",
+            "a4: TestToolHooksSwitch passes at 10a0cd0: SetSettingEnabled refuses both tool hooks on and off with FailedPrecondition naming 'orch spaces enforce hooks off'; a session's SetEnforcement hooks off is refused; the operator's turns Claude Code's PreToolUse and CwdChanged orch-hook entries off and is logged with time and caller (spaces_enforcement_log); sessions see the hooks layer relaxed with since-when. TestToolHooksSwitchRealSettings drives the real settings service on a temporary settings.json (off removes only the two tool hooks, on puts them back; a hook deleted by hand, or its row deleted with a policy applied, reads as not enforcing). TestToolHooksFollowOnlyTheSwitch (internal/install): install writes the tool hooks despite settings toggles, leaves them out only while the switch is off, and writes them when the switches cannot be read, do not match their log, or the timer expired. TestSessionStartNamesSwitchedOffLayers (internal/hook) shows the digest line 'hooks (tool hooks (pre-tool-use, cwd-changed)) is switched off since 2026-11-11 10:05 UTC'."
+          ]
         },
         {
           "id": "SP-070.2",
@@ -3127,18 +3244,24 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (digest): TestSessionStartNamesSwitchedOffLayers (internal/hook/enforcement_test.go) passes at 10a0cd0 for an interactive session and a queued task: the SessionStart digest names 'guard (tool guard) is switched off since 2026-11-11 10:05 UTC; it reverts to block-other-jobs at 2026-11-11 10:20 UTC', the hooks layer and the terms layer in log, and not the enforcing memory layer. Also TestSessionStartReadsSwitchesWithoutOrchd (orchd down: read from orch.db, expired timers not named; unreadable store named) and TestSessionStartNamesEnforcementProblems.",
+            "a1 (orch status): TestStatusNamesRelaxedLayers (internal/daemon) passes at 10a0cd0: Status names memory and guard with their set_at, hides set_by from a session, and still names them with no spaces policy; TestSpacesSectionNamesRelaxedLayers (internal/status/spaces_test.go) renders 'enforcement=guard is off' with 'since 2026-11-11 10:05', the revert time, 'set by operator (process 9)' and the command to switch back, with control characters stripped.",
+            "a2: TestToolEventsNotEnforced (internal/daemon/enforcement_test.go) passes at 10a0cd0: through RecordToolEvent and the command log, with the guard off every pre-tool-use and cwd-changed event is still stored, with decision 'not enforced' and rule 'would refuse (other-job)' / 'would allow' from the guard verdict; in log the decision stays 'logged' with the would-be verdict; in strict nothing is rewritten; the chain verifies. The guard verdict is a seam (server.guardVerdict) until SP-040's Decide is wired (RC-86); with no verdict the record is still 'not enforced'.",
+            "DOD at 10a0cd0 (self-check): go test ./... exit 0; go vet ./... exit 0; gofmt -l internal: 0 lines; make cover 'All files >= 80%' (enforcement.go 98.0%, enforce_store.go 92.2%, enforce.go 100%, spaces_enforce.go 100%, hook/updates.go 97.4%, status.go 97.2%, install/toggles.go 90.5%); TestCommandLogNeverReachesRAG passes with the new reader on the log's path. Security: four security-audit rounds; every critical/high/medium fixed (rounds 1-4 found 1 high, 2+2+1+1 mediums), lows recorded as RC-90.",
+            "Independent verifier at 089d4b9: SP-070.1 a1-a4 and SP-070.2 a1-a2 PASS (a2 with the caveat that the would-be verdict is the RC-86 seam until SP-040); INV-13 and INV-16 PASS; DOD-2..DOD-9 PASS (CI app, test and macOS ORT build green on PR #167; 4 signed Conventional Commits; draft PR registered in ~/.pr-watch.json; verifier's own security read found 0 open critical/high/medium). DOD-1: go test ./... passed in the implementer's two full runs at 10a0cd0/089d4b9 and in CI; in the verifier's local runs only TestWatchTasksStreamsSnapshotChangesAndTicks failed (untouched by the diff; passes 10/10 alone; a cancel during a send returns the context error), recorded as RC-92."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "089d4b9d33a9fb4e7f196398ad46527b76904dc1",
+      "verified_at": "2026-11-11T16:21:17Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "d51436cafcfd5be71cd5c5cbb9c23cb70d246bfbaab59d97dd4b548431c44ba9",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-070-enforcement-switches",
+      "pr": "https://github.com/willesq/orchestrator/pull/167"
     },
     {
       "id": "SP-041",

@@ -18,6 +18,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/willesq/orchestrator/internal/check"
 	"github.com/willesq/orchestrator/internal/config"
@@ -376,7 +377,8 @@ func spacesSection(resp *orchdv1.StatusResponse, err error) (sec Section, ok boo
 	sec = Section{Title: "spaces"}
 	sp := resp.GetSpaces()
 	if err != nil || sp == nil ||
-		(sp.GetAppliedRevision() == 0 && sp.GetDraftRevision() == 0 && len(sp.GetDrift()) == 0 && sp.GetError() == "") {
+		(sp.GetAppliedRevision() == 0 && sp.GetDraftRevision() == 0 && len(sp.GetDrift()) == 0 && sp.GetError() == "" &&
+			len(sp.GetRelaxed()) == 0 && sp.GetEnforcementError() == "") {
 		return sec, false
 	}
 	policy := Line{Name: "policy", Value: "none applied", Level: LevelOK, Detail: "one shared space, as before spaces"}
@@ -402,10 +404,56 @@ func spacesSection(resp *orchdv1.StatusResponse, err error) (sec Section, ok boo
 		}
 		sec.Lines = append(sec.Lines, l)
 	}
+	for _, sw := range sp.GetRelaxed() {
+		sec.Lines = append(sec.Lines, relaxedLine(sw))
+	}
+	if e := sp.GetEnforcementError(); e != "" {
+		sec.Lines = append(sec.Lines, Line{Name: "enforcement", Value: "switches in orch.db not taken", Level: LevelBad, Detail: printable(e)})
+	}
 	if e := sp.GetError(); e != "" {
 		sec.Lines = append(sec.Lines, Line{Name: "error", Value: e, Level: LevelBad})
 	}
 	return sec, true
+}
+
+// relaxedLine reports an enforcement layer switched off (or the guard only
+// logging), and since when (SP-070).
+//
+// Reason for printable: the fields come from orch.db, which a process
+// running as the user can edit, and land in the operator's terminal.
+func relaxedLine(sw *orchdv1.EnforcementSwitch) Line {
+	l := Line{Name: "enforcement", Level: LevelWarn,
+		Value: printable(fmt.Sprintf("%s is %s", sw.GetLayer(), sw.GetState()))}
+	var parts []string
+	if t := sw.GetTitle(); t != "" {
+		parts = append(parts, t)
+	}
+	if p := sw.GetProblem(); p != "" {
+		l.Value = printable(sw.GetLayer() + " does not enforce")
+		parts = append(parts, p)
+	}
+	if at := sw.GetSetAt(); at > 0 {
+		parts = append(parts, "since "+time.Unix(at, 0).Local().Format("2006-01-02 15:04"))
+	}
+	if u := sw.GetUntil(); u > 0 {
+		parts = append(parts, fmt.Sprintf("reverts to %s at %s", sw.GetRevertsTo(), time.Unix(u, 0).Local().Format("2006-01-02 15:04")))
+	}
+	if by := sw.GetSetBy(); by != "" {
+		parts = append(parts, "set by "+by)
+	}
+	parts = append(parts, "switch back with 'orch spaces enforce "+sw.GetLayer()+" "+sw.GetDefaultState()+"'")
+	l.Detail = printable(strings.Join(parts, "; "))
+	return l
+}
+
+// printable replaces control and format characters with spaces.
+func printable(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			return ' '
+		}
+		return r
+	}, s)
 }
 
 func vectorSection(ctx context.Context, d Deps, resp *orchdv1.StatusResponse) Section {
