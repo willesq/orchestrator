@@ -2980,14 +2980,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "d51436cafcfd5be71cd5c5cbb9c23cb70d246bfbaab59d97dd4b548431c44ba9",
-      "branch": null,
+      "branch": "feat/sp-070-enforcement-switches",
       "pr": null
     },
     {
