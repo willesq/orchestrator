@@ -95,7 +95,7 @@ func (s *server) WatchTasks(req *orchdv1.WatchTasksRequest, stream orchdv1.Orchd
 	defer unsubscribe()
 	filter := queue.ListFilter{Status: req.GetStatus(), Limit: int(req.GetLimit())}
 	if err := s.sendTaskSnapshot(ctx, stream, filter); err != nil {
-		return err
+		return clientGone(ctx, err)
 	}
 	tick := time.NewTicker(watchTick)
 	defer tick.Stop()
@@ -107,21 +107,32 @@ func (s *server) WatchTasks(req *orchdv1.WatchTasksRequest, stream orchdv1.Orchd
 			return grpcstatus.Error(codes.Unavailable, "orchd is shutting down; reconnect")
 		case <-tick.C:
 			if err := s.sendTaskTick(ctx, stream, filter.Status); err != nil {
-				return err
+				return clientGone(ctx, err)
 			}
 		case id := <-sub.ch:
 			ids := s.collectChanges(ctx, sub, id)
 			if sub.overflow.Swap(false) {
 				if err := s.sendTaskSnapshot(ctx, stream, filter); err != nil {
-					return err
+					return clientGone(ctx, err)
 				}
 				continue
 			}
 			if err := s.sendTaskChanges(ctx, stream, filter.Status, ids); err != nil {
-				return err
+				return clientGone(ctx, err)
 			}
 		}
 	}
+}
+
+// clientGone ends a stream cleanly when a read or send failed because the
+// client went away. Reason: the cancel can land while a snapshot, change or
+// tick is being read, or select can pick a ready tick or change over the ready
+// ctx.Done; either way the failure is the disconnect, not the ledger.
+func clientGone(ctx context.Context, err error) error {
+	if ctx.Err() != nil {
+		return nil
+	}
+	return err
 }
 
 // collectChanges gathers the IDs that arrive within watchBatch of first,
