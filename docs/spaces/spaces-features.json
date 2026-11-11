@@ -2890,14 +2890,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "7617a8f9e308fa2c249ac0eb4a7c191eb7248d4617881c8328f7af0b776f8272",
-      "branch": null,
+      "branch": "feat/sp-040-guard-decide",
       "pr": null
     },
     {
