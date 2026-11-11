@@ -1450,6 +1450,73 @@
           "SP-054"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-76",
+        "kind": "decision",
+        "topic": "The guard does not judge what a cwd contains in block-other-jobs",
+        "detail": "SP-040 judges a cd_dest, path, git dir or glob prefix that contains another job's root as reaching that job, but the call's cwd only in strict mode. Otherwise every call of a session started under a public root such as ~/code (which holds every job's root) would be refused. So in block-other-jobs a command that searches its cwd by default (grep -r x, rg x, find, du, tar) run with cwd ~/code is allowed, and the OS sandbox (SP-046) is the boundary. Options: keep this; or refuse such calls when the command is a known recursive reader with no path argument (needs Targets to report it); or pin public-root sessions out of ancestor cwds.",
+        "source": "https://github.com/willesq/orchestrator/pull/166",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-040",
+          "SP-041",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-77",
+        "kind": "decision",
+        "topic": "block-other-jobs allows opaque calls (RC-36 (2))",
+        "detail": "SP-040's block-other-jobs mode allows an opaque call whose known targets stay out of other jobs (rule opaque_unverified, logged for audit); strict refuses it (opaque_strict); calls opaque because Targets hit a limit or had no absolute cwd or home are refused in both enforcing modes (analysis_limit, RC-36 (3)). Measured before choosing: 0 of the 46 recorded Claude Code and Codex PreToolUse fixtures (internal/hook/testdata/payloads) come back opaque; the real command log on this Mac is empty because the tool hooks are not wired yet (RC-33), so the rate on real agent work is unmeasured. Re-measure from the command log once the hooks run (counts of opaque_unverified per space via orch spaces log) before SP-041 enforces, and confirm or tighten.",
+        "source": "https://github.com/willesq/orchestrator/pull/166",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-040",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-78",
+        "kind": "decision",
+        "topic": "Paths that contain another job's root are refused",
+        "detail": "Per RC-36 (1), block-other-jobs refuses a path, cd destination, git dir or glob prefix that contains another isolated space's root (grep -r ~/code, cd ~/code && rg x, find / ..., ls ~/code), because Targets cannot tell a recursive reader from a listing. This adds friction for sessions under a public root (cd ~/code before a git clone, ls ~/code). Confirm, or decide to allow a listing-only set of commands (ls, cd alone) once Targets can report it.",
+        "source": "https://github.com/willesq/orchestrator/pull/166",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-040",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-79",
+        "kind": "follow-up",
+        "topic": "What SP-041 must do around Decide",
+        "detail": "From the SP-040 security reviews. (1) The zero GuardPolicy means 'no spaces configured' and allows everything (INV-10); SP-041 must refuse (INV-13) when the policy snapshot cannot be read or does not validate, never pass the zero value. (2) NewGuardPolicy resolves root and protected-path symlinks once; SP-041 must rebuild it when the policy, a root or its links change (replay is exact only against the same snapshot). (3) A missing pin refuses in enforcing modes (pin_missing); decide how queued tasks without a session pin are judged. (4) Limit reasons are matched by message text; TestLimitReasonsMatchTargets checks forceOpaque reasons and that every listed reason still exists, but a new limit raised with plain opaque() would not be flagged; consider a typed limit flag in ToolTargets. (5) Pass EventCwdChanged only for cwd-changed: every other kind, including an empty one, is enforced.",
+        "source": "https://github.com/willesq/orchestrator/pull/166",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-80",
+        "kind": "follow-up",
+        "topic": "SP-040 audit lows and design choices",
+        "detail": "(1) In strict mode a private root symlinked into another non-public space is placed by the deepest root only, so unreadable_space can judge by the wrong space (never lets one job reach another; otherJobHolds covers isolated spaces). (2) Self-protection covers file-tool writes (Write, Edit, MultiEdit, NotebookEdit, apply_patch); shell writes to protected paths (>, tee, sed -i, cp, mv) are SP-042's, since Targets does not tell writes from reads. (3) An unknown guard mode is read as strict, so a damaged enforcement state never enforces less. (4) A session under a public root is pinned to public_root_sessions (D-22); strict mode judges its targets by that space's reads, not by 'public only'. (5) A path in no space (/tmp, /usr, /opt) is always allowed; per-space TMPDIRs (D-53, SP-046) are the boundary for temp files.",
+        "source": "https://github.com/willesq/orchestrator/pull/166",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-040",
+          "SP-041",
+          "SP-042",
+          "SP-046"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -2964,18 +3031,24 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestDecideCases (internal/spaces/guard_test.go) passes at 2b7dc8a: 43 cases x 4 modes (off, log, block-other-jobs, strict) = 172 subtests, all pass. Targets are extracted by the real Targets code from a temporary home in the plan's layout (oss ~/code public, personal ~/code/willesq private, acme ~/code/company1 isolated reading personal, globex ~/code/globex isolated). Every listed form is covered: cd within the space (allow); cd into another job, compound cd (cd .. && cd ../globex/app && cat), absolute path read, Read tool into another job (other_job_path); Read outside every root and in public (allow); git -C into another job (other_job_path); gh api repos/globex/... and gh -R Globex/app (other_job_repo), gh -R own org (allow), gh -R a private org (strict: unreadable_space); opaque bash -c \"$CMD\" (block-other-jobs: opaque_unverified allow; strict: opaque_strict refuse), literal bash -c into another job and an opaque call that also names one (refused), Targets limit (analysis_limit); /tmp-style scratch build (allow); edit in the session's own linked worktree outside every root (allow) and in another job's worktree (refused, via its main checkout); EnterWorktree (allow); /cd as a cwd-changed event (logged as would-refuse, never refused) and the first call after it (refused); subagent launch (allow) and a subagent's Grep into another job (refused); settings tampering with Write ~/.claude/settings.json and Edit of the checkout's .claude/settings.local.json (self_protection), reading settings (allow); grep -r and glob prefixes over ~/code and cd ~/code && rg (other_job_ancestor); cwd holding another job (strict only); private-space reads listed/unlisted; session pinned to no space ('', quarantine, a space the policy no longer has); no pin (pin_missing); no policy (no_policy); malformed repo, relative target and relative cwd (malformed_target). Off and log never refuse and record the block-other-jobs verdict.",
+            "a1 (regressions from the security audits): TestDecideModeDefaults (empty mode = block-other-jobs, unknown mode = strict, empty/misspelled event kinds enforced), TestDecideSymlinkedRoots (home reached through a symlink), TestDecideUnicodeSpelling (NFD target vs NFC root), TestDecideAliasedRoots (a public root symlinked into, and a private root onto, another job's root, both policy orders), TestDecideRuleRankIgnoresTargetOrder, TestDecideLimitReasons, TestLimitReasonsMatchTargets (limit reasons kept in step with targets*.go), TestNewGuardPolicyRefusesRelativeProtectedPath.",
+            "a2: TestDecideDeterministic passes at 2b7dc8a: 20,000 seeded random inputs (event kinds, tools, cwd and target lists drawn from in-space, other-job, ancestor, protected, root and relative paths, repos including malformed ones, opaque reasons, 7 pins, 6 modes including '' and an unknown one, 3 policies); each decision is repeated 3 times on deep copies and is identical in verdict, would, rule, mode and enforced; Decide never changes its input; a refusal is always enforced; more than 10 distinct rules are reached.",
+            "DOD at 2b7dc8a: go test ./... exit 0; go vet ./... exit 0; gofmt -l on changed Go files: 0 lines; make cover exit 0, all files >= 80% (internal/spaces/guard.go 97.8%); docs/internals/hooks.md updated ('Guard decision'). Security audit: 3 rounds by the security-audit agent; round 1 found 1 high (symlinked roots never matched), 2 medium (cwd/cd_dest containment, non-pre-tool-use kinds unenforced) and 4 low; round 2 found 1 medium (a root symlinked into another job's root) and 5 low; all high and medium fixed with regression tests; round 3: no critical, high or medium open. Remaining lows and design choices recorded as RC-76..RC-80.",
+            "Independent verification: round 1 at f92c22e passed every item and DOD check but found that TestDecideCases derived the off/log expectation from Enforcing(), the code under test; fixed in 169903e (expectation spelled out; a mutant making off and log enforce now fails). Round 2 at 169903e, by a fresh verifier: a1 PASS (172 subtests, 43 per mode), a2 PASS, DOD-1..DOD-9 PASS (CI run 43049237100 green, test and macOS ORT build), criteria_sha256 matches; 20 of 23 mutants killed, 2 equivalent, 1 (under() without the '/' boundary) would only over-refuse."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "169903e673455cd338f28e605d16e24c77148043",
+      "verified_at": "2026-11-11T15:41:05Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "7617a8f9e308fa2c249ac0eb4a7c191eb7248d4617881c8328f7af0b776f8272",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-040-guard-decide",
+      "pr": "https://github.com/willesq/orchestrator/pull/166"
     },
     {
       "id": "SP-070",

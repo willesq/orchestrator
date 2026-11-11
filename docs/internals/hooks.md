@@ -135,7 +135,68 @@ forms, including every bypass from both SP-013 security-review rounds. `FuzzTarg
 relative targets and pathological slowness. `TestTargetsCorpusBudget` replays the corpus a fuzz
 run leaves and checks the 2 ms per-input budget. The [command log](daemon.md#command-log)
 records its result for each `pre-tool-use` event, read on orchd's log writer, off the hook's
-path; the guard (SP-040/SP-041) will decide on it.
+path. The guard decides on it ([Guard decision](#guard-decision)).
+
+### Guard decision
+
+`spaces.Decide(policy, pin, enforcement, event)` (`internal/spaces/guard.go`, SP-040) turns one
+hook event and its targets into `allow` or `refuse` plus a rule id. It is pure: it reads only its
+arguments, so a logged event replays to the same verdict and rule. Nothing calls it yet. The
+enforcing hook (SP-041) will call it from `pre-tool-use`, and the operator's switches (SP-070) set
+its mode. `spaces.NewGuardPolicy(policy, protected)` prepares the policy once: Targets reports
+physical paths, so each root and protected path is matched both as written and with its symlinks
+resolved (`~/code` linked to another volume). That is the only filesystem read, and Decide
+itself stays pure; a replay gives the same answer against the same policy snapshot, which must be
+rebuilt when roots or their links change. A protected path that is not absolute is an error.
+Paths compare cleaned, in Unicode NFC and case-folded, as macOS treats names.
+
+- **Modes (D-12).** `off` and `log` never refuse. The decision still carries the verdict
+  `block-other-jobs` would give (`would`), for the command log. `block-other-jobs` is the default,
+  and an empty mode means it. `strict` is opt-in. An unknown mode is read as `strict`, so a
+  damaged state never enforces less. A `cwd-changed` event (Claude Code's `/cd`, or a `cd` the
+  harness reports) cannot be refused. Its verdict is only logged. The next tool call runs in the
+  new cwd and is judged there. Any other event kind, even a misspelled or empty one, is enforced.
+- **What it checks.** The call's cwd, `cd_dest`, `paths`, `git_dirs` and `prefixes` are placed by
+  the deepest root holding them, as placement does, except that any other job's root holding
+  them refuses: a root reached through a symlink can resolve inside or onto a job's root, which
+  validation of the written roots cannot see. A `cd_dest`, path, git dir or prefix that
+  *contains* another space's root also reaches that space (`grep -r ~/code` and
+  `cd ~/code && rg x` reach every job under `~/code`; RC-36). The cwd counts as containing only in
+  `strict`: otherwise a session started under a public root such as `~/code` would be refused
+  every call. So in `block-other-jobs`, a command there that searches its cwd by default
+  (`grep -r x`, `rg x`, `find`) is not caught (RC-76). `gh_repos` are placed by the space their owner is bound to. A path in no space
+  (`/tmp`, `/usr`) is allowed: the guard separates spaces, and the sandbox covers the rest.
+  Worktree paths come with their main checkout's path, so an outside worktree counts as its
+  repo's space. Moving within the session's own space is allowed (D-09). Subagents share the
+  session's pin (INV-05), so their calls are judged the same way.
+- **Rules, in order.** The first rule that matches decides; when several targets refuse, the rule
+  reported is the one ranked first here, whatever order the targets come in:
+  1. `no_policy`: no spaces are configured, so the call is allowed (INV-10).
+  2. `pin_missing`: the session has no pin, so the call is refused (INV-13).
+  3. `self_protection`: `Write`, `Edit`, `MultiEdit`, `NotebookEdit` or `apply_patch` writes to a
+     protected path, so the call is refused. The caller supplies the list (SP-042). Reads are not
+     refused. Shell writes to protected paths are SP-042's.
+  4. `other_job_path`, `other_job_ancestor` and `other_job_repo`: a target lies in, contains, or
+     is a repo of an isolated space other than the session's. The call is refused.
+  5. `unreadable_space` (`strict` only): a target lies in, contains, or is a repo of a non-public
+     space the session may not read. The call is refused.
+  6. `malformed_target`: the cwd or a target is not an absolute path, or a repo is not
+     `owner/repo`. The call is refused.
+  7. `analysis_limit`: Targets stopped at one of its limits (time, target count, nesting, path or
+     text size, symlinks, brace groups) or had no absolute cwd or home. The call is refused in both
+     enforcing modes (RC-36). `TestLimitReasonsMatchTargets` keeps the list in step with
+     `targets*.go`.
+  8. `opaque_strict` (refused in `strict`) or `opaque_unverified` (allowed in `block-other-jobs`):
+     part of the call is opaque. Its known targets still count, so an opaque call that also names
+     another job is refused under rule 4.
+  9. `within_space`: every target is reachable, so the call is allowed.
+- **No space.** A session pinned to no space (`""`, quarantine, or a space the policy no longer
+  has) treats every isolated space as another job. In `strict`, it may reach only public spaces
+  and folders in no space.
+
+The rule id is safe to show and log: it never names the matched path or text. `TestDecideCases`
+runs 43 cases in all four modes, covering every SP-040.1 form, and `TestDecideDeterministic`
+replays 20,000 random inputs.
 
 ## Prompt context
 
