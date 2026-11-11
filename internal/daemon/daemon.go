@@ -152,6 +152,12 @@ type server struct {
 	spaces *spaces.Engine
 	// pins records each session's pin; nil when unavailable.
 	pins *pinRegistry
+	// enforcement holds the enforcement switches (SP-070); nil without a
+	// store, when every layer enforces.
+	enforcement *enforcement
+	// guardVerdict is the guard's verdict on a tool event, recorded while
+	// the guard is off or logging; nil until the guard decides (SP-040).
+	guardVerdict guardVerdictFunc
 	// toolEvents takes the events pre-tool-use and cwd-changed hooks send.
 	toolEvents toolEventIntake
 	// toolLog stores them (SP-014); nil when it could not be opened.
@@ -747,12 +753,16 @@ func Run(ctx context.Context) error {
 		safetyNet:    safetyNetFor(s),
 		settings:     settingsSvc,
 		toolLog:      tlog,
+		enforcement:  newEnforcement(ctx, store, settingsSvc),
 	}
 	if tlog != nil {
 		srv.toolEvents.setSink(srv.logToolEvent)
 	}
 	go srv.runSessionSweeps(runCtx, sessionSweepEvery)
 	go srv.runToolLogSweeps(runCtx, logSweepEvery)
+	if srv.enforcement != nil {
+		go srv.enforcement.run(runCtx, enforcementTick)
+	}
 	orchdv1.RegisterOrchdServer(gs, srv)
 	go func() {
 		<-runCtx.Done()

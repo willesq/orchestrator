@@ -185,6 +185,15 @@ service Orchd {
   // SummarizeToolLog sums the command log per space over a window: tool
   // calls, directory moves and moves into another space. Operator only.
   rpc SummarizeToolLog(SummarizeToolLogRequest) returns (ToolLogSummary);
+  // GetEnforcement lists every enforcement layer's switch (SP-070). Open to
+  // every caller, so every session's start digest can name a layer that is
+  // off; who set a switch is shown to the operator only.
+  rpc GetEnforcement(GetEnforcementRequest) returns (EnforcementState);
+  // SetEnforcement switches one enforcement layer, optionally for a time
+  // after which it reverts by itself. Operator-only: refused to callers
+  // descended from a harness or from orchd. Every change is logged with its
+  // time and caller and emits an event on the "spaces" stream.
+  rpc SetEnforcement(SetEnforcementRequest) returns (SetEnforcementResponse);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -441,6 +450,10 @@ message SpacesStatus {
   // "changed_outside_orchd" (orch.db's applied revision was edited).
   repeated string drift = 4;
   string error = 5;
+  // The enforcement switches that stop their layer enforcing (SP-070).
+  repeated EnforcementSwitch relaxed = 6;
+  // Set when orch.db's switches differ from orchd's or could not be read.
+  string enforcement_error = 7;
 }
 
 // MigrationProgress is how far a running hybrid migration has got.
@@ -1131,7 +1144,9 @@ message ToolEvent {
   string new_cwd = 11;   // cwd-changed only
   string command = 12;
   string targets = 13;   // the call's targets as JSON
-  string decision = 14;  // logged | refused
+  string decision = 14;  // logged | refused | not enforced
+  // The guard's rule; for a call it did not enforce (decision logged or
+  // not enforced), the verdict it would have given: "would refuse (<rule>)".
   string rule = 15;
   int64 dropped = 16;    // gap records: events lost before they were stored
   // The session the hook named, when orchd attributed the event elsewhere.
@@ -1642,4 +1657,47 @@ message PRLanding {
   int32 additions = 20;
   int32 deletions = 21;
   int32 binary_files = 22;  // their changes show in no line count or diff
+}
+
+// EnforcementSwitch is one enforcement layer's switch (SP-070).
+message EnforcementSwitch {
+  string layer = 1;          // memory | guard | terms | sandbox | hooks
+  string title = 2;          // the layer for people
+  string state = 3;          // on | off; the guard: off | log | block-other-jobs | strict
+  string default_state = 4;
+  repeated string states = 5;
+  bool relaxed = 6;          // the layer is not enforcing: off, or the guard in log
+  int64 set_at = 7;          // unix seconds; 0 when never switched
+  string set_by = 8;         // shown to the operator only
+  int64 until = 9;           // unix seconds a timed switch reverts; 0 untimed
+  string reverts_to = 10;    // the state a timed switch reverts to
+  // Why the layer does not enforce though its switch is on (relaxed is
+  // then set): today, tool hooks turned off or removed in Claude Code's
+  // settings outside the switch.
+  string problem = 11;
+}
+
+message GetEnforcementRequest {}
+
+message EnforcementState {
+  repeated EnforcementSwitch switches = 1;
+  // Set when orchd could not read the switches at startup, or orch.db's
+  // differ from the ones orchd enforces (changed outside orchd); the
+  // affected layers enforce.
+  string error = 2;
+}
+
+message SetEnforcementRequest {
+  string layer = 1;
+  string state = 2;
+  // A timed switch: it reverts to the state before it after this many
+  // seconds (at most 24 hours). 0 sets it until changed again.
+  int64 for_seconds = 3;
+}
+
+message SetEnforcementResponse {
+  EnforcementSwitch current = 1;
+  bool changed = 2;          // false when the layer already had that state
+  // What else the switch did or could not do, for the operator.
+  repeated string notes = 3;
 }

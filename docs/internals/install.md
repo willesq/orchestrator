@@ -100,7 +100,10 @@ binary as plain files in `~/.claude`.
 works with orchd down) and leaves out each orch item the user turned off: a disabled orch-hook
 event is left as it is, a disabled orch allow or credential deny rule is not added, and the
 summary names them. An unreadable store stops the plan instead of re-enabling them. See
-[settings.md](settings.md#orch-install-and-drift).
+[settings.md](settings.md#orch-install-and-drift). The tool hooks (`PreToolUse`, `CwdChanged`) are
+the exception (D-40): a settings toggle cannot keep them out. Install reads the operator's
+`hooks` [enforcement switch](daemon.md#enforcement-switches) from `orch.db` the same read-only
+way and leaves them out only while it is `off`; a store it cannot read leaves them in.
 
 ### Safety net
 
@@ -199,7 +202,8 @@ file and prints a `<harness> tool hooks` line under harness wiring: `wired` with
 `missing <events>` (a warning naming the `orch install` that fixes it), or, for Gemini,
 `not covered by spaces`. Spaces cover Claude Code and Codex only (D-20), so the Gemini adapter
 installs no tool hooks. A hook counts as wired only when its command is exactly
-`<bin>/orch-hook <slug>`; a hook turned off in orch's settings reads as missing.
+`<bin>/orch-hook <slug>`; a hook turned off by the operator's `hooks` enforcement switch reads as
+missing.
 
 ## Common
 

@@ -1,14 +1,18 @@
 package hook
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/redact"
+	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/spaces"
 )
 
 // updateStreams are the event streams surfaced mid-session: the session's own
@@ -95,4 +99,96 @@ func eventLine(e events.Event) string {
 		line = string(r[:maxEventLine-1]) + "…"
 	}
 	return line
+}
+
+// enforcementTimeout bounds asking orchd for the enforcement switches at
+// SessionStart, inside the start hook's budget.
+const enforcementTimeout = 500 * time.Millisecond
+
+// enforcementNotice is a digest line per enforcement layer that does not
+// enforce: switched off by the operator, the guard only logging, or the
+// tool hooks gone though their switch is on; each names the layer and since
+// when (SP-070, INV-16). It asks orchd, never a file a session could write
+// alone. When orchd does not answer it reads orch.db's switches read-only,
+// so a stopped orchd cannot hide a layer the operator switched off, and
+// says when it cannot tell at all.
+func enforcementNotice(cf clientFactory) []string {
+	if rep, ok := askEnforcement(cf); ok {
+		var lines []string
+		for _, sw := range rep.GetSwitches() {
+			if sw.GetRelaxed() {
+				lines = append(lines, switchLine(sw, ""))
+			}
+		}
+		if e := rep.GetError(); e != "" {
+			lines = append(lines, noticeLine(e))
+		}
+		return lines
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), enforcementTimeout)
+	defer cancel()
+	sw, err := spaces.ReadEnforcement(ctx, paths.DBFile())
+	if sw == nil {
+		return []string{noticeLine("orchd did not answer and orch.db's enforcement switches could not be read, so a layer may be switched off; check 'orch spaces enforce'")}
+	}
+	var lines []string
+	for _, s := range sw.At(time.Now()).Relaxed() {
+		lines = append(lines, switchLine(&orchdv1.EnforcementSwitch{
+			Layer: string(s.Layer), Title: s.Layer.Title(), State: s.State, SetAt: unixOrZero(s.SetAt),
+			Until: unixOrZero(s.Until), RevertsTo: s.Previous,
+		}, " (orchd did not answer; read from orch.db)"))
+	}
+	if err != nil {
+		lines = append(lines, noticeLine(err.Error()+"; those layers enforce"))
+	}
+	return lines
+}
+
+// askEnforcement asks orchd for the switches; ok is false when it did not
+// answer.
+func askEnforcement(cf clientFactory) (*orchdv1.EnforcementState, bool) {
+	client, cleanup, err := cf()
+	if err != nil {
+		return nil, false
+	}
+	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), enforcementTimeout)
+	defer cancel()
+	rep, err := client.GetEnforcement(ctx, &orchdv1.GetEnforcementRequest{})
+	return rep, err == nil && rep != nil
+}
+
+// switchLine is one layer that does not enforce, flattened and capped like
+// an event line.
+func switchLine(sw *orchdv1.EnforcementSwitch, suffix string) string {
+	what := "is switched off"
+	switch {
+	case sw.GetProblem() != "":
+		// Capped so the line's end survives eventLine's cap.
+		what = "does not enforce: " + capRunes(sw.GetProblem(), 160)
+	case sw.GetState() != "off":
+		what = "only logs (" + sw.GetState() + ")"
+	}
+	line := fmt.Sprintf("%s (%s) %s", sw.GetLayer(), sw.GetTitle(), what)
+	if at := sw.GetSetAt(); at > 0 {
+		line += " since " + time.Unix(at, 0).UTC().Format("2006-01-02 15:04 UTC")
+	}
+	if u := sw.GetUntil(); u > 0 {
+		line += "; it reverts to " + sw.GetRevertsTo() + " at " + time.Unix(u, 0).UTC().Format("2006-01-02 15:04 UTC")
+	}
+	line += "; spaces does not enforce this layer meanwhile" + suffix
+	return noticeLine(line)
+}
+
+// noticeLine is an enforcement notice as a digest line.
+func noticeLine(s string) string {
+	return eventLine(events.Event{Kind: "enforcement", Source: "orchd", Summary: s})
+}
+
+// capRunes cuts s to at most n runes, marking a cut.
+func capRunes(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
+	}
+	return s
 }

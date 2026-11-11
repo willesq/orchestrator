@@ -8,6 +8,7 @@ import (
 	"github.com/willesq/orchestrator/internal/safetynet"
 	"github.com/willesq/orchestrator/internal/safetynet/fakeclaude"
 	orchsettings "github.com/willesq/orchestrator/internal/settings"
+	"github.com/willesq/orchestrator/internal/spaces"
 )
 
 // TestMain points install's plugin steps at a simulated claude CLI, so no
@@ -17,5 +18,6 @@ func TestMain(m *testing.M) {
 		return fakeclaude.New(loc.ClaudeDir)
 	})
 	install.SetToggleLoader(func() (orchsettings.Toggles, error) { return orchsettings.Toggles{}, nil })
+	install.SetSwitchLoader(func() (spaces.Enforcement, error) { return spaces.DefaultEnforcement(), nil })
 	os.Exit(m.Run())
 }

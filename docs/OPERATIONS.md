@@ -59,6 +59,8 @@ orch spaces why <path|url|owner/repo|slack:ID|teams:ID>   # which space its cont
 orch spaces log [<session>|task:ID]   # a session's command log, in order
 orch spaces log summary [--since 168h]   # per space: tool calls, directory moves, moves into another space
 orch spaces log verify <session|task:ID>   # check a session's command log was not changed
+orch spaces enforce                   # every enforcement layer's switch
+orch spaces enforce guard off --for 15m   # switch a layer, optionally for a time (operator only)
 orch sessions list [--all]   # sessions and their state: active, idle, ended (with --all), unpinned
 ```
 
@@ -99,6 +101,15 @@ records are deleted 7 days after it ends and its process has exited (Settings, "
 long it sits idle, only cut to its newest 50 MB, and past 500 MB in total the sessions that
 ended first go early, all but their refused calls. `verify` shows how far retention cut a
 session, and orchd's log names every cut. See [internals/daemon.md](internals/daemon.md#command-log).
+
+Each enforcement layer has a switch for isolating behavior when debugging: `memory` (memory
+filtering), `guard` (`block-other-jobs` by default, `strict`, `log` or `off`), `terms`
+(outbound terms), `sandbox` (generated sandbox rules) and `hooks` (Claude Code's pre-tool-use and
+cwd-changed hooks). Only you can switch them, from your own terminal or Orch.app; `--for` makes
+the switch revert by itself. Every change is logged with its time and caller. While a layer is
+off, `orch status` and every new session's start digest say so, and the command log keeps
+recording. orch settings and `orch install` cannot turn the tool hooks off; `orch spaces enforce
+hooks off` can. See [internals/daemon.md](internals/daemon.md#enforcement-switches).
 
 `orch sessions list` shows each pinned session's space, directory and state. orchd reads it from
 the kernel: a session left open without `/exit` stays `idle` for as long as its claude or codex

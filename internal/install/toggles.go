@@ -1,6 +1,7 @@
 package install
 
 import (
+	"context"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/settings"
+	"github.com/willesq/orchestrator/internal/spaces"
 )
 
 // The settings provider and kinds for the items the Claude Code install
@@ -73,6 +75,44 @@ func OrchPermissionRules() []OrchRule {
 
 // loadToggles reads what the user turned off in orch's settings store.
 var loadToggles = func() (settings.Toggles, error) { return settings.LoadToggles(paths.DBFile()) }
+
+// loadSwitches reads the enforcement switches from orch.db; install reads
+// the hooks switch (D-40).
+var loadSwitches = func() (spaces.Enforcement, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return spaces.ReadEnforcement(ctx, paths.DBFile())
+}
+
+// SetSwitchLoader replaces how install reads the enforcement switches and
+// returns a function restoring the previous loader, for tests in other
+// packages.
+func SetSwitchLoader(f func() (spaces.Enforcement, error)) (restore func()) {
+	prev := loadSwitches
+	loadSwitches = f
+	return func() { loadSwitches = prev }
+}
+
+// toolHooksOff reports whether the operator switched the tool hooks off,
+// counting a timed switch whose time is up as reverted (orchd may not be
+// running to revert it). Reason, fail closed: switches that cannot be read,
+// or that do not match their change log, leave the hooks on, so install
+// writes them; they are off only by the operator's switch.
+func toolHooksOff() bool {
+	sw, err := loadSwitches()
+	return err == nil && sw.At(time.Now()).State(spaces.LayerHooks) == spaces.SwitchOff
+}
+
+// isToolHookEvent reports whether event and slug are one of the tool hooks
+// spaces depend on, which only the hooks switch turns off.
+func isToolHookEvent(event, slug string) bool {
+	for _, ev := range toolHookEvents[ProviderClaudeCode].events {
+		if ev.Event == event && ev.Slug == slug {
+			return true
+		}
+	}
+	return false
+}
 
 // SetToggleLoader replaces how install reads the settings toggles and
 // returns a function restoring the previous loader. It exists for tests in

@@ -628,6 +628,12 @@ public nonisolated struct Orchd_V1_SpacesStatus: Sendable {
 
   public var error: String = String()
 
+  /// The enforcement switches that stop their layer enforcing (SP-070).
+  public var relaxed: [Orchd_V1_EnforcementSwitch] = []
+
+  /// Set when orch.db's switches differ from orchd's or could not be read.
+  public var enforcementError: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2580,12 +2586,14 @@ public nonisolated struct Orchd_V1_ToolEvent: @unchecked Sendable {
     set {_uniqueStorage()._targets = newValue}
   }
 
-  /// logged | refused
+  /// logged | refused | not enforced
   public var decision: String {
     get {_storage._decision}
     set {_uniqueStorage()._decision = newValue}
   }
 
+  /// The guard's rule; for a call it did not enforce (decision logged or
+  /// not enforced), the verdict it would have given: "would refuse (<rule>)".
   public var rule: String {
     get {_storage._rule}
     set {_uniqueStorage()._rule = newValue}
@@ -4226,6 +4234,122 @@ public nonisolated struct Orchd_V1_PRLanding: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+/// EnforcementSwitch is one enforcement layer's switch (SP-070).
+public nonisolated struct Orchd_V1_EnforcementSwitch: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// memory | guard | terms | sandbox | hooks
+  public var layer: String = String()
+
+  /// the layer for people
+  public var title: String = String()
+
+  /// on | off; the guard: off | log | block-other-jobs | strict
+  public var state: String = String()
+
+  public var defaultState: String = String()
+
+  public var states: [String] = []
+
+  /// the layer is not enforcing: off, or the guard in log
+  public var relaxed: Bool = false
+
+  /// unix seconds; 0 when never switched
+  public var setAt: Int64 = 0
+
+  /// shown to the operator only
+  public var setBy: String = String()
+
+  /// unix seconds a timed switch reverts; 0 untimed
+  public var until: Int64 = 0
+
+  /// the state a timed switch reverts to
+  public var revertsTo: String = String()
+
+  /// Why the layer does not enforce though its switch is on (relaxed is
+  /// then set): today, tool hooks turned off or removed in Claude Code's
+  /// settings outside the switch.
+  public var problem: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_GetEnforcementRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_EnforcementState: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var switches: [Orchd_V1_EnforcementSwitch] = []
+
+  /// Set when orchd could not read the switches at startup, or orch.db's
+  /// differ from the ones orchd enforces (changed outside orchd); the
+  /// affected layers enforce.
+  public var error: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SetEnforcementRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var layer: String = String()
+
+  public var state: String = String()
+
+  /// A timed switch: it reverts to the state before it after this many
+  /// seconds (at most 24 hours). 0 sets it until changed again.
+  public var forSeconds: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SetEnforcementResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var current: Orchd_V1_EnforcementSwitch {
+    get {_current ?? Orchd_V1_EnforcementSwitch()}
+    set {_current = newValue}
+  }
+  /// Returns true if `current` has been explicitly set.
+  public var hasCurrent: Bool {self._current != nil}
+  /// Clears the value of `current`. Subsequent reads from it will return its default value.
+  public mutating func clearCurrent() {self._current = nil}
+
+  /// false when the layer already had that state
+  public var changed: Bool = false
+
+  /// What else the switch did or could not do, for the operator.
+  public var notes: [String] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _current: Orchd_V1_EnforcementSwitch? = nil
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "orchd.v1"
@@ -5364,7 +5488,7 @@ nonisolated extension Orchd_V1_StatusResponse: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SpacesStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}configured\0\u{3}applied_revision\0\u{3}draft_revision\0\u{1}drift\0\u{1}error\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}configured\0\u{3}applied_revision\0\u{3}draft_revision\0\u{1}drift\0\u{1}error\0\u{1}relaxed\0\u{3}enforcement_error\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5377,6 +5501,8 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
       case 3: try { try decoder.decodeSingularInt64Field(value: &self.draftRevision) }()
       case 4: try { try decoder.decodeRepeatedStringField(value: &self.drift) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.relaxed) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.enforcementError) }()
       default: break
       }
     }
@@ -5398,6 +5524,12 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
     if !self.error.isEmpty {
       try visitor.visitSingularStringField(value: self.error, fieldNumber: 5)
     }
+    if !self.relaxed.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.relaxed, fieldNumber: 6)
+    }
+    if !self.enforcementError.isEmpty {
+      try visitor.visitSingularStringField(value: self.enforcementError, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -5407,6 +5539,8 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
     if lhs.draftRevision != rhs.draftRevision {return false}
     if lhs.drift != rhs.drift {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.relaxed != rhs.relaxed {return false}
+    if lhs.enforcementError != rhs.enforcementError {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -12735,6 +12869,224 @@ nonisolated extension Orchd_V1_PRLanding: SwiftProtobuf.Message, SwiftProtobuf._
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_EnforcementSwitch: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".EnforcementSwitch"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}layer\0\u{1}title\0\u{1}state\0\u{3}default_state\0\u{1}states\0\u{1}relaxed\0\u{3}set_at\0\u{3}set_by\0\u{1}until\0\u{3}reverts_to\0\u{1}problem\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.layer) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.state) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.defaultState) }()
+      case 5: try { try decoder.decodeRepeatedStringField(value: &self.states) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.relaxed) }()
+      case 7: try { try decoder.decodeSingularInt64Field(value: &self.setAt) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.setBy) }()
+      case 9: try { try decoder.decodeSingularInt64Field(value: &self.until) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.revertsTo) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.problem) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.layer.isEmpty {
+      try visitor.visitSingularStringField(value: self.layer, fieldNumber: 1)
+    }
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 2)
+    }
+    if !self.state.isEmpty {
+      try visitor.visitSingularStringField(value: self.state, fieldNumber: 3)
+    }
+    if !self.defaultState.isEmpty {
+      try visitor.visitSingularStringField(value: self.defaultState, fieldNumber: 4)
+    }
+    if !self.states.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.states, fieldNumber: 5)
+    }
+    if self.relaxed != false {
+      try visitor.visitSingularBoolField(value: self.relaxed, fieldNumber: 6)
+    }
+    if self.setAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.setAt, fieldNumber: 7)
+    }
+    if !self.setBy.isEmpty {
+      try visitor.visitSingularStringField(value: self.setBy, fieldNumber: 8)
+    }
+    if self.until != 0 {
+      try visitor.visitSingularInt64Field(value: self.until, fieldNumber: 9)
+    }
+    if !self.revertsTo.isEmpty {
+      try visitor.visitSingularStringField(value: self.revertsTo, fieldNumber: 10)
+    }
+    if !self.problem.isEmpty {
+      try visitor.visitSingularStringField(value: self.problem, fieldNumber: 11)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_EnforcementSwitch, rhs: Orchd_V1_EnforcementSwitch) -> Bool {
+    if lhs.layer != rhs.layer {return false}
+    if lhs.title != rhs.title {return false}
+    if lhs.state != rhs.state {return false}
+    if lhs.defaultState != rhs.defaultState {return false}
+    if lhs.states != rhs.states {return false}
+    if lhs.relaxed != rhs.relaxed {return false}
+    if lhs.setAt != rhs.setAt {return false}
+    if lhs.setBy != rhs.setBy {return false}
+    if lhs.until != rhs.until {return false}
+    if lhs.revertsTo != rhs.revertsTo {return false}
+    if lhs.problem != rhs.problem {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_GetEnforcementRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetEnforcementRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_GetEnforcementRequest, rhs: Orchd_V1_GetEnforcementRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_EnforcementState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".EnforcementState"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}switches\0\u{1}error\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.switches) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.switches.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.switches, fieldNumber: 1)
+    }
+    if !self.error.isEmpty {
+      try visitor.visitSingularStringField(value: self.error, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_EnforcementState, rhs: Orchd_V1_EnforcementState) -> Bool {
+    if lhs.switches != rhs.switches {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SetEnforcementRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetEnforcementRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}layer\0\u{1}state\0\u{3}for_seconds\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.layer) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.state) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.forSeconds) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.layer.isEmpty {
+      try visitor.visitSingularStringField(value: self.layer, fieldNumber: 1)
+    }
+    if !self.state.isEmpty {
+      try visitor.visitSingularStringField(value: self.state, fieldNumber: 2)
+    }
+    if self.forSeconds != 0 {
+      try visitor.visitSingularInt64Field(value: self.forSeconds, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SetEnforcementRequest, rhs: Orchd_V1_SetEnforcementRequest) -> Bool {
+    if lhs.layer != rhs.layer {return false}
+    if lhs.state != rhs.state {return false}
+    if lhs.forSeconds != rhs.forSeconds {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SetEnforcementResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetEnforcementResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}current\0\u{1}changed\0\u{1}notes\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._current) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.changed) }()
+      case 3: try { try decoder.decodeRepeatedStringField(value: &self.notes) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._current {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.changed != false {
+      try visitor.visitSingularBoolField(value: self.changed, fieldNumber: 2)
+    }
+    if !self.notes.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.notes, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SetEnforcementResponse, rhs: Orchd_V1_SetEnforcementResponse) -> Bool {
+    if lhs._current != rhs._current {return false}
+    if lhs.changed != rhs.changed {return false}
+    if lhs.notes != rhs.notes {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -84,7 +84,7 @@ func dispatch(event string, p Payload, out io.Writer, cf clientFactory) error {
 		return userPromptSubmit(loadAutoRAG(), p, out, cf)
 	case "session-start":
 		pinSession(p, cf)
-		return sessionStart(p, out)
+		return sessionStartWith(p, out, enforcementNotice(cf))
 	case "stop":
 		return stop(p)
 	case "session-end":
