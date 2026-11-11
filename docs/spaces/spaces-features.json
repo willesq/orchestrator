@@ -1473,7 +1473,7 @@
         "id": "RC-92",
         "kind": "follow-up",
         "topic": "Flaky TestWatchTasksStreamsSnapshotChangesAndTicks",
-        "detail": "While three feature agents ran tests on this machine, internal/daemon's TestWatchTasksStreamsSnapshotChangesAndTicks failed in 2 of about 10 full package runs ('WatchTasks ended with context canceled', taskwatch_test.go:117). The test and internal/daemon/taskwatch.go are untouched by SP-070; it looks load-sensitive. Add it to the flaky list with RC-39 or fix the cancel race.",
+        "detail": "internal/daemon's TestWatchTasksStreamsSnapshotChangesAndTicks fails under load from parallel test runs ('WatchTasks ended with context canceled', taskwatch_test.go:117): about 4 of 16 full package runs on the SP-070 branch while three feature agents tested on this machine, 0 of 3 on main and 0 of 4 on the branch when the machine was quieter, 10 of 10 alone. The test and internal/daemon/taskwatch.go are untouched by SP-070. Likely cause: when the client cancels while WatchTasks is sending a tick or a change (the test's tick is 50 ms), the send returns the context error instead of WatchTasks returning nil. Fix in WatchTasks (return nil when ctx.Err() is set after a failed send) or add to the flaky list with RC-39.",
         "source": "https://github.com/willesq/orchestrator/pull/167",
         "raised": "2026-11-11",
         "affects": [
@@ -3084,14 +3084,15 @@
             "a1 (digest): TestSessionStartNamesSwitchedOffLayers (internal/hook/enforcement_test.go) passes at 10a0cd0 for an interactive session and a queued task: the SessionStart digest names 'guard (tool guard) is switched off since 2026-11-11 10:05 UTC; it reverts to block-other-jobs at 2026-11-11 10:20 UTC', the hooks layer and the terms layer in log, and not the enforcing memory layer. Also TestSessionStartReadsSwitchesWithoutOrchd (orchd down: read from orch.db, expired timers not named; unreadable store named) and TestSessionStartNamesEnforcementProblems.",
             "a1 (orch status): TestStatusNamesRelaxedLayers (internal/daemon) passes at 10a0cd0: Status names memory and guard with their set_at, hides set_by from a session, and still names them with no spaces policy; TestSpacesSectionNamesRelaxedLayers (internal/status/spaces_test.go) renders 'enforcement=guard is off' with 'since 2026-11-11 10:05', the revert time, 'set by operator (process 9)' and the command to switch back, with control characters stripped.",
             "a2: TestToolEventsNotEnforced (internal/daemon/enforcement_test.go) passes at 10a0cd0: through RecordToolEvent and the command log, with the guard off every pre-tool-use and cwd-changed event is still stored, with decision 'not enforced' and rule 'would refuse (other-job)' / 'would allow' from the guard verdict; in log the decision stays 'logged' with the would-be verdict; in strict nothing is rewritten; the chain verifies. The guard verdict is a seam (server.guardVerdict) until SP-040's Decide is wired (RC-86); with no verdict the record is still 'not enforced'.",
-            "DOD at 10a0cd0 (self-check): go test ./... exit 0; go vet ./... exit 0; gofmt -l internal: 0 lines; make cover 'All files >= 80%' (enforcement.go 98.0%, enforce_store.go 92.2%, enforce.go 100%, spaces_enforce.go 100%, hook/updates.go 97.4%, status.go 97.2%, install/toggles.go 90.5%); TestCommandLogNeverReachesRAG passes with the new reader on the log's path. Security: four security-audit rounds; every critical/high/medium fixed (rounds 1-4 found 1 high, 2+2+1+1 mediums), lows recorded as RC-90."
+            "DOD at 10a0cd0 (self-check): go test ./... exit 0; go vet ./... exit 0; gofmt -l internal: 0 lines; make cover 'All files >= 80%' (enforcement.go 98.0%, enforce_store.go 92.2%, enforce.go 100%, spaces_enforce.go 100%, hook/updates.go 97.4%, status.go 97.2%, install/toggles.go 90.5%); TestCommandLogNeverReachesRAG passes with the new reader on the log's path. Security: four security-audit rounds; every critical/high/medium fixed (rounds 1-4 found 1 high, 2+2+1+1 mediums), lows recorded as RC-90.",
+            "Independent verifier at 089d4b9: SP-070.1 a1-a4 and SP-070.2 a1-a2 PASS (a2 with the caveat that the would-be verdict is the RC-86 seam until SP-040); INV-13 and INV-16 PASS; DOD-2..DOD-9 PASS (CI app, test and macOS ORT build green on PR #167; 4 signed Conventional Commits; draft PR registered in ~/.pr-watch.json; verifier's own security read found 0 open critical/high/medium). DOD-1: go test ./... passed in the implementer's two full runs at 10a0cd0/089d4b9 and in CI; in the verifier's local runs only TestWatchTasksStreamsSnapshotChangesAndTicks failed (untouched by the diff; passes 10/10 alone; a cancel during a send returns the context error), recorded as RC-92."
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "089d4b9d33a9fb4e7f196398ad46527b76904dc1",
+      "verified_at": "2026-11-11T16:21:17Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "d51436cafcfd5be71cd5c5cbb9c23cb70d246bfbaab59d97dd4b548431c44ba9",
