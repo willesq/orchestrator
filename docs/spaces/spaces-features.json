@@ -1392,7 +1392,7 @@
         "id": "RC-66",
         "kind": "follow-up",
         "topic": "Flaky TestWatchTasksStreamsSnapshotChangesAndTicks hides internal/daemon from make cover",
-        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go) fails about one run in five on main at ea0b147 with 'WatchTasks ended with context canceled' (also under -race); SP-073 does not touch it. scripts/cover.sh appends a package's profile only when its tests pass, so when this test flakes the whole internal/daemon package silently drops out of the per-file gate and make cover still prints 'All files >= 80%'. Fix the test (a send racing the client's cancel), and make cover.sh fail, or at least warn, when a package's tests fail.",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go) fails about one run in five on main at ea0b147 with 'WatchTasks ended with context canceled' (also under -race); SP-073 does not touch it. scripts/cover.sh appends a package's profile only when its tests pass, so when this test flakes the whole internal/daemon package silently drops out of the per-file gate and make cover still prints 'All files >= 80%'. Fix the test (a send racing the client's cancel), and make cover.sh fail, or at least warn, when a package's tests fail. Also seen on PR #165: TestTargetsAuditRound2Scripts (internal/spaces/targets_audit2_test.go:153, 'fan-out sources', 6000 sourced scripts under a time budget) failed CI run 43049750035's first attempt with 'neither opaque nor reaching .../otherco' and passed on the re-run and locally; the budget-dependent case is likely flaky under CI load.",
         "source": "https://github.com/willesq/orchestrator/pull/165",
         "raised": "2026-11-11",
         "affects": [
@@ -2912,14 +2912,15 @@
           "evidence": [
             "a1: TestUnpinnedProcessChain (internal/daemon/toollog_chains_test.go) passes at 1cf9c2c: caller resolution of a hook under claude PID 501 holding no pin keeps that harness and its start time; its two events are stored in chain process:501-<start ns> with harness claude and the claimed session kept as evidence; a caller under no harness is still not logged; the operator reads it with 'process:501' or the full ID (a PID with no chain is NotFound) and verifies it; ListSessions shows the unpinned row with 2 tool events and a last activity; a session pinned later in that process gets PermissionDenied for process:501 and the full ID, reads only its own 'pwd', and its events go to its own chain; the liveness sweep then ends and anchors the process chain (copied into orch.db) and frees its place; retention keeps it while the process runs and, once the process has exited, expires it; with --all the exited process's chain is listed as ended, and not without --all.",
             "a1 (bounds and parsing): TestProcessChainCap: at most 8 unpinned processes have a chain open; the ninth process's events are dropped until one exits; reopening the log counts the open chains again (the first security audit's second medium finding). TestOwnerKindsAndProcessIDs and TestChainQueries (internal/toollog/anchors_test.go): process IDs parse and print, PID-only lookup, open chains, latest chain of a PID and per-process activity. TestSessionsList (internal/cli/sessions_cmd_test.go): an unpinned row with a log prints its counts.",
-            "a2: TestSessionCapSetting (internal/daemon/toollog_chains_test.go) passes at 1cf9c2c: sessions.command_log.max_session_mb is in the schema as a sensitive TypeInt ranged 10-1000, defaults to 50 (config.Defaults, logPolicy gives 50 MiB); 10, 200 and 1000 give that cap, while 0, 9, 1001 and -5 keep 50; a running session with about 12.8 MB of records keeps all 800 under the 50 MB cap and is cut to at most 10 MB (500-640 records) by a retention sweep with max_session_mb 10, and still verifies."
+            "a2: TestSessionCapSetting (internal/daemon/toollog_chains_test.go) passes at 1cf9c2c: sessions.command_log.max_session_mb is in the schema as a sensitive TypeInt ranged 10-1000, defaults to 50 (config.Defaults, logPolicy gives 50 MiB); 10, 200 and 1000 give that cap, while 0, 9, 1001 and -5 keep 50; a running session with about 12.8 MB of records keeps all 800 under the 50 MB cap and is cut to at most 10 MB (500-640 records) by a retention sweep with max_session_mb 10, and still verifies.",
+            "DOD at bf2672f (independent verifier, re-run): go test ./... exit 0; go vet ./... exit 0; gofmt -l on the 21 changed Go files: 0 lines; make cover 'All files >= 80%' with internal/daemon included (toollog_chains.go 85.1%, toollog/anchors.go 85.5%, toollog_anchors.go 89.4%, toollog.go 91.6%); criteria_sha256 recomputed and unchanged; security: two audit rounds, no open critical/high/medium (lows in RC-68, RC-69); docs/internals/daemon.md and config.md changed; all commits signed, Conventional, no co-author lines; draft PR #165 registered in ~/.pr-watch.json. CI run 43049750035: the first attempt failed TestTargetsAuditRound2Scripts in internal/spaces (not touched by this diff; passes locally), the re-run passed test and the macOS ORT build."
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "bf2672f09377e163b66999f844d224bc32c4ee99",
+      "verified_at": "2026-11-11T15:52:00Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "75ec414b2dc8e3f89b8904df10fe958a44fa16b522421a801ae451083fe97105",
