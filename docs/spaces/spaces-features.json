@@ -2988,7 +2988,7 @@
       "attempts": 1,
       "criteria_sha256": "d51436cafcfd5be71cd5c5cbb9c23cb70d246bfbaab59d97dd4b548431c44ba9",
       "branch": "feat/sp-070-enforcement-switches",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/167"
     },
     {
       "id": "SP-041",
