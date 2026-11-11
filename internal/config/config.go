@@ -239,6 +239,9 @@ type CommandLogSettings struct {
 	// MaxTotalMB caps the log file; the sessions that ended first are
 	// deleted to fit, never a running one.
 	MaxTotalMB int `mapstructure:"max_total_mb"`
+	// MaxSessionMB caps each running session's (or task's, or unpinned
+	// process's) records; the oldest other than refusals go first.
+	MaxSessionMB int `mapstructure:"max_session_mb"`
 }
 
 // SessionSummarySettings controls the model-written summary of each finished
@@ -382,6 +385,7 @@ func setDefaults(v *viper.Viper) {
 	// Command log retention (spaces SP-015).
 	v.SetDefault("sessions.command_log.retention", "7d")
 	v.SetDefault("sessions.command_log.max_total_mb", 500)
+	v.SetDefault("sessions.command_log.max_session_mb", 50)
 	// Queue worker: on, so a dispatched task runs. It acts only on tasks that
 	// were dispatched, in a permission mode that keeps the guard rails
 	// (bypassPermissions is refused), with dispatch denied to its sessions.

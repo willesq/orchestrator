@@ -16,14 +16,16 @@ func newSpacesLogCmd(cf clientFactory) *cobra.Command {
 	var after int64
 	var limit int
 	cmd := &cobra.Command{
-		Use:   "log [<session id | task:<task id>>]",
+		Use:   "log [<session id | task:<task id> | process:<pid>>]",
 		Short: "Show or check the command log of sessions' tool calls",
 		Long: `orchd records every tool call and directory change the pre-tool-use and
 cwd-changed hooks report, per session or queued task, in an owner-only file
 apart from orch.db. The log is never indexed into RAG.
 
-With a session ID (or session:<id> for one named like a subcommand) or
-task:<task id>, prints that log's records in order. In a terminal outside any
+With a session ID (or session:<id> for one named like a subcommand),
+task:<task id> or process:<pid> (a harness process that held no pin; the
+latest such process with that PID, or process:<pid>-<start> for one), prints
+that log's records in order. In a terminal outside any
 agent session any log can be read; inside a session only that session's own,
 which is also what it prints with no argument, and one read at a time: a second
 run while one is reading is refused.`,
@@ -154,11 +156,12 @@ func printToolLogSummary(out io.Writer, rep *orchdv1.ToolLogSummary) error {
 
 func newSpacesLogVerifyCmd(cf clientFactory) *cobra.Command {
 	return &cobra.Command{
-		Use:   "verify <session id | task:<task id>>",
+		Use:   "verify <session id | task:<task id> | process:<pid>>",
 		Short: "Check that a session's command log was not changed",
 		Long: `Recomputes the session's hash chain and reports every record that was
 modified, deleted or moved since orchd wrote it, and every chain head
-anchored at SessionEnd that no longer matches. Exits non-zero when the
+anchored at its end that no longer matches, either in the command log or in
+the copy of each anchor orchd keeps in orch.db. Exits non-zero when the
 chain is broken. Operator only: run it in a terminal outside any agent
 session.`,
 		Args: cobra.ExactArgs(1),

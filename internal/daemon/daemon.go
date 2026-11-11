@@ -708,12 +708,13 @@ func Run(ctx context.Context) error {
 	// Reason: the resolver needs the server, which is built after the log;
 	// it runs only once events arrive, after srv is set.
 	var srv *server
-	tlog, err := openToolLog(paths.ToolLogFile(), func(k toollog.Key) toollog.Owner { return srv.resolveClaim(k) })
+	tlog, err := openToolLogCopying(paths.ToolLogFile(), func(k toollog.Key) toollog.Owner { return srv.resolveClaim(k) }, store)
 	if err != nil {
 		log.Printf("orchd: command log is off: %v", err)
 	} else {
 		defer func() { _ = tlog.Close() }()
 		tlog.policy = logPolicy(s.Sessions.CommandLog)
+		tlog.taskStatus = tasks.Status
 	}
 	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf})
 	srv = &server{
@@ -753,6 +754,7 @@ func Run(ctx context.Context) error {
 	}
 	go srv.runSessionSweeps(runCtx, sessionSweepEvery)
 	go srv.runToolLogSweeps(runCtx, logSweepEvery)
+	go srv.runTaskAnchors(runCtx)
 	orchdv1.RegisterOrchdServer(gs, srv)
 	go func() {
 		<-runCtx.Done()

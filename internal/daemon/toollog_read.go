@@ -92,13 +92,14 @@ func (s *server) ListToolEvents(ctx context.Context, req *orchdv1.ListToolEvents
 func (s *server) toolLogOwner(ctx context.Context, requested string) (toollog.Owner, bool, error) {
 	if _, ok := operator(ctx); ok {
 		if requested == "" {
-			return toollog.Owner{}, true, grpcstatus.Error(codes.InvalidArgument, "name a session ID or task:<task id>")
+			return toollog.Owner{}, true, grpcstatus.Error(codes.InvalidArgument, "name a session ID, task:<task id> or process:<pid>")
 		}
 		o, err := toollog.ParseOwner(requested)
 		if err != nil {
 			return toollog.Owner{}, true, grpcstatus.Error(codes.InvalidArgument, err.Error())
 		}
-		return o, true, nil
+		o, err = s.toolLog.processChain(ctx, o)
+		return o, true, err
 	}
 	own, err := s.callerChain(ctx)
 	if err != nil {

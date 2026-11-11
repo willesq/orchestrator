@@ -515,6 +515,11 @@
         "id": "D-54",
         "decision": "All four SP-063 follow-ups become planned work in SP-074: scopes and PR watching for profile-only orgs; refusing GitHub calls a space's profile cannot read, with stricter gh_config_dir checks; the repo picker and PR-outcome tracker using the space's profile; a GitHub API quota cap per isolated account (was RC-10).",
         "date": "2026-11-10"
+      },
+      {
+        "id": "D-55",
+        "decision": "SP-073, SP-040 and SP-070 are worked in parallel by three independent agent sessions, each in its own worktree and draft PR, overriding session_procedure step 2 (one feature, one session at a time) for these three only; their dependencies are done and their code barely overlaps. To avoid id clashes each reserves a block of reconvene ids: SP-073 RC-66..RC-75, SP-040 RC-76..RC-85, SP-070 RC-86..RC-95. New confirmed_by_user decisions are recorded by the coordinating session. Whichever PR merges later is rebased onto main (plan file, orch.db migration numbers, regenerated proto stubs).",
+        "date": "2026-11-11"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -1379,6 +1384,69 @@
         "affects": [
           "SP-016",
           "SP-046",
+          "SP-054"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-66",
+        "kind": "follow-up",
+        "topic": "Flaky TestWatchTasksStreamsSnapshotChangesAndTicks hides internal/daemon from make cover",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go) fails about one run in five on main at ea0b147 with 'WatchTasks ended with context canceled' (also under -race); SP-073 does not touch it. scripts/cover.sh appends a package's profile only when its tests pass, so when this test flakes the whole internal/daemon package silently drops out of the per-file gate and make cover still prints 'All files >= 80%'. Fix the test (a send racing the client's cancel), and make cover.sh fail, or at least warn, when a package's tests fail. Also seen on PR #165: TestTargetsAuditRound2Scripts (internal/spaces/targets_audit2_test.go:153, 'fan-out sources', 6000 sourced scripts under a time budget) failed CI run 43049750035's first attempt with 'neither opaque nor reaching .../otherco' and passed on the re-run and locally; the budget-dependent case is likely flaky under CI load.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073",
+          "DOD-3"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-67",
+        "kind": "decision",
+        "topic": "Which task states anchor a task's command log chain",
+        "detail": "SP-073 anchors a queued task's chain once its ledger status is anything but pending or in_progress (queue.Unsettled): complete, failed (a timed-out run is failed with 'timed out after ...'), cancelled, and also blocked and interrupted, and only when no run of it is live. orchd follows the ledger through the task hub, which takes one of its 16 watcher slots (maxWatchers) for good; every retention sweep also anchors any task chain left open whose task is terminal. Confirm the states, and whether internal subscribers should be exempt from maxWatchers.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-68",
+        "kind": "decision",
+        "topic": "Limits of the orch.db copies of command log anchors (SP-073 audit lows and notes)",
+        "detail": "From the two SP-073 security reviews, accepted as Low or informational: (1) toollog.db and orch.db belong to the same user, so the copies are defense in depth against edits to toollog.db, not against a process that can write both; (2) at every open orchd copies anchors toollog.db holds that orch.db lacks (repairs a crash between the two writes), so an anchor only in toollog.db is reported only until the next orchd start; copies are never replaced; (3) pruned heads are copied only the first time (logs from before SP-073 are trusted as they were), and a cut copy lost in a crash or dropped past 10,000 waiting makes verify report that chain until a later cut moves the copy past it; a stronger fix writes the cut to orch.db before the toollog.db delete commits and lets verify accept a copy ahead of the file when the records between still link; (4) verify works per owner, so a chain deleted whole shows only when that owner is verified (consider 'orch spaces log verify --all' over orch.db's owners); (5) copy-at-open logs only how many anchors it copied, not whose; (6) a verify racing a retention cut is retried once and can still, rarely, report a cut not yet copied (never a false pass).",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-69",
+        "kind": "decision",
+        "topic": "Cap on unpinned harness process chains",
+        "detail": "D-36 logs a harness process holding no pin in its own chain. A running chain is never expired nor cut for the total cap, and any process named like a harness counts, so SP-073 allows at most 8 such chains open at once (maxProcessChains, a constant): events of further unpinned processes are dropped and counted, logged as one total per liveness sweep, until one exits or is pinned (a pinned process's chain is ended and its place freed). Worst case the process chains hold 8 x max_session_mb. Confirm 8, or make it a setting, and decide whether the drop log should name the processes.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-70",
+        "kind": "follow-up",
+        "topic": "Session list rows do not name an unpinned process's log chain",
+        "detail": "ListSessions shows an unpinned process's tool events, refusals and last event, but SessionInfo has no field for its chain ID (process:<pid>-<start ns>); 'orch spaces log process:<pid>' resolves the latest chain of that PID instead. A log_owner field was not added to the proto, to avoid regenerating the Go and Swift stubs while SP-040, SP-070 and SP-073 run in parallel (D-55). Add it (and show process chains in the app, SP-054) when convenient.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073",
           "SP-054"
         ],
         "status": "open"
@@ -2883,7 +2951,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestAnchorsCopiedIntoOrchDB (internal/daemon/toollog_anchors_test.go) passes at 1cf9c2c: two SessionEnds write anchors at records 4 and 8 in toollog.db and the same two (owner, seq, hash, at) in orch.db's toollog_anchors; VerifyToolLog on the intact chain reports no problem; with orch.db's copy of anchor 4 removed it reports '4: anchored in toollog.db but orch.db has no copy of the anchor'; with records 5-8 and anchor 8 deleted from the file, Store.Verify on the file alone passes but VerifyToolLog reports '8: anchored in orch.db but the anchor is missing from toollog.db' and '8: the anchored chain head is missing (records after it were removed)'.",
+            "a1 (store): TestAnchorCopiesCatchWhatTheFileCannot (internal/toollog/anchors_test.go) passes at 1cf9c2c: the writer hands each committed anchor to its onAnchor, equal to the file's anchors; five tamperings each pass Verify on the file alone and fail VerifyCopies with the named problem: cut after the last in-file anchor ('records after it were removed'), rewritten from the first record with every hash, link and file anchor recomputed ('the chain was rewritten'), anchor only in toollog.db ('orch.db has no copy'), anchor only in orch.db ('missing from toollog.db'), a copy that disagrees ('disagree'). TestForgedPrunedHeadReported: a chain deleted under a pruned head written into the file passes the file check and is reported against orch.db's pruned head copy (the first security audit's medium finding). TestAnchorCopiesWithRetention, TestCopiesAtOpen and TestCopiesRetried (internal/daemon) cover cuts copied through the cut hook, copies at open (missing anchors copied, existing copies never replaced, pruned heads only the first time) and retries.",
+            "a2: TestTaskChainAnchoredAtTerminalState (internal/daemon/toollog_anchors_test.go) passes at 1cf9c2c with the real queue.SQLTaskStore wired to the task hub as Run wires it: for each of complete, failed, timed out (failed with 'timed out after 30m0s') and cancelled (queue Control's End), the task's chain of two events gets an end record (record 3) and one anchor, also copied into orch.db; the failed task, retried (pending, in_progress, a live run), writes 'make test' as record 4 in the same chain, is not anchored while its run is live, and on complete gets end record 5 and a second anchor; VerifyToolLog reports no problem and 2 anchors. TestTaskChainAnchorCatchUp: a retention sweep anchors a terminal task's chain no change notice anchored, and leaves running, pending and unknown tasks unanchored."
+          ]
         },
         {
           "id": "SP-073.2",
@@ -2904,18 +2976,23 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestUnpinnedProcessChain (internal/daemon/toollog_chains_test.go) passes at 1cf9c2c: caller resolution of a hook under claude PID 501 holding no pin keeps that harness and its start time; its two events are stored in chain process:501-<start ns> with harness claude and the claimed session kept as evidence; a caller under no harness is still not logged; the operator reads it with 'process:501' or the full ID (a PID with no chain is NotFound) and verifies it; ListSessions shows the unpinned row with 2 tool events and a last activity; a session pinned later in that process gets PermissionDenied for process:501 and the full ID, reads only its own 'pwd', and its events go to its own chain; the liveness sweep then ends and anchors the process chain (copied into orch.db) and frees its place; retention keeps it while the process runs and, once the process has exited, expires it; with --all the exited process's chain is listed as ended, and not without --all.",
+            "a1 (bounds and parsing): TestProcessChainCap: at most 8 unpinned processes have a chain open; the ninth process's events are dropped until one exits; reopening the log counts the open chains again (the first security audit's second medium finding). TestOwnerKindsAndProcessIDs and TestChainQueries (internal/toollog/anchors_test.go): process IDs parse and print, PID-only lookup, open chains, latest chain of a PID and per-process activity. TestSessionsList (internal/cli/sessions_cmd_test.go): an unpinned row with a log prints its counts.",
+            "a2: TestSessionCapSetting (internal/daemon/toollog_chains_test.go) passes at 1cf9c2c: sessions.command_log.max_session_mb is in the schema as a sensitive TypeInt ranged 10-1000, defaults to 50 (config.Defaults, logPolicy gives 50 MiB); 10, 200 and 1000 give that cap, while 0, 9, 1001 and -5 keep 50; a running session with about 12.8 MB of records keeps all 800 under the 50 MB cap and is cut to at most 10 MB (500-640 records) by a retention sweep with max_session_mb 10, and still verifies.",
+            "DOD at bf2672f (independent verifier, re-run): go test ./... exit 0; go vet ./... exit 0; gofmt -l on the 21 changed Go files: 0 lines; make cover 'All files >= 80%' with internal/daemon included (toollog_chains.go 85.1%, toollog/anchors.go 85.5%, toollog_anchors.go 89.4%, toollog.go 91.6%); criteria_sha256 recomputed and unchanged; security: two audit rounds, no open critical/high/medium (lows in RC-68, RC-69); docs/internals/daemon.md and config.md changed; all commits signed, Conventional, no co-author lines; draft PR #165 registered in ~/.pr-watch.json. CI run 43049750035: the first attempt failed TestTargetsAuditRound2Scripts in internal/spaces (not touched by this diff; passes locally), the re-run passed test and the macOS ORT build."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "bf2672f09377e163b66999f844d224bc32c4ee99",
+      "verified_at": "2026-11-11T15:52:00Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "75ec414b2dc8e3f89b8904df10fe958a44fa16b522421a801ae451083fe97105",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-073-log-hardening",
+      "pr": "https://github.com/willesq/orchestrator/pull/165"
     },
     {
       "id": "SP-040",

@@ -34,7 +34,9 @@ space and directory each is pinned to. orchd reads liveness from the kernel:
 a session is active while its harness process runs and a hook event came in
 the last 30 minutes, idle while it runs with none for longer, and ended once
 SessionEnd came or the process is gone. Running claude, codex or gemini
-processes with no pin are listed as unpinned.
+processes with no pin are listed as unpinned, with the tool calls orchd logged
+for that process; read them with 'orch spaces log process:<pid>'. With --all,
+the logs of unpinned processes that have since exited are listed as ended.
 
 In a terminal outside any agent session every session is shown; inside a
 session only that session's row is.`,
@@ -85,9 +87,10 @@ func unixCell(sec int64) string {
 	return time.Unix(sec, 0).Local().Format("2006-01-02 15:04")
 }
 
-// countCell is a count, or "-" for an unpinned process, which has no log.
+// countCell is a count, or "-" for an unpinned process that has logged
+// nothing.
 func countCell(r *orchdv1.SessionInfo, n int64) string {
-	if r.GetSessionId() == "" {
+	if r.GetSessionId() == "" && r.GetToolEvents() == 0 && r.GetLastActivity() == 0 {
 		return "-"
 	}
 	return strconv.FormatInt(n, 10)

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -32,6 +33,9 @@ const (
 const (
 	OwnerSession = "session"
 	OwnerTask    = "task"
+	// OwnerProcess is a harness process that holds no pin (D-36); its ID is
+	// ProcessID's "<pid>-<start>".
+	OwnerProcess = "process"
 )
 
 // DecisionRefused is the decision of a call the tool guard refused. Only
@@ -46,33 +50,63 @@ const MaxField = 4096
 
 var idPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
-// Owner is whose chain a record belongs to: a pinned session or a queued
-// task, as orchd resolved the caller. It is never taken from a request.
+// processPattern is a process chain's ID, or a PID alone (ParseOwner).
+var processPattern = regexp.MustCompile(`^[1-9][0-9]{0,9}(-[1-9][0-9]{0,18})?$`)
+
+// Owner is whose chain a record belongs to: a pinned session, a queued
+// task, or a harness process with no pin, as orchd resolved the caller. It
+// is never taken from a request.
 type Owner struct {
 	Kind string
 	ID   string
 }
 
-// String is "task:<id>" for a task and the bare ID for a session, the form
-// ParseOwner reads.
+// String is "task:<id>" for a task, "process:<pid>-<start>" for a process
+// and the bare ID for a session, the form ParseOwner reads.
 func (o Owner) String() string {
-	if o.Kind == OwnerTask {
-		return OwnerTask + ":" + o.ID
+	if o.Kind == OwnerTask || o.Kind == OwnerProcess {
+		return o.Kind + ":" + o.ID
 	}
 	return o.ID
 }
 
-// ParseOwner reads "<session id>", "session:<id>" or "task:<id>".
+// ProcessID is the chain ID of the harness process pid started at started
+// (unix nanoseconds): the start time tells a reused PID's chain apart.
+func ProcessID(pid int, started int64) string {
+	return fmt.Sprintf("%d-%d", pid, started)
+}
+
+// ParseProcessID reads a process chain's ID; ok is false for anything else.
+func ParseProcessID(id string) (pid int, started int64, ok bool) {
+	p, s, found := strings.Cut(id, "-")
+	if !found || !processPattern.MatchString(id) {
+		return 0, 0, false
+	}
+	pid, err1 := strconv.Atoi(p)
+	started, err2 := strconv.ParseInt(s, 10, 64)
+	return pid, started, err1 == nil && err2 == nil
+}
+
+// ParseOwner reads "<session id>", "session:<id>", "task:<id>" or
+// "process:<pid>-<start>". "process:<pid>" alone is accepted too; the
+// caller resolves it to that PID's latest chain (LatestProcessChain).
 func ParseOwner(s string) (Owner, error) {
 	o := Owner{Kind: OwnerSession, ID: s}
 	if k, id, ok := strings.Cut(s, ":"); ok {
 		o = Owner{Kind: k, ID: id}
 	}
-	if o.Kind != OwnerSession && o.Kind != OwnerTask {
-		return Owner{}, fmt.Errorf("unknown log owner %q: use a session ID or task:<id>", o.Kind)
-	}
-	if !idPattern.MatchString(o.ID) {
-		return Owner{}, fmt.Errorf("IDs are 1 to 128 letters, digits, '-' or '_'")
+	switch o.Kind {
+	case OwnerSession, OwnerTask:
+		if !idPattern.MatchString(o.ID) {
+			return Owner{}, fmt.Errorf("IDs are 1 to 128 letters, digits, '-' or '_'")
+		}
+	case OwnerProcess:
+		_, _, full := ParseProcessID(o.ID)
+		if !processPattern.MatchString(o.ID) || (strings.Contains(o.ID, "-") && !full) {
+			return Owner{}, fmt.Errorf("a process chain is process:<pid> or process:<pid>-<start>")
+		}
+	default:
+		return Owner{}, fmt.Errorf("unknown log owner %q: use a session ID, task:<id> or process:<pid>", o.Kind)
 	}
 	return o, nil
 }

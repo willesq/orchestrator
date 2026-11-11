@@ -45,6 +45,11 @@ type resolvedCaller struct {
 	task agentrun.LiveRun
 	// why says why kind is callerNone, for logs.
 	why string
+	// harness and harnessProc are the nearest harness process above a
+	// callerNone caller when it holds no pin, so the command log can keep
+	// its events in that process's chain (D-36); empty otherwise.
+	harness     string
+	harnessProc procstat.Identity
 }
 
 // connCaller caches what a connection resolves to. Only results that cannot
@@ -115,7 +120,9 @@ func (r *callerResolver) resolve(ctx context.Context) resolvedCaller {
 		log.Printf("orchd: resolving process %d to its session: %v", a.pid, err)
 		return none("the session pins could not be read")
 	case !ok:
-		return none("no harness above the caller is pinned")
+		c := none("no harness above the caller is pinned")
+		c.harness, c.harnessProc = a.harness, a.harnessProc
+		return c
 	}
 	return resolvedCaller{kind: callerSession, pin: pin}
 }

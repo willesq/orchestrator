@@ -216,7 +216,12 @@ the command log (the hook events orchd records per session); with the log off it
 own times. Unpinned processes come from the process table (`procstat.Processes`, one sysctl;
 none outside macOS), matched by kernel name as `procstat.FindByName` does. A process named
 `node`, `bun`, `deno` or for a version number (Claude Code's native binary) is matched by its
-program, as [caller resolution](#queued-callers) does.
+program, as [caller resolution](#queued-callers) does. An unpinned process's row carries its
+[command log](#command-log) chain's tool-event count, refusals and last event (SP-073, D-36);
+with `all` the operator also sees the chains of unpinned processes that have since exited
+(`ended`) or been pinned (`unpinned`, the events from before the pin). Read one with
+`orch spaces log process:<pid>`. The liveness sweep also ends and anchors the chain of every
+unpinned process that has exited.
 
 `ListSessions` (all → sessions) returns, per row, the harness, session ID, PID, space, pinned
 directory, state, last activity, tool-event count, refusals (events whose decision is
@@ -285,7 +290,8 @@ orchd stores every event the [tool hooks](hooks.md#tool-hooks) hand to `RecordTo
 into RAG (INV-12): the log package imports only the standard library, SQLite and `redact`, and
 `TestCommandLogNeverReachesRAG` type-checks the repository and fails if any function reachable
 by calls from the code that takes, stores or reads tool events (`internal/toollog`,
-`internal/daemon/toollog.go`, `toollog_read.go`, `toolevents.go`) calls `IngestText`, `Upsert` or `Ingest`, or if
+`internal/daemon/toollog.go`, `toollog_read.go`, `toollog_anchors.go`, `toollog_chains.go`,
+`toolevents.go`) calls `IngestText`, `Upsert` or `Ingest`, or if
 any function both touches the log and calls one. A call through an interface may reach any
 method of that name; calls through function values are not followed.
 
@@ -294,15 +300,27 @@ method of that name; calls through function values are not followed.
   wider file is tightened at open. A symlink or anything but a regular file at that path is
   refused, and the log is then off (orchd logs why and counts and drops events as before).
 - **Whose:** each record belongs to one chain, keyed by the [caller orchd
-  resolved](#caller-sessions): a session's pin, or a queued task's ID (`task:<id>`, D-31). The
+  resolved](#caller-sessions): a session's pin, a queued task's ID (`task:<id>`, D-31), or a
+  harness process that holds no pin (`process:<pid>-<start>`, D-36). The
   `session_id` a hook sends is kept as `claimed_session`; it chooses the chain only when that
   session is pinned to the same harness process as the caller's pin (an earlier session of the
   process, before `/clear`), so a hook cannot write into another process's chain. That check
   reads `orch.db`, so it runs on the log's writer, never on the hook's RPC; dropped events are
-  resolved the same way, so their gap lands in the chain that lost them. Events from
-  the operator, from a task orchd cannot find, or from an unresolved caller are counted by
-  caller kind and not stored (RC-29): they have no owner, and storing them would let any local
-  process grow the log.
+  resolved the same way, so their gap lands in the chain that lost them. A hook whose nearest
+  harness process holds no pin (started before the hooks were installed, or one whose
+  SessionStart pin failed) logs into a chain keyed by that process: its PID and its start time in
+  unix nanoseconds, so a reused PID starts a new chain (SP-073, D-36). Its events share that
+  process's quota, its `claimed_session` is kept as evidence only, and a session pinned in the
+  process later writes and reads its own chain, never the process's. At most 8 unpinned processes
+  have a chain open at once (`maxProcessChains`, counted again from the file at open): a running
+  chain is never expired nor cut for the total cap, and any process named like a harness counts,
+  so without the bound a local process could grow the log without limit. Events of further
+  processes are dropped and counted (logged by the next liveness sweep) until one exits or is
+  pinned: the liveness sweep also ends the chain of a process that has since been pinned, whose
+  sessions log in their own chains from then on. Events from the operator,
+  from a task orchd cannot find, or from a caller under no harness are counted by caller kind
+  and not stored (RC-29): they have no owner, and storing them would let any local process
+  grow the log.
 - **What:** per record `seq`, `ts` (when orchd took it) and the hook's `hook_at`, `kind`
   (`event`, `gap` or `end`), harness, event, tool, tool_use_id, agent_id, agent_type, cwd,
   old/new cwd, `targets` (the JSON of [`spaces.Targets`](hooks.md#tool-call-targets)), the
@@ -330,16 +348,50 @@ method of that name; calls through function values are not followed.
   session can still hide what it ran by flooding its own share; the gap shows that it did. Events lost before they reach orchd (orchd down, or slower than the hook's 20 ms) leave
   no trace; the guard fails closed once it enforces.
 - **Integrity:** each record's hash is SHA-256 over its JSON with the previous record's hash, so
-  records chain per owner. At SessionEnd orchd writes an `end` record after the session's queued
-  events and anchors its hash in the `anchors` table, unless the chain is empty or already ends
-  in an end record: a repeated SessionEnd adds nothing, and a resumed session, which continues the
-  same chain, is anchored again at its next SessionEnd. One end per session is in flight at a
-  time; a SessionEnd that arrives meanwhile runs one more after it. `orch spaces log verify <session|task:<id>>` (`VerifyToolLog`, operator-only) recomputes
-  the chain and reports each record whose content no longer matches its hash, that no longer
-  links to the one before it, that is missing from the sequence, and each anchored head that is
-  gone or changed. It cannot see records removed after the last anchor, nor a chain someone
-  rewrote from its first record with the same code: the anchors live in the same file. It is
-  tamper-evidence against edits to the file, not a defense against a process that can write it.
+  records chain per owner. When a chain's owner ends orchd writes an `end` record after its
+  queued events and anchors its hash in the `anchors` table, unless the chain is empty or already
+  ends in an end record: a repeated end adds nothing, and a resumed session or a retried task,
+  which continues the same chain, is anchored again at its next end. A session ends at
+  SessionEnd (or when the liveness sweep finds its process gone); a queued task when its ledger
+  status becomes terminal (`complete`, `failed`, which includes a timed-out run, `blocked`,
+  `cancelled` or `interrupted`) and no run of it is live: orchd follows the task ledger's
+  changes (one of the task hub's 16 watcher slots), and every retention sweep, and the
+  follower when it starts or falls behind, also anchors any task chain left open whose task is
+  terminal; an unpinned harness process's chain when the liveness sweep finds the process gone
+  (SP-073, D-35, D-36). One end per chain is in flight at a time; an end that arrives meanwhile
+  runs one more after it.
+- **Copies in orch.db** (SP-073, D-35; `internal/daemon/toollog_anchors.go`, tables
+  `toollog_anchors` and `toollog_cuts` in `orch.db`): the writer hands every anchor it committed,
+  and retention every cut it committed (its pruned head), to orchd, which copies them into
+  `orch.db` on a goroutine of their own, so a slow `orch.db` never stalls the writer. An anchor
+  already copied is never replaced (a disagreeing one is logged); a copied pruned head only moves
+  forward. Copies `orch.db` refuses wait in memory (at most 10,000 of each; past that the oldest
+  are dropped and logged) and are written by the next hand-over, retention sweep or verify; one
+  handed over after the copier stopped (a sweep outliving shutdown) is written at once. A pruned
+  head whose copy is lost anyway (a crash between the cut and its copy) is reported by verify for
+  that chain until a later cut moves the copy past it. When
+  orchd opens the log it copies every anchor `toollog.db` holds that `orch.db` lacks, so a crash
+  between the two writes is repaired (an anchor added to the file by hand only constrains the
+  chain further). Pruned heads are copied at open only the first time (`toollog_copy_started`),
+  for a log that predates SP-073: copying them later would let a pruned head written into the file
+  by hand excuse the records it claims retention deleted. What was copied that way is only as
+  trustworthy as the file was then.
+  `orch spaces log verify <session|task:<id>|process:<pid>>` (`VerifyToolLog`,
+  operator-only) recomputes the chain and reports each record whose content no longer matches its
+  hash, that no longer links to the one before it, that is missing from the sequence, and each
+  anchored head that is gone or changed. It then compares the file with `orch.db`'s copies: an
+  anchor in only one store, a pair that disagrees, a copy whose record is gone or has another
+  hash, and a pruned head that differs from the copied one are reported, and the chain is then
+  checked against the copied pruned head, so records deleted under one written into the file by
+  hand show as missing. That catches what the file alone cannot: records removed after the last
+  anchor the file still holds (with the later anchors), a chain rewritten from its first record
+  with the same code (`TestAnchorCopiesCatchWhatTheFileCannot`), and a chain deleted under a
+  forged pruned head (`TestForgedPrunedHeadReported`). Records written after a chain's last
+  anchor in both stores are still unprotected until its next end. Both files belong to the same
+  user, so this is defense in depth against edits to `toollog.db`, not against a process that
+  can write both: it is tamper-evidence, not a defense. Verify works one chain at a time, so a
+  chain deleted whole shows only when that owner is verified. An anchor only in the file is
+  reported until orchd next opens the log, which copies it.
   Up to a chain's pruned head (retention, below) a missing record is no problem and a kept record
   links only to one kept just before it; retention keeps only refusals there, so any other record
   at or before the head is reported, as is a kept head record whose hash is not the head's. The
@@ -362,13 +414,15 @@ method of that name; calls through function values are not followed.
   process that keeps working is never expired, and an agent cannot start the clock on its own
   log. The end time is the latest of `ended_at`, `exited_at` and the chain's last record: for a
   session that ended normally that is within a minute of SessionEnd, and one ended early gets its
-  full retention after its process exits. A task, which has no end record, and a session chain
-  with no pin ended at their last record.
+  full retention after its process exits. A task and a session chain with no pin ended at their
+  last record (a task's end record once it is terminal). An unpinned harness process's chain runs
+  while that PID runs with the same start time and ended at its last record once it exits.
   - An ended chain loses every record except refusals `sessions.command_log.retention` after it
     ended (`3d`, `7d` or `30d`; default `7d`, [config.md](config.md)). A refusal (decision
     `refused`, written by the guard, SP-041) goes once it is also 90 days old.
-  - A running chain is never expired, however long it is idle. Over 50 MB of records (the stored
-    text plus 64 bytes a record) it loses its oldest records except refusals until it fits.
+  - A running chain is never expired, however long it is idle. Over
+    `sessions.command_log.max_session_mb` of records (default 50, 10 to 1000; the stored text plus
+    64 bytes a record) it loses its oldest records except refusals until it fits.
   - Then, while the file's pages in use exceed `sessions.command_log.max_total_mb` (default 500),
     the chains that ended first lose, early, what an expired chain loses: everything but
     refusals under 90 days old. A running chain is never cut for it, and refusals under 90 days
@@ -400,12 +454,11 @@ method of that name; calls through function values are not followed.
   - **Limits.** The total cap is the one place retention deletes records before their time, and
     anything that writes the log fills it: ten sessions busy at once, or an agent flooding events
     push the ended sessions' records other than refusals out early. Each chain of a running
-    process may keep 50 MB, and a process keeps a chain for every session it ended early
+    process may keep the per-session cap (50 MB by default), and a process keeps a chain for every session it ended early
     (each `/clear`), so one long-lived process can hold several. A pruned head written into the
-    file by hand still excuses any records deleted before it, refusals included, when nothing
-    other than refusals is kept there and the next record links to it (a chain deleted whole, or
-    a prefix up to a record whose hash is copied); `verify` then shows the cut, and orchd's log has
-    no line for it. A large delete holds the write lock for its whole statement; the writer waits
+    file by hand is reported by `verify` against `orch.db`'s copy (above); without `orch.db` it
+    still excuses any records deleted before it, refusals included, when nothing other than
+    refusals is kept there and the next record links to it, and orchd's log has no line for it. A large delete holds the write lock for its whole statement; the writer waits
     for it, and events that overflow the queue meanwhile are dropped and recorded as a gap. Pins are not pruned here (RC-50), and the policy is read when orchd starts.
 - **Reading** (SP-016, INV-12; `internal/daemon/toollog_read.go`, `toollog.Store.Page`,
   `toollog.Store.ActivitySince`): `ListToolEvents` returns one chain's records in sequence order
@@ -427,7 +480,9 @@ method of that name; calls through function values are not followed.
   session. A session `/clear` replaced is readable only by the operator. A queued task reads only `task:<its id>` (`ListToolEvents` is in
   `taskCallable`; the handler narrows it). Any other caller (an unpinned harness, a task orchd
   cannot find), and any request naming another chain, gets the same `PermissionDenied` whether or
-  not that chain exists. `SummarizeToolLog` (operator-only) sums every chain's `event` records
+  not that chain exists; that includes an unpinned process's chain, which only the operator reads
+  (`process:<pid>` names the latest chain of that PID, `process:<pid>-<start>` one chain;
+  `NotFound` when the PID has none). `SummarizeToolLog` (operator-only) sums every chain's `event` records
   taken in a window (7 days unless `since` names an earlier time) per space: sessions and tasks
   with events, tool calls (`pre-tool-use`), refusals, directory moves (`cwd-changed`) and moves
   into another space, which are moves whose new directory a session would be pinned to a
@@ -436,11 +491,10 @@ method of that name; calls through function values are not followed.
   none of the lookups pinning relies on, and an uncached repo keeps the owner its remote names).
   Placing stops after 20 seconds. A session counts in the
   space it is pinned to; tasks, which have no space yet, sessions pinned with no policy applied,
-  and chains with no pin are under `""`, and their moves are not compared. One summary places at
+  chains with no pin and unpinned processes are under `""`, and their moves are not compared. One summary places at
   most 500 distinct directories; moves past that or the time limit are counted as unplaced. Moves a Bash `cd` makes without a `cwd-changed` event (Codex
-  sends none) are not counted. CLI: `orch spaces log [<session>|task:<id>]`, `orch spaces log
-  summary [--since 168h]`.
-- **Not yet:** tasks have no end record: their runs send no SessionEnd.
+  sends none) are not counted. CLI: `orch spaces log [<session>|task:<id>|process:<pid>]`,
+  `orch spaces log summary [--since 168h]`.
 
 Clients dial `unix://<socket>` lazily (failure surfaces on the first call) and set their own
 deadlines: hooks 0.5 s for writes and 3 s for prompt search; `orch status` 2–3 s; long CLI
@@ -464,9 +518,9 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `Restart` | name (empty = all) → restarted | restarts subsystems in place, never the process; unknown → `NotFound` |
 | `PinSession` | session_id, cwd, parent_session_id, source → the pin | see [session pins](#session-pins); `source` `resume` moves a pin to a new harness process; refused to queued tasks |
 | `EndSession` | session_id → ended_at | sets `ended_at` once; only the pinned harness process; refused to queued tasks; writes the session's [command log](#command-log) end record and anchors its head in the background |
-| `RecordToolEvent` | event (`pre-tool-use`/`cwd-changed`), session_id, cwd, tool_name, tool_input (≤ 1 MiB), tool_input_size, tool_use_id, agent_id, agent_type, old_cwd, new_cwd, at → — | takes a [tool hook](hooks.md#tool-hooks) event and answers at once; attributed to the [caller orchd resolved](#caller-sessions), never to session_id; open to queued tasks. Counted by caller kind and stored in the [command log](#command-log) when its caller is a pinned session or a running task; never indexed |
-| `ListSessions` | all → sessions (harness, session_id, harness_pid, space, first_cwd, state, last_activity, tool_events, refusals, ended_at) | runs a [liveness](#session-liveness) sweep first; the operator sees every session and unpinned harness process, a session only its own row, anyone else none; refused to queued tasks; ended sessions only with `all` |
-| `VerifyToolLog` | owner (session ID or `task:<id>`) → records, anchors, ends, gaps, dropped, problems | recomputes the owner's [command log](#command-log) chain after storing what is queued; operator-only |
+| `RecordToolEvent` | event (`pre-tool-use`/`cwd-changed`), session_id, cwd, tool_name, tool_input (≤ 1 MiB), tool_input_size, tool_use_id, agent_id, agent_type, old_cwd, new_cwd, at → — | takes a [tool hook](hooks.md#tool-hooks) event and answers at once; attributed to the [caller orchd resolved](#caller-sessions), never to session_id; open to queued tasks. Counted by caller kind and stored in the [command log](#command-log) when its caller is a pinned session, a running task or a harness process holding no pin; never indexed |
+| `ListSessions` | all → sessions (harness, session_id, harness_pid, space, first_cwd, state, last_activity, tool_events, refusals, ended_at) | runs a [liveness](#session-liveness) sweep first; the operator sees every session and unpinned harness process (with its command log chain's counts and last event), a session only its own row, anyone else none; refused to queued tasks; ended sessions, and the chains of unpinned processes that exited or were pinned since, only with `all` |
+| `VerifyToolLog` | owner (session ID, `task:<id>` or `process:<pid>[-<start>]`) → records, anchors, ends, gaps, dropped, problems | recomputes the owner's [command log](#command-log) chain after storing what is queued, and compares its anchors with orch.db's copies; operator-only |
 | `SummarizeSession` | session_id, transcript_path, tags → accepted | ID `^[A-Za-z0-9_-]{1,128}$`; path absolute, `.jsonl`, regular file; enqueue only (backlog 32) |
 | `RecommendModel` | task_kind → route, from_table | see [tasks.md](tasks.md) |
 | `RateTask` | id, rating (`good`/`rework`/`bad`) → — | sets the task's rating; with the PR-outcome sweep, the only ledger writes outside the queue |

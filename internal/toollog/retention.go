@@ -129,6 +129,9 @@ func (s *Store) Sweep(ctx context.Context, now time.Time, p Policy, state StateF
 			return false
 		}
 		k.Reason = reason
+		if s.onCut != nil {
+			s.onCut(k)
+		}
 		res.Cuts = append(res.Cuts, k)
 		res.Records += k.Deleted
 		return true
