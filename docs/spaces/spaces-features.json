@@ -2848,7 +2848,7 @@
       "attempts": 1,
       "criteria_sha256": "75ec414b2dc8e3f89b8904df10fe958a44fa16b522421a801ae451083fe97105",
       "branch": "feat/sp-073-log-hardening",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/165"
     },
     {
       "id": "SP-040",
