@@ -2898,7 +2898,7 @@
       "attempts": 1,
       "criteria_sha256": "7617a8f9e308fa2c249ac0eb4a7c191eb7248d4617881c8328f7af0b776f8272",
       "branch": "feat/sp-040-guard-decide",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/166"
     },
     {
       "id": "SP-070",
