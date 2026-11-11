@@ -515,6 +515,11 @@
         "id": "D-54",
         "decision": "All four SP-063 follow-ups become planned work in SP-074: scopes and PR watching for profile-only orgs; refusing GitHub calls a space's profile cannot read, with stricter gh_config_dir checks; the repo picker and PR-outcome tracker using the space's profile; a GitHub API quota cap per isolated account (was RC-10).",
         "date": "2026-11-10"
+      },
+      {
+        "id": "D-55",
+        "decision": "SP-073, SP-040 and SP-070 are worked in parallel by three independent agent sessions, each in its own worktree and draft PR, overriding session_procedure step 2 (one feature, one session at a time) for these three only; their dependencies are done and their code barely overlaps. To avoid id clashes each reserves a block of reconvene ids: SP-073 RC-66..RC-75, SP-040 RC-76..RC-85, SP-070 RC-86..RC-95. New confirmed_by_user decisions are recorded by the coordinating session. Whichever PR merges later is rebased onto main (plan file, orch.db migration numbers, regenerated proto stubs).",
+        "date": "2026-11-11"
       }
     ],
     "recommended_pending_confirmation": [],
