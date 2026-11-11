@@ -1387,6 +1387,69 @@
           "SP-054"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-66",
+        "kind": "follow-up",
+        "topic": "Flaky TestWatchTasksStreamsSnapshotChangesAndTicks hides internal/daemon from make cover",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go) fails about one run in five on main at ea0b147 with 'WatchTasks ended with context canceled' (also under -race); SP-073 does not touch it. scripts/cover.sh appends a package's profile only when its tests pass, so when this test flakes the whole internal/daemon package silently drops out of the per-file gate and make cover still prints 'All files >= 80%'. Fix the test (a send racing the client's cancel), and make cover.sh fail, or at least warn, when a package's tests fail.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073",
+          "DOD-3"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-67",
+        "kind": "decision",
+        "topic": "Which task states anchor a task's command log chain",
+        "detail": "SP-073 anchors a queued task's chain once its ledger status is anything but pending or in_progress (queue.Unsettled): complete, failed (a timed-out run is failed with 'timed out after ...'), cancelled, and also blocked and interrupted, and only when no run of it is live. orchd follows the ledger through the task hub, which takes one of its 16 watcher slots (maxWatchers) for good; every retention sweep also anchors any task chain left open whose task is terminal. Confirm the states, and whether internal subscribers should be exempt from maxWatchers.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-68",
+        "kind": "decision",
+        "topic": "Limits of the orch.db copies of command log anchors (SP-073 audit lows and notes)",
+        "detail": "From the two SP-073 security reviews, accepted as Low or informational: (1) toollog.db and orch.db belong to the same user, so the copies are defense in depth against edits to toollog.db, not against a process that can write both; (2) at every open orchd copies anchors toollog.db holds that orch.db lacks (repairs a crash between the two writes), so an anchor only in toollog.db is reported only until the next orchd start; copies are never replaced; (3) pruned heads are copied only the first time (logs from before SP-073 are trusted as they were), and a cut copy lost in a crash or dropped past 10,000 waiting makes verify report that chain until a later cut moves the copy past it; a stronger fix writes the cut to orch.db before the toollog.db delete commits and lets verify accept a copy ahead of the file when the records between still link; (4) verify works per owner, so a chain deleted whole shows only when that owner is verified (consider 'orch spaces log verify --all' over orch.db's owners); (5) copy-at-open logs only how many anchors it copied, not whose; (6) a verify racing a retention cut is retried once and can still, rarely, report a cut not yet copied (never a false pass).",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-69",
+        "kind": "decision",
+        "topic": "Cap on unpinned harness process chains",
+        "detail": "D-36 logs a harness process holding no pin in its own chain. A running chain is never expired nor cut for the total cap, and any process named like a harness counts, so SP-073 allows at most 8 such chains open at once (maxProcessChains, a constant): events of further unpinned processes are dropped and counted, logged as one total per liveness sweep, until one exits or is pinned (a pinned process's chain is ended and its place freed). Worst case the process chains hold 8 x max_session_mb. Confirm 8, or make it a setting, and decide whether the drop log should name the processes.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-70",
+        "kind": "follow-up",
+        "topic": "Session list rows do not name an unpinned process's log chain",
+        "detail": "ListSessions shows an unpinned process's tool events, refusals and last event, but SessionInfo has no field for its chain ID (process:<pid>-<start ns>); 'orch spaces log process:<pid>' resolves the latest chain of that PID instead. A log_owner field was not added to the proto, to avoid regenerating the Go and Swift stubs while SP-040, SP-070 and SP-073 run in parallel (D-55). Add it (and show process chains in the app, SP-054) when convenient.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073",
+          "SP-054"
+        ],
+        "status": "open"
       }
     ]
   },
