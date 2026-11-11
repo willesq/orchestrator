@@ -1399,7 +1399,8 @@
           "SP-073",
           "DOD-3"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "The flaky-test part was fixed on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction); see RC-92. Still open: scripts/cover.sh silently drops a package whose tests fail, so make cover can print 'All files >= 80%' with that package missing. TestTargetsAuditRound2Scripts' budget-dependent case is also unaddressed."
       },
       {
         "id": "RC-67",
@@ -1614,7 +1615,8 @@
         "affects": [
           "SP-070"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction): WatchTasks now returns nil when a read or send fails after the client's context is done (a cancel during a snapshot, change or tick read, or select picking a ready tick or change over ctx.Done). TestWatchTasksEndsCleanlyWhenClientGoesAwayMidRead cancels at each read point and failed on every run before the fix."
       },
       {
         "id": "RC-93",
@@ -1628,7 +1630,8 @@
           "SP-073",
           "SP-070"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "Part (1) fixed on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction): WatchTasks ends cleanly when the client goes away mid-read; see RC-92. Part (2) remains open: TestDecideCases' 100 ms Targets budget can be exhausted under load."
       }
     ]
   },
