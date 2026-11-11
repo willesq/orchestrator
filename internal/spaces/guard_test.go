@@ -173,7 +173,9 @@ func TestDecideCases(t *testing.T) {
 					w = c.strict
 				}
 				got := Decide(pol, c.pin, Enforcement{Guard: mode}, c.ev)
-				enforced := mode.Enforcing() && c.ev.Kind == EventPreToolUse
+				// Reason: spelled out rather than taken from Enforcing, so the
+				// test checks that off and log never refuse.
+				enforced := (mode == GuardBlockOtherJobs || mode == GuardStrict) && c.ev.Kind == EventPreToolUse
 				verdict := Allow
 				if enforced {
 					verdict = w.v
