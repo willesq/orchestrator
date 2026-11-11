@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -38,6 +39,13 @@ const endAnchorTimeout = 30 * time.Second
 // to be stored before it checks the chain.
 const verifyFlushTimeout = 10 * time.Second
 
+// The range sessions.command_log.max_session_mb may take (SP-073), as the
+// settings schema offers it.
+const (
+	minSessionMB = 10
+	maxSessionMB = 1000
+)
+
 // logSweepEvery is how often retention runs over the command log (SP-015).
 const logSweepEvery = 10 * time.Minute
 
@@ -46,15 +54,29 @@ const logSweepEvery = 10 * time.Minute
 type toolLog struct {
 	store  *toollog.Store
 	writer *toollog.Writer
-	// ending holds the sessions whose end record is being written, so a
-	// repeated SessionEnd starts no second writer wait; true means another
-	// SessionEnd came meanwhile and one more End runs after this one.
+	// ending holds the chains whose end record is being written, so a
+	// repeated end starts no second writer wait; true means another end
+	// came meanwhile and one more End runs after this one.
 	endMu  sync.Mutex
-	ending map[string]bool
+	ending map[toollog.Owner]bool
 	// policy is what retention keeps (SP-015).
 	policy toollog.Policy
+	// copies keeps a copy of each anchor and pruned head in orch.db
+	// (D-35); nil without orch.db, and then verify checks the file alone.
+	copies *logCopies
+	// procs holds the unpinned harness processes that have a chain open
+	// (D-36), at most maxProcessChains; procDropped counts the events of
+	// processes refused one.
+	procMu      sync.Mutex
+	procs       map[toollog.Owner]bool
+	procDropped int64
 	// running reports whether a task runs; nil asks the current runner.
 	running func(taskID string) bool
+	// taskStatus reads a task's ledger status, for anchoring its chain once
+	// it is terminal (D-35); nil anchors no task chain. Reason: a function
+	// value, so the command log's call-graph check (toollog
+	// TestCommandLogNeverReachesRAG) does not follow every Get method.
+	taskStatus func(ctx context.Context, id string) (string, bool, error)
 	// flushes shares one writer flush among concurrent readers.
 	flushes singleflight.Group
 	// reading holds the chains an agent is reading now (ListToolEvents).
@@ -65,12 +87,41 @@ type toolLog struct {
 // openToolLog opens the command log at path and starts its writer; resolve
 // picks the chain of an event whose hook named another session.
 func openToolLog(path string, resolve toollog.Resolver) (*toolLog, error) {
+	return openToolLogCopying(path, resolve, nil)
+}
+
+// openToolLogCopying is openToolLog that also copies every anchor and
+// every retention cut into orch (orch.db) when it is not nil (D-35); see
+// logCopies.copyAtOpen for what is copied at open.
+func openToolLogCopying(path string, resolve toollog.Resolver, orch *sql.DB) (*toolLog, error) {
 	st, err := toollog.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	return &toolLog{store: st, writer: toollog.NewWriter(st, toollog.DefaultQueue, resolve), ending: map[string]bool{},
-		policy: toollog.DefaultPolicy()}, nil
+	ctx := context.Background()
+	l := &toolLog{store: st, ending: map[toollog.Owner]bool{}, policy: toollog.DefaultPolicy(), procs: map[toollog.Owner]bool{}}
+	open, err := st.OpenChains(ctx, toollog.OwnerProcess)
+	if err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	for _, o := range open {
+		l.procs[o] = true
+	}
+	var onAnchor func([]toollog.Anchor)
+	if orch != nil {
+		l.copies = newLogCopies(orch)
+		if err := l.copies.copyAtOpen(ctx, st); err != nil {
+			// Reason: the log still works; verify then reports the
+			// anchors orch.db lacks, which is what an operator should see.
+			log.Printf("orchd: command log: copying existing anchors into orch.db: %v", err)
+		}
+		l.copies.start()
+		st.SetCutHook(l.copies.addCut)
+		onAnchor = l.copies.addAnchors
+	}
+	l.writer = toollog.NewWriterWithAnchors(st, toollog.DefaultQueue, resolve, onAnchor)
+	return l, nil
 }
 
 // logPolicy is the command log's retention from the settings. A value
@@ -93,6 +144,13 @@ func logPolicy(c config.CommandLogSettings) toollog.Policy {
 	case c.MaxTotalMB != 0:
 		log.Printf("orchd: command log: max_total_mb %d is outside 100-100000; keeping %d", c.MaxTotalMB, p.TotalCap>>20)
 	}
+	switch {
+	case c.MaxSessionMB >= minSessionMB && c.MaxSessionMB <= maxSessionMB:
+		p.SessionCap = int64(c.MaxSessionMB) << 20
+	case c.MaxSessionMB != 0:
+		log.Printf("orchd: command log: max_session_mb %d is outside %d-%d; keeping %d",
+			c.MaxSessionMB, minSessionMB, maxSessionMB, p.SessionCap>>20)
+	}
 	return p
 }
 
@@ -103,9 +161,11 @@ func logPolicy(c config.CommandLogSettings) toollog.Policy {
 // keeps writing. So an idle session left open is never expired, and a
 // session ended by /clear keeps its log until its process exits. It ended
 // at the later of ended_at and exited_at (when the liveness sweep saw the
-// process gone); until the sweep has seen that, it still runs here. A task runs while the current runner runs it; it has
-// no end record, so it ended at its last record. A session with no pin
-// ended at its last record too.
+// process gone); until the sweep has seen that, it still runs here. A task
+// runs while the current runner runs it, and ended at its last record (its
+// end record once it reached a terminal state). An unpinned harness process
+// runs until it exits, and ended at its last record (D-36). A session with
+// no pin ended at its last record too.
 func (s *server) chainState(ctx context.Context, o toollog.Owner) (toollog.ChainState, error) {
 	switch o.Kind {
 	case toollog.OwnerSession:
@@ -126,6 +186,8 @@ func (s *server) chainState(ctx context.Context, o toollog.Owner) (toollog.Chain
 		return toollog.ChainState{Ended: end}, nil
 	case toollog.OwnerTask:
 		return toollog.ChainState{Live: s.taskRunning(o.ID)}, nil
+	case toollog.OwnerProcess:
+		return s.processState(o), nil
 	}
 	return toollog.ChainState{}, fmt.Errorf("unknown owner kind %q", o.Kind)
 }
@@ -147,6 +209,11 @@ func (s *server) sweepToolLog(ctx context.Context, now time.Time) {
 	if s.toolLog == nil {
 		return
 	}
+	if s.toolLog.copies != nil {
+		s.toolLog.copies.flush()
+	}
+	// Task chains whose end no change notice anchored (D-35).
+	s.endSettledTasks(ctx)
 	res, err := s.toolLog.store.Sweep(ctx, now, s.toolLog.policy, s.chainState)
 	if err != nil {
 		// Reason: chains that failed are retried next sweep; the rest
@@ -187,16 +254,19 @@ func (s *server) runToolLogSweeps(ctx context.Context, every time.Duration) {
 // Close stores what is queued and closes the file.
 func (l *toolLog) Close() error {
 	l.writer.Close()
+	if l.copies != nil {
+		l.copies.close()
+	}
 	return l.store.Close()
 }
 
 // logToolEvent is the intake's sink. Events of callers orchd cannot tie to
-// a pinned session or a running task are not stored (RC-29): their owner is
-// unknown, and storing them would let any local process grow the log. The
-// intake has already counted them.
+// a pinned session, a running task or a harness process are not stored
+// (RC-29): their owner is unknown, and storing them would let any local
+// process grow the log. The intake has already counted them.
 func (s *server) logToolEvent(ev toolEvent) {
 	key, harness, ok := s.toolLogKey(ev)
-	if !ok {
+	if !ok || !s.toolLog.admitProcess(key.Owner) {
 		return
 	}
 	s.toolLog.writer.Enqueue(key, eventSize(ev.req), func() toollog.Record {
@@ -226,6 +296,15 @@ func (s *server) toolLogKey(ev toolEvent) (toollog.Key, string, bool) {
 		if c.task.TaskID != "" {
 			o := toollog.Owner{Kind: toollog.OwnerTask, ID: c.task.TaskID}
 			return toollog.Key{Quota: "task:" + c.task.TaskID, Owner: o}, c.task.Provider, true
+		}
+	case callerNone:
+		// A harness process with no pin (D-36): its events go to a chain
+		// of that process, charged to it like its sessions' would be.
+		if h := c.harnessProc; c.harness != "" && h.PID > 0 && !h.Started.IsZero() {
+			return toollog.Key{
+				Quota: fmt.Sprintf("process:%d:%d", h.PID, h.Started.UnixNano()),
+				Owner: toollog.Owner{Kind: toollog.OwnerProcess, ID: toollog.ProcessID(h.PID, h.Started.UnixNano())},
+			}, c.harness, true
 		}
 	}
 	return toollog.Key{}, "", false
@@ -301,38 +380,45 @@ func targetsJSON(t spaces.ToolTargets) string {
 }
 
 // endToolLog writes a session's end record and anchors its chain head
-// (SessionEnd). It runs in the background: the hook does not wait on it.
-// The writer adds no end record to a chain that already ends in one, so a
-// repeated SessionEnd adds nothing and a resumed session's later records
-// are anchored at its next one.
+// (SessionEnd).
 func (s *server) endToolLog(id string) {
+	s.endChain(toollog.Owner{Kind: toollog.OwnerSession, ID: id})
+}
+
+// endChain writes o's end record and anchors its chain head: a session's
+// at SessionEnd, a task's when it reaches a terminal state, an unpinned
+// process's once it exited. It runs in the background: the caller does not
+// wait on it. The writer adds no end record to a chain that already ends
+// in one, so a repeated end adds nothing, and a resumed session's or a
+// retried task's later records are anchored at its next end.
+func (s *server) endChain(o toollog.Owner) {
 	if s.toolLog == nil {
 		return
 	}
 	l := s.toolLog
 	l.endMu.Lock()
-	if _, busy := l.ending[id]; busy {
+	if _, busy := l.ending[o]; busy {
 		// Records of a resumed session may have been queued after the End
 		// in flight; anchor once more when it is done.
-		l.ending[id] = true
+		l.ending[o] = true
 		l.endMu.Unlock()
 		return
 	}
-	l.ending[id] = false
+	l.ending[o] = false
 	l.endMu.Unlock()
 	go func() {
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), endAnchorTimeout)
-			if err := l.writer.End(ctx, toollog.Owner{Kind: toollog.OwnerSession, ID: id}); err != nil {
-				log.Printf("orchd: command log: anchoring session %s: %v", id, err)
+			if err := l.writer.End(ctx, o); err != nil {
+				log.Printf("orchd: command log: anchoring %s: %v", printableID(o.String()), err)
 			}
 			cancel()
 			l.endMu.Lock()
-			again := l.ending[id]
+			again := l.ending[o]
 			if !again {
-				delete(l.ending, id)
+				delete(l.ending, o)
 			} else {
-				l.ending[id] = false
+				l.ending[o] = false
 			}
 			l.endMu.Unlock()
 			if !again {
@@ -355,13 +441,34 @@ func (s *server) VerifyToolLog(ctx context.Context, req *orchdv1.VerifyToolLogRe
 	if err != nil {
 		return nil, grpcstatus.Error(codes.InvalidArgument, err.Error())
 	}
+	if owner, err = s.toolLog.processChain(ctx, owner); err != nil {
+		return nil, err
+	}
 	// Events already taken are checked too.
 	fctx, cancel := context.WithTimeout(ctx, verifyFlushTimeout)
 	defer cancel()
 	if err := s.toolLog.writer.Flush(fctx); err != nil {
 		return nil, grpcstatus.Errorf(codes.Unavailable, "command log: %v", err)
 	}
-	rep, err := s.toolLog.store.Verify(ctx, owner)
+	var rep toollog.Report
+	if c := s.toolLog.copies; c != nil {
+		// of writes the copies still waiting first, so one handed over
+		// just now, or a passing hiccup in orch.db, is not reported as
+		// missing. Reason for a second try: a retention cut committed
+		// between reading the copies and reading the file is copied a
+		// moment later, and must not read as a forged pruned head.
+		for try := 0; try < 2 && (try == 0 || !rep.OK()); try++ {
+			copies, cerr := c.of(ctx, owner)
+			if cerr != nil {
+				return nil, grpcstatus.Errorf(codes.Internal, "orch.db's anchor copies: %v", cerr)
+			}
+			if rep, err = s.toolLog.store.VerifyCopies(ctx, owner, copies); err != nil {
+				break
+			}
+		}
+	} else {
+		rep, err = s.toolLog.store.Verify(ctx, owner)
+	}
 	if err != nil {
 		return nil, grpcstatus.Errorf(codes.Internal, "command log: %v", err)
 	}

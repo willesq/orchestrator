@@ -103,6 +103,8 @@ type Writer struct {
 	now   func() time.Time
 
 	resolve Resolver
+	// onAnchor, when set, is given the anchors each committed batch wrote.
+	onAnchor func([]Anchor)
 
 	mu    sync.Mutex
 	drops map[dropKey]int64
@@ -126,8 +128,15 @@ type Writer struct {
 // NewWriter starts a writer over s with a queue of queue events. resolve
 // may be nil: every event then goes to its key's Owner.
 func NewWriter(s *Store, queue int, resolve Resolver) *Writer {
+	return NewWriterWithAnchors(s, queue, resolve, nil)
+}
+
+// NewWriterWithAnchors is NewWriter that also hands onAnchor the anchors of
+// each batch once it is committed (D-35: orchd copies them into orch.db).
+// onAnchor runs on the writer goroutine; it should be quick.
+func NewWriterWithAnchors(s *Store, queue int, resolve Resolver, onAnchor func([]Anchor)) *Writer {
 	w := &Writer{
-		store: s, jobs: make(chan job, queue), now: time.Now, resolve: resolve,
+		store: s, jobs: make(chan job, queue), now: time.Now, resolve: resolve, onAnchor: onAnchor,
 		drops: map[dropKey]int64{}, queued: map[string]*share{}, heads: map[Owner]chainHead{},
 		stop: make(chan struct{}), exited: make(chan struct{}),
 	}
@@ -345,6 +354,7 @@ func (w *Writer) commit(batch []job) {
 	ctx := context.Background()
 	pending := map[Owner]chainHead{}
 	var n int64
+	var anchors []Anchor
 	err := w.store.inTx(ctx, func(tx execer) error {
 		appendRec := func(r Record) error {
 			o := Owner{Kind: r.OwnerKind, ID: r.OwnerID}
@@ -365,6 +375,7 @@ func (w *Writer) commit(batch []job) {
 			pending[o] = chainHead{seq: r.Seq, hash: r.Hash, kind: r.Kind}
 			n++
 			if r.Kind == KindEnd {
+				anchors = append(anchors, Anchor{Owner: o, Seq: r.Seq, Hash: r.Hash, At: r.TS})
 				return anchor(ctx, tx, r)
 			}
 			return nil
@@ -433,6 +444,9 @@ func (w *Writer) commit(batch []job) {
 			}
 		}
 		w.stored.Add(n)
+		if len(anchors) > 0 && w.onAnchor != nil {
+			w.onAnchor(anchors)
+		}
 	} else {
 		log.Printf("orchd: command log: storing %d record(s) failed: %v", len(batch), err)
 		w.mu.Lock()

@@ -515,6 +515,11 @@
         "id": "D-54",
         "decision": "All four SP-063 follow-ups become planned work in SP-074: scopes and PR watching for profile-only orgs; refusing GitHub calls a space's profile cannot read, with stricter gh_config_dir checks; the repo picker and PR-outcome tracker using the space's profile; a GitHub API quota cap per isolated account (was RC-10).",
         "date": "2026-11-10"
+      },
+      {
+        "id": "D-55",
+        "decision": "SP-073, SP-040 and SP-070 are worked in parallel by three independent agent sessions, each in its own worktree and draft PR, overriding session_procedure step 2 (one feature, one session at a time) for these three only; their dependencies are done and their code barely overlaps. To avoid id clashes each reserves a block of reconvene ids: SP-073 RC-66..RC-75, SP-040 RC-76..RC-85, SP-070 RC-86..RC-95. New confirmed_by_user decisions are recorded by the coordinating session. Whichever PR merges later is rebased onto main (plan file, orch.db migration numbers, regenerated proto stubs).",
+        "date": "2026-11-11"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -1384,6 +1389,136 @@
         "status": "open"
       },
       {
+        "id": "RC-66",
+        "kind": "follow-up",
+        "topic": "Flaky TestWatchTasksStreamsSnapshotChangesAndTicks hides internal/daemon from make cover",
+        "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go) fails about one run in five on main at ea0b147 with 'WatchTasks ended with context canceled' (also under -race); SP-073 does not touch it. scripts/cover.sh appends a package's profile only when its tests pass, so when this test flakes the whole internal/daemon package silently drops out of the per-file gate and make cover still prints 'All files >= 80%'. Fix the test (a send racing the client's cancel), and make cover.sh fail, or at least warn, when a package's tests fail. Also seen on PR #165: TestTargetsAuditRound2Scripts (internal/spaces/targets_audit2_test.go:153, 'fan-out sources', 6000 sourced scripts under a time budget) failed CI run 43049750035's first attempt with 'neither opaque nor reaching .../otherco' and passed on the re-run and locally; the budget-dependent case is likely flaky under CI load.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073",
+          "DOD-3"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-67",
+        "kind": "decision",
+        "topic": "Which task states anchor a task's command log chain",
+        "detail": "SP-073 anchors a queued task's chain once its ledger status is anything but pending or in_progress (queue.Unsettled): complete, failed (a timed-out run is failed with 'timed out after ...'), cancelled, and also blocked and interrupted, and only when no run of it is live. orchd follows the ledger through the task hub, which takes one of its 16 watcher slots (maxWatchers) for good; every retention sweep also anchors any task chain left open whose task is terminal. Confirm the states, and whether internal subscribers should be exempt from maxWatchers.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-68",
+        "kind": "decision",
+        "topic": "Limits of the orch.db copies of command log anchors (SP-073 audit lows and notes)",
+        "detail": "From the two SP-073 security reviews, accepted as Low or informational: (1) toollog.db and orch.db belong to the same user, so the copies are defense in depth against edits to toollog.db, not against a process that can write both; (2) at every open orchd copies anchors toollog.db holds that orch.db lacks (repairs a crash between the two writes), so an anchor only in toollog.db is reported only until the next orchd start; copies are never replaced; (3) pruned heads are copied only the first time (logs from before SP-073 are trusted as they were), and a cut copy lost in a crash or dropped past 10,000 waiting makes verify report that chain until a later cut moves the copy past it; a stronger fix writes the cut to orch.db before the toollog.db delete commits and lets verify accept a copy ahead of the file when the records between still link; (4) verify works per owner, so a chain deleted whole shows only when that owner is verified (consider 'orch spaces log verify --all' over orch.db's owners); (5) copy-at-open logs only how many anchors it copied, not whose; (6) a verify racing a retention cut is retried once and can still, rarely, report a cut not yet copied (never a false pass).",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-69",
+        "kind": "decision",
+        "topic": "Cap on unpinned harness process chains",
+        "detail": "D-36 logs a harness process holding no pin in its own chain. A running chain is never expired nor cut for the total cap, and any process named like a harness counts, so SP-073 allows at most 8 such chains open at once (maxProcessChains, a constant): events of further unpinned processes are dropped and counted, logged as one total per liveness sweep, until one exits or is pinned (a pinned process's chain is ended and its place freed). Worst case the process chains hold 8 x max_session_mb. Confirm 8, or make it a setting, and decide whether the drop log should name the processes.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-70",
+        "kind": "follow-up",
+        "topic": "Session list rows do not name an unpinned process's log chain",
+        "detail": "ListSessions shows an unpinned process's tool events, refusals and last event, but SessionInfo has no field for its chain ID (process:<pid>-<start ns>); 'orch spaces log process:<pid>' resolves the latest chain of that PID instead. A log_owner field was not added to the proto, to avoid regenerating the Go and Swift stubs while SP-040, SP-070 and SP-073 run in parallel (D-55). Add it (and show process chains in the app, SP-054) when convenient.",
+        "source": "https://github.com/willesq/orchestrator/pull/165",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-073",
+          "SP-054"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-76",
+        "kind": "decision",
+        "topic": "The guard does not judge what a cwd contains in block-other-jobs",
+        "detail": "SP-040 judges a cd_dest, path, git dir or glob prefix that contains another job's root as reaching that job, but the call's cwd only in strict mode. Otherwise every call of a session started under a public root such as ~/code (which holds every job's root) would be refused. So in block-other-jobs a command that searches its cwd by default (grep -r x, rg x, find, du, tar) run with cwd ~/code is allowed, and the OS sandbox (SP-046) is the boundary. Options: keep this; or refuse such calls when the command is a known recursive reader with no path argument (needs Targets to report it); or pin public-root sessions out of ancestor cwds.",
+        "source": "https://github.com/willesq/orchestrator/pull/166",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-040",
+          "SP-041",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-77",
+        "kind": "decision",
+        "topic": "block-other-jobs allows opaque calls (RC-36 (2))",
+        "detail": "SP-040's block-other-jobs mode allows an opaque call whose known targets stay out of other jobs (rule opaque_unverified, logged for audit); strict refuses it (opaque_strict); calls opaque because Targets hit a limit or had no absolute cwd or home are refused in both enforcing modes (analysis_limit, RC-36 (3)). Measured before choosing: 0 of the 46 recorded Claude Code and Codex PreToolUse fixtures (internal/hook/testdata/payloads) come back opaque; the real command log on this Mac is empty because the tool hooks are not wired yet (RC-33), so the rate on real agent work is unmeasured. Re-measure from the command log once the hooks run (counts of opaque_unverified per space via orch spaces log) before SP-041 enforces, and confirm or tighten.",
+        "source": "https://github.com/willesq/orchestrator/pull/166",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-040",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-78",
+        "kind": "decision",
+        "topic": "Paths that contain another job's root are refused",
+        "detail": "Per RC-36 (1), block-other-jobs refuses a path, cd destination, git dir or glob prefix that contains another isolated space's root (grep -r ~/code, cd ~/code && rg x, find / ..., ls ~/code), because Targets cannot tell a recursive reader from a listing. This adds friction for sessions under a public root (cd ~/code before a git clone, ls ~/code). Confirm, or decide to allow a listing-only set of commands (ls, cd alone) once Targets can report it.",
+        "source": "https://github.com/willesq/orchestrator/pull/166",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-040",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-79",
+        "kind": "follow-up",
+        "topic": "What SP-041 must do around Decide",
+        "detail": "From the SP-040 security reviews. (1) The zero GuardPolicy means 'no spaces configured' and allows everything (INV-10); SP-041 must refuse (INV-13) when the policy snapshot cannot be read or does not validate, never pass the zero value. (2) NewGuardPolicy resolves root and protected-path symlinks once; SP-041 must rebuild it when the policy, a root or its links change (replay is exact only against the same snapshot). (3) A missing pin refuses in enforcing modes (pin_missing); decide how queued tasks without a session pin are judged. (4) Limit reasons are matched by message text; TestLimitReasonsMatchTargets checks forceOpaque reasons and that every listed reason still exists, but a new limit raised with plain opaque() would not be flagged; consider a typed limit flag in ToolTargets. (5) Pass EventCwdChanged only for cwd-changed: every other kind, including an empty one, is enforced.",
+        "source": "https://github.com/willesq/orchestrator/pull/166",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-80",
+        "kind": "follow-up",
+        "topic": "SP-040 audit lows and design choices",
+        "detail": "(1) In strict mode a private root symlinked into another non-public space is placed by the deepest root only, so unreadable_space can judge by the wrong space (never lets one job reach another; otherJobHolds covers isolated spaces). (2) Self-protection covers file-tool writes (Write, Edit, MultiEdit, NotebookEdit, apply_patch); shell writes to protected paths (>, tee, sed -i, cp, mv) are SP-042's, since Targets does not tell writes from reads. (3) An unknown guard mode is read as strict, so a damaged enforcement state never enforces less. (4) A session under a public root is pinned to public_root_sessions (D-22); strict mode judges its targets by that space's reads, not by 'public only'. (5) A path in no space (/tmp, /usr, /opt) is always allowed; per-space TMPDIRs (D-53, SP-046) are the boundary for temp files.",
+        "source": "https://github.com/willesq/orchestrator/pull/166",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-040",
+          "SP-041",
+          "SP-042",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
         "id": "RC-86",
         "kind": "follow-up",
         "topic": "Wire the guard verdict into not-enforced records",
@@ -1477,6 +1612,20 @@
         "source": "https://github.com/willesq/orchestrator/pull/167",
         "raised": "2026-11-11",
         "affects": [
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-93",
+        "kind": "follow-up",
+        "topic": "Flaky tests after the parallel SP-040/SP-073/SP-070 merges",
+        "detail": "Seen on 2026-11-11 while merging main into SP-070 (coordinator session). (1) TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon) fails 'WatchTasks ended with context canceled' in 2 of 2 package runs on main at faa84d2 (after SP-073) and in 3 of 4 runs on the SP-070 merge on this Mac, but passes 20/20 run alone and passed CI on Linux; more often than RC-66's 'about 1 in 5', so SP-073's task-anchor follower (it holds one task hub watcher slot, RC-67) may make it worse. See RC-66 and RC-92 for the cause and fix. (2) TestDecideCases (internal/spaces, SP-040) failed once under the full parallel suite: Targets hit its time budget ('analysis took too long'), so the case 'session pinned to no space reads a private space' got analysis_limit instead of within_space; it passes alone (3/3). The table test should give Targets a budget that load cannot exhaust, or retry on a limit reason.",
+        "source": "https://github.com/willesq/orchestrator/pull/167",
+        "raised": "2026-11-11",
+        "affects": [
+          "SP-040",
+          "SP-073",
           "SP-070"
         ],
         "status": "open"
@@ -2914,7 +3063,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestAnchorsCopiedIntoOrchDB (internal/daemon/toollog_anchors_test.go) passes at 1cf9c2c: two SessionEnds write anchors at records 4 and 8 in toollog.db and the same two (owner, seq, hash, at) in orch.db's toollog_anchors; VerifyToolLog on the intact chain reports no problem; with orch.db's copy of anchor 4 removed it reports '4: anchored in toollog.db but orch.db has no copy of the anchor'; with records 5-8 and anchor 8 deleted from the file, Store.Verify on the file alone passes but VerifyToolLog reports '8: anchored in orch.db but the anchor is missing from toollog.db' and '8: the anchored chain head is missing (records after it were removed)'.",
+            "a1 (store): TestAnchorCopiesCatchWhatTheFileCannot (internal/toollog/anchors_test.go) passes at 1cf9c2c: the writer hands each committed anchor to its onAnchor, equal to the file's anchors; five tamperings each pass Verify on the file alone and fail VerifyCopies with the named problem: cut after the last in-file anchor ('records after it were removed'), rewritten from the first record with every hash, link and file anchor recomputed ('the chain was rewritten'), anchor only in toollog.db ('orch.db has no copy'), anchor only in orch.db ('missing from toollog.db'), a copy that disagrees ('disagree'). TestForgedPrunedHeadReported: a chain deleted under a pruned head written into the file passes the file check and is reported against orch.db's pruned head copy (the first security audit's medium finding). TestAnchorCopiesWithRetention, TestCopiesAtOpen and TestCopiesRetried (internal/daemon) cover cuts copied through the cut hook, copies at open (missing anchors copied, existing copies never replaced, pruned heads only the first time) and retries.",
+            "a2: TestTaskChainAnchoredAtTerminalState (internal/daemon/toollog_anchors_test.go) passes at 1cf9c2c with the real queue.SQLTaskStore wired to the task hub as Run wires it: for each of complete, failed, timed out (failed with 'timed out after 30m0s') and cancelled (queue Control's End), the task's chain of two events gets an end record (record 3) and one anchor, also copied into orch.db; the failed task, retried (pending, in_progress, a live run), writes 'make test' as record 4 in the same chain, is not anchored while its run is live, and on complete gets end record 5 and a second anchor; VerifyToolLog reports no problem and 2 anchors. TestTaskChainAnchorCatchUp: a retention sweep anchors a terminal task's chain no change notice anchored, and leaves running, pending and unknown tasks unanchored."
+          ]
         },
         {
           "id": "SP-073.2",
@@ -2935,18 +3088,23 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestUnpinnedProcessChain (internal/daemon/toollog_chains_test.go) passes at 1cf9c2c: caller resolution of a hook under claude PID 501 holding no pin keeps that harness and its start time; its two events are stored in chain process:501-<start ns> with harness claude and the claimed session kept as evidence; a caller under no harness is still not logged; the operator reads it with 'process:501' or the full ID (a PID with no chain is NotFound) and verifies it; ListSessions shows the unpinned row with 2 tool events and a last activity; a session pinned later in that process gets PermissionDenied for process:501 and the full ID, reads only its own 'pwd', and its events go to its own chain; the liveness sweep then ends and anchors the process chain (copied into orch.db) and frees its place; retention keeps it while the process runs and, once the process has exited, expires it; with --all the exited process's chain is listed as ended, and not without --all.",
+            "a1 (bounds and parsing): TestProcessChainCap: at most 8 unpinned processes have a chain open; the ninth process's events are dropped until one exits; reopening the log counts the open chains again (the first security audit's second medium finding). TestOwnerKindsAndProcessIDs and TestChainQueries (internal/toollog/anchors_test.go): process IDs parse and print, PID-only lookup, open chains, latest chain of a PID and per-process activity. TestSessionsList (internal/cli/sessions_cmd_test.go): an unpinned row with a log prints its counts.",
+            "a2: TestSessionCapSetting (internal/daemon/toollog_chains_test.go) passes at 1cf9c2c: sessions.command_log.max_session_mb is in the schema as a sensitive TypeInt ranged 10-1000, defaults to 50 (config.Defaults, logPolicy gives 50 MiB); 10, 200 and 1000 give that cap, while 0, 9, 1001 and -5 keep 50; a running session with about 12.8 MB of records keeps all 800 under the 50 MB cap and is cut to at most 10 MB (500-640 records) by a retention sweep with max_session_mb 10, and still verifies.",
+            "DOD at bf2672f (independent verifier, re-run): go test ./... exit 0; go vet ./... exit 0; gofmt -l on the 21 changed Go files: 0 lines; make cover 'All files >= 80%' with internal/daemon included (toollog_chains.go 85.1%, toollog/anchors.go 85.5%, toollog_anchors.go 89.4%, toollog.go 91.6%); criteria_sha256 recomputed and unchanged; security: two audit rounds, no open critical/high/medium (lows in RC-68, RC-69); docs/internals/daemon.md and config.md changed; all commits signed, Conventional, no co-author lines; draft PR #165 registered in ~/.pr-watch.json. CI run 43049750035: the first attempt failed TestTargetsAuditRound2Scripts in internal/spaces (not touched by this diff; passes locally), the re-run passed test and the macOS ORT build."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "bf2672f09377e163b66999f844d224bc32c4ee99",
+      "verified_at": "2026-11-11T15:52:00Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "75ec414b2dc8e3f89b8904df10fe958a44fa16b522421a801ae451083fe97105",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-073-log-hardening",
+      "pr": "https://github.com/willesq/orchestrator/pull/165"
     },
     {
       "id": "SP-040",
@@ -2985,18 +3143,24 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestDecideCases (internal/spaces/guard_test.go) passes at 2b7dc8a: 43 cases x 4 modes (off, log, block-other-jobs, strict) = 172 subtests, all pass. Targets are extracted by the real Targets code from a temporary home in the plan's layout (oss ~/code public, personal ~/code/willesq private, acme ~/code/company1 isolated reading personal, globex ~/code/globex isolated). Every listed form is covered: cd within the space (allow); cd into another job, compound cd (cd .. && cd ../globex/app && cat), absolute path read, Read tool into another job (other_job_path); Read outside every root and in public (allow); git -C into another job (other_job_path); gh api repos/globex/... and gh -R Globex/app (other_job_repo), gh -R own org (allow), gh -R a private org (strict: unreadable_space); opaque bash -c \"$CMD\" (block-other-jobs: opaque_unverified allow; strict: opaque_strict refuse), literal bash -c into another job and an opaque call that also names one (refused), Targets limit (analysis_limit); /tmp-style scratch build (allow); edit in the session's own linked worktree outside every root (allow) and in another job's worktree (refused, via its main checkout); EnterWorktree (allow); /cd as a cwd-changed event (logged as would-refuse, never refused) and the first call after it (refused); subagent launch (allow) and a subagent's Grep into another job (refused); settings tampering with Write ~/.claude/settings.json and Edit of the checkout's .claude/settings.local.json (self_protection), reading settings (allow); grep -r and glob prefixes over ~/code and cd ~/code && rg (other_job_ancestor); cwd holding another job (strict only); private-space reads listed/unlisted; session pinned to no space ('', quarantine, a space the policy no longer has); no pin (pin_missing); no policy (no_policy); malformed repo, relative target and relative cwd (malformed_target). Off and log never refuse and record the block-other-jobs verdict.",
+            "a1 (regressions from the security audits): TestDecideModeDefaults (empty mode = block-other-jobs, unknown mode = strict, empty/misspelled event kinds enforced), TestDecideSymlinkedRoots (home reached through a symlink), TestDecideUnicodeSpelling (NFD target vs NFC root), TestDecideAliasedRoots (a public root symlinked into, and a private root onto, another job's root, both policy orders), TestDecideRuleRankIgnoresTargetOrder, TestDecideLimitReasons, TestLimitReasonsMatchTargets (limit reasons kept in step with targets*.go), TestNewGuardPolicyRefusesRelativeProtectedPath.",
+            "a2: TestDecideDeterministic passes at 2b7dc8a: 20,000 seeded random inputs (event kinds, tools, cwd and target lists drawn from in-space, other-job, ancestor, protected, root and relative paths, repos including malformed ones, opaque reasons, 7 pins, 6 modes including '' and an unknown one, 3 policies); each decision is repeated 3 times on deep copies and is identical in verdict, would, rule, mode and enforced; Decide never changes its input; a refusal is always enforced; more than 10 distinct rules are reached.",
+            "DOD at 2b7dc8a: go test ./... exit 0; go vet ./... exit 0; gofmt -l on changed Go files: 0 lines; make cover exit 0, all files >= 80% (internal/spaces/guard.go 97.8%); docs/internals/hooks.md updated ('Guard decision'). Security audit: 3 rounds by the security-audit agent; round 1 found 1 high (symlinked roots never matched), 2 medium (cwd/cd_dest containment, non-pre-tool-use kinds unenforced) and 4 low; round 2 found 1 medium (a root symlinked into another job's root) and 5 low; all high and medium fixed with regression tests; round 3: no critical, high or medium open. Remaining lows and design choices recorded as RC-76..RC-80.",
+            "Independent verification: round 1 at f92c22e passed every item and DOD check but found that TestDecideCases derived the off/log expectation from Enforcing(), the code under test; fixed in 169903e (expectation spelled out; a mutant making off and log enforce now fails). Round 2 at 169903e, by a fresh verifier: a1 PASS (172 subtests, 43 per mode), a2 PASS, DOD-1..DOD-9 PASS (CI run 43049237100 green, test and macOS ORT build), criteria_sha256 matches; 20 of 23 mutants killed, 2 equivalent, 1 (under() without the '/' boundary) would only over-refuse."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "169903e673455cd338f28e605d16e24c77148043",
+      "verified_at": "2026-11-11T15:41:05Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "7617a8f9e308fa2c249ac0eb4a7c191eb7248d4617881c8328f7af0b776f8272",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-040-guard-decide",
+      "pr": "https://github.com/willesq/orchestrator/pull/166"
     },
     {
       "id": "SP-070",
