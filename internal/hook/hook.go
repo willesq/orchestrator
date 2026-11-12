@@ -5,6 +5,8 @@
 // Crash-safety contract (matches the Python system): a hook must NEVER block or
 // fail the user's session. Every handler degrades to a no-op on any error and
 // returns nil; problems go to stderr, never stdout (stdout is context injection).
+// The one exception is the enforcing tool guard in pre-tool-use (SP-041):
+// while it enforces, it refuses a call it cannot decide (guard.go).
 package hook
 
 import (
@@ -97,7 +99,7 @@ func dispatch(event string, p Payload, out io.Writer, cf clientFactory) error {
 	case "post-tool-use":
 		return postToolUse(p)
 	case "pre-tool-use", "cwd-changed":
-		recordToolEvent(event, p, cf)
+		guardToolEvent(event, p, out, cf)
 		return nil
 	default:
 		return nil

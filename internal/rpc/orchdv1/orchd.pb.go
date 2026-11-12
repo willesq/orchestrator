@@ -7422,8 +7422,15 @@ type RecordToolEventRequest struct {
 	OldCwd        string `protobuf:"bytes,10,opt,name=old_cwd,json=oldCwd,proto3" json:"old_cwd,omitempty"` // cwd-changed only
 	NewCwd        string `protobuf:"bytes,11,opt,name=new_cwd,json=newCwd,proto3" json:"new_cwd,omitempty"` // cwd-changed only
 	At            int64  `protobuf:"varint,12,opt,name=at,proto3" json:"at,omitempty"`                      // unix nanoseconds when the hook started
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// The tool guard's decision as the hook made it (SP-041); empty when no
+	// guard ran (an older hook). guard_verdict is what the guard decided or,
+	// when not enforced, would have decided: allow | refuse.
+	GuardVerdict   string `protobuf:"bytes,13,opt,name=guard_verdict,json=guardVerdict,proto3" json:"guard_verdict,omitempty"`
+	GuardRule      string `protobuf:"bytes,14,opt,name=guard_rule,json=guardRule,proto3" json:"guard_rule,omitempty"`              // a rule id; never a path or text
+	GuardEnforced  bool   `protobuf:"varint,15,opt,name=guard_enforced,json=guardEnforced,proto3" json:"guard_enforced,omitempty"` // the verdict took effect
+	GuardPolicyRev int64  `protobuf:"varint,16,opt,name=guard_policy_rev,json=guardPolicyRev,proto3" json:"guard_policy_rev,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *RecordToolEventRequest) Reset() {
@@ -7536,6 +7543,34 @@ func (x *RecordToolEventRequest) GetNewCwd() string {
 func (x *RecordToolEventRequest) GetAt() int64 {
 	if x != nil {
 		return x.At
+	}
+	return 0
+}
+
+func (x *RecordToolEventRequest) GetGuardVerdict() string {
+	if x != nil {
+		return x.GuardVerdict
+	}
+	return ""
+}
+
+func (x *RecordToolEventRequest) GetGuardRule() string {
+	if x != nil {
+		return x.GuardRule
+	}
+	return ""
+}
+
+func (x *RecordToolEventRequest) GetGuardEnforced() bool {
+	if x != nil {
+		return x.GuardEnforced
+	}
+	return false
+}
+
+func (x *RecordToolEventRequest) GetGuardPolicyRev() int64 {
+	if x != nil {
+		return x.GuardPolicyRev
 	}
 	return 0
 }
@@ -13471,7 +13506,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\bended_at\x18\n" +
 	" \x01(\x03R\aendedAt\"I\n" +
 	"\x14ListSessionsResponse\x121\n" +
-	"\bsessions\x18\x01 \x03(\v2\x15.orchd.v1.SessionInfoR\bsessions\"\xdf\x02\n" +
+	"\bsessions\x18\x01 \x03(\v2\x15.orchd.v1.SessionInfoR\bsessions\"\xf4\x03\n" +
 	"\x16RecordToolEventRequest\x12\x14\n" +
 	"\x05event\x18\x01 \x01(\tR\x05event\x12\x1d\n" +
 	"\n" +
@@ -13488,7 +13523,12 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\aold_cwd\x18\n" +
 	" \x01(\tR\x06oldCwd\x12\x17\n" +
 	"\anew_cwd\x18\v \x01(\tR\x06newCwd\x12\x0e\n" +
-	"\x02at\x18\f \x01(\x03R\x02at\"\x19\n" +
+	"\x02at\x18\f \x01(\x03R\x02at\x12#\n" +
+	"\rguard_verdict\x18\r \x01(\tR\fguardVerdict\x12\x1d\n" +
+	"\n" +
+	"guard_rule\x18\x0e \x01(\tR\tguardRule\x12%\n" +
+	"\x0eguard_enforced\x18\x0f \x01(\bR\rguardEnforced\x12(\n" +
+	"\x10guard_policy_rev\x18\x10 \x01(\x03R\x0eguardPolicyRev\"\x19\n" +
 	"\x17RecordToolEventResponse\",\n" +
 	"\x14VerifyToolLogRequest\x12\x14\n" +
 	"\x05owner\x18\x01 \x01(\tR\x05owner\":\n" +
