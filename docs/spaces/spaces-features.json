@@ -4621,7 +4621,7 @@
       "attempts": 1,
       "criteria_sha256": "0ed90500129ff80453d9ab01f9e541da7d9f62defe2a9d070c09806eae31aa3a",
       "branch": "feat/sp-046-per-space-harness-settings",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/171"
     },
     {
       "id": "SP-048",
