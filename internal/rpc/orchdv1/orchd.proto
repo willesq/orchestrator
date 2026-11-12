@@ -152,6 +152,16 @@ service Orchd {
   // owner/repo or chat tenant) goes to and why. Agents get an answer only
   // when every space it names is public; the operator sees all.
   rpc ExplainPlacement(ExplainPlacementRequest) returns (PlacementExplanation);
+  // ListSpaces lists the spaces of the applied policy: each one's kind,
+  // bindings and the spaces it may read, with the policy's status.
+  // Operator-only, like DiffSpaces: it names every job's orgs and roots.
+  rpc ListSpaces(ListSpacesRequest) returns (ListSpacesResponse);
+  // ScanSpaces looks through folders the operator chose for git checkouts
+  // and reports each one's GitHub remote, the repo's visibility and where
+  // the applied policy places it, plus the GitHub orgs each gh login belongs
+  // to. It writes nothing: no file, no policy revision, no binding.
+  // Operator-only: it reads folders and GitHub accounts of every job.
+  rpc ScanSpaces(ScanSpacesRequest) returns (ScanSpacesResponse);
   // PinSession records a session's pin at SessionStart: its harness process,
   // first directory and space. A pin's space and first directory never
   // change: a second call returns the existing pin, a subagent gets its
@@ -185,6 +195,12 @@ service Orchd {
   // SummarizeToolLog sums the command log per space over a window: tool
   // calls, directory moves and moves into another space. Operator only.
   rpc SummarizeToolLog(SummarizeToolLogRequest) returns (ToolLogSummary);
+  // ReplaySpaces decides one command log's recorded tool events again with
+  // the guard's decision function and reports each verdict that differs
+  // from the recorded one (SP-047). By default each event is decided under
+  // the revision applied when it was recorded. Operator-only; it changes
+  // nothing.
+  rpc ReplaySpaces(ReplaySpacesRequest) returns (ReplaySpacesResponse);
   // GetEnforcement lists every enforcement layer's switch (SP-070). Open to
   // every caller, so every session's start digest can name a layer that is
   // off; who set a switch is shown to the operator only.
@@ -1010,6 +1026,76 @@ message PlacementExplanation {
   string session_reads = 9;
 }
 
+message ListSpacesRequest {}
+
+// SpaceInfo is one space of the applied policy, as the operator wrote it.
+message SpaceInfo {
+  string name = 1;
+  string kind = 2; // public | private | isolated
+  repeated string github_orgs = 3;
+  repeated string roots = 4;
+  repeated string web_prefixes = 5;
+  repeated string chat = 6;
+  // reads are the spaces it lists; readable is every space it may read:
+  // itself, every public space and the ones it lists.
+  repeated string reads = 7;
+  repeated string readable = 8;
+  string terms_file = 9; // the outbound term list's path, never its terms
+  string gh_config_dir = 10;
+}
+
+message ListSpacesResponse {
+  SpacesStatus status = 1;
+  repeated SpaceInfo spaces = 2; // by name
+  // Where sessions pinned under a public root write.
+  string public_root_sessions = 3;
+}
+
+message ScanSpacesRequest {
+  // Absolute folders to look through. Each is walked without following
+  // symbolic links, skipping hidden folders, and a checkout's own folders
+  // are not entered.
+  repeated string folders = 1;
+  int32 max_depth = 2; // folders below each one; 0 means 3, at most 6
+  // Ask GitHub nothing: visibility comes only from orchd's cache and no
+  // account's orgs are listed.
+  bool offline = 3;
+}
+
+// ScannedCheckout is one git checkout a scan found.
+message ScannedCheckout {
+  string path = 1;
+  string owner = 2; // the origin's GitHub owner; "" for none
+  string repo = 3;
+  string visibility = 4; // public | private | "" (not known)
+  // anonymous: its .git does not follow git's layout, so its remote is
+  // not believed and it is placed by its folder alone.
+  bool anonymous = 5;
+  // Where the applied policy places the checkout's content.
+  string space = 6;
+  string rule = 7;
+  string outcome = 8; // placed | quarantined | conflict
+  string reason = 9;
+}
+
+// ScannedAccount is a gh login and the orgs it belongs to: the default
+// login, and each space's gh profile.
+message ScannedAccount {
+  string profile = 1; // "" for the default login, else the space's name
+  string login = 2;
+  repeated string orgs = 3;
+  string error = 4;
+}
+
+message ScanSpacesResponse {
+  repeated ScannedCheckout checkouts = 1; // by path
+  repeated ScannedAccount accounts = 2;
+  // Set when a limit stopped the walk early.
+  bool truncated = 3;
+  // Folders that could not be read, and why.
+  repeated string problems = 4;
+}
+
 message PinSessionRequest {
   string session_id = 1; // ^[A-Za-z0-9_-]{1,128}$
   // The session's directory as the hook reports it. A new pin is refused
@@ -1098,6 +1184,13 @@ message RecordToolEventRequest {
   string old_cwd = 10;   // cwd-changed only
   string new_cwd = 11;   // cwd-changed only
   int64 at = 12;         // unix nanoseconds when the hook started
+  // The tool guard's decision as the hook made it (SP-041); empty when no
+  // guard ran (an older hook). guard_verdict is what the guard decided or,
+  // when not enforced, would have decided: allow | refuse.
+  string guard_verdict = 13;
+  string guard_rule = 14;     // a rule id; never a path or text
+  bool guard_enforced = 15;   // the verdict took effect
+  int64 guard_policy_rev = 16;
 }
 
 message RecordToolEventResponse {}
@@ -1151,6 +1244,52 @@ message ToolEvent {
   int64 dropped = 16;    // gap records: events lost before they were stored
   // The session the hook named, when orchd attributed the event elsewhere.
   string claimed_session = 17;
+}
+
+message ReplaySpacesRequest {
+  // A session ID, task:<task id> or process:<pid>[-<start>].
+  string owner = 1;
+  // The policy to decide under, instead of each event's recording
+  // revision: a saved revision, or a policy document. At most one.
+  int64 policy_revision = 2;
+  string policy_json = 3;
+  // The guard mode to judge in: off | log | block-other-jobs | strict; ""
+  // for the guard switch's current state.
+  string mode = 4;
+  // Return every replayed event, not only the changed ones.
+  bool all = 5;
+}
+
+// ReplayedEvent is one event's recorded and replayed verdicts.
+message ReplayedEvent {
+  int64 seq = 1;
+  int64 at = 2; // unix nanoseconds when it was recorded
+  string event = 3;
+  string tool = 4;
+  int64 policy_revision = 5; // applied when it was recorded; 0 for none
+  bool recorded = 6;         // the record carries a verdict
+  string recorded_verdict = 7;
+  string recorded_rule = 8;
+  string verdict = 9; // allow | refuse; "" when it could not be decided
+  string rule = 10;
+  bool changed = 11;
+  string problem = 12;
+}
+
+message ReplaySpacesResponse {
+  string owner = 1;
+  string mode = 2;       // the mode judged in
+  string pin_space = 3;  // the owner's pinned space; "" for none
+  bool pinned = 4;
+  int64 events = 5;      // events replayed
+  int64 compared = 6;    // with a recorded verdict
+  int64 changed = 7;
+  int64 unrecorded = 8;  // with no recorded verdict
+  int64 problems = 9;    // that could not be decided
+  // The changed events (with all, every event), in sequence order.
+  repeated ReplayedEvent rows = 10;
+  // Set when the log held more events than one replay reads.
+  bool truncated = 11;
 }
 
 message ListToolEventsResponse {
