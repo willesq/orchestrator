@@ -3570,14 +3570,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "0eb37e92d0ee52c8d2354afb9a924d4cd28933049e2c50b5534055f758615d4d",
-      "branch": null,
+      "branch": "feat/sp-047-policy-replay",
       "pr": null
     },
     {
