@@ -146,6 +146,10 @@ var operatorActions = map[string]string{
 	// Reason: a task has no session row, and the list names other sessions'
 	// spaces and directories (ListSessions also answers a task with none).
 	orchdv1.Orchd_ListSessions_FullMethodName: "list sessions",
+	// Reason (SP-047): a replay reads any session's command log and every
+	// policy revision; it is also refused to interactive harness sessions
+	// (refuseNonOperator).
+	orchdv1.Orchd_ReplaySpaces_FullMethodName: "replay the command log",
 }
 
 // refuseQueued returns the refusal for method when ctx's caller is a queued

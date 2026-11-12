@@ -76,6 +76,7 @@ const (
 	Orchd_VerifyToolLog_FullMethodName            = "/orchd.v1.Orchd/VerifyToolLog"
 	Orchd_ListToolEvents_FullMethodName           = "/orchd.v1.Orchd/ListToolEvents"
 	Orchd_SummarizeToolLog_FullMethodName         = "/orchd.v1.Orchd/SummarizeToolLog"
+	Orchd_ReplaySpaces_FullMethodName             = "/orchd.v1.Orchd/ReplaySpaces"
 	Orchd_GetEnforcement_FullMethodName           = "/orchd.v1.Orchd/GetEnforcement"
 	Orchd_SetEnforcement_FullMethodName           = "/orchd.v1.Orchd/SetEnforcement"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
@@ -281,6 +282,12 @@ type OrchdClient interface {
 	// SummarizeToolLog sums the command log per space over a window: tool
 	// calls, directory moves and moves into another space. Operator only.
 	SummarizeToolLog(ctx context.Context, in *SummarizeToolLogRequest, opts ...grpc.CallOption) (*ToolLogSummary, error)
+	// ReplaySpaces decides one command log's recorded tool events again with
+	// the guard's decision function and reports each verdict that differs
+	// from the recorded one (SP-047). By default each event is decided under
+	// the revision applied when it was recorded. Operator-only; it changes
+	// nothing.
+	ReplaySpaces(ctx context.Context, in *ReplaySpacesRequest, opts ...grpc.CallOption) (*ReplaySpacesResponse, error)
 	// GetEnforcement lists every enforcement layer's switch (SP-070). Open to
 	// every caller, so every session's start digest can name a layer that is
 	// off; who set a switch is shown to the operator only.
@@ -927,6 +934,16 @@ func (c *orchdClient) SummarizeToolLog(ctx context.Context, in *SummarizeToolLog
 	return out, nil
 }
 
+func (c *orchdClient) ReplaySpaces(ctx context.Context, in *ReplaySpacesRequest, opts ...grpc.CallOption) (*ReplaySpacesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplaySpacesResponse)
+	err := c.cc.Invoke(ctx, Orchd_ReplaySpaces_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) GetEnforcement(ctx context.Context, in *GetEnforcementRequest, opts ...grpc.CallOption) (*EnforcementState, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EnforcementState)
@@ -1292,6 +1309,12 @@ type OrchdServer interface {
 	// SummarizeToolLog sums the command log per space over a window: tool
 	// calls, directory moves and moves into another space. Operator only.
 	SummarizeToolLog(context.Context, *SummarizeToolLogRequest) (*ToolLogSummary, error)
+	// ReplaySpaces decides one command log's recorded tool events again with
+	// the guard's decision function and reports each verdict that differs
+	// from the recorded one (SP-047). By default each event is decided under
+	// the revision applied when it was recorded. Operator-only; it changes
+	// nothing.
+	ReplaySpaces(context.Context, *ReplaySpacesRequest) (*ReplaySpacesResponse, error)
 	// GetEnforcement lists every enforcement layer's switch (SP-070). Open to
 	// every caller, so every session's start digest can name a layer that is
 	// off; who set a switch is shown to the operator only.
@@ -1529,6 +1552,9 @@ func (UnimplementedOrchdServer) ListToolEvents(context.Context, *ListToolEventsR
 }
 func (UnimplementedOrchdServer) SummarizeToolLog(context.Context, *SummarizeToolLogRequest) (*ToolLogSummary, error) {
 	return nil, status.Error(codes.Unimplemented, "method SummarizeToolLog not implemented")
+}
+func (UnimplementedOrchdServer) ReplaySpaces(context.Context, *ReplaySpacesRequest) (*ReplaySpacesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReplaySpaces not implemented")
 }
 func (UnimplementedOrchdServer) GetEnforcement(context.Context, *GetEnforcementRequest) (*EnforcementState, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetEnforcement not implemented")
@@ -2624,6 +2650,24 @@ func _Orchd_SummarizeToolLog_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_ReplaySpaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReplaySpacesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ReplaySpaces(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ReplaySpaces_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ReplaySpaces(ctx, req.(*ReplaySpacesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_GetEnforcement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetEnforcementRequest)
 	if err := dec(in); err != nil {
@@ -3178,6 +3222,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SummarizeToolLog",
 			Handler:    _Orchd_SummarizeToolLog_Handler,
+		},
+		{
+			MethodName: "ReplaySpaces",
+			Handler:    _Orchd_ReplaySpaces_Handler,
 		},
 		{
 			MethodName: "GetEnforcement",

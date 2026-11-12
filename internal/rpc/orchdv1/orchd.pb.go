@@ -8002,6 +8002,347 @@ func (x *ToolEvent) GetClaimedSession() string {
 	return ""
 }
 
+type ReplaySpacesRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// A session ID, task:<task id> or process:<pid>[-<start>].
+	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	// The policy to decide under, instead of each event's recording
+	// revision: a saved revision, or a policy document. At most one.
+	PolicyRevision int64  `protobuf:"varint,2,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	PolicyJson     string `protobuf:"bytes,3,opt,name=policy_json,json=policyJson,proto3" json:"policy_json,omitempty"`
+	// The guard mode to judge in: off | log | block-other-jobs | strict; ""
+	// for the guard switch's current state.
+	Mode string `protobuf:"bytes,4,opt,name=mode,proto3" json:"mode,omitempty"`
+	// Return every replayed event, not only the changed ones.
+	All           bool `protobuf:"varint,5,opt,name=all,proto3" json:"all,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReplaySpacesRequest) Reset() {
+	*x = ReplaySpacesRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[120]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplaySpacesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplaySpacesRequest) ProtoMessage() {}
+
+func (x *ReplaySpacesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[120]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplaySpacesRequest.ProtoReflect.Descriptor instead.
+func (*ReplaySpacesRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{120}
+}
+
+func (x *ReplaySpacesRequest) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *ReplaySpacesRequest) GetPolicyRevision() int64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *ReplaySpacesRequest) GetPolicyJson() string {
+	if x != nil {
+		return x.PolicyJson
+	}
+	return ""
+}
+
+func (x *ReplaySpacesRequest) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *ReplaySpacesRequest) GetAll() bool {
+	if x != nil {
+		return x.All
+	}
+	return false
+}
+
+// ReplayedEvent is one event's recorded and replayed verdicts.
+type ReplayedEvent struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Seq             int64                  `protobuf:"varint,1,opt,name=seq,proto3" json:"seq,omitempty"`
+	At              int64                  `protobuf:"varint,2,opt,name=at,proto3" json:"at,omitempty"` // unix nanoseconds when it was recorded
+	Event           string                 `protobuf:"bytes,3,opt,name=event,proto3" json:"event,omitempty"`
+	Tool            string                 `protobuf:"bytes,4,opt,name=tool,proto3" json:"tool,omitempty"`
+	PolicyRevision  int64                  `protobuf:"varint,5,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"` // applied when it was recorded; 0 for none
+	Recorded        bool                   `protobuf:"varint,6,opt,name=recorded,proto3" json:"recorded,omitempty"`                                   // the record carries a verdict
+	RecordedVerdict string                 `protobuf:"bytes,7,opt,name=recorded_verdict,json=recordedVerdict,proto3" json:"recorded_verdict,omitempty"`
+	RecordedRule    string                 `protobuf:"bytes,8,opt,name=recorded_rule,json=recordedRule,proto3" json:"recorded_rule,omitempty"`
+	Verdict         string                 `protobuf:"bytes,9,opt,name=verdict,proto3" json:"verdict,omitempty"` // allow | refuse; "" when it could not be decided
+	Rule            string                 `protobuf:"bytes,10,opt,name=rule,proto3" json:"rule,omitempty"`
+	Changed         bool                   `protobuf:"varint,11,opt,name=changed,proto3" json:"changed,omitempty"`
+	Problem         string                 `protobuf:"bytes,12,opt,name=problem,proto3" json:"problem,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ReplayedEvent) Reset() {
+	*x = ReplayedEvent{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[121]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplayedEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplayedEvent) ProtoMessage() {}
+
+func (x *ReplayedEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[121]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplayedEvent.ProtoReflect.Descriptor instead.
+func (*ReplayedEvent) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{121}
+}
+
+func (x *ReplayedEvent) GetSeq() int64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *ReplayedEvent) GetAt() int64 {
+	if x != nil {
+		return x.At
+	}
+	return 0
+}
+
+func (x *ReplayedEvent) GetEvent() string {
+	if x != nil {
+		return x.Event
+	}
+	return ""
+}
+
+func (x *ReplayedEvent) GetTool() string {
+	if x != nil {
+		return x.Tool
+	}
+	return ""
+}
+
+func (x *ReplayedEvent) GetPolicyRevision() int64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *ReplayedEvent) GetRecorded() bool {
+	if x != nil {
+		return x.Recorded
+	}
+	return false
+}
+
+func (x *ReplayedEvent) GetRecordedVerdict() string {
+	if x != nil {
+		return x.RecordedVerdict
+	}
+	return ""
+}
+
+func (x *ReplayedEvent) GetRecordedRule() string {
+	if x != nil {
+		return x.RecordedRule
+	}
+	return ""
+}
+
+func (x *ReplayedEvent) GetVerdict() string {
+	if x != nil {
+		return x.Verdict
+	}
+	return ""
+}
+
+func (x *ReplayedEvent) GetRule() string {
+	if x != nil {
+		return x.Rule
+	}
+	return ""
+}
+
+func (x *ReplayedEvent) GetChanged() bool {
+	if x != nil {
+		return x.Changed
+	}
+	return false
+}
+
+func (x *ReplayedEvent) GetProblem() string {
+	if x != nil {
+		return x.Problem
+	}
+	return ""
+}
+
+type ReplaySpacesResponse struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Owner      string                 `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
+	Mode       string                 `protobuf:"bytes,2,opt,name=mode,proto3" json:"mode,omitempty"`                         // the mode judged in
+	PinSpace   string                 `protobuf:"bytes,3,opt,name=pin_space,json=pinSpace,proto3" json:"pin_space,omitempty"` // the owner's pinned space; "" for none
+	Pinned     bool                   `protobuf:"varint,4,opt,name=pinned,proto3" json:"pinned,omitempty"`
+	Events     int64                  `protobuf:"varint,5,opt,name=events,proto3" json:"events,omitempty"`     // events replayed
+	Compared   int64                  `protobuf:"varint,6,opt,name=compared,proto3" json:"compared,omitempty"` // with a recorded verdict
+	Changed    int64                  `protobuf:"varint,7,opt,name=changed,proto3" json:"changed,omitempty"`
+	Unrecorded int64                  `protobuf:"varint,8,opt,name=unrecorded,proto3" json:"unrecorded,omitempty"` // with no recorded verdict
+	Problems   int64                  `protobuf:"varint,9,opt,name=problems,proto3" json:"problems,omitempty"`     // that could not be decided
+	// The changed events (with all, every event), in sequence order.
+	Rows []*ReplayedEvent `protobuf:"bytes,10,rep,name=rows,proto3" json:"rows,omitempty"`
+	// Set when the log held more events than one replay reads.
+	Truncated     bool `protobuf:"varint,11,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReplaySpacesResponse) Reset() {
+	*x = ReplaySpacesResponse{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[122]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplaySpacesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplaySpacesResponse) ProtoMessage() {}
+
+func (x *ReplaySpacesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[122]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplaySpacesResponse.ProtoReflect.Descriptor instead.
+func (*ReplaySpacesResponse) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{122}
+}
+
+func (x *ReplaySpacesResponse) GetOwner() string {
+	if x != nil {
+		return x.Owner
+	}
+	return ""
+}
+
+func (x *ReplaySpacesResponse) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *ReplaySpacesResponse) GetPinSpace() string {
+	if x != nil {
+		return x.PinSpace
+	}
+	return ""
+}
+
+func (x *ReplaySpacesResponse) GetPinned() bool {
+	if x != nil {
+		return x.Pinned
+	}
+	return false
+}
+
+func (x *ReplaySpacesResponse) GetEvents() int64 {
+	if x != nil {
+		return x.Events
+	}
+	return 0
+}
+
+func (x *ReplaySpacesResponse) GetCompared() int64 {
+	if x != nil {
+		return x.Compared
+	}
+	return 0
+}
+
+func (x *ReplaySpacesResponse) GetChanged() int64 {
+	if x != nil {
+		return x.Changed
+	}
+	return 0
+}
+
+func (x *ReplaySpacesResponse) GetUnrecorded() int64 {
+	if x != nil {
+		return x.Unrecorded
+	}
+	return 0
+}
+
+func (x *ReplaySpacesResponse) GetProblems() int64 {
+	if x != nil {
+		return x.Problems
+	}
+	return 0
+}
+
+func (x *ReplaySpacesResponse) GetRows() []*ReplayedEvent {
+	if x != nil {
+		return x.Rows
+	}
+	return nil
+}
+
+func (x *ReplaySpacesResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
 type ListToolEventsResponse struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Owner  string                 `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"` // the chain read, as "<session id>" or "task:<id>"
@@ -8016,7 +8357,7 @@ type ListToolEventsResponse struct {
 
 func (x *ListToolEventsResponse) Reset() {
 	*x = ListToolEventsResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[120]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8028,7 +8369,7 @@ func (x *ListToolEventsResponse) String() string {
 func (*ListToolEventsResponse) ProtoMessage() {}
 
 func (x *ListToolEventsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[120]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8041,7 +8382,7 @@ func (x *ListToolEventsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListToolEventsResponse.ProtoReflect.Descriptor instead.
 func (*ListToolEventsResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{120}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *ListToolEventsResponse) GetOwner() string {
@@ -8081,7 +8422,7 @@ type SummarizeToolLogRequest struct {
 
 func (x *SummarizeToolLogRequest) Reset() {
 	*x = SummarizeToolLogRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[121]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8093,7 +8434,7 @@ func (x *SummarizeToolLogRequest) String() string {
 func (*SummarizeToolLogRequest) ProtoMessage() {}
 
 func (x *SummarizeToolLogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[121]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8106,7 +8447,7 @@ func (x *SummarizeToolLogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SummarizeToolLogRequest.ProtoReflect.Descriptor instead.
 func (*SummarizeToolLogRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{121}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *SummarizeToolLogRequest) GetSince() int64 {
@@ -8135,7 +8476,7 @@ type SpaceToolActivity struct {
 
 func (x *SpaceToolActivity) Reset() {
 	*x = SpaceToolActivity{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[122]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8147,7 +8488,7 @@ func (x *SpaceToolActivity) String() string {
 func (*SpaceToolActivity) ProtoMessage() {}
 
 func (x *SpaceToolActivity) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[122]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8160,7 +8501,7 @@ func (x *SpaceToolActivity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpaceToolActivity.ProtoReflect.Descriptor instead.
 func (*SpaceToolActivity) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{122}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *SpaceToolActivity) GetSpace() string {
@@ -8219,7 +8560,7 @@ type ToolLogSummary struct {
 
 func (x *ToolLogSummary) Reset() {
 	*x = ToolLogSummary{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[123]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8231,7 +8572,7 @@ func (x *ToolLogSummary) String() string {
 func (*ToolLogSummary) ProtoMessage() {}
 
 func (x *ToolLogSummary) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[123]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8244,7 +8585,7 @@ func (x *ToolLogSummary) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolLogSummary.ProtoReflect.Descriptor instead.
 func (*ToolLogSummary) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{123}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *ToolLogSummary) GetSince() int64 {
@@ -8290,7 +8631,7 @@ type DocRepo struct {
 
 func (x *DocRepo) Reset() {
 	*x = DocRepo{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[124]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8302,7 +8643,7 @@ func (x *DocRepo) String() string {
 func (*DocRepo) ProtoMessage() {}
 
 func (x *DocRepo) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[124]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8315,7 +8656,7 @@ func (x *DocRepo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DocRepo.ProtoReflect.Descriptor instead.
 func (*DocRepo) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{124}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *DocRepo) GetRepo() string {
@@ -8383,7 +8724,7 @@ type DocFile struct {
 
 func (x *DocFile) Reset() {
 	*x = DocFile{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[125]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8395,7 +8736,7 @@ func (x *DocFile) String() string {
 func (*DocFile) ProtoMessage() {}
 
 func (x *DocFile) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[125]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8408,7 +8749,7 @@ func (x *DocFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DocFile.ProtoReflect.Descriptor instead.
 func (*DocFile) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{125}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *DocFile) GetSourceUri() string {
@@ -8476,7 +8817,7 @@ type GetDocumentRequest struct {
 
 func (x *GetDocumentRequest) Reset() {
 	*x = GetDocumentRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[126]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8488,7 +8829,7 @@ func (x *GetDocumentRequest) String() string {
 func (*GetDocumentRequest) ProtoMessage() {}
 
 func (x *GetDocumentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[126]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8501,7 +8842,7 @@ func (x *GetDocumentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDocumentRequest.ProtoReflect.Descriptor instead.
 func (*GetDocumentRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{126}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{129}
 }
 
 func (x *GetDocumentRequest) GetSourceUri() string {
@@ -8533,7 +8874,7 @@ type Document struct {
 
 func (x *Document) Reset() {
 	*x = Document{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[127]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[130]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8545,7 +8886,7 @@ func (x *Document) String() string {
 func (*Document) ProtoMessage() {}
 
 func (x *Document) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[127]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[130]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8558,7 +8899,7 @@ func (x *Document) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Document.ProtoReflect.Descriptor instead.
 func (*Document) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{127}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *Document) GetSourceUri() string {
@@ -8653,7 +8994,7 @@ type ListRegisteredSourcesRequest struct {
 
 func (x *ListRegisteredSourcesRequest) Reset() {
 	*x = ListRegisteredSourcesRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[128]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[131]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8665,7 +9006,7 @@ func (x *ListRegisteredSourcesRequest) String() string {
 func (*ListRegisteredSourcesRequest) ProtoMessage() {}
 
 func (x *ListRegisteredSourcesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[128]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[131]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8678,7 +9019,7 @@ func (x *ListRegisteredSourcesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRegisteredSourcesRequest.ProtoReflect.Descriptor instead.
 func (*ListRegisteredSourcesRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{128}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{131}
 }
 
 type ListRegisteredSourcesResponse struct {
@@ -8690,7 +9031,7 @@ type ListRegisteredSourcesResponse struct {
 
 func (x *ListRegisteredSourcesResponse) Reset() {
 	*x = ListRegisteredSourcesResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[129]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[132]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8702,7 +9043,7 @@ func (x *ListRegisteredSourcesResponse) String() string {
 func (*ListRegisteredSourcesResponse) ProtoMessage() {}
 
 func (x *ListRegisteredSourcesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[129]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[132]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8715,7 +9056,7 @@ func (x *ListRegisteredSourcesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRegisteredSourcesResponse.ProtoReflect.Descriptor instead.
 func (*ListRegisteredSourcesResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{129}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *ListRegisteredSourcesResponse) GetSources() []*RegisteredSource {
@@ -8746,7 +9087,7 @@ type RegisteredSource struct {
 
 func (x *RegisteredSource) Reset() {
 	*x = RegisteredSource{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[130]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[133]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8758,7 +9099,7 @@ func (x *RegisteredSource) String() string {
 func (*RegisteredSource) ProtoMessage() {}
 
 func (x *RegisteredSource) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[130]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[133]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8771,7 +9112,7 @@ func (x *RegisteredSource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisteredSource.ProtoReflect.Descriptor instead.
 func (*RegisteredSource) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{130}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *RegisteredSource) GetId() string {
@@ -8863,7 +9204,7 @@ type SaveSourceRequest struct {
 
 func (x *SaveSourceRequest) Reset() {
 	*x = SaveSourceRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[131]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[134]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8875,7 +9216,7 @@ func (x *SaveSourceRequest) String() string {
 func (*SaveSourceRequest) ProtoMessage() {}
 
 func (x *SaveSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[131]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[134]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8888,7 +9229,7 @@ func (x *SaveSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SaveSourceRequest.ProtoReflect.Descriptor instead.
 func (*SaveSourceRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{131}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{134}
 }
 
 func (x *SaveSourceRequest) GetSource() *RegisteredSource {
@@ -8916,7 +9257,7 @@ type RemoveSourceRequest struct {
 
 func (x *RemoveSourceRequest) Reset() {
 	*x = RemoveSourceRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[132]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8928,7 +9269,7 @@ func (x *RemoveSourceRequest) String() string {
 func (*RemoveSourceRequest) ProtoMessage() {}
 
 func (x *RemoveSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[132]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8941,7 +9282,7 @@ func (x *RemoveSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSourceRequest.ProtoReflect.Descriptor instead.
 func (*RemoveSourceRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{132}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *RemoveSourceRequest) GetId() string {
@@ -8975,7 +9316,7 @@ type RemoveSourceResponse struct {
 
 func (x *RemoveSourceResponse) Reset() {
 	*x = RemoveSourceResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[133]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8987,7 +9328,7 @@ func (x *RemoveSourceResponse) String() string {
 func (*RemoveSourceResponse) ProtoMessage() {}
 
 func (x *RemoveSourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[133]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9000,7 +9341,7 @@ func (x *RemoveSourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSourceResponse.ProtoReflect.Descriptor instead.
 func (*RemoveSourceResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{133}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *RemoveSourceResponse) GetPurgedSources() int32 {
@@ -9029,7 +9370,7 @@ type RefreshSourceRequest struct {
 
 func (x *RefreshSourceRequest) Reset() {
 	*x = RefreshSourceRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[134]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9041,7 +9382,7 @@ func (x *RefreshSourceRequest) String() string {
 func (*RefreshSourceRequest) ProtoMessage() {}
 
 func (x *RefreshSourceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[134]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9054,7 +9395,7 @@ func (x *RefreshSourceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshSourceRequest.ProtoReflect.Descriptor instead.
 func (*RefreshSourceRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{134}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{137}
 }
 
 func (x *RefreshSourceRequest) GetId() string {
@@ -9080,7 +9421,7 @@ type RefreshSourceResponse struct {
 
 func (x *RefreshSourceResponse) Reset() {
 	*x = RefreshSourceResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[135]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9092,7 +9433,7 @@ func (x *RefreshSourceResponse) String() string {
 func (*RefreshSourceResponse) ProtoMessage() {}
 
 func (x *RefreshSourceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[135]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9105,7 +9446,7 @@ func (x *RefreshSourceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshSourceResponse.ProtoReflect.Descriptor instead.
 func (*RefreshSourceResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{135}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *RefreshSourceResponse) GetMarked() int32 {
@@ -9123,7 +9464,7 @@ type GetSafetyNetRequest struct {
 
 func (x *GetSafetyNetRequest) Reset() {
 	*x = GetSafetyNetRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[136]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9135,7 +9476,7 @@ func (x *GetSafetyNetRequest) String() string {
 func (*GetSafetyNetRequest) ProtoMessage() {}
 
 func (x *GetSafetyNetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[136]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9148,7 +9489,7 @@ func (x *GetSafetyNetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSafetyNetRequest.ProtoReflect.Descriptor instead.
 func (*GetSafetyNetRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{136}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{139}
 }
 
 type InstallSafetyNetRequest struct {
@@ -9162,7 +9503,7 @@ type InstallSafetyNetRequest struct {
 
 func (x *InstallSafetyNetRequest) Reset() {
 	*x = InstallSafetyNetRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[137]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9174,7 +9515,7 @@ func (x *InstallSafetyNetRequest) String() string {
 func (*InstallSafetyNetRequest) ProtoMessage() {}
 
 func (x *InstallSafetyNetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[137]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9187,7 +9528,7 @@ func (x *InstallSafetyNetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InstallSafetyNetRequest.ProtoReflect.Descriptor instead.
 func (*InstallSafetyNetRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{137}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{140}
 }
 
 func (x *InstallSafetyNetRequest) GetRulesOnly() bool {
@@ -9217,7 +9558,7 @@ type SafetyNetState struct {
 
 func (x *SafetyNetState) Reset() {
 	*x = SafetyNetState{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[138]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9229,7 +9570,7 @@ func (x *SafetyNetState) String() string {
 func (*SafetyNetState) ProtoMessage() {}
 
 func (x *SafetyNetState) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[138]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9242,7 +9583,7 @@ func (x *SafetyNetState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SafetyNetState.ProtoReflect.Descriptor instead.
 func (*SafetyNetState) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{138}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *SafetyNetState) GetState() string {
@@ -9333,7 +9674,7 @@ type SafetyNetInstall struct {
 
 func (x *SafetyNetInstall) Reset() {
 	*x = SafetyNetInstall{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[139]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9345,7 +9686,7 @@ func (x *SafetyNetInstall) String() string {
 func (*SafetyNetInstall) ProtoMessage() {}
 
 func (x *SafetyNetInstall) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[139]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9358,7 +9699,7 @@ func (x *SafetyNetInstall) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SafetyNetInstall.ProtoReflect.Descriptor instead.
 func (*SafetyNetInstall) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{139}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *SafetyNetInstall) GetId() string {
@@ -9399,7 +9740,7 @@ type SafetyNetRules struct {
 
 func (x *SafetyNetRules) Reset() {
 	*x = SafetyNetRules{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[140]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[143]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9411,7 +9752,7 @@ func (x *SafetyNetRules) String() string {
 func (*SafetyNetRules) ProtoMessage() {}
 
 func (x *SafetyNetRules) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[140]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[143]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9424,7 +9765,7 @@ func (x *SafetyNetRules) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SafetyNetRules.ProtoReflect.Descriptor instead.
 func (*SafetyNetRules) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{140}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *SafetyNetRules) GetOk() bool {
@@ -9506,7 +9847,7 @@ type SafetyNetRulebook struct {
 
 func (x *SafetyNetRulebook) Reset() {
 	*x = SafetyNetRulebook{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[141]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[144]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9518,7 +9859,7 @@ func (x *SafetyNetRulebook) String() string {
 func (*SafetyNetRulebook) ProtoMessage() {}
 
 func (x *SafetyNetRulebook) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[141]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[144]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9531,7 +9872,7 @@ func (x *SafetyNetRulebook) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SafetyNetRulebook.ProtoReflect.Descriptor instead.
 func (*SafetyNetRulebook) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{141}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{144}
 }
 
 func (x *SafetyNetRulebook) GetSource() string {
@@ -9604,7 +9945,7 @@ type SafetyNetRule struct {
 
 func (x *SafetyNetRule) Reset() {
 	*x = SafetyNetRule{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[142]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9616,7 +9957,7 @@ func (x *SafetyNetRule) String() string {
 func (*SafetyNetRule) ProtoMessage() {}
 
 func (x *SafetyNetRule) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[142]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9629,7 +9970,7 @@ func (x *SafetyNetRule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SafetyNetRule.ProtoReflect.Descriptor instead.
 func (*SafetyNetRule) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{142}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{145}
 }
 
 func (x *SafetyNetRule) GetName() string {
@@ -9690,7 +10031,7 @@ type SafetyNetAction struct {
 
 func (x *SafetyNetAction) Reset() {
 	*x = SafetyNetAction{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[143]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9702,7 +10043,7 @@ func (x *SafetyNetAction) String() string {
 func (*SafetyNetAction) ProtoMessage() {}
 
 func (x *SafetyNetAction) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[143]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9715,7 +10056,7 @@ func (x *SafetyNetAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SafetyNetAction.ProtoReflect.Descriptor instead.
 func (*SafetyNetAction) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{143}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{146}
 }
 
 func (x *SafetyNetAction) GetRunning() bool {
@@ -9784,7 +10125,7 @@ type ListSettingsRequest struct {
 
 func (x *ListSettingsRequest) Reset() {
 	*x = ListSettingsRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[144]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9796,7 +10137,7 @@ func (x *ListSettingsRequest) String() string {
 func (*ListSettingsRequest) ProtoMessage() {}
 
 func (x *ListSettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[144]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9809,7 +10150,7 @@ func (x *ListSettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSettingsRequest.ProtoReflect.Descriptor instead.
 func (*ListSettingsRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{144}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{147}
 }
 
 func (x *ListSettingsRequest) GetProvider() string {
@@ -9838,7 +10179,7 @@ type ListSettingsResponse struct {
 
 func (x *ListSettingsResponse) Reset() {
 	*x = ListSettingsResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[145]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9850,7 +10191,7 @@ func (x *ListSettingsResponse) String() string {
 func (*ListSettingsResponse) ProtoMessage() {}
 
 func (x *ListSettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[145]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9863,7 +10204,7 @@ func (x *ListSettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSettingsResponse.ProtoReflect.Descriptor instead.
 func (*ListSettingsResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{145}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *ListSettingsResponse) GetProviders() []*SettingsProvider {
@@ -9901,7 +10242,7 @@ type SettingsProvider struct {
 
 func (x *SettingsProvider) Reset() {
 	*x = SettingsProvider{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[146]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[149]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9913,7 +10254,7 @@ func (x *SettingsProvider) String() string {
 func (*SettingsProvider) ProtoMessage() {}
 
 func (x *SettingsProvider) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[146]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[149]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9926,7 +10267,7 @@ func (x *SettingsProvider) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SettingsProvider.ProtoReflect.Descriptor instead.
 func (*SettingsProvider) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{146}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{149}
 }
 
 func (x *SettingsProvider) GetName() string {
@@ -9988,7 +10329,7 @@ type SettingKind struct {
 
 func (x *SettingKind) Reset() {
 	*x = SettingKind{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[147]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10000,7 +10341,7 @@ func (x *SettingKind) String() string {
 func (*SettingKind) ProtoMessage() {}
 
 func (x *SettingKind) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[147]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10013,7 +10354,7 @@ func (x *SettingKind) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SettingKind.ProtoReflect.Descriptor instead.
 func (*SettingKind) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{147}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{150}
 }
 
 func (x *SettingKind) GetName() string {
@@ -10080,7 +10421,7 @@ type SettingField struct {
 
 func (x *SettingField) Reset() {
 	*x = SettingField{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[148]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10092,7 +10433,7 @@ func (x *SettingField) String() string {
 func (*SettingField) ProtoMessage() {}
 
 func (x *SettingField) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[148]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10105,7 +10446,7 @@ func (x *SettingField) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SettingField.ProtoReflect.Descriptor instead.
 func (*SettingField) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{148}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{151}
 }
 
 func (x *SettingField) GetName() string {
@@ -10178,7 +10519,7 @@ type SettingItem struct {
 
 func (x *SettingItem) Reset() {
 	*x = SettingItem{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[149]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10190,7 +10531,7 @@ func (x *SettingItem) String() string {
 func (*SettingItem) ProtoMessage() {}
 
 func (x *SettingItem) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[149]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10203,7 +10544,7 @@ func (x *SettingItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SettingItem.ProtoReflect.Descriptor instead.
 func (*SettingItem) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{149}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{152}
 }
 
 func (x *SettingItem) GetProvider() string {
@@ -10295,7 +10636,7 @@ type SetSettingEnabledRequest struct {
 
 func (x *SetSettingEnabledRequest) Reset() {
 	*x = SetSettingEnabledRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[150]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10307,7 +10648,7 @@ func (x *SetSettingEnabledRequest) String() string {
 func (*SetSettingEnabledRequest) ProtoMessage() {}
 
 func (x *SetSettingEnabledRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[150]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10320,7 +10661,7 @@ func (x *SetSettingEnabledRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSettingEnabledRequest.ProtoReflect.Descriptor instead.
 func (*SetSettingEnabledRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{150}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{153}
 }
 
 func (x *SetSettingEnabledRequest) GetProvider() string {
@@ -10362,7 +10703,7 @@ type AddSettingRequest struct {
 
 func (x *AddSettingRequest) Reset() {
 	*x = AddSettingRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[151]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10374,7 +10715,7 @@ func (x *AddSettingRequest) String() string {
 func (*AddSettingRequest) ProtoMessage() {}
 
 func (x *AddSettingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[151]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10387,7 +10728,7 @@ func (x *AddSettingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddSettingRequest.ProtoReflect.Descriptor instead.
 func (*AddSettingRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{151}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{154}
 }
 
 func (x *AddSettingRequest) GetProvider() string {
@@ -10422,7 +10763,7 @@ type RemoveSettingRequest struct {
 
 func (x *RemoveSettingRequest) Reset() {
 	*x = RemoveSettingRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[152]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10434,7 +10775,7 @@ func (x *RemoveSettingRequest) String() string {
 func (*RemoveSettingRequest) ProtoMessage() {}
 
 func (x *RemoveSettingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[152]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10447,7 +10788,7 @@ func (x *RemoveSettingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSettingRequest.ProtoReflect.Descriptor instead.
 func (*RemoveSettingRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{152}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *RemoveSettingRequest) GetProvider() string {
@@ -10479,7 +10820,7 @@ type RemoveSettingResponse struct {
 
 func (x *RemoveSettingResponse) Reset() {
 	*x = RemoveSettingResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[153]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10491,7 +10832,7 @@ func (x *RemoveSettingResponse) String() string {
 func (*RemoveSettingResponse) ProtoMessage() {}
 
 func (x *RemoveSettingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[153]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10504,7 +10845,7 @@ func (x *RemoveSettingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveSettingResponse.ProtoReflect.Descriptor instead.
 func (*RemoveSettingResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{153}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{156}
 }
 
 type ListPRReviewsRequest struct {
@@ -10515,7 +10856,7 @@ type ListPRReviewsRequest struct {
 
 func (x *ListPRReviewsRequest) Reset() {
 	*x = ListPRReviewsRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[154]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10527,7 +10868,7 @@ func (x *ListPRReviewsRequest) String() string {
 func (*ListPRReviewsRequest) ProtoMessage() {}
 
 func (x *ListPRReviewsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[154]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10540,7 +10881,7 @@ func (x *ListPRReviewsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPRReviewsRequest.ProtoReflect.Descriptor instead.
 func (*ListPRReviewsRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{154}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{157}
 }
 
 type ListPRReviewsResponse struct {
@@ -10552,7 +10893,7 @@ type ListPRReviewsResponse struct {
 
 func (x *ListPRReviewsResponse) Reset() {
 	*x = ListPRReviewsResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[155]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10564,7 +10905,7 @@ func (x *ListPRReviewsResponse) String() string {
 func (*ListPRReviewsResponse) ProtoMessage() {}
 
 func (x *ListPRReviewsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[155]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10577,7 +10918,7 @@ func (x *ListPRReviewsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPRReviewsResponse.ProtoReflect.Descriptor instead.
 func (*ListPRReviewsResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{155}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{158}
 }
 
 func (x *ListPRReviewsResponse) GetReviews() []*PRReview {
@@ -10626,7 +10967,7 @@ type PRReview struct {
 
 func (x *PRReview) Reset() {
 	*x = PRReview{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[156]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10638,7 +10979,7 @@ func (x *PRReview) String() string {
 func (*PRReview) ProtoMessage() {}
 
 func (x *PRReview) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[156]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10651,7 +10992,7 @@ func (x *PRReview) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRReview.ProtoReflect.Descriptor instead.
 func (*PRReview) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{156}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *PRReview) GetUrl() string {
@@ -10837,7 +11178,7 @@ type WatchPRReviewRequest struct {
 
 func (x *WatchPRReviewRequest) Reset() {
 	*x = WatchPRReviewRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[157]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10849,7 +11190,7 @@ func (x *WatchPRReviewRequest) String() string {
 func (*WatchPRReviewRequest) ProtoMessage() {}
 
 func (x *WatchPRReviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[157]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10862,7 +11203,7 @@ func (x *WatchPRReviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchPRReviewRequest.ProtoReflect.Descriptor instead.
 func (*WatchPRReviewRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{157}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *WatchPRReviewRequest) GetUrl() string {
@@ -10938,7 +11279,7 @@ type SetPRReviewUpdateInPlaceRequest struct {
 
 func (x *SetPRReviewUpdateInPlaceRequest) Reset() {
 	*x = SetPRReviewUpdateInPlaceRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[158]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10950,7 +11291,7 @@ func (x *SetPRReviewUpdateInPlaceRequest) String() string {
 func (*SetPRReviewUpdateInPlaceRequest) ProtoMessage() {}
 
 func (x *SetPRReviewUpdateInPlaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[158]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10963,7 +11304,7 @@ func (x *SetPRReviewUpdateInPlaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPRReviewUpdateInPlaceRequest.ProtoReflect.Descriptor instead.
 func (*SetPRReviewUpdateInPlaceRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{158}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{161}
 }
 
 func (x *SetPRReviewUpdateInPlaceRequest) GetUrl() string {
@@ -10990,7 +11331,7 @@ type StopPRReviewRequest struct {
 
 func (x *StopPRReviewRequest) Reset() {
 	*x = StopPRReviewRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[159]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11002,7 +11343,7 @@ func (x *StopPRReviewRequest) String() string {
 func (*StopPRReviewRequest) ProtoMessage() {}
 
 func (x *StopPRReviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[159]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11015,7 +11356,7 @@ func (x *StopPRReviewRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopPRReviewRequest.ProtoReflect.Descriptor instead.
 func (*StopPRReviewRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{159}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{162}
 }
 
 func (x *StopPRReviewRequest) GetUrl() string {
@@ -11040,7 +11381,7 @@ type StopPRReviewResponse struct {
 
 func (x *StopPRReviewResponse) Reset() {
 	*x = StopPRReviewResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[160]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11052,7 +11393,7 @@ func (x *StopPRReviewResponse) String() string {
 func (*StopPRReviewResponse) ProtoMessage() {}
 
 func (x *StopPRReviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[160]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11065,7 +11406,7 @@ func (x *StopPRReviewResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopPRReviewResponse.ProtoReflect.Descriptor instead.
 func (*StopPRReviewResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{160}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{163}
 }
 
 type GetPRDetailRequest struct {
@@ -11078,7 +11419,7 @@ type GetPRDetailRequest struct {
 
 func (x *GetPRDetailRequest) Reset() {
 	*x = GetPRDetailRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[161]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11090,7 +11431,7 @@ func (x *GetPRDetailRequest) String() string {
 func (*GetPRDetailRequest) ProtoMessage() {}
 
 func (x *GetPRDetailRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[161]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11103,7 +11444,7 @@ func (x *GetPRDetailRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPRDetailRequest.ProtoReflect.Descriptor instead.
 func (*GetPRDetailRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{161}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{164}
 }
 
 func (x *GetPRDetailRequest) GetUrl() string {
@@ -11153,7 +11494,7 @@ type PRDetail struct {
 
 func (x *PRDetail) Reset() {
 	*x = PRDetail{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[162]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11165,7 +11506,7 @@ func (x *PRDetail) String() string {
 func (*PRDetail) ProtoMessage() {}
 
 func (x *PRDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[162]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11178,7 +11519,7 @@ func (x *PRDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRDetail.ProtoReflect.Descriptor instead.
 func (*PRDetail) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{162}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *PRDetail) GetUrl() string {
@@ -11352,7 +11693,7 @@ type PRReviewerState struct {
 
 func (x *PRReviewerState) Reset() {
 	*x = PRReviewerState{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[163]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11364,7 +11705,7 @@ func (x *PRReviewerState) String() string {
 func (*PRReviewerState) ProtoMessage() {}
 
 func (x *PRReviewerState) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[163]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11377,7 +11718,7 @@ func (x *PRReviewerState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRReviewerState.ProtoReflect.Descriptor instead.
 func (*PRReviewerState) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{163}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *PRReviewerState) GetLogin() string {
@@ -11404,7 +11745,7 @@ type PRCheck struct {
 
 func (x *PRCheck) Reset() {
 	*x = PRCheck{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[164]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11416,7 +11757,7 @@ func (x *PRCheck) String() string {
 func (*PRCheck) ProtoMessage() {}
 
 func (x *PRCheck) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[164]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11429,7 +11770,7 @@ func (x *PRCheck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRCheck.ProtoReflect.Descriptor instead.
 func (*PRCheck) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{164}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{167}
 }
 
 func (x *PRCheck) GetName() string {
@@ -11457,7 +11798,7 @@ type PRFile struct {
 
 func (x *PRFile) Reset() {
 	*x = PRFile{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[165]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11469,7 +11810,7 @@ func (x *PRFile) String() string {
 func (*PRFile) ProtoMessage() {}
 
 func (x *PRFile) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[165]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11482,7 +11823,7 @@ func (x *PRFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRFile.ProtoReflect.Descriptor instead.
 func (*PRFile) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{165}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{168}
 }
 
 func (x *PRFile) GetPath() string {
@@ -11515,7 +11856,7 @@ type GetTaskActivityRequest struct {
 
 func (x *GetTaskActivityRequest) Reset() {
 	*x = GetTaskActivityRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[166]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[169]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11527,7 +11868,7 @@ func (x *GetTaskActivityRequest) String() string {
 func (*GetTaskActivityRequest) ProtoMessage() {}
 
 func (x *GetTaskActivityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[166]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[169]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11540,7 +11881,7 @@ func (x *GetTaskActivityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTaskActivityRequest.ProtoReflect.Descriptor instead.
 func (*GetTaskActivityRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{166}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{169}
 }
 
 func (x *GetTaskActivityRequest) GetId() string {
@@ -11574,7 +11915,7 @@ type TaskActivityStep struct {
 
 func (x *TaskActivityStep) Reset() {
 	*x = TaskActivityStep{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[167]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[170]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11586,7 +11927,7 @@ func (x *TaskActivityStep) String() string {
 func (*TaskActivityStep) ProtoMessage() {}
 
 func (x *TaskActivityStep) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[167]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[170]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11599,7 +11940,7 @@ func (x *TaskActivityStep) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskActivityStep.ProtoReflect.Descriptor instead.
 func (*TaskActivityStep) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{167}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{170}
 }
 
 func (x *TaskActivityStep) GetAt() string {
@@ -11724,7 +12065,7 @@ type TaskActivityTool struct {
 
 func (x *TaskActivityTool) Reset() {
 	*x = TaskActivityTool{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[168]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11736,7 +12077,7 @@ func (x *TaskActivityTool) String() string {
 func (*TaskActivityTool) ProtoMessage() {}
 
 func (x *TaskActivityTool) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[168]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11749,7 +12090,7 @@ func (x *TaskActivityTool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskActivityTool.ProtoReflect.Descriptor instead.
 func (*TaskActivityTool) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{168}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *TaskActivityTool) GetName() string {
@@ -11777,7 +12118,7 @@ type TaskActivityFile struct {
 
 func (x *TaskActivityFile) Reset() {
 	*x = TaskActivityFile{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[169]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11789,7 +12130,7 @@ func (x *TaskActivityFile) String() string {
 func (*TaskActivityFile) ProtoMessage() {}
 
 func (x *TaskActivityFile) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[169]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11802,7 +12143,7 @@ func (x *TaskActivityFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskActivityFile.ProtoReflect.Descriptor instead.
 func (*TaskActivityFile) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{169}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{172}
 }
 
 func (x *TaskActivityFile) GetPath() string {
@@ -11846,7 +12187,7 @@ type TaskActivity struct {
 
 func (x *TaskActivity) Reset() {
 	*x = TaskActivity{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[170]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11858,7 +12199,7 @@ func (x *TaskActivity) String() string {
 func (*TaskActivity) ProtoMessage() {}
 
 func (x *TaskActivity) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[170]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11871,7 +12212,7 @@ func (x *TaskActivity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskActivity.ProtoReflect.Descriptor instead.
 func (*TaskActivity) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{170}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *TaskActivity) GetAvailable() bool {
@@ -11967,7 +12308,7 @@ type PRLandingRequest struct {
 
 func (x *PRLandingRequest) Reset() {
 	*x = PRLandingRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[171]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11979,7 +12320,7 @@ func (x *PRLandingRequest) String() string {
 func (*PRLandingRequest) ProtoMessage() {}
 
 func (x *PRLandingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[171]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11992,7 +12333,7 @@ func (x *PRLandingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRLandingRequest.ProtoReflect.Descriptor instead.
 func (*PRLandingRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{171}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{174}
 }
 
 func (x *PRLandingRequest) GetTaskId() string {
@@ -12010,7 +12351,7 @@ type ListPRLandingsRequest struct {
 
 func (x *ListPRLandingsRequest) Reset() {
 	*x = ListPRLandingsRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[172]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12022,7 +12363,7 @@ func (x *ListPRLandingsRequest) String() string {
 func (*ListPRLandingsRequest) ProtoMessage() {}
 
 func (x *ListPRLandingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[172]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12035,7 +12376,7 @@ func (x *ListPRLandingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPRLandingsRequest.ProtoReflect.Descriptor instead.
 func (*ListPRLandingsRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{172}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{175}
 }
 
 type PRLandingDecision struct {
@@ -12049,7 +12390,7 @@ type PRLandingDecision struct {
 
 func (x *PRLandingDecision) Reset() {
 	*x = PRLandingDecision{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[173]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12061,7 +12402,7 @@ func (x *PRLandingDecision) String() string {
 func (*PRLandingDecision) ProtoMessage() {}
 
 func (x *PRLandingDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[173]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12074,7 +12415,7 @@ func (x *PRLandingDecision) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRLandingDecision.ProtoReflect.Descriptor instead.
 func (*PRLandingDecision) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{173}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{176}
 }
 
 func (x *PRLandingDecision) GetTaskId() string {
@@ -12107,7 +12448,7 @@ type ListPRLandingsResponse struct {
 
 func (x *ListPRLandingsResponse) Reset() {
 	*x = ListPRLandingsResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[174]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12119,7 +12460,7 @@ func (x *ListPRLandingsResponse) String() string {
 func (*ListPRLandingsResponse) ProtoMessage() {}
 
 func (x *ListPRLandingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[174]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12132,7 +12473,7 @@ func (x *ListPRLandingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPRLandingsResponse.ProtoReflect.Descriptor instead.
 func (*ListPRLandingsResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{174}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{177}
 }
 
 func (x *ListPRLandingsResponse) GetDecisions() []*PRLandingDecision {
@@ -12152,7 +12493,7 @@ type LandPRRequest struct {
 
 func (x *LandPRRequest) Reset() {
 	*x = LandPRRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[175]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12164,7 +12505,7 @@ func (x *LandPRRequest) String() string {
 func (*LandPRRequest) ProtoMessage() {}
 
 func (x *LandPRRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[175]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12177,7 +12518,7 @@ func (x *LandPRRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LandPRRequest.ProtoReflect.Descriptor instead.
 func (*LandPRRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{175}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *LandPRRequest) GetTaskId() string {
@@ -12204,7 +12545,7 @@ type DiscardPRLandingRequest struct {
 
 func (x *DiscardPRLandingRequest) Reset() {
 	*x = DiscardPRLandingRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[176]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[179]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12216,7 +12557,7 @@ func (x *DiscardPRLandingRequest) String() string {
 func (*DiscardPRLandingRequest) ProtoMessage() {}
 
 func (x *DiscardPRLandingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[176]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[179]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12229,7 +12570,7 @@ func (x *DiscardPRLandingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiscardPRLandingRequest.ProtoReflect.Descriptor instead.
 func (*DiscardPRLandingRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{176}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{179}
 }
 
 func (x *DiscardPRLandingRequest) GetTaskId() string {
@@ -12257,7 +12598,7 @@ type PRLandingCommit struct {
 
 func (x *PRLandingCommit) Reset() {
 	*x = PRLandingCommit{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[177]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[180]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12269,7 +12610,7 @@ func (x *PRLandingCommit) String() string {
 func (*PRLandingCommit) ProtoMessage() {}
 
 func (x *PRLandingCommit) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[177]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[180]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12282,7 +12623,7 @@ func (x *PRLandingCommit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRLandingCommit.ProtoReflect.Descriptor instead.
 func (*PRLandingCommit) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{177}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{180}
 }
 
 func (x *PRLandingCommit) GetSha() string {
@@ -12337,7 +12678,7 @@ type PRLanding struct {
 
 func (x *PRLanding) Reset() {
 	*x = PRLanding{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[178]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[181]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12349,7 +12690,7 @@ func (x *PRLanding) String() string {
 func (*PRLanding) ProtoMessage() {}
 
 func (x *PRLanding) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[178]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[181]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12362,7 +12703,7 @@ func (x *PRLanding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PRLanding.ProtoReflect.Descriptor instead.
 func (*PRLanding) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{178}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{181}
 }
 
 func (x *PRLanding) GetTaskId() string {
@@ -12542,7 +12883,7 @@ type EnforcementSwitch struct {
 
 func (x *EnforcementSwitch) Reset() {
 	*x = EnforcementSwitch{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[179]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[182]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12554,7 +12895,7 @@ func (x *EnforcementSwitch) String() string {
 func (*EnforcementSwitch) ProtoMessage() {}
 
 func (x *EnforcementSwitch) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[179]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[182]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12567,7 +12908,7 @@ func (x *EnforcementSwitch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnforcementSwitch.ProtoReflect.Descriptor instead.
 func (*EnforcementSwitch) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{179}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{182}
 }
 
 func (x *EnforcementSwitch) GetLayer() string {
@@ -12655,7 +12996,7 @@ type GetEnforcementRequest struct {
 
 func (x *GetEnforcementRequest) Reset() {
 	*x = GetEnforcementRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[180]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[183]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12667,7 +13008,7 @@ func (x *GetEnforcementRequest) String() string {
 func (*GetEnforcementRequest) ProtoMessage() {}
 
 func (x *GetEnforcementRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[180]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[183]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12680,7 +13021,7 @@ func (x *GetEnforcementRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEnforcementRequest.ProtoReflect.Descriptor instead.
 func (*GetEnforcementRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{180}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{183}
 }
 
 type EnforcementState struct {
@@ -12696,7 +13037,7 @@ type EnforcementState struct {
 
 func (x *EnforcementState) Reset() {
 	*x = EnforcementState{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[181]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[184]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12708,7 +13049,7 @@ func (x *EnforcementState) String() string {
 func (*EnforcementState) ProtoMessage() {}
 
 func (x *EnforcementState) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[181]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[184]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12721,7 +13062,7 @@ func (x *EnforcementState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnforcementState.ProtoReflect.Descriptor instead.
 func (*EnforcementState) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{181}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{184}
 }
 
 func (x *EnforcementState) GetSwitches() []*EnforcementSwitch {
@@ -12751,7 +13092,7 @@ type SetEnforcementRequest struct {
 
 func (x *SetEnforcementRequest) Reset() {
 	*x = SetEnforcementRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[182]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[185]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12763,7 +13104,7 @@ func (x *SetEnforcementRequest) String() string {
 func (*SetEnforcementRequest) ProtoMessage() {}
 
 func (x *SetEnforcementRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[182]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[185]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12776,7 +13117,7 @@ func (x *SetEnforcementRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetEnforcementRequest.ProtoReflect.Descriptor instead.
 func (*SetEnforcementRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{182}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{185}
 }
 
 func (x *SetEnforcementRequest) GetLayer() string {
@@ -12812,7 +13153,7 @@ type SetEnforcementResponse struct {
 
 func (x *SetEnforcementResponse) Reset() {
 	*x = SetEnforcementResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[183]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[186]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12824,7 +13165,7 @@ func (x *SetEnforcementResponse) String() string {
 func (*SetEnforcementResponse) ProtoMessage() {}
 
 func (x *SetEnforcementResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[183]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[186]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12837,7 +13178,7 @@ func (x *SetEnforcementResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetEnforcementResponse.ProtoReflect.Descriptor instead.
 func (*SetEnforcementResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{183}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{186}
 }
 
 func (x *SetEnforcementResponse) GetCurrent() *EnforcementSwitch {
@@ -13526,7 +13867,43 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\bdecision\x18\x0e \x01(\tR\bdecision\x12\x12\n" +
 	"\x04rule\x18\x0f \x01(\tR\x04rule\x12\x18\n" +
 	"\adropped\x18\x10 \x01(\x03R\adropped\x12'\n" +
-	"\x0fclaimed_session\x18\x11 \x01(\tR\x0eclaimedSession\"\x87\x01\n" +
+	"\x0fclaimed_session\x18\x11 \x01(\tR\x0eclaimedSession\"\x9b\x01\n" +
+	"\x13ReplaySpacesRequest\x12\x14\n" +
+	"\x05owner\x18\x01 \x01(\tR\x05owner\x12'\n" +
+	"\x0fpolicy_revision\x18\x02 \x01(\x03R\x0epolicyRevision\x12\x1f\n" +
+	"\vpolicy_json\x18\x03 \x01(\tR\n" +
+	"policyJson\x12\x12\n" +
+	"\x04mode\x18\x04 \x01(\tR\x04mode\x12\x10\n" +
+	"\x03all\x18\x05 \x01(\bR\x03all\"\xd2\x02\n" +
+	"\rReplayedEvent\x12\x10\n" +
+	"\x03seq\x18\x01 \x01(\x03R\x03seq\x12\x0e\n" +
+	"\x02at\x18\x02 \x01(\x03R\x02at\x12\x14\n" +
+	"\x05event\x18\x03 \x01(\tR\x05event\x12\x12\n" +
+	"\x04tool\x18\x04 \x01(\tR\x04tool\x12'\n" +
+	"\x0fpolicy_revision\x18\x05 \x01(\x03R\x0epolicyRevision\x12\x1a\n" +
+	"\brecorded\x18\x06 \x01(\bR\brecorded\x12)\n" +
+	"\x10recorded_verdict\x18\a \x01(\tR\x0frecordedVerdict\x12#\n" +
+	"\rrecorded_rule\x18\b \x01(\tR\frecordedRule\x12\x18\n" +
+	"\averdict\x18\t \x01(\tR\averdict\x12\x12\n" +
+	"\x04rule\x18\n" +
+	" \x01(\tR\x04rule\x12\x18\n" +
+	"\achanged\x18\v \x01(\bR\achanged\x12\x18\n" +
+	"\aproblem\x18\f \x01(\tR\aproblem\"\xca\x02\n" +
+	"\x14ReplaySpacesResponse\x12\x14\n" +
+	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x12\n" +
+	"\x04mode\x18\x02 \x01(\tR\x04mode\x12\x1b\n" +
+	"\tpin_space\x18\x03 \x01(\tR\bpinSpace\x12\x16\n" +
+	"\x06pinned\x18\x04 \x01(\bR\x06pinned\x12\x16\n" +
+	"\x06events\x18\x05 \x01(\x03R\x06events\x12\x1a\n" +
+	"\bcompared\x18\x06 \x01(\x03R\bcompared\x12\x18\n" +
+	"\achanged\x18\a \x01(\x03R\achanged\x12\x1e\n" +
+	"\n" +
+	"unrecorded\x18\b \x01(\x03R\n" +
+	"unrecorded\x12\x1a\n" +
+	"\bproblems\x18\t \x01(\x03R\bproblems\x12+\n" +
+	"\x04rows\x18\n" +
+	" \x03(\v2\x17.orchd.v1.ReplayedEventR\x04rows\x12\x1c\n" +
+	"\ttruncated\x18\v \x01(\bR\ttruncated\"\x87\x01\n" +
 	"\x16ListToolEventsResponse\x12\x14\n" +
 	"\x05owner\x18\x01 \x01(\tR\x05owner\x12+\n" +
 	"\x06events\x18\x02 \x03(\v2\x13.orchd.v1.ToolEventR\x06events\x12\x12\n" +
@@ -13958,7 +14335,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x16SetEnforcementResponse\x125\n" +
 	"\acurrent\x18\x01 \x01(\v2\x1b.orchd.v1.EnforcementSwitchR\acurrent\x12\x18\n" +
 	"\achanged\x18\x02 \x01(\bR\achanged\x12\x14\n" +
-	"\x05notes\x18\x03 \x03(\tR\x05notes2\xc6,\n" +
+	"\x05notes\x18\x03 \x03(\tR\x05notes2\x95-\n" +
 	"\x05Orchd\x125\n" +
 	"\x04Ping\x12\x15.orchd.v1.PingRequest\x1a\x16.orchd.v1.PingResponse\x12;\n" +
 	"\x06Ingest\x12\x17.orchd.v1.IngestRequest\x1a\x18.orchd.v1.IngestResponse\x12;\n" +
@@ -14023,6 +14400,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\rVerifyToolLog\x12\x1e.orchd.v1.VerifyToolLogRequest\x1a\x1f.orchd.v1.VerifyToolLogResponse\x12S\n" +
 	"\x0eListToolEvents\x12\x1f.orchd.v1.ListToolEventsRequest\x1a .orchd.v1.ListToolEventsResponse\x12O\n" +
 	"\x10SummarizeToolLog\x12!.orchd.v1.SummarizeToolLogRequest\x1a\x18.orchd.v1.ToolLogSummary\x12M\n" +
+	"\fReplaySpaces\x12\x1d.orchd.v1.ReplaySpacesRequest\x1a\x1e.orchd.v1.ReplaySpacesResponse\x12M\n" +
 	"\x0eGetEnforcement\x12\x1f.orchd.v1.GetEnforcementRequest\x1a\x1a.orchd.v1.EnforcementState\x12S\n" +
 	"\x0eSetEnforcement\x12\x1f.orchd.v1.SetEnforcementRequest\x1a .orchd.v1.SetEnforcementResponse\x12h\n" +
 	"\x15ListRegisteredSources\x12&.orchd.v1.ListRegisteredSourcesRequest\x1a'.orchd.v1.ListRegisteredSourcesResponse\x12E\n" +
@@ -14056,7 +14434,7 @@ func file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP() []byte {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescData
 }
 
-var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 187)
+var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 190)
 var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*PingRequest)(nil),                     // 0: orchd.v1.PingRequest
 	(*PingResponse)(nil),                    // 1: orchd.v1.PingResponse
@@ -14178,73 +14556,76 @@ var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*VerifyToolLogResponse)(nil),           // 117: orchd.v1.VerifyToolLogResponse
 	(*ListToolEventsRequest)(nil),           // 118: orchd.v1.ListToolEventsRequest
 	(*ToolEvent)(nil),                       // 119: orchd.v1.ToolEvent
-	(*ListToolEventsResponse)(nil),          // 120: orchd.v1.ListToolEventsResponse
-	(*SummarizeToolLogRequest)(nil),         // 121: orchd.v1.SummarizeToolLogRequest
-	(*SpaceToolActivity)(nil),               // 122: orchd.v1.SpaceToolActivity
-	(*ToolLogSummary)(nil),                  // 123: orchd.v1.ToolLogSummary
-	(*DocRepo)(nil),                         // 124: orchd.v1.DocRepo
-	(*DocFile)(nil),                         // 125: orchd.v1.DocFile
-	(*GetDocumentRequest)(nil),              // 126: orchd.v1.GetDocumentRequest
-	(*Document)(nil),                        // 127: orchd.v1.Document
-	(*ListRegisteredSourcesRequest)(nil),    // 128: orchd.v1.ListRegisteredSourcesRequest
-	(*ListRegisteredSourcesResponse)(nil),   // 129: orchd.v1.ListRegisteredSourcesResponse
-	(*RegisteredSource)(nil),                // 130: orchd.v1.RegisteredSource
-	(*SaveSourceRequest)(nil),               // 131: orchd.v1.SaveSourceRequest
-	(*RemoveSourceRequest)(nil),             // 132: orchd.v1.RemoveSourceRequest
-	(*RemoveSourceResponse)(nil),            // 133: orchd.v1.RemoveSourceResponse
-	(*RefreshSourceRequest)(nil),            // 134: orchd.v1.RefreshSourceRequest
-	(*RefreshSourceResponse)(nil),           // 135: orchd.v1.RefreshSourceResponse
-	(*GetSafetyNetRequest)(nil),             // 136: orchd.v1.GetSafetyNetRequest
-	(*InstallSafetyNetRequest)(nil),         // 137: orchd.v1.InstallSafetyNetRequest
-	(*SafetyNetState)(nil),                  // 138: orchd.v1.SafetyNetState
-	(*SafetyNetInstall)(nil),                // 139: orchd.v1.SafetyNetInstall
-	(*SafetyNetRules)(nil),                  // 140: orchd.v1.SafetyNetRules
-	(*SafetyNetRulebook)(nil),               // 141: orchd.v1.SafetyNetRulebook
-	(*SafetyNetRule)(nil),                   // 142: orchd.v1.SafetyNetRule
-	(*SafetyNetAction)(nil),                 // 143: orchd.v1.SafetyNetAction
-	(*ListSettingsRequest)(nil),             // 144: orchd.v1.ListSettingsRequest
-	(*ListSettingsResponse)(nil),            // 145: orchd.v1.ListSettingsResponse
-	(*SettingsProvider)(nil),                // 146: orchd.v1.SettingsProvider
-	(*SettingKind)(nil),                     // 147: orchd.v1.SettingKind
-	(*SettingField)(nil),                    // 148: orchd.v1.SettingField
-	(*SettingItem)(nil),                     // 149: orchd.v1.SettingItem
-	(*SetSettingEnabledRequest)(nil),        // 150: orchd.v1.SetSettingEnabledRequest
-	(*AddSettingRequest)(nil),               // 151: orchd.v1.AddSettingRequest
-	(*RemoveSettingRequest)(nil),            // 152: orchd.v1.RemoveSettingRequest
-	(*RemoveSettingResponse)(nil),           // 153: orchd.v1.RemoveSettingResponse
-	(*ListPRReviewsRequest)(nil),            // 154: orchd.v1.ListPRReviewsRequest
-	(*ListPRReviewsResponse)(nil),           // 155: orchd.v1.ListPRReviewsResponse
-	(*PRReview)(nil),                        // 156: orchd.v1.PRReview
-	(*WatchPRReviewRequest)(nil),            // 157: orchd.v1.WatchPRReviewRequest
-	(*SetPRReviewUpdateInPlaceRequest)(nil), // 158: orchd.v1.SetPRReviewUpdateInPlaceRequest
-	(*StopPRReviewRequest)(nil),             // 159: orchd.v1.StopPRReviewRequest
-	(*StopPRReviewResponse)(nil),            // 160: orchd.v1.StopPRReviewResponse
-	(*GetPRDetailRequest)(nil),              // 161: orchd.v1.GetPRDetailRequest
-	(*PRDetail)(nil),                        // 162: orchd.v1.PRDetail
-	(*PRReviewerState)(nil),                 // 163: orchd.v1.PRReviewerState
-	(*PRCheck)(nil),                         // 164: orchd.v1.PRCheck
-	(*PRFile)(nil),                          // 165: orchd.v1.PRFile
-	(*GetTaskActivityRequest)(nil),          // 166: orchd.v1.GetTaskActivityRequest
-	(*TaskActivityStep)(nil),                // 167: orchd.v1.TaskActivityStep
-	(*TaskActivityTool)(nil),                // 168: orchd.v1.TaskActivityTool
-	(*TaskActivityFile)(nil),                // 169: orchd.v1.TaskActivityFile
-	(*TaskActivity)(nil),                    // 170: orchd.v1.TaskActivity
-	(*PRLandingRequest)(nil),                // 171: orchd.v1.PRLandingRequest
-	(*ListPRLandingsRequest)(nil),           // 172: orchd.v1.ListPRLandingsRequest
-	(*PRLandingDecision)(nil),               // 173: orchd.v1.PRLandingDecision
-	(*ListPRLandingsResponse)(nil),          // 174: orchd.v1.ListPRLandingsResponse
-	(*LandPRRequest)(nil),                   // 175: orchd.v1.LandPRRequest
-	(*DiscardPRLandingRequest)(nil),         // 176: orchd.v1.DiscardPRLandingRequest
-	(*PRLandingCommit)(nil),                 // 177: orchd.v1.PRLandingCommit
-	(*PRLanding)(nil),                       // 178: orchd.v1.PRLanding
-	(*EnforcementSwitch)(nil),               // 179: orchd.v1.EnforcementSwitch
-	(*GetEnforcementRequest)(nil),           // 180: orchd.v1.GetEnforcementRequest
-	(*EnforcementState)(nil),                // 181: orchd.v1.EnforcementState
-	(*SetEnforcementRequest)(nil),           // 182: orchd.v1.SetEnforcementRequest
-	(*SetEnforcementResponse)(nil),          // 183: orchd.v1.SetEnforcementResponse
-	nil,                                     // 184: orchd.v1.SystemMetrics.TasksEntry
-	nil,                                     // 185: orchd.v1.SetConfigRequest.ValuesEntry
-	nil,                                     // 186: orchd.v1.AddSettingRequest.FieldsEntry
+	(*ReplaySpacesRequest)(nil),             // 120: orchd.v1.ReplaySpacesRequest
+	(*ReplayedEvent)(nil),                   // 121: orchd.v1.ReplayedEvent
+	(*ReplaySpacesResponse)(nil),            // 122: orchd.v1.ReplaySpacesResponse
+	(*ListToolEventsResponse)(nil),          // 123: orchd.v1.ListToolEventsResponse
+	(*SummarizeToolLogRequest)(nil),         // 124: orchd.v1.SummarizeToolLogRequest
+	(*SpaceToolActivity)(nil),               // 125: orchd.v1.SpaceToolActivity
+	(*ToolLogSummary)(nil),                  // 126: orchd.v1.ToolLogSummary
+	(*DocRepo)(nil),                         // 127: orchd.v1.DocRepo
+	(*DocFile)(nil),                         // 128: orchd.v1.DocFile
+	(*GetDocumentRequest)(nil),              // 129: orchd.v1.GetDocumentRequest
+	(*Document)(nil),                        // 130: orchd.v1.Document
+	(*ListRegisteredSourcesRequest)(nil),    // 131: orchd.v1.ListRegisteredSourcesRequest
+	(*ListRegisteredSourcesResponse)(nil),   // 132: orchd.v1.ListRegisteredSourcesResponse
+	(*RegisteredSource)(nil),                // 133: orchd.v1.RegisteredSource
+	(*SaveSourceRequest)(nil),               // 134: orchd.v1.SaveSourceRequest
+	(*RemoveSourceRequest)(nil),             // 135: orchd.v1.RemoveSourceRequest
+	(*RemoveSourceResponse)(nil),            // 136: orchd.v1.RemoveSourceResponse
+	(*RefreshSourceRequest)(nil),            // 137: orchd.v1.RefreshSourceRequest
+	(*RefreshSourceResponse)(nil),           // 138: orchd.v1.RefreshSourceResponse
+	(*GetSafetyNetRequest)(nil),             // 139: orchd.v1.GetSafetyNetRequest
+	(*InstallSafetyNetRequest)(nil),         // 140: orchd.v1.InstallSafetyNetRequest
+	(*SafetyNetState)(nil),                  // 141: orchd.v1.SafetyNetState
+	(*SafetyNetInstall)(nil),                // 142: orchd.v1.SafetyNetInstall
+	(*SafetyNetRules)(nil),                  // 143: orchd.v1.SafetyNetRules
+	(*SafetyNetRulebook)(nil),               // 144: orchd.v1.SafetyNetRulebook
+	(*SafetyNetRule)(nil),                   // 145: orchd.v1.SafetyNetRule
+	(*SafetyNetAction)(nil),                 // 146: orchd.v1.SafetyNetAction
+	(*ListSettingsRequest)(nil),             // 147: orchd.v1.ListSettingsRequest
+	(*ListSettingsResponse)(nil),            // 148: orchd.v1.ListSettingsResponse
+	(*SettingsProvider)(nil),                // 149: orchd.v1.SettingsProvider
+	(*SettingKind)(nil),                     // 150: orchd.v1.SettingKind
+	(*SettingField)(nil),                    // 151: orchd.v1.SettingField
+	(*SettingItem)(nil),                     // 152: orchd.v1.SettingItem
+	(*SetSettingEnabledRequest)(nil),        // 153: orchd.v1.SetSettingEnabledRequest
+	(*AddSettingRequest)(nil),               // 154: orchd.v1.AddSettingRequest
+	(*RemoveSettingRequest)(nil),            // 155: orchd.v1.RemoveSettingRequest
+	(*RemoveSettingResponse)(nil),           // 156: orchd.v1.RemoveSettingResponse
+	(*ListPRReviewsRequest)(nil),            // 157: orchd.v1.ListPRReviewsRequest
+	(*ListPRReviewsResponse)(nil),           // 158: orchd.v1.ListPRReviewsResponse
+	(*PRReview)(nil),                        // 159: orchd.v1.PRReview
+	(*WatchPRReviewRequest)(nil),            // 160: orchd.v1.WatchPRReviewRequest
+	(*SetPRReviewUpdateInPlaceRequest)(nil), // 161: orchd.v1.SetPRReviewUpdateInPlaceRequest
+	(*StopPRReviewRequest)(nil),             // 162: orchd.v1.StopPRReviewRequest
+	(*StopPRReviewResponse)(nil),            // 163: orchd.v1.StopPRReviewResponse
+	(*GetPRDetailRequest)(nil),              // 164: orchd.v1.GetPRDetailRequest
+	(*PRDetail)(nil),                        // 165: orchd.v1.PRDetail
+	(*PRReviewerState)(nil),                 // 166: orchd.v1.PRReviewerState
+	(*PRCheck)(nil),                         // 167: orchd.v1.PRCheck
+	(*PRFile)(nil),                          // 168: orchd.v1.PRFile
+	(*GetTaskActivityRequest)(nil),          // 169: orchd.v1.GetTaskActivityRequest
+	(*TaskActivityStep)(nil),                // 170: orchd.v1.TaskActivityStep
+	(*TaskActivityTool)(nil),                // 171: orchd.v1.TaskActivityTool
+	(*TaskActivityFile)(nil),                // 172: orchd.v1.TaskActivityFile
+	(*TaskActivity)(nil),                    // 173: orchd.v1.TaskActivity
+	(*PRLandingRequest)(nil),                // 174: orchd.v1.PRLandingRequest
+	(*ListPRLandingsRequest)(nil),           // 175: orchd.v1.ListPRLandingsRequest
+	(*PRLandingDecision)(nil),               // 176: orchd.v1.PRLandingDecision
+	(*ListPRLandingsResponse)(nil),          // 177: orchd.v1.ListPRLandingsResponse
+	(*LandPRRequest)(nil),                   // 178: orchd.v1.LandPRRequest
+	(*DiscardPRLandingRequest)(nil),         // 179: orchd.v1.DiscardPRLandingRequest
+	(*PRLandingCommit)(nil),                 // 180: orchd.v1.PRLandingCommit
+	(*PRLanding)(nil),                       // 181: orchd.v1.PRLanding
+	(*EnforcementSwitch)(nil),               // 182: orchd.v1.EnforcementSwitch
+	(*GetEnforcementRequest)(nil),           // 183: orchd.v1.GetEnforcementRequest
+	(*EnforcementState)(nil),                // 184: orchd.v1.EnforcementState
+	(*SetEnforcementRequest)(nil),           // 185: orchd.v1.SetEnforcementRequest
+	(*SetEnforcementResponse)(nil),          // 186: orchd.v1.SetEnforcementResponse
+	nil,                                     // 187: orchd.v1.SystemMetrics.TasksEntry
+	nil,                                     // 188: orchd.v1.SetConfigRequest.ValuesEntry
+	nil,                                     // 189: orchd.v1.AddSettingRequest.FieldsEntry
 }
 var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	6,   // 0: orchd.v1.SearchResponse.hits:type_name -> orchd.v1.SearchHit
@@ -14257,7 +14638,7 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	24,  // 7: orchd.v1.StatusResponse.subsystems:type_name -> orchd.v1.SubsystemStatus
 	23,  // 8: orchd.v1.StatusResponse.migration:type_name -> orchd.v1.MigrationProgress
 	22,  // 9: orchd.v1.StatusResponse.spaces:type_name -> orchd.v1.SpacesStatus
-	179, // 10: orchd.v1.SpacesStatus.relaxed:type_name -> orchd.v1.EnforcementSwitch
+	182, // 10: orchd.v1.SpacesStatus.relaxed:type_name -> orchd.v1.EnforcementSwitch
 	29,  // 11: orchd.v1.RecommendModelResponse.route:type_name -> orchd.v1.Route
 	18,  // 12: orchd.v1.TaskEvent.tasks:type_name -> orchd.v1.Task
 	50,  // 13: orchd.v1.ListPRsResponse.prs:type_name -> orchd.v1.PullRequest
@@ -14270,14 +14651,14 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	69,  // 20: orchd.v1.TailLogsResponse.entries:type_name -> orchd.v1.LogEntry
 	72,  // 21: orchd.v1.SystemMetrics.processes:type_name -> orchd.v1.ProcessMetrics
 	73,  // 22: orchd.v1.SystemMetrics.data:type_name -> orchd.v1.DataSize
-	184, // 23: orchd.v1.SystemMetrics.tasks:type_name -> orchd.v1.SystemMetrics.TasksEntry
+	187, // 23: orchd.v1.SystemMetrics.tasks:type_name -> orchd.v1.SystemMetrics.TasksEntry
 	79,  // 24: orchd.v1.ListDocsResponse.owners:type_name -> orchd.v1.DocOwner
-	125, // 25: orchd.v1.ListDocsResponse.files:type_name -> orchd.v1.DocFile
+	128, // 25: orchd.v1.ListDocsResponse.files:type_name -> orchd.v1.DocFile
 	78,  // 26: orchd.v1.ListDocsResponse.sync:type_name -> orchd.v1.DocsSyncState
-	124, // 27: orchd.v1.DocOwner.repos:type_name -> orchd.v1.DocRepo
+	127, // 27: orchd.v1.DocOwner.repos:type_name -> orchd.v1.DocRepo
 	79,  // 28: orchd.v1.ListDocsOwnersResponse.owners:type_name -> orchd.v1.DocOwner
 	83,  // 29: orchd.v1.ListDocsOwnerReposResponse.repos:type_name -> orchd.v1.DocsOwnerRepo
-	185, // 30: orchd.v1.SetConfigRequest.values:type_name -> orchd.v1.SetConfigRequest.ValuesEntry
+	188, // 30: orchd.v1.SetConfigRequest.values:type_name -> orchd.v1.SetConfigRequest.ValuesEntry
 	91,  // 31: orchd.v1.ConfigState.fields:type_name -> orchd.v1.ConfigField
 	95,  // 32: orchd.v1.SpacesDraft.problems:type_name -> orchd.v1.SpacesProblem
 	98,  // 33: orchd.v1.SpacesDiff.changes:type_name -> orchd.v1.SpacesChange
@@ -14286,187 +14667,190 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	104, // 36: orchd.v1.PlacementExplanation.remote:type_name -> orchd.v1.PlacementRemote
 	111, // 37: orchd.v1.ListSessionsResponse.sessions:type_name -> orchd.v1.SessionInfo
 	116, // 38: orchd.v1.VerifyToolLogResponse.problems:type_name -> orchd.v1.ToolLogProblem
-	119, // 39: orchd.v1.ListToolEventsResponse.events:type_name -> orchd.v1.ToolEvent
-	122, // 40: orchd.v1.ToolLogSummary.spaces:type_name -> orchd.v1.SpaceToolActivity
-	130, // 41: orchd.v1.ListRegisteredSourcesResponse.sources:type_name -> orchd.v1.RegisteredSource
-	130, // 42: orchd.v1.SaveSourceRequest.source:type_name -> orchd.v1.RegisteredSource
-	139, // 43: orchd.v1.SafetyNetState.legacy:type_name -> orchd.v1.SafetyNetInstall
-	140, // 44: orchd.v1.SafetyNetState.rules:type_name -> orchd.v1.SafetyNetRules
-	143, // 45: orchd.v1.SafetyNetState.action:type_name -> orchd.v1.SafetyNetAction
-	141, // 46: orchd.v1.SafetyNetRules.rulebooks:type_name -> orchd.v1.SafetyNetRulebook
-	142, // 47: orchd.v1.SafetyNetRulebook.rules:type_name -> orchd.v1.SafetyNetRule
-	146, // 48: orchd.v1.ListSettingsResponse.providers:type_name -> orchd.v1.SettingsProvider
-	149, // 49: orchd.v1.ListSettingsResponse.items:type_name -> orchd.v1.SettingItem
-	147, // 50: orchd.v1.SettingsProvider.kinds:type_name -> orchd.v1.SettingKind
-	148, // 51: orchd.v1.SettingKind.fields:type_name -> orchd.v1.SettingField
-	186, // 52: orchd.v1.AddSettingRequest.fields:type_name -> orchd.v1.AddSettingRequest.FieldsEntry
-	156, // 53: orchd.v1.ListPRReviewsResponse.reviews:type_name -> orchd.v1.PRReview
-	163, // 54: orchd.v1.PRDetail.reviews:type_name -> orchd.v1.PRReviewerState
-	164, // 55: orchd.v1.PRDetail.checks:type_name -> orchd.v1.PRCheck
-	165, // 56: orchd.v1.PRDetail.files:type_name -> orchd.v1.PRFile
-	167, // 57: orchd.v1.TaskActivity.steps:type_name -> orchd.v1.TaskActivityStep
-	168, // 58: orchd.v1.TaskActivity.tools:type_name -> orchd.v1.TaskActivityTool
-	169, // 59: orchd.v1.TaskActivity.files_edited:type_name -> orchd.v1.TaskActivityFile
-	173, // 60: orchd.v1.ListPRLandingsResponse.decisions:type_name -> orchd.v1.PRLandingDecision
-	177, // 61: orchd.v1.PRLanding.commits:type_name -> orchd.v1.PRLandingCommit
-	165, // 62: orchd.v1.PRLanding.files:type_name -> orchd.v1.PRFile
-	179, // 63: orchd.v1.EnforcementState.switches:type_name -> orchd.v1.EnforcementSwitch
-	179, // 64: orchd.v1.SetEnforcementResponse.current:type_name -> orchd.v1.EnforcementSwitch
-	0,   // 65: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
-	2,   // 66: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
-	4,   // 67: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
-	7,   // 68: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
-	10,  // 69: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
-	12,  // 70: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
-	14,  // 71: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
-	16,  // 72: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
-	20,  // 73: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
-	25,  // 74: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
-	27,  // 75: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
-	30,  // 76: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
-	32,  // 77: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
-	34,  // 78: orchd.v1.Orchd.RetryTask:input_type -> orchd.v1.RetryTaskRequest
-	36,  // 79: orchd.v1.Orchd.CancelTask:input_type -> orchd.v1.CancelTaskRequest
-	38,  // 80: orchd.v1.Orchd.WatchTasks:input_type -> orchd.v1.WatchTasksRequest
-	40,  // 81: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
-	42,  // 82: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
-	46,  // 83: orchd.v1.Orchd.ReindexKeywords:input_type -> orchd.v1.ReindexKeywordsRequest
-	44,  // 84: orchd.v1.Orchd.BackfillSessions:input_type -> orchd.v1.BackfillSessionsRequest
-	48,  // 85: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
-	51,  // 86: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
-	54,  // 87: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
-	57,  // 88: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
-	59,  // 89: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
-	62,  // 90: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
-	64,  // 91: orchd.v1.Orchd.RequestGitHubSweep:input_type -> orchd.v1.RequestGitHubSweepRequest
-	154, // 92: orchd.v1.Orchd.ListPRReviews:input_type -> orchd.v1.ListPRReviewsRequest
-	157, // 93: orchd.v1.Orchd.WatchPRReview:input_type -> orchd.v1.WatchPRReviewRequest
-	158, // 94: orchd.v1.Orchd.SetPRReviewUpdateInPlace:input_type -> orchd.v1.SetPRReviewUpdateInPlaceRequest
-	159, // 95: orchd.v1.Orchd.StopPRReview:input_type -> orchd.v1.StopPRReviewRequest
-	161, // 96: orchd.v1.Orchd.GetPRDetail:input_type -> orchd.v1.GetPRDetailRequest
-	67,  // 97: orchd.v1.Orchd.TailLogs:input_type -> orchd.v1.TailLogsRequest
-	70,  // 98: orchd.v1.Orchd.GetSystemMetrics:input_type -> orchd.v1.GetSystemMetricsRequest
-	74,  // 99: orchd.v1.Orchd.ListDocs:input_type -> orchd.v1.ListDocsRequest
-	126, // 100: orchd.v1.Orchd.GetDocument:input_type -> orchd.v1.GetDocumentRequest
-	76,  // 101: orchd.v1.Orchd.SyncDocs:input_type -> orchd.v1.SyncDocsRequest
-	77,  // 102: orchd.v1.Orchd.GetDocsSync:input_type -> orchd.v1.GetDocsSyncRequest
-	80,  // 103: orchd.v1.Orchd.ListDocsOwners:input_type -> orchd.v1.ListDocsOwnersRequest
-	82,  // 104: orchd.v1.Orchd.ListDocsOwnerRepos:input_type -> orchd.v1.ListDocsOwnerReposRequest
-	85,  // 105: orchd.v1.Orchd.SaveDocsOwner:input_type -> orchd.v1.SaveDocsOwnerRequest
-	86,  // 106: orchd.v1.Orchd.RemoveDocsOwner:input_type -> orchd.v1.RemoveDocsOwnerRequest
-	87,  // 107: orchd.v1.Orchd.PurgeDocs:input_type -> orchd.v1.PurgeDocsRequest
-	89,  // 108: orchd.v1.Orchd.GetConfig:input_type -> orchd.v1.GetConfigRequest
-	90,  // 109: orchd.v1.Orchd.SetConfig:input_type -> orchd.v1.SetConfigRequest
-	93,  // 110: orchd.v1.Orchd.RemoveLegacyConfig:input_type -> orchd.v1.RemoveLegacyConfigRequest
-	94,  // 111: orchd.v1.Orchd.SetSpacesDraft:input_type -> orchd.v1.SetSpacesDraftRequest
-	97,  // 112: orchd.v1.Orchd.DiffSpaces:input_type -> orchd.v1.DiffSpacesRequest
-	100, // 113: orchd.v1.Orchd.ApplySpaces:input_type -> orchd.v1.ApplySpacesRequest
-	102, // 114: orchd.v1.Orchd.ExplainPlacement:input_type -> orchd.v1.ExplainPlacementRequest
-	106, // 115: orchd.v1.Orchd.PinSession:input_type -> orchd.v1.PinSessionRequest
-	108, // 116: orchd.v1.Orchd.EndSession:input_type -> orchd.v1.EndSessionRequest
-	110, // 117: orchd.v1.Orchd.ListSessions:input_type -> orchd.v1.ListSessionsRequest
-	113, // 118: orchd.v1.Orchd.RecordToolEvent:input_type -> orchd.v1.RecordToolEventRequest
-	115, // 119: orchd.v1.Orchd.VerifyToolLog:input_type -> orchd.v1.VerifyToolLogRequest
-	118, // 120: orchd.v1.Orchd.ListToolEvents:input_type -> orchd.v1.ListToolEventsRequest
-	121, // 121: orchd.v1.Orchd.SummarizeToolLog:input_type -> orchd.v1.SummarizeToolLogRequest
-	180, // 122: orchd.v1.Orchd.GetEnforcement:input_type -> orchd.v1.GetEnforcementRequest
-	182, // 123: orchd.v1.Orchd.SetEnforcement:input_type -> orchd.v1.SetEnforcementRequest
-	128, // 124: orchd.v1.Orchd.ListRegisteredSources:input_type -> orchd.v1.ListRegisteredSourcesRequest
-	131, // 125: orchd.v1.Orchd.SaveSource:input_type -> orchd.v1.SaveSourceRequest
-	132, // 126: orchd.v1.Orchd.RemoveSource:input_type -> orchd.v1.RemoveSourceRequest
-	134, // 127: orchd.v1.Orchd.RefreshSource:input_type -> orchd.v1.RefreshSourceRequest
-	136, // 128: orchd.v1.Orchd.GetSafetyNet:input_type -> orchd.v1.GetSafetyNetRequest
-	137, // 129: orchd.v1.Orchd.InstallSafetyNet:input_type -> orchd.v1.InstallSafetyNetRequest
-	144, // 130: orchd.v1.Orchd.ListSettings:input_type -> orchd.v1.ListSettingsRequest
-	150, // 131: orchd.v1.Orchd.SetSettingEnabled:input_type -> orchd.v1.SetSettingEnabledRequest
-	151, // 132: orchd.v1.Orchd.AddSetting:input_type -> orchd.v1.AddSettingRequest
-	152, // 133: orchd.v1.Orchd.RemoveSetting:input_type -> orchd.v1.RemoveSettingRequest
-	166, // 134: orchd.v1.Orchd.GetTaskActivity:input_type -> orchd.v1.GetTaskActivityRequest
-	171, // 135: orchd.v1.Orchd.GetPRLanding:input_type -> orchd.v1.PRLandingRequest
-	172, // 136: orchd.v1.Orchd.ListPRLandings:input_type -> orchd.v1.ListPRLandingsRequest
-	175, // 137: orchd.v1.Orchd.LandPR:input_type -> orchd.v1.LandPRRequest
-	171, // 138: orchd.v1.Orchd.UndoPRLanding:input_type -> orchd.v1.PRLandingRequest
-	176, // 139: orchd.v1.Orchd.DiscardPRLanding:input_type -> orchd.v1.DiscardPRLandingRequest
-	1,   // 140: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
-	3,   // 141: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
-	5,   // 142: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
-	8,   // 143: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
-	11,  // 144: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
-	13,  // 145: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
-	15,  // 146: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
-	17,  // 147: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
-	21,  // 148: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
-	26,  // 149: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
-	28,  // 150: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
-	31,  // 151: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
-	33,  // 152: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
-	35,  // 153: orchd.v1.Orchd.RetryTask:output_type -> orchd.v1.RetryTaskResponse
-	37,  // 154: orchd.v1.Orchd.CancelTask:output_type -> orchd.v1.CancelTaskResponse
-	39,  // 155: orchd.v1.Orchd.WatchTasks:output_type -> orchd.v1.TaskEvent
-	41,  // 156: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
-	43,  // 157: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
-	47,  // 158: orchd.v1.Orchd.ReindexKeywords:output_type -> orchd.v1.ReindexKeywordsResponse
-	45,  // 159: orchd.v1.Orchd.BackfillSessions:output_type -> orchd.v1.BackfillSessionsResponse
-	49,  // 160: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
-	52,  // 161: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
-	55,  // 162: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
-	58,  // 163: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
-	60,  // 164: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
-	63,  // 165: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
-	65,  // 166: orchd.v1.Orchd.RequestGitHubSweep:output_type -> orchd.v1.RequestGitHubSweepResponse
-	155, // 167: orchd.v1.Orchd.ListPRReviews:output_type -> orchd.v1.ListPRReviewsResponse
-	156, // 168: orchd.v1.Orchd.WatchPRReview:output_type -> orchd.v1.PRReview
-	156, // 169: orchd.v1.Orchd.SetPRReviewUpdateInPlace:output_type -> orchd.v1.PRReview
-	160, // 170: orchd.v1.Orchd.StopPRReview:output_type -> orchd.v1.StopPRReviewResponse
-	162, // 171: orchd.v1.Orchd.GetPRDetail:output_type -> orchd.v1.PRDetail
-	68,  // 172: orchd.v1.Orchd.TailLogs:output_type -> orchd.v1.TailLogsResponse
-	71,  // 173: orchd.v1.Orchd.GetSystemMetrics:output_type -> orchd.v1.SystemMetrics
-	75,  // 174: orchd.v1.Orchd.ListDocs:output_type -> orchd.v1.ListDocsResponse
-	127, // 175: orchd.v1.Orchd.GetDocument:output_type -> orchd.v1.Document
-	78,  // 176: orchd.v1.Orchd.SyncDocs:output_type -> orchd.v1.DocsSyncState
-	78,  // 177: orchd.v1.Orchd.GetDocsSync:output_type -> orchd.v1.DocsSyncState
-	81,  // 178: orchd.v1.Orchd.ListDocsOwners:output_type -> orchd.v1.ListDocsOwnersResponse
-	84,  // 179: orchd.v1.Orchd.ListDocsOwnerRepos:output_type -> orchd.v1.ListDocsOwnerReposResponse
-	79,  // 180: orchd.v1.Orchd.SaveDocsOwner:output_type -> orchd.v1.DocOwner
-	88,  // 181: orchd.v1.Orchd.RemoveDocsOwner:output_type -> orchd.v1.PurgeDocsResponse
-	88,  // 182: orchd.v1.Orchd.PurgeDocs:output_type -> orchd.v1.PurgeDocsResponse
-	92,  // 183: orchd.v1.Orchd.GetConfig:output_type -> orchd.v1.ConfigState
-	92,  // 184: orchd.v1.Orchd.SetConfig:output_type -> orchd.v1.ConfigState
-	92,  // 185: orchd.v1.Orchd.RemoveLegacyConfig:output_type -> orchd.v1.ConfigState
-	96,  // 186: orchd.v1.Orchd.SetSpacesDraft:output_type -> orchd.v1.SpacesDraft
-	99,  // 187: orchd.v1.Orchd.DiffSpaces:output_type -> orchd.v1.SpacesDiff
-	101, // 188: orchd.v1.Orchd.ApplySpaces:output_type -> orchd.v1.ApplySpacesResponse
-	105, // 189: orchd.v1.Orchd.ExplainPlacement:output_type -> orchd.v1.PlacementExplanation
-	107, // 190: orchd.v1.Orchd.PinSession:output_type -> orchd.v1.SessionPin
-	109, // 191: orchd.v1.Orchd.EndSession:output_type -> orchd.v1.EndSessionResponse
-	112, // 192: orchd.v1.Orchd.ListSessions:output_type -> orchd.v1.ListSessionsResponse
-	114, // 193: orchd.v1.Orchd.RecordToolEvent:output_type -> orchd.v1.RecordToolEventResponse
-	117, // 194: orchd.v1.Orchd.VerifyToolLog:output_type -> orchd.v1.VerifyToolLogResponse
-	120, // 195: orchd.v1.Orchd.ListToolEvents:output_type -> orchd.v1.ListToolEventsResponse
-	123, // 196: orchd.v1.Orchd.SummarizeToolLog:output_type -> orchd.v1.ToolLogSummary
-	181, // 197: orchd.v1.Orchd.GetEnforcement:output_type -> orchd.v1.EnforcementState
-	183, // 198: orchd.v1.Orchd.SetEnforcement:output_type -> orchd.v1.SetEnforcementResponse
-	129, // 199: orchd.v1.Orchd.ListRegisteredSources:output_type -> orchd.v1.ListRegisteredSourcesResponse
-	130, // 200: orchd.v1.Orchd.SaveSource:output_type -> orchd.v1.RegisteredSource
-	133, // 201: orchd.v1.Orchd.RemoveSource:output_type -> orchd.v1.RemoveSourceResponse
-	135, // 202: orchd.v1.Orchd.RefreshSource:output_type -> orchd.v1.RefreshSourceResponse
-	138, // 203: orchd.v1.Orchd.GetSafetyNet:output_type -> orchd.v1.SafetyNetState
-	138, // 204: orchd.v1.Orchd.InstallSafetyNet:output_type -> orchd.v1.SafetyNetState
-	145, // 205: orchd.v1.Orchd.ListSettings:output_type -> orchd.v1.ListSettingsResponse
-	149, // 206: orchd.v1.Orchd.SetSettingEnabled:output_type -> orchd.v1.SettingItem
-	149, // 207: orchd.v1.Orchd.AddSetting:output_type -> orchd.v1.SettingItem
-	153, // 208: orchd.v1.Orchd.RemoveSetting:output_type -> orchd.v1.RemoveSettingResponse
-	170, // 209: orchd.v1.Orchd.GetTaskActivity:output_type -> orchd.v1.TaskActivity
-	178, // 210: orchd.v1.Orchd.GetPRLanding:output_type -> orchd.v1.PRLanding
-	174, // 211: orchd.v1.Orchd.ListPRLandings:output_type -> orchd.v1.ListPRLandingsResponse
-	178, // 212: orchd.v1.Orchd.LandPR:output_type -> orchd.v1.PRLanding
-	178, // 213: orchd.v1.Orchd.UndoPRLanding:output_type -> orchd.v1.PRLanding
-	178, // 214: orchd.v1.Orchd.DiscardPRLanding:output_type -> orchd.v1.PRLanding
-	140, // [140:215] is the sub-list for method output_type
-	65,  // [65:140] is the sub-list for method input_type
-	65,  // [65:65] is the sub-list for extension type_name
-	65,  // [65:65] is the sub-list for extension extendee
-	0,   // [0:65] is the sub-list for field type_name
+	121, // 39: orchd.v1.ReplaySpacesResponse.rows:type_name -> orchd.v1.ReplayedEvent
+	119, // 40: orchd.v1.ListToolEventsResponse.events:type_name -> orchd.v1.ToolEvent
+	125, // 41: orchd.v1.ToolLogSummary.spaces:type_name -> orchd.v1.SpaceToolActivity
+	133, // 42: orchd.v1.ListRegisteredSourcesResponse.sources:type_name -> orchd.v1.RegisteredSource
+	133, // 43: orchd.v1.SaveSourceRequest.source:type_name -> orchd.v1.RegisteredSource
+	142, // 44: orchd.v1.SafetyNetState.legacy:type_name -> orchd.v1.SafetyNetInstall
+	143, // 45: orchd.v1.SafetyNetState.rules:type_name -> orchd.v1.SafetyNetRules
+	146, // 46: orchd.v1.SafetyNetState.action:type_name -> orchd.v1.SafetyNetAction
+	144, // 47: orchd.v1.SafetyNetRules.rulebooks:type_name -> orchd.v1.SafetyNetRulebook
+	145, // 48: orchd.v1.SafetyNetRulebook.rules:type_name -> orchd.v1.SafetyNetRule
+	149, // 49: orchd.v1.ListSettingsResponse.providers:type_name -> orchd.v1.SettingsProvider
+	152, // 50: orchd.v1.ListSettingsResponse.items:type_name -> orchd.v1.SettingItem
+	150, // 51: orchd.v1.SettingsProvider.kinds:type_name -> orchd.v1.SettingKind
+	151, // 52: orchd.v1.SettingKind.fields:type_name -> orchd.v1.SettingField
+	189, // 53: orchd.v1.AddSettingRequest.fields:type_name -> orchd.v1.AddSettingRequest.FieldsEntry
+	159, // 54: orchd.v1.ListPRReviewsResponse.reviews:type_name -> orchd.v1.PRReview
+	166, // 55: orchd.v1.PRDetail.reviews:type_name -> orchd.v1.PRReviewerState
+	167, // 56: orchd.v1.PRDetail.checks:type_name -> orchd.v1.PRCheck
+	168, // 57: orchd.v1.PRDetail.files:type_name -> orchd.v1.PRFile
+	170, // 58: orchd.v1.TaskActivity.steps:type_name -> orchd.v1.TaskActivityStep
+	171, // 59: orchd.v1.TaskActivity.tools:type_name -> orchd.v1.TaskActivityTool
+	172, // 60: orchd.v1.TaskActivity.files_edited:type_name -> orchd.v1.TaskActivityFile
+	176, // 61: orchd.v1.ListPRLandingsResponse.decisions:type_name -> orchd.v1.PRLandingDecision
+	180, // 62: orchd.v1.PRLanding.commits:type_name -> orchd.v1.PRLandingCommit
+	168, // 63: orchd.v1.PRLanding.files:type_name -> orchd.v1.PRFile
+	182, // 64: orchd.v1.EnforcementState.switches:type_name -> orchd.v1.EnforcementSwitch
+	182, // 65: orchd.v1.SetEnforcementResponse.current:type_name -> orchd.v1.EnforcementSwitch
+	0,   // 66: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
+	2,   // 67: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
+	4,   // 68: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
+	7,   // 69: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
+	10,  // 70: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
+	12,  // 71: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
+	14,  // 72: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
+	16,  // 73: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
+	20,  // 74: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
+	25,  // 75: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
+	27,  // 76: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
+	30,  // 77: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
+	32,  // 78: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
+	34,  // 79: orchd.v1.Orchd.RetryTask:input_type -> orchd.v1.RetryTaskRequest
+	36,  // 80: orchd.v1.Orchd.CancelTask:input_type -> orchd.v1.CancelTaskRequest
+	38,  // 81: orchd.v1.Orchd.WatchTasks:input_type -> orchd.v1.WatchTasksRequest
+	40,  // 82: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
+	42,  // 83: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
+	46,  // 84: orchd.v1.Orchd.ReindexKeywords:input_type -> orchd.v1.ReindexKeywordsRequest
+	44,  // 85: orchd.v1.Orchd.BackfillSessions:input_type -> orchd.v1.BackfillSessionsRequest
+	48,  // 86: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
+	51,  // 87: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
+	54,  // 88: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
+	57,  // 89: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
+	59,  // 90: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
+	62,  // 91: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
+	64,  // 92: orchd.v1.Orchd.RequestGitHubSweep:input_type -> orchd.v1.RequestGitHubSweepRequest
+	157, // 93: orchd.v1.Orchd.ListPRReviews:input_type -> orchd.v1.ListPRReviewsRequest
+	160, // 94: orchd.v1.Orchd.WatchPRReview:input_type -> orchd.v1.WatchPRReviewRequest
+	161, // 95: orchd.v1.Orchd.SetPRReviewUpdateInPlace:input_type -> orchd.v1.SetPRReviewUpdateInPlaceRequest
+	162, // 96: orchd.v1.Orchd.StopPRReview:input_type -> orchd.v1.StopPRReviewRequest
+	164, // 97: orchd.v1.Orchd.GetPRDetail:input_type -> orchd.v1.GetPRDetailRequest
+	67,  // 98: orchd.v1.Orchd.TailLogs:input_type -> orchd.v1.TailLogsRequest
+	70,  // 99: orchd.v1.Orchd.GetSystemMetrics:input_type -> orchd.v1.GetSystemMetricsRequest
+	74,  // 100: orchd.v1.Orchd.ListDocs:input_type -> orchd.v1.ListDocsRequest
+	129, // 101: orchd.v1.Orchd.GetDocument:input_type -> orchd.v1.GetDocumentRequest
+	76,  // 102: orchd.v1.Orchd.SyncDocs:input_type -> orchd.v1.SyncDocsRequest
+	77,  // 103: orchd.v1.Orchd.GetDocsSync:input_type -> orchd.v1.GetDocsSyncRequest
+	80,  // 104: orchd.v1.Orchd.ListDocsOwners:input_type -> orchd.v1.ListDocsOwnersRequest
+	82,  // 105: orchd.v1.Orchd.ListDocsOwnerRepos:input_type -> orchd.v1.ListDocsOwnerReposRequest
+	85,  // 106: orchd.v1.Orchd.SaveDocsOwner:input_type -> orchd.v1.SaveDocsOwnerRequest
+	86,  // 107: orchd.v1.Orchd.RemoveDocsOwner:input_type -> orchd.v1.RemoveDocsOwnerRequest
+	87,  // 108: orchd.v1.Orchd.PurgeDocs:input_type -> orchd.v1.PurgeDocsRequest
+	89,  // 109: orchd.v1.Orchd.GetConfig:input_type -> orchd.v1.GetConfigRequest
+	90,  // 110: orchd.v1.Orchd.SetConfig:input_type -> orchd.v1.SetConfigRequest
+	93,  // 111: orchd.v1.Orchd.RemoveLegacyConfig:input_type -> orchd.v1.RemoveLegacyConfigRequest
+	94,  // 112: orchd.v1.Orchd.SetSpacesDraft:input_type -> orchd.v1.SetSpacesDraftRequest
+	97,  // 113: orchd.v1.Orchd.DiffSpaces:input_type -> orchd.v1.DiffSpacesRequest
+	100, // 114: orchd.v1.Orchd.ApplySpaces:input_type -> orchd.v1.ApplySpacesRequest
+	102, // 115: orchd.v1.Orchd.ExplainPlacement:input_type -> orchd.v1.ExplainPlacementRequest
+	106, // 116: orchd.v1.Orchd.PinSession:input_type -> orchd.v1.PinSessionRequest
+	108, // 117: orchd.v1.Orchd.EndSession:input_type -> orchd.v1.EndSessionRequest
+	110, // 118: orchd.v1.Orchd.ListSessions:input_type -> orchd.v1.ListSessionsRequest
+	113, // 119: orchd.v1.Orchd.RecordToolEvent:input_type -> orchd.v1.RecordToolEventRequest
+	115, // 120: orchd.v1.Orchd.VerifyToolLog:input_type -> orchd.v1.VerifyToolLogRequest
+	118, // 121: orchd.v1.Orchd.ListToolEvents:input_type -> orchd.v1.ListToolEventsRequest
+	124, // 122: orchd.v1.Orchd.SummarizeToolLog:input_type -> orchd.v1.SummarizeToolLogRequest
+	120, // 123: orchd.v1.Orchd.ReplaySpaces:input_type -> orchd.v1.ReplaySpacesRequest
+	183, // 124: orchd.v1.Orchd.GetEnforcement:input_type -> orchd.v1.GetEnforcementRequest
+	185, // 125: orchd.v1.Orchd.SetEnforcement:input_type -> orchd.v1.SetEnforcementRequest
+	131, // 126: orchd.v1.Orchd.ListRegisteredSources:input_type -> orchd.v1.ListRegisteredSourcesRequest
+	134, // 127: orchd.v1.Orchd.SaveSource:input_type -> orchd.v1.SaveSourceRequest
+	135, // 128: orchd.v1.Orchd.RemoveSource:input_type -> orchd.v1.RemoveSourceRequest
+	137, // 129: orchd.v1.Orchd.RefreshSource:input_type -> orchd.v1.RefreshSourceRequest
+	139, // 130: orchd.v1.Orchd.GetSafetyNet:input_type -> orchd.v1.GetSafetyNetRequest
+	140, // 131: orchd.v1.Orchd.InstallSafetyNet:input_type -> orchd.v1.InstallSafetyNetRequest
+	147, // 132: orchd.v1.Orchd.ListSettings:input_type -> orchd.v1.ListSettingsRequest
+	153, // 133: orchd.v1.Orchd.SetSettingEnabled:input_type -> orchd.v1.SetSettingEnabledRequest
+	154, // 134: orchd.v1.Orchd.AddSetting:input_type -> orchd.v1.AddSettingRequest
+	155, // 135: orchd.v1.Orchd.RemoveSetting:input_type -> orchd.v1.RemoveSettingRequest
+	169, // 136: orchd.v1.Orchd.GetTaskActivity:input_type -> orchd.v1.GetTaskActivityRequest
+	174, // 137: orchd.v1.Orchd.GetPRLanding:input_type -> orchd.v1.PRLandingRequest
+	175, // 138: orchd.v1.Orchd.ListPRLandings:input_type -> orchd.v1.ListPRLandingsRequest
+	178, // 139: orchd.v1.Orchd.LandPR:input_type -> orchd.v1.LandPRRequest
+	174, // 140: orchd.v1.Orchd.UndoPRLanding:input_type -> orchd.v1.PRLandingRequest
+	179, // 141: orchd.v1.Orchd.DiscardPRLanding:input_type -> orchd.v1.DiscardPRLandingRequest
+	1,   // 142: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
+	3,   // 143: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
+	5,   // 144: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
+	8,   // 145: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
+	11,  // 146: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
+	13,  // 147: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
+	15,  // 148: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
+	17,  // 149: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
+	21,  // 150: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
+	26,  // 151: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
+	28,  // 152: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
+	31,  // 153: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
+	33,  // 154: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
+	35,  // 155: orchd.v1.Orchd.RetryTask:output_type -> orchd.v1.RetryTaskResponse
+	37,  // 156: orchd.v1.Orchd.CancelTask:output_type -> orchd.v1.CancelTaskResponse
+	39,  // 157: orchd.v1.Orchd.WatchTasks:output_type -> orchd.v1.TaskEvent
+	41,  // 158: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
+	43,  // 159: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
+	47,  // 160: orchd.v1.Orchd.ReindexKeywords:output_type -> orchd.v1.ReindexKeywordsResponse
+	45,  // 161: orchd.v1.Orchd.BackfillSessions:output_type -> orchd.v1.BackfillSessionsResponse
+	49,  // 162: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
+	52,  // 163: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
+	55,  // 164: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
+	58,  // 165: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
+	60,  // 166: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
+	63,  // 167: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
+	65,  // 168: orchd.v1.Orchd.RequestGitHubSweep:output_type -> orchd.v1.RequestGitHubSweepResponse
+	158, // 169: orchd.v1.Orchd.ListPRReviews:output_type -> orchd.v1.ListPRReviewsResponse
+	159, // 170: orchd.v1.Orchd.WatchPRReview:output_type -> orchd.v1.PRReview
+	159, // 171: orchd.v1.Orchd.SetPRReviewUpdateInPlace:output_type -> orchd.v1.PRReview
+	163, // 172: orchd.v1.Orchd.StopPRReview:output_type -> orchd.v1.StopPRReviewResponse
+	165, // 173: orchd.v1.Orchd.GetPRDetail:output_type -> orchd.v1.PRDetail
+	68,  // 174: orchd.v1.Orchd.TailLogs:output_type -> orchd.v1.TailLogsResponse
+	71,  // 175: orchd.v1.Orchd.GetSystemMetrics:output_type -> orchd.v1.SystemMetrics
+	75,  // 176: orchd.v1.Orchd.ListDocs:output_type -> orchd.v1.ListDocsResponse
+	130, // 177: orchd.v1.Orchd.GetDocument:output_type -> orchd.v1.Document
+	78,  // 178: orchd.v1.Orchd.SyncDocs:output_type -> orchd.v1.DocsSyncState
+	78,  // 179: orchd.v1.Orchd.GetDocsSync:output_type -> orchd.v1.DocsSyncState
+	81,  // 180: orchd.v1.Orchd.ListDocsOwners:output_type -> orchd.v1.ListDocsOwnersResponse
+	84,  // 181: orchd.v1.Orchd.ListDocsOwnerRepos:output_type -> orchd.v1.ListDocsOwnerReposResponse
+	79,  // 182: orchd.v1.Orchd.SaveDocsOwner:output_type -> orchd.v1.DocOwner
+	88,  // 183: orchd.v1.Orchd.RemoveDocsOwner:output_type -> orchd.v1.PurgeDocsResponse
+	88,  // 184: orchd.v1.Orchd.PurgeDocs:output_type -> orchd.v1.PurgeDocsResponse
+	92,  // 185: orchd.v1.Orchd.GetConfig:output_type -> orchd.v1.ConfigState
+	92,  // 186: orchd.v1.Orchd.SetConfig:output_type -> orchd.v1.ConfigState
+	92,  // 187: orchd.v1.Orchd.RemoveLegacyConfig:output_type -> orchd.v1.ConfigState
+	96,  // 188: orchd.v1.Orchd.SetSpacesDraft:output_type -> orchd.v1.SpacesDraft
+	99,  // 189: orchd.v1.Orchd.DiffSpaces:output_type -> orchd.v1.SpacesDiff
+	101, // 190: orchd.v1.Orchd.ApplySpaces:output_type -> orchd.v1.ApplySpacesResponse
+	105, // 191: orchd.v1.Orchd.ExplainPlacement:output_type -> orchd.v1.PlacementExplanation
+	107, // 192: orchd.v1.Orchd.PinSession:output_type -> orchd.v1.SessionPin
+	109, // 193: orchd.v1.Orchd.EndSession:output_type -> orchd.v1.EndSessionResponse
+	112, // 194: orchd.v1.Orchd.ListSessions:output_type -> orchd.v1.ListSessionsResponse
+	114, // 195: orchd.v1.Orchd.RecordToolEvent:output_type -> orchd.v1.RecordToolEventResponse
+	117, // 196: orchd.v1.Orchd.VerifyToolLog:output_type -> orchd.v1.VerifyToolLogResponse
+	123, // 197: orchd.v1.Orchd.ListToolEvents:output_type -> orchd.v1.ListToolEventsResponse
+	126, // 198: orchd.v1.Orchd.SummarizeToolLog:output_type -> orchd.v1.ToolLogSummary
+	122, // 199: orchd.v1.Orchd.ReplaySpaces:output_type -> orchd.v1.ReplaySpacesResponse
+	184, // 200: orchd.v1.Orchd.GetEnforcement:output_type -> orchd.v1.EnforcementState
+	186, // 201: orchd.v1.Orchd.SetEnforcement:output_type -> orchd.v1.SetEnforcementResponse
+	132, // 202: orchd.v1.Orchd.ListRegisteredSources:output_type -> orchd.v1.ListRegisteredSourcesResponse
+	133, // 203: orchd.v1.Orchd.SaveSource:output_type -> orchd.v1.RegisteredSource
+	136, // 204: orchd.v1.Orchd.RemoveSource:output_type -> orchd.v1.RemoveSourceResponse
+	138, // 205: orchd.v1.Orchd.RefreshSource:output_type -> orchd.v1.RefreshSourceResponse
+	141, // 206: orchd.v1.Orchd.GetSafetyNet:output_type -> orchd.v1.SafetyNetState
+	141, // 207: orchd.v1.Orchd.InstallSafetyNet:output_type -> orchd.v1.SafetyNetState
+	148, // 208: orchd.v1.Orchd.ListSettings:output_type -> orchd.v1.ListSettingsResponse
+	152, // 209: orchd.v1.Orchd.SetSettingEnabled:output_type -> orchd.v1.SettingItem
+	152, // 210: orchd.v1.Orchd.AddSetting:output_type -> orchd.v1.SettingItem
+	156, // 211: orchd.v1.Orchd.RemoveSetting:output_type -> orchd.v1.RemoveSettingResponse
+	173, // 212: orchd.v1.Orchd.GetTaskActivity:output_type -> orchd.v1.TaskActivity
+	181, // 213: orchd.v1.Orchd.GetPRLanding:output_type -> orchd.v1.PRLanding
+	177, // 214: orchd.v1.Orchd.ListPRLandings:output_type -> orchd.v1.ListPRLandingsResponse
+	181, // 215: orchd.v1.Orchd.LandPR:output_type -> orchd.v1.PRLanding
+	181, // 216: orchd.v1.Orchd.UndoPRLanding:output_type -> orchd.v1.PRLanding
+	181, // 217: orchd.v1.Orchd.DiscardPRLanding:output_type -> orchd.v1.PRLanding
+	142, // [142:218] is the sub-list for method output_type
+	66,  // [66:142] is the sub-list for method input_type
+	66,  // [66:66] is the sub-list for extension type_name
+	66,  // [66:66] is the sub-list for extension extendee
+	0,   // [0:66] is the sub-list for field type_name
 }
 
 func init() { file_internal_rpc_orchdv1_orchd_proto_init() }
@@ -14480,7 +14864,7 @@ func file_internal_rpc_orchdv1_orchd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_rpc_orchdv1_orchd_proto_rawDesc), len(file_internal_rpc_orchdv1_orchd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   187,
+			NumMessages:   190,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -761,6 +761,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ReplaySpaces" metadata.
+        public enum ReplaySpaces: Sendable {
+            /// Request type for "ReplaySpaces".
+            public typealias Input = Orchd_V1_ReplaySpacesRequest
+            /// Response type for "ReplaySpaces".
+            public typealias Output = Orchd_V1_ReplaySpacesResponse
+            /// Descriptor for "ReplaySpaces".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ReplaySpaces",
+                type: .unary
+            )
+        }
         /// Namespace for "GetEnforcement" metadata.
         public enum GetEnforcement: Sendable {
             /// Request type for "GetEnforcement".
@@ -1054,6 +1067,7 @@ public enum Orchd_V1_Orchd: Sendable {
             VerifyToolLog.descriptor,
             ListToolEvents.descriptor,
             SummarizeToolLog.descriptor,
+            ReplaySpaces.descriptor,
             GetEnforcement.descriptor,
             SetEnforcement.descriptor,
             ListRegisteredSources.descriptor,
@@ -2469,6 +2483,33 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ToolLogSummary>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ToolLogSummary>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ReplaySpaces" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ReplaySpaces decides one command log's recorded tool events again with
+        /// > the guard's decision function and reports each verdict that differs
+        /// > from the recorded one (SP-047). By default each event is decided under
+        /// > the revision applied when it was recorded. Operator-only; it changes
+        /// > nothing.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ReplaySpacesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ReplaySpacesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ReplaySpacesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func replaySpaces<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ReplaySpacesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ReplaySpacesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ReplaySpacesResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ReplaySpacesResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "GetEnforcement" method.
@@ -4928,6 +4969,44 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "ReplaySpaces" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ReplaySpaces decides one command log's recorded tool events again with
+        /// > the guard's decision function and reports each verdict that differs
+        /// > from the recorded one (SP-047). By default each event is decided under
+        /// > the revision applied when it was recorded. Operator-only; it changes
+        /// > nothing.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ReplaySpacesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ReplaySpacesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ReplaySpacesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func replaySpaces<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ReplaySpacesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ReplaySpacesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ReplaySpacesResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ReplaySpacesResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ReplaySpaces.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "GetEnforcement" method.
         ///
         /// > Source IDL Documentation:
@@ -7276,6 +7355,39 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SummarizeToolLogRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ToolLogSummary>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ReplaySpaces" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ReplaySpaces decides one command log's recorded tool events again with
+    /// > the guard's decision function and reports each verdict that differs
+    /// > from the recorded one (SP-047). By default each event is decided under
+    /// > the revision applied when it was recorded. Operator-only; it changes
+    /// > nothing.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ReplaySpacesRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func replaySpaces<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ReplaySpacesRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ReplaySpacesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.replaySpaces(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ReplaySpacesRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ReplaySpacesResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -9765,6 +9877,43 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.summarizeToolLog(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ReplaySpaces" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ReplaySpaces decides one command log's recorded tool events again with
+    /// > the guard's decision function and reports each verdict that differs
+    /// > from the recorded one (SP-047). By default each event is decided under
+    /// > the revision applied when it was recorded. Operator-only; it changes
+    /// > nothing.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func replaySpaces<Result>(
+        _ message: Orchd_V1_ReplaySpacesRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ReplaySpacesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ReplaySpacesRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.replaySpaces(
             request: request,
             options: options,
             onResponse: handleResponse

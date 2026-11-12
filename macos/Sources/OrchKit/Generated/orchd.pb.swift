@@ -2618,6 +2618,111 @@ public nonisolated struct Orchd_V1_ToolEvent: @unchecked Sendable {
   fileprivate var _storage = _StorageClass.defaultInstance
 }
 
+public nonisolated struct Orchd_V1_ReplaySpacesRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// A session ID, task:<task id> or process:<pid>[-<start>].
+  public var owner: String = String()
+
+  /// The policy to decide under, instead of each event's recording
+  /// revision: a saved revision, or a policy document. At most one.
+  public var policyRevision: Int64 = 0
+
+  public var policyJson: String = String()
+
+  /// The guard mode to judge in: off | log | block-other-jobs | strict; ""
+  /// for the guard switch's current state.
+  public var mode: String = String()
+
+  /// Return every replayed event, not only the changed ones.
+  public var all: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// ReplayedEvent is one event's recorded and replayed verdicts.
+public nonisolated struct Orchd_V1_ReplayedEvent: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var seq: Int64 = 0
+
+  /// unix nanoseconds when it was recorded
+  public var at: Int64 = 0
+
+  public var event: String = String()
+
+  public var tool: String = String()
+
+  /// applied when it was recorded; 0 for none
+  public var policyRevision: Int64 = 0
+
+  /// the record carries a verdict
+  public var recorded: Bool = false
+
+  public var recordedVerdict: String = String()
+
+  public var recordedRule: String = String()
+
+  /// allow | refuse; "" when it could not be decided
+  public var verdict: String = String()
+
+  public var rule: String = String()
+
+  public var changed: Bool = false
+
+  public var problem: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ReplaySpacesResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var owner: String = String()
+
+  /// the mode judged in
+  public var mode: String = String()
+
+  /// the owner's pinned space; "" for none
+  public var pinSpace: String = String()
+
+  public var pinned: Bool = false
+
+  /// events replayed
+  public var events: Int64 = 0
+
+  /// with a recorded verdict
+  public var compared: Int64 = 0
+
+  public var changed: Int64 = 0
+
+  /// with no recorded verdict
+  public var unrecorded: Int64 = 0
+
+  /// that could not be decided
+  public var problems: Int64 = 0
+
+  /// The changed events (with all, every event), in sequence order.
+  public var rows: [Orchd_V1_ReplayedEvent] = []
+
+  /// Set when the log held more events than one replay reads.
+  public var truncated: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Orchd_V1_ListToolEventsResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -9658,6 +9763,221 @@ nonisolated extension Orchd_V1_ToolEvent: SwiftProtobuf.Message, SwiftProtobuf._
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ReplaySpacesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ReplaySpacesRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{3}policy_revision\0\u{3}policy_json\0\u{1}mode\0\u{1}all\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.policyRevision) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.policyJson) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.mode) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.all) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    if self.policyRevision != 0 {
+      try visitor.visitSingularInt64Field(value: self.policyRevision, fieldNumber: 2)
+    }
+    if !self.policyJson.isEmpty {
+      try visitor.visitSingularStringField(value: self.policyJson, fieldNumber: 3)
+    }
+    if !self.mode.isEmpty {
+      try visitor.visitSingularStringField(value: self.mode, fieldNumber: 4)
+    }
+    if self.all != false {
+      try visitor.visitSingularBoolField(value: self.all, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ReplaySpacesRequest, rhs: Orchd_V1_ReplaySpacesRequest) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.policyRevision != rhs.policyRevision {return false}
+    if lhs.policyJson != rhs.policyJson {return false}
+    if lhs.mode != rhs.mode {return false}
+    if lhs.all != rhs.all {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ReplayedEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ReplayedEvent"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}seq\0\u{1}at\0\u{1}event\0\u{1}tool\0\u{3}policy_revision\0\u{1}recorded\0\u{3}recorded_verdict\0\u{3}recorded_rule\0\u{1}verdict\0\u{1}rule\0\u{1}changed\0\u{1}problem\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt64Field(value: &self.seq) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.at) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.event) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.tool) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.policyRevision) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.recorded) }()
+      case 7: try { try decoder.decodeSingularStringField(value: &self.recordedVerdict) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.recordedRule) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.verdict) }()
+      case 10: try { try decoder.decodeSingularStringField(value: &self.rule) }()
+      case 11: try { try decoder.decodeSingularBoolField(value: &self.changed) }()
+      case 12: try { try decoder.decodeSingularStringField(value: &self.problem) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.seq != 0 {
+      try visitor.visitSingularInt64Field(value: self.seq, fieldNumber: 1)
+    }
+    if self.at != 0 {
+      try visitor.visitSingularInt64Field(value: self.at, fieldNumber: 2)
+    }
+    if !self.event.isEmpty {
+      try visitor.visitSingularStringField(value: self.event, fieldNumber: 3)
+    }
+    if !self.tool.isEmpty {
+      try visitor.visitSingularStringField(value: self.tool, fieldNumber: 4)
+    }
+    if self.policyRevision != 0 {
+      try visitor.visitSingularInt64Field(value: self.policyRevision, fieldNumber: 5)
+    }
+    if self.recorded != false {
+      try visitor.visitSingularBoolField(value: self.recorded, fieldNumber: 6)
+    }
+    if !self.recordedVerdict.isEmpty {
+      try visitor.visitSingularStringField(value: self.recordedVerdict, fieldNumber: 7)
+    }
+    if !self.recordedRule.isEmpty {
+      try visitor.visitSingularStringField(value: self.recordedRule, fieldNumber: 8)
+    }
+    if !self.verdict.isEmpty {
+      try visitor.visitSingularStringField(value: self.verdict, fieldNumber: 9)
+    }
+    if !self.rule.isEmpty {
+      try visitor.visitSingularStringField(value: self.rule, fieldNumber: 10)
+    }
+    if self.changed != false {
+      try visitor.visitSingularBoolField(value: self.changed, fieldNumber: 11)
+    }
+    if !self.problem.isEmpty {
+      try visitor.visitSingularStringField(value: self.problem, fieldNumber: 12)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ReplayedEvent, rhs: Orchd_V1_ReplayedEvent) -> Bool {
+    if lhs.seq != rhs.seq {return false}
+    if lhs.at != rhs.at {return false}
+    if lhs.event != rhs.event {return false}
+    if lhs.tool != rhs.tool {return false}
+    if lhs.policyRevision != rhs.policyRevision {return false}
+    if lhs.recorded != rhs.recorded {return false}
+    if lhs.recordedVerdict != rhs.recordedVerdict {return false}
+    if lhs.recordedRule != rhs.recordedRule {return false}
+    if lhs.verdict != rhs.verdict {return false}
+    if lhs.rule != rhs.rule {return false}
+    if lhs.changed != rhs.changed {return false}
+    if lhs.problem != rhs.problem {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ReplaySpacesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ReplaySpacesResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}owner\0\u{1}mode\0\u{3}pin_space\0\u{1}pinned\0\u{1}events\0\u{1}compared\0\u{1}changed\0\u{1}unrecorded\0\u{1}problems\0\u{1}rows\0\u{1}truncated\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.owner) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.mode) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.pinSpace) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.pinned) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.events) }()
+      case 6: try { try decoder.decodeSingularInt64Field(value: &self.compared) }()
+      case 7: try { try decoder.decodeSingularInt64Field(value: &self.changed) }()
+      case 8: try { try decoder.decodeSingularInt64Field(value: &self.unrecorded) }()
+      case 9: try { try decoder.decodeSingularInt64Field(value: &self.problems) }()
+      case 10: try { try decoder.decodeRepeatedMessageField(value: &self.rows) }()
+      case 11: try { try decoder.decodeSingularBoolField(value: &self.truncated) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.owner.isEmpty {
+      try visitor.visitSingularStringField(value: self.owner, fieldNumber: 1)
+    }
+    if !self.mode.isEmpty {
+      try visitor.visitSingularStringField(value: self.mode, fieldNumber: 2)
+    }
+    if !self.pinSpace.isEmpty {
+      try visitor.visitSingularStringField(value: self.pinSpace, fieldNumber: 3)
+    }
+    if self.pinned != false {
+      try visitor.visitSingularBoolField(value: self.pinned, fieldNumber: 4)
+    }
+    if self.events != 0 {
+      try visitor.visitSingularInt64Field(value: self.events, fieldNumber: 5)
+    }
+    if self.compared != 0 {
+      try visitor.visitSingularInt64Field(value: self.compared, fieldNumber: 6)
+    }
+    if self.changed != 0 {
+      try visitor.visitSingularInt64Field(value: self.changed, fieldNumber: 7)
+    }
+    if self.unrecorded != 0 {
+      try visitor.visitSingularInt64Field(value: self.unrecorded, fieldNumber: 8)
+    }
+    if self.problems != 0 {
+      try visitor.visitSingularInt64Field(value: self.problems, fieldNumber: 9)
+    }
+    if !self.rows.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.rows, fieldNumber: 10)
+    }
+    if self.truncated != false {
+      try visitor.visitSingularBoolField(value: self.truncated, fieldNumber: 11)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ReplaySpacesResponse, rhs: Orchd_V1_ReplaySpacesResponse) -> Bool {
+    if lhs.owner != rhs.owner {return false}
+    if lhs.mode != rhs.mode {return false}
+    if lhs.pinSpace != rhs.pinSpace {return false}
+    if lhs.pinned != rhs.pinned {return false}
+    if lhs.events != rhs.events {return false}
+    if lhs.compared != rhs.compared {return false}
+    if lhs.changed != rhs.changed {return false}
+    if lhs.unrecorded != rhs.unrecorded {return false}
+    if lhs.problems != rhs.problems {return false}
+    if lhs.rows != rhs.rows {return false}
+    if lhs.truncated != rhs.truncated {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

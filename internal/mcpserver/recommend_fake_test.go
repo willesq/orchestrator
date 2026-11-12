@@ -287,3 +287,7 @@ func (f *fakeClient) GetEnforcement(context.Context, *orchdv1.GetEnforcementRequ
 func (f *fakeClient) SetEnforcement(context.Context, *orchdv1.SetEnforcementRequest, ...grpc.CallOption) (*orchdv1.SetEnforcementResponse, error) {
 	return &orchdv1.SetEnforcementResponse{}, nil
 }
+
+func (f *fakeClient) ReplaySpaces(context.Context, *orchdv1.ReplaySpacesRequest, ...grpc.CallOption) (*orchdv1.ReplaySpacesResponse, error) {
+	return &orchdv1.ReplaySpacesResponse{}, nil
+}
