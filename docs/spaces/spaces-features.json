@@ -1963,6 +1963,83 @@
           "SP-042"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-200",
+        "kind": "follow-up",
+        "topic": "Self-protection follows orchd's directories, not the hook's or the harness's",
+        "detail": "From the RC-110 security review (low, accepted 2026-11-12): orchd computes the guard's protection from its own environment, and under launchd or brew services it has no ORCH_*/XDG_* variables, so it protects ~/.config/orch, ~/.claude/settings* and ~/.codex/*. A config directory or harness home that only the user's shell moves (XDG_CONFIG_HOME, ORCH_CONFIG_DIR, CLAUDE_CONFIG_DIR, CODEX_HOME) is not protected, so an agent could edit the installed AGENTS.md or the live harness settings there. Related to RC-102. Proposed: the hook adds its own paths.ConfigDir(), data directory and guard directory to the snapshot's write list (a union only adds protection), and protects $CLAUDE_CONFIG_DIR/settings* and $CODEX_HOME/{hooks.json,config.toml} when set; replay would then need the same union.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-042",
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-201",
+        "kind": "follow-up",
+        "topic": "Guard snapshot version 2 refuses calls until orchd restarts after brew upgrade",
+        "detail": "From the RC-110 security review (low, fail closed): RC-110 bumped the guard snapshot to version 2. brew upgrade relinks orch-hook at once but does not restart orchd (the formula's caveat), so with a spaces policy applied and the guard enforcing, every tool call is refused as policy_unreadable until 'brew services restart orch'. Installs with no policy ever applied are allowed (the hook treats another version like a missing snapshot then). Documented in docs/internals/hooks.md. Proposed: name the version mismatch and the restart in the refusal reason, or restart orchd from the formula's post_install.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-202",
+        "kind": "follow-up",
+        "topic": "Only the orch binaries beside orchd are protected",
+        "detail": "From the RC-110 security review (low): spaces.GuardProtection protects orch, orchd and orch-hook in the directory orchd runs from (under brew services /opt/homebrew/opt/orch/bin, whose links resolve to the same Cellar files as the bin/orch-hook link harness settings run, so writes through either are refused). An orch-hook installed elsewhere (orch install --bin-dir) is not protected, and moving the whole directory that holds the settings' link (mv /opt/homebrew/bin ...) and planting a new orch-hook is not refused. Proposed: protect the hook command path orch install writes into harness settings (recorded at install, or read from the settings when the snapshot is written).",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-203",
+        "kind": "follow-up",
+        "topic": "The CLI's payload replay protects its own environment's paths",
+        "detail": "From the RC-110 security review (low, replay correctness only): orch spaces replay <payloads> --policy <file> builds its protection with spaces.GuardProtection from the CLI's own ORCH_CONFIG_DIR/ORCH_DATA_DIR/HOME and its executable's directory, which can differ from the running orchd's (brew bin vs opt path, --bin-dir, a shell that sets XDG_*). orchd's ReplaySpaces uses orchd's own, the same as the live snapshot. Proposed: document, or have the CLI ask orchd for the protection it applies.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-204",
+        "kind": "follow-up",
+        "topic": "A relative orch directory or no home makes the guard refuse every call",
+        "detail": "From the RC-110 security review (low, fail closed): orchd puts ORCH_CONFIG_DIR/ORCH_DATA_DIR as written, and the home from os.UserHomeDir, into the snapshot's protection. If one is relative, or the home cannot be found, NewGuardPolicyProtecting rejects the entries and the hook answers every call with policy_unreadable while a policy is configured (with no policy nothing is refused: protection is ignored then). Nothing in orchd's log or orch status explains it. Proposed: orchd makes the directories absolute, or validates the protection before writing the snapshot and reports the failure.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-205",
+        "kind": "follow-up",
+        "topic": "Self-protection scope notes from the RC-110 review",
+        "detail": "Info-level notes from the three RC-110 security-review rounds: (1) user hook scripts that harness settings point at (~/.claude/hooks/*), shell startup files (~/.zshenv, ~/.zshrc, ~/.bash_profile), Gemini and Codex extension directories and the Homebrew tap formula run code in later sessions and are plain, recognisable writes, but are not protected; (2) ~/Library/LaunchAgents/*orch* also protects unrelated launch agents whose name holds 'orch' (com.pytorch...), and writing the LaunchAgents directory itself is refused; narrow to com.orchestrator.* and homebrew.mxcl.orch*.plist if that matters; (3) the '.pub' exclusion meant for ~/.ssh/id_* also applies to write patterns (com.orchestrator.orchd.plist.pub is writable, harmless); (4) a replay judges older revisions with today's protection, so events recorded before RC-110 can show as changed where they wrote a path protected since (documented in daemon.md).",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-042",
+          "SP-047"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -3738,8 +3815,9 @@
             }
           ],
           "evidence": [
-            "a1: TestSelfProtectionRefusesWrites (internal/spaces/guard_selfprotect_test.go): 12 protected paths (orch config file, orch.db, the guard's policy snapshot and a pin file under the data directory, a terms file, the user's Claude Code settings.json and settings.local.json, Codex hooks.json and config.toml, Gemini settings.json, a checkout's .git/hooks/pre-commit and .claude/settings.local.json) x 9 methods (Write, Edit, MultiEdit, Bash '>', '>>', tee -a, sed -i, cp, mv) = 108 cases, all refused with rule self_protection by Decide (block-other-jobs, session pinned to its own space). Further forms in TestSelfProtectionForms (18 refused: recursive removal of orch's directories, mv .git, removal of .claude, cp -t, install, dd of=, truncate, touch/ln/chmod in .git/hooks, a glob or variable target, sudo tee, bash -c, cd then a relative write, apply_patch in Bash and the apply_patch tool) and TestSelfProtectionReviewCases (23 reproducers from the security review: heredoc apply_patch, U+017F long s, -t attached or clustered, hard links, curl -o, wget -O, tar -C/-f, unzip -d, curl -O after cd, patch, .git/config). TestShellWritesListed checks Targets' new writes list against reads for 14 forms.",
-            "a2: TestSelfProtectionAllowsReads: the Read tool and cat of each of the 11 protected paths other than the terms file are allowed; the terms file and 6 secret files (the list in docs/internals/hooks.md, Self-protection) are refused with self_protection, by both tools. TestSelfProtectionForms and TestSelfProtectionReviewCases keep ordinary calls allowed: cp of settings to /tmp, ls of the ssh directory, ls and du of the home's entries, known_hosts and public keys, GH_CONFIG_DIR=<dir> gh, a Write whose content names protected paths, git commit/add naming them, tar of the Claude Code directory to /tmp."
+            "a1: TestSelfProtectionRefusesWrites (internal/spaces/guard_selfprotect_test.go): 16 protected paths (orch config file, orch.db, the guard's policy snapshot and a pin file under the data directory, a terms file, the user's Claude Code settings.json and settings.local.json, Codex hooks.json and config.toml, Gemini settings.json, a checkout's .git/hooks/pre-commit and .claude/settings.local.json, and since RC-110 ~/.claude.json, a Claude Code plugin's hooks.json, orchd's launchd job and brew services' job) x 9 methods (Write, Edit, MultiEdit, Bash '>', '>>', tee -a, sed -i, cp, mv) = 144 cases, all refused with rule self_protection by Decide (block-other-jobs, session pinned to its own space). Further forms in TestSelfProtectionForms (18 refused: recursive removal of orch's directories, mv .git, removal of .claude, cp -t, install, dd of=, truncate, touch/ln/chmod in .git/hooks, a glob or variable target, sudo tee, bash -c, cd then a relative write, apply_patch in Bash and the apply_patch tool) and TestSelfProtectionReviewCases (23 reproducers from the security review: heredoc apply_patch, U+017F long s, -t attached or clustered, hard links, curl -o, wget -O, tar -C/-f, unzip -d, curl -O after cd, patch, .git/config). TestShellWritesListed checks Targets' new writes list against reads for 14 forms.",
+            "a2: TestSelfProtectionAllowsReads: the Read tool and cat of each of the 11 protected paths other than the terms file are allowed; the terms file and 6 secret files (the list in docs/internals/hooks.md, Self-protection) are refused with self_protection, by both tools. TestSelfProtectionForms and TestSelfProtectionReviewCases keep ordinary calls allowed: cp of settings to /tmp, ls of the ssh directory, ls and du of the home's entries, known_hosts and public keys, GH_CONFIG_DIR=<dir> gh, a Write whose content names protected paths, git commit/add naming them, tar of the Claude Code directory to /tmp.",
+            "RC-110 (live guard): orchd's snapshot carries spaces.GuardProtection and orch-hook decides with NewGuardPolicyProtecting. TestGuardSelfProtectionLive (internal/daemon/guardfiles_selfprotect_test.go) runs orchd's snapshot writer and PinSession into the hook's GuardFiles.Decide: 21 calls refused as self_protection (Write/Edit/redirect into ~/.claude/settings.json, Write/redirect into a checkout's .git/hooks/x, Write/redirect into orch.db, the policy file, a pin file, rm -rf of the data directory, orch's config, the checkout's .claude/settings.local.json, cp over orch-hook, Write orchd, ~/.claude.json, a plugin's hooks.json, both launchd jobs, Read/cat of the terms file and cp of it), 9 ordinary in-space calls allowed (within_space). TestReplaySpacesReproducesSelfProtection: four recorded calls (three self_protection refusals) replay through ReplaySpaces with 0 changed; TestSpacesReplayFixturesSelfProtection: the CLI's payload replay refuses 3 such writes and allows the in-space one. TestGuardFilesUnreadablePolicy, TestGuardFilesSnapshotMissing, TestGuardFilesNoPolicy and TestGuardFilesRefuseBadInput cover snapshot version 2, missing or invalid protection, a version 1 snapshot and one with no version; TestGuardProtectionLiteralDirs covers pattern characters and backslashes in orch's directory names."
           ]
         }
       ],
