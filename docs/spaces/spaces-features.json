@@ -520,6 +520,11 @@
         "id": "D-55",
         "decision": "SP-073, SP-040 and SP-070 are worked in parallel by three independent agent sessions, each in its own worktree and draft PR, overriding session_procedure step 2 (one feature, one session at a time) for these three only; their dependencies are done and their code barely overlaps. To avoid id clashes each reserves a block of reconvene ids: SP-073 RC-66..RC-75, SP-040 RC-76..RC-85, SP-070 RC-86..RC-95. New confirmed_by_user decisions are recorded by the coordinating session. Whichever PR merges later is rebased onto main (plan file, orch.db migration numbers, regenerated proto stubs).",
         "date": "2026-11-11"
+      },
+      {
+        "id": "D-56",
+        "decision": "Spaces work may run as up to five parallel lanes coordinated by one session: each lane works its assigned features one at a time in order; lanes use disjoint reconvene ID ranges (A RC-100..119, B RC-120..139, C RC-140..159, D RC-160..179, E RC-180..199); only the coordinator writes the live progress file, D-ids and changelog. This overrides session_procedure step 2 and the other-session check in step 3 for this run.",
+        "date": "2026-11-12"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -3350,14 +3355,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "59c0d955dc641ee5e9676b8779dc98ae509c7ecc89abc2fcf839a19da0e763cc",
-      "branch": null,
+      "branch": "feat/sp-041-enforcing-guard",
       "pr": null
     },
     {
@@ -5308,6 +5313,10 @@
     {
       "date": "2026-11-10",
       "change": "Decision review batch 7 (user actions): RC-17, RC-18, RC-21 and RC-22 resolved; issues #158-#162 filed for the defects found."
+    },
+    {
+      "date": "2026-11-12",
+      "change": "D-56: user approved parallel lanes (A SP-041..044, B SP-023, C SP-050 then SP-047, D SP-072, E SP-046) with disjoint RC ranges; the procedure text is unchanged."
     }
   ],
   "plan_location": {
