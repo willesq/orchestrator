@@ -3443,14 +3443,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "c237bfdccd1c0dea479609bdb5c5b2caf19389502654c7d8effada1b73456941",
-      "branch": null,
+      "branch": "feat/sp-043-github-guard",
       "pr": null
     },
     {
