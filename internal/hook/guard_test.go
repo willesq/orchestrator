@@ -376,3 +376,19 @@ func TestGuardDecidesUnreadablePayload(t *testing.T) {
 		t.Errorf("panicking inputs: %s", r.Verdict)
 	}
 }
+
+// TestGuardInputCwdChanged: a cwd-changed event is judged running in its
+// old directory and moving to its new one, as a command log replay builds
+// it; without an old directory it runs in the payload's cwd.
+func TestGuardInputCwdChanged(t *testing.T) {
+	in := guardInput("cwd-changed", Payload{SessionID: "s", Cwd: "/n", OldCwd: "/o", NewCwd: "/n"})
+	if in.Kind != spaces.EventCwdChanged || in.Cwd != "/o" || in.NewCwd != "/n" {
+		t.Errorf("cwd-changed input = %+v", in)
+	}
+	if in := guardInput("cwd-changed", Payload{Cwd: "/n", NewCwd: "/n"}); in.Cwd != "/n" {
+		t.Errorf("without old_cwd: %+v", in)
+	}
+	if in := guardInput("pre-tool-use", Payload{Cwd: "/c", OldCwd: "/o", ToolName: "Bash"}); in.Kind != spaces.EventPreToolUse || in.Cwd != "/c" {
+		t.Errorf("pre-tool-use input = %+v", in)
+	}
+}

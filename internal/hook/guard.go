@@ -46,14 +46,20 @@ func guardToolEvent(event string, p Payload, out io.Writer, cf clientFactory) {
 	recordToolEvent(event, p, cf, &res)
 }
 
-// guardInput is the decision's input for event.
+// guardInput is the decision's input for event. A cwd-changed event runs
+// in its old directory and moves to its new one, as a replay of the
+// command log builds it (spaces.GuardEventOf, SP-047), so a live verdict
+// and its replay agree.
 func guardInput(event string, p Payload) spaces.GuardInput {
-	kind := spaces.EventPreToolUse
-	if event == "cwd-changed" {
-		kind = spaces.EventCwdChanged
-	}
-	return spaces.GuardInput{Kind: kind, SessionID: p.SessionID, Tool: p.ToolName,
+	in := spaces.GuardInput{Kind: spaces.EventPreToolUse, SessionID: p.SessionID, Tool: p.ToolName,
 		Input: p.ToolInput, Cwd: p.Cwd, NewCwd: p.NewCwd}
+	if event == "cwd-changed" {
+		in.Kind = spaces.EventCwdChanged
+		if p.OldCwd != "" {
+			in.Cwd = p.OldCwd
+		}
+	}
+	return in
 }
 
 // decideWithin decides in, refusing when the decision takes longer than

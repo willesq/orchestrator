@@ -246,7 +246,10 @@ calls `Decide`. What it cannot read becomes a rule, refused in the enforcing mod
   snapshot has given it, decides whether that refuses; before that it refuses.
 
 With no spaces configured the call is allowed without reading a pin (INV-10). A `cwd-changed`
-event is never refused; its would-be verdict is logged. The decision, the would-be verdict when
+event is never refused; its would-be verdict is logged. It is judged as running in `old_cwd` and
+moving to `new_cwd`, as a replay of the command log builds it, so a replay (SP-047) gives the
+verdict the hook recorded. The guard's mode is not stored per record: an enforced decision is
+`refused`/`allowed` with a bare rule id, one not enforced `would <verdict> (<rule>)`. The decision, the would-be verdict when
 not enforced, the rule and the policy revision go to orchd in `RecordToolEvent`
 (`guard_verdict`, `guard_rule`, `guard_enforced`, `guard_policy_rev`); orchd stores them as the
 record's decision (`refused`, `allowed`) or as `would refuse (<rule>)` (RC-86), and keeps queue
