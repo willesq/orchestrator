@@ -4,7 +4,8 @@
 event JSON from stdin and writes context for the agent to stdout as plain Markdown.
 
 **Contract:** a hook never fails and never blocks the agent. Every handler returns success, a
-panic is recovered and exits zero; slow
+panic is recovered and exits zero. The one exception is the [enforcing guard](#enforcing-guard)
+in `pre-tool-use`: while it enforces, a call it cannot decide is refused (INV-13). Slow
 work is handed to orchd ([hand-offs](#hand-offs)); each orchd call has a short deadline (0.5 s for
 writes, 3 s for prompt search, 20 ms for [tool hooks](#tool-hooks)). Unknown events, empty input and read errors are no-ops.
 
@@ -23,8 +24,8 @@ they name a file.
 | `pre-compact` | Writes `sessions/<id>.checkpoint.yaml` with the last request and reply. |
 | `session-end` | See [session end](#session-end). |
 | `subagent-stop` | Appends `{kind: complete, source: subagent_type, summary}` (redacted, 200 bytes) to the parent session's event stream. |
-| `pre-tool-use` | Hands the tool call to orchd for the command log and prints nothing, so the call goes ahead. See [tool hooks](#tool-hooks). Claude Code and Codex. |
-| `cwd-changed` | Hands the directory change (`old_cwd`, `new_cwd`) to orchd and prints nothing. See [tool hooks](#tool-hooks). Claude Code only; Codex has no such event. |
+| `pre-tool-use` | Decides the call with the [enforcing guard](#enforcing-guard), prints a deny when it refuses, and hands the call with the decision to orchd for the command log. See [tool hooks](#tool-hooks). Claude Code and Codex. |
+| `cwd-changed` | Hands the directory change (`old_cwd`, `new_cwd`) to orchd with the verdict the guard would give, and prints nothing. See [tool hooks](#tool-hooks). Claude Code only; Codex has no such event. |
 | `post-tool-use` | After `gh pr create\|ready\|close\|merge\|reopen\|edit`, requests a PR refresh, and after `gh pr create` (also `rtk gh pr create`) registers the PR with PR Watch (below). After `Edit`/`Write`/`MultiEdit` of markdown or a file under `~/.claude/`, hands the file off to be stored again. |
 
 ## Tool hooks
@@ -37,14 +38,17 @@ orchd takes the event and answers at once; it decides whose event it is from the
 process ([caller sessions](daemon.md#caller-sessions)), never from `session_id`. Queued tasks send
 their events too.
 
-They always allow: the hooks print nothing, which Claude Code and Codex read as no decision, so
-the call runs as it would without them. A panic, a payload that does not parse, or an orchd that
-is down, refuses or does not answer within 20 ms loses the event and nothing else. Measured with
-the real binary against orchd's server (`TestToolHookCost`, M3 Max): p50 10.8 ms, p99 13.4 ms from
-process start to exit over 1,000 runs. The tool guard (SP-041) will add refusals to
-`pre-tool-use`. That is why Claude Code runs it synchronously, while `cwd-changed` runs in the
-background ([install.md](install.md#claude-code)). orchd stores the events in its
-[command log](daemon.md#command-log).
+`pre-tool-use` decides each call first ([enforcing guard](#enforcing-guard)); an allowed call
+prints nothing, which Claude Code and Codex read as no decision. Handing the event to orchd is
+separate: an orchd that is down, refuses or does not answer within 20 ms (250 ms for a refused
+call, which is refused whatever orchd says) loses the event and nothing else. A payload that
+cannot be read or does not parse has no session, so the guard refuses it as `pin_missing` while
+it enforces and allows it otherwise. A panic in the decision refuses like a timeout; one
+elsewhere in the hook, after the decision, changes nothing it printed. Measured with the real binary against orchd's server,
+reading the guard's files and deciding (`TestToolHookCost`, M3 Max, 2026-11-12): p50 13.0 ms,
+p99 18.9 ms from process start to exit over 1,000 runs. Claude Code runs `pre-tool-use`
+synchronously, while `cwd-changed` runs in the background ([install.md](install.md#claude-code)).
+orchd stores the events in its [command log](daemon.md#command-log).
 
 The tool hooks are an [enforcement switch](daemon.md#enforcement-switches) (D-40): orch settings
 cannot turn them off or on (`SetSettingEnabled` refuses), and `orch install` writes them whatever a
@@ -159,9 +163,9 @@ path. The guard decides on it ([Guard decision](#guard-decision)).
 
 `spaces.Decide(policy, pin, enforcement, event)` (`internal/spaces/guard.go`, SP-040) turns one
 hook event and its targets into `allow` or `refuse` plus a rule id. It is pure: it reads only its
-arguments, so a logged event replays to the same verdict and rule. Nothing calls it yet. The
-enforcing hook (SP-041) will call it from `pre-tool-use`, and the operator's switches (SP-070) set
-its mode. `spaces.NewGuardPolicy(policy, protected)` prepares the policy once: Targets reports
+arguments, so a logged event replays to the same verdict and rule. The
+[enforcing guard](#enforcing-guard) calls it from `pre-tool-use`, and the operator's switches
+(SP-070) set its mode. `spaces.NewGuardPolicy(policy, protected)` prepares the policy once: Targets reports
 physical paths, so each root and protected path is matched both as written and with its symlinks
 resolved (`~/code` linked to another volume). That is the only filesystem read, and Decide
 itself stays pure; a replay gives the same answer against the same policy snapshot, which must be
@@ -216,6 +220,75 @@ takes `ſ` for `s`), as macOS treats names.
 The rule id is safe to show and log: it never names the matched path or text. `TestDecideCases`
 runs 43 cases in all four modes, covering every SP-040.1 form, and `TestDecideDeterministic`
 replays 20,000 random inputs.
+
+### Enforcing guard
+
+`pre-tool-use` enforces the guard itself (spaces SP-041, D-11, INV-13; `internal/hook/guard.go`,
+`internal/spaces/guard_files.go`). The hook starts for every call and cannot wait on orchd, so it
+decides from files orchd writes under `<data>/guard/` (directories 0700, files 0600, each
+replaced through a temporary file and a rename):
+
+- **`policy.json`**, the snapshot: the applied policy and its revision (none when no spaces are
+  applied), whether the applied revision no longer verifies, the home that expands `~`, the
+  protected paths (today the guard directory itself; SP-042 adds the rest) and the guard's switch
+  with a timed switch's end and the state it reverts to. orchd writes it at startup, after
+  `ApplySpaces`, and after every switch change or timed revert (`internal/daemon/guardfiles.go`).
+  A snapshot it cannot rewrite is removed, never left stale, so the hook falls back to
+  `orch.db` and refuses while a policy is applied.
+  The hook applies a timed switch's end itself, so it reverts on time even if orchd is down.
+- **`pins/<session_id>.json`**: the session's pinned space, written when `PinSession` succeeds
+  (new, `/clear`, subagent copy or resume). Every 10 minutes and at startup orchd rewrites the
+  files of sessions whose harness process still runs and removes the others.
+
+For each call the hook reads the snapshot, validates its policy (without the git-tree rule, as
+orchd does at startup), builds the guard policy, reads the session's pin file, runs `Targets` and
+calls `Decide`. What it cannot read becomes a rule, refused in the enforcing modes
+(`block-other-jobs`, `strict`) and only logged with the guard `off` or in `log`:
+
+- `policy_unreadable`: the snapshot is damaged, of another version, marks a policy that no
+  longer verifies, or holds a policy or protected path that does not validate. A missing
+  snapshot is read as no policy only when `orch.db` has never applied one (or does not exist);
+  otherwise the guard's switch is read from `orch.db` read-only and the call refused unless it
+  is `off` or `log`, and as `strict` when `orch.db` cannot be read.
+- `pin_missing`: no readable pin file for the payload's `session_id` (from `Decide`). Queued
+  tasks have no session pin, so while spaces are configured and the guard enforces, their calls
+  are refused (RC-100).
+- `guard_timeout`: the decision did not finish within 250 ms, or panicked. The mode, once the
+  snapshot has given it, decides whether that refuses; before that it refuses.
+
+With no spaces configured the call is allowed without reading a pin (INV-10). A `cwd-changed`
+event is never refused; its would-be verdict is logged. It is judged as running in `old_cwd` and
+moving to `new_cwd`, as a replay of the command log builds it, so a replay (SP-047) gives the
+verdict the hook recorded. The guard's mode is not stored per record: an enforced decision is
+`refused`/`allowed` with a bare rule id, one not enforced `would <verdict> (<rule>)`. The decision, the would-be verdict when
+not enforced, the rule and the policy revision go to orchd in `RecordToolEvent`
+(`guard_verdict`, `guard_rule`, `guard_enforced`, `guard_policy_rev`); orchd stores them as the
+record's decision (`refused`, `allowed`) or as `would refuse (<rule>)` (RC-86), and keeps queue
+room for refusals ([command log](daemon.md#command-log), D-37).
+
+A refusal prints the deny SP-001 recorded both harnesses honoring, one JSON line:
+`{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"orch spaces guard refused this call (rule <rule>): <why>. ..."}}`.
+The reason names the rule and what to do, never the path, repo or text that matched; Codex needs
+it non-empty. The hook still exits 0: a deny is only ever this output (RC-34). A Go runtime fatal
+error would exit 2, which Claude Code reads as blocking the call, so a crash fails closed.
+
+Measured (`TestGuardDecisionLatency`, M3 Max, 2026-11-12): the decision, file reads included,
+over the recorded payloads takes p50 0.09 ms and p99 0.21 ms; the whole hook process p99 18.9 ms
+(above). `TestGuardReplaysFixtures` replays every recorded PreToolUse call of both harnesses under
+`block-other-jobs`: none is refused for a target in its own space.
+
+The hook reads each file through one handle, opened without following a symlink, and checks
+it is a regular file of at most 2 MiB.
+
+**Limits.** The guard's files are protected from file tools by the guard itself; shell writes to
+them and to `orch.db` are SP-042's. A pin file is looked up by the payload's `session_id`, which
+the harness sets. The hook finds its files through `ORCH_DATA_DIR`, `XDG_DATA_HOME` and `HOME`,
+which a session can change for a harness it starts inside itself; such a nested harness could
+point its hook at an empty directory and run unguarded. Accepted (2026-11-12): the same nested
+harness can drop every hook already (`CLAUDE_CONFIG_DIR`, `--settings`), so this adds no new
+way around the guard; the OS sandbox is the boundary (RC-102). The guard is best-effort target
+extraction (D-28); the OS sandbox (SP-046) and per-job GitHub accounts (SP-063) are the hard
+boundary.
 
 ### Self-protection
 

@@ -43,6 +43,10 @@ type RefreshOpts struct {
 	Dates func(ctx context.Context, dir string) gitdates.Dates
 	// Guard caps deletions across scans; nil caps each refresh on its own.
 	Guard PruneGuard
+	// CheckOwner, when set, re-checks the GitHub org binding of a
+	// checkout's origin owner before each repo's docs are written (D-52);
+	// an error leaves that repo as last indexed.
+	CheckOwner func(ctx context.Context, owner string) error
 }
 
 // CheckoutURI is the URI a repo or owner source stores a local file under:
@@ -99,6 +103,7 @@ func refreshWeb(ctx context.Context, s Source, ing Ingester, opts RefreshOpts) (
 	text, _ = redact.Redact(text)
 	if _, err := ing.IngestText(ctx, text, rag.Meta{
 		SourceURI: s.URI, SourceType: KindWeb, Scope: s.Scope, Tags: s.Tags, Writer: rag.WriterSources,
+		Origin: rag.Origin{System: rag.OriginWeb, URL: s.URI},
 	}); err != nil {
 		return "error", err
 	}
@@ -235,6 +240,24 @@ func indexable(repoPath string) (bool, string) {
 	return co.DefaultBranchState()
 }
 
+// ownerRefused re-checks the org binding of the GitHub repo a checkout's
+// origin names, and says why its docs may not be written, if they may not.
+// An anonymous checkout's claimed origin is not believed, so placement does
+// not use it and it is not checked.
+func ownerRefused(ctx context.Context, repoPath string, opts RefreshOpts) string {
+	if opts.CheckOwner == nil {
+		return ""
+	}
+	co, ok := handoff.CheckoutAt(repoPath)
+	if !ok || co.Anonymous || co.Owner == "" {
+		return ""
+	}
+	if err := opts.CheckOwner(ctx, co.Owner); err != nil {
+		return statusSafe("not indexed: " + err.Error())
+	}
+	return ""
+}
+
 // ingestRepoMarkdown walks a repo dir for *.md files, outside the excluded
 // directories and other checkouts, and ingests each with repo + owner
 // metadata under its checkout:// URI.
@@ -243,6 +266,10 @@ func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, i
 	repoPath = resolve(repoPath)
 	if ok, why := indexable(repoPath); !ok {
 		why = statusSafe(why)
+		log.Printf("sources: %s: %s; left as last indexed", repoPath, why)
+		return repoResult{skipped: why}
+	}
+	if why := ownerRefused(ctx, repoPath, opts); why != "" {
 		log.Printf("sources: %s: %s; left as last indexed", repoPath, why)
 		return repoResult{skipped: why}
 	}
@@ -284,6 +311,7 @@ func ingestRepoMarkdown(ctx context.Context, repoPath, owner string, s Source, i
 			StartedAt:  changed,
 			EndedAt:    changed,
 			Writer:     rag.WriterSources,
+			Origin:     rag.Origin{System: rag.OriginFS, Path: p},
 		}); err == nil {
 			r.stored++
 		}

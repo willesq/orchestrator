@@ -20,6 +20,14 @@ const DefaultQueue = 4096
 // memory either (H1 of the SP-014 audit).
 const MaxQueuedBytes = 64 << 20
 
+// MaxReservedBytes bounds the room kept for guard decisions (D-37), as
+// MaxQueuedBytes bounds the ordinary queue.
+const MaxReservedBytes = 16 << 20
+
+// reserveShare is the part of the queue's length kept apart for guard
+// decisions: EnqueueDecision uses it once an ordinary share is full.
+const reserveShare = 4
+
 // ownerShare is the part of the queue, in events and in bytes, that one
 // quota key (a harness process or a task) may hold: a session flooding the
 // log drops its own events, not other sessions', however many sessions it
@@ -82,6 +90,8 @@ type job struct {
 	gap int64
 	// done, when set, receives the result once the job's batch committed.
 	done chan error
+	// reserved marks an event queued in the room kept for guard decisions.
+	reserved bool
 }
 
 type share struct {
@@ -112,6 +122,13 @@ type Writer struct {
 	// total; an event's share is released once its record is built.
 	queued      map[string]*share
 	queuedBytes int64
+	// Ordinary events fill the channel up to size; the reserve slots past
+	// it are kept for guard decisions (D-37), with reserved, reservedN and
+	// reservedBytes counting them as queued and queuedBytes do.
+	size, reserve int
+	reserved      map[string]*share
+	reservedN     int
+	reservedBytes int64
 	// closed is set under mu before jobs is closed, so no send races it.
 	closed bool
 
@@ -135,10 +152,12 @@ func NewWriter(s *Store, queue int, resolve Resolver) *Writer {
 // each batch once it is committed (D-35: orchd copies them into orch.db).
 // onAnchor runs on the writer goroutine; it should be quick.
 func NewWriterWithAnchors(s *Store, queue int, resolve Resolver, onAnchor func([]Anchor)) *Writer {
+	reserve := max(queue/reserveShare, 1)
 	w := &Writer{
-		store: s, jobs: make(chan job, queue), now: time.Now, resolve: resolve, onAnchor: onAnchor,
+		store: s, jobs: make(chan job, queue+reserve), now: time.Now, resolve: resolve, onAnchor: onAnchor,
 		drops: map[dropKey]int64{}, queued: map[string]*share{}, heads: map[Owner]chainHead{},
 		stop: make(chan struct{}), exited: make(chan struct{}),
+		size: queue, reserve: reserve, reserved: map[string]*share{},
 	}
 	go w.run()
 	return w
@@ -149,48 +168,103 @@ func NewWriterWithAnchors(s *Store, queue int, resolve Resolver, onAnchor func([
 // next gap record of k's chain, when the writer is closed, the queue or its
 // byte budget is full, or k's quota key already holds its share of either.
 func (w *Writer) Enqueue(k Key, size int64, build func() Record) bool {
+	return w.enqueue(k, size, build, false)
+}
+
+// EnqueueDecision is Enqueue for a guard decision, such as a refused call
+// (D-37): once k's ordinary share or the ordinary queue is full, it is
+// queued in room kept for guard decisions, so a session flooding the log
+// with ordinary events cannot push its refusals out. That room has shares
+// of its own, so one quota key cannot take all of it either.
+func (w *Writer) EnqueueDecision(k Key, size int64, build func() Record) bool {
+	return w.enqueue(k, size, build, true)
+}
+
+func (w *Writer) enqueue(k Key, size int64, build func() Record, decision bool) bool {
 	if k.Claim == k.Owner.ID {
 		k.Claim = ""
 	}
 	dk := dropKey{k.Owner, k.Claim}
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.closed {
+		w.countDrop(dk, k)
+		return false
+	}
+	j := job{key: k, build: build, at: w.now(), size: size, gap: w.drops[dk]}
 	sh := w.queued[k.Quota]
 	if sh == nil {
 		sh = &share{}
 	}
-	fits := !w.closed && w.queuedBytes+size <= MaxQueuedBytes &&
-		sh.n < max(cap(w.jobs)/ownerShare, 1) && sh.bytes+size <= MaxQueuedBytes/ownerShare
-	if fits {
-		select {
-		case w.jobs <- job{key: k, build: build, at: w.now(), size: size, gap: w.drops[dk]}:
-			delete(w.drops, dk)
-			sh.n++
-			sh.bytes += size
-			w.queued[k.Quota] = sh
-			w.queuedBytes += size
+	// Reason: ordinary events may fill the channel up to size; the room
+	// past it is for guard decisions.
+	if len(w.jobs) < w.size && w.queuedBytes+size <= MaxQueuedBytes &&
+		sh.n < max(w.size/ownerShare, 1) && sh.bytes+size <= MaxQueuedBytes/ownerShare && w.send(j, dk) {
+		sh.n++
+		sh.bytes += size
+		w.queued[k.Quota] = sh
+		w.queuedBytes += size
+		return true
+	}
+	if decision {
+		rs := w.reserved[k.Quota]
+		if rs == nil {
+			rs = &share{}
+		}
+		j.reserved = true
+		if w.reservedN < w.reserve && w.reservedBytes+size <= MaxReservedBytes &&
+			rs.n < max(w.reserve/ownerShare, 1) && rs.bytes+size <= MaxReservedBytes/ownerShare && w.send(j, dk) {
+			rs.n++
+			rs.bytes += size
+			w.reserved[k.Quota] = rs
+			w.reservedN++
+			w.reservedBytes += size
 			return true
-		default:
 		}
 	}
+	w.countDrop(dk, k)
+	return false
+}
+
+// send queues j without blocking and clears dk's drop count, which j's gap
+// carries. It is called with mu held.
+func (w *Writer) send(j job, dk dropKey) bool {
+	select {
+	case w.jobs <- j:
+		delete(w.drops, dk)
+		return true
+	default:
+		return false
+	}
+}
+
+// countDrop counts one dropped event of k toward dk's next gap record. It
+// is called with mu held.
+func (w *Writer) countDrop(dk dropKey, k Key) {
 	if _, ok := w.drops[dk]; !ok && len(w.drops) >= maxDropKeys {
 		dk = dropKey{owner: k.Owner}
 	}
 	w.drops[dk]++
 	w.dropped.Add(1)
-	return false
 }
 
 // release returns an event's share of the queue.
 func (w *Writer) release(j job) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.queuedBytes -= j.size
-	if sh := w.queued[j.key.Quota]; sh != nil {
+	shares := w.queued
+	if j.reserved {
+		shares = w.reserved
+		w.reservedN--
+		w.reservedBytes -= j.size
+	} else {
+		w.queuedBytes -= j.size
+	}
+	if sh := shares[j.key.Quota]; sh != nil {
 		sh.n--
 		sh.bytes -= j.size
 		if sh.n <= 0 {
-			delete(w.queued, j.key.Quota)
+			delete(shares, j.key.Quota)
 		}
 	}
 }

@@ -51,6 +51,17 @@ type Meta struct {
 	// migration's copy passes the original's along, since its rebuilt text
 	// can differ in whitespace.
 	ContentHash string
+	// Origin is the facts the writer reports about the content (SP-023),
+	// stored as payload "origin". With a placer set, a write without one is
+	// refused.
+	Origin Origin
+	// Space and LabelsV are where the content was placed and the applied
+	// spaces policy revision that placed it (payload "space" and
+	// "labels_v"). With a placer set (Service.Place) only the placer's
+	// answer is stored, whatever a caller put here; without one they are
+	// stored as given, and an empty Space stores neither.
+	Space   string
+	LabelsV int64
 }
 
 // Service ties the embedder and vector store together.
@@ -112,6 +123,10 @@ type Service struct {
 	// MarkdownSections chunks markdown by heading section instead of by word
 	// window (embedder.markdown_sections).
 	MarkdownSections bool
+	// Place decides every write's space from its origin (SP-023). Set once,
+	// before the service is shared; nil stores writes unplaced, as tools and
+	// tests do.
+	Place PlaceFunc
 }
 
 // NewService constructs a RAG service. chunkTokens and overlap are in model
@@ -240,7 +255,13 @@ func (s *Service) split(text string) []chunk {
 
 // IngestText chunks, embeds, and upserts text. Chunks for the same source_uri
 // are replaced via deterministic point IDs (uri#index).
+//
+// With a placer set (Place), the write is placed first and stamped with its
+// origin, space and labels_v; a write the placer refuses stores nothing.
 func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, error) {
+	if err := s.place(ctx, &m); err != nil {
+		return 0, err
+	}
 	// An unchanged write is skipped before embedding, so re-fetching an
 	// unchanged page neither costs an embed nor makes it look new. During a
 	// migration every write goes through, so the shadow gets it too.
@@ -328,6 +349,13 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 		if m.Writer != "" {
 			payload[fieldWriter] = m.Writer
 			payload[fieldTrust] = trust
+		}
+		if o := m.Origin.payload(); len(o) > 0 {
+			payload[fieldOrigin] = o
+		}
+		if m.Space != "" {
+			payload[fieldSpace] = m.Space
+			payload[fieldLabelsV] = m.LabelsV
 		}
 		if h := pieces[i].heading; h != "" {
 			payload["heading"] = h

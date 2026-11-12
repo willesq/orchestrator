@@ -1,0 +1,94 @@
+claude-code.jsonl 0cfffe7e-8408-40d5-8755-04ea6f0bc80a (pinned to project), mode block-other-jobs: 4 calls replayed, 0 with a recorded verdict, 0 changed, 4 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED              CHANGED
+3    pre-tool-use  Bash  0    -         allow (within_space)  -
+4    cwd-changed   -     0    -         allow (within_space)  -
+6    pre-tool-use  Bash  0    -         allow (within_space)  -
+8    pre-tool-use  Bash  0    -         allow (within_space)  -
+claude-code.jsonl d8b8f03c-5188-4ca3-910e-c5233c19e09e (pinned to project), mode block-other-jobs: 4 calls replayed, 0 with a recorded verdict, 0 changed, 4 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED                 CHANGED
+14   pre-tool-use  Bash  0    -         refuse (other_job_path)  -
+16   cwd-changed   -     0    -         refuse (other_job_path)  -
+17   pre-tool-use  Bash  0    -         allow (within_space)     -
+19   pre-tool-use  Bash  0    -         allow (within_space)     -
+claude-code.jsonl 691c4764-2a3d-4bbe-b471-c1ff05325396 (pinned to project), mode block-other-jobs: 3 calls replayed, 0 with a recorded verdict, 0 changed, 3 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED                 CHANGED
+25   pre-tool-use  Bash  0    -         refuse (other_job_path)  -
+27   cwd-changed   -     0    -         refuse (other_job_path)  -
+28   pre-tool-use  Bash  0    -         allow (within_space)     -
+claude-code.jsonl d22e7d63-0143-45eb-b3d7-20081cc608b2 (pinned to project), mode block-other-jobs: 1 calls replayed, 0 with a recorded verdict, 0 changed, 1 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED                 CHANGED
+34   pre-tool-use  Bash  0    -         refuse (other_job_path)  -
+claude-code.jsonl ca4bffee-ae07-4f5e-8e45-e8c4679d0b68 (pinned to project), mode block-other-jobs: 1 calls replayed, 0 with a recorded verdict, 0 changed, 1 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED              CHANGED
+40   pre-tool-use  Bash  0    -         allow (within_space)  -
+claude-code.jsonl 7c898305-d401-452c-b59c-22eb42c6ce33 (pinned to project), mode block-other-jobs: 1 calls replayed, 0 with a recorded verdict, 0 changed, 1 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED                 CHANGED
+46   pre-tool-use  Read  0    -         refuse (other_job_path)  -
+claude-code.jsonl 3aa6bf7b-d185-4aaf-93ae-759288fe01a1 (pinned to project), mode block-other-jobs: 6 calls replayed, 0 with a recorded verdict, 0 changed, 6 with none recorded, 0 not decided
+SEQ  EVENT         TOOL              REV  RECORDED  REPLAYED                 CHANGED
+52   pre-tool-use  Agent             0    -         allow (within_space)     -
+54   pre-tool-use  Bash              0    -         refuse (other_job_path)  -
+55   pre-tool-use  Bash              0    -         allow (within_space)     -
+58   pre-tool-use  SubagentHandback  0    -         allow (within_space)     -
+63   pre-tool-use  Bash              0    -         refuse (other_job_path)  -
+65   cwd-changed   -                 0    -         refuse (other_job_path)  -
+claude-code.jsonl 0d8726ba-4730-4456-ae37-c83032bf8e17 (pinned to project), mode block-other-jobs: 3 calls replayed, 0 with a recorded verdict, 0 changed, 3 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED              CHANGED
+70   pre-tool-use  Bash  0    -         allow (within_space)  -
+72   cwd-changed   -     0    -         allow (within_space)  -
+73   pre-tool-use  Bash  0    -         allow (within_space)  -
+claude-code.jsonl 45ea713b-8129-4650-a2c4-0f13e42961c3 (pinned to project), mode block-other-jobs: 4 calls replayed, 0 with a recorded verdict, 0 changed, 4 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED              CHANGED
+79   pre-tool-use  Bash  0    -         allow (within_space)  -
+81   cwd-changed   -     0    -         allow (within_space)  -
+82   pre-tool-use  Bash  0    -         allow (within_space)  -
+88   pre-tool-use  Bash  0    -         allow (within_space)  -
+claude-code.jsonl bec44976-985f-4c08-adee-bc4b47e4f013 (pinned to project), mode block-other-jobs: 3 calls replayed, 0 with a recorded verdict, 0 changed, 3 with none recorded, 0 not decided
+SEQ  EVENT         TOOL           REV  RECORDED  REPLAYED              CHANGED
+100  pre-tool-use  ToolSearch     0    -         allow (within_space)  -
+102  pre-tool-use  EnterWorktree  0    -         allow (within_space)  -
+104  pre-tool-use  Bash           0    -         allow (within_space)  -
+claude-code.jsonl 5eed7d0d-11ee-4ef8-a806-0ed8eee94133 (pinned to project), mode block-other-jobs: 0 calls replayed, 0 with a recorded verdict, 0 changed, 0 with none recorded, 0 not decided
+claude-code.jsonl dd5886a0-fa13-44bb-b66a-27179936f070 (pinned to project), mode block-other-jobs: 1 calls replayed, 0 with a recorded verdict, 0 changed, 1 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED              CHANGED
+112  pre-tool-use  Bash  0    -         allow (within_space)  -
+codex.jsonl 01a1bbb9-30be-72f3-91d2-6ba43c1530d0 (pinned to project), mode block-other-jobs: 3 calls replayed, 0 with a recorded verdict, 0 changed, 3 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED              CHANGED
+3    pre-tool-use  Bash  0    -         allow (within_space)  -
+5    pre-tool-use  Bash  0    -         allow (within_space)  -
+7    pre-tool-use  Bash  0    -         allow (within_space)  -
+codex.jsonl 01a1bbb9-89fb-7fd2-bd58-172ade1d0696 (pinned to project), mode block-other-jobs: 3 calls replayed, 0 with a recorded verdict, 0 changed, 3 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED                 CHANGED
+13   pre-tool-use  Bash  0    -         refuse (other_job_path)  -
+15   pre-tool-use  Bash  0    -         allow (within_space)     -
+17   pre-tool-use  Bash  0    -         allow (within_space)     -
+codex.jsonl 01a1bbb9-caaf-7d21-9de4-a4f2fa81a8c9 (pinned to project), mode block-other-jobs: 2 calls replayed, 0 with a recorded verdict, 0 changed, 2 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED                 CHANGED
+23   pre-tool-use  Bash  0    -         refuse (other_job_path)  -
+25   pre-tool-use  Bash  0    -         allow (within_space)     -
+codex.jsonl 01a1bbb8-06d1-72c3-97fe-ab8bbc1d8ae9 (pinned to project), mode block-other-jobs: 0 calls replayed, 0 with a recorded verdict, 0 changed, 0 with none recorded, 0 not decided
+codex.jsonl 01a1bbba-df0b-73c3-a735-be37932f1482 (pinned to project), mode block-other-jobs: 1 calls replayed, 0 with a recorded verdict, 0 changed, 1 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED                 CHANGED
+32   pre-tool-use  Bash  0    -         refuse (other_job_path)  -
+codex.jsonl 01a1bbbb-129c-7440-af32-e579161855b1 (pinned to project), mode block-other-jobs: 1 calls replayed, 0 with a recorded verdict, 0 changed, 1 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED              CHANGED
+38   pre-tool-use  Bash  0    -         allow (within_space)  -
+codex.jsonl 01a1bbbb-3be8-7c63-958c-f3d5342effa7 (pinned to project), mode block-other-jobs: 1 calls replayed, 0 with a recorded verdict, 0 changed, 1 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED                 CHANGED
+44   pre-tool-use  Bash  0    -         refuse (other_job_path)  -
+codex.jsonl 01a1bbbb-96fc-7df3-82b2-d765135ccff5 (pinned to project), mode block-other-jobs: 1 calls replayed, 0 with a recorded verdict, 0 changed, 1 with none recorded, 0 not decided
+SEQ  EVENT         TOOL  REV  RECORDED  REPLAYED              CHANGED
+50   pre-tool-use  Bash  0    -         allow (within_space)  -
+codex.jsonl 01a1bbbb-b52a-7c22-90a5-ee9f2fd87d0f (pinned to project), mode block-other-jobs: 5 calls replayed, 0 with a recorded verdict, 0 changed, 5 with none recorded, 0 not decided
+SEQ  EVENT         TOOL         REV  RECORDED  REPLAYED                 CHANGED
+55   pre-tool-use  Bash         0    -         allow (within_space)     -
+57   pre-tool-use  Bash         0    -         allow (within_space)     -
+59   pre-tool-use  Bash         0    -         refuse (other_job_path)  -
+61   pre-tool-use  apply_patch  0    -         refuse (other_job_path)  -
+67   pre-tool-use  Bash         0    -         allow (within_space)     -
+codex.jsonl 01a1bbbc-3852-70c3-8824-e42630c1b61a (pinned to project), mode block-other-jobs: 4 calls replayed, 0 with a recorded verdict, 0 changed, 4 with none recorded, 0 not decided
+SEQ  EVENT         TOOL                      REV  RECORDED  REPLAYED                 CHANGED
+77   pre-tool-use  Bash                      0    -         allow (within_space)     -
+79   pre-tool-use  collaborationspawn_agent  0    -         allow (within_space)     -
+82   pre-tool-use  collaborationwait_agent   0    -         allow (within_space)     -
+83   pre-tool-use  Bash                      0    -         refuse (other_job_path)  -

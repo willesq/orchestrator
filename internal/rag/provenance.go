@@ -89,6 +89,12 @@ func (s *Service) ingestHash(text string, m Meta) string {
 	key := strings.Join([]string{text, m.SourceType, m.Scope, strings.Join(tags, "\x01"), m.Writer,
 		fmt.Sprint(m.StartedAt.Unix(), m.EndedAt.Unix(), m.Timeline, m.KeepUndated),
 		fmt.Sprint(s.chunkTokens, s.overlap, s.MarkdownSections, bm25.TokenizerVersion, s.BM25)}, "\x00")
+	// Reason: a write placed elsewhere, or under another revision, is not
+	// the write that is stored, so it is not skipped. Unplaced writes keep
+	// the hash they had before placement existed.
+	if m.Space != "" || m.Origin.System != "" {
+		key += "\x00" + strings.Join([]string{m.Origin.key(), m.Space, fmt.Sprint(m.LabelsV)}, "\x00")
+	}
 	sum := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(sum[:16])
 }
@@ -96,6 +102,9 @@ func (s *Service) ingestHash(text string, m Meta) string {
 // StoredCopy is what the store holds for one source, read from its first chunk.
 type StoredCopy struct {
 	Writer, Trust, ContentHash string
+	// Space is the space the source was placed in; "" when it was stored
+	// unplaced (before SP-023, or without a placer).
+	Space string
 }
 
 // Copy returns the provenance of the source stored under uri; ok is false
@@ -104,7 +113,7 @@ func (s *Service) Copy(ctx context.Context, uri string) (StoredCopy, bool, error
 	if uri == "" {
 		return StoredCopy{}, false, nil
 	}
-	pts, err := s.active().Retrieve(ctx, []string{pointID(uri, 0)}, []string{fieldWriter, fieldTrust, fieldContentHash, "source_uri"})
+	pts, err := s.active().Retrieve(ctx, []string{pointID(uri, 0)}, []string{fieldWriter, fieldTrust, fieldContentHash, fieldSpace, "source_uri"})
 	if err != nil || len(pts) == 0 {
 		return StoredCopy{}, false, err
 	}
@@ -112,7 +121,7 @@ func (s *Service) Copy(ctx context.Context, uri string) (StoredCopy, bool, error
 	if str(p["source_uri"]) != uri {
 		return StoredCopy{}, false, nil
 	}
-	return StoredCopy{Writer: str(p[fieldWriter]), Trust: str(p[fieldTrust]), ContentHash: str(p[fieldContentHash])}, true, nil
+	return StoredCopy{Writer: str(p[fieldWriter]), Trust: str(p[fieldTrust]), ContentHash: str(p[fieldContentHash]), Space: str(p[fieldSpace])}, true, nil
 }
 
 // ensureWriterIndex adds the writer payload index until one attempt succeeds.

@@ -91,6 +91,9 @@ type deps struct {
 	// ghProfiles picks the gh login of each space's GitHub calls; nil runs
 	// every call as the default login.
 	ghProfiles *ghProfiles
+	// spaces re-checks GitHub org bindings before content is written; nil
+	// checks none.
+	spaces *spaces.Engine
 }
 
 // subsystems lists orchd's supervised units in start order (stopped in reverse).
@@ -112,7 +115,7 @@ func subsystems(d deps) []supervisor.Unit {
 	if sched == nil {
 		sched = newDocsScheduler(d.settings, d.store, d.rag, nil, d.ghProfiles)
 	}
-	out = append(out, sourcesUnit(d.settings, d.store, d.rag), docsUnit(d.settings, sched))
+	out = append(out, sourcesUnit(d.settings, d.store, d.rag, d.spaces), docsUnit(d.settings, sched))
 	if d.settingsSvc != nil {
 		out = append(out, settingsUnit(d.settingsSvc))
 	}
@@ -282,10 +285,10 @@ func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []str
 }
 
 // sourcesUnit refreshes registered web/repo/owner sources on a cadence.
-func sourcesUnit(s config.Settings, store *sql.DB, ing sources.Ingester) supervisor.Unit {
+func sourcesUnit(s config.Settings, store *sql.DB, ing sources.Ingester, sp *spaces.Engine) supervisor.Unit {
 	sched := sources.NewScheduler(sources.NewRegistry(store), ing,
 		sources.RefreshOpts{KnownRoots: expandRoots(s.Sources.KnownRoots), ExcludeDirs: s.Ingest.ExcludeDirs,
-			Guard: sourcesGuard(store)})
+			Guard: sourcesGuard(store), CheckOwner: docsOwnerCheck(sp)})
 	return supervisor.Unit{
 		Name:     UnitSources,
 		Detail:   "web/repo/owner source freshness",

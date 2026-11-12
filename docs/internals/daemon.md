@@ -50,7 +50,15 @@ opened it (`internal/daemon/callers.go`) rather than trusting clients to check `
 
 - **Peer:** at connect time the server's transport credentials read the peer PID
   (`LOCAL_PEERPID` on macOS, `SO_PEERCRED` on Linux) and walk its parents (`procstat.Parent`, at
-  most 256 steps). A process descended from orchd is one orchd started: a task session, its MCP
+  most 256 steps). After the walk orchd checks the PID against the peer's kernel token (D-44,
+  `internal/daemon/peer_token*.go`): on macOS the `LOCAL_PEERTOKEN` audit token's PID and PID
+  version must match the process now at that PID (`proc_pidinfo` `PROC_PIDUNIQIDENTIFIERINFO`); on
+  Linux the `SO_PEERPIDFD` pidfd (kernel 6.5) must still name that PID. A peer that handed its
+  socket on and exited, its PID then reused by another process, or whose token cannot be read,
+  is not identified: it resolves to no session and no space, and gets a task's limits. A Linux
+  kernel before 6.5 has no `SO_PEERPIDFD`, so there no peer is identified and, while spaces are
+  configured, every guarded call is refused for want of a pin (fails closed; orch targets macOS,
+  D-49). A process descended from orchd is one orchd started: a task session, its MCP
   servers, hooks and shell commands, or a verification run. orchd itself is not its own
   descendant. A walk that fails is retried once; a peer that still cannot be placed, or a call
   without orchd's peer information, is treated as a task. On platforms without peer lookup, and
@@ -79,7 +87,8 @@ opened it (`internal/daemon/callers.go`) rather than trusting clients to check `
   `@anthropic-ai/claude-code`, `@openai/codex` or `claude/versions/`. The kernel name alone is
   not enough: npm installs run as `node`, and Claude Code's native installer names its binary
   after the version. The walk is not retried: a session exiting mid-walk would leave a second
-  walk with no harness to find. `DiffSpaces` and `ApplySpaces` use it (`refuseNonOperator`).
+  walk with no harness to find. `DiffSpaces`, `ApplySpaces`, `ListSpaces` and `ScanSpaces` use
+  it (`refuseNonOperator`).
   They are refused to queued tasks, to any caller inside an agent session, and to a caller whose
   ancestry orchd cannot read, so a session can neither read nor apply the spaces policy it runs
   under. The limits below apply here too: a process that leaves the session's tree is not caught,
@@ -180,12 +189,14 @@ process named `claude` there (`( cd /other && sh -c 'exec -a claude …; true' &
 `.command` file in Terminal, `osascript` or `launchctl submit` do the same, and on Linux so does
 an orphan adopted by a subreaper rather than init. Ancestry alone cannot tell these from a real
 session (tmux's server also runs under launchd). Pins grant nothing yet; nothing that reads
-memory by a pin's space (SP-011, SP-025) may rely on them until the pre-tool guard (SP-041)
-stops a session from starting such a process. Any process in a session can
+memory by a pin's space (SP-011, SP-025) may rely on them until the pre-tool guard stops a
+session from starting such a process. The enforcing guard (SP-041) refuses such a launch only
+when its command names another job's folder; one in a folder of no space, or hidden in an opaque
+command under `block-other-jobs`, still runs (RC-101). Any process in a session can
 end that session's pin early; retention (SP-015) still keeps a live process's log, and a
 resume in the same process clears the end. The detached fake harness above can also resume a
 dead or ended session of any space whose directory it starts in, and then write that session's
-command log, until SP-041 stops it. Codex is not pinned yet: orch's Codex install registers no SessionStart or
+command log, unless the guard refuses its launch (above). Codex is not pinned yet: orch's Codex install registers no SessionStart or
 SessionEnd hook. SP-011 (below) resolves callers from these rows, and
 [session liveness](#session-liveness) follows their processes.
 
@@ -279,9 +290,9 @@ the pre-tool guard (SP-041) closes two gaps: the detached-harness case described
 [session pins](#session-pins), and a process that leaves the session's tree before orchd accepts
 its connection (a double fork, `launchctl submit`, `open`, `osascript`; see
 [queued callers](#queued-callers)), which has no harness above it and so resolves to the
-operator, the widest result. The connection's peer PID is still taken on trust at accept
-(see [queued callers](#queued-callers)): a peer that hands its socket to a child and exits leaves
-its PID free for reuse.
+operator, the widest result. Since SP-041 the connection's peer PID is checked against its
+kernel token (see [queued callers](#queued-callers)), so a peer that hands its socket to a child
+and exits cannot be resolved to whatever process reuses its PID; it gets no space.
 
 ### Command log
 
@@ -333,12 +344,14 @@ method of that name; calls through function values are not followed.
   `…[truncated N bytes]` marker. Every other text field is redacted and capped at 4 KiB; targets
   over 16 KiB are stored as opaque. Redaction reads at most twice the cap plus 4 KiB of a field,
   so a secret the cut passes through is still found and a 1 MiB input costs little. Text is made
-  valid UTF-8 (invalid bytes become U+FFFD) before it is stored and hashed. The decision is
-  `logged` until the guard (SP-041) decides. While the guard's [enforcement
-  switch](#enforcement-switches) is `off` the decision is `not enforced`; while it is `off` or
-  `log`, `rule` holds the verdict the guard would have given (`would refuse (<rule>)`, `would
-  allow`) once a guard verdict is wired in (`server.guardVerdict`, SP-040/SP-041; empty until
-  then). Logging never stops: every switch state stores every event. `RecordToolEvent` refuses an event whose fields
+  valid UTF-8 (invalid bytes become U+FFFD) before it is stored and hashed. The decision is the
+  one the hook's [enforcing guard](hooks.md#enforcing-guard) reports (SP-041): `refused` or
+  `allowed` with its rule id when it enforced; otherwise `logged`, with `rule` holding the
+  verdict it would have given (`would refuse (<rule>)`, `would allow (<rule>)`, RC-86). While
+  the guard's [enforcement switch](#enforcement-switches) is `off` the decision is `not
+  enforced`. An event from a hook that sent no decision stays `logged`. The decision is the
+  hook's report: a caller can only write to the chain orchd resolved for it, and a rule that is
+  not a rule id is stored as `unknown`. Logging never stops: every switch state stores every event. `RecordToolEvent` refuses an event whose fields
   other than `tool_input` exceed 4 KiB, or that carries protobuf fields orchd does not know.
 - **Off the hook's path:** `RecordToolEvent` only queues the event. The queue holds at most
   4096 events and 64 MiB (each event counted at its encoded request size plus 512 bytes), and one
@@ -349,8 +362,15 @@ method of that name; calls through function values are not followed.
   the budget or the owner's share is full, or because a batch could not be stored, are counted
   per chain; a `gap` record with the count is written just before the chain's next queued record
   (an end record included), or after the batch, within a second, when none follows (D-30). A
-  session can still hide what it ran by flooding its own share; the gap shows that it did. Events lost before they reach orchd (orchd down, or slower than the hook's 20 ms) leave
-  no trace; the guard fails closed once it enforces.
+  session can still hide what it ran by flooding its own share; the gap shows that it did.
+  Refusals are not pushed out that way (D-37): a call the guard refused (enforced) for a pinned
+  session or a task that finds its owner's share or the queue full goes into room kept apart
+  for guard decisions (a quarter of the queue's length, 1024 events, and 16 MiB, with the same
+  quarter-per-owner shares), so it is stored with its decision while the ordinary events past
+  the share drop with a gap record. Unpinned harness processes' chains get no reserved room, so a
+  process cannot fill it by starting programs it names claude; the decision is the hook's report
+  (RC-104). Events lost before they reach orchd (orchd down, or slower than the
+  hook's deadline) leave no trace; the guard has already decided the call.
 - **Integrity:** each record's hash is SHA-256 over its JSON with the previous record's hash, so
   records chain per owner. When a chain's owner ends orchd writes an `end` record after its
   queued events and anchors its hash in the `anchors` table, unless the chain is empty or already
@@ -504,6 +524,28 @@ Clients dial `unix://<socket>` lazily (failure surfaces on the first call) and s
 deadlines: hooks 0.5 s for writes and 3 s for prompt search; `orch status` 2–3 s; long CLI
 commands up to 2 hours (migration).
 
+### Policy replay
+
+`ReplaySpaces` (SP-047, `internal/daemon/spaces_replay_rpc.go`) decides one command log's stored
+tool events again and reports where the verdict differs from the recorded one, so a policy
+change can be tried on real behavior first. It reads the chain a page at a time (after flushing
+what is queued), deciding each page before reading the next and keeping only the rows it returns, the owner's pin (a session's; tasks and harness processes have none, so the
+guard judges them `pin_missing`), and stored revisions; it writes nothing. Each event becomes the
+guard's input with `spaces.GuardEventOf`: a tool call's stored targets JSON (never re-extracted
+from the redacted command; unreadable targets are opaque), and for a cwd-changed event the old
+directory as cwd and the new one as its destination. `spaces.Replay` then calls the live
+`spaces.Decide` and compares its `Would` verdict and rule with the recorded ones, which
+`spaces.RecordedVerdict` reads from the record: `would <verdict> (<rule>)` in the rule for a
+call the guard did not enforce (`wouldRule`), or a `refused`/`allowed` decision with its rule.
+Events recorded while no guard decided (decision `logged` with no rule) are counted as having
+no recorded verdict and are still decided. By default each event is decided under the revision
+recorded with it (`policy_rev`), read with `Engine.ResolvedRevision`, which checks the
+revision's hash and validates it; a revision that fails is a per-event problem, not a verdict.
+`policy_revision` or `policy_json` (validated as a draft, `Engine.Resolve`) replays under one
+policy instead; each revision is read and validated once per replay. The guard policy is built with no protected paths, as the live guard has none
+until SP-042, and the mode is the request's or the guard switch's current state; the record does
+not keep the mode it was judged in.
+
 ### Enforcement switches
 
 Each layer of spaces enforcement has an operator-only switch (spaces SP-070, D-11, D-12, D-40,
@@ -574,9 +616,10 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
   the digest included, without any switch; the hooks check reads only the user's
   `~/.claude/settings.json`. When orchd does not answer, the digest's fallback reads only the
   switches in `orch.db`, not whether the tool hooks are still in `settings.json`.
-- **Not yet:** the layers' consumers come with their features. Today the guard switch marks
-  command log records (above); memory filtering, terms, sandbox rules and the enforcing guard
-  read `enforcement.state` when SP-025, SP-044, SP-046 and SP-041 land.
+- **Consumers:** the guard switch sets the enforcing guard's mode: orchd writes it into the
+  guard's snapshot after every change and timed revert, so the next tool call of every running
+  session uses it ([hooks.md](hooks.md#enforcing-guard), SP-041). Memory filtering, terms and
+  sandbox rules read `enforcement.state` when SP-025, SP-044 and SP-046 land.
 
 ## gRPC API
 
@@ -598,9 +641,12 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `EndSession` | session_id → ended_at | sets `ended_at` once; only the pinned harness process; refused to queued tasks; writes the session's [command log](#command-log) end record and anchors its head in the background |
 | `RecordToolEvent` | event (`pre-tool-use`/`cwd-changed`), session_id, cwd, tool_name, tool_input (≤ 1 MiB), tool_input_size, tool_use_id, agent_id, agent_type, old_cwd, new_cwd, at → — | takes a [tool hook](hooks.md#tool-hooks) event and answers at once; attributed to the [caller orchd resolved](#caller-sessions), never to session_id; open to queued tasks. Counted by caller kind and stored in the [command log](#command-log) when its caller is a pinned session, a running task or a harness process holding no pin; never indexed |
 | `ListSessions` | all → sessions (harness, session_id, harness_pid, space, first_cwd, state, last_activity, tool_events, refusals, ended_at) | runs a [liveness](#session-liveness) sweep first; the operator sees every session and unpinned harness process (with its command log chain's counts and last event), a session only its own row, anyone else none; refused to queued tasks; ended sessions, and the chains of unpinned processes that exited or were pinned since, only with `all` |
+| `ListSpaces` | → status (as in `Status`), spaces (name, kind, github_orgs, roots, web_prefixes, chat, reads, readable, terms_file, gh_config_dir), public_root_sessions | the applied revision's spaces by name; `readable` is every space it may read (itself, public spaces, the ones it lists); a policy that does not verify lists none and the status says why; operator-only (`refuseNonOperator`) |
+| `ScanSpaces` | folders (≤ 32, absolute), max_depth (0 = 3, capped at 6), offline → checkouts (path, owner, repo, visibility, anonymous, space, rule, outcome, reason), accounts (profile, login, orgs, error), truncated, problems | one scan at a time (`Aborted` while one runs); walks each folder through a read-only `fs.FS` over an `os.Root`, so no path resolves outside it, never following symbolic links or entering hidden folders below it (a chosen hidden folder is walked) or a checkout's own folders, at most 20,000 folders and 2,000 checkouts (`truncated`); reads each checkout's `.git` without running git (`handoff.CheckoutAt`, which follows a linked worktree's `.git` pointer; an anonymous `.git`'s remote is not believed); looks up visibility through the placement repo lookups, at most 15 from GitHub per scan so `ExplainPlacement` keeps its budget, the rest (all when `offline`) from the cache, and places each checkout as `ExplainPlacement` does; accounts are the default gh login and each space's gh profile, from the profiles' 5-minute check (none when `offline`). Writes nothing: no file, revision or org binding. Unreadable folders → `problems`; a policy that does not verify → `FailedPrecondition`; operator-only |
 | `GetEnforcement` | → switches (layer, title, state, default, states, relaxed, set_at, set_by, until, reverts_to), error | every [enforcement switch](#enforcement-switches); open to every caller, queued tasks included; `set_by` only for the operator; switches that cannot be read are returned as the defaults with `error` |
 | `SetEnforcement` | layer, state, for_seconds → current switch, changed, notes | operator-only (refused to callers descended from a harness or orchd); unknown layer or state, or `for_seconds` outside 0–86400 → `InvalidArgument`; logged with time and caller and emitted on the `spaces` stream; `notes` say what the hooks switch did to Claude Code's settings |
 | `VerifyToolLog` | owner (session ID, `task:<id>` or `process:<pid>[-<start>]`) → records, anchors, ends, gaps, dropped, problems | recomputes the owner's [command log](#command-log) chain after storing what is queued, and compares its anchors with orch.db's copies; operator-only |
+| `ReplaySpaces` | owner, policy_revision or policy_json, mode, all → owner, mode, pin_space, pinned, counts (events, compared, changed, unrecorded, problems), rows (seq, event, tool, revision, recorded and replayed verdict and rule, changed, problem), truncated | [policy replay](#policy-replay); *operator-only* (refused to harness sessions and tasks); both policies, a negative revision, an unknown mode or a policy that does not parse or validate → `InvalidArgument`; a named revision that is missing or edited → `FailedPrecondition`; rows are the changed and undecided calls, every call with `all`; at most 50,000 events and 5,000 rows (`truncated`) |
 | `SummarizeSession` | session_id, transcript_path, tags → accepted | ID `^[A-Za-z0-9_-]{1,128}$`; path absolute, `.jsonl`, regular file; enqueue only (backlog 32) |
 | `RecommendModel` | task_kind → route, from_table | see [tasks.md](tasks.md) |
 | `RateTask` | id, rating (`good`/`rework`/`bad`) → — | sets the task's rating; with the PR-outcome sweep, the only ledger writes outside the queue |
@@ -652,6 +698,13 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `DiscardPRLanding` | task_id, restore → the landing | records or forgets the decision; operator-only |
 | `GetPRDetail` | url, refresh → title, body (≤ 8000 bytes), author, branches, head, sizes, CI, checks, labels, reviewers, reviews, files (≤ 100), fetched_at | one `gh pr view`, cached a minute per PR; GitHub failure → `Unavailable`; operator-only |
 | `ListPRs` | needs_me → PRs (with reasons and attention), updated_at | reads the PR babysitter's cache only, never `gh`; most urgent first, then repo and title; `updated_at` is the cache file's mtime, 0 before the first sweep; an unparseable cache → `Unavailable` |
+
+The macOS Spaces pane (SP-050) is a thin client over `ListSpaces`, `ScanSpaces`,
+`ExplainPlacement`, `ListSessions` (the session pins), `ListToolEvents`, `DiffSpaces` and
+`ApplySpaces`; every rule lives in orchd. `ListSpaces`, `ScanSpaces`, `DiffSpaces` and
+`ApplySpaces` are operator-only. `ExplainPlacement`, `ListSessions` and `ListToolEvents` answer
+any other caller only about what it may see, and only `ExplainPlacement` and `ListToolEvents` are
+open to queued tasks (`taskCallable`).
 
 Dispatch inserts the ledger row before creating the workflow (a row without a workflow is
 diagnosable; the reverse is invisible), redacts the body, assigns `task-<uuid>`, and snapshots git
@@ -721,6 +774,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `<data>/landings/<task>.git` | a proposal's commit, in a bare repository with no hooks; pruned after 30 days |
 | `<data>/orch.db` | SQLite: tasks, sources, docs, models, routing, managed settings |
 | `<data>/toollog.db` | SQLite, mode 0600: the [command log](#command-log); never indexed; trimmed by retention |
+| `<data>/guard/` (0700) | the [enforcing guard](hooks.md#enforcing-guard)'s inputs, 0600: `policy.json` (applied policy, guard switch) and `pins/<session>.json` |
 | `<data>/workflows.db` | durable workflow state |
 | `<data>/qdrant/`, `bin/qdrant`, `qdrant-api-key` (0600) | vector store, engine binary, API key |
 | `<data>/models/minilm/` | embedding model |

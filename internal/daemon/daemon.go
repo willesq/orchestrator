@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
@@ -158,6 +159,9 @@ type server struct {
 	// guardVerdict is the guard's verdict on a tool event, recorded while
 	// the guard is off or logging; nil until the guard decides (SP-040).
 	guardVerdict guardVerdictFunc
+	// guard writes the files the enforcing tool guard in orch-hook reads
+	// (SP-041); nil writes none.
+	guard *guardWriter
 	// toolEvents takes the events pre-tool-use and cwd-changed hooks send.
 	toolEvents toolEventIntake
 	// toolLog stores them (SP-014); nil when it could not be opened.
@@ -194,13 +198,19 @@ func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingR
 }
 
 func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchdv1.IngestResponse, error) {
+	origin := clientOrigin(ctx, req.GetSourceUri())
 	// A source a sync keeps is not a client's to replace: the replacement
 	// would hide the synced text until the sync next rewrote it.
 	if c, ok := s.rag.(copyReader); ok {
-		if cp, found, err := c.Copy(ctx, req.GetSourceUri()); err == nil && found &&
-			(cp.Writer == rag.WriterDocs || cp.Writer == rag.WriterSources) {
+		cp, found, err := c.Copy(ctx, req.GetSourceUri())
+		if err == nil && found && (cp.Writer == rag.WriterDocs || cp.Writer == rag.WriterSources) {
 			return nil, grpcstatus.Errorf(codes.FailedPrecondition,
 				"%s is kept by the %s sync; store the note under another source_uri", req.GetSourceUri(), cp.Writer)
+		}
+		if err == nil && found && cp.Space != "" {
+			if err := s.mayReplace(ctx, origin, cp.Space); err != nil {
+				return nil, err
+			}
 		}
 	}
 	// A URI, scope or tag is shown in every pointer and log line, and rewriting one
@@ -227,6 +237,9 @@ func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchd
 		// Whatever type or URI a client declares, what it stores is a
 		// client's: fenced as data wherever it is shown.
 		Writer: rag.WriterClient,
+		// Placed in the caller's own space, as orchd resolved it from the
+		// caller's process; no request field names a space (SP-023).
+		Origin: origin,
 	})
 	if err != nil {
 		return nil, err
@@ -621,6 +634,11 @@ func Run(ctx context.Context) error {
 
 	svc, emb := buildRAG(s, s.QdrantURL(), apiKey)
 	defer emb.Close()
+	// Every write is placed from here on (SP-023); set before any writer
+	// starts, so nothing is stored unplaced.
+	pins := newPinRegistry(store)
+	repos := newRepoLookups(ghp.Routed())
+	svc.Place = (&writePlacer{spaces: sp, pins: pins, repos: repos}).place
 
 	// Durable workflow engine: the worker unit drains AgentTask instances; the
 	// dispatcher (used by the RPC handler, not a subsystem) enqueues them.
@@ -686,7 +704,7 @@ func Run(ctx context.Context) error {
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
 		summaries: summaries, github: ghService, ghProfiles: ghp, system: system, docs: docsSched,
-		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub, reviews: reviewWatcher,
+		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub, reviews: reviewWatcher, spaces: sp,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return recovery(err)
@@ -710,7 +728,6 @@ func Run(ctx context.Context) error {
 		log.Printf("orchd: model routing is off: %v", routerErr)
 	}
 
-	pins := newPinRegistry(store)
 	// Reason: the resolver needs the server, which is built after the log;
 	// it runs only once events arrive, after srv is set.
 	var srv *server
@@ -745,7 +762,7 @@ func Run(ctx context.Context) error {
 		config:       cfg,
 		spaces:       sp,
 		pins:         pins,
-		repos:        newRepoLookups(ghp.Routed()),
+		repos:        repos,
 		ghProfiles:   ghp,
 		prune:        newPruneGuard(store),
 		sourcesReg:   sources.NewRegistry(store),
@@ -755,7 +772,9 @@ func Run(ctx context.Context) error {
 		settings:     settingsSvc,
 		toolLog:      tlog,
 		enforcement:  newEnforcement(ctx, store, settingsSvc),
+		guard:        newGuardWriter(paths.GuardDir(), userHome()),
 	}
+	srv.startGuardFiles(runCtx)
 	if tlog != nil {
 		srv.toolEvents.setSink(srv.logToolEvent)
 	}
@@ -773,7 +792,14 @@ func Run(ctx context.Context) error {
 
 	log.Printf("orchd %s listening on %s (subsystems: %s)",
 		version.Version, lis.Addr(), strings.Join(sup.Names(), ", "))
-	return gs.Serve(lis)
+	err = gs.Serve(lis)
+	// Reason: a shutdown that begins before Serve starts (a new build
+	// installed during startup) stops the server first, and Serve then
+	// reports it stopped; that is a clean exit like any other shutdown.
+	if errors.Is(err, grpc.ErrServerStopped) && runCtx.Err() != nil {
+		return nil
+	}
+	return err
 }
 
 // selfUpdateWatch reports the binary orchd should watch for a new build of
