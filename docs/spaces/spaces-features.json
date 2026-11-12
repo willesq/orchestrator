@@ -1632,6 +1632,153 @@
         ],
         "status": "open",
         "note": "Part (1) fixed on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction): WatchTasks ends cleanly when the client goes away mid-read; see RC-92. Part (2) remains open: TestDecideCases' 100 ms Targets budget can be exhausted under load."
+      },
+      {
+        "id": "RC-180",
+        "kind": "user-action",
+        "topic": "Run the Claude Code checks for SP-046 (a5, a7, a6's Claude side, 2.a2)",
+        "detail": "Needs real Claude Code sessions (haiku, about 15 short headless runs) using your Claude login read-only; they add transcripts under ~/.claude/projects for temp folders. Steps: (1) optional for a5's gh part: mkdir -p <dir> && GH_CONFIG_DIR=<dir> gh auth login (a job or test account). (2) optional for 2.a2: pick a folder L, run CLAUDE_CONFIG_DIR=L/joba/claude claude and /login once, then exit. (3) cd /Users/williamesquivel/code/willesq/orchestrator.worktrees/feat/sp-046-per-space-harness-settings && ORCH_CLAUDE_E2E=1 [ORCH_E2E_GH_PROFILE=<dir>] [ORCH_E2E_LAYOUT=L] go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1. The 'protect' probe also checks whether Claude Code's Edit deny on the settings files holds against a link or other-case path (security audit P-1; high if it fails).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-181",
+        "kind": "decision",
+        "topic": "Which folders the generated rules deny",
+        "detail": "Rules deny only other isolated spaces' roots (plus other spaces' orch folders and gh profiles), never public roots or private spaces, matching block-other-jobs (D-12). A job session can therefore read a private space it does not list (e.g. personal) through the shell. Options: keep; or also deny private roots an isolated space does not read.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-182",
+        "kind": "follow-up",
+        "topic": "Cross-space channels the deny rules leave open",
+        "detail": "Not denied: harness transcripts under ~/.claude/projects and ~/.codex/sessions (shared by sessions started without the launcher), orch's data folder outside spaces/ (orch.db, toollog.db; SP-042), the default gh login ~/.config/gh, the shared /tmp (D-53 residual) and /tmp/claude, which checkouts with no space share (no per-checkout TMPDIR).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046",
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-183",
+        "kind": "follow-up",
+        "topic": "What the rules reveal and how exactly they match",
+        "detail": "Each checkout's settings name other jobs' root paths (sessions can read which folders are denied; name roots neutrally). Claude Code permission rules match by case while APFS usually is not case sensitive; paths holding glob characters get only the sandbox deny.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-184",
+        "kind": "follow-up",
+        "topic": "Unverified Claude Code behaviour SP-046 relies on",
+        "detail": "Read from the Claude Code 2.1.309 binary, not measured: sandboxed commands get TMPDIR=$CLAUDE_CODE_TMPDIR (set through settings env), and the sandbox already denies shell writes to .claude/settings*.json. Not known: whether sandbox.filesystem.allowRead in a subfolder's own .claude (which applies to sessions started there, SP-004) or in a project settings.json can re-allow a denied folder; such subfolder files are not managed. RC-180's run checks the first.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-185",
+        "kind": "follow-up",
+        "topic": "Checkout placement spends GitHub lookups",
+        "detail": "Each sync places every checkout through orchd's repo lookups (30 per minute, cached 10 minutes), shared with session pins. With many checkouts some fall back to the remote's owner with unknown visibility until cached; rules can flip between a space's and a checkout with no space's. Consider cache-only lookups or a longer TTL for the sync.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-186",
+        "kind": "follow-up",
+        "topic": "Show checkout-settings problems outside orchd's log",
+        "detail": "Tracked files (no rules), entries moved aside, unmergeable files replaced and a truncated walk are logged by orchd only. Surface them in orch status and the app (SP-072), and recheck ignore status periodically (a checkout seen ignored is not checked again until orch changes its file).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046",
+          "SP-072"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-187",
+        "kind": "decision",
+        "topic": "A checkout only its remote places gets no space's rules",
+        "detail": "After the security audit (H-1), a checkout gets a space's rules only when its folder root decided the placement; a job repo cloned under a personal root gets a checkout-with-no-space's rules (no GH_CONFIG_DIR, no TMPDIR). Options: keep (move such clones under the job's root); or let the operator pin a checkout to a space.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-188",
+        "kind": "decision",
+        "topic": "Which folders 'orch run' accepts",
+        "detail": "Interpretation of SP-046.2.a1 'a space the current folder resolves outside of': refused when the folder is placed in another space or its placement is a conflict or quarantine; allowed in the space's own folders and in folders no root or remote places (e.g. ~/scratch). --force allows any.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-189",
+        "kind": "follow-up",
+        "topic": "Sandboxed git cannot change tracked .claude files",
+        "detail": "Each checkout's rules deny shell writes to its .claude folder, so a git checkout or pull run by the session that changes tracked files under .claude/ fails; the file tools and the user's terminal are unaffected.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-190",
+        "kind": "follow-up",
+        "topic": "SP-046 security audit lows (four rounds)",
+        "detail": "Accepted: (1) the session controls .git, so it can point the info/exclude orch appends its one ignore line to at another repository's git folder, and appendLine follows links in folders above the git folder; (2) moved-aside names (*.orch-moved-*) are not git-ignored and moving does not re-check the entry just before the rename; (3) a .claude or settings file that cannot be opened (mode 000, a socket) is reported but not moved, leaving that checkout without rules; (4) a tracked settings file gets no rules and a session can freeze its rules with git add -f (the enforcing guard, SP-041, is the answer); (5) the launcher's profile links share plugins and skills across spaces; (6) GetEnforcement is open to every caller (pre-existing).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-191",
+        "kind": "user-action",
+        "topic": "Confirm a per-space Claude Code login persists",
+        "detail": "SP-004 measured that a fresh CLAUDE_CONFIG_DIR starts logged out but not whether its login persists. After the first 'orch run <space> -- claude' and /login, start it again and note whether it asks to log in.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -4568,7 +4715,15 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (2026-11-12): tests TestGeneratedSettingsDenyOtherJobsOnly, TestGeneratedSettingsOtherSpaces, TestOtherProfilesAndOrchDirDenied, TestUnplacedCheckout (internal/settings/spacesettings) and TestPlaceCheckoutIgnoresStricterRemote (internal/daemon) pass: a checkout in job A denies job B's and C's roots, other spaces' folders and gh profiles, never anything in A, the public root or the private space A reads; env GH_CONFIG_DIR is A's gh_config_dir.",
+            "a2 (2026-11-12): TestMergePreservesUserEntries (user entries kept, orch never claims an entry the user had, removal restores the file's meaning), TestMergeIdempotent + TestSyncIdempotent (second run writes nothing, same bytes and mtime), TestSyncKeepsBackupOfFirstChange (original kept once, 0600, never replaced) pass: 3 pass.",
+            "a3 (2026-11-12): TestSyncIgnoresEveryCheckout passes: 5/5 writable checkouts (plain repo, one whose committed .gitignore covers the file, one whose info/exclude covers it, a main checkout and its linked worktree) report 'git check-ignore' ignored = 100%; an exclude line was added only where no rule covered it (plain; main, shared by the worktree); the .gitignore is unchanged; a checkout with the file tracked is refused and not written.",
+            "a4 (2026-11-12): TestSyncPicksUpNewClone and TestCheckoutSettingsLoop pass (a clone appearing under a root is written at the next sync; the loop syncs on start, every tick and on nudge). orchd syncs every 30 s (checkoutSettingsEvery). Measured on this Mac: a sync of 136 temp checkouts that finds and writes one new clone took 57 ms (first, cold sync of 135: 3.2 s); walking the real ~/code (135 checkouts) took 0.38 s. Worst case after a clone appears is about 30 s + one sync, <= 60 s.",
+            "a5: waiting on the user (RC-180): needs real Claude Code sessions and a gh profile the user logs in to; covered by the opt-in TestClaudeE2E (bash and gh probes).",
+            "a6 (2026-11-12): TestPerSpaceTmpDir (own TMPDIR and CLAUDE_CODE_TMPDIR, allowWrite own, deny of every other space's folder including its tmp) and TestRunSetsProfileForChildOnly (launcher sets TMPDIR and CLAUDE_CODE_TMPDIR) pass. TestCodexSandboxPerSpaceTmp ran the real codex-cli 0.166.0 sandbox (no model, temp CODEX_HOME) with the launcher's -c profile: job A wrote and read its own TMPDIR; cat of a file job B wrote under B's TMPDIR -> 'Operation not permitted'; writing into B's TMPDIR -> 'Operation not permitted'; cat in B's root -> 'Operation not permitted'. The Claude Code side (sandboxed TMPDIR is A's, B's tmp unreadable) is in the opt-in TestClaudeE2E (tmpdir and bash probes), waiting on the user (RC-180).",
+            "a7: waiting on the user (RC-180): TestClaudeE2E starts Claude Code from a subfolder of a temp checkout whose root settings.local.json orch wrote, and probes Read, Grep, Glob, Edit and Write on job B's root next to controls on job A's folder."
+          ]
         },
         {
           "id": "SP-046.2",
@@ -4596,7 +4751,11 @@
               "threshold": "true"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (2026-11-12): TestRunSetsProfileForChildOnly (CLAUDE_CONFIG_DIR, GH_CONFIG_DIR, TMPDIR set in the exec'd harness's environment only, inherited values replaced, orch's own environment unchanged), TestRunRefusesUnknownSpace (unknown space and no applied policy refused, nothing started) and TestRunRefusesOtherSpaceFolder (a folder in another space or undecidable refused unless --force; own space and unplaced folders allowed) pass: 3 pass. Also TestRunCodex, TestRunSandboxOff, TestRunUsage.",
+            "a2: waiting on the user (RC-180): TestClaudeE2E with ORCH_E2E_LAYOUT runs the same probes from a folder outside every root with the launcher's profile, after the user logs in to that profile once.",
+            "a3 (2026-11-12): documented from SP-004 (a fresh CLAUDE_CONFIG_DIR starts 'Not logged in'; persistence per profile not measured) with the setup steps in docs/internals/install.md 'Per-space harness settings' (Logging in to a per-space profile) and docs/OPERATIONS.md."
+          ]
         },
         {
           "id": "SP-046.3",
@@ -4610,7 +4769,9 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (2026-11-12): TestSandboxSwitch (internal/settings/spacesettings) and TestCheckoutSettingsFollowPolicyAndSwitch (internal/daemon) pass: switching the sandbox layer off takes orch's entries out of all 3 files, leaves the user's file meaning-equal to its original and removes the files orch created; switching on restores the same content; the switch change asks for a sync at once; with no policy the entries go too."
+          ]
         }
       ],
       "status": "in_progress",
