@@ -2587,6 +2587,19 @@ public nonisolated struct Orchd_V1_RecordToolEventRequest: Sendable {
   /// unix nanoseconds when the hook started
   public var at: Int64 = 0
 
+  /// The tool guard's decision as the hook made it (SP-041); empty when no
+  /// guard ran (an older hook). guard_verdict is what the guard decided or,
+  /// when not enforced, would have decided: allow | refuse.
+  public var guardVerdict: String = String()
+
+  /// a rule id; never a path or text
+  public var guardRule: String = String()
+
+  /// the verdict took effect
+  public var guardEnforced: Bool = false
+
+  public var guardPolicyRev: Int64 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -9727,7 +9740,7 @@ nonisolated extension Orchd_V1_ListSessionsResponse: SwiftProtobuf.Message, Swif
 
 nonisolated extension Orchd_V1_RecordToolEventRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RecordToolEventRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}event\0\u{3}session_id\0\u{1}cwd\0\u{3}tool_name\0\u{3}tool_input\0\u{3}tool_input_size\0\u{3}tool_use_id\0\u{3}agent_id\0\u{3}agent_type\0\u{3}old_cwd\0\u{3}new_cwd\0\u{1}at\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}event\0\u{3}session_id\0\u{1}cwd\0\u{3}tool_name\0\u{3}tool_input\0\u{3}tool_input_size\0\u{3}tool_use_id\0\u{3}agent_id\0\u{3}agent_type\0\u{3}old_cwd\0\u{3}new_cwd\0\u{1}at\0\u{3}guard_verdict\0\u{3}guard_rule\0\u{3}guard_enforced\0\u{3}guard_policy_rev\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -9747,6 +9760,10 @@ nonisolated extension Orchd_V1_RecordToolEventRequest: SwiftProtobuf.Message, Sw
       case 10: try { try decoder.decodeSingularStringField(value: &self.oldCwd) }()
       case 11: try { try decoder.decodeSingularStringField(value: &self.newCwd) }()
       case 12: try { try decoder.decodeSingularInt64Field(value: &self.at) }()
+      case 13: try { try decoder.decodeSingularStringField(value: &self.guardVerdict) }()
+      case 14: try { try decoder.decodeSingularStringField(value: &self.guardRule) }()
+      case 15: try { try decoder.decodeSingularBoolField(value: &self.guardEnforced) }()
+      case 16: try { try decoder.decodeSingularInt64Field(value: &self.guardPolicyRev) }()
       default: break
       }
     }
@@ -9789,6 +9806,18 @@ nonisolated extension Orchd_V1_RecordToolEventRequest: SwiftProtobuf.Message, Sw
     if self.at != 0 {
       try visitor.visitSingularInt64Field(value: self.at, fieldNumber: 12)
     }
+    if !self.guardVerdict.isEmpty {
+      try visitor.visitSingularStringField(value: self.guardVerdict, fieldNumber: 13)
+    }
+    if !self.guardRule.isEmpty {
+      try visitor.visitSingularStringField(value: self.guardRule, fieldNumber: 14)
+    }
+    if self.guardEnforced != false {
+      try visitor.visitSingularBoolField(value: self.guardEnforced, fieldNumber: 15)
+    }
+    if self.guardPolicyRev != 0 {
+      try visitor.visitSingularInt64Field(value: self.guardPolicyRev, fieldNumber: 16)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -9805,6 +9834,10 @@ nonisolated extension Orchd_V1_RecordToolEventRequest: SwiftProtobuf.Message, Sw
     if lhs.oldCwd != rhs.oldCwd {return false}
     if lhs.newCwd != rhs.newCwd {return false}
     if lhs.at != rhs.at {return false}
+    if lhs.guardVerdict != rhs.guardVerdict {return false}
+    if lhs.guardRule != rhs.guardRule {return false}
+    if lhs.guardEnforced != rhs.guardEnforced {return false}
+    if lhs.guardPolicyRev != rhs.guardPolicyRev {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

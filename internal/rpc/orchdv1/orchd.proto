@@ -1178,6 +1178,13 @@ message RecordToolEventRequest {
   string old_cwd = 10;   // cwd-changed only
   string new_cwd = 11;   // cwd-changed only
   int64 at = 12;         // unix nanoseconds when the hook started
+  // The tool guard's decision as the hook made it (SP-041); empty when no
+  // guard ran (an older hook). guard_verdict is what the guard decided or,
+  // when not enforced, would have decided: allow | refuse.
+  string guard_verdict = 13;
+  string guard_rule = 14;     // a rule id; never a path or text
+  bool guard_enforced = 15;   // the verdict took effect
+  int64 guard_policy_rev = 16;
 }
 
 message RecordToolEventResponse {}

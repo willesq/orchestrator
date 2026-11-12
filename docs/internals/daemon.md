@@ -50,7 +50,15 @@ opened it (`internal/daemon/callers.go`) rather than trusting clients to check `
 
 - **Peer:** at connect time the server's transport credentials read the peer PID
   (`LOCAL_PEERPID` on macOS, `SO_PEERCRED` on Linux) and walk its parents (`procstat.Parent`, at
-  most 256 steps). A process descended from orchd is one orchd started: a task session, its MCP
+  most 256 steps). After the walk orchd checks the PID against the peer's kernel token (D-44,
+  `internal/daemon/peer_token*.go`): on macOS the `LOCAL_PEERTOKEN` audit token's PID and PID
+  version must match the process now at that PID (`proc_pidinfo` `PROC_PIDUNIQIDENTIFIERINFO`); on
+  Linux the `SO_PEERPIDFD` pidfd (kernel 6.5) must still name that PID. A peer that handed its
+  socket on and exited, its PID then reused by another process, or whose token cannot be read,
+  is not identified: it resolves to no session and no space, and gets a task's limits. A Linux
+  kernel before 6.5 has no `SO_PEERPIDFD`, so there no peer is identified and, while spaces are
+  configured, every guarded call is refused for want of a pin (fails closed; orch targets macOS,
+  D-49). A process descended from orchd is one orchd started: a task session, its MCP
   servers, hooks and shell commands, or a verification run. orchd itself is not its own
   descendant. A walk that fails is retried once; a peer that still cannot be placed, or a call
   without orchd's peer information, is treated as a task. On platforms without peer lookup, and
@@ -181,12 +189,14 @@ process named `claude` there (`( cd /other && sh -c 'exec -a claude …; true' &
 `.command` file in Terminal, `osascript` or `launchctl submit` do the same, and on Linux so does
 an orphan adopted by a subreaper rather than init. Ancestry alone cannot tell these from a real
 session (tmux's server also runs under launchd). Pins grant nothing yet; nothing that reads
-memory by a pin's space (SP-011, SP-025) may rely on them until the pre-tool guard (SP-041)
-stops a session from starting such a process. Any process in a session can
+memory by a pin's space (SP-011, SP-025) may rely on them until the pre-tool guard stops a
+session from starting such a process. The enforcing guard (SP-041) refuses such a launch only
+when its command names another job's folder; one in a folder of no space, or hidden in an opaque
+command under `block-other-jobs`, still runs (RC-101). Any process in a session can
 end that session's pin early; retention (SP-015) still keeps a live process's log, and a
 resume in the same process clears the end. The detached fake harness above can also resume a
 dead or ended session of any space whose directory it starts in, and then write that session's
-command log, until SP-041 stops it. Codex is not pinned yet: orch's Codex install registers no SessionStart or
+command log, unless the guard refuses its launch (above). Codex is not pinned yet: orch's Codex install registers no SessionStart or
 SessionEnd hook. SP-011 (below) resolves callers from these rows, and
 [session liveness](#session-liveness) follows their processes.
 
@@ -280,9 +290,9 @@ the pre-tool guard (SP-041) closes two gaps: the detached-harness case described
 [session pins](#session-pins), and a process that leaves the session's tree before orchd accepts
 its connection (a double fork, `launchctl submit`, `open`, `osascript`; see
 [queued callers](#queued-callers)), which has no harness above it and so resolves to the
-operator, the widest result. The connection's peer PID is still taken on trust at accept
-(see [queued callers](#queued-callers)): a peer that hands its socket to a child and exits leaves
-its PID free for reuse.
+operator, the widest result. Since SP-041 the connection's peer PID is checked against its
+kernel token (see [queued callers](#queued-callers)), so a peer that hands its socket to a child
+and exits cannot be resolved to whatever process reuses its PID; it gets no space.
 
 ### Command log
 
@@ -334,12 +344,14 @@ method of that name; calls through function values are not followed.
   `…[truncated N bytes]` marker. Every other text field is redacted and capped at 4 KiB; targets
   over 16 KiB are stored as opaque. Redaction reads at most twice the cap plus 4 KiB of a field,
   so a secret the cut passes through is still found and a 1 MiB input costs little. Text is made
-  valid UTF-8 (invalid bytes become U+FFFD) before it is stored and hashed. The decision is
-  `logged` until the guard (SP-041) decides. While the guard's [enforcement
-  switch](#enforcement-switches) is `off` the decision is `not enforced`; while it is `off` or
-  `log`, `rule` holds the verdict the guard would have given (`would refuse (<rule>)`, `would
-  allow`) once a guard verdict is wired in (`server.guardVerdict`, SP-040/SP-041; empty until
-  then). Logging never stops: every switch state stores every event. `RecordToolEvent` refuses an event whose fields
+  valid UTF-8 (invalid bytes become U+FFFD) before it is stored and hashed. The decision is the
+  one the hook's [enforcing guard](hooks.md#enforcing-guard) reports (SP-041): `refused` or
+  `allowed` with its rule id when it enforced; otherwise `logged`, with `rule` holding the
+  verdict it would have given (`would refuse (<rule>)`, `would allow (<rule>)`, RC-86). While
+  the guard's [enforcement switch](#enforcement-switches) is `off` the decision is `not
+  enforced`. An event from a hook that sent no decision stays `logged`. The decision is the
+  hook's report: a caller can only write to the chain orchd resolved for it, and a rule that is
+  not a rule id is stored as `unknown`. Logging never stops: every switch state stores every event. `RecordToolEvent` refuses an event whose fields
   other than `tool_input` exceed 4 KiB, or that carries protobuf fields orchd does not know.
 - **Off the hook's path:** `RecordToolEvent` only queues the event. The queue holds at most
   4096 events and 64 MiB (each event counted at its encoded request size plus 512 bytes), and one
@@ -350,8 +362,15 @@ method of that name; calls through function values are not followed.
   the budget or the owner's share is full, or because a batch could not be stored, are counted
   per chain; a `gap` record with the count is written just before the chain's next queued record
   (an end record included), or after the batch, within a second, when none follows (D-30). A
-  session can still hide what it ran by flooding its own share; the gap shows that it did. Events lost before they reach orchd (orchd down, or slower than the hook's 20 ms) leave
-  no trace; the guard fails closed once it enforces.
+  session can still hide what it ran by flooding its own share; the gap shows that it did.
+  Refusals are not pushed out that way (D-37): a call the guard refused (enforced) for a pinned
+  session or a task that finds its owner's share or the queue full goes into room kept apart
+  for guard decisions (a quarter of the queue's length, 1024 events, and 16 MiB, with the same
+  quarter-per-owner shares), so it is stored with its decision while the ordinary events past
+  the share drop with a gap record. Unpinned harness processes' chains get no reserved room, so a
+  process cannot fill it by starting programs it names claude; the decision is the hook's report
+  (RC-104). Events lost before they reach orchd (orchd down, or slower than the
+  hook's deadline) leave no trace; the guard has already decided the call.
 - **Integrity:** each record's hash is SHA-256 over its JSON with the previous record's hash, so
   records chain per owner. When a chain's owner ends orchd writes an `end` record after its
   queued events and anchors its hash in the `anchors` table, unless the chain is empty or already
@@ -575,9 +594,10 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
   the digest included, without any switch; the hooks check reads only the user's
   `~/.claude/settings.json`. When orchd does not answer, the digest's fallback reads only the
   switches in `orch.db`, not whether the tool hooks are still in `settings.json`.
-- **Not yet:** the layers' consumers come with their features. Today the guard switch marks
-  command log records (above); memory filtering, terms, sandbox rules and the enforcing guard
-  read `enforcement.state` when SP-025, SP-044, SP-046 and SP-041 land.
+- **Consumers:** the guard switch sets the enforcing guard's mode: orchd writes it into the
+  guard's snapshot after every change and timed revert, so the next tool call of every running
+  session uses it ([hooks.md](hooks.md#enforcing-guard), SP-041). Memory filtering, terms and
+  sandbox rules read `enforcement.state` when SP-025, SP-044 and SP-046 land.
 
 ## gRPC API
 
@@ -731,6 +751,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `<data>/landings/<task>.git` | a proposal's commit, in a bare repository with no hooks; pruned after 30 days |
 | `<data>/orch.db` | SQLite: tasks, sources, docs, models, routing, managed settings |
 | `<data>/toollog.db` | SQLite, mode 0600: the [command log](#command-log); never indexed; trimmed by retention |
+| `<data>/guard/` (0700) | the [enforcing guard](hooks.md#enforcing-guard)'s inputs, 0600: `policy.json` (applied policy, guard switch) and `pins/<session>.json` |
 | `<data>/workflows.db` | durable workflow state |
 | `<data>/qdrant/`, `bin/qdrant`, `qdrant-api-key` (0600) | vector store, engine binary, API key |
 | `<data>/models/minilm/` | embedding model |

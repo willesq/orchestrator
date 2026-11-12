@@ -520,6 +520,11 @@
         "id": "D-55",
         "decision": "SP-073, SP-040 and SP-070 are worked in parallel by three independent agent sessions, each in its own worktree and draft PR, overriding session_procedure step 2 (one feature, one session at a time) for these three only; their dependencies are done and their code barely overlaps. To avoid id clashes each reserves a block of reconvene ids: SP-073 RC-66..RC-75, SP-040 RC-76..RC-85, SP-070 RC-86..RC-95. New confirmed_by_user decisions are recorded by the coordinating session. Whichever PR merges later is rebased onto main (plan file, orch.db migration numbers, regenerated proto stubs).",
         "date": "2026-11-11"
+      },
+      {
+        "id": "D-56",
+        "decision": "Spaces work may run as up to five parallel lanes coordinated by one session: each lane works its assigned features one at a time in order; lanes use disjoint reconvene ID ranges (A RC-100..119, B RC-120..139, C RC-140..159, D RC-160..179, E RC-180..199); only the coordinator writes the live progress file, D-ids and changelog. This overrides session_procedure step 2 and the other-session check in step 3 for this run.",
+        "date": "2026-11-12"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -1632,6 +1637,132 @@
         ],
         "status": "open",
         "note": "Part (1) fixed on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction): WatchTasks ends cleanly when the client goes away mid-read; see RC-92. Part (2) remains open: TestDecideCases' 100 ms Targets budget can be exhausted under load."
+      },
+      {
+        "id": "RC-100",
+        "kind": "decision",
+        "topic": "Queued tasks under the enforcing guard",
+        "detail": "SP-041's hook decides from a session pin file, and queued tasks have no session pin (PinSession is refused to them), so while spaces are applied and the guard enforces, every tool call of a queued task is refused (pin_missing). Proposed: orchd writes a task pin file keyed by ORCH_TASK_ID when it starts a run, with the space D-46 gives (the dispatching session's space; the operator's task takes its working directory's placement), which needs Dispatch to record the caller's pin. Until then, queued work stops when spaces are applied with the guard enforcing.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-025"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-101",
+        "kind": "decision",
+        "topic": "What SP-041 does for D-38",
+        "detail": "D-38 lets memory reads widen by a pin's space once the enforcing guard stops a session from starting a harness outside its tree. SP-041 refuses such a launch only when the command names another job's folder (cd, paths, git -C); a launch in a folder of no space, or hidden in an opaque command (bash -c \"$X\") under block-other-jobs (opaque_unverified), still runs, as do double forks and launchctl/open/osascript. SP-025 should not assume more, or should require strict mode or other evidence (D-39).",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-025",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-102",
+        "kind": "decision",
+        "topic": "Accepted risk: the hook finds its files through the environment",
+        "detail": "From the SP-041 security audit (medium, accepted 2026-11-12 with reason): orch-hook locates the guard's files and orch.db through ORCH_DATA_DIR, XDG_DATA_HOME and HOME, which a session can change for a harness it starts inside itself; that nested harness's hook can then read an empty or forged directory and allow every call. Accepted because the same nested harness can already drop every hook (CLAUDE_CONFIG_DIR, --settings), so this adds no new way around the guard; the OS sandbox (SP-046) is the boundary. Proposed for SP-042: refuse tool calls that start a harness with ORCH_DATA_DIR, XDG_DATA_HOME, HOME, CLAUDE_CONFIG_DIR or CODEX_HOME set, or a --settings override. Confirm or ask for a fix in SP-041.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-042",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-103",
+        "kind": "follow-up",
+        "topic": "Guard files need SP-042's shell-write protection",
+        "detail": "SP-041's snapshot (<data>/guard/policy.json) and pin files are protected from file tools only (the guard directory is the snapshot's one protected path). A shell write (echo, tee, cp, mv, sed -i) can still set the guard's switch to off in the snapshot or change a session's pin space, and an edit of orch.db can do the same for the fallback. SP-042 must cover <data>/guard and orch.db for shell writes, and should keep reads of the pin files allowed.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-104",
+        "kind": "follow-up",
+        "topic": "The command log stores the hook's reported decision",
+        "detail": "From the SP-041 security audit (low): orchd stores an enforced decision (refused, allowed) and its rule as the hook reports them in RecordToolEvent, without computing its own verdict or comparing guard_enforced with its own switch; any process can only write its own chain. Reserved queue room (D-37) goes only to enforced refusals of pinned sessions and tasks, so unpinned process chains cannot claim it, but a session can still fill its own reserve share with claimed refusals. Proposed: compute orchd's own would-verdict (server.guardVerdict) on the writer goroutine and flag records whose hook decision differs.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-016"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-105",
+        "kind": "follow-up",
+        "topic": "Analysis-limit refusals under load",
+        "detail": "Targets has a 100 ms budget; when the machine is loaded it can run out on an ordinary call (RC-93 (2)), and the enforcing guard then refuses it (analysis_limit). Measure how often real sessions hit analysis_limit or guard_timeout once the guard runs (orch spaces log), and raise the budget or retry if it matters. Also seen: TestTargetsAuditRound3Cost (internal/spaces) fails under -race on this Mac (a 2 MB Write took 565 ms), unrelated to SP-041's diff.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-013"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-106",
+        "kind": "user-action",
+        "topic": "Check the enforcing guard in real sessions after release",
+        "detail": "After SP-041 ships and orchd restarts: (1) sessions started while orchd was down or an older orchd ran have no pin file; once spaces are applied with the guard enforcing, their calls are refused (pin_missing) and they must be restarted; (2) in one Claude Code and one Codex session in a configured space, try a call into another job's folder and confirm the call is refused and the reason (rule id, no path) is shown; (3) confirm 'orch spaces enforce guard off' takes effect on the next call.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-107",
+        "kind": "follow-up",
+        "topic": "Snapshot window after an apply when orchd crashes",
+        "detail": "From SP-041's independent verifier (low): ApplySpaces commits the policy, then orchd rewrites the guard snapshot. If orchd crashes between the two, the old snapshot (for example 'no policy') stays readable and the hook decides by it until orchd restarts and rewrites it at startup. Options: remove the snapshot before an apply and rewrite it after (calls during the apply then fall back to orch.db), or accept the window.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-108",
+        "kind": "decision",
+        "topic": "Peer identification on Linux kernels before 6.5",
+        "detail": "SP-041 identifies socket peers by SO_PEERPIDFD on Linux (D-44), which needs kernel 6.5. On older kernels (Debian 12, Ubuntu 22.04) no peer is identified, no session can be pinned, and once spaces are applied with the guard enforcing every tool call is refused (fails closed). Documented in docs/internals/daemon.md; orch targets macOS (D-49). Confirm, or ask for a fallback (for example SO_PEERCRED plus a start-time check) on older kernels.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-109",
+        "kind": "follow-up",
+        "topic": "SP-041 verifier lows",
+        "detail": "From the second independent verification of SP-041 (2026-11-12), all low: (1) if the hook cannot even locate its files (guardFilesFor panics: no home or data directory), the call is refused although no spaces may be configured, a narrow exception to INV-10 in favour of INV-13; (2) no test covers an unreadable pre-tool-use stdin with no spaces configured (allowed by the same path TestGuardFilesNoPolicy covers); (3) a panic recovered in decideWithin for a cwd-changed event is logged as an enforced refuse verdict (nothing is printed, the event cannot be refused), unlike the timeout branch, which marks it not enforced.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041"
+        ],
+        "status": "open"
       },
       {
         "id": "RC-140",
@@ -3351,7 +3482,13 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestGuardDenyFormat (internal/hook/guard_test.go) runs a recorded PreToolUse payload of each harness (Claude Code and Codex, SP-001 fixtures) through run() with the payload's target bound to another job: both print exactly one hookSpecificOutput object with hookEventName PreToolUse, permissionDecision deny and a non-empty permissionDecisionReason, the same fields as the capture hook's deny that SP-001 recorded both harnesses honoring (capture.DenyOutput); the reason names the rule (other_job_path) and never the path or file name. 2 of 2 harnesses. TestWriteDenyUnknownRule: an unknown rule still gets a non-empty reason (Codex requires it).",
+            "a2: TestGuardFailsClosed (internal/hook/guard_test.go): timeout (decision stalls past the deadline after reporting its mode), missing pin and unreadable policy (snapshot marking a policy that no longer verifies), each in off, log, block-other-jobs and strict: 12 subtests pass; the enforcing modes print a deny and hand orchd an enforced refuse with rules guard_timeout, pin_missing, policy_unreadable; off and log print nothing and hand orchd the would-refuse verdict. Further cases: TestGuardFilesUnreadablePolicy (broken, invalid and relative-protected-path snapshots x 4 modes), TestGuardFilesSnapshotMissing (no snapshot: orch.db never applied allows; applied refuses unless orch.db's guard switch is off/log; unreadable orch.db refuses as strict; a damaged snapshot refuses), TestGuardTimeoutWithoutMode (a stall before the mode is known, or a panic, refuses; cwd-changed is never refused), TestGuardFilesNoPolicy (no spaces: allowed without a pin, INV-10) in internal/spaces/guard_files_test.go. TestGuardDecidesUnreadablePayload: a pre-tool-use payload that cannot be read is still decided (refused under block-other-jobs, allowed in log), and a guard whose inputs cannot be located refuses. Independent verifier (fresh subagent, 2026-11-12) re-ran all of these: PASS.",
+            "a3: TestGuardDecisionLatency (internal/hook/guard_test.go): 1,000 decisions over the 46 recorded PreToolUse payloads, each reading policy.json and the pin file, validating the policy, running Targets and Decide: p50 0.091 ms, p99 0.206 ms, max 0.477 ms (darwin/arm64, M3 Max, 2026-11-12). Whole process: TestToolHookCost (internal/daemon) now writes a configured snapshot and pin, so each of 1,000 runs of the real orch-hook binary decides (all 'allow within_space') and hands the event to orchd: p50 13.0 ms, p99 18.9 ms. p99 < 50 ms.",
+            "a4: TestRefusalStoredWhenShareFull (internal/daemon/guardfiles_test.go): with the writer held, a pinned session floods 1,074 ordinary events (its share is 1,024); the overflow is dropped and counted, an enforced refusal sent after the flood is not dropped (EnqueueDecision uses the reserve, D-37); after release the chain holds the refusal with decision refused and rule other_job_path, and gap records whose counts equal the dropped events. TestEnqueueDecisionUsesReserve (internal/toollog/decision_test.go): ordinary events stop at the key's share, one decision still queues in the reserve, a second one of the same key is refused its reserve share, another key's decision still fits, and nothing queues after Close.",
+            "a5: TestPeerReusedPIDGetsNoSpace (internal/daemon/guardfiles_test.go): a connection whose walk reaches a pinned claude resolves to that session only while the kernel-token check passes; when the token says the PID now names another process (errPeerReplaced) or cannot be read, it resolves to callerNone and the operator check treats it as an unidentified process (no space, D-44). TestConnSamePeerRealSocket: on a real unix socket the token matches this process and refuses another PID; identify passes for a real connection. TestCheckToken (darwin: LOCAL_PEERTOKEN audit token PID and PID version vs proc_pidinfo PROC_PIDUNIQIDENTIFIERINFO; a changed version is errPeerReplaced) and TestCheckPIDFD (linux: SO_PEERPIDFD pidfd's fdinfo Pid). TestToolHookCost and the socket tests in internal/daemon pass with the check on real connections."
+          ]
         },
         {
           "id": "SP-041.2",
@@ -3372,18 +3509,21 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestGuardReplaysFixtures (internal/hook/guard_test.go) replays all 46 recorded PreToolUse calls of Claude Code and Codex (SP-001 fixtures) through run() under block-other-jobs, every session pinned to space 'job': with /scratch in 'job', 0 refused; with /scratch/project in 'job' and /scratch/outside in no space, 0 refused; with /scratch/outside bound to another job, 13 refused, every one reaching /scratch/outside. Refusals for targets within the session's own space: 0.",
+            "a2: TestGuardSwitchTakesEffectNextCall (internal/daemon/guardfiles_test.go): orchd writes the snapshot at start and after ApplySpaces; a call into another job is refused; after SetEnforcement guard off (the operator RPC) the next decision from the files allows (would refuse, not enforced); strict refuses again; a 15-minute log switch allows, and once the fake clock passes its end the next call refuses as strict before orchd rewrites the snapshot, and orchd's revert then rewrites it. TestGuardSnapshotFollowsPolicy and TestGuardSnapshotRemovedWhenWriteFails cover the writer."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "206d8c4499fbf648db18aff8ca8d4d4f44a45476",
+      "verified_at": "2026-11-12T16:28:31Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "59c0d955dc641ee5e9676b8779dc98ae509c7ecc89abc2fcf839a19da0e763cc",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-041-enforcing-guard",
+      "pr": "https://github.com/willesq/orchestrator/pull/172"
     },
     {
       "id": "SP-042",
@@ -5338,6 +5478,10 @@
     {
       "date": "2026-11-10",
       "change": "Decision review batch 7 (user actions): RC-17, RC-18, RC-21 and RC-22 resolved; issues #158-#162 filed for the defects found."
+    },
+    {
+      "date": "2026-11-12",
+      "change": "D-56: user approved parallel lanes (A SP-041..044, B SP-023, C SP-050 then SP-047, D SP-072, E SP-046) with disjoint RC ranges; the procedure text is unchanged."
     }
   ],
   "plan_location": {
