@@ -327,6 +327,7 @@ func (e *extractor) embedded(s string, at where, rel, whole bool) {
 		s = s[:maxScan]
 	}
 	e.githubURLs(s)
+	e.githubOrgURLs(s)
 	// Paths found inside text are guesses: they add targets, but cannot
 	// make the call opaque on their own.
 	e.spec++

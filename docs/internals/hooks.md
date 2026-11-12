@@ -58,7 +58,24 @@ stored, with decision `not enforced`.
 
 `spaces.Targets(tool, tool_input, cwd)` (`internal/spaces/targets*.go`, SP-013) lists everything
 a tool call reaches, for the command log and the tool guard: `paths`, `cd_dest`, `git_dirs`,
-`gh_repos` (lowercase `owner/repo`), `prefixes` and `opaque` with `opaque_reasons`. Checking `cd`
+`gh_repos` (lowercase `owner/repo`), `gh_orgs`, `prefixes` and `opaque` with `opaque_reasons`.
+`gh_orgs` (SP-043, `targets_github.go`) are GitHub accounts the call reaches without naming one
+repo: `gh api orgs/<o>…` and `users/<o>…`, `gh repo list <o>`, `gh search`'s `--owner` and its
+`owner:`/`org:`/`user:` qualifiers (`repo:` adds a repo), and `github.com/orgs/<o>`,
+`github.com/users/<o>` and bare `github.com/<o>` URLs (also `www.` and `gist.`; a login follows
+GitHub's grammar, so a sentence-ending period is not part of it). When `git fetch`, `pull`,
+`push`, `ls-remote` or `remote update` names a remote rather than a URL, its `url` and
+`pushurl` are read from the checkout's git config (`targets_gitconfig.go`: a linked worktree's
+common directory, a symlinked `.git`, or the `--git-dir` the command gives; quoting, comments,
+continued lines, keys on a header line and legacy `[remote.x]` headers are read as git reads
+them) and added to `gh_repos`. Named remote groups expand to their members, `--multiple`,
+`--all` and a bare `remote update` take every remote, and valued flags (`--depth 1`) are not
+read as the remote. With no remote named, the remote git would use is taken: the current
+branch's `pushRemote`, `remote.pushDefault`, its `remote`, then `origin`; every remote when
+HEAD cannot be read. A config remote that is a local path or `file://` URL is a git target; one
+on a host whose name does not say GitHub (an ssh alias), or that cannot be read, a name that is
+no remote, a config with `url.*.insteadOf` or an include, and a config over 256 KiB or not a
+regular file make the call opaque. Checking `cd`
 alone would be easy to get around, so it reads every form the call can take, and it flags what
 it cannot read rather than returning less. It is best-effort by decision (D-28): no static
 reading of shell is complete, so it is evidence for the guard, and the OS sandbox and per-job
@@ -117,8 +134,10 @@ accounts remain the hard boundary.
   but a short allowlist such as `user.*`), git flags and subcommands that run a command
   (`rebase -x`, `fetch --upload-pack`, `bisect run`, `submodule foreach`, `filter-branch`),
   `make VAR=…` and `make -f -`, `sed`'s `e` command, `shopt`/`setopt`/`set -o`, `gh search`,
-  `gh alias`, `gh extension`, `gh repo list` and `gh api` endpoints outside `repos/<o>/<r>` (other
-  than a few about the signed-in account). Also: variables that run code or redirect tools
+  `gh alias`, `gh extension`, `gh repo list` and `gh api` endpoints outside `repos/<o>/<r>`,
+  `orgs/<o>` and `users/<o>` (other than a few about the signed-in account). The accounts and
+  repos such a command names are still listed, so one that names another job's org is refused
+  before its opacity counts. Also: variables that run code or redirect tools
   (`CDPATH`, `PS4`, `EDITOR`, `VISUAL`, `PAGER`, `LESSOPEN`, `HOME`, `GIT_SSH*`, `GIT_CONFIG*`,
   `BASH_ENV`, anything ending in `_COMMAND`, `EDITOR` or `PAGER`); namerefs; zsh `$var[…]`
   subscripts; command, process and arithmetic substitution; unknown
@@ -172,7 +191,8 @@ Paths compare cleaned, in Unicode NFC and case-folded, as macOS treats names.
   `cd ~/code && rg x` reach every job under `~/code`; RC-36). The cwd counts as containing only in
   `strict`: otherwise a session started under a public root such as `~/code` would be refused
   every call. So in `block-other-jobs`, a command there that searches its cwd by default
-  (`grep -r x`, `rg x`, `find`) is not caught (RC-76). `gh_repos` are placed by the space their owner is bound to. A path in no space
+  (`grep -r x`, `rg x`, `find`) is not caught (RC-76). `gh_repos` are placed by the space their owner is bound to, and `gh_orgs` by the space the
+  account is bound to (SP-043). A path in no space
   (`/tmp`, `/usr`) is allowed: the guard separates spaces, and the sandbox covers the rest.
   Worktree paths come with their main checkout's path, so an outside worktree counts as its
   repo's space. Moving within the session's own space is allowed (D-09). Subagents share the
@@ -185,7 +205,7 @@ Paths compare cleaned, in Unicode NFC and case-folded, as macOS treats names.
      protected path, so the call is refused. The caller supplies the list (SP-042). Reads are not
      refused. Shell writes to protected paths are SP-042's.
   4. `other_job_path`, `other_job_ancestor` and `other_job_repo`: a target lies in, contains, or
-     is a repo of an isolated space other than the session's. The call is refused.
+     is a repo or account of an isolated space other than the session's. The call is refused.
   5. `unreadable_space` (`strict` only): a target lies in, contains, or is a repo of a non-public
      space the session may not read. The call is refused.
   6. `malformed_target`: the cwd or a target is not an absolute path, or a repo is not
@@ -205,6 +225,27 @@ Paths compare cleaned, in Unicode NFC and case-folded, as macOS treats names.
 The rule id is safe to show and log: it never names the matched path or text. `TestDecideCases`
 runs 43 cases in all four modes, covering every SP-040.1 form, and `TestDecideDeterministic`
 replays 20,000 random inputs.
+
+### Live GitHub guard
+
+With one `gh` login an agent could read another employer's org directly, bypassing memory, so
+the guard judges what `gh` and `git` commands reach on GitHub (spaces SP-043): `gh api
+repos/<o>/<r>`, `-R`/`--repo`, `GH_REPO`, `gh repo clone|view <o>/<r>`, `git clone`, `fetch`,
+`pull`, `push` and `ls-remote` to a GitHub URL or to a remote whose URL the checkout's config
+gives, and the accounts in `gh_orgs` (`gh api orgs/<o>`, `gh repo list <o>`, `gh search --owner`
+and qualifiers, `github.com/<o>` URLs, including `curl` of the API). A repo is placed by its
+owner's binding and an account by its own; one bound to another isolated space is refused
+(`other_job_repo`), in both enforcing modes. The session's own org and public orgs are allowed;
+in `strict`, so is a private space the session reads. `TestGitHubGuardCases` covers 24 forms
+against another job's org (also upper-cased), the session's own org and a public one (96 cases);
+`TestGitRemoteReviewCases`, `TestGitConfigParsing` and `TestGitHubURLReviewCases` hold the
+security review's reproducers.
+
+**Limits.** What Targets marks opaque is refused only in `strict`: a remote behind an ssh alias
+whose name does not say GitHub, `insteadOf` rewrites and includes (the user's global git config
+is not read either), `gh api graphql`, `gh` aliases and extensions. A token used with `curl`
+against an endpoint Targets does not read, and `GIT_DIR` set as a variable, are not caught.
+Per-job GitHub accounts (SP-063) are the boundary.
 
 ## Prompt context
 
