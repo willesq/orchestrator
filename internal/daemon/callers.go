@@ -146,6 +146,11 @@ var operatorActions = map[string]string{
 	// Reason: a task has no session row, and the list names other sessions'
 	// spaces and directories (ListSessions also answers a task with none).
 	orchdv1.Orchd_ListSessions_FullMethodName: "list sessions",
+	// Reason (SP-050): like DiffSpaces, these name every job's orgs, roots
+	// and checkouts; both are also refused to interactive harness sessions
+	// (refuseNonOperator).
+	orchdv1.Orchd_ListSpaces_FullMethodName: "list the spaces",
+	orchdv1.Orchd_ScanSpaces_FullMethodName: "scan folders for spaces",
 }
 
 // refuseQueued returns the refusal for method when ctx's caller is a queued

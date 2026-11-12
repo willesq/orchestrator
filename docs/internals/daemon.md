@@ -87,7 +87,8 @@ opened it (`internal/daemon/callers.go`) rather than trusting clients to check `
   `@anthropic-ai/claude-code`, `@openai/codex` or `claude/versions/`. The kernel name alone is
   not enough: npm installs run as `node`, and Claude Code's native installer names its binary
   after the version. The walk is not retried: a session exiting mid-walk would leave a second
-  walk with no harness to find. `DiffSpaces` and `ApplySpaces` use it (`refuseNonOperator`).
+  walk with no harness to find. `DiffSpaces`, `ApplySpaces`, `ListSpaces` and `ScanSpaces` use
+  it (`refuseNonOperator`).
   They are refused to queued tasks, to any caller inside an agent session, and to a caller whose
   ancestry orchd cannot read, so a session can neither read nor apply the spaces policy it runs
   under. The limits below apply here too: a process that leaves the session's tree is not caught,
@@ -618,6 +619,8 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `EndSession` | session_id → ended_at | sets `ended_at` once; only the pinned harness process; refused to queued tasks; writes the session's [command log](#command-log) end record and anchors its head in the background |
 | `RecordToolEvent` | event (`pre-tool-use`/`cwd-changed`), session_id, cwd, tool_name, tool_input (≤ 1 MiB), tool_input_size, tool_use_id, agent_id, agent_type, old_cwd, new_cwd, at → — | takes a [tool hook](hooks.md#tool-hooks) event and answers at once; attributed to the [caller orchd resolved](#caller-sessions), never to session_id; open to queued tasks. Counted by caller kind and stored in the [command log](#command-log) when its caller is a pinned session, a running task or a harness process holding no pin; never indexed |
 | `ListSessions` | all → sessions (harness, session_id, harness_pid, space, first_cwd, state, last_activity, tool_events, refusals, ended_at) | runs a [liveness](#session-liveness) sweep first; the operator sees every session and unpinned harness process (with its command log chain's counts and last event), a session only its own row, anyone else none; refused to queued tasks; ended sessions, and the chains of unpinned processes that exited or were pinned since, only with `all` |
+| `ListSpaces` | → status (as in `Status`), spaces (name, kind, github_orgs, roots, web_prefixes, chat, reads, readable, terms_file, gh_config_dir), public_root_sessions | the applied revision's spaces by name; `readable` is every space it may read (itself, public spaces, the ones it lists); a policy that does not verify lists none and the status says why; operator-only (`refuseNonOperator`) |
+| `ScanSpaces` | folders (≤ 32, absolute), max_depth (0 = 3, capped at 6), offline → checkouts (path, owner, repo, visibility, anonymous, space, rule, outcome, reason), accounts (profile, login, orgs, error), truncated, problems | one scan at a time (`Aborted` while one runs); walks each folder through a read-only `fs.FS` over an `os.Root`, so no path resolves outside it, never following symbolic links or entering hidden folders below it (a chosen hidden folder is walked) or a checkout's own folders, at most 20,000 folders and 2,000 checkouts (`truncated`); reads each checkout's `.git` without running git (`handoff.CheckoutAt`, which follows a linked worktree's `.git` pointer; an anonymous `.git`'s remote is not believed); looks up visibility through the placement repo lookups, at most 15 from GitHub per scan so `ExplainPlacement` keeps its budget, the rest (all when `offline`) from the cache, and places each checkout as `ExplainPlacement` does; accounts are the default gh login and each space's gh profile, from the profiles' 5-minute check (none when `offline`). Writes nothing: no file, revision or org binding. Unreadable folders → `problems`; a policy that does not verify → `FailedPrecondition`; operator-only |
 | `GetEnforcement` | → switches (layer, title, state, default, states, relaxed, set_at, set_by, until, reverts_to), error | every [enforcement switch](#enforcement-switches); open to every caller, queued tasks included; `set_by` only for the operator; switches that cannot be read are returned as the defaults with `error` |
 | `SetEnforcement` | layer, state, for_seconds → current switch, changed, notes | operator-only (refused to callers descended from a harness or orchd); unknown layer or state, or `for_seconds` outside 0–86400 → `InvalidArgument`; logged with time and caller and emitted on the `spaces` stream; `notes` say what the hooks switch did to Claude Code's settings |
 | `VerifyToolLog` | owner (session ID, `task:<id>` or `process:<pid>[-<start>]`) → records, anchors, ends, gaps, dropped, problems | recomputes the owner's [command log](#command-log) chain after storing what is queued, and compares its anchors with orch.db's copies; operator-only |
@@ -672,6 +675,13 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `DiscardPRLanding` | task_id, restore → the landing | records or forgets the decision; operator-only |
 | `GetPRDetail` | url, refresh → title, body (≤ 8000 bytes), author, branches, head, sizes, CI, checks, labels, reviewers, reviews, files (≤ 100), fetched_at | one `gh pr view`, cached a minute per PR; GitHub failure → `Unavailable`; operator-only |
 | `ListPRs` | needs_me → PRs (with reasons and attention), updated_at | reads the PR babysitter's cache only, never `gh`; most urgent first, then repo and title; `updated_at` is the cache file's mtime, 0 before the first sweep; an unparseable cache → `Unavailable` |
+
+The macOS Spaces pane (SP-050) is a thin client over `ListSpaces`, `ScanSpaces`,
+`ExplainPlacement`, `ListSessions` (the session pins), `ListToolEvents`, `DiffSpaces` and
+`ApplySpaces`; every rule lives in orchd. `ListSpaces`, `ScanSpaces`, `DiffSpaces` and
+`ApplySpaces` are operator-only. `ExplainPlacement`, `ListSessions` and `ListToolEvents` answer
+any other caller only about what it may see, and only `ExplainPlacement` and `ListToolEvents` are
+open to queued tasks (`taskCallable`).
 
 Dispatch inserts the ledger row before creating the workflow (a row without a workflow is
 diagnosable; the reverse is invisible), redacts the body, assigns `task-<uuid>`, and snapshots git
