@@ -77,7 +77,7 @@ func Capture(opts Options, stdin []byte) (string, error) {
 		return "", err
 	}
 	if opts.Event == "PreToolUse" && toolInputHasMarker(stdin) {
-		return denyOutput(), nil
+		return DenyOutput(), nil
 	}
 	return "", nil
 }
@@ -162,9 +162,11 @@ func appendLine(path string, rec Record) error {
 	return err
 }
 
-// denyOutput uses the hookSpecificOutput shape both Claude Code and Codex
-// accept; Codex rejects a deny without a non-empty reason.
-func denyOutput() string {
+// DenyOutput is the deny the capture hook prints. It uses the
+// hookSpecificOutput shape both Claude Code and Codex honored when SP-001
+// recorded them; Codex rejects a deny without a non-empty reason. The tool
+// guard (internal/hook) checks its own deny against it.
+func DenyOutput() string {
 	out := map[string]any{"hookSpecificOutput": map[string]any{
 		"hookEventName":            "PreToolUse",
 		"permissionDecision":       "deny",

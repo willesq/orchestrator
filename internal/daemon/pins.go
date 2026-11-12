@@ -449,6 +449,7 @@ func (s *server) PinSession(ctx context.Context, req *orchdv1.PinSessionRequest)
 		log.Printf("orchd: PinSession %s: %v", id, err)
 		return nil, pinStatus(err)
 	}
+	s.writeGuardPin(p)
 	return p.proto(), nil
 }
 

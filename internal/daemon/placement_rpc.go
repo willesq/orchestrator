@@ -102,17 +102,7 @@ func publicOnly(res *spaces.Resolved, p spaces.Placement) bool {
 func (s *server) placementOrigin(ctx context.Context, target string) (spaces.Origin, string, error) {
 	switch {
 	case strings.HasPrefix(target, "/"):
-		path := filepath.Clean(target)
-		o := spaces.Origin{System: spaces.SystemFS, Path: path}
-		c, ok := handoff.CheckoutAt(path)
-		if !ok {
-			c, ok = handoff.FindCheckout(path)
-		}
-		// An anonymous checkout's .git could borrow any repo's identity.
-		if ok && !c.Anonymous && c.Owner != "" {
-			o.Remote = s.repos.lookup(ctx, c.Owner, c.Repo)
-		}
-		return o, "path", nil
+		return pathOrigin(ctx, s.repos, target), "path", nil
 	case strings.HasPrefix(target, "http://"), strings.HasPrefix(target, "https://"):
 		return spaces.Origin{System: spaces.SystemWeb, URL: target, SourceURI: target}, "url", nil
 	case strings.HasPrefix(target, "slack:"), strings.HasPrefix(target, "teams:"):
@@ -128,6 +118,22 @@ func (s *server) placementOrigin(ctx context.Context, target string) (spaces.Ori
 	}
 	return spaces.Origin{}, "", grpcstatus.Error(codes.InvalidArgument,
 		"target must be an absolute path, an http(s) URL, owner/repo, or slack:<id> / teams:<id>")
+}
+
+// pathOrigin is the origin orchd records for a local path: the path and,
+// when it is in a GitHub checkout, that repo as GitHub reports it.
+func pathOrigin(ctx context.Context, repos *repoLookups, path string) spaces.Origin {
+	path = filepath.Clean(path)
+	o := spaces.Origin{System: spaces.SystemFS, Path: path}
+	c, ok := handoff.CheckoutAt(path)
+	if !ok {
+		c, ok = handoff.FindCheckout(path)
+	}
+	// An anonymous checkout's .git could borrow any repo's identity.
+	if ok && !c.Anonymous && c.Owner != "" {
+		o.Remote = repos.lookup(ctx, c.Owner, c.Repo)
+	}
+	return o
 }
 
 func placementProto(p spaces.Placement) *orchdv1.PlacementExplanation {

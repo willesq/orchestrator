@@ -80,6 +80,9 @@ type enforcement struct {
 	// hooks applies the hooks switch to Claude Code's settings; nil leaves
 	// the files alone.
 	hooks hookSettings
+	// onChange, when set, is given every switch after a change, under mu:
+	// orchd rewrites the guard's snapshot with it (SP-041).
+	onChange func(spaces.Enforcement)
 
 	// mu guards cur and problem, and orders changes, so a switch and its
 	// side effects are not interleaved with another's.
@@ -226,6 +229,9 @@ func (e *enforcement) changed(ctx context.Context, c spaces.SwitchChange) []stri
 	var notes []string
 	if c.Layer == spaces.LayerHooks {
 		notes = e.applyHooks(ctx, c.State == spaces.SwitchOn)
+	}
+	if e.onChange != nil {
+		e.onChange(e.copyLocked())
 	}
 	log.Printf("orchd: enforcement: %s", c.Describe())
 	for _, n := range notes {
