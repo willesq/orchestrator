@@ -1924,7 +1924,8 @@
           "SP-042",
           "SP-047"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved 2026-11-12 in commit f88994eb7c2d5f95de2bf9ba6b1ba83ea0055b9c (PR #175): orchd's guard snapshot (version 2) carries spaces.GuardProtection (ProtectedPaths for the applied policy, the guard directory and orch's binaries), orch-hook builds its policy with NewGuardPolicyProtecting from it, and orchd's ReplaySpaces and the CLI's payload replay compute the same protection. Verified by an independent verifier at 7ffc5bb (TestGuardSelfProtectionLive, TestReplaySpacesReproducesSelfProtection, TestSpacesReplayFixturesSelfProtection). Security-review lows: RC-200..RC-205."
       },
       {
         "id": "RC-111",
@@ -3816,15 +3817,15 @@
           ],
           "evidence": [
             "a1: TestSelfProtectionRefusesWrites (internal/spaces/guard_selfprotect_test.go): 16 protected paths (orch config file, orch.db, the guard's policy snapshot and a pin file under the data directory, a terms file, the user's Claude Code settings.json and settings.local.json, Codex hooks.json and config.toml, Gemini settings.json, a checkout's .git/hooks/pre-commit and .claude/settings.local.json, and since RC-110 ~/.claude.json, a Claude Code plugin's hooks.json, orchd's launchd job and brew services' job) x 9 methods (Write, Edit, MultiEdit, Bash '>', '>>', tee -a, sed -i, cp, mv) = 144 cases, all refused with rule self_protection by Decide (block-other-jobs, session pinned to its own space). Further forms in TestSelfProtectionForms (18 refused: recursive removal of orch's directories, mv .git, removal of .claude, cp -t, install, dd of=, truncate, touch/ln/chmod in .git/hooks, a glob or variable target, sudo tee, bash -c, cd then a relative write, apply_patch in Bash and the apply_patch tool) and TestSelfProtectionReviewCases (23 reproducers from the security review: heredoc apply_patch, U+017F long s, -t attached or clustered, hard links, curl -o, wget -O, tar -C/-f, unzip -d, curl -O after cd, patch, .git/config). TestShellWritesListed checks Targets' new writes list against reads for 14 forms.",
-            "a2: TestSelfProtectionAllowsReads: the Read tool and cat of each of the 11 protected paths other than the terms file are allowed; the terms file and 6 secret files (the list in docs/internals/hooks.md, Self-protection) are refused with self_protection, by both tools. TestSelfProtectionForms and TestSelfProtectionReviewCases keep ordinary calls allowed: cp of settings to /tmp, ls of the ssh directory, ls and du of the home's entries, known_hosts and public keys, GH_CONFIG_DIR=<dir> gh, a Write whose content names protected paths, git commit/add naming them, tar of the Claude Code directory to /tmp.",
+            "a2: TestSelfProtectionAllowsReads: the Read tool and cat of each of the 15 protected paths other than the terms file are allowed; the terms file and 6 secret files (the list in docs/internals/hooks.md, Self-protection) are refused with self_protection, by both tools. TestSelfProtectionForms and TestSelfProtectionReviewCases keep ordinary calls allowed: cp of settings to /tmp, ls of the ssh directory, ls and du of the home's entries, known_hosts and public keys, GH_CONFIG_DIR=<dir> gh, a Write whose content names protected paths, git commit/add naming them, tar of the Claude Code directory to /tmp.",
             "RC-110 (live guard): orchd's snapshot carries spaces.GuardProtection and orch-hook decides with NewGuardPolicyProtecting. TestGuardSelfProtectionLive (internal/daemon/guardfiles_selfprotect_test.go) runs orchd's snapshot writer and PinSession into the hook's GuardFiles.Decide: 21 calls refused as self_protection (Write/Edit/redirect into ~/.claude/settings.json, Write/redirect into a checkout's .git/hooks/x, Write/redirect into orch.db, the policy file, a pin file, rm -rf of the data directory, orch's config, the checkout's .claude/settings.local.json, cp over orch-hook, Write orchd, ~/.claude.json, a plugin's hooks.json, both launchd jobs, Read/cat of the terms file and cp of it), 9 ordinary in-space calls allowed (within_space). TestReplaySpacesReproducesSelfProtection: four recorded calls (three self_protection refusals) replay through ReplaySpaces with 0 changed; TestSpacesReplayFixturesSelfProtection: the CLI's payload replay refuses 3 such writes and allows the in-space one. TestGuardFilesUnreadablePolicy, TestGuardFilesSnapshotMissing, TestGuardFilesNoPolicy and TestGuardFilesRefuseBadInput cover snapshot version 2, missing or invalid protection, a version 1 snapshot and one with no version; TestGuardProtectionLiteralDirs covers pattern characters and backslashes in orch's directory names."
           ]
         }
       ],
       "status": "done",
       "passes": true,
-      "verified_sha": "1f4ae7364df2b9c8fc4e32083d80a57dbf6a3296",
-      "verified_at": "2026-11-12T16:44:42Z",
+      "verified_sha": "7ffc5bb50ae781b8a72c3e3ed9a64b4dcd340e57",
+      "verified_at": "2026-11-12T20:08:17Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "516bf29527b8f8f01e04135d569b6635490675259e69914c5913c7350f4986d6",
