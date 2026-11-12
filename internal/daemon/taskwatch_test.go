@@ -2,7 +2,9 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -124,6 +126,100 @@ func TestWatchTasksStreamsSnapshotChangesAndTicks(t *testing.T) {
 	s.hub.mu.Unlock()
 	if n != 0 {
 		t.Errorf("%d subscriptions left after the stream ended", n)
+	}
+}
+
+// hookedTasks calls before ahead of each ledger read, so a test can make the
+// client go away, or the ledger fail, at an exact point in a stream.
+type hookedTasks struct {
+	taskReader
+	lists  atomic.Int32
+	before func(op string, lists int32) error
+}
+
+func (h *hookedTasks) List(ctx context.Context, f queue.ListFilter) ([]queue.Task, error) {
+	if err := h.before("list", h.lists.Add(1)); err != nil {
+		return nil, err
+	}
+	return h.taskReader.List(ctx, f)
+}
+
+func (h *hookedTasks) Get(ctx context.Context, id string) (queue.Task, bool, error) {
+	if err := h.before("get", h.lists.Load()); err != nil {
+		return queue.Task{}, false, err
+	}
+	return h.taskReader.Get(ctx, id)
+}
+
+// A client that goes away while a snapshot, change or tick is being read ends
+// the stream cleanly; the read then fails only because its context is gone.
+// A ledger failure while the client is still there is still reported.
+func TestWatchTasksEndsCleanlyWhenClientGoesAwayMidRead(t *testing.T) {
+	errLedger := errors.New("ledger failed")
+	cases := []struct {
+		name    string
+		publish bool   // trigger a change after the snapshot
+		flood   bool   // overflow the stream's buffer while its snapshot is read
+		tick    bool   // let ticks fire
+		on      string // the read that the hook acts on
+		onList  int32  // for "list": the List call number
+		fail    bool   // the hook fails the read instead of cancelling
+		want    error
+	}{
+		{name: "snapshot", on: "list", onList: 1},
+		{name: "change", publish: true, on: "get"},
+		{name: "overflow snapshot", flood: true, on: "list", onList: 2},
+		{name: "tick", tick: true, on: "list", onList: 2},
+		{name: "ledger failure", publish: true, on: "get", fail: true, want: errLedger},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, store, _ := newTaskServer(t)
+			s.hub = newTaskHub()
+			savedBatch, savedTick := watchBatch, watchTick
+			watchBatch, watchTick = time.Millisecond, time.Hour
+			if tc.tick {
+				watchTick = 5 * time.Millisecond
+			}
+			t.Cleanup(func() { watchBatch, watchTick = savedBatch, savedTick })
+			ctx := context.Background()
+			if err := store.Create(ctx, workflows.AgentTaskInput{ID: "task-a", Agent: "dev", Body: "x"}); err != nil {
+				t.Fatal(err)
+			}
+			wctx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			s.tasks = &hookedTasks{taskReader: store, before: func(op string, lists int32) error {
+				if tc.flood && op == "list" && lists == 1 {
+					// The stream is subscribed by now; the resync is served next.
+					for i := 0; i < subBuffer+1; i++ {
+						s.hub.publish("task-a")
+					}
+				}
+				if op != tc.on || (op == "list" && lists != tc.onList) {
+					return nil
+				}
+				if tc.fail {
+					return errLedger
+				}
+				cancel() // the client goes away; the read below then fails
+				return nil
+			}}
+			stream := &fakeWatchStream{ctx: wctx}
+			done := make(chan error, 1)
+			go func() { done <- s.WatchTasks(&orchdv1.WatchTasksRequest{}, stream) }()
+			if tc.publish {
+				eventually(t, "the snapshot", func() bool { return stream.count("snapshot") == 1 })
+				s.hub.publish("task-a")
+			}
+			select {
+			case err := <-done:
+				if !errors.Is(err, tc.want) {
+					t.Errorf("WatchTasks ended with %v, want %v", err, tc.want)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("WatchTasks did not end")
+			}
+		})
 	}
 }
 

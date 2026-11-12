@@ -89,7 +89,9 @@ Packages: `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `pr
    - **Limits:** at most 16 streams are open (`ResourceExhausted` beyond). Streams end with
      `Unavailable` when orchd begins shutting down, since gRPC's graceful stop waits for every open
      RPC and an app holding a stream would otherwise keep orchd from exiting. Shutdown also forces
-     a stop of anything still open after 5 s.
+     a stop of anything still open after 5 s. A client that goes away ends its stream cleanly
+     (no error), even when it leaves while a snapshot, change or tick is being read; a ledger
+     failure while the client is still connected ends the stream with that error.
    - **Access:** operator-only. Queued tasks are refused it and use `ListTasks` and `GetTask`.
 
 ## Claude Code runner
