@@ -287,3 +287,11 @@ func (f *fakeClient) GetEnforcement(context.Context, *orchdv1.GetEnforcementRequ
 func (f *fakeClient) SetEnforcement(context.Context, *orchdv1.SetEnforcementRequest, ...grpc.CallOption) (*orchdv1.SetEnforcementResponse, error) {
 	return &orchdv1.SetEnforcementResponse{}, nil
 }
+
+func (f *fakeClient) ListSpaces(context.Context, *orchdv1.ListSpacesRequest, ...grpc.CallOption) (*orchdv1.ListSpacesResponse, error) {
+	return &orchdv1.ListSpacesResponse{}, nil
+}
+
+func (f *fakeClient) ScanSpaces(context.Context, *orchdv1.ScanSpacesRequest, ...grpc.CallOption) (*orchdv1.ScanSpacesResponse, error) {
+	return &orchdv1.ScanSpacesResponse{}, nil
+}
