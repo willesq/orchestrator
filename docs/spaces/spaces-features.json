@@ -3635,14 +3635,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "9ecf2284e0903ca5b703649fda4ca3bd71d42cb33a05f5e31f6efbe9d8b3a208",
-      "branch": null,
+      "branch": "feat/sp-072-app-spaces-controls",
       "pr": null
     },
     {
