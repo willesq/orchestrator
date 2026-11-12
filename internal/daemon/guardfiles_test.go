@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -28,7 +29,7 @@ const guardJobsPolicy = `{"spaces":[{"name":"work","kind":"isolated","roots":["~
 func withGuardFiles(t *testing.T, s *server) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "guard")
-	s.guard = newGuardWriter(dir, "/home/u")
+	s.guard = newGuardWriter(dir, "/home/u", "/home/u/.config/orch", filepath.Dir(dir), "/home/u/bin")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	s.startGuardFiles(ctx)
@@ -66,8 +67,20 @@ func TestGuardSnapshotFollowsPolicy(t *testing.T) {
 	dir := withGuardFiles(t, s)
 	snap := readSnapshot(t, dir)
 	if snap.Policy != nil || snap.Revision != 0 || snap.Broken || snap.Home != "/home/u" ||
-		snap.Guard.State != spaces.SwitchBlockOtherJobs || len(snap.Protected) != 1 || snap.Protected[0] != dir {
+		snap.Guard.State != spaces.SwitchBlockOtherJobs {
 		t.Fatalf("snapshot at start = %+v", snap)
+	}
+	// The snapshot carries the whole self-protection (RC-110): orch's
+	// directories, the guard's own, harness settings and paths protected
+	// below every directory.
+	prot := snap.Protection
+	for _, want := range []string{"/home/u/.config/orch", filepath.Dir(dir), dir, "/home/u/.claude/settings*", "/home/u/bin/orch-hook"} {
+		if !slices.Contains(prot.Write, want) {
+			t.Errorf("snapshot protection %v lacks %s", prot.Write, want)
+		}
+	}
+	if !slices.Contains(prot.Anywhere, filepath.Join(".git", "hooks")) || len(prot.Read) == 0 {
+		t.Errorf("snapshot protection = %+v", prot)
 	}
 	rev := applyPolicy(t, s, guardJobsPolicy)
 	snap = readSnapshot(t, dir)

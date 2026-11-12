@@ -18,15 +18,15 @@ type Protection struct {
 	// everything below it, and a call that writes a directory holding one
 	// (rm -rf, mv) writes it too. A final element holding '*' is a name
 	// pattern: ~/.claude/settings* is every file named settings... there.
-	Write []string
+	Write []string `json:"write,omitempty"`
 	// Anywhere are relative paths protected below every directory, such
 	// as .git/hooks or .claude/settings*: a checkout's own harness settings
 	// and git hooks. A call that writes a directory they would be under,
 	// such as a .git or .claude folder itself, writes them too.
-	Anywhere []string
+	Anywhere []string `json:"anywhere,omitempty"`
 	// Read are absolute paths no call may read or write: terms files and
 	// credentials. Name patterns work as in Write.
-	Read []string
+	Read []string `json:"read,omitempty"`
 }
 
 // ProtectedPaths is the protection orch applies, for orchd's guard and for
@@ -37,11 +37,22 @@ type Protection struct {
 func ProtectedPaths(home, configDir, dataDir string, res *Resolved) Protection {
 	p := Protection{
 		Write: []string{
-			configDir, dataDir,
+			// Reason: as written, even when a name holds a pattern
+			// character (ORCH_DATA_DIR=/x/data[1]).
+			literalName(configDir), literalName(dataDir),
 			filepath.Join(home, ".claude", "settings*"),
 			filepath.Join(home, ".codex", "hooks.json"),
 			filepath.Join(home, ".codex", "config.toml"),
 			filepath.Join(home, ".gemini", "settings.json"),
+			// Reason: launch surfaces. ~/.claude.json holds the MCP server
+			// commands, plugins bring their own hooks, and a launchd job
+			// names the orchd binary that runs; changing any of them runs
+			// code outside the guard (RC-110 security review). The jobs are
+			// orch install's com.orchestrator.orchd.plist and brew
+			// services' homebrew.mxcl.orch.plist.
+			filepath.Join(home, ".claude.json"),
+			filepath.Join(home, ".claude", "plugins"),
+			filepath.Join(home, "Library", "LaunchAgents", "*orch*"),
 		},
 		Anywhere: []string{
 			filepath.Join(".git", "hooks"),
@@ -80,10 +91,38 @@ func ProtectedPaths(home, configDir, dataDir string, res *Resolved) Protection {
 	return p
 }
 
+// orchBinaries are the binaries orch installs side by side; harness
+// settings run orch-hook from there, and launchd runs orchd.
+var orchBinaries = []string{"orch", "orchd", "orch-hook"}
+
+// GuardProtection is ProtectedPaths with what only the running install
+// knows: the guard directory, named although it lies in the data directory
+// so it stays protected wherever it is, and orch's binaries in binDir ("" for
+// none), so an agent cannot replace orch-hook with one that allows
+// everything. orchd's guard snapshot and both replays (orchd's and the
+// CLI's) build their protection with it, so the hook and a replay judge the
+// same paths (RC-110).
+func GuardProtection(home, configDir, dataDir, guardDir, binDir string, res *Resolved) Protection {
+	p := ProtectedPaths(home, configDir, dataDir, res)
+	p.Write = append(p.Write, literalName(guardDir))
+	if binDir != "" {
+		for _, b := range orchBinaries {
+			p.Write = append(p.Write, filepath.Join(binDir, b))
+		}
+	}
+	return p
+}
+
 // literalName escapes the name pattern characters in p's final element, so
-// a path such as ~/terms/job[1].txt is protected as written.
+// a path such as ~/terms/job[1].txt is protected as written. Reason: a name
+// without '*', '?' or '[' is not read as a pattern at all, so it is left
+// as it is; escaping a backslash there would protect a name that does not
+// exist (RC-110 security review).
 func literalName(p string) string {
 	dir, base := filepath.Split(p)
+	if !strings.ContainsAny(base, "*?[") {
+		return p
+	}
 	var b strings.Builder
 	for _, r := range base {
 		if strings.ContainsRune(`*?[\`, r) {

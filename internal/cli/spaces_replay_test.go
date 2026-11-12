@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"os"
@@ -65,6 +66,39 @@ func TestSpacesReplayFixtures(t *testing.T) {
 		"--policy", "testdata/replay/fixtures-policy.json", "--mode", "strict")
 	if err != nil || strings.Contains(quiet, "SEQ") || !strings.Contains(quiet, "mode strict") {
 		t.Errorf("strict replay without --all = %q, %v", quiet, err)
+	}
+}
+
+// TestSpacesReplayFixturesSelfProtection: a payload replay protects what
+// orchd's guard protects (RC-110), so writes into a checkout's git hooks,
+// harness settings or orch's data directory replay as self_protection
+// refusals, and an ordinary call in the space is allowed.
+func TestSpacesReplayFixturesSelfProtection(t *testing.T) {
+	home := t.TempDir()
+	data := filepath.Join(t.TempDir(), "data")
+	t.Setenv("HOME", home)
+	t.Setenv("ORCH_CONFIG_DIR", filepath.Join(t.TempDir(), "config"))
+	t.Setenv("ORCH_DATA_DIR", data)
+	call := func(tool, key, value string) string {
+		b, _ := json.Marshal(map[string]any{"payload": map[string]any{"hook_event_name": "PreToolUse", "session_id": "s",
+			"cwd": "/scratch/project", "tool_name": tool, "tool_input": map[string]string{key: value}}})
+		return string(b) + "\n"
+	}
+	payloads := filepath.Join(t.TempDir(), "self.jsonl")
+	lines := call("Bash", "command", "echo x > /scratch/project/.git/hooks/pre-commit") +
+		call("Write", "file_path", filepath.Join(home, ".claude", "settings.json")) +
+		call("Bash", "command", "echo x >> "+filepath.Join(data, "orch.db")) +
+		call("Bash", "command", "echo x > /scratch/project/out.txt")
+	if err := os.WriteFile(payloads, []byte(lines), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := run(factory(&fakeClient{}, nil), "", "spaces", "replay", payloads,
+		"--policy", "testdata/replay/fixtures-policy.json", "--all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(out, "refuse (self_protection)"); n != 3 || strings.Count(out, "allow (within_space)") != 1 {
+		t.Errorf("%d self_protection refusals, want 3, and one allowed call:\n%s", n, out)
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/willesq/orchestrator/internal/paths"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/spaces"
 )
@@ -196,11 +197,12 @@ func replayFixtures(out io.Writer, path, policy, mode string, all bool) error {
 	if err != nil {
 		return err
 	}
-	res, err := spaces.Validate(p, spaces.DefaultEnv())
+	env := spaces.DefaultEnv()
+	res, err := spaces.Validate(p, env)
 	if err != nil {
 		return fmt.Errorf("the policy does not validate: %w", err)
 	}
-	pol, err := spaces.NewGuardPolicy(res, nil)
+	pol, err := spaces.NewGuardPolicyProtecting(res, localProtection(env.Home, res))
 	if err != nil {
 		return err
 	}
@@ -231,6 +233,18 @@ func replayFixtures(out io.Writer, path, policy, mode string, all bool) error {
 		}
 	}
 	return nil
+}
+
+// localProtection is the protection orchd's guard applies under res, built
+// as orchd builds it (spaces.GuardProtection) from this install's
+// directories and binaries, so a payload replay judges the same paths as
+// the live guard (RC-110).
+func localProtection(home string, res *spaces.Resolved) spaces.Protection {
+	bin := ""
+	if exe, err := os.Executable(); err == nil {
+		bin = filepath.Dir(exe)
+	}
+	return spaces.GuardProtection(home, paths.ConfigDir(), paths.DataDir(), paths.GuardDir(), bin, res)
 }
 
 func fixtureRowProto(r spaces.ReplayRow) *orchdv1.ReplayedEvent {

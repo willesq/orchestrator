@@ -42,7 +42,7 @@ func guardSetup(t *testing.T, mode, jobRoot, otherRoot string, pinned ...string)
 		p.Spaces = append(p.Spaces, spaces.Space{Name: "other", Kind: spaces.Isolated, Roots: []string{otherRoot}, GitHubOrgs: []string{"otherorg"}})
 	}
 	if err := spaces.WriteGuardSnapshot(paths.GuardDir(), spaces.GuardSnapshot{Revision: 7, Policy: &p, Home: "/Users/user",
-		Protected: []string{paths.GuardDir()}, Guard: spaces.GuardSwitch{State: mode}}); err != nil {
+		Protection: spaces.Protection{Write: []string{paths.GuardDir()}}, Guard: spaces.GuardSwitch{State: mode}}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range pinned {

@@ -43,6 +43,10 @@ func replayPolicy(code string, globexKind spaces.Kind) string {
 func newReplayRig(t *testing.T) replayRig {
 	t.Helper()
 	s := spacesServer(t)
+	// Reason: the rig writes no guard files, so a replay protects orch's
+	// default directories; they must be temporary ones.
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("ORCH_CONFIG_DIR", filepath.Join(t.TempDir(), "config"))
 	code, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +73,7 @@ func newReplayRig(t *testing.T) replayRig {
 		if err != nil {
 			return "", ""
 		}
-		pol, err := spaces.NewGuardPolicy(res, nil)
+		pol, err := spaces.NewGuardPolicyProtecting(res, s.guardProtection(res))
 		if err != nil {
 			return "", ""
 		}

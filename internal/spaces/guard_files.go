@@ -24,9 +24,15 @@ import (
 // the call. Anything it cannot read while the guard enforces is a refusal
 // (INV-13).
 
+// errSnapshotVersion marks a snapshot of another format version.
+var errSnapshotVersion = errors.New("policy snapshot has another version")
+
 // GuardSnapshotVersion is the snapshot format orchd writes and the hook
-// reads. A snapshot of another version is unreadable.
-const GuardSnapshotVersion = 1
+// reads. A snapshot of another version is unreadable. Version 2 carries the
+// whole self-protection (SP-042, RC-110); a version 1 snapshot, which
+// carried only the guard directory, is therefore unreadable, and the guard
+// refuses while it enforces until orchd rewrites it (INV-13).
+const GuardSnapshotVersion = 2
 
 // Rules the hook adds around Decide. Like Decide's rules, they name a rule,
 // never a path or text.
@@ -62,10 +68,13 @@ type GuardSnapshot struct {
 	Broken bool `json:"broken,omitempty"`
 	// Home expands "~" in the policy's roots, as orchd expanded them.
 	Home string `json:"home"`
-	// Protected are the absolute paths file tools may not write (SP-042).
-	Protected []string    `json:"protected,omitempty"`
-	Guard     GuardSwitch `json:"guard"`
-	WrittenAt time.Time   `json:"written_at"`
+	// Protection is what the guard protects (SP-042): ProtectedPaths for
+	// the applied policy, plus the guard directory. A snapshot with a
+	// policy and no write protection is unreadable, so the guard never
+	// enforces a policy without its self-protection.
+	Protection Protection  `json:"protection"`
+	Guard      GuardSwitch `json:"guard"`
+	WrittenAt  time.Time   `json:"written_at"`
 }
 
 // Mode is the guard's mode at now, after a timed switch's end.
@@ -197,8 +206,13 @@ func ReadGuardSnapshot(dir string) (GuardSnapshot, error) {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return GuardSnapshot{}, fmt.Errorf("policy snapshot: %w", err)
 	}
-	if s.Version != GuardSnapshotVersion {
-		return GuardSnapshot{}, fmt.Errorf("policy snapshot has version %d, not %d", s.Version, GuardSnapshotVersion)
+	switch {
+	case s.Version == 0:
+		// Reason: every orchd writes a version; a snapshot without one is
+		// damaged, not of another release.
+		return GuardSnapshot{}, errors.New("policy snapshot has no version")
+	case s.Version != GuardSnapshotVersion:
+		return GuardSnapshot{}, fmt.Errorf("%w: %d, not %d", errSnapshotVersion, s.Version, GuardSnapshotVersion)
 	}
 	return s, nil
 }
@@ -316,7 +330,20 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 		}
 		res = r
 	}
-	pol, err := NewGuardPolicy(res, snap.Protected)
+	prot := snap.Protection
+	switch {
+	case !res.Configured():
+		// Reason: without spaces nothing is guarded (INV-10), so a
+		// protection orchd could not spell (no home) must not refuse.
+		prot = Protection{}
+	case len(prot.Write) == 0:
+		// Reason: orchd always protects its own directories; a snapshot
+		// without them was not written by this orchd, and enforcing a
+		// policy without self-protection would let an agent switch the
+		// guard off.
+		return fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision)
+	}
+	pol, err := NewGuardPolicyProtecting(res, prot)
 	if err != nil {
 		return fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision)
 	}
@@ -339,12 +366,16 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 }
 
 // unreadable decides when the snapshot cannot be read. Without an orch.db
-// that ever applied a policy, nothing is configured and the call is allowed
-// (INV-10). Otherwise the guard's switch is read from orch.db: off or log
+// that ever applied a policy, a missing snapshot, or one of another version
+// (an orchd of another release wrote it), means nothing is configured, and
+// the call is allowed (INV-10). Otherwise the guard's switch is read from orch.db: off or log
 // allow, anything else, or a store that cannot be read, refuses.
 func (f GuardFiles) unreadable(ctx context.Context, cause error, now time.Time) GuardResult {
 	applied, err := HasApplied(ctx, f.DB)
-	if err == nil && !applied && errors.Is(cause, os.ErrNotExist) {
+	// Reason: a damaged snapshot still refuses; another version is what
+	// every install without spaces holds after an upgrade until orchd
+	// rewrites it.
+	if err == nil && !applied && (errors.Is(cause, os.ErrNotExist) || errors.Is(cause, errSnapshotVersion)) {
 		return fixed(GuardBlockOtherJobs, Allow, RuleNoPolicy, 0)
 	}
 	mode := GuardStrict

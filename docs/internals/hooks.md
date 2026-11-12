@@ -230,8 +230,14 @@ replaced through a temporary file and a rename):
 
 - **`policy.json`**, the snapshot: the applied policy and its revision (none when no spaces are
   applied), whether the applied revision no longer verifies, the home that expands `~`, the
-  protected paths (today the guard directory itself; SP-042 adds the rest) and the guard's switch
-  with a timed switch's end and the state it reverts to. orchd writes it at startup, after
+  whole [self-protection](#self-protection) (`protection`: `write`, `anywhere` and `read`, from
+  `spaces.GuardProtection` for the applied policy, RC-110) and the guard's switch with a timed
+  switch's end and the state it reverts to. The format is version 2; a snapshot of another
+  version (version 1 carried only the guard directory) is unreadable: allowed as no policy when
+  `orch.db` never applied one, otherwise refused while the guard enforces, until orchd rewrites
+  it at startup. `brew upgrade` relinks the hook at once but does not restart orchd, so with a
+  policy applied, restart it after upgrading (`brew services restart orch`) (RC-201). A snapshot
+  with no version is damaged, not another release's. orchd writes it at startup, after
   `ApplySpaces`, and after every switch change or timed revert (`internal/daemon/guardfiles.go`).
   A snapshot it cannot rewrite is removed, never left stale, so the hook falls back to
   `orch.db` and refuses while a policy is applied.
@@ -241,13 +247,19 @@ replaced through a temporary file and a rename):
   files of sessions whose harness process still runs and removes the others.
 
 For each call the hook reads the snapshot, validates its policy (without the git-tree rule, as
-orchd does at startup), builds the guard policy, reads the session's pin file, runs `Targets` and
+orchd does at startup), builds the guard policy with `spaces.NewGuardPolicyProtecting` from the
+snapshot's protection, reads the session's pin file, runs `Targets` and
 calls `Decide`. What it cannot read becomes a rule, refused in the enforcing modes
 (`block-other-jobs`, `strict`) and only logged with the guard `off` or in `log`:
 
 - `policy_unreadable`: the snapshot is damaged, of another version, marks a policy that no
-  longer verifies, or holds a policy or protected path that does not validate. A missing
-  snapshot is read as no policy only when `orch.db` has never applied one (or does not exist);
+  longer verifies, holds a policy or protected path that does not validate (a `write` or `read`
+  entry not absolute, an `anywhere` entry empty or absolute), or holds a policy with no `write`
+  protection: orchd always protects its own directories, so the guard never enforces a policy
+  it wrote without its self-protection (a consistency check, not tamper detection: the guard
+  directory's own write protection keeps the snapshot orchd's). The protection is not checked
+  while no policy is configured. A missing snapshot, or one of another version, is read as no
+  policy only when `orch.db` has never applied one (or does not exist);
   otherwise the guard's switch is read from `orch.db` read-only and the call refused unless it
   is `off` or `log`, and as `strict` when `orch.db` cannot be read.
 - `pin_missing`: no readable pin file for the payload's `session_id` (from `Decide`). Queued
@@ -280,8 +292,8 @@ over the recorded payloads takes p50 0.09 ms and p99 0.21 ms; the whole hook pro
 The hook reads each file through one handle, opened without following a symlink, and checks
 it is a regular file of at most 2 MiB.
 
-**Limits.** The guard's files are protected from file tools by the guard itself; shell writes to
-them and to `orch.db` are SP-042's. A pin file is looked up by the payload's `session_id`, which
+**Limits.** The guard's files and `orch.db` are protected by the guard itself, from file tools
+and from the shell writes `Targets` sees ([self-protection](#self-protection)). A pin file is looked up by the payload's `session_id`, which
 the harness sets. The hook finds its files through `ORCH_DATA_DIR`, `XDG_DATA_HOME` and `HOME`,
 which a session can change for a harness it starts inside itself; such a nested harness could
 point its hook at an empty directory and run unguarded. Accepted (2026-11-12): the same nested
@@ -295,13 +307,25 @@ boundary.
 The guard refuses agent writes to what keeps orch's layers working (spaces SP-042,
 `internal/spaces/guard_selfprotect.go`): otherwise an agent could remove orch's hooks, edit its
 pin or switch the guard off. `spaces.ProtectedPaths(home, configDir, dataDir, policy)` is the one
-list, shared by the guard and a replay of the command log (SP-047), and
-`spaces.NewGuardPolicyProtecting(policy, protection)` builds the guard policy with it:
+list, and `spaces.GuardProtection` adds what only the running install knows: the guard
+directory (named although it lies in the data directory) and the `orch`, `orchd` and `orch-hook`
+binaries in the directory orchd runs from (as written and with links resolved: under
+`brew services` that is `opt/orch/bin` and the Cellar files it leads to, which the
+`bin/orch-hook` link in harness settings also resolves to). orch's directories are matched as
+written, even when a name holds `*`, `?` or `[`. `spaces.NewGuardPolicyProtecting(policy, protection)` builds the guard
+policy with it. orchd computes it for the applied policy and writes it into the
+[enforcing guard](#enforcing-guard)'s snapshot, which the hook decides from; orchd's
+`ReplaySpaces` and the CLI's payload replay compute it the same way (`guardWriter.protection`,
+`localProtection`) for each revision they replay, so a recorded self-protection refusal replays
+as one (RC-110):
 
 - **Never written:** orch's config directory (`~/.config/orch`) and data directory
   (`~/.local/share/orch`, which holds `orch.db`, the command log and the guard's policy snapshot
   and pin files), `~/.claude/settings*`, `~/.codex/hooks.json` and `config.toml`,
-  `~/.gemini/settings.json`. A directory protects everything
+  `~/.gemini/settings.json`; the launch surfaces `~/.claude.json` (MCP server commands),
+  `~/.claude/plugins` (plugins bring their own hooks), orchd's launchd job
+  (`~/Library/LaunchAgents/*orch*`: `orch install`'s `com.orchestrator.orchd.plist` and
+  `brew services`' `homebrew.mxcl.orch.plist`) and orch's binaries. A directory protects everything
   below it, and writing a directory that holds a protected path (`rm -rf ~/.config`,
   `mv ~/.local/share/orch …`) is writing it.
 - **Never written, in any directory:** `.git/hooks`, `.git/config` (whose `core.hooksPath` and
@@ -323,13 +347,29 @@ tool's paths count as written. Paths compare as the guard's do: cleaned, NFC, wi
 case folding (APFS takes `ſ` for `s`), and
 both as written and with symlinks resolved (for the fixed paths; the "any directory" patterns
 match the resolved path). Like every guard rule, it applies only while spaces are configured.
-`TestSelfProtectionRefusesWrites` covers 12 protected paths with each of `Write`, `Edit`,
-`MultiEdit`, `>`, `>>`, `tee`, `sed -i`, `cp` and `mv` (108 cases, all refused);
+`TestSelfProtectionRefusesWrites` covers 15 protected paths with each of `Write`, `Edit`,
+`MultiEdit`, `>`, `>>`, `tee`, `sed -i`, `cp` and `mv` (135 cases, all refused);
 `TestSelfProtectionAllowsReads`, `TestSelfProtectionForms` and
 `TestSelfProtectionReviewCases` (the security review's reproducers) cover reads and other forms.
+`TestGuardSelfProtectionLive` runs the live path, orchd's snapshot writer and `PinSession` into
+the hook's `GuardFiles.Decide`: `Write`, `Edit` and shell redirections into
+`~/.claude/settings.json`, a checkout's `.git/hooks`, `orch.db`, the guard's files, orch's
+config, `orch-hook` and the other launch surfaces, and reads of a terms file, are refused,
+ordinary calls in the space allowed.
+`TestReplaySpacesReproducesSelfProtection` and `TestSpacesReplayFixturesSelfProtection` replay
+such refusals through orchd and the CLI.
 
 **Limits.** Writes Targets cannot see (an interpreter's `open()`, a variable holding the whole
-path, `git config core.hooksPath`) are not caught; D-28 applies.
+path, `git config core.hooksPath`) are not caught; D-28 applies. The directories come from
+orchd's environment (it usually runs under launchd without `ORCH_*` or `XDG_*` variables); a
+config directory or harness home that only the user's shell moves (`XDG_CONFIG_HOME`,
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) is not the one protected (RC-200). The binaries protected
+are those beside orchd; an `orch-hook` installed elsewhere (`orch install --bin-dir`) is not, and
+moving the whole directory that holds the harness settings' `bin/orch-hook` link is not refused
+(RC-202). The CLI's payload replay takes the directories and binaries from its own environment,
+which can differ from orchd's (RC-203). An orchd run from a checkout's build output protects that
+output's `orch`, `orchd` and `orch-hook` too, so an agent working on orch cannot replace the
+running hook. `*orch*` also covers other launch agents whose name holds `orch` (`com.pytorch.…`).
 
 ## Prompt context
 

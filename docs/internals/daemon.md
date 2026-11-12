@@ -542,8 +542,12 @@ no recorded verdict and are still decided. By default each event is decided unde
 recorded with it (`policy_rev`), read with `Engine.ResolvedRevision`, which checks the
 revision's hash and validates it; a revision that fails is a per-event problem, not a verdict.
 `policy_revision` or `policy_json` (validated as a draft, `Engine.Resolve`) replays under one
-policy instead; each revision is read and validated once per replay. The guard policy is built with no protected paths, as the live guard has none
-until SP-042, and the mode is the request's or the guard switch's current state; the record does
+policy instead; each revision is read and validated once per replay. The guard policy is built with the same
+[self-protection](hooks.md#self-protection) the live guard's snapshot carries
+(`guardWriter.protection`: `spaces.GuardProtection` for that revision, with the guard directory and orch's binaries,
+RC-110), so a recorded `self_protection` refusal replays as one. Events recorded before RC-110,
+when only the guard directory was protected, can therefore show as changed where they write a
+path protected since; and the directories are the replaying orchd's. The mode is the request's or the guard switch's current state; the record does
 not keep the mode it was judged in.
 
 ### Enforcement switches

@@ -3,6 +3,7 @@ package spaces
 import (
 	"encoding/json"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -67,6 +68,10 @@ func (f protectFixture) protectedTargets() map[string]string {
 		"Gemini settings":          filepath.Join(f.home, ".gemini", "settings.json"),
 		"git hook":                 filepath.Join(f.checkout, ".git", "hooks", "pre-commit"),
 		"checkout Claude settings": filepath.Join(f.checkout, ".claude", "settings.local.json"),
+		"Claude Code MCP servers":  filepath.Join(f.home, ".claude.json"),
+		"a Claude Code plugin":     filepath.Join(f.home, ".claude", "plugins", "p", "hooks", "hooks.json"),
+		"orchd's launchd job":      filepath.Join(f.home, "Library", "LaunchAgents", "com.orchestrator.orchd.plist"),
+		"brew services' job":       filepath.Join(f.home, "Library", "LaunchAgents", "homebrew.mxcl.orch.plist"),
 	}
 }
 
@@ -282,5 +287,53 @@ func TestProtectionValidation(t *testing.T) {
 	}
 	if p := ProtectedPaths("/h", "/c", "/d", nil); len(p.Read) == 0 || len(p.Write) == 0 || len(p.Anywhere) == 0 {
 		t.Errorf("ProtectedPaths without a policy = %+v", p)
+	}
+	// GuardProtection adds the guard directory and orch's binaries, when
+	// their directory is known.
+	g := GuardProtection("/h", "/c", "/d", "/g", "/bin", nil)
+	for _, want := range []string{"/c", "/d", "/g", "/bin/orch", "/bin/orchd", "/bin/orch-hook", "/h/.claude.json", "/h/.claude/plugins",
+		"/h/Library/LaunchAgents/*orch*"} {
+		if !slices.Contains(g.Write, want) {
+			t.Errorf("GuardProtection lacks %s: %v", want, g.Write)
+		}
+	}
+	if g := GuardProtection("/h", "/c", "/d", "/g", "", nil); slices.Contains(g.Write, "orch-hook") || !slices.Contains(g.Write, "/g") ||
+		len(g.Write) != len(ProtectedPaths("/h", "/c", "/d", nil).Write)+1 {
+		t.Errorf("GuardProtection without a binary directory = %v", g.Write)
+	}
+}
+
+// TestGuardProtectionLiteralDirs: orch's directories are protected as
+// written even when a name holds a pattern character, so data[1] protects
+// itself, not data1 beside it; other launchd jobs stay writable.
+func TestGuardProtectionLiteralDirs(t *testing.T) {
+	home := realTemp(t)
+	data, guard, cfg := filepath.Join(home, "data[1]"), filepath.Join(home, "g[x]"), filepath.Join(home, `c\fg`)
+	terms := filepath.Join(home, `te\rms.txt`)
+	mkdirs(t, data, guard, cfg, filepath.Join(home, "data1"), filepath.Join(home, "gx"), filepath.Join(home, "code", "job"))
+	env := testEnv()
+	env.Home = home
+	res := mustValid(t, Policy{Spaces: []Space{{Name: "job", Kind: Isolated, Roots: []string{"~/code/job"}, TermsFile: terms}}}, env)
+	pol, err := NewGuardPolicyProtecting(res, GuardProtection(home, cfg, data, guard, "", res))
+	if err != nil {
+		t.Fatal(err)
+	}
+	decide := func(path string) GuardDecision {
+		tool, in := bash("echo x > '" + path + "'")
+		cwd := filepath.Join(home, "code", "job")
+		ev := GuardEvent{Kind: EventPreToolUse, Tool: tool, Cwd: cwd, Targets: extractTargets(tool, json.RawMessage(in), cwd, home)}
+		return Decide(pol, GuardPin{Found: true, Space: "job"}, GuardEnforcement{}, ev)
+	}
+	// A backslash is no pattern character: a name holding one stays plain.
+	for _, p := range []string{filepath.Join(data, "orch.db"), filepath.Join(guard, "policy.json"), filepath.Join(cfg, "AGENTS.md"), terms} {
+		if d := decide(p); d.Rule != RuleSelfProtection {
+			t.Errorf("write to %s: %s (%s)", p, d.Verdict, d.Rule)
+		}
+	}
+	for _, p := range []string{filepath.Join(home, "data1", "x"), filepath.Join(home, "gx", "x"),
+		filepath.Join(home, "Library", "LaunchAgents", "com.example.agent.plist")} {
+		if d := decide(p); d.Rule == RuleSelfProtection {
+			t.Errorf("write to %s refused as self_protection", p)
+		}
 	}
 }

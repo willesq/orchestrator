@@ -93,9 +93,9 @@ func (s *server) ReplaySpaces(ctx context.Context, req *orchdv1.ReplaySpacesRequ
 // request names, or the revision recorded with the event.
 func (s *server) replayPolicies(ctx context.Context, req *orchdv1.ReplaySpacesRequest) (spaces.ReplayPolicies, error) {
 	guard := func(res *spaces.Resolved) (spaces.GuardPolicy, error) {
-		// Reason: the live guard has no protected paths until SP-042, so a
-		// replay that added some would report changes no policy made.
-		return spaces.NewGuardPolicy(res, nil)
+		// Reason: the protection the live guard's snapshot carries, so a
+		// recorded self-protection refusal replays as one (RC-110).
+		return spaces.NewGuardPolicyProtecting(res, s.guardProtection(res))
 	}
 	var fixed *spaces.Resolved
 	switch {
