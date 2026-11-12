@@ -4430,14 +4430,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "3025c7e6d0152b605a402bbbfebe2786f6649b26a8a33bd596e2d27c53437060",
-      "branch": null,
+      "branch": "feat/sp-044-outbound-terms",
       "pr": null
     },
     {
