@@ -39,7 +39,7 @@ var gitCreates = flagSet("clone", "checkout", "switch", "worktree", "apply", "am
 // and the subcommand's paths are relative to the last one. -c with a key
 // that can run code or redirect git is opaque.
 func (e *extractor) git(args []word, at where, st *shellState, depth int) {
-	i := 0
+	i, gitDir := 0, ""
 	for ; i < len(args); i++ {
 		a := args[i]
 		flag, val, hasVal := strings.Cut(a.val, "=")
@@ -61,6 +61,9 @@ func (e *extractor) git(args []word, at where, st *shellState, depth int) {
 			next := e.moveAll(at, arg.val)
 			if flag == "-C" {
 				at = next
+			}
+			if flag == "--git-dir" && len(next.dirs) == 1 {
+				gitDir = next.dirs[0]
 			}
 			for _, d := range next.dirs {
 				e.add(kindGit, d)
@@ -129,6 +132,7 @@ func (e *extractor) git(args []word, at where, st *shellState, depth int) {
 			e.gitRemote(a.val)
 		}
 	}
+	e.gitNamedRemotes(sub, rest, at, gitDir)
 	e.genericArgs(rest, at)
 	if gitCreates[sub] {
 		e.creates()
@@ -282,6 +286,12 @@ func (e *extractor) gh(args []word, at where) {
 					e.opaque("gh api endpoint is not static")
 				}
 				e.ghRepoArg(word{val: strings.TrimPrefix(ep, "repos/")})
+			case strings.HasPrefix(ep, "orgs/") || strings.HasPrefix(ep, "users/"):
+				if org, ok := ghOrgEndpoint(ep); ok && !args[i].partial {
+					e.addOrg(org)
+				} else {
+					e.opaque("gh api endpoint is not static")
+				}
 			case !ghSafeEndpoints[ep]:
 				e.opaque("gh api endpoint outside one repo")
 			}
@@ -292,6 +302,7 @@ func (e *extractor) gh(args []word, at where) {
 			}
 		}
 	}
+	e.ghOrgArgs(subs, args)
 	e.genericArgs(args, at)
 	if len(subs) >= 2 && subs[0] == "repo" && subs[1] == "clone" {
 		e.creates()

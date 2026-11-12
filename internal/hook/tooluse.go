@@ -5,6 +5,7 @@ import (
 	"time"
 
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/spaces"
 )
 
 // toolEventTimeout bounds handing a tool event to orchd. pre-tool-use runs
@@ -13,19 +14,24 @@ import (
 // answering (SP-012), so a healthy orchd answers in a few milliseconds.
 const toolEventTimeout = 20 * time.Millisecond
 
+// refusalEventTimeout bounds handing a refused call to orchd. The call is
+// refused whatever orchd answers and refusals are rare, so the hook waits
+// longer for the refusal to reach the command log.
+const refusalEventTimeout = 250 * time.Millisecond
+
 // maxToolInput is the largest tool input sent to orchd. A larger one, such as
 // a Write of a big file, is sent as its size alone.
 const maxToolInput = 1 << 20
 
-// recordToolEvent hands a pre-tool-use or cwd-changed event to orchd for the
-// command log (spaces plan SP-012, D-04). It prints nothing, which every
-// harness reads as "no decision", so the call goes ahead as it would without
-// the hook. A missing orchd, a refusal or a timeout loses the event and
-// nothing else. Enforcement (SP-041) is added on top of this.
+// recordToolEvent hands a pre-tool-use or cwd-changed event, with the
+// guard's decision g when one was made, to orchd for the command log
+// (spaces plan SP-012, D-04, SP-041). It prints nothing. A missing orchd, a
+// refusal or a timeout loses the event and nothing else: the guard has
+// already decided the call.
 //
 // Queued tasks send their events too: orchd attributes each event to the
 // caller it resolves from the connection, never to the session ID sent here.
-func recordToolEvent(event string, p Payload, cf clientFactory) {
+func recordToolEvent(event string, p Payload, cf clientFactory, g *spaces.GuardResult) {
 	at := time.Now()
 	req := &orchdv1.RecordToolEventRequest{
 		Event:         event,
@@ -43,12 +49,20 @@ func recordToolEvent(event string, p Payload, cf clientFactory) {
 	if len(p.ToolInput) <= maxToolInput {
 		req.ToolInput = p.ToolInput
 	}
+	wait := toolEventTimeout
+	if g != nil {
+		req.GuardVerdict, req.GuardRule = string(g.Would), string(g.Rule)
+		req.GuardEnforced, req.GuardPolicyRev = g.Enforced, g.Revision
+		if g.Verdict == spaces.Refuse {
+			wait = refusalEventTimeout
+		}
+	}
 	client, cleanup, err := cf()
 	if err != nil {
 		return
 	}
 	defer cleanup()
-	ctx, cancel := context.WithTimeout(context.Background(), toolEventTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
 	_, _ = client.RecordToolEvent(ctx, req)
 }

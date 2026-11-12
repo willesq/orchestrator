@@ -157,6 +157,10 @@ func watchFrom(svc *github.Service, ghp *ghProfiles) prs.WatchSource {
 		if err != nil {
 			return prs.Watch{}, err
 		}
-		return prs.Watch{Login: id.Login, Scopes: scopes, Accounts: accounts, Route: route}, nil
+		w := prs.Watch{Login: id.Login, Scopes: scopes, Accounts: accounts, Route: route}
+		if ghp != nil {
+			w.CheckOwner = docsOwnerCheck(ghp.spaces)
+		}
+		return w, nil
 	}
 }

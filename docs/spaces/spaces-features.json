@@ -520,6 +520,11 @@
         "id": "D-55",
         "decision": "SP-073, SP-040 and SP-070 are worked in parallel by three independent agent sessions, each in its own worktree and draft PR, overriding session_procedure step 2 (one feature, one session at a time) for these three only; their dependencies are done and their code barely overlaps. To avoid id clashes each reserves a block of reconvene ids: SP-073 RC-66..RC-75, SP-040 RC-76..RC-85, SP-070 RC-86..RC-95. New confirmed_by_user decisions are recorded by the coordinating session. Whichever PR merges later is rebased onto main (plan file, orch.db migration numbers, regenerated proto stubs).",
         "date": "2026-11-11"
+      },
+      {
+        "id": "D-56",
+        "decision": "Spaces work may run as up to five parallel lanes coordinated by one session: each lane works its assigned features one at a time in order; lanes use disjoint reconvene ID ranges (A RC-100..119, B RC-120..139, C RC-140..159, D RC-160..179, E RC-180..199); only the coordinator writes the live progress file, D-ids and changelog. This overrides session_procedure step 2 and the other-session check in step 3 for this run.",
+        "date": "2026-11-12"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -1632,6 +1637,434 @@
         ],
         "status": "open",
         "note": "Part (1) fixed on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction): WatchTasks ends cleanly when the client goes away mid-read; see RC-92. Part (2) remains open: TestDecideCases' 100 ms Targets budget can be exhausted under load."
+      },
+      {
+        "id": "RC-100",
+        "kind": "decision",
+        "topic": "Queued tasks under the enforcing guard",
+        "detail": "SP-041's hook decides from a session pin file, and queued tasks have no session pin (PinSession is refused to them), so while spaces are applied and the guard enforces, every tool call of a queued task is refused (pin_missing). Proposed: orchd writes a task pin file keyed by ORCH_TASK_ID when it starts a run, with the space D-46 gives (the dispatching session's space; the operator's task takes its working directory's placement), which needs Dispatch to record the caller's pin. Until then, queued work stops when spaces are applied with the guard enforcing.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-025"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-101",
+        "kind": "decision",
+        "topic": "What SP-041 does for D-38",
+        "detail": "D-38 lets memory reads widen by a pin's space once the enforcing guard stops a session from starting a harness outside its tree. SP-041 refuses such a launch only when the command names another job's folder (cd, paths, git -C); a launch in a folder of no space, or hidden in an opaque command (bash -c \"$X\") under block-other-jobs (opaque_unverified), still runs, as do double forks and launchctl/open/osascript. SP-025 should not assume more, or should require strict mode or other evidence (D-39).",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-025",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-102",
+        "kind": "decision",
+        "topic": "Accepted risk: the hook finds its files through the environment",
+        "detail": "From the SP-041 security audit (medium, accepted 2026-11-12 with reason): orch-hook locates the guard's files and orch.db through ORCH_DATA_DIR, XDG_DATA_HOME and HOME, which a session can change for a harness it starts inside itself; that nested harness's hook can then read an empty or forged directory and allow every call. Accepted because the same nested harness can already drop every hook (CLAUDE_CONFIG_DIR, --settings), so this adds no new way around the guard; the OS sandbox (SP-046) is the boundary. Proposed for SP-042: refuse tool calls that start a harness with ORCH_DATA_DIR, XDG_DATA_HOME, HOME, CLAUDE_CONFIG_DIR or CODEX_HOME set, or a --settings override. Confirm or ask for a fix in SP-041.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-042",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-103",
+        "kind": "follow-up",
+        "topic": "Guard files need SP-042's shell-write protection",
+        "detail": "SP-041's snapshot (<data>/guard/policy.json) and pin files are protected from file tools only (the guard directory is the snapshot's one protected path). A shell write (echo, tee, cp, mv, sed -i) can still set the guard's switch to off in the snapshot or change a session's pin space, and an edit of orch.db can do the same for the fallback. SP-042 must cover <data>/guard and orch.db for shell writes, and should keep reads of the pin files allowed.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-104",
+        "kind": "follow-up",
+        "topic": "The command log stores the hook's reported decision",
+        "detail": "From the SP-041 security audit (low): orchd stores an enforced decision (refused, allowed) and its rule as the hook reports them in RecordToolEvent, without computing its own verdict or comparing guard_enforced with its own switch; any process can only write its own chain. Reserved queue room (D-37) goes only to enforced refusals of pinned sessions and tasks, so unpinned process chains cannot claim it, but a session can still fill its own reserve share with claimed refusals. Proposed: compute orchd's own would-verdict (server.guardVerdict) on the writer goroutine and flag records whose hook decision differs.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-016"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-105",
+        "kind": "follow-up",
+        "topic": "Analysis-limit refusals under load",
+        "detail": "Targets has a 100 ms budget; when the machine is loaded it can run out on an ordinary call (RC-93 (2)), and the enforcing guard then refuses it (analysis_limit). Measure how often real sessions hit analysis_limit or guard_timeout once the guard runs (orch spaces log), and raise the budget or retry if it matters. Also seen: TestTargetsAuditRound3Cost (internal/spaces) fails under -race on this Mac (a 2 MB Write took 565 ms), unrelated to SP-041's diff.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-013"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-106",
+        "kind": "user-action",
+        "topic": "Check the enforcing guard in real sessions after release",
+        "detail": "After SP-041 ships and orchd restarts: (1) sessions started while orchd was down or an older orchd ran have no pin file; once spaces are applied with the guard enforcing, their calls are refused (pin_missing) and they must be restarted; (2) in one Claude Code and one Codex session in a configured space, try a call into another job's folder and confirm the call is refused and the reason (rule id, no path) is shown; (3) confirm 'orch spaces enforce guard off' takes effect on the next call.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-107",
+        "kind": "follow-up",
+        "topic": "Snapshot window after an apply when orchd crashes",
+        "detail": "From SP-041's independent verifier (low): ApplySpaces commits the policy, then orchd rewrites the guard snapshot. If orchd crashes between the two, the old snapshot (for example 'no policy') stays readable and the hook decides by it until orchd restarts and rewrites it at startup. Options: remove the snapshot before an apply and rewrite it after (calls during the apply then fall back to orch.db), or accept the window.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-108",
+        "kind": "decision",
+        "topic": "Peer identification on Linux kernels before 6.5",
+        "detail": "SP-041 identifies socket peers by SO_PEERPIDFD on Linux (D-44), which needs kernel 6.5. On older kernels (Debian 12, Ubuntu 22.04) no peer is identified, no session can be pinned, and once spaces are applied with the guard enforcing every tool call is refused (fails closed). Documented in docs/internals/daemon.md; orch targets macOS (D-49). Confirm, or ask for a fallback (for example SO_PEERCRED plus a start-time check) on older kernels.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-109",
+        "kind": "follow-up",
+        "topic": "SP-041 verifier lows",
+        "detail": "From the second independent verification of SP-041 (2026-11-12), all low: (1) if the hook cannot even locate its files (guardFilesFor panics: no home or data directory), the call is refused although no spaces may be configured, a narrow exception to INV-10 in favour of INV-13; (2) no test covers an unreadable pre-tool-use stdin with no spaces configured (allowed by the same path TestGuardFilesNoPolicy covers); (3) a panic recovered in decideWithin for a cwd-changed event is logged as an enforced refuse verdict (nothing is printed, the event cannot be refused), unlike the timeout branch, which marks it not enforced.",
+        "source": "https://github.com/willesq/orchestrator/pull/172",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-140",
+        "kind": "decision",
+        "topic": "ListSessionPins is served by ListSessions",
+        "detail": "SP-050 names a ListSessionPins RPC. ListSessions (SP-016) already lists every session pin with its harness, PID, space, first directory, liveness and command-log counts, scoped per caller, so SP-050 adds no second RPC and the Spaces pane (SP-054) reads pins from ListSessions. If the pane needs a field ListSessions lacks (e.g. the chain owner of RC-81), add it to SessionInfo instead.",
+        "source": "https://github.com/willesq/orchestrator/pull/170",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-050",
+          "SP-054"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-141",
+        "kind": "follow-up",
+        "topic": "ScanSpaces accepted lows",
+        "detail": "From the SP-050 security audit (0 critical/high/medium). Accepted: (1) the walk lists folders through an os.Root, but each checkout is read by absolute path with handoff.CheckoutAt, which follows a linked worktree's .git pointer outside the chosen folder by design; a folder swapped for a symlink between listing and reading could make it read one .git outside the folder. Only that remote's owner/repo reaches the operator. (2) The one-scan-at-a-time slot is a package variable, shared by every server in the process (one per orchd). (3) gh profile checks have no single-flight: a scan and a Status call at the same moment can each start a gh auth check for the same profile. (4) A placement or gh error is returned to the operator verbatim (no terms or tokens).",
+        "source": "https://github.com/willesq/orchestrator/pull/170",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-050"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-120",
+        "kind": "decision",
+        "topic": "Space of client notes from the operator, queued tasks and unidentified callers",
+        "detail": "SP-023 places a client Ingest only in the caller's pinned space; the operator at a terminal ('orch ingest'), queued tasks and unidentified callers have none, so under a policy their notes go to quarantine until retagged (SP-071). D-46 says a task writes to its dispatcher's space, but tasks do not record the dispatching session yet (SP-025.1.a8/SP-029). Decide how the operator's own notes are placed (e.g. an operator-only space choice, or the placement of the operator's cwd).",
+        "source": "https://github.com/willesq/orchestrator/pull/173",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-023",
+          "SP-025",
+          "SP-029",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-121",
+        "kind": "decision",
+        "topic": "Registered web sources outside any bound prefix go to quarantine",
+        "detail": "The sources registry does not record who registered a source, so a web source is placed by its bound web prefix only and otherwise quarantined (D-14 places a page by the session that ingested it, which a scheduled refresh does not have). Decide whether SaveSource records the registering caller's space, or the operator binds prefixes.",
+        "source": "https://github.com/willesq/orchestrator/pull/173",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-023",
+          "SP-030",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-122",
+        "kind": "follow-up",
+        "topic": "Local files placed only by a checkout's remote are quarantined",
+        "detail": "Security review of SP-023: an agent can make a .git naming any org, so an edit hand-off placed by its remote alone or by a remote stricter than its root, and a repo/owner source under no root, go to quarantine. A genuine org checkout under a personal or public root therefore has its edit hand-offs quarantined until hand-offs carry the editing session's space (SP-029). Registered sources under a root still follow the stricter remote, as session pins do (SP-022). Also consider making SaveSource/RefreshSource for repo/owner kinds operator-only, or limiting repo sources to sources.known_roots.",
+        "source": "https://github.com/willesq/orchestrator/pull/173",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-029",
+          "SP-042",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-123",
+        "kind": "follow-up",
+        "topic": "SP-023 security review lows and accepted limits",
+        "detail": "From three security-audit rounds on PR #173 (all critical/high/medium fixed): (1) a session's records are tied to it only when the transcript sits where its harness keeps that session's transcript, so planting another session's content now takes a write into ~/.claude/projects or ~/.codex/sessions (or a symlinked root there), which the OS sandbox should deny (SP-046); recording the transcript path at the pin (PinSession, orchd.proto) would close it fully; a harness whose transcripts live elsewhere (CLAUDE_CONFIG_DIR/CODEX_HOME set for the harness but not for orchd) has its session records quarantined under a policy; (2) the owner's GitHub node ID is recorded in each docs chunk's origin but not compared with the binding at placement, because the REST node_id read at apply and the GraphQL id read at sync may use different ID formats (verify, then compare in Engine.PlaceUnder); (3) the Ingest refusal to replace another space's source is an existence oracle, as the docs-kept refusal already is, and has a small check-then-write window; notes in quarantine can be replaced by any other unplaced caller; (4) DeleteSource still deletes a source in any space (gate deletes by space in SP-025/SP-026); (5) when reading the stored copy fails (Qdrant briefly unavailable), Ingest skips both replace checks, as the docs-kept check already did; (6) a .git an agent writes under a root can still move a source it registers into a stricter space (never public), accepted as for session pins.",
+        "source": "https://github.com/willesq/orchestrator/pull/173",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-025",
+          "SP-026",
+          "SP-029",
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-124",
+        "kind": "follow-up",
+        "topic": "Content stored before SP-023 has no placement",
+        "detail": "Chunks written before SP-023 carry no origin, space or labels_v, and a migration copies them as they are. A docs file whose content and repo HEAD did not change, and a source file whose text did not change, is not written again, so it keeps no placement (or an earlier one) until 'orch rag relabel' (SP-027); a repo whose visibility flips without a new HEAD is not re-stamped (SP-030.1.a2). Repo visibility and owner node ID are recorded on chunks only, not in docs_repos (no migration added, to keep parallel lanes rebase-friendly). Readers must treat a missing space or stale labels_v as unreadable (INV-08, SP-025/SP-027).",
+        "source": "https://github.com/willesq/orchestrator/pull/173",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-025",
+          "SP-027",
+          "SP-030"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-142",
+        "kind": "follow-up",
+        "topic": "Keep the live guard's records replayable (SP-041)",
+        "detail": "Replay (SP-047) reads a recorded verdict from a command log record with spaces.RecordedVerdict: 'would <verdict> (<rule>)' in the rule for a call not enforced (daemon wouldRule), or decision 'refused' / 'allowed' with the bare rule id for one enforced; a record with decision 'logged' and no rule counts as having no recorded verdict. It rebuilds the guard event with spaces.GuardEventOf (stored targets JSON; a cwd-changed event runs in old_cwd and moves to new_cwd) and builds the guard policy with no protected paths. SP-041 (and SP-042's protected paths) should record in one of those forms, build its event with GuardEventOf, and share the protected-path list with replay; otherwise replay reports changes no policy made. The record also does not keep the guard mode it was judged in, so replay judges in the current switch or --mode; consider storing the mode with each decision.",
+        "source": "https://github.com/willesq/orchestrator/pull/174",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-042",
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-143",
+        "kind": "follow-up",
+        "topic": "Two open PRs extend orchd.proto",
+        "detail": "SP-050 (https://github.com/willesq/orchestrator/pull/170: ListSpaces, ScanSpaces) and SP-047 (https://github.com/willesq/orchestrator/pull/174: ReplaySpaces) were both branched from origin/main and both add RPCs and messages to orchd.proto, so the generated Go and Swift stubs will conflict when the second merges. Resolve by merging the .proto (both sides are additive) and running make proto, never by editing generated files; also keep both sides' test-fake stubs (internal/{cli,hook,mcpserver} fakeClient) and both callers.go operatorActions entries.",
+        "source": "https://github.com/willesq/orchestrator/pull/174",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-050",
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-144",
+        "kind": "follow-up",
+        "topic": "Replay validation runs without a deadline (accepted low)",
+        "detail": "From the SP-047 security audit (0 critical/high; the one medium was fixed). ReplaySpaces validates the revision or policy it replays under (InGitTree checks and symlink resolution of up to 512 roots, terms and gh_config_dir paths) with no deadline. A draft an agent session saved can be named by --policy <rev>, so a root on an automount or network path could stall that RPC or make the Mac contact a host. Only the operator can call it, and diff and apply validate drafts the same way. Option: validate under the request deadline in a goroutine abandoned on cancellation, and say in the reply when the named revision is an agent's unapplied draft.",
+        "source": "https://github.com/willesq/orchestrator/pull/174",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-145",
+        "kind": "decision",
+        "topic": "Replay of session logs runs in orchd (new ReplaySpaces RPC)",
+        "detail": "The session form of 'orch spaces replay' asks orchd (ReplaySpaces, operator-only) rather than reading orch.db and the command log from the CLI: stored revisions name every job's orgs and roots (DiffSpaces is operator-only for that reason) and the log is readable only by the operator or its own session (INV-12), so reading them client-side would bypass those gates. The payload-file form stays in the CLI with no orchd, so CI can replay the SP-001 fixtures. An argument holding '/' or '.' is a path (log owners cannot hold either). Payload fixtures carry no recorded verdicts, so CI compares their replayed verdicts with a committed golden file.",
+        "source": "https://github.com/willesq/orchestrator/pull/174",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-114",
+        "kind": "follow-up",
+        "topic": "GitHub calls the live guard can only mark opaque",
+        "detail": "SP-043 marks these opaque, so block-other-jobs allows them (opaque_unverified) and only strict refuses: a git remote behind an ssh alias whose host name does not say GitHub (the usual per-account setup, e.g. Host work-gh), a checkout config with url.*.insteadOf or an include (the user's global git config is not read at all), gh api graphql, gh aliases and extensions, and gh search beyond the accounts it names. Proposed: read the ssh client config's Host/HostName for aliases and the global git config's insteadOf, or refuse opaque remote-talking git and gh calls in block-other-jobs. GIT_DIR set as a shell variable is not followed either.",
+        "source": "https://github.com/willesq/orchestrator/pull/176",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-043"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-115",
+        "kind": "follow-up",
+        "topic": "SP-043 verifier lows",
+        "detail": "From the independent verification of SP-043 (2026-11-12), all low: (1) a GitHub search through curl with org: in the URL query (api.github.com/search/code?q=org:X) is not read and not opaque, so it is allowed even in strict; (2) in strict, gh repo list and gh search for the session own org, and git push to a non-GitHub remote, are refused as opaque_strict; (3) for a named remote, pushurl is judged on fetch as well as url (over-inclusive, not a bypass). See also RC-114.",
+        "source": "https://github.com/willesq/orchestrator/pull/176",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-043"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-110",
+        "kind": "follow-up",
+        "topic": "Wire SP-042's protection into the guard at rebase",
+        "detail": "SP-042 adds spaces.ProtectedPaths and NewGuardPolicyProtecting, but on main nothing builds a guard policy yet (the enforcing hook is SP-041, PR #172). When the two meet, orchd's guard snapshot must carry ProtectedPaths(home, config dir, data dir, applied policy) (its Write, Anywhere and Read lists, replacing SP-041's single protected guard directory) and the hook must build its policy with NewGuardPolicyProtecting; replay (SP-047) should use the same function.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-042",
+          "SP-047"
+        ],
+        "status": "resolved",
+        "note": "Resolved 2026-11-12 in commit f88994eb7c2d5f95de2bf9ba6b1ba83ea0055b9c (PR #175): orchd's guard snapshot (version 2) carries spaces.GuardProtection (ProtectedPaths for the applied policy, the guard directory and orch's binaries), orch-hook builds its policy with NewGuardPolicyProtecting from it, and orchd's ReplaySpaces and the CLI's payload replay compute the same protection. Verified by an independent verifier at 7ffc5bb (TestGuardSelfProtectionLive, TestReplaySpacesReproducesSelfProtection, TestSpacesReplayFixturesSelfProtection). Security-review lows: RC-200..RC-205."
+      },
+      {
+        "id": "RC-111",
+        "kind": "follow-up",
+        "topic": "Self-protection gaps left after the SP-042 review",
+        "detail": "Accepted for now (best-effort target extraction, D-28; the OS sandbox is the boundary): recursive reads of a directory holding secret files (grep -r or rg over the ssh or gh profile directories, tar of them) are allowed; 'git config core.hooksPath|core.fsmonitor|core.sshCommand' is not refused (writing .git/config directly is); writes by interpreters (perl -pi, python open()) and copies that create protected files without naming them (cp -r template/.claude .) are not caught. Proposed: refuse recursive readers of those directories and those git config keys.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-112",
+        "kind": "decision",
+        "topic": "Which secret files the guard refuses to read",
+        "detail": "SP-042 refuses reads (not only writes) of terms files and of the secret files listed in docs/internals/hooks.md (Self-protection): the files of each space's gh profile and of the default gh profile, orch's Qdrant API key, the netrc file, the AWS CLI's key file and ssh private keys (id_*, not *.pub). Confirm the list or extend it (for example Docker, kubectl, npm or PyPI login files).",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-113",
+        "kind": "follow-up",
+        "topic": "TestToolHookCost flake on Linux CI",
+        "detail": "On PR #175 (no daemon change) CI failed once in TestToolHookCost (internal/daemon): one of 1,000 events reached orchd attributed to no session instead of sess-hook; a re-run passed. It also passes 5/5 locally. Likely a load-dependent race in caller resolution of the real orch-hook process on shared runners; worth a look before the enforcing guard relies on pins (a hook resolved to no session is refused while enforcing). Also from the SP-042 verifier (low): perl -i and xargs touch writes are opaque, allowed in block-other-jobs and refused in strict (see RC-111).",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-014",
+          "SP-041",
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-200",
+        "kind": "follow-up",
+        "topic": "Self-protection follows orchd's directories, not the hook's or the harness's",
+        "detail": "From the RC-110 security review (low, accepted 2026-11-12): orchd computes the guard's protection from its own environment, and under launchd or brew services it has no ORCH_*/XDG_* variables, so it protects ~/.config/orch, ~/.claude/settings* and ~/.codex/*. A config directory or harness home that only the user's shell moves (XDG_CONFIG_HOME, ORCH_CONFIG_DIR, CLAUDE_CONFIG_DIR, CODEX_HOME) is not protected, so an agent could edit the installed AGENTS.md or the live harness settings there. Related to RC-102. Proposed: the hook adds its own paths.ConfigDir(), data directory and guard directory to the snapshot's write list (a union only adds protection), and protects $CLAUDE_CONFIG_DIR/settings* and $CODEX_HOME/{hooks.json,config.toml} when set; replay would then need the same union.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-042",
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-201",
+        "kind": "follow-up",
+        "topic": "Guard snapshot version 2 refuses calls until orchd restarts after brew upgrade",
+        "detail": "From the RC-110 security review (low, fail closed): RC-110 bumped the guard snapshot to version 2. brew upgrade relinks orch-hook at once but does not restart orchd (the formula's caveat), so with a spaces policy applied and the guard enforcing, every tool call is refused as policy_unreadable until 'brew services restart orch'. Installs with no policy ever applied are allowed (the hook treats another version like a missing snapshot then). Documented in docs/internals/hooks.md. Proposed: name the version mismatch and the restart in the refusal reason, or restart orchd from the formula's post_install.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-202",
+        "kind": "follow-up",
+        "topic": "Only the orch binaries beside orchd are protected",
+        "detail": "From the RC-110 security review (low): spaces.GuardProtection protects orch, orchd and orch-hook in the directory orchd runs from (under brew services /opt/homebrew/opt/orch/bin, whose links resolve to the same Cellar files as the bin/orch-hook link harness settings run, so writes through either are refused). An orch-hook installed elsewhere (orch install --bin-dir) is not protected, and moving the whole directory that holds the settings' link (mv /opt/homebrew/bin ...) and planting a new orch-hook is not refused. Proposed: protect the hook command path orch install writes into harness settings (recorded at install, or read from the settings when the snapshot is written).",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-203",
+        "kind": "follow-up",
+        "topic": "The CLI's payload replay protects its own environment's paths",
+        "detail": "From the RC-110 security review (low, replay correctness only): orch spaces replay <payloads> --policy <file> builds its protection with spaces.GuardProtection from the CLI's own ORCH_CONFIG_DIR/ORCH_DATA_DIR/HOME and its executable's directory, which can differ from the running orchd's (brew bin vs opt path, --bin-dir, a shell that sets XDG_*). orchd's ReplaySpaces uses orchd's own, the same as the live snapshot. Proposed: document, or have the CLI ask orchd for the protection it applies.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-204",
+        "kind": "follow-up",
+        "topic": "A relative orch directory or no home makes the guard refuse every call",
+        "detail": "From the RC-110 security review (low, fail closed): orchd puts ORCH_CONFIG_DIR/ORCH_DATA_DIR as written, and the home from os.UserHomeDir, into the snapshot's protection. If one is relative, or the home cannot be found, NewGuardPolicyProtecting rejects the entries and the hook answers every call with policy_unreadable while a policy is configured (with no policy nothing is refused: protection is ignored then). Nothing in orchd's log or orch status explains it. Proposed: orchd makes the directories absolute, or validates the protection before writing the snapshot and reports the failure.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-205",
+        "kind": "follow-up",
+        "topic": "Self-protection scope notes from the RC-110 review",
+        "detail": "Info-level notes from the three RC-110 security-review rounds: (1) user hook scripts that harness settings point at (~/.claude/hooks/*), shell startup files (~/.zshenv, ~/.zshrc, ~/.bash_profile), Gemini and Codex extension directories and the Homebrew tap formula run code in later sessions and are plain, recognisable writes, but are not protected; (2) ~/Library/LaunchAgents/*orch* also protects unrelated launch agents whose name holds 'orch' (com.pytorch...), and writing the LaunchAgents directory itself is refused; narrow to com.orchestrator.* and homebrew.mxcl.orch*.plist if that matters; (3) the '.pub' exclusion meant for ~/.ssh/id_* also applies to write patterns (com.orchestrator.orchd.plist.pub is writable, harmless); (4) a replay judges older revisions with today's protection, so events recorded before RC-110 can show as changed where they wrote a path protected since (documented in daemon.md).",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-042",
+          "SP-047"
+        ],
+        "status": "open"
       },
       {
         "id": "RC-180",
@@ -3473,7 +3906,13 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestGuardDenyFormat (internal/hook/guard_test.go) runs a recorded PreToolUse payload of each harness (Claude Code and Codex, SP-001 fixtures) through run() with the payload's target bound to another job: both print exactly one hookSpecificOutput object with hookEventName PreToolUse, permissionDecision deny and a non-empty permissionDecisionReason, the same fields as the capture hook's deny that SP-001 recorded both harnesses honoring (capture.DenyOutput); the reason names the rule (other_job_path) and never the path or file name. 2 of 2 harnesses. TestWriteDenyUnknownRule: an unknown rule still gets a non-empty reason (Codex requires it).",
+            "a2: TestGuardFailsClosed (internal/hook/guard_test.go): timeout (decision stalls past the deadline after reporting its mode), missing pin and unreadable policy (snapshot marking a policy that no longer verifies), each in off, log, block-other-jobs and strict: 12 subtests pass; the enforcing modes print a deny and hand orchd an enforced refuse with rules guard_timeout, pin_missing, policy_unreadable; off and log print nothing and hand orchd the would-refuse verdict. Further cases: TestGuardFilesUnreadablePolicy (broken, invalid and relative-protected-path snapshots x 4 modes), TestGuardFilesSnapshotMissing (no snapshot: orch.db never applied allows; applied refuses unless orch.db's guard switch is off/log; unreadable orch.db refuses as strict; a damaged snapshot refuses), TestGuardTimeoutWithoutMode (a stall before the mode is known, or a panic, refuses; cwd-changed is never refused), TestGuardFilesNoPolicy (no spaces: allowed without a pin, INV-10) in internal/spaces/guard_files_test.go. TestGuardDecidesUnreadablePayload: a pre-tool-use payload that cannot be read is still decided (refused under block-other-jobs, allowed in log), and a guard whose inputs cannot be located refuses. Independent verifier (fresh subagent, 2026-11-12) re-ran all of these: PASS.",
+            "a3: TestGuardDecisionLatency (internal/hook/guard_test.go): 1,000 decisions over the 46 recorded PreToolUse payloads, each reading policy.json and the pin file, validating the policy, running Targets and Decide: p50 0.091 ms, p99 0.206 ms, max 0.477 ms (darwin/arm64, M3 Max, 2026-11-12). Whole process: TestToolHookCost (internal/daemon) now writes a configured snapshot and pin, so each of 1,000 runs of the real orch-hook binary decides (all 'allow within_space') and hands the event to orchd: p50 13.0 ms, p99 18.9 ms. p99 < 50 ms.",
+            "a4: TestRefusalStoredWhenShareFull (internal/daemon/guardfiles_test.go): with the writer held, a pinned session floods 1,074 ordinary events (its share is 1,024); the overflow is dropped and counted, an enforced refusal sent after the flood is not dropped (EnqueueDecision uses the reserve, D-37); after release the chain holds the refusal with decision refused and rule other_job_path, and gap records whose counts equal the dropped events. TestEnqueueDecisionUsesReserve (internal/toollog/decision_test.go): ordinary events stop at the key's share, one decision still queues in the reserve, a second one of the same key is refused its reserve share, another key's decision still fits, and nothing queues after Close.",
+            "a5: TestPeerReusedPIDGetsNoSpace (internal/daemon/guardfiles_test.go): a connection whose walk reaches a pinned claude resolves to that session only while the kernel-token check passes; when the token says the PID now names another process (errPeerReplaced) or cannot be read, it resolves to callerNone and the operator check treats it as an unidentified process (no space, D-44). TestConnSamePeerRealSocket: on a real unix socket the token matches this process and refuses another PID; identify passes for a real connection. TestCheckToken (darwin: LOCAL_PEERTOKEN audit token PID and PID version vs proc_pidinfo PROC_PIDUNIQIDENTIFIERINFO; a changed version is errPeerReplaced) and TestCheckPIDFD (linux: SO_PEERPIDFD pidfd's fdinfo Pid). TestToolHookCost and the socket tests in internal/daemon pass with the check on real connections."
+          ]
         },
         {
           "id": "SP-041.2",
@@ -3494,18 +3933,21 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestGuardReplaysFixtures (internal/hook/guard_test.go) replays all 46 recorded PreToolUse calls of Claude Code and Codex (SP-001 fixtures) through run() under block-other-jobs, every session pinned to space 'job': with /scratch in 'job', 0 refused; with /scratch/project in 'job' and /scratch/outside in no space, 0 refused; with /scratch/outside bound to another job, 13 refused, every one reaching /scratch/outside. Refusals for targets within the session's own space: 0.",
+            "a2: TestGuardSwitchTakesEffectNextCall (internal/daemon/guardfiles_test.go): orchd writes the snapshot at start and after ApplySpaces; a call into another job is refused; after SetEnforcement guard off (the operator RPC) the next decision from the files allows (would refuse, not enforced); strict refuses again; a 15-minute log switch allows, and once the fake clock passes its end the next call refuses as strict before orchd rewrites the snapshot, and orchd's revert then rewrites it. TestGuardSnapshotFollowsPolicy and TestGuardSnapshotRemovedWhenWriteFails cover the writer."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "206d8c4499fbf648db18aff8ca8d4d4f44a45476",
+      "verified_at": "2026-11-12T16:28:31Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "59c0d955dc641ee5e9676b8779dc98ae509c7ecc89abc2fcf839a19da0e763cc",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-041-enforcing-guard",
+      "pr": "https://github.com/willesq/orchestrator/pull/172"
     },
     {
       "id": "SP-042",
@@ -3544,18 +3986,22 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestSelfProtectionRefusesWrites (internal/spaces/guard_selfprotect_test.go): 16 protected paths (orch config file, orch.db, the guard's policy snapshot and a pin file under the data directory, a terms file, the user's Claude Code settings.json and settings.local.json, Codex hooks.json and config.toml, Gemini settings.json, a checkout's .git/hooks/pre-commit and .claude/settings.local.json, and since RC-110 ~/.claude.json, a Claude Code plugin's hooks.json, orchd's launchd job and brew services' job) x 9 methods (Write, Edit, MultiEdit, Bash '>', '>>', tee -a, sed -i, cp, mv) = 144 cases, all refused with rule self_protection by Decide (block-other-jobs, session pinned to its own space). Further forms in TestSelfProtectionForms (18 refused: recursive removal of orch's directories, mv .git, removal of .claude, cp -t, install, dd of=, truncate, touch/ln/chmod in .git/hooks, a glob or variable target, sudo tee, bash -c, cd then a relative write, apply_patch in Bash and the apply_patch tool) and TestSelfProtectionReviewCases (23 reproducers from the security review: heredoc apply_patch, U+017F long s, -t attached or clustered, hard links, curl -o, wget -O, tar -C/-f, unzip -d, curl -O after cd, patch, .git/config). TestShellWritesListed checks Targets' new writes list against reads for 14 forms.",
+            "a2: TestSelfProtectionAllowsReads: the Read tool and cat of each of the 15 protected paths other than the terms file are allowed; the terms file and 6 secret files (the list in docs/internals/hooks.md, Self-protection) are refused with self_protection, by both tools. TestSelfProtectionForms and TestSelfProtectionReviewCases keep ordinary calls allowed: cp of settings to /tmp, ls of the ssh directory, ls and du of the home's entries, known_hosts and public keys, GH_CONFIG_DIR=<dir> gh, a Write whose content names protected paths, git commit/add naming them, tar of the Claude Code directory to /tmp.",
+            "RC-110 (live guard): orchd's snapshot carries spaces.GuardProtection and orch-hook decides with NewGuardPolicyProtecting. TestGuardSelfProtectionLive (internal/daemon/guardfiles_selfprotect_test.go) runs orchd's snapshot writer and PinSession into the hook's GuardFiles.Decide: 21 calls refused as self_protection (Write/Edit/redirect into ~/.claude/settings.json, Write/redirect into a checkout's .git/hooks/x, Write/redirect into orch.db, the policy file, a pin file, rm -rf of the data directory, orch's config, the checkout's .claude/settings.local.json, cp over orch-hook, Write orchd, ~/.claude.json, a plugin's hooks.json, both launchd jobs, Read/cat of the terms file and cp of it), 9 ordinary in-space calls allowed (within_space). TestReplaySpacesReproducesSelfProtection: four recorded calls (three self_protection refusals) replay through ReplaySpaces with 0 changed; TestSpacesReplayFixturesSelfProtection: the CLI's payload replay refuses 3 such writes and allows the in-space one. TestGuardFilesUnreadablePolicy, TestGuardFilesSnapshotMissing, TestGuardFilesNoPolicy and TestGuardFilesRefuseBadInput cover snapshot version 2, missing or invalid protection, a version 1 snapshot and one with no version; TestGuardProtectionLiteralDirs covers pattern characters and backslashes in orch's directory names."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "7ffc5bb50ae781b8a72c3e3ed9a64b4dcd340e57",
+      "verified_at": "2026-11-12T20:08:17Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "516bf29527b8f8f01e04135d569b6635490675259e69914c5913c7350f4986d6",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-042-self-protection",
+      "pr": "https://github.com/willesq/orchestrator/pull/175"
     },
     {
       "id": "SP-043",
@@ -3587,18 +4033,20 @@
               "threshold": ">= 12, all pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestGitHubGuardCases (internal/spaces/guard_github_test.go): 24 covered forms (gh api repos/ and /repos/, gh -R, gh --repo=, GH_REPO, gh repo clone of a name and of a URL, gh repo view, git clone over https, ssh and ssh://, git fetch, push and ls-remote to a URL, git push/fetch/pull to a remote named in the checkout's config, gh api orgs/ and users/, gh repo list, gh search --owner and an org: qualifier, curl of the orgs API, an account's page URL) x 4 orgs = 96 cases, all pass: for another job's org (globex, and GLOBEX upper-cased) every form is refused with other_job_repo in both block-other-jobs and strict; for the session's own org (acme) and a public org (oss-org) every form is allowed in block-other-jobs. The security review's reproducers are regression tests too: TestGitRemoteReviewCases (16 config and operand forms refused, 6 made opaque, the branch's own remote chosen for a bare push/fetch/pull, --git-dir, oversized and FIFO configs opaque), TestGitConfigParsing, TestGitDirSymlink, TestGitHubURLReviewCases (www., gist., angle brackets, a sentence-ending URL refused for another job; text ending in an unbound account's URL allowed) and TestGitHubTargets."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "ac8e561a0d2d028e63a708092eac5178d0013839",
+      "verified_at": "2026-11-12T17:09:18Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "c237bfdccd1c0dea479609bdb5c5b2caf19389502654c7d8effada1b73456941",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-043-github-guard",
+      "pr": "https://github.com/willesq/orchestrator/pull/176"
     },
     {
       "id": "SP-074",
@@ -3714,18 +4162,24 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (0 mismatches, at 92b85f9): TestReplayReproducesRecordedDecisions (internal/spaces/replay_test.go) records every SP-040 guard case (43, grouped by pin into sessions) in each of the 4 modes as the command log stores it ('would <verdict> (<rule>)' when not enforced, 'refused'/'allowed' plus rule when enforced), reads each back with RecordedVerdict and replays under the recording policy with Replay, which calls the guard's own Decide: 43 compared per mode, 172 in all, 0 mismatches. End to end, TestReplaySpacesReproducesRecording (internal/daemon/spaces_replay_rpc_test.go) records 5 Bash calls and a cwd-changed through RecordToolEvent for a session pinned to acme with the guard switched to log and its verdict recorded on each event, plus a stored 'refused' Read call; ReplaySpaces with no policy decides each under its recorded revision (1): 7 events, 7 compared, 0 changed, rules within_space, other_job_path, other_job_repo and other_job_ancestor all present. Pass.",
+            "a2: TestReplayChangedPolicyListsRules (internal/spaces) replays the recorded guard cases under the plan policy with globex made public: exactly the 15 calls whose verdict or rule changes are marked changed, each with its new rule id equal to Decide's (e.g. 'cd into another job' refuse (other_job_path) -> allow (within_space), 'gh api into another job's org' refuse (other_job_repo) -> allow (within_space), 'opaque call that also names another job' -> allow (opaque_unverified)), and no unchanged call is listed. End to end, TestReplaySpacesChangedPolicy replays the session under that policy given as a document and as a saved draft revision: rows are exactly seq 2, 3, 4, 6, 7, each 'refuse (<other_job_path|other_job_repo|other_job_ancestor|other_job_path|other_job_path>) -> allow (within_space)', changed = 5; under strict nothing changes. TestSpacesReplaySession checks the CLI sends --policy (revision or file) and --mode and prints each changed verdict with both rule ids. Pass.",
+            "CI over the SP-001 fixtures: TestSpacesReplayFixtures (internal/cli) runs 'orch spaces replay ../hook/testdata/payloads --policy testdata/replay/fixtures-policy.json --all' with no orchd (project and outside as two isolated jobs) and compares the output with internal/cli/testdata/replay/fixtures.golden (every Claude Code and Codex session; e.g. cd /scratch/outside, cat /scratch/outside/file.txt, the Read tool and apply_patch on the outside file refuse (other_job_path); calls within the project allow (within_space)). It runs in CI with go test ./....",
+            "DOD at 92b85f9: go test ./... exit 0; go vet ./... exit 0; make cover: All files >= 80% (internal/spaces/replay.go 100.0%, internal/daemon/spaces_replay_rpc.go 92.7%, internal/cli/spaces_replay.go 97.4%, callers.go 96.4%, spaces_cmd.go 98.9%); go test -race on the replay tests passes; gofmt -l on changed Go files: 0 lines; git diff --check clean; replay does not edit internal/spaces/guard.go and calls the existing Decide; security-audit subagent: 0 critical/high, 1 medium (a 50k-event replay held every decoded event before deciding) fixed in the same commit by deciding a page at a time and keeping only returned rows, lows: fixture reader now refuses non-regular files and caps 50,000 calls per file; validation of a replayed revision without a deadline accepted (RC-144); docs/internals/cli.md and docs/internals/daemon.md (Policy replay, ReplaySpaces row) updated; orchd.proto regenerated with make proto.",
+            "Independent verifier (fresh subagent given only the diff, this feature and definition_of_done; no invariant lists SP-047) at ff7f454: a1 PASS, a2 PASS, CI fixture replay PASS, guard.go untouched and Decide called PASS, DOD-1..DOD-8 PASS. DOD-9: gh pr checks 174 all passing on ff7f454 (app 3m5s, build 40s, test 5m56s) after one rerun of the test job, whose first run failed in TestRunExitsWhenANewBuildIsInstalled ('grpc: the server has been stopped'; internal/daemon/run_test.go, self-update, untouched by this PR; passed 5/5 locally with -count=5; see RC-39)."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "ff7f454defceaef5ac1dc634e947b0b99cba010f",
+      "verified_at": "2026-11-12T16:08:36Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "0eb37e92d0ee52c8d2354afb9a924d4cd28933049e2c50b5534055f758615d4d",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-047-policy-replay",
+      "pr": "https://github.com/willesq/orchestrator/pull/174"
     },
     {
       "id": "SP-072",
@@ -3847,18 +4301,26 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (commit 034d4a1): internal/daemon TestWritersStampOriginSpaceAndLabels passes, one subtest per writer storing through a real rag.Service (in-memory Qdrant) placed by orchd's writePlacer under the plan's example policy, each asserting origin.system/facts, space and labels_v = applied revision on the stored chunks: docs sync (github origin, acme), sources refresh (fs origin in a company1 checkout -> acme; a web page under no bound prefix -> quarantine), session hand-off (transcript and record -> the pin's space acme), file hand-off (fs -> acme), summaries (Codex rollout-<time>-<id>.jsonl transcript, pin personal -> personal), Ingest RPC (client origin with caller and writer_space -> personal). Sixth writer, the RAG store's migration copy: internal/rag TestMigrationKeepsPlacement (origin, space, labels_v copied as stored, never re-placed). Service-level: internal/rag TestPlacedWritesCarryOriginSpaceAndLabels, TestPlacerRefusals (no origin / placer error / no space store nothing), TestUnplacedWritesStoreNoPlacement, TestPlacementChangeIsNotSkipped. Writers covered: 6 of 6.",
+            "a2 (commit 034d4a1): internal/docs TestRepoVisibilityAndOwnerNodeID passes: the repo GraphQL query asks for isPrivate and owner{id}; parseGraphQLPage fills docs.Repo.Private and OwnerNodeID; a sync stamps each doc's origin with visibility private/public (unknown when no owner node ID was listed, never public) and owner_node_id. End to end in TestWritersStampOriginSpaceAndLabels/docs_sync.",
+            "a3 (commit 034d4a1): internal/daemon TestClientCannotChooseItsSpace passes: an Ingest whose scope, type and tags claim space globex lands in the caller's pinned space (acme) and, for a session pinned to no space, to an unknown space or to public, a queued task, the operator and an unidentified caller, in quarantine; a page URL under a bound public prefix stays the client's (quarantine). TestClientCannotReplaceAnotherSpacesSource: a write over a source placed in another space is refused with a FailedPrecondition naming no space. internal/rag TestPlacedWritesCarryOriginSpaceAndLabels: a caller's Meta.Space/LabelsV are discarded before placing.",
+            "a4 (commit 034d4a1): internal/docs TestSyncRechecksOwnerBetweenRepos (CheckOwner before listing and before each further repo written; unchanged repos cost no check; a refusal stops before the next clone, NotTried counted); internal/sources TestRepoRefreshReportsOriginAndRechecksOwner (each checkout's origin owner re-checked; a refused one is left as last indexed); internal/prs TestSweepRechecksOwnersBeforeCaching (once per owner per sweep; refused owner's items neither enriched nor cached); internal/reviews TestRefusedOwnerIsNotReviewed and TestOwnerRefusedNeedsAnOwner (no review started and no verdict recorded while refused). End to end with the real Engine.CheckOrg: internal/daemon TestIdentityChangeStopsWrites (node ID changes mid-sync: repo one written, repo two not, result error 'not confirmed'; sources skip the org too).",
+            "DOD (commit 034d4a1): go test ./... exit 0; go vet ./... exit 0; gofmt -l on changed files empty; make cover 'All files >= 80%' (placing.go 90.0%, handoff.go 91.7%, daemon.go 91.2%, summaries.go 84.7%, rag/origin.go 100%, rag/service.go 92.9%, rag/provenance.go 95.1%, rag/migrate.go 88.0%, docs/sync.go 92.6%, sources/refresh.go 91.4%, prs/watch.go 100%, reviews/watcher.go 94.9%); go test -race on rag, docs, sources, prs, reviews passes; docs/internals/memory.md (Placement of writes) and config.md updated; three security-audit rounds, all critical/high/medium fixed (lows in RC-123).",
+            "Verification round 1 (independent verifier at 882cd60): a1-a4 PASS; DOD-9 failed on an unrelated flake (TestToolHookCost, 982 of 990 events; passed on rerun of run 43250358803) and the verifier rated as medium (DOD-6) that a session knowing another session's ID could name a file after it and have it stored in that session's space. Fixed in the next commit: internal/daemon/session_origin.go transcriptOf ties a session's records to it only for a regular file at <claude>/projects/<project>/<id>.jsonl or <codex>/sessions/.../rollout-<time>-<id>.jsonl (exact ID), and SummarizeSession marks a request from another session Foreign (quarantined). Tests: internal/daemon TestSessionWritesNeedTheirOwnPinAndTranscript (path table incl. a correctly named file kept elsewhere, a UUID fragment, links), TestForeignSummaryRequestIsQuarantined, TestTranscriptRootsFollowTheHarnessHomes; security audit of the fix: no critical/high/medium open.",
+            "Verification round 2 (fresh independent verifier at 2229f1b): a1-a4 PASS; DOD-1..DOD-9 PASS (go test/vet exit 0; make cover all >= 80%; gofmt clean; memory.md changed; 6 signed Conventional Commits, no co-author; PR #173 draft; CI run 43253621420 test and ORT build passed); no open critical/high/medium; accepted lows are RC-123."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "2229f1b5d9693cc83769d6c839fa8b3ffadcccad",
+      "verified_at": "2026-11-12T16:06:43Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "119d6446a5c77ae087c787bf967eab9387ea82c8fdf1a638a62bd7be84eb027e",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-023-stamp-origin",
+      "pr": "https://github.com/willesq/orchestrator/pull/173"
     },
     {
       "id": "SP-024",
@@ -4867,18 +5329,23 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (7 of 7 RPCs tested, at b0019b5): ListSpaces: TestListSpaces, TestListSpacesWithoutPolicy, TestListSpacesBrokenPolicy (internal/daemon/spaces_pane_rpc_test.go). ScanSpaces: TestScanSpaces, TestScanSpacesRequests, TestScanSpacesLimits, TestScanSpacesAccounts, TestScanSpacesReadsCachedAccounts, TestScanSpacesStoreErrors, TestScanSpacesUnreadableFolder, TestScanSpacesOneAtATime, TestScanSpacesLookupBudget, TestScanErr. ExplainPlacement (existing, reused): TestExplainPlacementCases, TestExplainPlacementAgents, TestExplainPlacementNoPolicy, TestExplainPlacementBadTargets, TestExplainPlacementErrorsHidden (placement_rpc_test.go). ListSessionPins is the existing ListSessions RPC (session pins with liveness; RC-140): TestListSessionsCallerScope, TestSessionLivenessStates (liveness_test.go). ListToolEvents (existing): TestListToolEventsCallerScope, TestListToolEventsPages (toollog_read_test.go). DiffSpaces (existing): TestDiffSpacesAndStatus, TestDiffSpacesOperatorOnly (spaces_rpc_test.go). ApplySpaces (existing): TestApplySpacesOperatorOnly, TestApplySpacesErrors. taskCallable/operatorActions: ListSpaces and ScanSpaces added to operatorActions (callers.go); TestEveryRPCIsClassified passes. Operator-only test: TestSpacesPaneRPCsOperatorOnly asserts ApplySpaces, DiffSpaces, ListSpaces and ScanSpaces are classed operator-only and refused (PermissionDenied) to claude and codex sessions, orchd children, queued tasks, unreadable ancestry, unidentified and peerless callers, and allowed for the operator. All pass.",
+            "a2: TestScanSpacesWritesNothing passes: the scanner runs over a read-only fake filesystem (fstest.MapFS behind a recording fs.FS, which has no write method) and a fake spaces store that also offers SaveDraft/Apply and counts calls; the scan reads both (opens > 0, store reads > 0), store writes = 0, and the MapFS is unchanged. TestScanSpacesLeavesDiskAndDBAlone also runs ScanSpaces through the server over a real tree and orch.db: a digest of every path, mode, size, mtime and content, and of every row of every orch.db table, is identical before and after.",
+            "DOD at b0019b5: go test ./... exit 0; go vet ./... exit 0; make cover: All files >= 80% (spaces_list_rpc.go 100.0%, spaces_scan.go 99.2-100.0% across runs, callers.go 96.4%); gofmt -l on changed Go files: 0 lines; git diff --check clean; security-audit subagent: 0 critical/high/medium, 3 lows fixed in the same commit (per-scan GitHub lookup cap of 15, os.Root walk, one scan at a time), the rest accepted (RC-141); docs/internals/daemon.md updated; orchd.proto regenerated with make proto (Go and Swift stubs).",
+            "Independent verifier (fresh subagent given only the diff, this feature, INV-06 and definition_of_done) at 08cbbcd: a1 PASS, a2 PASS, INV-06 PASS, DOD-1..DOD-8 PASS. DOD-9: gh pr checks 170 all passing (app 3m44s, build 42s, test 5m51s) on 08cbbcd."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "08cbbcd37f2258fa6709545e59b61779afdbc545",
+      "verified_at": "2026-11-12T15:27:32Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f0acc03a68be8583dd633bfa5e24f888817ce09d39e4ce97f227fd76aaf85178",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-050-spaces-pane-rpcs",
+      "pr": "https://github.com/willesq/orchestrator/pull/170"
     },
     {
       "id": "SP-051",
@@ -5469,6 +5936,10 @@
     {
       "date": "2026-11-10",
       "change": "Decision review batch 7 (user actions): RC-17, RC-18, RC-21 and RC-22 resolved; issues #158-#162 filed for the defects found."
+    },
+    {
+      "date": "2026-11-12",
+      "change": "D-56: user approved parallel lanes (A SP-041..044, B SP-023, C SP-050 then SP-047, D SP-072, E SP-046) with disjoint RC ranges; the procedure text is unchanged."
     }
   ],
   "plan_location": {

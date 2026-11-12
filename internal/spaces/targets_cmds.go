@@ -100,6 +100,7 @@ func (e *extractor) command(argv []word, st *shellState, depth int) {
 	if writers[name] || (name == "sed" || name == "gsed") && hasFlag(args, "-i", "--in-place") {
 		e.writes(args, at)
 	}
+	e.writeArgs(name, args, at)
 	if varSetters[name] {
 		st.forgetVars()
 	}
@@ -163,7 +164,9 @@ func (e *extractor) command(argv []word, st *shellState, depth int) {
 		e.opaque("flock runs a command")
 		e.genericArgs(args, at)
 	case name == "apply_patch" || name == "applypatch":
+		e.writing++
 		e.patch(joinWords(args), at)
+		e.writing--
 	case linkMakers[name]:
 		if name == "ln" || name == "link" || name == "cp" && hasFlag(args, "-s", "--symbolic-link") {
 			e.opaque("creates links")

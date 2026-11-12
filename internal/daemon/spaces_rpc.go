@@ -89,6 +89,7 @@ func (s *server) ApplySpaces(ctx context.Context, req *orchdv1.ApplySpacesReques
 		return nil, grpcstatus.Error(codes.Internal, err.Error())
 	}
 	log.Printf("orchd: spaces revision %d applied by %s", r.Number, callerLabel(ctx))
+	s.writeGuardSnapshot()
 	s.checkouts.nudge()
 	return &orchdv1.ApplySpacesResponse{AppliedRevision: r.Number}, nil
 }
