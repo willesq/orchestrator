@@ -47,6 +47,11 @@ type ToolTargets struct {
 	// GH_REPO, gh api repos/<o>/<r>, gh repo <cmd> <o>/<r>, git remotes
 	// on a github host and github.com URLs.
 	GHRepos []string `json:"gh_repos,omitempty"`
+	// GHOrgs are GitHub accounts (orgs or users), lowercase, the call
+	// reaches without naming one repo (SP-043): gh api orgs/<o> and
+	// users/<o>, gh repo list <o>, gh search --owner and owner:/org:/user:
+	// qualifiers, and github.com/<o> URLs.
+	GHOrgs []string `json:"gh_orgs,omitempty"`
 	// Prefixes are directories under which the call may reach any path:
 	// the fixed part of a glob, or of a word whose value is only known up
 	// to a variable or command substitution. "cat ~/code/*/x" reaches
@@ -227,7 +232,7 @@ func (e *extractor) result() ToolTargets {
 		e.opaque("a path may run through a link the call creates")
 	}
 	t := e.out
-	for _, l := range []*[]string{&t.Paths, &t.CdDest, &t.GitDirs, &t.GHRepos, &t.Prefixes, &t.Writes} {
+	for _, l := range []*[]string{&t.Paths, &t.CdDest, &t.GitDirs, &t.GHRepos, &t.GHOrgs, &t.Prefixes, &t.Writes} {
 		*l = sortedUnique(*l)
 	}
 	for r := range e.reasons {
