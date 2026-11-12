@@ -524,6 +524,28 @@ Clients dial `unix://<socket>` lazily (failure surfaces on the first call) and s
 deadlines: hooks 0.5 s for writes and 3 s for prompt search; `orch status` 2–3 s; long CLI
 commands up to 2 hours (migration).
 
+### Policy replay
+
+`ReplaySpaces` (SP-047, `internal/daemon/spaces_replay_rpc.go`) decides one command log's stored
+tool events again and reports where the verdict differs from the recorded one, so a policy
+change can be tried on real behavior first. It reads the chain a page at a time (after flushing
+what is queued), deciding each page before reading the next and keeping only the rows it returns, the owner's pin (a session's; tasks and harness processes have none, so the
+guard judges them `pin_missing`), and stored revisions; it writes nothing. Each event becomes the
+guard's input with `spaces.GuardEventOf`: a tool call's stored targets JSON (never re-extracted
+from the redacted command; unreadable targets are opaque), and for a cwd-changed event the old
+directory as cwd and the new one as its destination. `spaces.Replay` then calls the live
+`spaces.Decide` and compares its `Would` verdict and rule with the recorded ones, which
+`spaces.RecordedVerdict` reads from the record: `would <verdict> (<rule>)` in the rule for a
+call the guard did not enforce (`wouldRule`), or a `refused`/`allowed` decision with its rule.
+Events recorded while no guard decided (decision `logged` with no rule) are counted as having
+no recorded verdict and are still decided. By default each event is decided under the revision
+recorded with it (`policy_rev`), read with `Engine.ResolvedRevision`, which checks the
+revision's hash and validates it; a revision that fails is a per-event problem, not a verdict.
+`policy_revision` or `policy_json` (validated as a draft, `Engine.Resolve`) replays under one
+policy instead; each revision is read and validated once per replay. The guard policy is built with no protected paths, as the live guard has none
+until SP-042, and the mode is the request's or the guard switch's current state; the record does
+not keep the mode it was judged in.
+
 ### Enforcement switches
 
 Each layer of spaces enforcement has an operator-only switch (spaces SP-070, D-11, D-12, D-40,
@@ -624,6 +646,7 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `GetEnforcement` | → switches (layer, title, state, default, states, relaxed, set_at, set_by, until, reverts_to), error | every [enforcement switch](#enforcement-switches); open to every caller, queued tasks included; `set_by` only for the operator; switches that cannot be read are returned as the defaults with `error` |
 | `SetEnforcement` | layer, state, for_seconds → current switch, changed, notes | operator-only (refused to callers descended from a harness or orchd); unknown layer or state, or `for_seconds` outside 0–86400 → `InvalidArgument`; logged with time and caller and emitted on the `spaces` stream; `notes` say what the hooks switch did to Claude Code's settings |
 | `VerifyToolLog` | owner (session ID, `task:<id>` or `process:<pid>[-<start>]`) → records, anchors, ends, gaps, dropped, problems | recomputes the owner's [command log](#command-log) chain after storing what is queued, and compares its anchors with orch.db's copies; operator-only |
+| `ReplaySpaces` | owner, policy_revision or policy_json, mode, all → owner, mode, pin_space, pinned, counts (events, compared, changed, unrecorded, problems), rows (seq, event, tool, revision, recorded and replayed verdict and rule, changed, problem), truncated | [policy replay](#policy-replay); *operator-only* (refused to harness sessions and tasks); both policies, a negative revision, an unknown mode or a policy that does not parse or validate → `InvalidArgument`; a named revision that is missing or edited → `FailedPrecondition`; rows are the changed and undecided calls, every call with `all`; at most 50,000 events and 5,000 rows (`truncated`) |
 | `SummarizeSession` | session_id, transcript_path, tags → accepted | ID `^[A-Za-z0-9_-]{1,128}$`; path absolute, `.jsonl`, regular file; enqueue only (backlog 32) |
 | `RecommendModel` | task_kind → route, from_table | see [tasks.md](tasks.md) |
 | `RateTask` | id, rating (`good`/`rework`/`bad`) → — | sets the task's rating; with the PR-outcome sweep, the only ledger writes outside the queue |

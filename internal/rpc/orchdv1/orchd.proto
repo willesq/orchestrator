@@ -195,6 +195,12 @@ service Orchd {
   // SummarizeToolLog sums the command log per space over a window: tool
   // calls, directory moves and moves into another space. Operator only.
   rpc SummarizeToolLog(SummarizeToolLogRequest) returns (ToolLogSummary);
+  // ReplaySpaces decides one command log's recorded tool events again with
+  // the guard's decision function and reports each verdict that differs
+  // from the recorded one (SP-047). By default each event is decided under
+  // the revision applied when it was recorded. Operator-only; it changes
+  // nothing.
+  rpc ReplaySpaces(ReplaySpacesRequest) returns (ReplaySpacesResponse);
   // GetEnforcement lists every enforcement layer's switch (SP-070). Open to
   // every caller, so every session's start digest can name a layer that is
   // off; who set a switch is shown to the operator only.
@@ -1238,6 +1244,52 @@ message ToolEvent {
   int64 dropped = 16;    // gap records: events lost before they were stored
   // The session the hook named, when orchd attributed the event elsewhere.
   string claimed_session = 17;
+}
+
+message ReplaySpacesRequest {
+  // A session ID, task:<task id> or process:<pid>[-<start>].
+  string owner = 1;
+  // The policy to decide under, instead of each event's recording
+  // revision: a saved revision, or a policy document. At most one.
+  int64 policy_revision = 2;
+  string policy_json = 3;
+  // The guard mode to judge in: off | log | block-other-jobs | strict; ""
+  // for the guard switch's current state.
+  string mode = 4;
+  // Return every replayed event, not only the changed ones.
+  bool all = 5;
+}
+
+// ReplayedEvent is one event's recorded and replayed verdicts.
+message ReplayedEvent {
+  int64 seq = 1;
+  int64 at = 2; // unix nanoseconds when it was recorded
+  string event = 3;
+  string tool = 4;
+  int64 policy_revision = 5; // applied when it was recorded; 0 for none
+  bool recorded = 6;         // the record carries a verdict
+  string recorded_verdict = 7;
+  string recorded_rule = 8;
+  string verdict = 9; // allow | refuse; "" when it could not be decided
+  string rule = 10;
+  bool changed = 11;
+  string problem = 12;
+}
+
+message ReplaySpacesResponse {
+  string owner = 1;
+  string mode = 2;       // the mode judged in
+  string pin_space = 3;  // the owner's pinned space; "" for none
+  bool pinned = 4;
+  int64 events = 5;      // events replayed
+  int64 compared = 6;    // with a recorded verdict
+  int64 changed = 7;
+  int64 unrecorded = 8;  // with no recorded verdict
+  int64 problems = 9;    // that could not be decided
+  // The changed events (with all, every event), in sequence order.
+  repeated ReplayedEvent rows = 10;
+  // Set when the log held more events than one replay reads.
+  bool truncated = 11;
 }
 
 message ListToolEventsResponse {
