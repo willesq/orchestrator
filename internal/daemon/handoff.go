@@ -170,42 +170,6 @@ func storeSession(ctx context.Context, ing summaryIngester, s handoff.Session) e
 	return err
 }
 
-// sessionOrigin is what orchd reports about a session's own record or
-// transcript: the session and, when known, its first directory (read from its
-// record when cwd is ""). The writePlacer places it where the session is
-// pinned. A hand-off entry or summary request names both the session and the
-// transcript, and any process of the user can write one, so the session is
-// reported only when the transcript's file name carries its ID, as Claude
-// Code's (<id>.jsonl) and Codex's (rollout-<time>-<id>.jsonl) do; otherwise
-// the write is tied to no session and is quarantined under a policy.
-func sessionOrigin(id, cwd, transcript string) rag.Origin {
-	if cwd == "" {
-		if rec, err := session.ReadRecord(paths.SessionsDir(), id); err == nil {
-			cwd = rec.Cwd
-		}
-	}
-	if !filepath.IsAbs(cwd) {
-		cwd = ""
-	}
-	o := rag.Origin{System: rag.OriginSession, Path: cwd}
-	if transcriptOf(id, transcript) {
-		o.Session = id
-	}
-	return o
-}
-
-// transcriptOf reports whether transcript is a regular file named as session
-// id's transcript: <id>.jsonl (Claude Code) or rollout-<time>-<id>.jsonl
-// (Codex).
-func transcriptOf(id, transcript string) bool {
-	base := filepath.Base(transcript)
-	if id == "" || (base != id+".jsonl" && !(strings.HasPrefix(base, "rollout-") && strings.HasSuffix(base, "-"+id+".jsonl"))) {
-		return false
-	}
-	info, err := os.Lstat(transcript)
-	return err == nil && info.Mode().IsRegular()
-}
-
 // storeRecord stores the session record as it is on disk. The summarizer
 // writes its summary there before storing it, under the same lock, so the
 // record read here is never older than the one stored. A record written

@@ -46,6 +46,7 @@ func newWritesEnv(t *testing.T, nodes orgNodes) writesEnv {
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 	s.pins = newPinRegistry(conn)
+	fakeTranscriptRoots(t)
 	svc, q := placedRAG(t, &writePlacer{spaces: s.spaces, pins: s.pins, repos: s.repos})
 	s.rag = svc
 	_, rev, err := s.spaces.CurrentRevision()
@@ -121,10 +122,24 @@ func (g *docsGit) Sync(_ context.Context, _, repo, dest string) error {
 	return os.WriteFile(filepath.Join(dest, "README.md"), []byte("# "+repo+" docs"), 0o644)
 }
 
-// sessionTranscript writes a one-turn transcript named as session id's.
+// fakeTranscriptRoots moves the harness transcript folders into a temporary
+// home for the test.
+func fakeTranscriptRoots(t *testing.T) (claude, codex string) {
+	t.Helper()
+	home := t.TempDir()
+	claude, codex = filepath.Join(home, ".claude", "projects"), filepath.Join(home, ".codex", "sessions")
+	prev := transcriptRoots
+	transcriptRoots = func() (string, string) { return claude, codex }
+	t.Cleanup(func() { transcriptRoots = prev })
+	return claude, codex
+}
+
+// sessionTranscript writes a one-turn Claude Code transcript of session id
+// where Claude Code keeps it.
 func sessionTranscript(t *testing.T, id string) string {
 	t.Helper()
-	tr := filepath.Join(t.TempDir(), id+".jsonl")
+	claude, _ := transcriptRoots()
+	tr := filepath.Join(claude, "-Users-u-code", id+".jsonl")
 	writeFile(t, tr, `{"type":"user","timestamp":"2026-11-12T09:00:00Z","message":{"role":"user","content":"plan the release"}}`+"\n")
 	return tr
 }
@@ -222,7 +237,8 @@ func TestWritersStampOriginSpaceAndLabels(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Codex names its transcript rollout-<time>-<id>.jsonl.
-		tr := filepath.Join(t.TempDir(), "rollout-2026-11-12T09-00-00-s-sum.jsonl")
+		_, codex := transcriptRoots()
+		tr := filepath.Join(codex, "2026", "11", "12", "rollout-2026-11-12T09-00-00-s-sum.jsonl")
 		writeFile(t, tr, `{"type":"user","message":{"role":"user","content":"plan"}}`+"\n")
 		summarizeOne(ctx, fakeSummarizer{summary: "the summary"}, e.svc, summaryJob{SessionID: "s-sum", TranscriptPath: tr}, time.Minute)
 		if o := e.placedAs(t, "session://s-sum/record", "personal", rag.OriginSession); o["path"] != dir || o["session"] != "s-sum" {
@@ -427,21 +443,42 @@ func TestSessionWritesNeedTheirOwnPinAndTranscript(t *testing.T) {
 	for _, uri := range []string{"session://s-new/transcript", "session://s-new/record"} {
 		e.placedAs(t, uri, spaces.Quarantine, rag.OriginSession)
 	}
-	dir := t.TempDir()
-	for name, want := range map[string]bool{"abc.jsonl": true, "rollout-2026-abc.jsonl": true, "xabc.jsonl": false,
-		"rollout-abcd.jsonl": false, "abc.jsonl.bak": false, "b.jsonl": false} {
-		writeFile(t, filepath.Join(dir, name), "{}")
-		if got := transcriptOf("abc", filepath.Join(dir, name)); got != want {
-			t.Errorf("transcriptOf(abc, %s) = %v", name, got)
+	claude, codex := transcriptRoots()
+	proj := filepath.Join(claude, "-Users-u-code")
+	elsewhere := t.TempDir()
+	for path, want := range map[string]bool{
+		filepath.Join(proj, "abc.jsonl"):                                            true,
+		filepath.Join(codex, "2026", "11", "rollout-2026-11-12T09-00-00-abc.jsonl"): true,
+		filepath.Join(codex, "rollout-2026-11-12T09-00-00-x-abc.jsonl"):             false, // abc is only part of the ID
+		filepath.Join(codex, "rollout-2026-abc.jsonl"):                              false,
+		filepath.Join(proj, "xabc.jsonl"):                                           false,
+		filepath.Join(codex, "rollout-abcd.jsonl"):                                  false,
+		filepath.Join(proj, "abc.jsonl.bak"):                                        false,
+		filepath.Join(claude, "abc.jsonl"):                                          false, // not in a project folder
+		filepath.Join(proj, "deeper", "abc.jsonl"):                                  false,
+		filepath.Join(proj, "rollout-1-abc.jsonl"):                                  false, // a Codex name in Claude's folder
+		filepath.Join(elsewhere, "abc.jsonl"):                                       false, // named right, kept elsewhere
+		filepath.Join(elsewhere, "rollout-1-abc.jsonl"):                             false,
+	} {
+		writeFile(t, path, "{}")
+		if got := transcriptOf("abc", path); got != want {
+			t.Errorf("transcriptOf(abc, %s) = %v", path, got)
 		}
 	}
-	if err := os.Symlink(filepath.Join(dir, "b.jsonl"), filepath.Join(dir, "link.jsonl")); err != nil {
+	if err := os.Symlink(filepath.Join(elsewhere, "abc.jsonl"), filepath.Join(proj, "link.jsonl")); err != nil {
 		t.Fatal(err)
 	}
-	if transcriptOf("link", filepath.Join(dir, "link.jsonl")) || transcriptOf("", filepath.Join(dir, ".jsonl")) ||
-		transcriptOf("gone", filepath.Join(dir, "gone.jsonl")) {
-		t.Fatal("a link, an empty ID or a missing file was taken as a session's transcript")
+	if transcriptOf("link", filepath.Join(proj, "link.jsonl")) || transcriptOf("", filepath.Join(proj, ".jsonl")) ||
+		transcriptOf("gone", filepath.Join(proj, "gone.jsonl")) || transcriptOf("abc", "-Users-u-code/abc.jsonl") {
+		t.Fatal("a link, an empty ID, a missing file or a relative path was taken as a session's transcript")
 	}
+	// Named after another session but kept outside its harness's folder.
+	fake := filepath.Join(elsewhere, "s-y.jsonl")
+	writeFile(t, fake, `{"type":"user","message":{"role":"user","content":"planted"}}`+"\n")
+	if err := storeSession(ctx, e.svc, handoff.Session{ID: "s-y", TranscriptPath: fake}); err != nil {
+		t.Fatal(err)
+	}
+	e.placedAs(t, "session://s-y/transcript", spaces.Quarantine, rag.OriginSession)
 }
 
 // TestEditedFilePlacedOnlyByItsRemoteIsQuarantined: an agent can write a
@@ -509,5 +546,49 @@ func TestClientCannotReplaceAnotherSpacesSource(t *testing.T) {
 	broken := &server{rag: e.svc}
 	if err := broken.mayReplace(ctx, rag.Origin{System: "bogus"}, "acme"); grpcstatus.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("mayReplace = %v", err)
+	}
+}
+
+// TestForeignSummaryRequestIsQuarantined: a session may ask for another
+// session's summary, but only a session's own request is tied to it.
+func TestForeignSummaryRequestIsQuarantined(t *testing.T) {
+	ctx := context.Background()
+	s := &server{summaries: newSummaryQueue()}
+	claude, _ := fakeTranscriptRoots(t)
+	tr := filepath.Join(claude, "p", "s-y.jsonl")
+	writeFile(t, tr, "{}")
+	for _, c := range []struct {
+		ctx     context.Context
+		foreign bool
+	}{
+		{sessionCtx(ctx, sessionPin{SessionID: "s-x"}), true},
+		{sessionCtx(ctx, sessionPin{SessionID: "s-y"}), false},
+		{context.WithValue(ctx, resolvedKey{}, resolvedCaller{kind: callerOperator}), false},
+	} {
+		if resp, err := s.SummarizeSession(c.ctx, &orchdv1.SummarizeSessionRequest{SessionId: "s-y", TranscriptPath: tr}); err != nil || !resp.GetAccepted() {
+			t.Fatalf("SummarizeSession = %v, %v", resp, err)
+		}
+		j := <-s.summaries.jobs
+		if j.Foreign != c.foreign {
+			t.Fatalf("job = %+v, want foreign %v", j, c.foreign)
+		}
+		if tied := tiedTranscript(j); (tied == "") != c.foreign {
+			t.Fatalf("tied transcript = %q", tied)
+		}
+	}
+}
+
+func TestTranscriptRootsFollowTheHarnessHomes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv("CODEX_HOME", "relative/ignored")
+	if c, x := transcriptRoots(); c != filepath.Join(home, ".claude", "projects") || x != filepath.Join(home, ".codex", "sessions") {
+		t.Fatalf("roots = %s, %s", c, x)
+	}
+	t.Setenv("CLAUDE_CONFIG_DIR", "/cfg/claude")
+	t.Setenv("CODEX_HOME", "/cfg/codex")
+	if c, x := transcriptRoots(); c != "/cfg/claude/projects" || x != "/cfg/codex/sessions" {
+		t.Fatalf("roots with overrides = %s, %s", c, x)
 	}
 }

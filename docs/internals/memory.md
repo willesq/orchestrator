@@ -184,7 +184,7 @@ no origin, or that the placer leaves without a space, stores nothing.
 |---|---|---|
 | docs sync | `github`: owner, repo, visibility (`private`/`public`; unknown when GitHub listed no owner node ID) and the owner's node ID, from the `gh api graphql` repo listing (`isPrivate`, `owner{id}`) | the owner's binding; public only when GitHub said the repo is public |
 | sources refresh | `fs` with the file's path (repo and owner sources); `web` with the URL | the deepest root and the checkout's remote, never the remote alone; the bound web prefix |
-| session hand-off, summaries | `session` with its first directory, from its record, and the session ID when the transcript's file name carries it (`<id>.jsonl`, `rollout-<time>-<id>.jsonl`) | the session's pin only; quarantine with no pin or no tied session |
+| session hand-off, summaries | `session` with its first directory, from its record, and the session ID when the transcript is that session's, where its harness keeps it | the session's pin only; quarantine with no pin or no tied session |
 | edit hand-off | `fs` with the resolved file path | the deepest root and the checkout's remote; never the remote alone |
 | Ingest RPC | `client` with the caller kind (`session`, `task`, `operator`, `none`), the space the caller's pin writes to, and the URL when the URI is one | the caller's pinned space; quarantine for any other caller |
 | migration copy (`rag`) | carried over from the stored chunk | not placed again: `origin`, `space` and `labels_v` are copied as stored |
@@ -199,11 +199,15 @@ no origin, or that the placer leaves without a space, stores nothing.
 - **Sessions are placed only by their pin.** A hand-off entry, a session record and a
   `SummarizeSession` request are files or fields any process of the user can write, so neither the
   session ID nor the directory they name is believed on its own: a session's records go to the
-  space of the pin orchd made at its start, and only when the transcript is that session's own (a
-  regular file named `<id>.jsonl` or `rollout-<time>-<id>.jsonl`). A session orchd never pinned, or a transcript of another session, goes
-  to quarantine. So a session cannot pull another space's transcript into its own space. Naming
-  another session's ID with a transcript file it named after that ID still works; recording the
-  transcript path at the pin would close it.
+  space of the pin orchd made at its start, and only when the transcript is that session's own: a
+  regular file (not a link) at `<claude>/projects/<project>/<id>.jsonl` or
+  `<codex>/sessions/…/rollout-<time>-<id>.jsonl`, where `<claude>` and `<codex>` are `~/.claude`
+  and `~/.codex`, or `CLAUDE_CONFIG_DIR` and `CODEX_HOME` when orchd's environment sets them. A
+  `SummarizeSession` request from a session about another session is not tied either. Anything
+  else, and a session orchd never pinned, goes to quarantine. So a session can neither pull another
+  space's transcript into its own space nor push a file it named after another session into that
+  session's space, short of writing into the harness's own transcript folders, which the OS
+  sandbox can deny (SP-046). Recording the transcript path at the pin would close that too.
 - **A local file is not placed by its remote alone.** An agent can write a `.git` naming any org
   beside a file it edits, or register such a folder as a repo source (any session may), so a file
   under no root that only its checkout's remote would place goes to quarantine. An edited file is
