@@ -112,6 +112,10 @@ the switch revert by itself. Every change is logged with its time and caller. Wh
 off, `orch status` and every new session's start digest say so, and the command log keeps
 recording. orch settings and `orch install` cannot turn the tool hooks off; `orch spaces enforce
 hooks off` can. See [internals/daemon.md](internals/daemon.md#enforcement-switches).
+In Orch.app, Settings → Spaces (and the menu bar panel) has the same switches with their timers,
+shows a banner while any layer is off, and checks a folder: every root holding it, what its git
+remote changes, and the space it lands in, as `orch spaces why` reports. See
+[internals/app.md](internals/app.md#spaces).
 
 **Per-space harness settings.** While a policy is applied and the `sandbox` layer is on, orchd
 keeps `.claude/settings.local.json` in every git checkout under a space's roots: the OS sandbox on,

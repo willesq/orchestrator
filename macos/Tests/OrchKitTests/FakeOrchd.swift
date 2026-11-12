@@ -38,6 +38,10 @@ struct FakeOrchdService: RegistrableRPCService {
     var docsOwnerRepos = Orchd_V1_ListDocsOwnerReposResponse()
     var docOwner = Orchd_V1_DocOwner()
     var purge = Orchd_V1_PurgeDocsResponse()
+    var enforcement = Orchd_V1_EnforcementState()
+    var setEnforcement = Orchd_V1_SetEnforcementResponse()
+    /// ExplainPlacement's answer per target; any other target is refused.
+    var placements: [String: Orchd_V1_PlacementExplanation] = [:]
     /// Records requests the fake received, for assertions.
     var recorder = Recorder()
 
@@ -54,6 +58,38 @@ struct FakeOrchdService: RegistrableRPCService {
         let landing = self.landing, landingDecisions = self.landingDecisions, activity = self.activity
         let configState = self.configState, docsOwners = self.docsOwners, docsOwnerRepos = self.docsOwnerRepos
         let docOwner = self.docOwner, purge = self.purge
+        let enforcement = self.enforcement, setEnforcement = self.setEnforcement, placements = self.placements
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.GetEnforcement.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_GetEnforcementRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_EnforcementState>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: enforcement))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.SetEnforcement.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_SetEnforcementRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_SetEnforcementResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: setEnforcement))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ExplainPlacement.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ExplainPlacementRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_PlacementExplanation>()
+        ) { request, _ in
+            var target = ""
+            for try await message in request.messages {
+                recorder.record(message)
+                target = message.target
+            }
+            guard let answer = placements[target] else {
+                return StreamingServerResponse(single: ServerResponse(error: RPCError(code: .invalidArgument, message: "no fixture for \(target)")))
+            }
+            return StreamingServerResponse(single: ServerResponse(message: answer))
+        }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.GetConfig.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_GetConfigRequest>(),

@@ -18,7 +18,7 @@ enum GitHubSection: String, CaseIterable, Identifiable {
 
 /// The parts of the Settings pane.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case overview, tasks, docs, github, memory, claude, safetyNet, app
+    case overview, tasks, docs, github, memory, spaces, claude, safetyNet, app
 
     var id: String { rawValue }
 
@@ -29,6 +29,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .docs: "Docs"
         case .github: "GitHub"
         case .memory: "Memory"
+        case .spaces: "Spaces"
         case .claude: "Claude"
         case .safetyNet: "Safety Net"
         case .app: "App"
@@ -42,6 +43,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .docs: "doc.text.magnifyingglass"
         case .github: "point.3.connected.trianglepath.dotted"
         case .memory: "brain.head.profile"
+        case .spaces: "shield.lefthalf.filled"
         case .claude: "slider.horizontal.3"
         case .safetyNet: "checkmark.shield"
         case .app: "macwindow"
@@ -55,7 +57,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .docs: ["Docs"]
         case .github: ["GitHub"]
         case .memory: ["Sources", "Prompt context", "Session summaries", "Command log", "Search", "Embedding", "Vector store"]
-        case .overview, .claude, .safetyNet, .app: []
+        case .overview, .spaces, .claude, .safetyNet, .app: []
         }
     }
 }

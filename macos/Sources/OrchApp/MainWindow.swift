@@ -53,6 +53,8 @@ struct MainWindow: View {
     let claude: SettingsModel
     let config: ConfigModel
     let docsOwners: DocsOwnersModel
+    let enforcement: EnforcementModel
+    let placement: PlacementValidator
     let loginItem: LoginItem
     @Bindable var navigator: Navigator
     let window: WindowControl
@@ -153,7 +155,7 @@ struct MainWindow: View {
                     .task { await landings.follow() }
             case .settings:
                 SettingsView(config: config, docsOwners: docsOwners, github: github, claude: claude, safetyNet: safetyNet,
-                             loginItem: loginItem, navigator: navigator)
+                             loginItem: loginItem, enforcement: enforcement, placement: placement, navigator: navigator)
             }
         }
         .toolbar {
