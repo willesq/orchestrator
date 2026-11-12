@@ -42,8 +42,9 @@ their events too.
 prints nothing, which Claude Code and Codex read as no decision. Handing the event to orchd is
 separate: an orchd that is down, refuses or does not answer within 20 ms (250 ms for a refused
 call, which is refused whatever orchd says) loses the event and nothing else. A payload that
-does not parse, or a panic outside the guard, still allows the call when no spaces are
-configured or the guard is off or logging. Measured with the real binary against orchd's server,
+cannot be read or does not parse has no session, so the guard refuses it as `pin_missing` while
+it enforces and allows it otherwise. A panic in the decision refuses like a timeout; one
+elsewhere in the hook, after the decision, changes nothing it printed. Measured with the real binary against orchd's server,
 reading the guard's files and deciding (`TestToolHookCost`, M3 Max, 2026-11-12): p50 13.0 ms,
 p99 18.9 ms from process start to exit over 1,000 runs. Claude Code runs `pre-tool-use`
 synchronously, while `cwd-changed` runs in the background ([install.md](install.md#claude-code)).

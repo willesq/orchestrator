@@ -63,7 +63,7 @@ func decideWithin(limit time.Duration, in spaces.GuardInput) spaces.GuardResult 
 	defer cancel()
 	var mode atomic.Value
 	done := make(chan spaces.GuardResult, 1)
-	decide, files := decideGuard, guardFilesFor()
+	decide, filesFor := decideGuard, guardFilesFor
 	go func() {
 		// Reason: a panic here would end the hook with a status the
 		// harness reads as its own error; a refusal is the fail-closed
@@ -74,7 +74,7 @@ func decideWithin(limit time.Duration, in spaces.GuardInput) spaces.GuardResult 
 				done <- spaces.TimedOut(m)
 			}
 		}()
-		done <- decide(ctx, files, in, func(m spaces.GuardMode) { mode.Store(m) })
+		done <- decide(ctx, filesFor(), in, func(m spaces.GuardMode) { mode.Store(m) })
 	}()
 	select {
 	case r := <-done:

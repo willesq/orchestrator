@@ -71,7 +71,12 @@ func run(args []string, in io.Reader, out io.Writer, cf clientFactory) (err erro
 	// parses and the handlers run without its fields.
 	data, err := io.ReadAll(io.LimitReader(in, maxPayload))
 	if err != nil {
-		return nil
+		// Reason: the enforcing guard must still decide a call it cannot
+		// read (INV-13); without a session it refuses as pin_missing.
+		if args[0] != "pre-tool-use" {
+			return nil
+		}
+		data = nil
 	}
 	var p Payload
 	if len(data) > 0 {

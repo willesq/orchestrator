@@ -345,3 +345,34 @@ func TestWriteDenyUnknownRule(t *testing.T) {
 		t.Errorf("reason %q", reason)
 	}
 }
+
+// failingReader fails every read, like a broken stdin pipe.
+type failingReader struct{}
+
+func (failingReader) Read([]byte) (int, error) { return 0, os.ErrClosed }
+
+// TestGuardDecidesUnreadablePayload: a pre-tool-use payload that cannot be
+// read is still decided: refused while the guard enforces (INV-13).
+func TestGuardDecidesUnreadablePayload(t *testing.T) {
+	for mode, want := range map[string]bool{spaces.SwitchBlockOtherJobs: true, spaces.SwitchLog: false} {
+		guardSetup(t, mode, "/scratch/project", "", "sess")
+		var out bytes.Buffer
+		if err := run([]string{"pre-tool-use"}, failingReader{}, &out, factory(&toolEventClient{fakeClient: &fakeClient{}}, nil)); err != nil {
+			t.Fatal(err)
+		}
+		if _, refused := denyOf(t, out.Bytes()); refused != want {
+			t.Errorf("%s: refused = %v, want %v", mode, refused, want)
+		}
+		out.Reset()
+		if err := run([]string{"stop"}, failingReader{}, &out, factory(nil, nil)); err != nil || out.Len() != 0 {
+			t.Errorf("stop with unreadable stdin: %v %q", err, out.String())
+		}
+	}
+	// A guard whose inputs cannot even be located refuses.
+	old := guardFilesFor
+	t.Cleanup(func() { guardFilesFor = old })
+	guardFilesFor = func() spaces.GuardFiles { panic("no home") }
+	if r := decideWithin(guardTimeout, spaces.GuardInput{Kind: spaces.EventPreToolUse}); r.Verdict != spaces.Refuse {
+		t.Errorf("panicking inputs: %s", r.Verdict)
+	}
+}
