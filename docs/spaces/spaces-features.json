@@ -3400,14 +3400,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "516bf29527b8f8f01e04135d569b6635490675259e69914c5913c7350f4986d6",
-      "branch": null,
+      "branch": "feat/sp-042-self-protection",
       "pr": null
     },
     {
