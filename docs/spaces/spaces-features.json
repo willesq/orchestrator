@@ -1911,6 +1911,30 @@
           "SP-047"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-114",
+        "kind": "follow-up",
+        "topic": "GitHub calls the live guard can only mark opaque",
+        "detail": "SP-043 marks these opaque, so block-other-jobs allows them (opaque_unverified) and only strict refuses: a git remote behind an ssh alias whose host name does not say GitHub (the usual per-account setup, e.g. Host work-gh), a checkout config with url.*.insteadOf or an include (the user's global git config is not read at all), gh api graphql, gh aliases and extensions, and gh search beyond the accounts it names. Proposed: read the ssh client config's Host/HostName for aliases and the global git config's insteadOf, or refuse opaque remote-talking git and gh calls in block-other-jobs. GIT_DIR set as a shell variable is not followed either.",
+        "source": "https://github.com/willesq/orchestrator/pull/176",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-043"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-115",
+        "kind": "follow-up",
+        "topic": "SP-043 verifier lows",
+        "detail": "From the independent verification of SP-043 (2026-11-12), all low: (1) a GitHub search through curl with org: in the URL query (api.github.com/search/code?q=org:X) is not read and not opaque, so it is allowed even in strict; (2) in strict, gh repo list and gh search for the session own org, and git push to a non-GitHub remote, are refused as opaque_strict; (3) for a named remote, pushurl is judged on fetch as well as url (over-inclusive, not a bypass). See also RC-114.",
+        "source": "https://github.com/willesq/orchestrator/pull/176",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-043"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -3728,18 +3752,20 @@
               "threshold": ">= 12, all pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestGitHubGuardCases (internal/spaces/guard_github_test.go): 24 covered forms (gh api repos/ and /repos/, gh -R, gh --repo=, GH_REPO, gh repo clone of a name and of a URL, gh repo view, git clone over https, ssh and ssh://, git fetch, push and ls-remote to a URL, git push/fetch/pull to a remote named in the checkout's config, gh api orgs/ and users/, gh repo list, gh search --owner and an org: qualifier, curl of the orgs API, an account's page URL) x 4 orgs = 96 cases, all pass: for another job's org (globex, and GLOBEX upper-cased) every form is refused with other_job_repo in both block-other-jobs and strict; for the session's own org (acme) and a public org (oss-org) every form is allowed in block-other-jobs. The security review's reproducers are regression tests too: TestGitRemoteReviewCases (16 config and operand forms refused, 6 made opaque, the branch's own remote chosen for a bare push/fetch/pull, --git-dir, oversized and FIFO configs opaque), TestGitConfigParsing, TestGitDirSymlink, TestGitHubURLReviewCases (www., gist., angle brackets, a sentence-ending URL refused for another job; text ending in an unbound account's URL allowed) and TestGitHubTargets."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "ac8e561a0d2d028e63a708092eac5178d0013839",
+      "verified_at": "2026-11-12T17:09:18Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "c237bfdccd1c0dea479609bdb5c5b2caf19389502654c7d8effada1b73456941",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-043-github-guard",
+      "pr": "https://github.com/willesq/orchestrator/pull/176"
     },
     {
       "id": "SP-074",

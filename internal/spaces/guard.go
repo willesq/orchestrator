@@ -58,8 +58,8 @@ const (
 	// RuleOtherJobAncestor: a path, git dir or prefix contains another
 	// isolated space's root, so the call may reach into it (grep -r ~/code).
 	RuleOtherJobAncestor GuardRule = "other_job_ancestor"
-	// RuleOtherJobRepo: a GitHub repo is owned by an org bound to another
-	// isolated space.
+	// RuleOtherJobRepo: a GitHub repo, or an account the call reaches
+	// (SP-043), is owned by or is an org bound to another isolated space.
 	RuleOtherJobRepo GuardRule = "other_job_repo"
 	// RuleUnreadableSpace: strict only; a target lies in, contains or is a
 	// repo of a space the session may not read.
@@ -343,6 +343,16 @@ func assess(pol GuardPolicy, pin GuardPin, mode GuardMode, ev GuardEvent) (Verdi
 		case reachUnreadable:
 			note(RuleUnreadableSpace)
 		}
+	}
+	r, malformed := g.judgeOrgs(t.GHOrgs)
+	if r == reachJob {
+		return Refuse, RuleOtherJobRepo
+	}
+	if r == reachUnreadable {
+		note(RuleUnreadableSpace)
+	}
+	if malformed {
+		note(RuleMalformedTarget)
 	}
 	if weakest != "" {
 		return Refuse, weakest
