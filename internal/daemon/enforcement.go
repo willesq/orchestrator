@@ -80,6 +80,9 @@ type enforcement struct {
 	// hooks applies the hooks switch to Claude Code's settings; nil leaves
 	// the files alone.
 	hooks hookSettings
+	// onSandbox asks for a sync of the per-checkout settings (SP-046) when
+	// the sandbox switch changes; nil leaves them to the next periodic sync.
+	onSandbox func()
 
 	// mu guards cur and problem, and orders changes, so a switch and its
 	// side effects are not interleaved with another's.
@@ -226,6 +229,9 @@ func (e *enforcement) changed(ctx context.Context, c spaces.SwitchChange) []stri
 	var notes []string
 	if c.Layer == spaces.LayerHooks {
 		notes = e.applyHooks(ctx, c.State == spaces.SwitchOn)
+	}
+	if c.Layer == spaces.LayerSandbox && e.onSandbox != nil {
+		e.onSandbox()
 	}
 	log.Printf("orchd: enforcement: %s", c.Describe())
 	for _, n := range notes {

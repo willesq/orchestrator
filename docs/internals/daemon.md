@@ -574,9 +574,12 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
   the digest included, without any switch; the hooks check reads only the user's
   `~/.claude/settings.json`. When orchd does not answer, the digest's fallback reads only the
   switches in `orch.db`, not whether the tool hooks are still in `settings.json`.
-- **Not yet:** the layers' consumers come with their features. Today the guard switch marks
-  command log records (above); memory filtering, terms, sandbox rules and the enforcing guard
-  read `enforcement.state` when SP-025, SP-044, SP-046 and SP-041 land.
+- **The sandbox switch** (SP-046): orchd's checkout sync reads it at every sync, and a change
+  asks for a sync at once. Off takes orch's entries out of every per-checkout settings file and
+  `orch run` adds no deny rules; on puts them back ([install.md](install.md#per-space-harness-settings)).
+- **Not yet:** the other layers' consumers come with their features. Today the guard switch marks
+  command log records (above); memory filtering, terms and the enforcing guard read
+  `enforcement.state` when SP-025, SP-044 and SP-041 land.
 
 ## gRPC API
 

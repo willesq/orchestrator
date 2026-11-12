@@ -62,6 +62,8 @@ orch spaces log verify <session|task:ID>   # check a session's command log was n
 orch spaces enforce                   # every enforcement layer's switch
 orch spaces enforce guard off --for 15m   # switch a layer, optionally for a time (operator only)
 orch sessions list [--all]   # sessions and their state: active, idle, ended (with --all), unpinned
+orch run <space> -- claude   # start Claude Code with the space's profile, from any folder
+orch run <space> -- codex    # the same for Codex
 ```
 
 The spaces policy lives in `orch.db` as numbered revisions. Diff and apply are yours alone: orchd
@@ -110,6 +112,21 @@ the switch revert by itself. Every change is logged with its time and caller. Wh
 off, `orch status` and every new session's start digest say so, and the command log keeps
 recording. orch settings and `orch install` cannot turn the tool hooks off; `orch spaces enforce
 hooks off` can. See [internals/daemon.md](internals/daemon.md#enforcement-switches).
+
+**Per-space harness settings.** While a policy is applied and the `sandbox` layer is on, orchd
+keeps `.claude/settings.local.json` in every git checkout under a space's roots: the OS sandbox on,
+and other jobs' folders denied to shell commands and to Claude Code's file tools, plus the space's
+`GH_CONFIG_DIR` and its own `TMPDIR`. Your own entries in that file stay; orch adds the file to the
+checkout's `.git/info/exclude` when nothing ignores it, and never writes a tracked one. A new clone
+gets its file within a minute. `orch spaces enforce sandbox off` takes orch's entries out again.
+
+`orch run <space> -- claude|codex` gives a session the same rules from any folder (Codex has no
+per-checkout settings, so this is how Codex sessions get them). Claude Code then runs with a
+per-space `CLAUDE_CONFIG_DIR`, which starts logged out: the first time, run
+`orch run <space> -- claude` and `/login` in it. Log in to the space's gh profile with
+`GH_CONFIG_DIR=<gh_config_dir> gh auth login`. Run it in a folder of that space or in one no space
+holds; `--force` allows another space's folder. See
+[internals/install.md](internals/install.md#per-space-harness-settings).
 
 `orch sessions list` shows each pinned session's space, directory and state. orchd reads it from
 the kernel: a session left open without `/exit` stays `idle` for as long as its claude or codex
