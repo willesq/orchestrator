@@ -1632,6 +1632,78 @@
         ],
         "status": "open",
         "note": "Part (1) fixed on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction): WatchTasks ends cleanly when the client goes away mid-read; see RC-92. Part (2) remains open: TestDecideCases' 100 ms Targets budget can be exhausted under load."
+      },
+      {
+        "id": "RC-120",
+        "kind": "decision",
+        "topic": "Space of client notes from the operator, queued tasks and unidentified callers",
+        "detail": "SP-023 places a client Ingest only in the caller's pinned space; the operator at a terminal ('orch ingest'), queued tasks and unidentified callers have none, so under a policy their notes go to quarantine until retagged (SP-071). D-46 says a task writes to its dispatcher's space, but tasks do not record the dispatching session yet (SP-025.1.a8/SP-029). Decide how the operator's own notes are placed (e.g. an operator-only space choice, or the placement of the operator's cwd).",
+        "source": "https://github.com/willesq/orchestrator/pull/173",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-023",
+          "SP-025",
+          "SP-029",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-121",
+        "kind": "decision",
+        "topic": "Registered web sources outside any bound prefix go to quarantine",
+        "detail": "The sources registry does not record who registered a source, so a web source is placed by its bound web prefix only and otherwise quarantined (D-14 places a page by the session that ingested it, which a scheduled refresh does not have). Decide whether SaveSource records the registering caller's space, or the operator binds prefixes.",
+        "source": "https://github.com/willesq/orchestrator/pull/173",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-023",
+          "SP-030",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-122",
+        "kind": "follow-up",
+        "topic": "Local files placed only by a checkout's remote are quarantined",
+        "detail": "Security review of SP-023: an agent can make a .git naming any org, so an edit hand-off placed by its remote alone or by a remote stricter than its root, and a repo/owner source under no root, go to quarantine. A genuine org checkout under a personal or public root therefore has its edit hand-offs quarantined until hand-offs carry the editing session's space (SP-029). Registered sources under a root still follow the stricter remote, as session pins do (SP-022). Also consider making SaveSource/RefreshSource for repo/owner kinds operator-only, or limiting repo sources to sources.known_roots.",
+        "source": "https://github.com/willesq/orchestrator/pull/173",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-029",
+          "SP-042",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-123",
+        "kind": "follow-up",
+        "topic": "SP-023 security review lows and accepted limits",
+        "detail": "From three security-audit rounds on PR #173 (all critical/high/medium fixed): (1) a session that knows another session's ID can write a transcript file named after it and have its content stored in that session's space (and replace its transcript); recording the transcript path at the pin (PinSession, orchd.proto) or requiring transcripts under the harness transcript roots would close it, and SummarizeSession accepts any caller; (2) the owner's GitHub node ID is recorded in each docs chunk's origin but not compared with the binding at placement, because the REST node_id read at apply and the GraphQL id read at sync may use different ID formats (verify, then compare in Engine.PlaceUnder); (3) the Ingest refusal to replace another space's source is an existence oracle, as the docs-kept refusal already is, and has a small check-then-write window; notes in quarantine can be replaced by any other unplaced caller; (4) DeleteSource still deletes a source in any space (gate deletes by space in SP-025/SP-026); (5) when reading the stored copy fails (Qdrant briefly unavailable), Ingest skips both replace checks, as the docs-kept check already did; (6) a .git an agent writes under a root can still move a source it registers into a stricter space (never public), accepted as for session pins.",
+        "source": "https://github.com/willesq/orchestrator/pull/173",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-025",
+          "SP-026",
+          "SP-029",
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-124",
+        "kind": "follow-up",
+        "topic": "Content stored before SP-023 has no placement",
+        "detail": "Chunks written before SP-023 carry no origin, space or labels_v, and a migration copies them as they are. A docs file whose content and repo HEAD did not change, and a source file whose text did not change, is not written again, so it keeps no placement (or an earlier one) until 'orch rag relabel' (SP-027); a repo whose visibility flips without a new HEAD is not re-stamped (SP-030.1.a2). Repo visibility and owner node ID are recorded on chunks only, not in docs_repos (no migration added, to keep parallel lanes rebase-friendly). Readers must treat a missing space or stale labels_v as unreadable (INV-08, SP-025/SP-027).",
+        "source": "https://github.com/willesq/orchestrator/pull/173",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-025",
+          "SP-027",
+          "SP-030"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -3700,7 +3772,13 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (commit 034d4a1): internal/daemon TestWritersStampOriginSpaceAndLabels passes, one subtest per writer storing through a real rag.Service (in-memory Qdrant) placed by orchd's writePlacer under the plan's example policy, each asserting origin.system/facts, space and labels_v = applied revision on the stored chunks: docs sync (github origin, acme), sources refresh (fs origin in a company1 checkout -> acme; a web page under no bound prefix -> quarantine), session hand-off (transcript and record -> the pin's space acme), file hand-off (fs -> acme), summaries (Codex rollout-<time>-<id>.jsonl transcript, pin personal -> personal), Ingest RPC (client origin with caller and writer_space -> personal). Sixth writer, the RAG store's migration copy: internal/rag TestMigrationKeepsPlacement (origin, space, labels_v copied as stored, never re-placed). Service-level: internal/rag TestPlacedWritesCarryOriginSpaceAndLabels, TestPlacerRefusals (no origin / placer error / no space store nothing), TestUnplacedWritesStoreNoPlacement, TestPlacementChangeIsNotSkipped. Writers covered: 6 of 6.",
+            "a2 (commit 034d4a1): internal/docs TestRepoVisibilityAndOwnerNodeID passes: the repo GraphQL query asks for isPrivate and owner{id}; parseGraphQLPage fills docs.Repo.Private and OwnerNodeID; a sync stamps each doc's origin with visibility private/public (unknown when no owner node ID was listed, never public) and owner_node_id. End to end in TestWritersStampOriginSpaceAndLabels/docs_sync.",
+            "a3 (commit 034d4a1): internal/daemon TestClientCannotChooseItsSpace passes: an Ingest whose scope, type and tags claim space globex lands in the caller's pinned space (acme) and, for a session pinned to no space, to an unknown space or to public, a queued task, the operator and an unidentified caller, in quarantine; a page URL under a bound public prefix stays the client's (quarantine). TestClientCannotReplaceAnotherSpacesSource: a write over a source placed in another space is refused with a FailedPrecondition naming no space. internal/rag TestPlacedWritesCarryOriginSpaceAndLabels: a caller's Meta.Space/LabelsV are discarded before placing.",
+            "a4 (commit 034d4a1): internal/docs TestSyncRechecksOwnerBetweenRepos (CheckOwner before listing and before each further repo written; unchanged repos cost no check; a refusal stops before the next clone, NotTried counted); internal/sources TestRepoRefreshReportsOriginAndRechecksOwner (each checkout's origin owner re-checked; a refused one is left as last indexed); internal/prs TestSweepRechecksOwnersBeforeCaching (once per owner per sweep; refused owner's items neither enriched nor cached); internal/reviews TestRefusedOwnerIsNotReviewed and TestOwnerRefusedNeedsAnOwner (no review started and no verdict recorded while refused). End to end with the real Engine.CheckOrg: internal/daemon TestIdentityChangeStopsWrites (node ID changes mid-sync: repo one written, repo two not, result error 'not confirmed'; sources skip the org too).",
+            "DOD (commit 034d4a1): go test ./... exit 0; go vet ./... exit 0; gofmt -l on changed files empty; make cover 'All files >= 80%' (placing.go 90.0%, handoff.go 91.7%, daemon.go 91.2%, summaries.go 84.7%, rag/origin.go 100%, rag/service.go 92.9%, rag/provenance.go 95.1%, rag/migrate.go 88.0%, docs/sync.go 92.6%, sources/refresh.go 91.4%, prs/watch.go 100%, reviews/watcher.go 94.9%); go test -race on rag, docs, sources, prs, reviews passes; docs/internals/memory.md (Placement of writes) and config.md updated; three security-audit rounds, all critical/high/medium fixed (lows in RC-123)."
+          ]
         }
       ],
       "status": "in_progress",
