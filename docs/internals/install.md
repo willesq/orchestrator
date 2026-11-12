@@ -300,15 +300,16 @@ and its own temporary folder into the sessions that work for it, two ways. Code:
 
 **Rules for a space** (`spacesettings.For`). A session in space A is denied, for both reading and
 writing, every root of every other isolated space, every other space's folder under
-`<data dir>/spaces/` (which holds each space's `tmp/` and its `claude/` profile), every other
+`<data dir>/spaces/` (which holds its `claude/` profile) and its temp folder, every other
 space's `gh_config_dir` (it can hold that account's token, and `GH_CONFIG_DIR` pointed at it acts
 as that account), and `<data dir>/spaces/.orch/`, orchd's record of the checkout files and their
 backups. Nothing of A, of a public space or of a private space is denied; memory filtering and the tool guard cover those, as
 in `block-other-jobs` (D-12). A folder reached through a link is denied by its link path and its
 real path. The space's environment is `GH_CONFIG_DIR` (its `gh_config_dir`, when it names one),
-`TMPDIR` and `CLAUDE_CODE_TMPDIR`, both `<data dir>/spaces/<space>/tmp` (created `0700`). Claude
-Code gives sandboxed commands `TMPDIR=$CLAUDE_CODE_TMPDIR` (default `/tmp/claude`) whatever
-`TMPDIR` says, so both are set. A checkout with no space (its root and its remote name different
+`TMPDIR` and `CLAUDE_CODE_TMPDIR`, both the space's temp folder `/tmp/orch-<uid>/<space>`
+(`/tmp/orch-<uid>/_<hash>` for a name too long; the root and the folder are created `0700`, and a
+root that is a link or another user's is refused: orchd then reports it and the space's checkout
+settings name no temp folder at all, rather than one another user controls). A checkout with no space (its root and its remote name different
 jobs, or it is quarantined) is denied every isolated root that does not hold it, every space's
 folder and gh profile and `.orch/`, and gets no environment.
 
@@ -320,6 +321,21 @@ and the other edit tools), the space's temp folder in `sandbox.filesystem.allowW
 write, would otherwise start servers outside the sandbox when every project server is enabled),
 and the environment in `env`. A path holding a character Claude Code's rules read as a pattern
 (`*?[]{}()!\`) gets no permission rule; the sandbox still denies it to shell commands.
+
+**Temp folders (measured, Claude Code 2.1.309).** Claude Code gives sandboxed commands
+`TMPDIR=$CLAUDE_CODE_TMPDIR/claude-<uid>`, and `/tmp/claude-<uid>` (shared by every session of the
+user) when that path is longer than 44 bytes, whatever `TMPDIR` says. Only the environment Claude
+Code starts with sets it: `CLAUDE_CODE_TMPDIR` or `TMPDIR` in a settings file's `env` changes
+neither the sandboxed `TMPDIR` nor the `CLAUDE_CODE_TMPDIR` the shell sees (other `env` entries,
+`GH_CONFIG_DIR` included, do reach the shell), and no `sandbox` setting names a temp folder. That
+is why the temp folders sit under `/tmp` rather than in orch's data directory, which is too long.
+So `orch run` gives a session its space's own sandboxed `TMPDIR`, and its profile also denies the
+shared `/tmp/claude-<uid>`; a session started in a checkout without `orch run` uses the shared
+folder, which every other such session can read, whatever its space (RC-206). Denying that folder
+in a checkout's settings would break every command that reads back a temp file (`mktemp` failed
+with `Operation not permitted`), so orch does not. Every space's settings still deny every other
+space's temp folder, so a file a launched session writes under its `TMPDIR` is unreadable from
+other spaces' sessions however they started.
 
 **Per-checkout files.** orchd keeps `.claude/settings.local.json` in every git checkout (a folder
 with a `.git` folder or file) under a space's roots. SP-004 measured that the checkout root's
@@ -411,7 +427,10 @@ per profile was not measured in SP-004. The gh profile is separate: log in to it
 - Paths match by case in Claude Code's permission rules; macOS volumes are usually not case
   sensitive, so a tool given a differently cased path may pass the `Read` rule (the sandbox
   matches the real path).
-- The shared `/tmp` stays writable by every space (D-53); only `TMPDIR` is per space.
+- The shared `/tmp` stays writable by every space (D-53); only `TMPDIR` is per space, and for
+  Claude Code only in sessions started with `orch run` (sessions started in a checkout share
+  `/tmp/claude-<uid>`, RC-206).
+- `/tmp` is cleaned by the system; orch makes the temp folders again at each sync and launch.
 - Harness transcripts under `~/.claude/projects` and `~/.codex/sessions` are shared by sessions
   started without the launcher and are not denied.
 - A settings file a session edits is put right at the next sync (30 s), but a running session

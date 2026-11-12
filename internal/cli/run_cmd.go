@@ -133,7 +133,7 @@ func (l *launcher) run(out io.Writer, space string, argv []string, force bool) e
 	if err := spacesettings.EnsurePrivateDir(l.layout.SpaceDir(space)); err != nil {
 		return err
 	}
-	if err := spacesettings.EnsurePrivateDir(rules.TmpDir); err != nil {
+	if err := l.layout.EnsureTmpDir(space); err != nil {
 		return err
 	}
 	env := withoutKeys(l.environ(), spaceEnvKeys)
@@ -148,7 +148,7 @@ func (l *launcher) run(out io.Writer, space string, argv []string, force bool) e
 	case "claude":
 		var frag spacesettings.Fragment
 		if on {
-			frag = spacesettings.ClaudeFragment(rules)
+			frag = spacesettings.LauncherFragment(rules)
 		}
 		userDir, err := l.claudeDir()
 		if err != nil {
@@ -160,6 +160,9 @@ func (l *launcher) run(out io.Writer, space string, argv []string, force bool) e
 		}
 		env = append(env, "CLAUDE_CONFIG_DIR="+dir)
 		fmt.Fprintf(out, "orch run: space %s, Claude Code profile %s\n", space, dir)
+		if spacesettings.ClaudeSandboxTmp(rules.TmpDir) == spacesettings.SharedClaudeTmp() {
+			fmt.Fprintf(out, "orch run: %s is too long for Claude Code's temp folder; its shell commands use the shared %s\n", rules.TmpDir, spacesettings.SharedClaudeTmp())
+		}
 	case "codex":
 		if on {
 			args = append([]string{argv[0]}, append(spacesettings.CodexArgs(rules), argv[1:]...)...)

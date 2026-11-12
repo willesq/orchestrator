@@ -37,6 +37,14 @@ func checkoutWorld(t *testing.T) (*server, string) {
 		t.Fatal(err)
 	}
 	s := &server{spaces: e, enforcement: newEnforcement(context.Background(), conn, nil), checkouts: newCheckoutSettings()}
+	// Reason: the default temp root is the real /tmp/orch-<uid>; keep the
+	// test's spaces out of it.
+	tmp, err := os.MkdirTemp("/tmp", "oe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(tmp) })
+	s.checkouts.syncer.Layout.Tmp = filepath.Join(tmp, "r")
 	s.enforcement.onSandbox = s.checkouts.nudge
 	return s, home
 }
@@ -99,7 +107,7 @@ func TestCheckoutSettingsFollowPolicyAndSwitch(t *testing.T) {
 	if strings.Contains(string(b), `"`+filepath.Join(home, "code", "a")+`"`) {
 		t.Errorf("job a's checkout denies job a:\n%s", b)
 	}
-	if info, err := os.Stat(filepath.Join(home, "data", "spaces", "joba", "tmp")); err != nil || info.Mode().Perm() != 0o700 {
+	if info, err := os.Stat(s.checkouts.syncer.Layout.TmpDir("joba")); err != nil || info.Mode().Perm() != 0o700 {
 		t.Errorf("joba tmp: %v %v", info, err)
 	}
 

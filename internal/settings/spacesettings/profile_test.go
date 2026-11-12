@@ -109,9 +109,11 @@ func TestCodexSandboxPerSpaceTmp(t *testing.T) {
 		t.Skip("codex is not installed")
 	}
 	w := newWorld(t)
+	// The temp folders sit under /tmp, as with DefaultLayout.
+	w.layout.Tmp = filepath.Join(shortTmp(t), "r")
 	a, b := For(w.res, "joba", w.layout), For(w.res, "jobb", w.layout)
-	for _, d := range []string{a.TmpDir, b.TmpDir} {
-		if err := EnsurePrivateDir(d); err != nil {
+	for _, n := range []string{"joba", "jobb"} {
+		if err := w.layout.EnsureTmpDir(n); err != nil {
 			t.Fatal(err)
 		}
 	}

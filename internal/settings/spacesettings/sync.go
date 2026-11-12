@@ -110,9 +110,23 @@ func (s *Syncer) Sync(ctx context.Context, res *spaces.Resolved, on bool) Report
 				want[c] = s.kept(res, c, fs)
 			}
 		}
+		// Reason: fail closed. A space whose temp folder orch could not
+		// make its own (under /tmp another user can make it first) gets
+		// no TMPDIR and no write access to it, rather than one that user
+		// could read or link elsewhere.
+		bad := map[string]bool{}
 		for _, n := range res.Names() {
-			if err := EnsurePrivateDir(s.Layout.TmpDir(n)); err != nil {
-				rep.Problems = append(rep.Problems, "create the TMPDIR of space "+n+": "+err.Error())
+			if err := s.Layout.EnsureTmpDir(n); err != nil {
+				bad[n] = true
+				rep.Problems = append(rep.Problems, "create the TMPDIR of space "+n+": "+err.Error()+"; its sessions get none")
+			} else if d := s.Layout.TmpDir(n); s.Layout.Tmp != "" && ClaudeSandboxTmp(d) == SharedClaudeTmp() {
+				rep.Problems = append(rep.Problems, "the TMPDIR of space "+n+" ("+d+") is too long for Claude Code; its sessions use the shared "+SharedClaudeTmp())
+			}
+		}
+		for c, r := range want {
+			if bad[r.Space] {
+				r.TmpDir = ""
+				want[c] = r
 			}
 		}
 	}
@@ -385,9 +399,11 @@ func (s *Syncer) save(st state, old []byte) error {
 	return os.Rename(tmp.Name(), s.StateFile)
 }
 
-// EnsurePrivateDir creates dir owner-only, and refuses one that is a link
-// or that others may enter. Reason: Claude Code refuses a CLAUDE_CODE_TMPDIR
-// another user could reach, and a space's temp files are its own.
+// EnsurePrivateDir creates dir owner-only, and refuses one that is a link,
+// not a folder or another user's, and makes one others may enter
+// owner-only. Reason: Claude Code refuses a CLAUDE_CODE_TMPDIR another user
+// could reach, a space's temp files are its own, and under the shared /tmp
+// another user can make the folder first.
 func EnsurePrivateDir(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -398,6 +414,9 @@ func EnsurePrivateDir(dir string) error {
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("%s is not a folder", dir)
+	}
+	if st, ok := info.Sys().(*syscall.Stat_t); ok && int(st.Uid) != os.Getuid() {
+		return fmt.Errorf("%s belongs to another user (uid %d)", dir, st.Uid)
 	}
 	if info.Mode().Perm() != 0o700 {
 		return os.Chmod(dir, 0o700)

@@ -8,6 +8,10 @@
 package spacesettings
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -16,20 +20,83 @@ import (
 	"github.com/willesq/orchestrator/internal/spaces"
 )
 
-// Layout places orch's per-space directories: <Dir>/<space>/tmp is the
-// space's TMPDIR and <Dir>/<space>/claude its Claude Code profile for
-// 'orch run'. Each space's directory is denied to every other space, so
-// neither temp files nor a profile's transcripts cross between them.
-type Layout struct{ Dir string }
+// Layout places orch's per-space directories: <Dir>/<space>/claude is the
+// space's Claude Code profile for 'orch run', and TmpDir its TMPDIR. Each
+// space's directories are denied to every other space, so neither temp
+// files nor a profile's transcripts cross between them.
+type Layout struct {
+	Dir string
+	// Tmp holds every space's temp folder; "" keeps it at
+	// <Dir>/<space>/tmp. Reason for a separate root: Claude Code uses a
+	// CLAUDE_CODE_TMPDIR only when it is short (claudeTmpMax), which a
+	// folder in orch's data directory is not.
+	Tmp string
+}
 
-// DefaultLayout keeps the per-space directories in orch's data directory.
-func DefaultLayout() Layout { return Layout{Dir: filepath.Join(paths.DataDir(), "spaces")} }
+// claudeTmpMax is the longest temp folder Claude Code takes as given.
+// Measured with Claude Code 2.1.309 (RC-184): its sandboxed commands get
+// TMPDIR=<CLAUDE_CODE_TMPDIR>/claude-<uid> when that path is at most 44
+// bytes (the AF_UNIX socket limit it keeps under), and otherwise
+// /tmp/claude-<uid>, which every session of the user shares. Only the
+// process environment sets CLAUDE_CODE_TMPDIR: a settings file's env does
+// not change it.
+const claudeTmpMax = 44
 
-// SpaceDir is everything orch keeps for one space.
+// DefaultLayout keeps the per-space directories in orch's data directory
+// and the temp folders under /tmp/orch-<uid>, short enough for Claude Code.
+func DefaultLayout() Layout {
+	return Layout{Dir: filepath.Join(paths.DataDir(), "spaces"), Tmp: fmt.Sprintf("/tmp/orch-%d", os.Getuid())}
+}
+
+// SpaceDir is the space's folder under Dir: its profile, and its temp
+// folder when Tmp is "".
 func (l Layout) SpaceDir(space string) string { return filepath.Join(l.Dir, space) }
 
-// TmpDir is the space's TMPDIR.
-func (l Layout) TmpDir(space string) string { return filepath.Join(l.SpaceDir(space), "tmp") }
+// TmpDir is the space's TMPDIR: <Tmp>/<space>, or <Tmp>/_<hash> when the
+// name would make Claude Code's folder in it too long. Space names start
+// with a letter, so no name is like a hash's.
+func (l Layout) TmpDir(space string) string {
+	if l.Tmp == "" {
+		return filepath.Join(l.SpaceDir(space), "tmp")
+	}
+	if d := filepath.Join(l.Tmp, space); len(claudeUIDDir(d)) <= claudeTmpMax {
+		return d
+	}
+	sum := sha256.Sum256([]byte(space))
+	// 48 bits keep the folder within claudeTmpMax for uids up to 5 digits.
+	return filepath.Join(l.Tmp, "_"+hex.EncodeToString(sum[:6]))
+}
+
+// EnsureTmpDir creates the space's temp folder owner-only, and the Tmp root
+// first: under the shared /tmp, a root another user made or linked is
+// refused rather than used.
+func (l Layout) EnsureTmpDir(space string) error {
+	if l.Tmp != "" {
+		if err := EnsurePrivateDir(l.Tmp); err != nil {
+			return err
+		}
+	}
+	return EnsurePrivateDir(l.TmpDir(space))
+}
+
+// claudeUIDDir is Claude Code's own folder in a temp folder.
+func claudeUIDDir(dir string) string {
+	return filepath.Join(dir, fmt.Sprintf("claude-%d", os.Getuid()))
+}
+
+// SharedClaudeTmp is the TMPDIR Claude Code gives sandboxed commands when it
+// runs without a usable CLAUDE_CODE_TMPDIR: one folder for every session of
+// the user, whatever its space.
+func SharedClaudeTmp() string { return claudeUIDDir("/tmp") }
+
+// ClaudeSandboxTmp is the TMPDIR Claude Code gives sandboxed commands of a
+// session started with CLAUDE_CODE_TMPDIR=dir in its environment.
+func ClaudeSandboxTmp(dir string) string {
+	if p := claudeUIDDir(dir); len(p) <= claudeTmpMax {
+		return p
+	}
+	return SharedClaudeTmp()
+}
 
 // ClaudeDir is the space's CLAUDE_CONFIG_DIR for 'orch run'.
 func (l Layout) ClaudeDir(space string) string { return filepath.Join(l.SpaceDir(space), "claude") }
@@ -78,11 +145,14 @@ func For(res *spaces.Resolved, space string, l Layout) Rules {
 }
 
 // otherSpace is what of space n another space's sessions are denied besides
-// its roots: its folder under the layout and its gh profile. Reason: a gh
+// its roots: its folders under the layout and its gh profile. Reason: a gh
 // profile can hold the account's token in hosts.yml, and GH_CONFIG_DIR
 // pointed at it acts as that account.
 func otherSpace(res *spaces.Resolved, n string, l Layout) []string {
 	out := []string{l.SpaceDir(n)}
+	if l.Tmp != "" {
+		out = append(out, l.TmpDir(n))
+	}
 	if gh := res.GHConfigDir(n); gh != "" {
 		out = append(out, gh)
 	}
@@ -106,6 +176,22 @@ func ForUnplaced(res *spaces.Resolved, path string, l Layout) Rules {
 	return Rules{Deny: withReal(deny)}
 }
 
+// realPath resolves p's links. A part of p that does not exist yet (a
+// space's temp folder before its first use) is kept as written below its
+// nearest existing parent's real path.
+func realPath(p string) (string, bool) {
+	rest := ""
+	for d := p; ; d = filepath.Dir(d) {
+		if real, err := filepath.EvalSymlinks(d); err == nil {
+			return filepath.Join(real, rest), true
+		}
+		if filepath.Dir(d) == d {
+			return "", false
+		}
+		rest = filepath.Join(filepath.Base(d), rest)
+	}
+}
+
 // withReal adds each path's real form when a symlink leads to it, then sorts
 // and removes duplicates. Reason: the sandbox matches the path a command
 // opens after the kernel resolves links (/tmp is /private/tmp on macOS),
@@ -115,7 +201,7 @@ func withReal(ps []string) []string {
 	for _, p := range ps {
 		p = filepath.Clean(p)
 		out = append(out, p)
-		if real, err := filepath.EvalSymlinks(p); err == nil && real != p {
+		if real, ok := realPath(p); ok && real != p {
 			out = append(out, real)
 		}
 	}

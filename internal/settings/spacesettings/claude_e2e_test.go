@@ -29,6 +29,12 @@ import (
 // Read, Grep, Glob, Edit, Write and a sandboxed cat on job B's root and on
 // job B's temp folder, each next to a control on job A's own folder.
 //
+// The tmpdir probes (SP-046.1.a6) also start sessions the way 'orch run'
+// does, with the space's environment and the launcher's rules given by
+// --settings instead of a per-space profile, so they need no second login:
+// job B's launched session writes under its TMPDIR, and job A's launched
+// and per-checkout sessions try to read it.
+//
 // With ORCH_E2E_GH_PROFILE set to a gh profile folder the user logged in to
 // (GH_CONFIG_DIR=<it> gh auth login), it is job A's gh_config_dir and the
 // session's 'gh auth status' must name that profile's account.
@@ -60,9 +66,16 @@ func TestClaudeE2E(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	layout := Layout{Dir: filepath.Join(base, "data", "spaces")}
+	// The temp folders sit under a short /tmp root, as with DefaultLayout:
+	// Claude Code ignores a longer CLAUDE_CODE_TMPDIR (RC-184).
+	layout := Layout{Dir: filepath.Join(base, "data", "spaces"), Tmp: filepath.Join(shortTmp(t), "r")}
 	if d := os.Getenv("ORCH_E2E_LAYOUT"); d != "" {
-		layout = Layout{Dir: d}
+		layout.Dir = d
+	}
+	for _, n := range []string{"joba", "jobb"} {
+		if err := layout.EnsureTmpDir(n); err != nil {
+			t.Fatal(err)
+		}
 	}
 	checkout := gitRepo(t, filepath.Join(codeA, "app"))
 	deep := filepath.Join(checkout, "sub", "deep")
@@ -80,9 +93,6 @@ func TestClaudeE2E(t *testing.T) {
 	}
 	if rep := s.Sync(context.Background(), res, true); len(rep.Written) != 1 || len(rep.Problems) != 0 {
 		t.Fatalf("sync: %+v", rep)
-	}
-	if err := EnsurePrivateDir(layout.TmpDir("jobb")); err != nil {
-		t.Fatal(err)
 	}
 	t.Logf("settings written:\n%s", readFile(t, localOf(checkout)))
 
@@ -117,7 +127,7 @@ func TestClaudeE2E(t *testing.T) {
 				userDir = filepath.Join(home, ".claude")
 			}
 			r := For(res, "joba", layout)
-			profile, err := WriteClaudeProfile(layout, "joba", userDir, ClaudeFragment(r))
+			profile, err := WriteClaudeProfile(layout, "joba", userDir, LauncherFragment(r))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -149,9 +159,19 @@ func TestClaudeE2E(t *testing.T) {
 	})
 	t.Run("tmpdir", func(t *testing.T) {
 		out := runClaude(t, claude, deep, "Run exactly this one Bash command and show its output: echo TMPDIR=$TMPDIR. Do not use any other tool. Then reply DONE.")
-		if !strings.Contains(out.results(), "TMPDIR="+layout.TmpDir("joba")) {
-			t.Errorf("the session's TMPDIR is not job A's (%s):\n%s", layout.TmpDir("joba"), out.results())
+		want := ClaudeSandboxTmp(layout.TmpDir("joba"))
+		switch res := out.results(); {
+		case strings.Contains(res, "TMPDIR="+want):
+		case strings.Contains(res, "TMPDIR="+SharedClaudeTmp()):
+			// Measured (RC-184, RC-206): a settings file cannot set the
+			// TMPDIR of Claude Code's sandboxed commands.
+			t.Skipf("a session started in the checkout without 'orch run' has the shared TMPDIR %s, not job A's %s (RC-206):\n%s", SharedClaudeTmp(), want, res)
+		default:
+			t.Errorf("the session's TMPDIR is neither job A's (%s) nor the shared one:\n%s", want, res)
 		}
+	})
+	t.Run("launched-tmpdir", func(t *testing.T) {
+		launchedTmpProbe(t, claude, base, deep, res, layout, marker)
 	})
 	// Last, as it may change the settings: the session tries to rewrite the
 	// file that holds its rules through a link it makes and through a path
@@ -175,6 +195,62 @@ func TestClaudeE2E(t *testing.T) {
 				t.Errorf("gh auth status in the session does not name %s:\n%s", want, out.results())
 			}
 		})
+	}
+}
+
+// launchedTmpProbe (SP-046.1.a6): sessions started as 'orch run' starts
+// them each get their space's own TMPDIR; job A's launched session can read
+// neither the file job B's launched session wrote under its TMPDIR nor one
+// in the shared folder sessions without the launcher use, and job A's
+// per-checkout session (in deep) cannot read job B's file either.
+func launchedTmpProbe(t *testing.T, claude, base, deep string, res *spaces.Resolved, layout Layout, marker string) {
+	scratch := filepath.Join(base, "scratch-tmp")
+	if err := os.MkdirAll(scratch, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	launched := func(space, prompt string) sessionOutput {
+		r := For(res, space, layout)
+		m, err := Merge(nil, false, LauncherFragment(r), Owned{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		file := filepath.Join(base, "launch-"+space+".json")
+		writeFile(t, file, string(m.Data))
+		var env []string
+		for k, v := range r.Env() {
+			env = append(env, k+"="+v)
+		}
+		return runClaudeWith(t, claude, scratch, prompt+" Do not use any other tool. Then reply DONE.", []string{"--settings", file}, env...)
+	}
+	bTmp := ClaudeSandboxTmp(layout.TmpDir("jobb"))
+	bFile := filepath.Join(bTmp, "b-launch.txt")
+	out := launched("jobb", "Run exactly this one Bash command and show its output: echo TMPDIR=$TMPDIR; echo B-LTMP-"+marker+" > \"$TMPDIR/b-launch.txt\"; cat \"$TMPDIR/b-launch.txt\".")
+	t.Logf("job B launched:\n%s", out.results())
+	if !strings.Contains(out.results(), "TMPDIR="+bTmp) {
+		t.Fatalf("job B's launched TMPDIR is not %s:\n%s", bTmp, out.results())
+	}
+	if readFile(t, bFile) != "B-LTMP-"+marker+"\n" {
+		t.Fatalf("job B's session did not write %s", bFile)
+	}
+	// Stands for a file a session started without the launcher wrote.
+	shared := filepath.Join(SharedClaudeTmp(), "orch-e2e-"+marker+".txt")
+	if err := os.WriteFile(shared, []byte("SHARED-"+marker), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(shared) })
+	aTmp := ClaudeSandboxTmp(layout.TmpDir("joba"))
+	out = launched("joba", fmt.Sprintf("Run exactly this one Bash command and show its full output: echo TMPDIR=$TMPDIR; echo A-MINE-%s > \"$TMPDIR/a.txt\"; cat \"$TMPDIR/a.txt\"; cat %s; cat %s", marker, bFile, shared))
+	t.Logf("job A launched:\n%s", out.results())
+	if r := out.results(); !strings.Contains(r, "TMPDIR="+aTmp) || !strings.Contains(r, "A-MINE-"+marker) {
+		t.Errorf("job A's launched session lacks its own TMPDIR %s:\n%s", aTmp, r)
+	}
+	if r := out.results(); strings.Contains(r, "B-LTMP-"+marker) || strings.Contains(r, "SHARED-"+marker) {
+		t.Errorf("job A's launched session read another session's temp file:\n%s", r)
+	}
+	out = runClaude(t, claude, deep, fmt.Sprintf("Run exactly this one Bash command and show its full output: cat %s. Do not use any other tool. Then reply DONE.", bFile))
+	t.Logf("job A per-checkout:\n%s", out.results())
+	if strings.Contains(out.results(), "B-LTMP-"+marker) {
+		t.Errorf("job A's per-checkout session read job B's temp file:\n%s", out.results())
 	}
 }
 
@@ -240,10 +316,17 @@ func (o sessionOutput) results() string { return strings.Join(o.texts, "\n") }
 // out of it (SP-004).
 func runClaude(t *testing.T, claude, dir, prompt string, env ...string) sessionOutput {
 	t.Helper()
+	return runClaudeWith(t, claude, dir, prompt, nil, env...)
+}
+
+// runClaudeWith is runClaude with extra command-line arguments.
+func runClaudeWith(t *testing.T, claude, dir, prompt string, extra []string, env ...string) sessionOutput {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, claude, "-p", prompt, "--model", "haiku", "--permission-mode", "default",
-		"--allowedTools", "Read Grep Glob Edit Write Bash", "--output-format", "stream-json", "--verbose")
+	args := append([]string{"-p", prompt, "--model", "haiku", "--permission-mode", "default",
+		"--allowedTools", "Read Grep Glob Edit Write Bash", "--output-format", "stream-json", "--verbose"}, extra...)
+	cmd := exec.CommandContext(ctx, claude, args...)
 	cmd.Dir = dir
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)

@@ -76,9 +76,15 @@ func runWorld(t *testing.T) (home, policy string) {
 
 func doLaunch(t *testing.T, home string, client *runClient, args ...string) launch {
 	t.Helper()
+	return doLaunchIn(t, home, spacesettings.Layout{Dir: filepath.Join(home, "data", "spaces")}, client, args...)
+}
+
+// doLaunchIn is doLaunch with the per-space folders in layout.
+func doLaunchIn(t *testing.T, home string, layout spacesettings.Layout, client *runClient, args ...string) launch {
+	t.Helper()
 	var got launch
 	got.userClaude = filepath.Join(home, "dot-claude")
-	got.layout = spacesettings.Layout{Dir: filepath.Join(home, "data", "spaces")}
+	got.layout = layout
 	l := &launcher{
 		cf:        func() (orchdv1.OrchdClient, func(), error) { return client, func() {}, nil },
 		layout:    got.layout,
@@ -156,6 +162,43 @@ func TestRunSetsProfileForChildOnly(t *testing.T) {
 	}
 	if info, err := os.Stat(got.layout.TmpDir("joba")); err != nil || info.Mode().Perm() != 0o700 {
 		t.Errorf("tmp dir: %v %v", info, err)
+	}
+}
+
+// TestRunClaudeTmp (SP-046.1.a6): with the temp folders under a short root,
+// as DefaultLayout has them, the launched session's CLAUDE_CODE_TMPDIR is
+// one Claude Code uses, and its profile denies the shared folder sessions
+// started without the launcher use. A folder too long for Claude Code is
+// reported and the shared folder is left alone.
+func TestRunClaudeTmp(t *testing.T) {
+	home, policy := runWorld(t)
+	root, err := os.MkdirTemp("/tmp", "oe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(root) })
+	layout := spacesettings.Layout{Dir: filepath.Join(home, "data", "spaces"), Tmp: filepath.Join(root, "r")}
+	got := doLaunchIn(t, home, layout, &runClient{applied: policy, placement: unmatched(), sandbox: "on"}, "joba", "--", "claude")
+	if got.err != nil {
+		t.Fatal(got.err)
+	}
+	tmp := layout.TmpDir("joba")
+	if v := envOf(got.env, "CLAUDE_CODE_TMPDIR"); !slices.Equal(v, []string{tmp}) || spacesettings.ClaudeSandboxTmp(tmp) == spacesettings.SharedClaudeTmp() {
+		t.Errorf("CLAUDE_CODE_TMPDIR = %v", v)
+	}
+	if info, err := os.Lstat(tmp); err != nil || info.Mode().Perm() != 0o700 {
+		t.Errorf("tmp dir: %v %v", info, err)
+	}
+	settings, err := os.ReadFile(filepath.Join(layout.ClaudeDir("joba"), "settings.json"))
+	if err != nil || !strings.Contains(string(settings), "Read(/"+spacesettings.SharedClaudeTmp()+"/**)") {
+		t.Errorf("profile settings do not deny the shared folder: %s %v", settings, err)
+	}
+	if strings.Contains(got.out, "too long") {
+		t.Errorf("warned: %s", got.out)
+	}
+	long := doLaunch(t, home, &runClient{applied: policy, placement: unmatched(), sandbox: "on"}, "joba", "--", "claude")
+	if long.err != nil || !strings.Contains(long.out, "too long for Claude Code") {
+		t.Errorf("long folder: %v %q", long.err, long.out)
 	}
 }
 

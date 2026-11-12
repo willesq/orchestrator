@@ -2076,7 +2076,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "2026-11-12: run with the user's approval without ORCH_E2E_GH_PROFILE and ORCH_E2E_LAYOUT: read, grep, glob, write, bash, edit, launched-tmpdir and protect PASS, tmpdir SKIP (RC-206). Still needed: steps (1) and (2) for a5's gh part and 2.a2."
       },
       {
         "id": "RC-181",
@@ -2125,7 +2126,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "2026-11-12, measured with Claude Code 2.1.309 headless haiku sessions: the first part was wrong. A settings file's env CLAUDE_CODE_TMPDIR or TMPDIR (settings.local.json, also with a 12-byte path) does not change the sandboxed TMPDIR, which stayed /tmp/claude-<uid>, nor the CLAUDE_CODE_TMPDIR the shell sees (also /tmp/claude-<uid>); other env entries (GH_CONFIG_DIR, an arbitrary name) do reach the shell. CLAUDE_CODE_TMPDIR in the process environment does: TMPDIR=<it>/claude-<uid>, but only when that path is at most 44 bytes; a 66-byte one fell back to /tmp/claude-<uid> (the binary names the AF_UNIX socket limit). No sandbox setting names a temp folder. SP-046 now keeps temp folders under /tmp/orch-<uid> and sets them through 'orch run' (RC-206 for sessions started without it). The second part held in the 'protect' probe (shell writes to .claude refused). Still not known: whether a subfolder's own .claude settings can re-allow a denied folder."
       },
       {
         "id": "RC-185",
@@ -2206,6 +2208,30 @@
         "kind": "user-action",
         "topic": "Confirm a per-space Claude Code login persists",
         "detail": "SP-004 measured that a fresh CLAUDE_CONFIG_DIR starts logged out but not whether its login persists. After the first 'orch run <space> -- claude' and /login, start it again and note whether it asks to log in.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-206",
+        "kind": "decision",
+        "topic": "Claude Code sessions started in a checkout share one TMPDIR across spaces (SP-046.1.a6)",
+        "detail": "Measured 2026-11-12 with Claude Code 2.1.309 (RC-184 note): only CLAUDE_CODE_TMPDIR in the environment Claude Code starts with sets its sandboxed commands' TMPDIR; a settings file cannot, and no sandbox setting can. So a session started in a checkout without 'orch run' writes its temp files to /tmp/claude-<uid>, which every such session of every space can read; the per-checkout settings cannot give a space its own TMPDIR, and SP-046.1.a6 is not met on that path. Denying /tmp/claude-<uid> in the checkout settings breaks temp files (mktemp 'Operation not permitted'). What holds: 'orch run' sessions get their space's TMPDIR (/tmp/orch-<uid>/<space>/claude-<uid>), are denied /tmp/claude-<uid>, and every space's settings deny every other space's temp folder, so a file a launched session writes there is unreadable from other spaces however they start. Options: (a) require 'orch run' for Claude Code sessions in isolated spaces and treat a6's per-checkout half as the launcher's (needs a criteria change by the user); (b) deny /tmp/claude-<uid> in isolated spaces' checkout settings and accept broken temp files there; (c) accept the shared folder as a documented limit until Claude Code honours a settings value (ask upstream); (d) have orch start sessions some other way that sets the environment (shell alias or wrapper the user installs).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-207",
+        "kind": "follow-up",
+        "topic": "Security audit lows on the /tmp temp folders (SP-046)",
+        "detail": "From the 2026-11-12 audit of the temp-folder move (its medium, settings naming a temp folder orch could not make its own, was fixed: such a space gets no TMPDIR, TestSyncFailsClosedOnTmpRoot). Lows left: (1) a temp folder of a deleted or renamed space stays under /tmp/orch-<uid> and is no longer denied, and the root itself is not denied, so any session can list the space names in it; remove or deny entries that belong to no current space. (2) hashed folder names use 48 bits and a collision between two long names is not detected (both spaces would share and deny one folder). (3) EnsurePrivateDir makes an existing root of orch's own owner-only after the fact; entries others made while it was open are not checked. (4) After a reboot clears /tmp, another local user can make /tmp/orch-<uid> before orchd's first sync; orchd then refuses it and reports it, and sessions get no TMPDIR until the user removes it. Re-audit lows: (5) a /tmp/orch-<uid> root another user planted as a link, with space-named entries linking elsewhere, makes the real-path step add those targets to every space's denies (extra denies only, so sessions can break, nothing is exposed); skip denying a space's temp folder by its real path when the root failed its check. (6) Likewise a planted /tmp/claude-<uid> link adds its target to the launcher profile's denies.",
         "source": "https://github.com/willesq/orchestrator/pull/171",
         "raised": "2026-11-12",
         "affects": [
@@ -5182,9 +5208,9 @@
             "a2 (2026-11-12): TestMergePreservesUserEntries (user entries kept, orch never claims an entry the user had, removal restores the file's meaning), TestMergeIdempotent + TestSyncIdempotent (second run writes nothing, same bytes and mtime), TestSyncKeepsBackupOfFirstChange (original kept once, 0600, never replaced) pass: 3 pass.",
             "a3 (2026-11-12): TestSyncIgnoresEveryCheckout passes: 5/5 writable checkouts (plain repo, one whose committed .gitignore covers the file, one whose info/exclude covers it, a main checkout and its linked worktree) report 'git check-ignore' ignored = 100%; an exclude line was added only where no rule covered it (plain; main, shared by the worktree); the .gitignore is unchanged; a checkout with the file tracked is refused and not written.",
             "a4 (2026-11-12): TestSyncPicksUpNewClone and TestCheckoutSettingsLoop pass (a clone appearing under a root is written at the next sync; the loop syncs on start, every tick and on nudge). orchd syncs every 30 s (checkoutSettingsEvery). Measured on this Mac: a sync of 136 temp checkouts that finds and writes one new clone took 57 ms (first, cold sync of 135: 3.2 s); walking the real ~/code (135 checkouts) took 0.38 s. Worst case after a clone appears is about 30 s + one sync, <= 60 s.",
-            "a5: waiting on the user (RC-180): needs real Claude Code sessions and a gh profile the user logs in to; covered by the opt-in TestClaudeE2E (bash and gh probes).",
-            "a6 (2026-11-12): TestPerSpaceTmpDir (own TMPDIR and CLAUDE_CODE_TMPDIR, allowWrite own, deny of every other space's folder including its tmp) and TestRunSetsProfileForChildOnly (launcher sets TMPDIR and CLAUDE_CODE_TMPDIR) pass. TestCodexSandboxPerSpaceTmp ran the real codex-cli 0.166.0 sandbox (no model, temp CODEX_HOME) with the launcher's -c profile: job A wrote and read its own TMPDIR; cat of a file job B wrote under B's TMPDIR -> 'Operation not permitted'; writing into B's TMPDIR -> 'Operation not permitted'; cat in B's root -> 'Operation not permitted'. The Claude Code side (sandboxed TMPDIR is A's, B's tmp unreadable) is in the opt-in TestClaudeE2E (tmpdir and bash probes), waiting on the user (RC-180).",
-            "a7: waiting on the user (RC-180): TestClaudeE2E starts Claude Code from a subfolder of a temp checkout whose root settings.local.json orch wrote, and probes Read, Grep, Glob, Edit and Write on job B's root next to controls on job A's folder."
+            "a5: partly observed, the rest waiting on the user (RC-180). 2026-11-12, Claude Code 2.1.309, ORCH_CLAUDE_E2E=1 TestClaudeE2E 'bash' probe (temp home, session started in a subfolder of job A's checkout with orch's settings.local.json): the sandboxed 'cat' of job B's root file -> 'Operation not permitted (os error 1)', of a file under job B's temp folder -> 'Operation not permitted', the control in job A's folder printed its content. The 'gh auth status' part did not run: it needs ORCH_E2E_GH_PROFILE set to a gh profile the user logged in to (GH_CONFIG_DIR=<dir> gh auth login); settings env GH_CONFIG_DIR was measured to reach the sandboxed shell (a probe session printed GH=<the settings value>).",
+            "a6 (2026-11-12): launcher side holds, per-checkout side does not (RC-206). Unit: TestPerSpaceTmpDir, TestShortTmpLayout (temp folders under a short /tmp root, other spaces' folders denied by written and real path before they exist), TestClaudeSandboxTmp, TestLauncherFragment, TestEnsureTmpDir, TestRunClaudeTmp, TestRunSetsProfileForChildOnly pass; TestCodexSandboxPerSpaceTmp (codex-cli sandbox, temp folders under /tmp) -> own TMPDIR written and read, B's TMPDIR file read and write 'Operation not permitted', B's root 'Operation not permitted'. Claude Code 2.1.309, TestClaudeE2E 'launched-tmpdir' (sessions started with the space's launcher environment and LauncherFragment via --settings): job B's TMPDIR=/tmp/oe332566413/r/jobb/claude-501 and it wrote b-launch.txt there; job A's TMPDIR=/tmp/oe332566413/r/joba/claude-501, own file written and read, cat of B's file -> 'Operation not permitted', cat of a file in the shared /tmp/claude-501 -> 'Operation not permitted'; job A's per-checkout session: cat of B's file -> 'Operation not permitted'. Not met: TestClaudeE2E 'tmpdir' SKIP: a session started in the checkout without 'orch run' has TMPDIR=/tmp/claude-501, the folder every such session of every space shares. Measured: a settings file's env CLAUDE_CODE_TMPDIR/TMPDIR does not change it (also not with a 12-byte path), there is no sandbox setting for it, and denying /tmp/claude-<uid> in the settings breaks mktemp ('Operation not permitted'). Re-run after the audit fixes (2026-11-12, same code as committed): read, grep, glob, write, bash, edit, launched-tmpdir, protect PASS, tmpdir SKIP with TMPDIR=/tmp/claude-501; job A launched TMPDIR=/tmp/oe990965985/r/joba/claude-501, B's file and the shared file 'Operation not permitted'.",
+            "a7 (2026-11-12): Claude Code 2.1.309, ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E: sessions started in <checkout>/sub/deep with orch's root settings.local.json (sandbox.enabled, allowUnsandboxedCommands=false, Read(//...)/Edit(//...) denies) were refused on job B's root: Read -> 'File is in a directory that is denied by your permission settings', Grep and Glob -> 'Permission to read .../code/b has been denied', Write -> denied and no file created, Edit -> called and job B's file unchanged; each control on job A's folder succeeded (read, grep, glob, write, edit subtests PASS)."
           ]
         },
         {
@@ -5215,7 +5241,7 @@
           ],
           "evidence": [
             "a1 (2026-11-12): TestRunSetsProfileForChildOnly (CLAUDE_CONFIG_DIR, GH_CONFIG_DIR, TMPDIR set in the exec'd harness's environment only, inherited values replaced, orch's own environment unchanged), TestRunRefusesUnknownSpace (unknown space and no applied policy refused, nothing started) and TestRunRefusesOtherSpaceFolder (a folder in another space or undecidable refused unless --force; own space and unplaced folders allowed) pass: 3 pass. Also TestRunCodex, TestRunSandboxOff, TestRunUsage.",
-            "a2: waiting on the user (RC-180): TestClaudeE2E with ORCH_E2E_LAYOUT runs the same probes from a folder outside every root with the launcher's profile, after the user logs in to that profile once.",
+            "a2: waiting on the user (RC-180): not run on 2026-11-12, as ORCH_E2E_LAYOUT was not set (it needs a per-space profile the user logged in to once). TestClaudeE2E with ORCH_E2E_LAYOUT runs the read, grep, glob, write and bash probes from a folder outside every root with the launcher's profile (CLAUDE_CONFIG_DIR, LauncherFragment) and environment.",
             "a3 (2026-11-12): documented from SP-004 (a fresh CLAUDE_CONFIG_DIR starts 'Not logged in'; persistence per profile not measured) with the setup steps in docs/internals/install.md 'Per-space harness settings' (Logging in to a per-space profile) and docs/OPERATIONS.md."
           ]
         },

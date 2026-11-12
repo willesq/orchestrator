@@ -31,9 +31,11 @@ const (
 	keyAllProjectMCP = "enableAllProjectMcpServers"
 	envGHConfigDir   = "GH_CONFIG_DIR"
 	envTmpDir        = "TMPDIR"
-	// envClaudeTmpDir is the TMPDIR Claude Code gives sandboxed commands
-	// and where it keeps its own temporary files; without it every space's
-	// sandboxed commands share /tmp/claude.
+	// envClaudeTmpDir is where Claude Code keeps its temporary files and
+	// makes the TMPDIR of sandboxed commands (ClaudeSandboxTmp). Measured
+	// (RC-184): only the environment Claude Code starts with sets it; in a
+	// settings file's env it is ignored, so a session started without
+	// 'orch run' shares SharedClaudeTmp with every other session.
 	envClaudeTmpDir = "CLAUDE_CODE_TMPDIR"
 )
 
@@ -88,6 +90,26 @@ func ClaudeFragment(r Rules) Fragment {
 	}
 	for k, v := range r.Env() {
 		f.Scalars["env."+k] = v
+	}
+	return f
+}
+
+// LauncherFragment is ClaudeFragment for a session 'orch run' starts with
+// the space's CLAUDE_CODE_TMPDIR, which also denies the shared
+// SharedClaudeTmp: there sessions started without the launcher, of any
+// space, keep their temp files. It is left alone when the space's folder
+// is too long for Claude Code, as the session itself then uses it.
+func LauncherFragment(r Rules) Fragment {
+	f := ClaudeFragment(r)
+	shared := SharedClaudeTmp()
+	if r.TmpDir == "" || ClaudeSandboxTmp(r.TmpDir) == shared {
+		return f
+	}
+	deny := withReal([]string{shared})
+	f.Lists[keyDenyRead] = append(slices.Clone(f.Lists[keyDenyRead]), deny...)
+	f.Lists[keyDenyWrite] = append(slices.Clone(f.Lists[keyDenyWrite]), deny...)
+	for _, p := range deny {
+		f.Lists[keyPermDeny] = append(f.Lists[keyPermDeny], "Read(/"+p+"/**)", "Edit(/"+p+"/**)")
 	}
 	return f
 }

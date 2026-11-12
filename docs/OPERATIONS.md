@@ -116,7 +116,9 @@ hooks off` can. See [internals/daemon.md](internals/daemon.md#enforcement-switch
 **Per-space harness settings.** While a policy is applied and the `sandbox` layer is on, orchd
 keeps `.claude/settings.local.json` in every git checkout under a space's roots: the OS sandbox on,
 and other jobs' folders denied to shell commands and to Claude Code's file tools, plus the space's
-`GH_CONFIG_DIR` and its own `TMPDIR`. Your own entries in that file stay; orch adds the file to the
+`GH_CONFIG_DIR` and its own `TMPDIR` (Claude Code's sandboxed commands get the space's `TMPDIR`
+only in sessions started with `orch run`; sessions started in a checkout share Claude Code's
+`/tmp/claude-<uid>`). Your own entries in that file stay; orch adds the file to the
 checkout's `.git/info/exclude` when nothing ignores it, and never writes a tracked one. A new clone
 gets its file within a minute. `orch spaces enforce sandbox off` takes orch's entries out again.
 
