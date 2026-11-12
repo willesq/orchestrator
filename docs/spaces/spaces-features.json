@@ -1632,6 +1632,57 @@
         ],
         "status": "open",
         "note": "Part (1) fixed on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction): WatchTasks ends cleanly when the client goes away mid-read; see RC-92. Part (2) remains open: TestDecideCases' 100 ms Targets budget can be exhausted under load."
+      },
+      {
+        "id": "RC-116",
+        "kind": "follow-up",
+        "topic": "Combine the outbound terms check with the enforcing guard at rebase",
+        "detail": "SP-044 runs its check in orch-hook pre-tool-use on its own (branched from main before SP-041, PR #172, merged): it prints its own deny and the command log does not record the refusal as a decision. When the two meet: one deny path, the terms refusal recorded in the command log as refused with rule outbound_term or outbound_unchecked, the hook tests' TestMain (SP-041) covering the terms tests, and the terms check reading the terms layer switch from SP-041's snapshot instead of orch.db. SP-042's ProtectedPaths already refuses reads of terms files.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-117",
+        "kind": "decision",
+        "topic": "What the outbound terms check does not see",
+        "detail": "Accepted for now and documented (docs/internals/hooks.md, Outbound terms): text sent by a script or program that runs git itself (./deploy.sh, make), an interpreter, curl to the GitHub API, or a tool other than a shell (notably GitHub MCP tools), and commits a push would send that a session hid by moving local remote-tracking refs. gh search and gh api GET queries send terms to GitHub without publishing them. Proposed: cover GitHub MCP tools' write calls the same way, and compare with git ls-remote before a push when a remote's tracking ref moved in the same session.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-044",
+          "SP-045"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-118",
+        "kind": "decision",
+        "topic": "How strict the outbound terms check is",
+        "detail": "While the terms layer is on, SP-044 fails closed (outbound_unchecked) on any outbound command it cannot read in full: a variable or command substitution in it (except $HOME and $(cat <<'EOF' ...)), a command name built from a variable, loops, eval/xargs, git -c beyond a small allowlist, an earlier command that changes a remote or config, gh fed from a pipe. A gh write without -R counts every remote of the checkout (and GH_REPO) as a destination, so a fork whose upstream is another space's refuses the session's own terms in gh pr create. After git add/commit in the same call a push also checks the work tree, untracked files and every branch. Confirm this strictness, or say which cases should be allowed.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-119",
+        "kind": "follow-up",
+        "topic": "Outbound terms elsewhere than the command log (INV-07)",
+        "detail": "SP-044 keeps terms out of refusals, the command log, orchd's log and status output. Session transcripts, session records and anything indexed into RAG from them, the PR digests and event streams can still hold a term a session typed; INV-07 lists SP-053 for those. The terms cache in orchd notices a changed terms file by size and modification time only.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-053",
+          "SP-044"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -4413,7 +4464,10 @@
               "threshold": "2 pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestTermsMatching (internal/spaces/terms_test.go): one terms file with literal terms (one word, two words, with punctuation, non-ASCII, a dotted host) and regex terms (a ticket pattern, an alternation), 26 match/no-match cases, all pass: case-insensitive, word boundaries (not inside falconry, refalcon, falcon_x, Überwaldx), regex anchoring by boundaries (INV-123 and INV-12345 do not match INV-[0-9]{4}), comments and blank lines skipped, CRLF lines. TestTermsRejected: 8 invalid files rejected (invalid regex, invalid character class, empty pattern, a pattern matching empty text, a line over 512 bytes, not UTF-8, over 256 KiB, over 4,096 terms), and no error text names the term; the error names the line. TestTermsRedact (5 cases incl. back-to-back terms and a regex with its own groups), TestRedactJSONAndTargets (reserved group names rejected), TestSpaceTerms, TestReadApplied.",
+            "a2: TestOutboundStagedTermCaught (internal/spaces/outbound_test.go, a real git repository whose origin is github.com/acme/app): a globex term in a staged file, with an innocent message, is refused for git commit (outbound_term, globex, line 1, destination acme), and so are commit -a with an unstaged tracked change, a term in the message and in a -F file; acme's own term to acme is allowed. TestOutboundPushedTermCaught: a globex term in a local commit not on origin is refused for git push, git push origin main, HEAD:main and -u origin --all; once origin's tracking ref has it the push is allowed; acme's term pushed to a globex URL is refused. Further: TestOutboundDestinations, TestOutboundFailsClosed, TestOutboundActions, and the three security reviews' reproducers TestOutboundReviewCases, TestOutboundReview2Cases, TestOutboundReview3Cases and TestOutboundNoFilterRun (a repository's clean filter does not run)."
+          ]
         },
         {
           "id": "SP-044.2",
@@ -4427,18 +4481,20 @@
               "threshold": "0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestTermsNeverLeak (internal/daemon/terms_redact_test.go): with two jobs' terms files (literal and regex terms) applied, 16 tool events carrying every fixture term in commands, paths, directories (cwd, old and new cwd) and a Write tool's content (after newline and tab escapes, and past the 2 KB command cap) are stored; the command log records, orchd's log output during the run, the Status RPC output and a refusal reason for each term hold 0 occurrences of any fixture term (commands read [term]). TestTermsWithheldWhenUnreadable: with a terms file gone, command, targets and directories are withheld. The hook's refusal text is checked too: TestOutboundTermsRefusedByHook (internal/hook/terms_test.go) prints the PreToolUse deny naming the rule and the term's space, and not the term."
+          ]
         }
       ],
-      "status": "in_progress",
+      "status": "blocked",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": null,
+      "blocked_reason": "Needs a user decision on residual risk (DOD-6 cannot reach zero open findings by more fixing). Three security-audit rounds of the outbound terms check each found new ways around static shell reading (round 3: 4 high, 7 medium, all fixed in this branch with regression tests; a fourth round would likely find more, as D-28 recorded for target extraction). Proposed decision, like D-28: SP-044's hook check is best-effort; SP-045's git hooks (commit-msg, pre-push on real content) and per-job GitHub accounts (D-18) are the boundary for git, and the residual classes (zsh and profile aliases/functions, scripts and programs that run git, interpreters, curl, non-shell tools, forged tracking refs) are accepted risk recorded in RC-117/RC-118. Confirm, or say what more SP-044 must cover. All acceptance items pass locally; the independent verifier and CI were not run because of this block.",
       "attempts": 1,
       "criteria_sha256": "3025c7e6d0152b605a402bbbfebe2786f6649b26a8a33bd596e2d27c53437060",
       "branch": "feat/sp-044-outbound-terms",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/177"
     },
     {
       "id": "SP-045",

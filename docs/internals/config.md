@@ -301,6 +301,16 @@ limits; and a
 volumes usually are. With `public_root_sessions` unset, session content from under a public root
 goes to the only private space when there is exactly one, else to quarantine.
 
+**Terms files** (`terms_file`, spaces SP-044): one term per line, a literal term or
+`re:<regex>` (Go RE2 syntax). Matching is case-insensitive and on word boundaries (a term is not
+found inside a longer word). Blank lines and lines starting with `#` are skipped. A file is
+rejected when it is over 256 KiB, not UTF-8, holds over 4,096 terms or a line over 512 bytes,
+an empty pattern, an invalid regular expression, a pattern that matches empty text or one that
+defines a group named `termb` or `terma`; errors name the line number, never the term. A term is
+named elsewhere only by its space, line number and the first 12 hex digits of its line's
+HMAC-SHA256, keyed with the SHA-256 of the whole file. How the terms are enforced is in
+[hooks.md](hooks.md#outbound-terms).
+
 **Reads** (`Resolved.CanRead`): a space reads itself, every public space and the spaces it lists.
 Lists do not chain, and nothing reads quarantine. With no policy applied, or one with no spaces,
 everything is in one implicit `shared` space and orch behaves as it did before spaces.

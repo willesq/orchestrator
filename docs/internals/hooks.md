@@ -23,7 +23,7 @@ they name a file.
 | `pre-compact` | Writes `sessions/<id>.checkpoint.yaml` with the last request and reply. |
 | `session-end` | See [session end](#session-end). |
 | `subagent-stop` | Appends `{kind: complete, source: subagent_type, summary}` (redacted, 200 bytes) to the parent session's event stream. |
-| `pre-tool-use` | Hands the tool call to orchd for the command log and prints nothing, so the call goes ahead. See [tool hooks](#tool-hooks). Claude Code and Codex. |
+| `pre-tool-use` | Refuses a call that would send another space's [outbound terms](#outbound-terms) out, then hands the tool call to orchd for the command log; otherwise prints nothing, so the call goes ahead. See [tool hooks](#tool-hooks). Claude Code and Codex. |
 | `cwd-changed` | Hands the directory change (`old_cwd`, `new_cwd`) to orchd and prints nothing. See [tool hooks](#tool-hooks). Claude Code only; Codex has no such event. |
 | `post-tool-use` | After `gh pr create\|ready\|close\|merge\|reopen\|edit`, requests a PR refresh, and after `gh pr create` (also `rtk gh pr create`) registers the PR with PR Watch (below). After `Edit`/`Write`/`MultiEdit` of markdown or a file under `~/.claude/`, hands the file off to be stored again. |
 
@@ -205,6 +205,83 @@ Paths compare cleaned, in Unicode NFC and case-folded, as macOS treats names.
 The rule id is safe to show and log: it never names the matched path or text. `TestDecideCases`
 runs 43 cases in all four modes, covering every SP-040.1 form, and `TestDecideDeterministic`
 replays 20,000 random inputs.
+
+### Outbound terms
+
+Each space may have a terms file ([config.md](config.md#spaces-policy)): words and patterns that
+belong to that space. `pre-tool-use` refuses an outbound action whose text holds a term of a
+space that one of its possible destinations does not hold (spaces SP-044,
+`internal/hook/terms.go`, `internal/spaces/terms.go`, `outbound*.go`).
+
+- **Outbound actions** (`spaces.OutboundActions`, read from the shell command with
+  `mvdan.cc/sh`, in any letter case (macOS runs `GIT` as git) and with zsh's `=git`, following
+  `cd`/`pushd` (with `~`), `git -C`, `env -C`, Codex's `workdir`, `source /dev/stdin`,
+  `export`ed variables, wrappers such as `env`, `timeout`, `nice`, `sudo` and `rtk`, `bash -c`/`-lc`
+  and a shell fed a literal here-document, and the commands inside `$(…)`, `<(…)` and
+  redirections): `git commit`
+  (its message, `-F` and `-t` files and staged changes, or with `-a` the tracked changes too),
+  `git push` (the commits it sends, `git log -p <refs> --not --remotes=<remote>`, and the messages
+  of annotated tags it pushes, also with `push.followTags`; with no refspec, every branch when the
+  remote's push refspec or `push.default=matching` says so, every ref for a mirror remote; to a
+  URL, only remotes whose push URLs lie in the URL's own spaces are left out), `git tag` with a
+  message, `git notes` with a file, every `gh`
+  command but a known read-only one (`pr list|view|diff|checks`, `repo view|clone`, `search`, …)
+  with its body, notes and recover files, gist files and release assets, and `gh api` writes
+  (any method but GET, or fields or `--input` without one). Their text is every string of the
+  tool input, decoded (so a term after a newline is on a word boundary), every word as the shell
+  passes it (so `'fal''con'` and `fal{,}con` are found), literal here-documents and here-strings,
+  the files they
+  send and what git says they send. When an earlier command of the same call changes what is
+  staged or committed (`git add && git commit && git push`), a commit or push also sends the
+  staged and work tree changes and every untracked file, and a push every branch.
+- **Destination.** The repo the command names (`-R`, `GH_REPO`, a PR or issue URL, `gh repo
+  create <o>/<r>`, `repos/<o>/<r>`, `orgs/<o>`, a push URL), else for `git` the checkout's push
+  remote (the branch's push remote, `remote.pushDefault`, the branch's remote, then `origin`) and
+  for `gh` every remote of the checkout and the hook's `GH_REPO`, since gh picks among them; every
+  push URL of a remote counts. A
+  term may reach a destination only when every possible destination is its own space. A remote's
+  owner is placed by its binding; a gist, a GraphQL call, an owner bound to no space and a host
+  that is not GitHub (`github.com`, a subdomain, or a dotless ssh alias naming github) hold none.
+- **Fails closed** while the terms layer is on ([switches](daemon.md#enforcement-switches)), as
+  `outbound_unchecked`: an outbound command with a variable or command substitution in it (other
+  than `$(cat <<'EOF' … EOF)`), a `cd` that cannot be followed, a loop, `eval`, `xargs`, a command
+  whose name is a variable or a program given `git`/`gh` as words (`rebase -x`, `submodule
+  foreach`), a `git-*` helper, an action inside a substitution; `git -c` other than a few harmless
+  keys, any other global git option but a few (`--git-dir`, `--work-tree`, `--config-env`), a
+  `GIT_DIR`-like variable set in the command, or an earlier command of the call that changes a
+  remote or writes config; a git alias the checkout defines, `git send-email`, `subtree`,
+  `request-pull` or `push --recurse-submodules`; a gh alias or extension, or a gh write fed from a
+  pipe or redirect; a fork, template, sync source, cloned labels or another owner's `--head`; a
+  zsh glob qualifier or an `alias` that runs git; a file an earlier command of the call wrote
+  (a redirection, `cp`, `sed -i`, `tee`, …) that the action sends, inside its checkout for a commit
+  or push, or in git's config; a file that cannot be read or is stdin (other than a literal
+  here-document); a
+  terms
+  file or `orch.db` policy that cannot be read; git failing, its output over 16 MiB, or the check
+  taking over 5 s. A command that cannot be parsed is refused too. With the layer off, or no
+  spaces or terms, nothing is checked.
+- **git runs safely.** The check's git runs with `core.fsmonitor=false`, no external diff,
+  textconv, pager or signature check, every configured clean/smudge/process filter switched off
+  for `commit -a`, variables that redirect what git runs removed, bounded output and a 1 s wait
+  for stray children, so a repository's config cannot make the hook run a program.
+- **Refusal.** The PreToolUse deny names the rule (`outbound_term` or `outbound_unchecked`), the
+  action, the destination's space and the term's space, line number and hash (HMAC-SHA256 keyed
+  with the terms file's own hash, so a short term cannot be guessed from it), never the term
+  (INV-07). The call is still logged.
+- **Never logged.** Before orchd builds a command log record it replaces every space's terms
+  with `[term]` in the tool input (decoded, so a term after an escape is found, and re-encoded),
+  the targets and the directories, before any field is cut to its cap
+  (`internal/daemon/terms_redact.go`, cached until the policy or a terms file changes); while the
+  policy or a terms file cannot be read those fields are withheld. `TestTermsNeverLeak` searches
+  refusals, the command log, orchd's log and status output for every fixture term and finds none.
+
+**Limits.** This is static reading of shell, best-effort like target extraction (D-28): three
+security-review rounds each found new forms, and the residual risk is open for the user's decision
+(the plan's SP-044 entry). Text sent by other means (a script, alias or shell function from the
+user's profile, or program that runs git itself, an interpreter, `curl` to the API, a tool other
+than a shell) is not checked. SP-045's git hooks check commits and pushes on their real content. A push is judged against the local
+remote-tracking refs, which a session could move. The check runs in the hook, independently of
+the tool guard (SP-041), until the two are combined.
 
 ## Prompt context
 

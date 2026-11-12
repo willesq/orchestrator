@@ -338,12 +338,15 @@ func (s *server) resolveClaim(k toollog.Key) toollog.Owner {
 func (s *server) toolRecord(ev toolEvent, harness string) toollog.Record {
 	req := ev.req
 	f := func(v string) string { return toollog.Clean(v, toollog.MaxField) }
+	// Reason: terms come out before any field is cut to its cap, so a term
+	// cut in half cannot stay (SP-044).
+	tv := s.termsView()
 	r := toollog.Record{
 		TS: ev.received.UnixNano(), HookAt: req.GetAt(),
 		Harness: f(harness), Event: f(req.GetEvent()), Tool: f(req.GetToolName()),
 		ClaimedSession: f(req.GetSessionId()), ToolUseID: f(req.GetToolUseId()),
 		AgentID: f(req.GetAgentId()), AgentType: f(req.GetAgentType()),
-		Cwd: f(req.GetCwd()), OldCwd: f(req.GetOldCwd()), NewCwd: f(req.GetNewCwd()),
+		Cwd: f(tv.text(req.GetCwd())), OldCwd: f(tv.text(req.GetOldCwd())), NewCwd: f(tv.text(req.GetNewCwd())),
 		InputSize: req.GetToolInputSize(),
 		Decision:  decisionLogged,
 	}
@@ -352,9 +355,9 @@ func (s *server) toolRecord(ev toolEvent, harness string) toollog.Record {
 		if len(input) == 0 && req.GetToolInputSize() > 0 {
 			r.Command = fmt.Sprintf("[tool input of %d bytes was not sent]", req.GetToolInputSize())
 		} else {
-			r.Command = toollog.Command(req.GetToolName(), input)
+			r.Command = toollog.Command(req.GetToolName(), tv.json(input))
 		}
-		r.Targets = targetsJSON(spaces.Targets(req.GetToolName(), input, req.GetCwd()))
+		r.Targets = targetsJSON(tv.targets(spaces.Targets(req.GetToolName(), input, req.GetCwd())))
 	}
 	if s.spaces != nil {
 		if _, rev, err := s.spaces.CurrentRevision(); err == nil {
@@ -362,6 +365,7 @@ func (s *server) toolRecord(ev toolEvent, harness string) toollog.Record {
 		}
 	}
 	s.markGuardState(&r)
+	tv.withhold(&r)
 	return r
 }
 

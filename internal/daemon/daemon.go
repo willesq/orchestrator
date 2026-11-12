@@ -158,6 +158,9 @@ type server struct {
 	// guardVerdict is the guard's verdict on a tool event, recorded while
 	// the guard is off or logging; nil until the guard decides (SP-040).
 	guardVerdict guardVerdictFunc
+	// terms caches the spaces' outbound terms, which the command log
+	// keeps out of its records (SP-044).
+	terms termsCache
 	// toolEvents takes the events pre-tool-use and cwd-changed hooks send.
 	toolEvents toolEventIntake
 	// toolLog stores them (SP-014); nil when it could not be opened.

@@ -97,6 +97,11 @@ func dispatch(event string, p Payload, out io.Writer, cf clientFactory) error {
 	case "post-tool-use":
 		return postToolUse(p)
 	case "pre-tool-use", "cwd-changed":
+		if event == "pre-tool-use" {
+			// Reason: outbound terms (SP-044) refuse before the call runs;
+			// the event is still logged.
+			refuseOutboundTerms(p, out)
+		}
 		recordToolEvent(event, p, cf)
 		return nil
 	default:
