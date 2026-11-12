@@ -46,6 +46,9 @@ func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, c
 			return id.Login, err
 		},
 	}
+	if ghp != nil {
+		w.CheckOwner = docsOwnerCheck(ghp.spaces)
+	}
 	if ctl != nil {
 		w.Cancel = func(ctx context.Context, id, reason string) error {
 			_, err := ctl.CancelFor(ctx, id, reason)

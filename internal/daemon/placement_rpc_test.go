@@ -59,7 +59,14 @@ func checkout(t *testing.T, dir, owner, name string) {
 // folder and returns the server and that folder.
 func placementServer(t *testing.T) (*server, string, *fakeRepos) {
 	t.Helper()
-	s := spacesServer(t)
+	return placementServerWith(t, orgNodes{})
+}
+
+// placementServerWith is placementServer with GitHub org identities from
+// nodes.
+func placementServerWith(t *testing.T, nodes orgNodes) (*server, string, *fakeRepos) {
+	t.Helper()
+	s := spacesServerWith(t, nodes)
 	code, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

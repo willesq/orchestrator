@@ -170,6 +170,66 @@ What a tier does and does not promise:
   not a queued task (by process lineage, like the other operator-only RPCs), so an agent in a queued
   task cannot approve deleting a repo's docs.
 
+### Placement of writes
+
+Every write also records its **origin** and is **placed** by orchd (SP-023, INV-02, INV-03). The
+writer reports facts as a `rag.Origin`, and `rag.Service.Place`, set by orchd before any writer
+starts (`internal/daemon/placing.go`), runs the classifier ([Placement](#placement)) under the
+applied policy. Each chunk then stores `origin` (the facts below, only those reported), `space` (the
+answer) and `labels_v` (the applied policy revision it was placed under; 0 with none). Whatever a
+caller put in `Meta.Space` is discarded before placing, and with a placer set a write that reports
+no origin, or that the placer leaves without a space, stores nothing.
+
+| Writer | Origin it reports | Placed by |
+|---|---|---|
+| docs sync | `github`: owner, repo, visibility (`private`/`public`; unknown when GitHub listed no owner node ID) and the owner's node ID, from the `gh api graphql` repo listing (`isPrivate`, `owner{id}`) | the owner's binding; public only when GitHub said the repo is public |
+| sources refresh | `fs` with the file's path (repo and owner sources); `web` with the URL | the deepest root and the checkout's remote, never the remote alone; the bound web prefix |
+| session hand-off, summaries | `session` with its first directory, from its record, and the session ID when the transcript's file name carries it (`<id>.jsonl`, `rollout-<time>-<id>.jsonl`) | the session's pin only; quarantine with no pin or no tied session |
+| edit hand-off | `fs` with the resolved file path | the deepest root and the checkout's remote; never the remote alone |
+| Ingest RPC | `client` with the caller kind (`session`, `task`, `operator`, `none`), the space the caller's pin writes to, and the URL when the URI is one | the caller's pinned space; quarantine for any other caller |
+| migration copy (`rag`) | carried over from the stored chunk | not placed again: `origin`, `space` and `labels_v` are copied as stored |
+
+- **Clients cannot choose a space.** No RPC field reaches `Origin` or `Space`: tags, scope and type
+  that name a space change nothing. A client note goes to the space of the caller's pin as orchd
+  resolved it from the caller's process (SP-011). A queued task, the operator at a terminal and an
+  unidentified caller have no space here, so their notes are quarantined until the operator retags
+  them, and so is a note from a session pinned to no space, to a public one or to one the policy
+  no longer has. A page a client stores is placed by its writer, never by the bound prefix its URL
+  falls under.
+- **Sessions are placed only by their pin.** A hand-off entry, a session record and a
+  `SummarizeSession` request are files or fields any process of the user can write, so neither the
+  session ID nor the directory they name is believed on its own: a session's records go to the
+  space of the pin orchd made at its start, and only when the transcript is that session's own (a
+  regular file named `<id>.jsonl` or `rollout-<time>-<id>.jsonl`). A session orchd never pinned, or a transcript of another session, goes
+  to quarantine. So a session cannot pull another space's transcript into its own space. Naming
+  another session's ID with a transcript file it named after that ID still works; recording the
+  transcript path at the pin would close it.
+- **A local file is not placed by its remote alone.** An agent can write a `.git` naming any org
+  beside a file it edits, or register such a folder as a repo source (any session may), so a file
+  under no root that only its checkout's remote would place goes to quarantine. An edited file is
+  also quarantined when its remote is stricter than the root it is under, until hand-offs carry the
+  editing session's space (SP-029); a registered source there is placed by the stricter remote, as
+  a session started there is. So a `.git` an agent writes under a root can still move a source it
+  registers into a stricter space, never into public; that risk is accepted, as for pins. Edit hand-offs use cached repo lookups only, so files an agent picks
+  spend none of GitHub's budget.
+- **A client cannot replace another space's source.** A write replaces and prunes every chunk under
+  its URI, so the Ingest RPC refuses (`FailedPrecondition`, naming no space) a write over a source
+  placed in another space than the one the write would go to. Sources stored before placement are
+  not checked. Two unplaced callers' notes share `quarantine`, so one can replace the other's.
+- **A conflict is not indexed.** An origin two equally strict spaces claim (a checkout under one
+  isolated root whose remote another binds) is refused with an error and nothing is stored; the
+  docs sync does not record the file's hash, so it is tried again after the policy changes.
+- **Fail closed.** With an applied revision that no longer verifies, every write goes to
+  `quarantine`. With no policy, everything is `shared` and `labels_v` is the applied revision
+  number (0 when nothing was ever applied), so behaviour is as before spaces (INV-10).
+- **A placement change is a new write.** The write hash includes the origin, space and
+  `labels_v`, so the same text placed elsewhere or under a new revision is stored again rather
+  than skipped as unchanged. Writes made without a placer (tools, tests) keep the hash they had.
+- **What is not done yet.** Chunks still go to one collection (a collection per space is SP-024),
+  and no read path filters by `space` or `labels_v` yet (SP-025). Chunks stored before SP-023 have
+  no placement; `orch rag relabel` (SP-027) places them. A docs file whose content and repo HEAD
+  did not change is not stored again, so it keeps its earlier placement until relabelled.
+
 Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<path>`,
 `file://<path>`, `claude://<path under ~/.claude>`, web URLs, and anything given to `orch ingest`.
 
@@ -307,6 +367,9 @@ GitHub tokens (`gh?_`, `github_pat_`), Slack tokens, Anthropic and OpenAI keys, 
 schedulers redact before storing; a file with more than 25 matches is skipped as a likely keystore.
 Text sent with `orch ingest` or `rag_ingest_text` is redacted by the Ingest RPC, which logs the count
 and never the text, and refuses a URI, scope, type or tag holding a secret, since those are shown as they are. Memory stored before this keeps what it was given until it is stored again.
+Redaction is pattern-based and so best-effort: a credential in a form no rule knows is stored as
+written. It is not the boundary between jobs; the OS sandbox and per-job GitHub accounts are
+(D-47).
 
 **Queued tasks cannot write.** `rag_ingest_text`, `rag_delete_source`, `orch ingest text` and
 `orch rag forget` refuse inside a queued task, and orchd refuses `Ingest`, `DeleteSource` and
@@ -435,7 +498,7 @@ no longer has are deleted, with their hashes (not when the clone has no markdown
 could not be read), under the same prune cap: a refused prune leaves the repo `error` with the
 reason and `orch docs sync <owner> --confirm-prune` (RPC `SyncDocs.confirm_prune`), which grants
 every current refusal of that owner. The refused repo records its new HEAD, so it is not cloned again
-on every sync while it waits; confirming forgets that HEAD, so the confirmed sync walks it again. Commit dates are read only when a doc changed. Clones use
+on every sync while it waits; confirming forgets that HEAD, so the confirmed sync walks it again. Before each repo after the first that it clones, the sync re-checks the owner's org binding and stops if it no longer holds (D-52, [config.md](config.md#spaces-policy)). Commit dates are read only when a doc changed. Clones use
 whatever protocol the user's gh is configured for (SSH or HTTPS).
 
 - **One sync at a time:** every docs sync runs in orchd: its scheduled scan, and `orch docs sync`
@@ -598,9 +661,9 @@ Memory spaces separate what each job's sessions can read ([the spaces plan](../s
 The policy that defines them, the operator-only apply, and drift are described in
 [config.md](config.md#spaces-policy). `spaces.Resolved.CanRead(reader, target)` is the rule read
 paths will use: a space reads itself, every public space and the private spaces it lists, and
-never another isolated space or quarantine. Nothing in memory uses it yet. Chunks are not yet
-stamped with a space, and search is not yet filtered by one; later features in the plan add
-both. Until a policy with spaces is applied, everything is in the one implicit `shared` space
+never another isolated space or quarantine. Nothing in memory uses it yet. Every write is
+stamped with its origin, space and `labels_v` ([Placement of writes](#placement-of-writes)), but
+search is not yet filtered by space; later features in the plan add that. Until a policy with spaces is applied, everything is in the one implicit `shared` space
 and search behaves as it always has.
 
 ## Placement
@@ -609,7 +672,8 @@ and search behaves as it always has.
 content goes to. It is a pure function: writers report facts about where content came from as a
 `spaces.Origin` (system, source URI, local path, GitHub repo with its current owner and
 visibility, URL, chat tenant, and the space of the pinned session that wrote it) and never choose
-a space themselves. No writer calls it yet; stamping every write is SP-023. The result is a
+a space themselves. orchd's write placer calls it for every write
+([Placement of writes](#placement-of-writes)). The result is a
 space, `quarantine`, or a conflict (also `quarantine`), with the deciding rule, a reason, every
 matching root and the remote's effect.
 
