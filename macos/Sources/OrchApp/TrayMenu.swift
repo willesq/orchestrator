@@ -7,7 +7,10 @@ struct TrayMenu: View {
     let prMonitor: PRMonitor
     let loginItem: LoginItem
     let control: DaemonControl
+    let enforcement: EnforcementModel
     let openMainWindow: () -> Void
+    /// Opens the main window on Settings → Spaces.
+    var openSpaces: () -> Void = {}
 
     @State private var busy = false
     @State private var controlError: String?
@@ -16,7 +19,12 @@ struct TrayMenu: View {
         VStack(alignment: .leading, spacing: 10) {
             header
             Divider()
+            EnforcementBanner(model: enforcement, show: nil)
             NeedsYouSection(monitor: prMonitor)
+            if let switches = enforcement.state?.switches, !switches.isEmpty {
+                Divider()
+                TraySpaces(switches: switches, model: enforcement, openSpaces: openSpaces)
+            }
             if let status = monitor.health.status {
                 Divider()
                 SubsystemList(subsystems: status.subsystems)
@@ -43,7 +51,11 @@ struct TrayMenu: View {
         .padding(12)
         .frame(width: 320)
         // macOS can change login items from System Settings while we run.
-        .onAppear { loginItem.refresh() }
+        .onAppear {
+            loginItem.refresh()
+            Task { await enforcement.load() }
+        }
+        .enforcementConfirmation(enforcement)
     }
 
     private var header: some View {
@@ -90,6 +102,24 @@ struct TrayMenu: View {
             }
             await monitor.refresh()
             busy = false
+        }
+    }
+}
+
+/// The enforcement switches, compact, with a way to the full section.
+struct TraySpaces: View {
+    let switches: [EnforcementSwitch]
+    let model: EnforcementModel
+    let openSpaces: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Enforcement").font(.caption.weight(.semibold)).foregroundStyle(Color.secondaryText)
+                Spacer()
+                Button("Spaces Settings…", action: openSpaces).buttonStyle(.link).font(.caption)
+            }
+            ForEach(switches) { EnforcementRow(layer: $0, model: model, compact: true) }
         }
     }
 }

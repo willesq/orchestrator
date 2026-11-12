@@ -37,5 +37,8 @@ let package = Package(
                 .product(name: "GRPCProtobuf", package: "grpc-swift-protobuf"),
             ]
         ),
+        // Renders app views to PNGs for review (light and dark). Its tests
+        // run only when ORCH_SNAPSHOT_DIR names a folder for the images.
+        .testTarget(name: "OrchAppSnapshots", dependencies: ["OrchApp", "OrchKit"]),
     ]
 )

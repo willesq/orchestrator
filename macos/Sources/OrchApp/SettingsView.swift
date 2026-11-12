@@ -10,6 +10,8 @@ struct SettingsView: View {
     let claude: SettingsModel
     let safetyNet: SafetyNetModel
     let loginItem: LoginItem
+    let enforcement: EnforcementModel
+    let placement: PlacementValidator
     @Bindable var navigator: Navigator
 
     @State private var confirmingRestart = false
@@ -41,6 +43,7 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 startupBanner
                 restartBanner
+                enforcementBanner
                 detail.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -69,6 +72,8 @@ struct SettingsView: View {
             return claude.changedOutside > 0 ? .warning : nil
         case .overview:
             return config.state?.startupError.isEmpty == false ? .bad : nil
+        case .spaces:
+            return enforcement.relaxed.isEmpty ? nil : .warning
         default:
             let waiting = section.configSections.flatMap(config.fields(section:)).contains(where: \.pendingRestart)
             return waiting ? .warning : nil
@@ -100,6 +105,9 @@ struct SettingsView: View {
             .navigationTitle("GitHub")
             .onAppear { github.start() }
             .onDisappear { github.stop() }
+        case .spaces:
+            SpacesSettingsView(enforcement: enforcement, validator: placement)
+                .navigationTitle("Spaces")
         case .claude:
             ClaudeView(model: claude)
         case .safetyNet:
@@ -132,6 +140,16 @@ struct SettingsView: View {
             }
             .padding(10)
             .background(.bar)
+            Divider()
+        }
+    }
+
+    /// While any enforcement layer is off, on every section.
+    @ViewBuilder
+    private var enforcementBanner: some View {
+        if !enforcement.relaxed.isEmpty {
+            EnforcementBanner(model: enforcement, show: navigator.settingsSection == .spaces ? nil : { navigator.settingsSection = .spaces })
+                .padding(8)
             Divider()
         }
     }

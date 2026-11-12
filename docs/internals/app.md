@@ -9,9 +9,10 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches and the directory validator (`Spaces`, `SpacesModel`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
+| `OrchAppSnapshots` | Renders app views to PNGs in light and dark from sample data, with no orchd; runs only when `ORCH_SNAPSHOT_DIR` is set (see [Snapshots](#snapshots)) |
 
 ## Connection
 
@@ -57,6 +58,43 @@ first, each with its reason (see the PR babysitter in [tasks.md](tasks.md)). Cli
   characters), polled by `ReviewMonitor` from `ListPRReviews` every 20 s for the whole app; none is
   posted for verdicts that already existed at launch. A failed poll keeps the
   last good list, so a briefly unreadable cache cannot make every PR look new. Notifications need the app bundle, so a bare `swift run` binary skips them.
+
+## Spaces
+
+The app shows the spaces enforcement switches ([config.md](config.md#spaces-policy), SP-070) and checks where a
+folder's content goes (`ExplainPlacement`, SP-022). orchd decides everything: the app only reads
+and asks.
+
+- **Switches:** Settings → Spaces lists every layer `GetEnforcement` returns (memory filtering,
+  tool guard, outbound terms, sandbox rules, tool hooks) with a dot (enforcing or not), its state,
+  since when and who set it, any problem orchd reports, and a live countdown for a timed switch
+  ("reverts to block-other-jobs in 14:59"). Each layer's menu lists its states, each with a
+  duration: until changed, 15 minutes, 1 hour, 4 hours or 24 hours (`for_seconds`). A state that
+  stops the layer enforcing (off, or the guard's log) is confirmed first, naming how long it lasts;
+  a stricter one is sent at once. `SetEnforcement` is operator-only, so the app works when the user
+  opened it; orchd's refusal (for example, a copy started from an agent's terminal) shows under the
+  layer, as do the notes it returns.
+- **Kept current:** `EnforcementModel` reads `GetEnforcement` every 10 s for the whole app, just
+  after a timed switch's expiry when that comes sooner, after every switch, and when Settings →
+  Spaces or the menu bar panel opens. A switch made with `orch spaces enforce` shows within 10 s.
+- **"Enforcement off" banner:** while any layer is relaxed, a banner names each one with its state
+  and time left. It sits above every Settings section (with **Show Switches**) and at the top of the
+  menu bar panel, and the Spaces section in the Settings list gets a warning dot.
+- **Menu bar panel:** the switches in compact form, with **Spaces Settings…** to open the section.
+- **Check a folder:** type a path (`~` expands to the home folder) or **Choose…** a folder or
+  file, and the app asks `ExplainPlacement`. It shows every root holding it from shallowest to
+  deepest with its space and kind (the deepest marked), the git remote with its effect (marked
+  when it changes the result: a stricter remote, a conflict, or a repo not verified public), the
+  effective space or quarantine or conflict, the deciding rule and reason, and where a session
+  started there writes and reads. Relative paths are refused before asking. Every string from orchd
+  goes through `displaySafe`.
+- **Tests:** `PlacementValidatorTests` replays `Tests/Fixtures/placement-explanations.json`,
+  `ExplainPlacement`'s answers for the nested-root fixture (`~/code` public, `~/code/willesq`
+  private, `~/code/company1` isolated) at 12 paths, through the fake orchd and the app's client,
+  and checks the validator's chain and result equal each answer.
+  `TestAppPlacementFixtureMatchesExplainPlacement` in `internal/daemon` fails when the fixture no
+  longer matches what orchd answers; `ORCH_UPDATE_APP_FIXTURE=1 go test ./internal/daemon -run
+  TestAppPlacementFixture` rewrites it.
 
 ## Launching
 
@@ -416,6 +454,7 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
       reloads every 30 s while the tab is open.
     - **Your teams:** from `GetGitHubIdentity`.
   - **Memory:** sources, prompt context, session summaries, search, embedding and the vector store.
+  - **Spaces:** the enforcement switches and the directory validator (see [Spaces](#spaces)).
   - **App:** appearance, the Dock icon, and open at login.
 
   - **Claude:** the managed settings ([settings.md](settings.md)): Claude Code's hooks, permission
@@ -545,6 +584,11 @@ rebuild.
 - **Bundle settings:** `LSMinimumSystemVersion` is 15.2.
 - **Tests:** `make app-test` runs the tests, and `make app-cover` applies the 80%-per-file gate
   to `OrchKit` (generated code excluded).
+- <a id="snapshots"></a>**Snapshots:** `ORCH_SNAPSHOT_DIR=<folder> swift test --package-path macos
+  --filter OrchAppSnapshots` renders the Spaces section, the "enforcement off" banner and the menu
+  bar panel's switches in light and dark from sample data, writing one PNG each. It draws offscreen
+  (`cacheDisplay`), so no window appears, the installed app and orchd are not involved, and no
+  Screen Recording permission is needed. Without `ORCH_SNAPSHOT_DIR` the suite is skipped.
 - **CI:** `app.yml` runs on pull requests to `main` that touch `macos/**`, `orchd.proto` or the
   Makefile. It checks codegen drift and runs the coverage gate; it does not assemble or upload
   the app, since the release builds its own. No checks run on `main`: the PR is the gate. To try
