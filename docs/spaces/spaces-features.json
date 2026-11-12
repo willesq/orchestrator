@@ -1632,6 +1632,68 @@
         ],
         "status": "open",
         "note": "Part (1) fixed on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction): WatchTasks ends cleanly when the client goes away mid-read; see RC-92. Part (2) remains open: TestDecideCases' 100 ms Targets budget can be exhausted under load."
+      },
+      {
+        "id": "RC-160",
+        "kind": "user-action",
+        "topic": "SP-072 manual checks: switch each layer from the app; review the snapshots",
+        "detail": "SP-072.1.a1 and a2 are manual. a1: with this branch's app opened by the user (not from an agent session, since SetEnforcement is operator-only), switch each of memory, guard, terms and sandbox from Settings -> Spaces (and the menu bar panel), confirm each change shows in `orch status` within 2 s, and set one for 15 minutes to see its countdown; then switch them back. a2: review the four snapshots listed in SP-072.1's evidence (section and banner, light and dark).",
+        "source": "https://github.com/willesq/orchestrator/pull/169",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-072"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-161",
+        "kind": "follow-up",
+        "topic": "The app mirrors orchd's 'relaxed' rule to decide what to confirm",
+        "detail": "EnforcementSwitch.relaxes(to:) in macos/Sources/OrchKit/Spaces.swift treats 'off' (every layer) and the guard's 'log' as relaxing, matching internal/spaces Layer.Relaxed today. If orchd adds a relaxing state, the app would switch to it without asking. A per-state relaxed flag in EnforcementSwitch (orchd.proto; lane C owns proto) would remove the copy. Also a step down that still enforces (guard strict -> block-other-jobs) is sent without confirmation, by the same definition (security audit, informational).",
+        "source": "https://github.com/willesq/orchestrator/pull/169",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-072",
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-162",
+        "kind": "decision",
+        "topic": "Low/accepted security notes from SP-072's audit",
+        "detail": "Accepted: (1) an agent with Accessibility or UI-scripting permission could click the app's switch and its confirmation, bypassing the process-ancestry check, as it could by scripting Terminal to run `orch spaces enforce`; the app adds no new class of bypass, and the log and start digest still announce it. (2) With both the Settings window and the menu bar panel open, a relaxing switch can show its confirmation in both; dismissing either cancels, which fails safe. Fixed before commit: orchd strings in the confirmation prompt, menus, banner and kinds now go through displaySafe; a folder picked in the open panel is checked untrimmed.",
+        "source": "https://github.com/willesq/orchestrator/pull/169",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-072"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-163",
+        "kind": "follow-up",
+        "topic": "App snapshot mode is an offscreen test target",
+        "detail": "The app had no snapshot mode, so SP-072 adds the OrchAppSnapshots test target (Package.swift), which @testable-imports OrchApp and draws views offscreen with cacheDisplay when ORCH_SNAPSHOT_DIR is set; it is skipped otherwise, so CI writes nothing. Offscreen drawing does not show window chrome, focus or vibrancy exactly as on screen. Unverified assumption: GitHub's macos-26 runner keeps building the extra test target (it compiles but is skipped) within the app job's time. The user may want a fuller snapshot mode (every pane) later.",
+        "source": "https://github.com/willesq/orchestrator/pull/169",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-072"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-164",
+        "kind": "decision",
+        "topic": "SP-072 adds a Go test that keeps the app's placement fixture honest",
+        "detail": "The lane rule was 'no Go daemon code'. SP-072 adds only internal/daemon/placement_app_fixture_test.go (test code): it compares macos/Tests/Fixtures/placement-explanations.json with ExplainPlacement's live answers for the plan's nested-root fixture and rewrites it with ORCH_UPDATE_APP_FIXTURE=1. A change to placement rules or explanation text therefore needs the fixture regenerated in the same PR.",
+        "source": "https://github.com/willesq/orchestrator/pull/169",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-072",
+          "SP-022"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -3618,7 +3680,10 @@
               "threshold": "4 reviewed"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a2 (awaiting the user's review): light and dark snapshots rendered at 61d1f9c with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter OrchAppSnapshots` (offscreen, sample data, no orchd): /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/spaces-section-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/spaces-section-dark.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/enforcement-banner-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/enforcement-banner-dark.png (plus the menu bar panel's switches: /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/menu-bar-spaces-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/menu-bar-spaces-dark.png). Not yet reviewed by the user.",
+            "a1 (awaiting the user): not yet observed. Supporting tests at 61d1f9c: EnforcementModelTests.everyLayerCanBeSwitchedToEachOfItsStates (6 layer x state changes plus back to default), switchingOffAsksFirstAndSendsOnlyOnConfirm, tighteningIsSentAtOnceAndTheSameStateIsNotSent, aRefusalStaysWithItsLayer, pollsAtTheIntervalOrJustAfterTheNextTimer; EnforcementSwitchTests.countdown; PlacementValidatorTests.enforcementRoundTrip (GetEnforcement/SetEnforcement over gRPC with for_seconds). SetEnforcement is operator-only, so the check must be run by the user from an app they opened, not from an agent session."
+          ]
         },
         {
           "id": "SP-072.2",
@@ -3632,7 +3697,9 @@
               "threshold": ">= 8 of 8"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: PlacementValidatorTests.validatorMatchesExplainPlacementForEveryFixturePath (macos/Tests/OrchKitTests/SpacesTests.swift) passes at 61d1f9c: 12 of 12 paths match. macos/Tests/Fixtures/placement-explanations.json holds ExplainPlacement's answers (operator) for the nested-root fixture ($CODE public oss, $CODE/willesq private personal, $CODE/company1 isolated acme) at $CODE, $CODE/tools, $CODE/willesq/deep/x, $CODE/company1/svc/x, $CODE/company1/app/main.go, $CODE/willesq/app (remote acme stricter than the private root: remote_stricter -> acme), $CODE/company1/lib (root_stricter), $CODE/company1/x (conflict), $CODE/lib, $CODE/secret (not_verified_public -> quarantine), $CODE/moved and /nonexistent-root/x (under no root: unmatched -> quarantine). The test serves them through the fake orchd over gRPC, types each path (with ~) into the app's PlacementValidator via DaemonClient, and checks the chain (root, space, kind, shallowest first, deepest marked), outcome, space, rule, reason, remote effect and session space/reads equal ExplainPlacement's answer. TestAppPlacementFixtureMatchesExplainPlacement (internal/daemon/placement_app_fixture_test.go) passes at 61d1f9c and fails when the fixture differs from what ExplainPlacement answers today (checked by editing one space), so the comparison is with the daemon, not a stale copy."
+          ]
         }
       ],
       "status": "in_progress",
