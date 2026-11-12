@@ -56,7 +56,7 @@ func recordCases(t *testing.T, f guardFixture, mode GuardMode) []*replayGroup {
 	return groups
 }
 
-func fixed(pol GuardPolicy) ReplayPolicies {
+func fixedPolicies(pol GuardPolicy) ReplayPolicies {
 	return func(int64) (GuardPolicy, error) { return pol, nil }
 }
 
@@ -69,7 +69,7 @@ func TestReplayReproducesRecordedDecisions(t *testing.T) {
 		t.Run(string(mode), func(t *testing.T) {
 			total, mismatches := 0, 0
 			for _, g := range recordCases(t, f, mode) {
-				rep := Replay(g.events, g.pin, GuardEnforcement{Guard: mode}, fixed(g.pol))
+				rep := Replay(g.events, g.pin, GuardEnforcement{Guard: mode}, fixedPolicies(g.pol))
 				if rep.Compared != len(g.events) || rep.Unrecorded != 0 || rep.Problems != 0 {
 					t.Errorf("pin %+v: compared %d of %d, unrecorded %d, problems %d", g.pin, rep.Compared, len(g.events), rep.Unrecorded, rep.Problems)
 				}
@@ -114,7 +114,7 @@ func TestReplayChangedPolicyListsRules(t *testing.T) {
 		if g.pol.res == nil {
 			pol = g.pol // the no-policy case keeps having none
 		}
-		rep := Replay(g.events, g.pin, enf, fixed(pol))
+		rep := Replay(g.events, g.pin, enf, fixedPolicies(pol))
 		for i, r := range rep.Rows {
 			now := Decide(pol, g.pin, enf, g.events[i].Guard)
 			before := g.events[i].Recorded

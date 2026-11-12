@@ -69,6 +69,8 @@ const (
 	Orchd_DiffSpaces_FullMethodName               = "/orchd.v1.Orchd/DiffSpaces"
 	Orchd_ApplySpaces_FullMethodName              = "/orchd.v1.Orchd/ApplySpaces"
 	Orchd_ExplainPlacement_FullMethodName         = "/orchd.v1.Orchd/ExplainPlacement"
+	Orchd_ListSpaces_FullMethodName               = "/orchd.v1.Orchd/ListSpaces"
+	Orchd_ScanSpaces_FullMethodName               = "/orchd.v1.Orchd/ScanSpaces"
 	Orchd_PinSession_FullMethodName               = "/orchd.v1.Orchd/PinSession"
 	Orchd_EndSession_FullMethodName               = "/orchd.v1.Orchd/EndSession"
 	Orchd_ListSessions_FullMethodName             = "/orchd.v1.Orchd/ListSessions"
@@ -249,6 +251,16 @@ type OrchdClient interface {
 	// owner/repo or chat tenant) goes to and why. Agents get an answer only
 	// when every space it names is public; the operator sees all.
 	ExplainPlacement(ctx context.Context, in *ExplainPlacementRequest, opts ...grpc.CallOption) (*PlacementExplanation, error)
+	// ListSpaces lists the spaces of the applied policy: each one's kind,
+	// bindings and the spaces it may read, with the policy's status.
+	// Operator-only, like DiffSpaces: it names every job's orgs and roots.
+	ListSpaces(ctx context.Context, in *ListSpacesRequest, opts ...grpc.CallOption) (*ListSpacesResponse, error)
+	// ScanSpaces looks through folders the operator chose for git checkouts
+	// and reports each one's GitHub remote, the repo's visibility and where
+	// the applied policy places it, plus the GitHub orgs each gh login belongs
+	// to. It writes nothing: no file, no policy revision, no binding.
+	// Operator-only: it reads folders and GitHub accounts of every job.
+	ScanSpaces(ctx context.Context, in *ScanSpacesRequest, opts ...grpc.CallOption) (*ScanSpacesResponse, error)
 	// PinSession records a session's pin at SessionStart: its harness process,
 	// first directory and space. A pin's space and first directory never
 	// change: a second call returns the existing pin, a subagent gets its
@@ -864,6 +876,26 @@ func (c *orchdClient) ExplainPlacement(ctx context.Context, in *ExplainPlacement
 	return out, nil
 }
 
+func (c *orchdClient) ListSpaces(ctx context.Context, in *ListSpacesRequest, opts ...grpc.CallOption) (*ListSpacesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSpacesResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListSpaces_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ScanSpaces(ctx context.Context, in *ScanSpacesRequest, opts ...grpc.CallOption) (*ScanSpacesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ScanSpacesResponse)
+	err := c.cc.Invoke(ctx, Orchd_ScanSpaces_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) PinSession(ctx context.Context, in *PinSessionRequest, opts ...grpc.CallOption) (*SessionPin, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SessionPin)
@@ -1276,6 +1308,16 @@ type OrchdServer interface {
 	// owner/repo or chat tenant) goes to and why. Agents get an answer only
 	// when every space it names is public; the operator sees all.
 	ExplainPlacement(context.Context, *ExplainPlacementRequest) (*PlacementExplanation, error)
+	// ListSpaces lists the spaces of the applied policy: each one's kind,
+	// bindings and the spaces it may read, with the policy's status.
+	// Operator-only, like DiffSpaces: it names every job's orgs and roots.
+	ListSpaces(context.Context, *ListSpacesRequest) (*ListSpacesResponse, error)
+	// ScanSpaces looks through folders the operator chose for git checkouts
+	// and reports each one's GitHub remote, the repo's visibility and where
+	// the applied policy places it, plus the GitHub orgs each gh login belongs
+	// to. It writes nothing: no file, no policy revision, no binding.
+	// Operator-only: it reads folders and GitHub accounts of every job.
+	ScanSpaces(context.Context, *ScanSpacesRequest) (*ScanSpacesResponse, error)
 	// PinSession records a session's pin at SessionStart: its harness process,
 	// first directory and space. A pin's space and first directory never
 	// change: a second call returns the existing pin, a subagent gets its
@@ -1531,6 +1573,12 @@ func (UnimplementedOrchdServer) ApplySpaces(context.Context, *ApplySpacesRequest
 }
 func (UnimplementedOrchdServer) ExplainPlacement(context.Context, *ExplainPlacementRequest) (*PlacementExplanation, error) {
 	return nil, status.Error(codes.Unimplemented, "method ExplainPlacement not implemented")
+}
+func (UnimplementedOrchdServer) ListSpaces(context.Context, *ListSpacesRequest) (*ListSpacesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSpaces not implemented")
+}
+func (UnimplementedOrchdServer) ScanSpaces(context.Context, *ScanSpacesRequest) (*ScanSpacesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ScanSpaces not implemented")
 }
 func (UnimplementedOrchdServer) PinSession(context.Context, *PinSessionRequest) (*SessionPin, error) {
 	return nil, status.Error(codes.Unimplemented, "method PinSession not implemented")
@@ -2524,6 +2572,42 @@ func _Orchd_ExplainPlacement_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_ListSpaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSpacesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListSpaces(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListSpaces_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListSpaces(ctx, req.(*ListSpacesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ScanSpaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScanSpacesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ScanSpaces(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ScanSpaces_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ScanSpaces(ctx, req.(*ScanSpacesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_PinSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PinSessionRequest)
 	if err := dec(in); err != nil {
@@ -3194,6 +3278,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ExplainPlacement",
 			Handler:    _Orchd_ExplainPlacement_Handler,
+		},
+		{
+			MethodName: "ListSpaces",
+			Handler:    _Orchd_ListSpaces_Handler,
+		},
+		{
+			MethodName: "ScanSpaces",
+			Handler:    _Orchd_ScanSpaces_Handler,
 		},
 		{
 			MethodName: "PinSession",

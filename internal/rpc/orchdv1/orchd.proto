@@ -152,6 +152,16 @@ service Orchd {
   // owner/repo or chat tenant) goes to and why. Agents get an answer only
   // when every space it names is public; the operator sees all.
   rpc ExplainPlacement(ExplainPlacementRequest) returns (PlacementExplanation);
+  // ListSpaces lists the spaces of the applied policy: each one's kind,
+  // bindings and the spaces it may read, with the policy's status.
+  // Operator-only, like DiffSpaces: it names every job's orgs and roots.
+  rpc ListSpaces(ListSpacesRequest) returns (ListSpacesResponse);
+  // ScanSpaces looks through folders the operator chose for git checkouts
+  // and reports each one's GitHub remote, the repo's visibility and where
+  // the applied policy places it, plus the GitHub orgs each gh login belongs
+  // to. It writes nothing: no file, no policy revision, no binding.
+  // Operator-only: it reads folders and GitHub accounts of every job.
+  rpc ScanSpaces(ScanSpacesRequest) returns (ScanSpacesResponse);
   // PinSession records a session's pin at SessionStart: its harness process,
   // first directory and space. A pin's space and first directory never
   // change: a second call returns the existing pin, a subagent gets its
@@ -1016,6 +1026,76 @@ message PlacementExplanation {
   string session_reads = 9;
 }
 
+message ListSpacesRequest {}
+
+// SpaceInfo is one space of the applied policy, as the operator wrote it.
+message SpaceInfo {
+  string name = 1;
+  string kind = 2; // public | private | isolated
+  repeated string github_orgs = 3;
+  repeated string roots = 4;
+  repeated string web_prefixes = 5;
+  repeated string chat = 6;
+  // reads are the spaces it lists; readable is every space it may read:
+  // itself, every public space and the ones it lists.
+  repeated string reads = 7;
+  repeated string readable = 8;
+  string terms_file = 9; // the outbound term list's path, never its terms
+  string gh_config_dir = 10;
+}
+
+message ListSpacesResponse {
+  SpacesStatus status = 1;
+  repeated SpaceInfo spaces = 2; // by name
+  // Where sessions pinned under a public root write.
+  string public_root_sessions = 3;
+}
+
+message ScanSpacesRequest {
+  // Absolute folders to look through. Each is walked without following
+  // symbolic links, skipping hidden folders, and a checkout's own folders
+  // are not entered.
+  repeated string folders = 1;
+  int32 max_depth = 2; // folders below each one; 0 means 3, at most 6
+  // Ask GitHub nothing: visibility comes only from orchd's cache and no
+  // account's orgs are listed.
+  bool offline = 3;
+}
+
+// ScannedCheckout is one git checkout a scan found.
+message ScannedCheckout {
+  string path = 1;
+  string owner = 2; // the origin's GitHub owner; "" for none
+  string repo = 3;
+  string visibility = 4; // public | private | "" (not known)
+  // anonymous: its .git does not follow git's layout, so its remote is
+  // not believed and it is placed by its folder alone.
+  bool anonymous = 5;
+  // Where the applied policy places the checkout's content.
+  string space = 6;
+  string rule = 7;
+  string outcome = 8; // placed | quarantined | conflict
+  string reason = 9;
+}
+
+// ScannedAccount is a gh login and the orgs it belongs to: the default
+// login, and each space's gh profile.
+message ScannedAccount {
+  string profile = 1; // "" for the default login, else the space's name
+  string login = 2;
+  repeated string orgs = 3;
+  string error = 4;
+}
+
+message ScanSpacesResponse {
+  repeated ScannedCheckout checkouts = 1; // by path
+  repeated ScannedAccount accounts = 2;
+  // Set when a limit stopped the walk early.
+  bool truncated = 3;
+  // Folders that could not be read, and why.
+  repeated string problems = 4;
+}
+
 message PinSessionRequest {
   string session_id = 1; // ^[A-Za-z0-9_-]{1,128}$
   // The session's directory as the hook reports it. A new pin is refused
@@ -1104,6 +1184,13 @@ message RecordToolEventRequest {
   string old_cwd = 10;   // cwd-changed only
   string new_cwd = 11;   // cwd-changed only
   int64 at = 12;         // unix nanoseconds when the hook started
+  // The tool guard's decision as the hook made it (SP-041); empty when no
+  // guard ran (an older hook). guard_verdict is what the guard decided or,
+  // when not enforced, would have decided: allow | refuse.
+  string guard_verdict = 13;
+  string guard_rule = 14;     // a rule id; never a path or text
+  bool guard_enforced = 15;   // the verdict took effect
+  int64 guard_policy_rev = 16;
 }
 
 message RecordToolEventResponse {}

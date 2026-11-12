@@ -150,6 +150,11 @@ var operatorActions = map[string]string{
 	// policy revision; it is also refused to interactive harness sessions
 	// (refuseNonOperator).
 	orchdv1.Orchd_ReplaySpaces_FullMethodName: "replay the command log",
+	// Reason (SP-050): like DiffSpaces, these name every job's orgs, roots
+	// and checkouts; both are also refused to interactive harness sessions
+	// (refuseNonOperator).
+	orchdv1.Orchd_ListSpaces_FullMethodName: "list the spaces",
+	orchdv1.Orchd_ScanSpaces_FullMethodName: "scan folders for spaces",
 }
 
 // refuseQueued returns the refusal for method when ctx's caller is a queued
@@ -284,16 +289,21 @@ type peerCredentials struct {
 	// started returns when a process started; nil leaves a harness's start
 	// time unread, so its session cannot be pinned.
 	started func(pid int) (time.Time, error)
+	// samePeer checks that pid still names c's peer (peer_token.go); nil
+	// reads the socket's kernel token, or skips the check when peerPID is
+	// set.
+	samePeer func(c net.Conn, pid int) error
 }
 
 func (p peerCredentials) ServerHandshake(c net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return c, p.identify(c), nil
 }
 
-// identify looks up c's process and whether orchd started it. It runs when
+// walk looks up c's process and whether orchd started it. It runs when
 // orchd accepts the connection, so a caller that lets its parent exit first is
 // orphaned out of orchd's tree; see docs/internals/daemon.md for the limits.
-func (p peerCredentials) identify(c net.Conn) callerAuth {
+// identify checks its result against the peer's kernel token.
+func (p peerCredentials) walk(c net.Conn) callerAuth {
 	lookup := p.peerPID
 	if lookup == nil {
 		lookup = connPeerPID

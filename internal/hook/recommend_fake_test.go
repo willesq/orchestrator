@@ -255,3 +255,11 @@ func (f *fakeClient) ExplainPlacement(context.Context, *orchdv1.ExplainPlacement
 func (f *fakeClient) ReplaySpaces(context.Context, *orchdv1.ReplaySpacesRequest, ...grpc.CallOption) (*orchdv1.ReplaySpacesResponse, error) {
 	return &orchdv1.ReplaySpacesResponse{}, nil
 }
+
+func (f *fakeClient) ListSpaces(context.Context, *orchdv1.ListSpacesRequest, ...grpc.CallOption) (*orchdv1.ListSpacesResponse, error) {
+	return &orchdv1.ListSpacesResponse{}, nil
+}
+
+func (f *fakeClient) ScanSpaces(context.Context, *orchdv1.ScanSpacesRequest, ...grpc.CallOption) (*orchdv1.ScanSpacesResponse, error) {
+	return &orchdv1.ScanSpacesResponse{}, nil
+}
