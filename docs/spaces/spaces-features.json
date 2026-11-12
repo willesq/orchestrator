@@ -4613,14 +4613,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "0ed90500129ff80453d9ab01f9e541da7d9f62defe2a9d070c09806eae31aa3a",
-      "branch": null,
+      "branch": "feat/sp-046-per-space-harness-settings",
       "pr": null
     },
     {
