@@ -57,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 github: model.github, prs: model.prs, handoff: model.handoff, landings: model.landings, system: model.system, logs: model.logs,
                 docs: model.docs, registeredSources: model.registeredSources,
                 safetyNet: model.safetyNet, claude: model.claude, config: model.config, docsOwners: model.docsOwners,
+                enforcement: model.enforcement, placement: model.placement,
                 loginItem: model.loginItem, navigator: model.navigator,
                 window: model.windowControl
             )
