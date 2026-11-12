@@ -35,6 +35,9 @@ type summaryJob struct {
 	SessionID      string
 	TranscriptPath string
 	Tags           []string
+	// Foreign marks a request from a session other than SessionID, whose
+	// summary is tied to no session (quarantined under a policy).
+	Foreign bool
 }
 
 // sessionSummarizer turns a session's messages into its summary.
@@ -124,10 +127,19 @@ func summarizeOne(ctx context.Context, s sessionSummarizer, ing summaryIngester,
 	start, end := rec.Span()
 	if _, err := ing.IngestText(jobCtx, rec.Text(), rag.Meta{
 		SourceURI: "session://" + j.SessionID + "/record", SourceType: "session_record", Tags: j.Tags,
-		StartedAt: start, EndedAt: end, Writer: rag.WriterSession,
+		StartedAt: start, EndedAt: end, Writer: rag.WriterSession, Origin: sessionOrigin(j.SessionID, rec.Cwd, tiedTranscript(j)),
 	}); err != nil {
 		log.Printf("session-summarizer: session %s: store summary: %v", j.SessionID, err)
 	}
+}
+
+// tiedTranscript is the transcript a summary is tied to its session by: none
+// for a foreign request.
+func tiedTranscript(j summaryJob) string {
+	if j.Foreign {
+		return ""
+	}
+	return j.TranscriptPath
 }
 
 // newSummarizer builds the CLI-backed summarizer from settings.
@@ -171,7 +183,7 @@ var sessionIDShape = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 // SummarizeSession queues a finished session for its summary and returns at
 // once. The transcript path must name an existing .jsonl file, so the RPC cannot
 // be used to feed arbitrary files to the model and into the store.
-func (s *server) SummarizeSession(_ context.Context, req *orchdv1.SummarizeSessionRequest) (*orchdv1.SummarizeSessionResponse, error) {
+func (s *server) SummarizeSession(ctx context.Context, req *orchdv1.SummarizeSessionRequest) (*orchdv1.SummarizeSessionResponse, error) {
 	if s.summaries == nil {
 		return &orchdv1.SummarizeSessionResponse{Accepted: false}, nil
 	}
@@ -185,6 +197,10 @@ func (s *server) SummarizeSession(_ context.Context, req *orchdv1.SummarizeSessi
 	if info, err := os.Lstat(p); err != nil || !info.Mode().IsRegular() {
 		return nil, grpcstatus.Error(codes.InvalidArgument, "transcript_path is not a regular file")
 	}
-	ok := s.summaries.enqueue(summaryJob{SessionID: req.GetSessionId(), TranscriptPath: p, Tags: req.GetTags()})
+	// Reason: a session may ask for any session's summary, but only its own
+	// is placed in a space; another's is quarantined (SP-023).
+	c := callerOf(ctx)
+	foreign := c.kind == callerSession && c.pin.SessionID != req.GetSessionId()
+	ok := s.summaries.enqueue(summaryJob{SessionID: req.GetSessionId(), TranscriptPath: p, Tags: req.GetTags(), Foreign: foreign})
 	return &orchdv1.SummarizeSessionResponse{Accepted: ok}, nil
 }

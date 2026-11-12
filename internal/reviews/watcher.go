@@ -61,6 +61,10 @@ type Watcher struct {
 	Login func(ctx context.Context) (string, error)
 	// Poll is how often each PR is checked; zero uses DefaultPoll.
 	Poll time.Duration
+	// CheckOwner, when set, re-checks the PR owner's GitHub org binding
+	// before anything from the PR is acted on or recorded (D-52); a refused
+	// owner's PR is left as it was, with a note.
+	CheckOwner func(ctx context.Context, owner string) error
 
 	mu      sync.Mutex
 	checked map[string]time.Time
@@ -329,8 +333,9 @@ func (w *Watcher) collect(ctx context.Context, url string) {
 		return
 	}
 	var v Verdict
-	var failure string
+	failure := w.ownerRefused(ctx, url)
 	switch {
+	case failure != "":
 	case !found:
 		failure = "the review task is gone from the queue"
 	case status != taskComplete:
@@ -367,6 +372,22 @@ func (w *Watcher) collect(ctx context.Context, url string) {
 	w.mu.Unlock()
 }
 
+// ownerRefused re-checks the org binding of url's owner and says why the
+// PR's content may not be recorded, if it may not.
+func (w *Watcher) ownerRefused(ctx context.Context, url string) string {
+	if w.CheckOwner == nil {
+		return ""
+	}
+	owner, _, ok := strings.Cut(strings.TrimPrefix(url, "https://github.com/"), "/")
+	if !ok || owner == "" {
+		return "not reviewed: the PR's owner cannot be read from its URL"
+	}
+	if err := w.CheckOwner(ctx, owner); err != nil {
+		return "not reviewed: " + github.Printable(err.Error(), 300)
+	}
+	return ""
+}
+
 // check reads the PR's status and acts on it.
 func (w *Watcher) check(ctx context.Context, url string) {
 	st, err := FetchStatus(ctx, w.GH, url)
@@ -379,6 +400,19 @@ func (w *Watcher) check(ctx context.Context, url string) {
 			if !w.expire(r) {
 				r.Note = "could not read the PR: " + github.Printable(err.Error(), 300)
 			}
+			return true
+		})
+		return
+	}
+	if note := w.ownerRefused(ctx, url); note != "" {
+		w.update(ctx, url, func(r *Review) bool {
+			if w.expire(r) {
+				return true
+			}
+			if r.Note == note {
+				return false
+			}
+			r.Note = note
 			return true
 		})
 		return
