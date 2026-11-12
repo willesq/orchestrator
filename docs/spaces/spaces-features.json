@@ -3711,7 +3711,7 @@
       "attempts": 1,
       "criteria_sha256": "119d6446a5c77ae087c787bf967eab9387ea82c8fdf1a638a62bd7be84eb027e",
       "branch": "feat/sp-023-stamp-origin",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/173"
     },
     {
       "id": "SP-024",
