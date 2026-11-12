@@ -3643,7 +3643,7 @@
       "attempts": 1,
       "criteria_sha256": "9ecf2284e0903ca5b703649fda4ca3bd71d42cb33a05f5e31f6efbe9d8b3a208",
       "branch": "feat/sp-072-app-spaces-controls",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/169"
     },
     {
       "id": "SP-023",
