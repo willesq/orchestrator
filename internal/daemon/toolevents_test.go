@@ -22,6 +22,7 @@ import (
 
 	"github.com/willesq/orchestrator/internal/procstat"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
+	"github.com/willesq/orchestrator/internal/spaces"
 )
 
 // TestRecordToolEvent: orchd takes every valid tool event and attributes it
@@ -155,10 +156,11 @@ func TestToolHookCost(t *testing.T) {
 	)
 	s := &server{pins: pins}
 	var mu sync.Mutex
-	var sessions []string
+	var sessions, verdicts []string
 	s.toolEvents.setSink(func(ev toolEvent) {
 		mu.Lock()
 		sessions = append(sessions, ev.caller.pin.SessionID)
+		verdicts = append(verdicts, ev.req.GetGuardVerdict()+" "+ev.req.GetGuardRule())
 		mu.Unlock()
 	})
 	orchdv1.RegisterOrchdServer(gs, s)
@@ -200,6 +202,18 @@ func TestToolHookCost(t *testing.T) {
 		Process: procstat.Identity{PID: cmd.Process.Pid, Started: started}, FirstCwd: "/", PinnedAt: started}); err != nil {
 		t.Fatal(err)
 	}
+	// Reason: the hook decides each call against these, as the enforcing
+	// guard does (SP-041.1.a3): the cost includes reading them.
+	guardDir := filepath.Join(tmp, "data", "guard")
+	pol := spaces.Policy{Spaces: []spaces.Space{{Name: "job", Kind: spaces.Isolated, Roots: []string{"/scratch"}},
+		{Name: "other", Kind: spaces.Isolated, Roots: []string{filepath.Join(tmp, "other")}}}}
+	if err := spaces.WriteGuardSnapshot(guardDir, spaces.GuardSnapshot{Revision: 1, Policy: &pol, Home: tmp,
+		Guard: spaces.GuardSwitch{State: spaces.SwitchBlockOtherJobs}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := spaces.WriteGuardPin(guardDir, spaces.GuardPinFile{SessionID: "sess-hook", Space: "job", Revision: 1}); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := stdin.Write([]byte("go\n")); err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +240,11 @@ func TestToolHookCost(t *testing.T) {
 	// events are dropped by design; all that arrive must be attributed.
 	mu.Lock()
 	got := slices.Clone(sessions)
+	decided := slices.Compact(slices.Sorted(slices.Values(verdicts)))
 	mu.Unlock()
+	if len(decided) != 1 || decided[0] != "allow within_space" {
+		t.Errorf("the guard decided %v, want every call allowed within its space", decided)
+	}
 	if len(got) < hookCostRuns*99/100 || len(got) > hookCostRuns ||
 		slices.IndexFunc(got, func(id string) bool { return id != "sess-hook" }) >= 0 {
 		t.Fatalf("orchd took %d events (want at least %d of %d), attributed to %v", len(got), hookCostRuns*99/100,

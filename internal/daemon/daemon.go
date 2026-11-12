@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
@@ -158,6 +159,9 @@ type server struct {
 	// guardVerdict is the guard's verdict on a tool event, recorded while
 	// the guard is off or logging; nil until the guard decides (SP-040).
 	guardVerdict guardVerdictFunc
+	// guard writes the files the enforcing tool guard in orch-hook reads
+	// (SP-041); nil writes none.
+	guard *guardWriter
 	// toolEvents takes the events pre-tool-use and cwd-changed hooks send.
 	toolEvents toolEventIntake
 	// toolLog stores them (SP-014); nil when it could not be opened.
@@ -755,7 +759,9 @@ func Run(ctx context.Context) error {
 		settings:     settingsSvc,
 		toolLog:      tlog,
 		enforcement:  newEnforcement(ctx, store, settingsSvc),
+		guard:        newGuardWriter(paths.GuardDir(), userHome()),
 	}
+	srv.startGuardFiles(runCtx)
 	if tlog != nil {
 		srv.toolEvents.setSink(srv.logToolEvent)
 	}
@@ -773,7 +779,14 @@ func Run(ctx context.Context) error {
 
 	log.Printf("orchd %s listening on %s (subsystems: %s)",
 		version.Version, lis.Addr(), strings.Join(sup.Names(), ", "))
-	return gs.Serve(lis)
+	err = gs.Serve(lis)
+	// Reason: a shutdown that begins before Serve starts (a new build
+	// installed during startup) stops the server first, and Serve then
+	// reports it stopped; that is a clean exit like any other shutdown.
+	if errors.Is(err, grpc.ErrServerStopped) && runCtx.Err() != nil {
+		return nil
+	}
+	return err
 }
 
 // selfUpdateWatch reports the binary orchd should watch for a new build of
