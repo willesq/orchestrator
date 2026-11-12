@@ -57,6 +57,11 @@ type ToolTargets struct {
 	// to a variable or command substitution. "cat ~/code/*/x" reaches
 	// every directory under ~/code.
 	Prefixes []string `json:"prefixes,omitempty"`
+	// Writes are the paths, and prefixes, the call writes (SP-042): a file
+	// tool's file, a shell redirection's target, tee's and sed -i's files,
+	// cp's and install's destination, mv's operands, rm's and touch's. They
+	// are also listed above.
+	Writes []string `json:"writes,omitempty"`
 	// Opaque is set when part of the call cannot be analysed, so the lists
 	// above may be incomplete. OpaqueReasons says which parts.
 	Opaque        bool     `json:"opaque,omitempty"`
@@ -115,6 +120,8 @@ type extractor struct {
 	mayCreate   bool
 	missing     bool
 	scriptBytes int
+	// writing is set while the paths added are written by the call.
+	writing int
 	// spec is set while walking text that may or may not be shell code,
 	// such as a string argument of an unknown program: its targets are
 	// kept, but what cannot be read there does not make the call opaque.
@@ -153,6 +160,9 @@ func (e *extractor) add(k targetKind, p string) {
 	if len(p) > maxPathLen || strings.Count(p, "/") > maxComponents {
 		e.opaque("path too long")
 		return
+	}
+	if e.writingNow() && (k == kindPath || k == kindPrefix) {
+		e.recordWrite(p)
 	}
 	key := string(rune('0'+k)) + p
 	if e.seen[key] {
@@ -222,7 +232,7 @@ func (e *extractor) result() ToolTargets {
 		e.opaque("a path may run through a link the call creates")
 	}
 	t := e.out
-	for _, l := range []*[]string{&t.Paths, &t.CdDest, &t.GitDirs, &t.GHRepos, &t.GHOrgs, &t.Prefixes} {
+	for _, l := range []*[]string{&t.Paths, &t.CdDest, &t.GitDirs, &t.GHRepos, &t.GHOrgs, &t.Prefixes, &t.Writes} {
 		*l = sortedUnique(*l)
 	}
 	for r := range e.reasons {
@@ -293,13 +303,16 @@ func (e *extractor) tool(name string, input json.RawMessage, cwd string) {
 	if err := json.Unmarshal(input, &obj); err != nil {
 		var s string
 		if json.Unmarshal(input, &s) == nil && name == "apply_patch" {
+			e.writing++
 			e.patch(s, where{dirs: []string{cwd}})
+			e.writing--
 			return
 		}
 		e.opaque("tool input is not a JSON object")
 		return
 	}
 	at := where{dirs: []string{cwd}}
+	e.fileToolWrites(name, obj, at)
 	if wd, ok := obj["workdir"].(string); ok && wd != "" {
 		at = e.moveAll(at, wd)
 		for _, d := range at.dirs {
@@ -324,7 +337,9 @@ func (e *extractor) tool(name string, input json.RawMessage, cwd string) {
 		if s == "" {
 			s, _ = obj["input"].(string)
 		}
+		e.writing++
 		e.patch(s, at)
+		e.writing--
 	case "EnterWorktree":
 		if n, ok := obj["name"].(string); ok && n != "" {
 			e.add(kindCd, cwd+"/.claude/worktrees/"+n)

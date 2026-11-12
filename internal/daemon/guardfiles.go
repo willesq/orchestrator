@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/spaces"
 )
 
@@ -27,20 +28,52 @@ const guardPinSyncEvery = 10 * time.Minute
 type guardWriter struct {
 	dir  string
 	home string
+	// configDir and dataDir are orch's directories and binDir holds its
+	// binaries, all protected from agent writes (SP-042).
+	configDir, dataDir, binDir string
 	// mu orders snapshot writes and guards sw, the guard's switch as last
 	// given.
 	mu sync.Mutex
 	sw spaces.Switch
 }
 
-func newGuardWriter(dir, home string) *guardWriter {
-	return &guardWriter{dir: dir, home: home,
+func newGuardWriter(dir, home, configDir, dataDir, binDir string) *guardWriter {
+	return &guardWriter{dir: dir, home: home, configDir: configDir, dataDir: dataDir, binDir: binDir,
 		sw: spaces.Switch{Layer: spaces.LayerGuard, State: spaces.LayerGuard.Default()}}
 }
 
-// guardProtected are the paths the hook refuses file tools to write: the
-// guard's own files. SP-042 adds the rest of orch's and the harnesses'.
-func (g *guardWriter) guardProtected() []string { return []string{g.dir} }
+// defaultGuardWriter writes the guard's files where orch-hook reads them.
+func defaultGuardWriter() *guardWriter {
+	return newGuardWriter(paths.GuardDir(), userHome(), paths.ConfigDir(), paths.DataDir(), executableDir())
+}
+
+// executableDir is the directory of the running binary, where orch installs
+// orch, orchd and orch-hook side by side; "" when it cannot be found.
+func executableDir() string {
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return filepath.Dir(exe)
+}
+
+// protection is what the guard protects under res (SP-042,
+// spaces.GuardProtection). The snapshot and a replay both take it from
+// here, so the hook and a replay judge the same paths (RC-110).
+func (g *guardWriter) protection(res *spaces.Resolved) spaces.Protection {
+	return spaces.GuardProtection(g.home, g.configDir, g.dataDir, g.dir, g.binDir, res)
+}
+
+// guardProtection is the protection the guard applies under res, for a
+// replay: the guard writer's, or where orch-hook reads its files when
+// orchd writes none.
+func (s *server) guardProtection(res *spaces.Resolved) spaces.Protection {
+	g := s.guard
+	if g == nil {
+		g = defaultGuardWriter()
+	}
+	return g.protection(res)
+}
 
 // setSwitches takes every layer's switch after a change and rewrites the
 // snapshot when the guard's changed. It runs under the switches' lock, so it
@@ -78,17 +111,18 @@ func (s *server) writeGuardSnapshot() {
 		return
 	}
 	snap := spaces.GuardSnapshot{
-		Home: g.home, Protected: g.guardProtected(), WrittenAt: time.Now().UTC(),
+		Home: g.home, WrittenAt: time.Now().UTC(),
 		Guard: spaces.GuardSwitch{State: g.sw.State, Until: g.sw.Until, Previous: g.sw.Previous},
 	}
 	res, rev, err := s.spaces.CurrentRevision()
 	switch {
 	case err != nil:
-		snap.Broken = true
+		snap.Broken, res = true, nil
 	case res != nil:
 		p := res.Policy
 		snap.Policy, snap.Revision = &p, rev
 	}
+	snap.Protection = g.protection(res)
 	if err := writeSnapshotFile(g.dir, snap); err != nil {
 		// Reason: a stale snapshot would keep a looser policy or switch in
 		// force; without one the hook refuses while orch.db has a policy.

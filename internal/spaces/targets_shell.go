@@ -224,8 +224,15 @@ func (e *extractor) redirect(r *syntax.Redirect, st *shellState, depth int) {
 		}
 	}
 	at := st.at()
+	out := r.Op != syntax.RdrIn
 	for _, w := range e.words(r.Word, st, depth) {
+		if out {
+			e.writing++
+		}
 		e.pathArg(w, at)
+		if out {
+			e.writing--
+		}
 		if r.Op != syntax.RdrIn && w.exact() {
 			for _, p := range e.absAll(at, w.val) {
 				e.written[e.fileKey(p)] = true
@@ -238,7 +245,11 @@ func (e *extractor) redirect(r *syntax.Redirect, st *shellState, depth int) {
 // here-string. Paths in it are kept, and a Codex patch in it is read.
 func (e *extractor) input(text string, at where) {
 	if strings.Contains(text, "*** Begin Patch") {
+		// A patch's files are written (SP-042): Codex's usual form is
+		// apply_patch <<'EOF'.
+		e.writing++
 		e.patch(text, at)
+		e.writing--
 	}
 	e.embedded(text, at, true, true)
 }

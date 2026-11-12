@@ -207,7 +207,8 @@ func TestToolHookCost(t *testing.T) {
 	guardDir := filepath.Join(tmp, "data", "guard")
 	pol := spaces.Policy{Spaces: []spaces.Space{{Name: "job", Kind: spaces.Isolated, Roots: []string{"/scratch"}},
 		{Name: "other", Kind: spaces.Isolated, Roots: []string{filepath.Join(tmp, "other")}}}}
-	if err := spaces.WriteGuardSnapshot(guardDir, spaces.GuardSnapshot{Revision: 1, Policy: &pol, Home: tmp,
+	prot := newGuardWriter(guardDir, tmp, filepath.Join(tmp, "config"), filepath.Join(tmp, "data"), "").protection(nil)
+	if err := spaces.WriteGuardSnapshot(guardDir, spaces.GuardSnapshot{Revision: 1, Policy: &pol, Home: tmp, Protection: prot,
 		Guard: spaces.GuardSwitch{State: spaces.SwitchBlockOtherJobs}}); err != nil {
 		t.Fatal(err)
 	}

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -50,7 +51,8 @@ const (
 	// RulePinMissing: the calling session has no pin, so its space is
 	// unknown; enforcing modes fail closed (INV-13).
 	RulePinMissing GuardRule = "pin_missing"
-	// RuleSelfProtection: a file tool writes to a path orch protects.
+	// RuleSelfProtection: the call writes to a path orch protects, or
+	// reads a terms file or credential (SP-042).
 	RuleSelfProtection GuardRule = "self_protection"
 	// RuleOtherJobPath: the cwd, a path, a cd destination, a git dir or a
 	// glob prefix lies in another isolated space.
@@ -100,6 +102,9 @@ type GuardPolicy struct {
 	res       *Resolved
 	roots     []guardRoot
 	protected [][]string
+	// self is the rest of the protection (SP-042): name patterns, paths
+	// protected anywhere, and paths no call may read.
+	self selfProtection
 }
 
 // guardRoot is one bound root under every spelling a target may use.
@@ -149,7 +154,14 @@ func spellings(pr *pathResolver, p string) []string {
 // guardKey is how paths compare: cleaned, Unicode NFC and case-folded, as
 // macOS volumes usually treat names.
 func guardKey(p string) string {
-	return strings.ToLower(norm.NFC.String(filepath.Clean(p)))
+	return foldName(filepath.Clean(p))
+}
+
+// foldName is s in NFC with Unicode case folding. Reason: full folding, not
+// lower-casing: APFS takes U+017F (long s) for "s", so a name spelled with
+// it must match the protected one (SP-042 security review).
+func foldName(s string) string {
+	return cases.Fold().String(norm.NFC.String(s))
 }
 
 // under reports whether key is base or lies below it.
@@ -202,8 +214,8 @@ type GuardDecision struct {
 	Enforced bool
 }
 
-// writeTools are file tools whose path fields are written. Shell tools'
-// writes cannot be told from reads in Targets; SP-042 adds those.
+// writeTools are file tools whose path fields are written. Shell writes
+// come from Targets' Writes (SP-042).
 var writeTools = map[string]bool{
 	"Write": true, "Edit": true, "MultiEdit": true, "NotebookEdit": true, "apply_patch": true,
 }
@@ -273,7 +285,7 @@ func assess(pol GuardPolicy, pin GuardPin, mode GuardMode, ev GuardEvent) (Verdi
 		own = ""
 	}
 	t := ev.Targets
-	if writeTools[ev.Tool] && pol.anyProtected(t.Paths, t.CdDest, t.GitDirs, t.Prefixes) {
+	if pol.selfProtected(ev.Tool, t) {
 		return Refuse, RuleSelfProtection
 	}
 	g := guardScope{pol: pol, own: own, strict: mode == GuardStrict}

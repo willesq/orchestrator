@@ -772,7 +772,7 @@ func Run(ctx context.Context) error {
 		settings:     settingsSvc,
 		toolLog:      tlog,
 		enforcement:  newEnforcement(ctx, store, settingsSvc),
-		guard:        newGuardWriter(paths.GuardDir(), userHome()),
+		guard:        defaultGuardWriter(),
 	}
 	srv.startGuardFiles(runCtx)
 	if tlog != nil {

@@ -38,12 +38,16 @@ func newFileFixture(t *testing.T, mode string) fileFixture {
 	f := fileFixture{home: home, dir: filepath.Join(t.TempDir(), "guard"), db: filepath.Join(t.TempDir(), "orch.db")}
 	f.files = GuardFiles{Dir: f.dir, DB: f.db}
 	p := guardPolicy()
-	f.writeSnapshot(t, GuardSnapshot{Revision: 3, Policy: &p, Home: home, Guard: GuardSwitch{State: mode}})
+	f.writeSnapshot(t, GuardSnapshot{Revision: 3, Policy: &p, Home: home, Protection: f.protection(), Guard: GuardSwitch{State: mode}})
 	if err := WriteGuardPin(f.dir, GuardPinFile{SessionID: "s1", Space: "work", Revision: 3, Harness: "claude"}); err != nil {
 		t.Fatal(err)
 	}
 	return f
 }
+
+// protection protects the fixture's guard directory, as orchd's snapshot
+// always does.
+func (f fileFixture) protection() Protection { return Protection{Write: []string{f.dir}} }
 
 func (f fileFixture) writeSnapshot(t *testing.T, s GuardSnapshot) {
 	t.Helper()
@@ -111,10 +115,11 @@ func TestGuardFilesRefuseBadInput(t *testing.T) {
 	// The snapshot must be a regular file of bounded size and known version.
 	snap := GuardSnapshotPath(f.dir)
 	for name, write := range map[string]func() error{
-		"damaged":   func() error { return os.WriteFile(snap, []byte("{"), 0o600) },
-		"version":   func() error { return os.WriteFile(snap, []byte(`{"version":99}`), 0o600) },
-		"oversized": func() error { return os.WriteFile(snap, make([]byte, maxGuardFile+1), 0o600) },
-		"directory": func() error { _ = os.Remove(snap); return os.Mkdir(snap, 0o700) },
+		"damaged":    func() error { return os.WriteFile(snap, []byte("{"), 0o600) },
+		"version":    func() error { return os.WriteFile(snap, []byte(`{"version":99}`), 0o600) },
+		"no version": func() error { return os.WriteFile(snap, []byte(`{}`), 0o600) },
+		"oversized":  func() error { return os.WriteFile(snap, make([]byte, maxGuardFile+1), 0o600) },
+		"directory":  func() error { _ = os.Remove(snap); return os.Mkdir(snap, 0o700) },
 		"symlink": func() error {
 			real := filepath.Join(t.TempDir(), "real.json")
 			if err := os.WriteFile(real, []byte(`{"version":1}`), 0o600); err != nil {
@@ -158,7 +163,7 @@ func TestGuardFilesDecide(t *testing.T) {
 		{"another job's folder", f.bash("cat " + filepath.Join(f.home, "code/other/app/x")), Refuse, RuleOtherJobPath},
 		{"another job's repo", f.bash("gh api repos/otherorg/app"), Refuse, RuleOtherJobRepo},
 		{"the guard's own files", GuardInput{Kind: EventPreToolUse, SessionID: "s1", Tool: "Write", Cwd: filepath.Join(f.home, "code/work"),
-			Input: mustJSON(t, map[string]string{"file_path": GuardSnapshotPath(f.dir), "content": "{}"})}, Allow, RuleWithinSpace},
+			Input: mustJSON(t, map[string]string{"file_path": GuardSnapshotPath(f.dir), "content": "{}"})}, Refuse, RuleSelfProtection},
 		{"no pin", func() GuardInput { in := f.bash("ls"); in.SessionID = "unpinned"; return in }(), Refuse, RulePinMissing},
 		{"cwd-changed into another job", GuardInput{Kind: EventCwdChanged, SessionID: "s1", Cwd: filepath.Join(f.home, "code/work"),
 			NewCwd: filepath.Join(f.home, "code/other")}, Allow, RuleOtherJobPath},
@@ -171,12 +176,19 @@ func TestGuardFilesDecide(t *testing.T) {
 			}
 		})
 	}
-	// The snapshot's protected paths reach Decide.
+	// The whole of the snapshot's protection reaches Decide: a path
+	// protected anywhere, and one no call may read.
 	p := guardPolicy()
-	f.writeSnapshot(t, GuardSnapshot{Revision: 3, Policy: &p, Home: f.home, Protected: []string{f.dir}})
-	r := f.files.Decide(ctx, cases[3].in)
-	if r.Verdict != Refuse || r.Rule != RuleSelfProtection {
-		t.Errorf("write to a protected path: %s (%s)", r.Verdict, r.Rule)
+	terms := filepath.Join(f.home, "terms.txt")
+	f.writeSnapshot(t, GuardSnapshot{Revision: 3, Policy: &p, Home: f.home, Guard: GuardSwitch{State: SwitchBlockOtherJobs},
+		Protection: Protection{Write: []string{f.dir}, Anywhere: []string{".git/hooks"}, Read: []string{terms}}})
+	for name, in := range map[string]GuardInput{
+		"a checkout's git hook": f.bash("echo x > " + filepath.Join(f.home, "code/work/app/.git/hooks/pre-commit")),
+		"a terms file":          f.bash("cat " + terms),
+	} {
+		if r := f.files.Decide(ctx, in); r.Verdict != Refuse || r.Rule != RuleSelfProtection {
+			t.Errorf("%s: %s (%s)", name, r.Verdict, r.Rule)
+		}
 	}
 }
 
@@ -199,6 +211,13 @@ func TestGuardFilesNoPolicy(t *testing.T) {
 	in.SessionID = "unpinned"
 	if r := f.files.Decide(ctx, in); r.Verdict != Allow || r.Rule != RuleNoPolicy {
 		t.Errorf("no spaces: %s (%s)", r.Verdict, r.Rule)
+	}
+	// A protection orchd could not spell (no home: relative entries) does
+	// not refuse while nothing is configured.
+	f.writeSnapshot(t, GuardSnapshot{Home: "", Guard: GuardSwitch{State: SwitchStrict},
+		Protection: Protection{Write: []string{".claude/settings*"}, Read: []string{".netrc"}}})
+	if r := f.files.Decide(ctx, in); r.Verdict != Allow || r.Rule != RuleNoPolicy {
+		t.Errorf("no spaces, relative protection: %s (%s)", r.Verdict, r.Rule)
 	}
 	_ = os.Remove(GuardSnapshotPath(f.dir))
 	if r := f.files.Decide(ctx, in); r.Verdict != Allow || r.Rule != RuleNoPolicy {
@@ -231,8 +250,29 @@ func TestGuardFilesUnreadablePolicy(t *testing.T) {
 			f.writeSnapshot(t, GuardSnapshot{Revision: 3, Policy: &bad, Home: f.home, Guard: GuardSwitch{State: mode}})
 			check("invalid policy")
 			p := guardPolicy()
-			f.writeSnapshot(t, GuardSnapshot{Revision: 3, Policy: &p, Home: f.home, Protected: []string{"relative"}, Guard: GuardSwitch{State: mode}})
-			check("relative protected path")
+			for name, prot := range map[string]Protection{
+				"no protection":                 {},
+				"relative protected path":       {Write: []string{f.dir, "relative"}},
+				"relative read-protected path":  {Write: []string{f.dir}, Read: []string{"relative"}},
+				"absolute path protected below": {Write: []string{f.dir}, Anywhere: []string{"/abs"}},
+				"empty path protected below":    {Write: []string{f.dir}, Anywhere: []string{""}},
+			} {
+				f.writeSnapshot(t, GuardSnapshot{Revision: 3, Policy: &p, Home: f.home, Protection: prot, Guard: GuardSwitch{State: mode}})
+				check(name)
+			}
+			// A snapshot of the format before RC-110, which carried only
+			// the guard directory, cannot be read at all. With no orch.db
+			// that ever applied a policy, nothing is configured, so it
+			// allows (INV-10); TestGuardFilesSnapshotMissing refuses it
+			// once a policy was applied.
+			old := `{"version":1,"revision":3,"policy":` + string(mustJSON(t, p)) + `,"home":"` + f.home +
+				`","protected":["` + f.dir + `"],"guard":{"state":"` + mode + `"}}`
+			if err := os.WriteFile(GuardSnapshotPath(f.dir), []byte(old), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if r := f.files.Decide(ctx, f.bash("ls")); r.Verdict != Allow || r.Rule != RuleNoPolicy {
+				t.Errorf("version 1 snapshot, nothing applied: %s (%s)", r.Verdict, r.Rule)
+			}
 		})
 	}
 }
@@ -257,6 +297,18 @@ func TestGuardFilesSnapshotMissing(t *testing.T) {
 	if r := files.Decide(ctx, in); r.Verdict != Refuse || r.Rule != RulePolicyUnreadable || r.Mode != GuardBlockOtherJobs {
 		t.Errorf("applied, no snapshot: %s (%s) in %s", r.Verdict, r.Rule, r.Mode)
 	}
+	// A snapshot of an older format (before RC-110) is no snapshot this
+	// hook can read: refused once a policy was applied.
+	if err := os.MkdirAll(files.Dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(GuardSnapshotPath(files.Dir), []byte(`{"version":1}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if r := files.Decide(ctx, in); r.Verdict != Refuse || r.Rule != RulePolicyUnreadable {
+		t.Errorf("applied, version 1 snapshot: %s (%s)", r.Verdict, r.Rule)
+	}
+	_ = os.Remove(GuardSnapshotPath(files.Dir))
 	if _, _, err := setSwitch(ctx, conn, LayerGuard, SwitchLog, "op", 0, time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -294,6 +346,13 @@ func TestGuardFilesSnapshotMissing(t *testing.T) {
 	if r := files.Decide(ctx, in); r.Verdict != Refuse || r.Rule != RulePolicyUnreadable {
 		t.Errorf("damaged snapshot: %s (%s)", r.Verdict, r.Rule)
 	}
+	// So is one with no version: not another release's, damaged.
+	if err := os.WriteFile(GuardSnapshotPath(files.Dir), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if r := files.Decide(ctx, in); r.Verdict != Refuse || r.Rule != RulePolicyUnreadable {
+		t.Errorf("snapshot without a version: %s (%s)", r.Verdict, r.Rule)
+	}
 }
 
 // TestGuardSnapshotTimedSwitch: a timed switch in the snapshot reverts at
@@ -312,7 +371,7 @@ func TestGuardSnapshotTimedSwitch(t *testing.T) {
 	}
 	f := newFileFixture(t, SwitchOff)
 	p := guardPolicy()
-	f.writeSnapshot(t, GuardSnapshot{Revision: 3, Policy: &p, Home: f.home, Guard: s.Guard})
+	f.writeSnapshot(t, GuardSnapshot{Revision: 3, Policy: &p, Home: f.home, Protection: f.protection(), Guard: s.Guard})
 	f.files.Now = func() time.Time { return end }
 	var seen GuardMode
 	f.files.OnMode = func(m GuardMode) { seen = m }
