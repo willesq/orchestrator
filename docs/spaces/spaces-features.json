@@ -1632,6 +1632,44 @@
         ],
         "status": "open",
         "note": "Part (1) fixed on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction): WatchTasks ends cleanly when the client goes away mid-read; see RC-92. Part (2) remains open: TestDecideCases' 100 ms Targets budget can be exhausted under load."
+      },
+      {
+        "id": "RC-110",
+        "kind": "follow-up",
+        "topic": "Wire SP-042's protection into the guard at rebase",
+        "detail": "SP-042 adds spaces.ProtectedPaths and NewGuardPolicyProtecting, but on main nothing builds a guard policy yet (the enforcing hook is SP-041, PR #172). When the two meet, orchd's guard snapshot must carry ProtectedPaths(home, config dir, data dir, applied policy) (its Write, Anywhere and Read lists, replacing SP-041's single protected guard directory) and the hook must build its policy with NewGuardPolicyProtecting; replay (SP-047) should use the same function.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-042",
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-111",
+        "kind": "follow-up",
+        "topic": "Self-protection gaps left after the SP-042 review",
+        "detail": "Accepted for now (best-effort target extraction, D-28; the OS sandbox is the boundary): recursive reads of a directory holding secret files (grep -r or rg over the ssh or gh profile directories, tar of them) are allowed; 'git config core.hooksPath|core.fsmonitor|core.sshCommand' is not refused (writing .git/config directly is); writes by interpreters (perl -pi, python open()) and copies that create protected files without naming them (cp -r template/.claude .) are not caught. Proposed: refuse recursive readers of those directories and those git config keys.",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-112",
+        "kind": "decision",
+        "topic": "Which secret files the guard refuses to read",
+        "detail": "SP-042 refuses reads (not only writes) of terms files and of the secret files listed in docs/internals/hooks.md (Self-protection): the files of each space's gh profile and of the default gh profile, orch's Qdrant API key, the netrc file, the AWS CLI's key file and ssh private keys (id_*, not *.pub). Confirm the list or extend it (for example Docker, kubectl, npm or PyPI login files).",
+        "source": "https://github.com/willesq/orchestrator/pull/175",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-042"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -3397,7 +3435,10 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestSelfProtectionRefusesWrites (internal/spaces/guard_selfprotect_test.go): 12 protected paths (orch config file, orch.db, the guard's policy snapshot and a pin file under the data directory, a terms file, the user's Claude Code settings.json and settings.local.json, Codex hooks.json and config.toml, Gemini settings.json, a checkout's .git/hooks/pre-commit and .claude/settings.local.json) x 9 methods (Write, Edit, MultiEdit, Bash '>', '>>', tee -a, sed -i, cp, mv) = 108 cases, all refused with rule self_protection by Decide (block-other-jobs, session pinned to its own space). Further forms in TestSelfProtectionForms (18 refused: recursive removal of orch's directories, mv .git, removal of .claude, cp -t, install, dd of=, truncate, touch/ln/chmod in .git/hooks, a glob or variable target, sudo tee, bash -c, cd then a relative write, apply_patch in Bash and the apply_patch tool) and TestSelfProtectionReviewCases (23 reproducers from the security review: heredoc apply_patch, U+017F long s, -t attached or clustered, hard links, curl -o, wget -O, tar -C/-f, unzip -d, curl -O after cd, patch, .git/config). TestShellWritesListed checks Targets' new writes list against reads for 14 forms.",
+            "a2: TestSelfProtectionAllowsReads: the Read tool and cat of each of the 11 protected paths other than the terms file are allowed; the terms file and 6 secret files (the list in docs/internals/hooks.md, Self-protection) are refused with self_protection, by both tools. TestSelfProtectionForms and TestSelfProtectionReviewCases keep ordinary calls allowed: cp of settings to /tmp, ls of the ssh directory, ls and du of the home's entries, known_hosts and public keys, GH_CONFIG_DIR=<dir> gh, a Write whose content names protected paths, git commit/add naming them, tar of the Claude Code directory to /tmp."
+          ]
         }
       ],
       "status": "in_progress",
@@ -3408,7 +3449,7 @@
       "attempts": 1,
       "criteria_sha256": "516bf29527b8f8f01e04135d569b6635490675259e69914c5913c7350f4986d6",
       "branch": "feat/sp-042-self-protection",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/175"
     },
     {
       "id": "SP-043",

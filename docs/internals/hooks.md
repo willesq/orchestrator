@@ -58,7 +58,17 @@ stored, with decision `not enforced`.
 
 `spaces.Targets(tool, tool_input, cwd)` (`internal/spaces/targets*.go`, SP-013) lists everything
 a tool call reaches, for the command log and the tool guard: `paths`, `cd_dest`, `git_dirs`,
-`gh_repos` (lowercase `owner/repo`), `prefixes` and `opaque` with `opaque_reasons`. Checking `cd`
+`gh_repos` (lowercase `owner/repo`), `prefixes`, `writes` and `opaque` with `opaque_reasons`.
+`writes` (SP-042, `targets_writes.go`) lists, apart from what the call only reads, what it
+writes: a file tool's `file_path`/`notebook_path` (not paths its content mentions), Codex
+`apply_patch` files, output redirections (`>`, `>>`, `&>`, `>|`, `2>`), `tee`'s and `sed -i`'s
+files, the destination of `cp`, `install`, `ln`, `rsync` and `ditto` (the last operand, or the
+`-t` / `--target-directory` value, also attached or in a flag cluster), every operand of `mv`,
+`rm`, `rmdir`, `unlink`, `touch`, `truncate`, `chmod`, `chown`, `shred` and `patch`, the sources
+of a hard link (`ln` without `-s`, `cp -l`), `dd`'s `of=`, `curl -o`/`--output-dir`, `wget
+-O`/`-P`, `unzip -d`, `tar -C` when extracting and `tar -f` when creating, and the working
+directory of a download or extraction that names no output; a word known only up to a variable
+or glob is listed as its prefix. Each is also listed under `paths` or `prefixes`. Checking `cd`
 alone would be easy to get around, so it reads every form the call can take, and it flags what
 it cannot read rather than returning less. It is best-effort by decision (D-28): no static
 reading of shell is complete, so it is evidence for the guard, and the OS sandbox and per-job
@@ -156,7 +166,8 @@ physical paths, so each root and protected path is matched both as written and w
 resolved (`~/code` linked to another volume). That is the only filesystem read, and Decide
 itself stays pure; a replay gives the same answer against the same policy snapshot, which must be
 rebuilt when roots or their links change. A protected path that is not absolute is an error.
-Paths compare cleaned, in Unicode NFC and case-folded, as macOS treats names.
+Paths compare cleaned, in Unicode NFC and with full Unicode case folding (not lower-casing: APFS
+takes `ſ` for `s`), as macOS treats names.
 
 - **Modes (D-12).** `off` and `log` never refuse. The decision still carries the verdict
   `block-other-jobs` would give (`would`), for the command log. `block-other-jobs` is the default,
@@ -181,9 +192,9 @@ Paths compare cleaned, in Unicode NFC and case-folded, as macOS treats names.
   reported is the one ranked first here, whatever order the targets come in:
   1. `no_policy`: no spaces are configured, so the call is allowed (INV-10).
   2. `pin_missing`: the session has no pin, so the call is refused (INV-13).
-  3. `self_protection`: `Write`, `Edit`, `MultiEdit`, `NotebookEdit` or `apply_patch` writes to a
-     protected path, so the call is refused. The caller supplies the list (SP-042). Reads are not
-     refused. Shell writes to protected paths are SP-042's.
+  3. `self_protection` ([self-protection](#self-protection), SP-042): the call writes to a
+     protected path, by a file tool or a shell command, or reads a terms file or credential, so
+     it is refused. Other reads of protected paths are allowed.
   4. `other_job_path`, `other_job_ancestor` and `other_job_repo`: a target lies in, contains, or
      is a repo of an isolated space other than the session's. The call is refused.
   5. `unreadable_space` (`strict` only): a target lies in, contains, or is a repo of a non-public
@@ -205,6 +216,47 @@ Paths compare cleaned, in Unicode NFC and case-folded, as macOS treats names.
 The rule id is safe to show and log: it never names the matched path or text. `TestDecideCases`
 runs 43 cases in all four modes, covering every SP-040.1 form, and `TestDecideDeterministic`
 replays 20,000 random inputs.
+
+### Self-protection
+
+The guard refuses agent writes to what keeps orch's layers working (spaces SP-042,
+`internal/spaces/guard_selfprotect.go`): otherwise an agent could remove orch's hooks, edit its
+pin or switch the guard off. `spaces.ProtectedPaths(home, configDir, dataDir, policy)` is the one
+list, shared by the guard and a replay of the command log (SP-047), and
+`spaces.NewGuardPolicyProtecting(policy, protection)` builds the guard policy with it:
+
+- **Never written:** orch's config directory (`~/.config/orch`) and data directory
+  (`~/.local/share/orch`, which holds `orch.db`, the command log and the guard's policy snapshot
+  and pin files), `~/.claude/settings*`, `~/.codex/hooks.json` and `config.toml`,
+  `~/.gemini/settings.json`. A directory protects everything
+  below it, and writing a directory that holds a protected path (`rm -rf ~/.config`,
+  `mv ~/.local/share/orch …`) is writing it.
+- **Never written, in any directory:** `.git/hooks`, `.git/config` (whose `core.hooksPath` and
+  `core.fsmonitor` run commands), `.claude/settings*`, `.codex/hooks.json`,
+  `.codex/config.toml` and `.gemini/settings.json`, so a checkout's own harness settings (which
+  can turn every hook off) and git hooks are covered too. Removing or moving the `.git`,
+  `.claude`, `.codex` or `.gemini` folder itself is a write.
+- **Never read either:** each space's terms file, the files in each space's gh profile directory
+  (`gh_config_dir`) and in the default one (`~/.config/gh`), which hold their logins (the
+  directory itself may still be named, as `GH_CONFIG_DIR=<dir> gh …` does), orch's `qdrant-api-key`,
+  `~/.netrc`, `~/.aws/credentials` and `~/.ssh/id_*` (not `*.pub`). A glob or unknown word
+  whose prefix lies in a protected entry's directory (`cat ~/.ssh/*`) reads it; one further up
+  (`ls ~/*`) does not. Listing or searching a directory that holds one (`ls ~/.ssh`,
+  `grep -r x ~/.ssh`) is not refused; the OS sandbox is the boundary there. A terms file whose
+  name holds `*`, `?` or `[` is matched as written.
+
+Writes are read from `Targets`' `writes`; a record stored before SP-042 has none, and then a file
+tool's paths count as written. Paths compare as the guard's do: cleaned, NFC, with full Unicode
+case folding (APFS takes `ſ` for `s`), and
+both as written and with symlinks resolved (for the fixed paths; the "any directory" patterns
+match the resolved path). Like every guard rule, it applies only while spaces are configured.
+`TestSelfProtectionRefusesWrites` covers 12 protected paths with each of `Write`, `Edit`,
+`MultiEdit`, `>`, `>>`, `tee`, `sed -i`, `cp` and `mv` (108 cases, all refused);
+`TestSelfProtectionAllowsReads`, `TestSelfProtectionForms` and
+`TestSelfProtectionReviewCases` (the security review's reproducers) cover reads and other forms.
+
+**Limits.** Writes Targets cannot see (an interpreter's `open()`, a variable holding the whole
+path, `git config core.hooksPath`) are not caught; D-28 applies.
 
 ## Prompt context
 
