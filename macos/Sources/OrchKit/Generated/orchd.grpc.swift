@@ -670,6 +670,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ListSpaces" metadata.
+        public enum ListSpaces: Sendable {
+            /// Request type for "ListSpaces".
+            public typealias Input = Orchd_V1_ListSpacesRequest
+            /// Response type for "ListSpaces".
+            public typealias Output = Orchd_V1_ListSpacesResponse
+            /// Descriptor for "ListSpaces".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListSpaces",
+                type: .unary
+            )
+        }
+        /// Namespace for "ScanSpaces" metadata.
+        public enum ScanSpaces: Sendable {
+            /// Request type for "ScanSpaces".
+            public typealias Input = Orchd_V1_ScanSpacesRequest
+            /// Response type for "ScanSpaces".
+            public typealias Output = Orchd_V1_ScanSpacesResponse
+            /// Descriptor for "ScanSpaces".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ScanSpaces",
+                type: .unary
+            )
+        }
         /// Namespace for "PinSession" metadata.
         public enum PinSession: Sendable {
             /// Request type for "PinSession".
@@ -1047,6 +1073,8 @@ public enum Orchd_V1_Orchd: Sendable {
             DiffSpaces.descriptor,
             ApplySpaces.descriptor,
             ExplainPlacement.descriptor,
+            ListSpaces.descriptor,
+            ScanSpaces.descriptor,
             PinSession.descriptor,
             EndSession.descriptor,
             ListSessions.descriptor,
@@ -2289,6 +2317,58 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PlacementExplanation>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PlacementExplanation>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListSpaces" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListSpaces lists the spaces of the applied policy: each one's kind,
+        /// > bindings and the spaces it may read, with the policy's status.
+        /// > Operator-only, like DiffSpaces: it names every job's orgs and roots.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListSpacesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListSpacesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListSpacesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listSpaces<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListSpacesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListSpacesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListSpacesResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSpacesResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ScanSpaces" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ScanSpaces looks through folders the operator chose for git checkouts
+        /// > and reports each one's GitHub remote, the repo's visibility and where
+        /// > the applied policy places it, plus the GitHub orgs each gh login belongs
+        /// > to. It writes nothing: no file, no policy revision, no binding.
+        /// > Operator-only: it reads folders and GitHub accounts of every job.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ScanSpacesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ScanSpacesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ScanSpacesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func scanSpaces<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ScanSpacesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ScanSpacesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ScanSpacesResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ScanSpacesResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "PinSession" method.
@@ -4664,6 +4744,80 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.ExplainPlacement.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListSpaces" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListSpaces lists the spaces of the applied policy: each one's kind,
+        /// > bindings and the spaces it may read, with the policy's status.
+        /// > Operator-only, like DiffSpaces: it names every job's orgs and roots.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListSpacesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListSpacesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListSpacesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listSpaces<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListSpacesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListSpacesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListSpacesResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSpacesResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListSpaces.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ScanSpaces" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ScanSpaces looks through folders the operator chose for git checkouts
+        /// > and reports each one's GitHub remote, the repo's visibility and where
+        /// > the applied policy places it, plus the GitHub orgs each gh login belongs
+        /// > to. It writes nothing: no file, no policy revision, no binding.
+        /// > Operator-only: it reads folders and GitHub accounts of every job.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ScanSpacesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ScanSpacesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ScanSpacesResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func scanSpaces<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ScanSpacesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ScanSpacesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ScanSpacesResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ScanSpacesResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ScanSpaces.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -7054,6 +7208,70 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ExplainPlacementRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PlacementExplanation>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListSpaces" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListSpaces lists the spaces of the applied policy: each one's kind,
+    /// > bindings and the spaces it may read, with the policy's status.
+    /// > Operator-only, like DiffSpaces: it names every job's orgs and roots.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListSpacesRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listSpaces<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListSpacesRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSpacesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listSpaces(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListSpacesRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListSpacesResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ScanSpaces" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ScanSpaces looks through folders the operator chose for git checkouts
+    /// > and reports each one's GitHub remote, the repo's visibility and where
+    /// > the applied policy places it, plus the GitHub orgs each gh login belongs
+    /// > to. It writes nothing: no file, no policy revision, no binding.
+    /// > Operator-only: it reads folders and GitHub accounts of every job.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ScanSpacesRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func scanSpaces<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ScanSpacesRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ScanSpacesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.scanSpaces(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ScanSpacesRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ScanSpacesResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -9515,6 +9733,78 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.explainPlacement(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListSpaces" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListSpaces lists the spaces of the applied policy: each one's kind,
+    /// > bindings and the spaces it may read, with the policy's status.
+    /// > Operator-only, like DiffSpaces: it names every job's orgs and roots.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listSpaces<Result>(
+        _ message: Orchd_V1_ListSpacesRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListSpacesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListSpacesRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listSpaces(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ScanSpaces" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ScanSpaces looks through folders the operator chose for git checkouts
+    /// > and reports each one's GitHub remote, the repo's visibility and where
+    /// > the applied policy places it, plus the GitHub orgs each gh login belongs
+    /// > to. It writes nothing: no file, no policy revision, no binding.
+    /// > Operator-only: it reads folders and GitHub accounts of every job.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func scanSpaces<Result>(
+        _ message: Orchd_V1_ScanSpacesRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ScanSpacesResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ScanSpacesRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.scanSpaces(
             request: request,
             options: options,
             onResponse: handleResponse
