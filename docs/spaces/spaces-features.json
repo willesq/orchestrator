@@ -6749,7 +6749,7 @@
     "main_checkout": "/Users/williamesquivel/code/willesq/orchestrator",
     "note": "Status on origin/main is authoritative. A feature's status changes on its feature branch and reaches main when its PR merges.",
     "progress_file": {
-      "path": "/Users/williamesquivel/code/willesq/orchestrator/docs/spaces/progress.<ID>.local.json",
+      "path": "<main checkout>/docs/spaces/progress.<ID>.local.json",
       "purpose": "Live progress for the user and the next session. The plan's status only changes on main when a PR merges; this file shows what is happening now. It is never committed (listed in .git/info/exclude). Under D-63 each lane writes its own file named by its feature id; the coordinator keeps progress.local.json (read by the reader) as a summary of all lanes.",
       "schema": {
         "updated_at": "UTC ISO 8601, set on every write",
@@ -6778,7 +6778,7 @@
   "session_procedure": [
     "1. Sync. In the main checkout (/Users/williamesquivel/code/willesq/orchestrator) run `git fetch origin`. Read the plan from origin/main: `git show origin/main:docs/spaces/spaces-features.json`. That copy is authoritative for status; local copies may be stale.",
     "2. Pick your feature. Under D-63 up to 5 lanes run in parallel, each a separate session on one feature. A lane session works only on the feature the coordinator assigned it in parallel_lanes.active (or, with no assignment, the first feature in ascending 'priority' whose status on origin/main is not 'done' or 'superseded' and that no active lane holds). Never work on two features in one session, never take a feature another lane holds, and never take one whose depends_on are not all 'done' on origin/main.",
-    "3. Look for existing work on it. First read this feature's live progress file (/Users/williamesquivel/code/willesq/orchestrator/docs/spaces/progress.<ID>.local.json, e.g. progress.SP-024.local.json): if it names a different session_id with status 'in_progress' and updated_at less than 30 minutes ago, another session is working. Stop and tell the user. Then check branches and PRs: the branch is feat/<id in lowercase>-<short-slug> (e.g. feat/sp-020-spaces-config); run `git branch -a --list '*feat/<id>-*'` and `gh pr list --state all --search '<ID> in:title'`.",
+    "3. Look for existing work on it. First read this feature's live progress file (<main checkout>/docs/spaces/progress.<ID>.local.json, e.g. progress.SP-024.local.json): if it names a different session_id with status 'in_progress' and updated_at less than 30 minutes ago, another session is working. Stop and tell the user. Then check branches and PRs: the branch is feat/<id in lowercase>-<short-slug> (e.g. feat/sp-020-spaces-config); run `git branch -a --list '*feat/<id>-*'` and `gh pr list --state all --search '<ID> in:title'`.",
     "3a. If an open PR exists whose plan copy already shows the feature 'done' with verification, it is waiting for the user to review and merge. Report the PR link and stop. Do not start the next feature.",
     "3b. If a branch or open PR exists but the feature isn't done there, resume it: use its existing worktree under /Users/williamesquivel/code/willesq/orchestrator.worktrees/feat/..., or recreate it with ~/.claude/orchestrator/scripts/git_worktree_create.sh <branch> and answer 'y' to reuse the existing branch.",
     "3c. If the PR was merged but origin/main doesn't show the feature done, or a PR was closed unmerged, stop and ask the user what happened.",
