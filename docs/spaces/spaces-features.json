@@ -6699,7 +6699,7 @@
       {
         "feature": "SP-074",
         "rc_range": "RC-300..RC-349",
-        "note": "PR #182; holds the orchd.proto slot for SP-074.3.a3"
+        "note": "done and verified at 4da29c1; PR #182 waits for the user"
       },
       {
         "feature": "SP-024",
@@ -6729,7 +6729,7 @@
       {
         "feature": "SP-075",
         "rc_range": "RC-600..RC-649",
-        "note": "started 2026-11-14; changes orchd.proto only after PR #182 (SP-074) merges and it rebases; holds the migration slot"
+        "note": "SP-075.1 done; waits for PR #182 to merge, then gets the proto slot and SpacesSection.swift/OrchApp.swift; PR #185"
       }
     ],
     "next_rc_block": "RC-650",
@@ -6746,8 +6746,8 @@
     ],
     "next_d_id": "D-65",
     "proto_slot": {
-      "holder": "SP-074 (done editing, eff7585; slot released when PR #182 merges)",
-      "next": "SP-075"
+      "holder": "none (SP-074 finished editing at eff7585)",
+      "next": "SP-075, after PR #182 merges"
     },
     "migration_slot": {
       "holder": "SP-075",
