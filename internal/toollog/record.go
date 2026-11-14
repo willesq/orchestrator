@@ -211,6 +211,12 @@ var shellTools = map[string]string{
 // (an argv list is joined with spaces), or the tool input itself for any
 // other tool. It is credential-redacted and capped at MaxCommand.
 func Command(tool string, input []byte) string {
+	return Clean(CommandText(tool, input), MaxCommand)
+}
+
+// CommandText is Command before it is cleaned and cut: the shell command,
+// an argv joined with spaces, or the input itself.
+func CommandText(tool string, input []byte) string {
 	if field, ok := shellTools[tool]; ok {
 		var obj map[string]json.RawMessage
 		if json.Unmarshal(input, &obj) == nil {
@@ -218,11 +224,11 @@ func Command(tool string, input []byte) string {
 			var argv []string
 			switch {
 			case json.Unmarshal(obj[field], &s) == nil:
-				return Clean(s, MaxCommand)
+				return s
 			case json.Unmarshal(obj[field], &argv) == nil:
-				return Clean(strings.Join(argv, " "), MaxCommand)
+				return strings.Join(argv, " ")
 			}
 		}
 	}
-	return Clean(string(input), MaxCommand)
+	return string(input)
 }

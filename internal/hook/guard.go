@@ -37,13 +37,30 @@ var decideGuard = func(ctx context.Context, f spaces.GuardFiles, in spaces.Guard
 
 // guardToolEvent decides a pre-tool-use or cwd-changed event, prints the
 // deny when the call is refused, and hands the event with its decision to
-// orchd for the command log.
+// orchd for the command log. A call the guard lets through is then checked
+// for outbound terms (SP-044), from the same snapshot; its refusal is
+// printed and recorded as the guard's are (RC-116).
 func guardToolEvent(event string, p Payload, out io.Writer, cf clientFactory) {
 	res := decideWithin(guardTimeout, guardInput(event, p))
+	reason := ""
+	if event == "pre-tool-use" && res.Verdict != spaces.Refuse {
+		if t := outboundTerms(p, res.Terms); t.Refuse {
+			res = termsRefusal(res, t)
+			reason = t.Reason()
+		}
+	}
 	if res.Verdict == spaces.Refuse && event == "pre-tool-use" {
-		writeDeny(out, res.Rule)
+		writeDeny(out, res.Rule, reason)
 	}
 	recordToolEvent(event, p, cf, &res)
+}
+
+// termsRefusal is g refused by the terms check's result t. The terms layer
+// has its own switch, so the refusal takes effect whatever the guard's
+// mode; the command log records it as refused with t's rule.
+func termsRefusal(g spaces.GuardResult, t spaces.OutboundResult) spaces.GuardResult {
+	g.Verdict, g.Would, g.Rule, g.Enforced = spaces.Refuse, spaces.Refuse, t.Rule, true
+	return g
 }
 
 // guardInput is the decision's input for event. A cwd-changed event runs
@@ -114,13 +131,17 @@ var guardReasons = map[spaces.GuardRule]string{
 // writeDeny prints the deny both Claude Code and Codex read from a
 // PreToolUse hook (recorded in SP-001): hookSpecificOutput with
 // permissionDecision "deny" and a non-empty reason, which Codex requires.
-func writeDeny(out io.Writer, rule spaces.GuardRule) {
-	why, ok := guardReasons[rule]
-	if !ok {
-		why = "the guard refused it"
+// reason, when set, says why instead of the rule's own text: the terms
+// check's, which names the term's space, line and hash, never the term.
+func writeDeny(out io.Writer, rule spaces.GuardRule, reason string) {
+	if reason == "" {
+		why, ok := guardReasons[rule]
+		if !ok {
+			why = "the guard refused it"
+		}
+		reason = "orch spaces guard refused this call (rule " + string(rule) + "): " + why + "."
 	}
-	reason := "orch spaces guard refused this call (rule " + string(rule) + "): " + why +
-		". The operator can see it with 'orch spaces log'."
+	reason += " The operator can see it with 'orch spaces log'."
 	b, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{
 		"hookEventName":            "PreToolUse",
 		"permissionDecision":       "deny",

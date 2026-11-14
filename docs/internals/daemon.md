@@ -550,6 +550,14 @@ when only the guard directory was protected, can therefore show as changed where
 path protected since; and the directories are the replaying orchd's. The mode is the request's or the guard switch's current state; the record does
 not keep the mode it was judged in.
 
+A call the hook's [outbound terms](hooks.md#outbound-terms) check refused (recorded `refused`
+with rule `outbound_term` or `outbound_unchecked`, RC-116) cannot be checked again: the log never
+keeps the text the check read (INV-07), and the checkout it read has moved on. `spaces.Replay`
+carries that recorded verdict while the replayed guard lets the call through (its `Verdict` is not
+`refuse` in the replayed mode) and the terms layer's switch is on now
+(`GuardEnforcement.Terms`); otherwise the row shows the guard's verdict, as changed. A call the
+check let through is judged by the guard alone.
+
 ### Enforcement switches
 
 Each layer of spaces enforcement has an operator-only switch (spaces SP-070, D-11, D-12, D-40,

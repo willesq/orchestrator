@@ -24,7 +24,7 @@ they name a file.
 | `pre-compact` | Writes `sessions/<id>.checkpoint.yaml` with the last request and reply. |
 | `session-end` | See [session end](#session-end). |
 | `subagent-stop` | Appends `{kind: complete, source: subagent_type, summary}` (redacted, 200 bytes) to the parent session's event stream. |
-| `pre-tool-use` | Decides the call with the [enforcing guard](#enforcing-guard), prints a deny when it refuses, and hands the call with the decision to orchd for the command log. See [tool hooks](#tool-hooks). Claude Code and Codex. |
+| `pre-tool-use` | Decides the call with the [enforcing guard](#enforcing-guard) and then the [outbound terms](#outbound-terms) check, prints one deny when either refuses, and hands the call with the decision to orchd for the command log. See [tool hooks](#tool-hooks). Claude Code and Codex. |
 | `cwd-changed` | Hands the directory change (`old_cwd`, `new_cwd`) to orchd with the verdict the guard would give, and prints nothing. See [tool hooks](#tool-hooks). Claude Code only; Codex has no such event. |
 | `post-tool-use` | After `gh pr create\|ready\|close\|merge\|reopen\|edit`, requests a PR refresh, and after `gh pr create` (also `rtk gh pr create`) registers the PR with PR Watch (below). After `Edit`/`Write`/`MultiEdit` of markdown or a file under `~/.claude/`, hands the file off to be stored again. |
 
@@ -251,8 +251,9 @@ replaced through a temporary file and a rename):
 - **`policy.json`**, the snapshot: the applied policy and its revision (none when no spaces are
   applied), whether the applied revision no longer verifies, the home that expands `~`, the
   whole [self-protection](#self-protection) (`protection`: `write`, `anywhere` and `read`, from
-  `spaces.GuardProtection` for the applied policy, RC-110) and the guard's switch with a timed
-  switch's end and the state it reverts to. The format is version 2; a snapshot of another
+  `spaces.GuardProtection` for the applied policy, RC-110), the guard's switch and the
+  [outbound terms](#outbound-terms) layer's (`terms`, RC-116), each with a timed switch's end and
+  the state it reverts to; a snapshot without `terms` holds the layer's default, on. The format is version 2; a snapshot of another
   version (version 1 carried only the guard directory) is unreadable: allowed as no policy when
   `orch.db` never applied one, otherwise refused while the guard enforces, until orchd rewrites
   it at startup. `brew upgrade` relinks the hook at once but does not restart orchd, so with a
@@ -298,10 +299,18 @@ not enforced, the rule and the policy revision go to orchd in `RecordToolEvent`
 record's decision (`refused`, `allowed`) or as `would refuse (<rule>)` (RC-86), and keeps queue
 room for refusals ([command log](daemon.md#command-log), D-37).
 
+A call the guard lets through (allowed, or only logged) then goes to the
+[outbound terms](#outbound-terms) check, which reads the policy and the terms layer's switch from
+the same snapshot. Its refusal takes effect whatever the guard's mode (the terms layer has its own
+switch) and goes through the same deny and the same `RecordToolEvent` fields, as an enforced
+`refuse` with rule `outbound_term` or `outbound_unchecked` and the snapshot's revision, so the
+command log stores it as `refused` with that rule (RC-116).
+
 A refusal prints the deny SP-001 recorded both harnesses honoring, one JSON line:
 `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"orch spaces guard refused this call (rule <rule>): <why>. ..."}}`.
 The reason names the rule and what to do, never the path, repo or text that matched; Codex needs
-it non-empty. The hook still exits 0: a deny is only ever this output (RC-34). A Go runtime fatal
+it non-empty. A terms refusal's reason is the terms check's own (below), ending with the same
+pointer to `orch spaces log`. The hook still exits 0: a deny is only ever this output (RC-34). A Go runtime fatal
 error would exit 2, which Claude Code reads as blocking the call, so a crash fails closed.
 
 Measured (`TestGuardDecisionLatency`, M3 Max, 2026-11-12): the decision, file reads included,
@@ -411,6 +420,151 @@ moving the whole directory that holds the harness settings' `bin/orch-hook` link
 which can differ from orchd's (RC-203). An orchd run from a checkout's build output protects that
 output's `orch`, `orchd` and `orch-hook` too, so an agent working on orch cannot replace the
 running hook. `*orch*` also covers other launch agents whose name holds `orch` (`com.pytorch.…`).
+
+### Outbound terms
+
+Each space may have a terms file ([config.md](config.md#spaces-policy)): words and patterns that
+belong to that space. `pre-tool-use` refuses an outbound action whose text holds a term of a
+space that one of its possible destinations does not hold (spaces SP-044,
+`internal/hook/terms.go`, `internal/spaces/terms.go`, `outbound*.go`). It runs after the
+[enforcing guard](#enforcing-guard) lets a call through, from the policy and the terms layer's
+switch in the guard's snapshot (not `orch.db`; while the snapshot cannot be read, the switch is
+read from `orch.db` as the guard's is, and an outbound call refused because the terms cannot be
+known), and refuses through the guard's deny and command log fields (RC-116). A replay of the
+command log ([SP-047](daemon.md#command-log)) cannot run the check again: the log never keeps the
+text checked (INV-07) and the checkout has moved on. It carries a recorded `outbound_term` or
+`outbound_unchecked` refusal as the replayed verdict while the replayed guard lets the call
+through and the terms layer is on now; otherwise the row shows the guard's verdict as changed.
+
+- **Outbound actions** (`spaces.OutboundActions`, read from the shell command with
+  `mvdan.cc/sh`, in any letter case (macOS runs `GIT` as git) and with zsh's `=git`, following
+  `cd`/`pushd` (with `~`), `git -C`, `env -C`, Codex's `workdir`, `source /dev/stdin`,
+  `export`ed variables, the variables of the [baseline](#outbound-baseline) (`$PWD`, `$USER`,
+  `$HOME` and literal assignments earlier in the command), wrappers such as `env` (with `-u`,
+  `-i` and `-P`), `timeout`, `nice`, `sudo` and `rtk`, `bash -c`/`-lc`
+  and a shell fed a literal here-document, and the commands inside `$(…)`, `<(…)` and
+  redirections): `git commit`
+  (its message, `-F` and `-t` files, staged changes and the author and committer git would
+  name, or with `-a` the tracked changes too; `git tag -a` and `git notes` also their tagger or
+  author),
+  `git push` (the commits it sends, `git log -p --cc <refs> --not --remotes=<remote>` with each
+  commit's author and committer, so what a merge itself adds is read, plus every commit a tag
+  reaches when tags are pushed, and the messages and taggers of annotated tags it pushes, also
+  with `push.followTags`; a pushed ref or tag that is not a commit once peeled (a tag of a blob or
+  tree) fails closed; with no refspec, every branch when the
+  remote's push refspec or `push.default=matching` says so, every ref for a mirror remote; to a
+  URL, only remotes whose push URLs lie in the URL's own spaces are left out), `git tag` with a
+  message, `git notes` with a file, every `gh`
+  command but a known read-only one (`pr list|view|diff|checks`, `repo view|clone`, `search`, …)
+  with its body, notes and recover files, gist files and release assets, and `gh api` writes
+  (any method but GET, or fields or `--input` without one). Their text is every string of the
+  tool input, decoded (so a term after a newline is on a word boundary), every word as the shell
+  passes it (so `'fal''con'` and `fal{,}con` are found), literal here-documents and here-strings,
+  the files they
+  send and what git says they send. git's diff shows a binary file only as changed, so each
+  binary file a commit or push sends is read whole (from the commit, the index or the work tree),
+  up to 1 MiB each and 64 per check; larger or further binary files are not read, like other
+  encoded content (D-60). When an earlier command of the same call changes what is
+  staged or committed (`git add && git commit && git push`), a commit or push also sends the
+  staged and work tree changes and every untracked file, and a push every branch.
+- **Destination.** The repo the command names (`-R`, `GH_REPO`, a PR or issue URL, `gh repo
+  create <o>/<r>`, `repos/<o>/<r>`, `orgs/<o>`, a push URL), else for `git` the checkout's push
+  remote (the branch's push remote, `remote.pushDefault`, the branch's remote, then `origin`) and
+  for `gh` the repo gh itself would use (`gh_default_repo`, D-60): the hook's `GH_REPO`; else,
+  among the checkout's remotes in gh's order (`upstream`, `github`, `origin`, then the rest), the
+  first one `gh repo set-default` marked (`remote.<name>.gh-resolved`: `base`, or the owner/repo
+  it names); else the first remote, since a tool call has no terminal for gh to ask on. gh only
+  counts remotes on hosts it knows, which the check cannot see (ssh aliases, Enterprise logins),
+  so without a mark every remote before the first `github.com` one counts as well, and with
+  `GH_HOST` naming another host, or `GH_CONFIG_DIR` set in the command, every remote does (the
+  command's own `GH_HOST` before the hook's). `gh api repos/{owner}/{repo}/…` (or `:owner/:repo`)
+  counts the marked repo and the first remotes too, since gh may fill the placeholders from its
+  first remote. Every push URL of a git remote counts. A
+  term may reach a destination only when every possible destination is its own space. A remote's
+  owner is placed by its binding; a gist, a GraphQL call, an owner bound to no space and a host
+  that is not GitHub (`github.com`, a subdomain, or a dotless ssh alias naming github) hold none.
+- **Fails closed** while the terms layer is on ([switches](daemon.md#enforcement-switches)), as
+  `outbound_unchecked` (`fail_closed_unreadable`): an outbound command with a command substitution
+  (other than `$(cat <<'EOF' … EOF)`) or a variable the [baseline](#outbound-baseline) does not
+  read in it, a `cd` that cannot be followed, a loop, `eval`, `xargs`, a command
+  whose name is a variable or a program given `git`/`gh` as words (`rebase -x`, `submodule
+  foreach`), a `git-*` helper, an action inside a substitution; `git -c` other than the harmless
+  keys below, any other global git option but a few (`--git-dir`, `--work-tree`, `--config-env`), a
+  variable set in the command that points git at another repository or config or changes how it
+  reaches a remote (`GIT_DIR`-like, `HOME`, `XDG_CONFIG_HOME`, `GIT_SSH`, `GIT_SSH_COMMAND`,
+  `GIT_PROXY_COMMAND`, `GIT_EXEC_PATH`, or `env -i`), an earlier command of the call that changes a
+  remote or writes config, or that changes gh's repo (`gh repo set-default`); `GH_REPO` set
+  without `export`, emptied or unset (`unset`, `env -u`, `env -i`) before a gh write, or a
+  `GH_HOST` that cannot be read; a git alias the checkout defines, `git send-email`, `subtree`,
+  `request-pull` or `push --recurse-submodules`; a gh alias or extension, or a gh write fed from a
+  pipe or redirect; a fork, template, sync source, cloned labels or another owner's `--head`, an
+  issue transfer, a PR body filled from commits (`--fill`, `--fill-first`, `--fill-verbose`, `-f`
+  also in a bundle such as `-fB`), release notes from a local tag (`--notes-from-tag`), a
+  `gh api` write to a `forks`, `transfer` or `generate` endpoint (each copies to a second
+  destination), a URL whose host only ends in `github.com`, a `gh api` URL on another host than
+  `api.github.com`, a `repos/` path it cannot read and a path with a `.` or `..` segment or an
+  escaped dot, slash or backslash (gh's own `new` alias of `create` is read as `create`); a
+  zsh glob qualifier or an `alias` that runs git; a file an earlier command of the call wrote
+  (a redirection, `cp`, `sed -i`, `tee`, …) that the action sends, inside its checkout for a commit
+  or push, or in git's config; a file that cannot be read or is stdin (other than a literal
+  here-document); a
+  terms
+  file or a policy snapshot that cannot be read; git failing, a file or git's output over 4 MiB,
+  or the check taking over 2.5 s (matching stops between terms when the time is up). The harness
+  gives `pre-tool-use` 5 s and lets the call run when it kills the hook, so the guard (250 ms), the
+  check, git's 1 s wait for stray children and handing a refusal to orchd (250 ms) stay under it.
+  A command that cannot be parsed is refused too. With the layer off, or no
+  spaces or terms, nothing is checked.
+- **git runs safely.** The check's git runs with `core.fsmonitor=false`, no external diff,
+  textconv, pager or signature check, no replace refs, and `log.showRoot`, `diff.relative`,
+  `core.quotePath` and `i18n.logOutputEncoding` pinned so the repository's config cannot hide what
+  is sent; a pushed commit that declares an encoding other than UTF-8 fails closed. Every
+  configured clean/smudge/process filter is switched off
+  for `commit -a`, variables that redirect what git runs removed, bounded output and a 1 s wait
+  for stray children, so a repository's config cannot make the hook run a program.
+- **Refusal.** The PreToolUse deny names the rule (`outbound_term` or `outbound_unchecked`), the
+  action, the destination's space and the term's space, line number and hash (HMAC-SHA256 keyed
+  with the terms file's own hash, so a short term cannot be guessed from it), never the term
+  (INV-07). The action is named by git's and gh's own words only: an alias, a gh subcommand or an
+  API method the session wrote is left out (`spaces.safeKind`), since it may be a term. The call is
+  still logged.
+- **Never logged.** Before orchd builds a command log record it replaces every space's terms
+  with `[term]` in the tool input (decoded, so a term after an escape is found, and re-encoded),
+  the command text again once a Codex argv is joined (so a term split across words is found), every
+  string of the targets and the directories, before any field is cut to its cap
+  (`internal/daemon/terms_redact.go`, cached until the policy or a terms file changes); while the
+  policy or a terms file cannot be read those fields are withheld. `TestTermsNeverLeak` searches
+  refusals, the command log, orchd's log and status output for every fixture term and finds none.
+
+#### Outbound baseline
+
+How strictly a command is read is a baseline of named rules (`internal/spaces/outbound_rules.go`,
+`spaces.OutboundBaseline`), each with a stable id so SP-075 can make them switchable and let the
+operator add stricter ones. Until then every rule is on and cannot be changed. D-60 (2026-11-14)
+loosened the first strict version with the four marked *loosens*:
+
+| Rule id | Loosens | What it does |
+|---|---|---|
+| `fail_closed_unreadable` | | An outbound command the check cannot read in full is refused as `outbound_unchecked`. |
+| `gh_default_repo` | yes | A gh write without `-R` goes to the repo gh would use (above), not to every remote of the checkout; before D-60 a fork whose upstream was another space's refused the session's own terms. |
+| `plain_variables` | yes | `$PWD` (the directory the walk is in; unknown after a `cd` it cannot follow), `$USER` (the hook's) and `$HOME`, also as `${NAME}`, are read as the shell expands them. |
+| `command_assignments` | yes | A variable given a literal value (or one built from known variables) earlier in the same command is read where that assignment always runs first: a top-level statement or the left side of `&&`/`\|\|`. It is unknown when assigned in a pipeline, subshell, `$(…)`, background job, the right side of `&&`/`\|\|` or a compound command; after `read`, `eval`, `source`, `unset`, `printf -v`, a prefix assignment (`R=x cmd`), `${R:=…}`, arithmetic or a `for` loop over it; and for the rest of the command once it defines a function, `alias` or `trap`, assigns `IFS` or makes a name reference (`declare -n`), and for a name once it is `readonly` or given another attribute than `-x` or `-g` (`declare -i`, `-l`, `-u`, `-r`, arrays, zsh's `integer` and `float`). A shell started with `bash -c` sees only exported values. |
+| `git_config_harmless_keys` | yes | `git -c` is read for keys that change neither where git sends, what it sends, nor what it runs: before D-60 `user.*`, `color.*`, `i18n.*`, `init.*`, `advice.*`, `log.*`, `commit.gpgsign`, `commit.verbose`, `core.quotepath`, `core.editor`, `gpg.format`, `tag.gpgsign`; D-60 added display and housekeeping keys (`core.commentChar`, `core.commentString`, `commit.cleanup`, `commit.status`, `core.abbrev`, `status.*`, `column.*`, `tag.sort`, `branch.sort`, `versionsort.*`, `gc.auto`, `gc.autoDetach`, `maintenance.auto`, `core.precomposeUnicode`, `core.longpaths`, `pull.rebase`, `pull.ff`, `rebase.autoStash`, `merge.conflictStyle`, `rerere.enabled`, `protocol.version`) and `push.autoSetupRemote` (it sets the upstream of a branch pushed to its default remote, which the check already reads). Keys that name a program (`core.pager`, `core.fsmonitor`, `core.hooksPath`, `credential.*`, `gpg.program`, `diff.external`), a destination or refs (`url.*`, `remote.*`, `push.default`, `push.followTags`) or a filter, and `help.autocorrect` (it can run another subcommand than the one written) still fail closed. Sections ending in `.*` match any key in them; the others match exactly. |
+| `pending_work_after_staging` | | After `git add`, `commit` or another command that changes what is staged or committed earlier in the call, a commit or push also sends the work tree, untracked files and, for a push, every branch. |
+
+`TestOutboundGHDefaultRepo`, `TestOutboundPlainVariables`, `TestOutboundCommandAssignments` and
+`TestOutboundGitConfigKeys` (`internal/spaces/outbound_d60_test.go`) hold, per loosening, commands
+the strict version refused that are now allowed, beside commands that still reach another space's
+destination or carry its term and are still refused.
+
+**Limits.** This is static reading of shell, best-effort like target extraction (D-28, D-60):
+SP-045's git hooks (`commit-msg`, `pre-push` on the real content) and per-job GitHub accounts
+(D-18) are the boundary for git. Accepted as risk by D-60 (RC-117): text sent by a script or
+program that runs git itself (`./deploy.sh`, `make`), an interpreter, `curl` to the GitHub API, a
+tool other than a shell (notably GitHub MCP tools), an alias or shell function from the user's
+profile, other static-shell evasions of the same kind, and commits a push sends that a session
+hid by moving local remote-tracking refs (a push is judged against them). `gh search` and `gh api`
+GET queries send terms to GitHub without publishing them.
 
 ## Prompt context
 

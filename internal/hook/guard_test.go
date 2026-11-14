@@ -340,7 +340,7 @@ func TestGuardDecisionLatency(t *testing.T) {
 // one, which Codex requires.
 func TestWriteDenyUnknownRule(t *testing.T) {
 	var out bytes.Buffer
-	writeDeny(&out, "something_new")
+	writeDeny(&out, "something_new", "")
 	if reason, ok := denyOf(t, out.Bytes()); !ok || !strings.Contains(reason, "something_new") {
 		t.Errorf("reason %q", reason)
 	}

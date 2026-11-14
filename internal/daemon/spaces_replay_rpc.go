@@ -61,7 +61,9 @@ func (s *server) ReplaySpaces(ctx context.Context, req *orchdv1.ReplaySpacesRequ
 		return nil, err
 	}
 	out := &orchdv1.ReplaySpacesResponse{Owner: owner.String(), Mode: mode, PinSpace: pin.Space, Pinned: pin.Found}
-	enf := spaces.GuardEnforcement{Guard: spaces.GuardMode(mode)}
+	// Reason: a terms refusal is carried only while the terms layer is
+	// on, as the hook checks terms only then (RC-116).
+	enf := spaces.GuardEnforcement{Guard: spaces.GuardMode(mode), Terms: s.enforcement.state(spaces.LayerTerms)}
 	err = s.replayPages(ctx, owner, func(events []spaces.ReplayEvent) {
 		rep := spaces.Replay(events, pin, enf, policies)
 		out.Events += int64(len(rep.Rows))

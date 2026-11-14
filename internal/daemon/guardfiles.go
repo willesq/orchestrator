@@ -15,10 +15,10 @@ import (
 )
 
 // The files the enforcing tool guard in orch-hook reads (spaces SP-041):
-// orchd writes the applied policy with the guard's switch into one
-// snapshot, and each session's pin into a pin file, so the hook decides a
-// call without waiting on orchd. See docs/internals/hooks.md "Enforcing
-// guard".
+// orchd writes the applied policy with the guard's and the terms layer's
+// switches into one snapshot, and each session's pin into a pin file, so
+// the hook decides a call without waiting on orchd. See
+// docs/internals/hooks.md "Enforcing guard".
 
 // guardPinSyncEvery is how often pin files of sessions whose harness
 // process exited are removed, and missing ones of live sessions written.
@@ -31,15 +31,17 @@ type guardWriter struct {
 	// configDir and dataDir are orch's directories and binDir holds its
 	// binaries, all protected from agent writes (SP-042).
 	configDir, dataDir, binDir string
-	// mu orders snapshot writes and guards sw, the guard's switch as last
-	// given.
-	mu sync.Mutex
-	sw spaces.Switch
+	// mu orders snapshot writes and guards sw and terms, the guard's and
+	// the terms layer's switches as last given.
+	mu    sync.Mutex
+	sw    spaces.Switch
+	terms spaces.Switch
 }
 
 func newGuardWriter(dir, home, configDir, dataDir, binDir string) *guardWriter {
 	return &guardWriter{dir: dir, home: home, configDir: configDir, dataDir: dataDir, binDir: binDir,
-		sw: spaces.Switch{Layer: spaces.LayerGuard, State: spaces.LayerGuard.Default()}}
+		sw:    spaces.Switch{Layer: spaces.LayerGuard, State: spaces.LayerGuard.Default()},
+		terms: spaces.Switch{Layer: spaces.LayerTerms, State: spaces.LayerTerms.Default()}}
 }
 
 // defaultGuardWriter writes the guard's files where orch-hook reads them.
@@ -76,21 +78,28 @@ func (s *server) guardProtection(res *spaces.Resolved) spaces.Protection {
 }
 
 // setSwitches takes every layer's switch after a change and rewrites the
-// snapshot when the guard's changed. It runs under the switches' lock, so it
-// must not call back into them.
+// snapshot with the guard's and the terms layer's (RC-116). It runs under
+// the switches' lock, so it must not call back into them.
 func (s *server) setSwitches(e spaces.Enforcement) {
 	g := s.guard
 	if g == nil {
 		return
 	}
-	sw, ok := e[spaces.LayerGuard]
-	if !ok {
-		return
-	}
-	g.mu.Lock()
-	g.sw = sw
-	g.mu.Unlock()
+	g.take(e)
 	s.writeGuardSnapshot()
+}
+
+// take keeps the guard's and the terms layer's switches of e, those it
+// carries.
+func (g *guardWriter) take(e spaces.Enforcement) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if sw, ok := e[spaces.LayerGuard]; ok {
+		g.sw = sw
+	}
+	if sw, ok := e[spaces.LayerTerms]; ok {
+		g.terms = sw
+	}
 }
 
 // writeGuardSnapshot writes the snapshot from the policy orchd enforces and
@@ -113,6 +122,7 @@ func (s *server) writeGuardSnapshot() {
 	snap := spaces.GuardSnapshot{
 		Home: g.home, WrittenAt: time.Now().UTC(),
 		Guard: spaces.GuardSwitch{State: g.sw.State, Until: g.sw.Until, Previous: g.sw.Previous},
+		Terms: spaces.GuardSwitch{State: g.terms.State, Until: g.terms.Until, Previous: g.terms.Previous},
 	}
 	res, rev, err := s.spaces.CurrentRevision()
 	switch {
@@ -202,11 +212,7 @@ func (s *server) startGuardFiles(ctx context.Context) {
 		// Reason: read and hooked under one lock, so no change falls
 		// between them.
 		e.mu.Lock()
-		if sw, ok := e.cur[spaces.LayerGuard]; ok {
-			s.guard.mu.Lock()
-			s.guard.sw = sw
-			s.guard.mu.Unlock()
-		}
+		s.guard.take(e.cur)
 		e.onChange = s.setSwitches
 		e.mu.Unlock()
 	}

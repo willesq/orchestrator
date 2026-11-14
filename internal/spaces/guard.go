@@ -185,6 +185,9 @@ type GuardEnforcement struct {
 	// the guard does not know is read as GuardStrict, so a damaged state
 	// never enforces less.
 	Guard GuardMode
+	// Terms is the outbound terms layer's state (SP-044). Decide does not
+	// read it; a replay does, to carry recorded terms verdicts. "" is on.
+	Terms string
 }
 
 // GuardEvent is one hook event, with its targets already extracted.
