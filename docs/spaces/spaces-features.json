@@ -6821,7 +6821,7 @@
       {
         "feature": "SP-030",
         "rc_range": "RC-400..RC-449",
-        "note": "blocked on RC-405 (how to declare public folders); design proposed to the user 2026-11-14; PR #180"
+        "note": "resumed to implement D-65's safe default (all local content under public roots quarantined); PR #180"
       },
       {
         "feature": "SP-048",
@@ -6831,7 +6831,7 @@
       {
         "feature": "SP-051",
         "rc_range": "RC-500..RC-549",
-        "note": "waiting on the user's a1 snapshot review; PR #181"
+        "note": "a1 approved (D-70); resumed for the independent verifier; PR #181"
       },
       {
         "feature": "SP-045",
@@ -6841,13 +6841,17 @@
       {
         "feature": "SP-075",
         "rc_range": "RC-600..RC-649",
-        "note": "SP-075.1 done; waits for PR #182 to merge, then gets the proto slot and SpacesSection.swift/OrchApp.swift; PR #185"
+        "note": "resumed for D-66's non-proto parts (migration slot); proto after #182 merges; PR #185"
+      },
+      {
+        "feature": "SP-046",
+        "rc_range": "RC-650..RC-699",
+        "note": "follow-up lane implementing D-67, D-68 and D-69 on a new branch, then audit and independent verifier"
       }
     ],
-    "next_rc_block": "RC-650",
+    "next_rc_block": "RC-700",
     "queued": [
       "SP-025 and SP-027 after #183 merges",
-      "SP-046 follow-ups (D-67, D-68, D-69)",
       "SP-052 and SP-054 after #181 merges",
       "SP-076 after SP-030 merges"
     ],
