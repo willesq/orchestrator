@@ -6503,14 +6503,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f09b8ebcceabae3c53278bbf89426eec5db6e7a09c656b08af71fa359704171c",
-      "branch": null,
+      "branch": "feat/sp-075-configurable-outbound-rules",
       "pr": null
     }
   ],
