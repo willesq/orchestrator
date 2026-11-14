@@ -5523,15 +5523,21 @@
             }
           ],
           "evidence": [
-            "a1: internal/daemon TestPrivateRepoInPublicOrgIsQuarantined passes (docs sync oss-org/secret private -> quarantine, oss-org/lib -> oss; sources checkout of oss-org/secret -> quarantine). commit ade4584",
-            "a2: internal/daemon TestRepoTurnedPrivateLeavesPublicInTheSameSync passes (same HEAD, lib now private: left public before aaa was cloned, cloned first, re-placed in quarantine in the same sync); internal/docs TestRepoTurnedPrivateLeavesPublicFirst (exact delete/clone/write order); internal/sources TestCheckoutNoLongerPublicLeavesFirst (sources do it before walking, skipped checkouts included). Fails with the leave pass removed."
+            "a1: internal/daemon TestPrivateRepoInPublicOrgIsQuarantined passes (docs sync oss-org/secret private -> quarantine, oss-org/lib -> oss; sources checkout of oss-org/secret -> quarantine). Verified at b9dd920.",
+            "a2: internal/daemon TestRepoTurnedPrivateLeavesPublicInTheSameSync passes (same HEAD, lib now private: left public before aaa was cloned, cloned first, re-placed in quarantine in the same sync); internal/docs TestRepoTurnedPrivateLeavesPublicFirst (exact delete/clone/write order); internal/sources TestCheckoutNoLongerPublicLeavesFirst (sources do it before walking, skipped checkouts included). Fails with the leave pass removed.",
+            "a3: internal/daemon TestUnreadableVisibilityIsPrivate passes (repo listed without owner node ID leaves public and syncs to quarantine; checkout whose repo GitHub will not show -> quarantine, and its public copy leaves).",
+            "a4: internal/daemon TestSessionWritersNeverTargetPublic 4/4 subtests pass: session and summary of a session pinned to public -> quarantine; hand-off of a file in a public repo under the public root -> personal (public_root_sessions), of a private repo -> quarantine; client note and public-prefix page from a session pinned to public -> quarantine.",
+            "a5 (D-65): internal/daemon TestCheckoutWithoutGitHubRemoteNeedsProofUnderPublicRoot passes: GitLab, no-remote, symlinked .git, plain and public GitHub folders under the public root are quarantined (no_public_proof), with a .git at, above or inside the public root and with a public root bound exactly at each folder; nothing on disk declares a folder public, so content becomes public only by a retag until public_paths (SP-076). internal/spaces TestPublicRootNeedsProofForCheckouts. D-65 regression: TestLocalContentUnderBroadPublicRootNeverPublic (session-registered sources, stricter-remote checkouts, web pages under a bound prefix still public, redirects placed by where they land).",
+            "Validation at b9dd920: go test ./... pass; go vet ./... clean; gofmt clean; make cover All files >= 80% (classify.go 98.8%, placing.go 92.7%, docs/public.go 91.2%, sources/public.go 96.7%); macOS swift tests 412 pass and make app-cover pass; CI build, test and app pass on PR #180 (app passed on rerun of a failed job; the same job also failed on other lanes branches).",
+            "DOD-6: security audit of the final diff (4 rounds): 0 critical, 0 high, 0 medium open; lows in RC-403; RC-406 (session pins follow a stricter remote) recorded for SP-022.",
+            "Independent verifier at b9dd920: a1-a5 PASS, D-65 regression present; DOD-1,2,3,4,5,7,8 PASS; DOD-9 pending at the time, since green; INV-10 and INV-03 PASS; no home paths or session IDs in the diff or commits."
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "b9dd920975b4b0fddbaa5c58b47a8ea3f2b1ceb3",
+      "verified_at": "2026-11-14T22:55:06Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "285ce77da8c1a9b5024a92a920ea21f2b54cf013a465814d3808d27d29495726",
