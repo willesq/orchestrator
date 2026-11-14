@@ -551,6 +551,11 @@
         "id": "D-61",
         "decision": "The sandbox layer is a user choice, not only a debugging switch. It gets a persistent setting stored in orch.db with three values: 'auto' (default: orch writes sandbox rules for a checkout only when another isolated space exists whose folders they would deny), 'on' (always, while a policy is applied) and 'off' (off by choice). 'off' or 'auto' with nothing to deny shows once in 'orch status' and the app, but does not mark sessions' start digests as enforcement off; a timed SP-070 switch that turns the sandbox off for debugging still warns as INV-16 says. Only the operator can change the setting, and each change is logged. When the sandbox is on: a space that uses the default gh login may read the default gh config folder inside the sandbox (RC-208 option a), a space that names its own gh profile reads only that profile, and other spaces' profiles stay denied. Multiple GitHub logins are supported as D-59 allows and are tested side by side. RC-211 is accepted: the SP-042 guard is the protection for writes to ~/.claude/settings*. This applies to the sandbox layer only; the other layers keep D-11 and INV-16 unchanged.",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-62",
+        "decision": "Merge SP-046 (PR #171) now, as admin without review, with the security-audit gate (DOD-6) not met: RC-215 (high), RC-216 and RC-217 (medium) stay open, together with the decisions in RC-210 and RC-213. SP-046 stays 'blocked' on main until they are settled and the independent verifier passes. With no spaces policy applied nothing changes (INV-10). The coordinator's recommendations, not yet confirmed by the user: RC-215 guard refuses tool calls in checkouts whose settings re-open another space's folders; RC-216 one-time start digest note after a sandbox setting change; RC-217 'auto' also triggers when another space has its own login folder; RC-210 documented limit, solved in SP-074; RC-213 use allowMachLookup com.apple.trustd.agent instead of enableWeakerNetworkIsolation.",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -6610,6 +6615,10 @@
     {
       "date": "2026-11-14",
       "change": "SP-046 under D-61: sandbox setting auto|on|off (orch spaces sandbox), gh in the sandbox (RC-208 option a, measured), two-login e2e. Evidence recorded for every SP-046 item at 6baf911; SP-046 blocked on the audit's high RC-215 and mediums RC-216, RC-217 (DOD-6). RC-180 and RC-184 resolved; RC-210 confirmed by measurement and made a decision; RC-213 to RC-219 added."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-62: user merged SP-046 (#171) with RC-215/216/217 open; SP-046 stays blocked until they are fixed and verified."
     }
   ],
   "plan_location": {
