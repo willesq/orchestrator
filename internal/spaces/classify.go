@@ -51,9 +51,14 @@ type Origin struct {
 	SourceURI string
 	// Path is a local folder or file: a checkout, a hand-off's file, or for
 	// a session record the session's first cwd. It must be absolute.
-	Path   string
-	Remote *Repo
-	URL    string
+	Path string
+	// Checkout is the top folder of the git checkout holding Path, "" when
+	// Path is in none. Under a public root a checkout needs proof to be
+	// public (SP-030, D-50): a remote GitHub verifies public, or a public
+	// root the operator bound at or inside the checkout.
+	Checkout string
+	Remote   *Repo
+	URL      string
 	// Tenant is a chat tenant's stable ID, without its provider.
 	Tenant string
 	// WriterSpace is where the pinned session that wrote the content writes,
@@ -98,6 +103,7 @@ const (
 	PlaceRootStricter      PlaceRule = "root_stricter"
 	PlaceConflict          PlaceRule = "conflict"
 	PlaceNotVerifiedPublic PlaceRule = "not_verified_public"
+	PlaceNoPublicProof     PlaceRule = "no_public_proof"
 	PlaceOrgUnconfirmed    PlaceRule = "org_unconfirmed"
 	PlaceWebPrefix         PlaceRule = "web_prefix"
 	PlaceWriter            PlaceRule = "writer"
@@ -200,8 +206,11 @@ func classify(o Origin, res *Resolved, opt Options) Placement {
 			path = ""
 		}
 		p := placeCheckout(path, o.Remote, res, opt)
-		if o.System == SystemSession {
+		switch o.System {
+		case SystemSession:
 			sessionPlacement(&p, res)
+		case SystemFS:
+			publicProof(&p, o, res)
 		}
 		return p
 	case SystemWeb:
@@ -290,6 +299,38 @@ func placeCheckout(path string, remote *Repo, res *Resolved, opt Options) Placem
 		return quarantine(p, PlaceNotVerifiedPublic, "it would be public, but its repo is not verified public")
 	}
 	return placed(p, c.space, rule, describe(rule, c.space))
+}
+
+// publicProof quarantines a local file that only a public root would make
+// public while it sits in a checkout nothing proves public (SP-030, D-50).
+// Reason: a public root such as ~/code holds every clone the user makes, and
+// a checkout from GitLab, or with no remote at all, can be any employer's
+// code; the root alone is not proof. A remote GitHub reports public is
+// proof, and so is a public root the operator bound at the checkout's own
+// folder or inside it. Content in no checkout is the operator's to declare
+// by the root that holds it.
+func publicProof(p *Placement, o Origin, res *Resolved) {
+	if p.Outcome != Placed || o.Checkout == "" || len(p.Roots) == 0 {
+		return
+	}
+	if s, _ := res.Space(p.Space); s.Kind != Public {
+		return
+	}
+	if o.Remote != nil && o.Remote.Visibility == VisibilityPublic {
+		return
+	}
+	if deep := p.Roots[len(p.Roots)-1]; within(deep.Root, o.Checkout) {
+		return
+	}
+	*p = quarantine(*p, PlaceNoPublicProof,
+		"it is under a public root, but its checkout has no remote GitHub reports public; the operator can retag it or bind its folder as a public root")
+}
+
+// within reports whether path is dir or lies inside it, compared as roots
+// are matched.
+func within(path, dir string) bool {
+	k, d := strings.ToLower(filepath.Clean(path)), strings.ToLower(filepath.Clean(dir))
+	return k == d || strings.HasPrefix(k, strings.TrimSuffix(d, string(filepath.Separator))+string(filepath.Separator))
 }
 
 // sessionPlacement turns a checkout's placement into a session pin's: a

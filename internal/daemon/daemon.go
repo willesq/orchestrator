@@ -644,7 +644,8 @@ func Run(ctx context.Context) error {
 	// starts, so nothing is stored unplaced.
 	pins := newPinRegistry(store)
 	repos := newRepoLookups(ghp.Routed())
-	svc.Place = (&writePlacer{spaces: sp, pins: pins, repos: repos}).place
+	placer := &writePlacer{spaces: sp, pins: pins, repos: repos}
+	svc.Place = placer.place
 
 	// Durable workflow engine: the worker unit drains AgentTask instances; the
 	// dispatcher (used by the RPC handler, not a subsystem) enqueues them.
@@ -703,14 +704,14 @@ func Run(ctx context.Context) error {
 	reviewWatcher := newReviewWatcher(reviews.NewStore(store), disp, tasks, ctl, ghService, ghp)
 	reviewWatcher.Poll = reviewsPoll(s.PRReviews.PollInterval)
 
-	docsSched := newDocsScheduler(s, store, svc, sp, ghp)
+	docsSched := newDocsScheduler(s, store, svc, sp, ghp, placer)
 	settingsSvc := settingsFor(store)
 	sup := supervisor.New(runCtx)
 	for _, u := range subsystems(deps{
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
 		summaries: summaries, github: ghService, ghProfiles: ghp, system: system, docs: docsSched,
-		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub, reviews: reviewWatcher, spaces: sp,
+		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub, reviews: reviewWatcher, spaces: sp, placer: placer,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return recovery(err)

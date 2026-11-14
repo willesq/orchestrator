@@ -2655,6 +2655,61 @@
           "SP-042"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-400",
+        "kind": "decision",
+        "topic": "Local files under a public root can be steered into public by any job session (security audit medium)",
+        "detail": "SP-030 makes a public root alone insufficient for checkouts without a verified-public GitHub remote (D-50), but anything local under a public root can still be written by any job session: the guard and the sandbox allow writes to public roots. Sessions may register repo/owner sources (SaveSource is refused to queued tasks only), and owner sources pick up new folders automatically. A session can therefore copy one job's files into a plain folder under ~/code, or into a folder whose fake .git names a public GitHub repo, or into the uncommitted working tree of a real public checkout, and the sources refresh places that content in public. This is not a regression (before SP-030 everything under a public root went to public), but the gate cannot meet 'only verified-public content reaches public' for local files. Options: (a) local files never go to public automatically: sources content under a public root goes to quarantine (or public_root_sessions); public content comes only from the GitHub docs sync, bound web prefixes and operator retags (SP-071). (b) Keep local placement in public and make repo/owner source registration operator-only (also RC-121/RC-122). This narrows the gap but does not close it, because owner sources still walk new folders and agents can still write into public checkouts. (c) Accept it and rely on the SP-046 sandbox denying job sessions writes to public roots. Recommendation: (a). Blocks SP-030 (DOD-6) until decided.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-046",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-401",
+        "kind": "decision",
+        "topic": "What counts as declaring a folder public (D-50)",
+        "detail": "Implemented as follows. A checkout under a public root is public only when GitHub reports its repo public, or when the operator bound a public root at the checkout's own folder or inside it. Content that is in no checkout (no .git anywhere above it, a symlinked .git included) is placed by the public root that holds it, following the summary's 'files under a root the operator declared public'. Confirm, or quarantine non-checkout content too (see RC-400).",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-402",
+        "kind": "follow-up",
+        "topic": "Limits of leaving public on a visibility change",
+        "detail": "(1) When the repo listing fails, every repo keeps its docs as last indexed, public ones included. A listing failure is not treated as unreadable visibility for every repo, because that would delete and re-embed a whole public org after a network blip. (2) A repo missing from the listing (deleted, transferred out, or not visible to the account) keeps its public docs until the owner is purged. (3) Leaving public deletes and re-ingests (re-embeds); it is not a move. SP-024 must make DeleteSource remove a source from every collection. (4) Cost: each docs sync reads one stored copy per doc of every listed repo that is not verified public, and each repo/owner source refresh reads one per stored doc. (5) A repo lookup that GitHub was not asked about or did not answer (budget spent, cache only, rate limit, 5xx, network error) moves nothing until GitHub answers; only a not-found answer counts as private. Rewrites still quarantine unknown visibility. (6) These deletions bypass the prune guard by design, because capping them would keep non-public content readable everywhere. A not-found answer during a GitHub incident could still remove many public copies at once (security audit residual).",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-024",
+          "SP-030",
+          "SP-027"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-403",
+        "kind": "follow-up",
+        "topic": "SP-030 security audit lows and design choices",
+        "detail": "(1) orchd's log names a repo or checkout path whose docs left public; tasks can read that log, but the content was public until then. (2) Folder comparison is case-insensitive, matching how roots are matched. (3) An edit hand-off that would be public goes to public_root_sessions, not to the editing session's space, until hand-offs carry the session (SP-029). (4) With an applied policy that no longer verifies, public copies are not moved; readers must treat a stale labels_v as unreadable (INV-08, SP-027). (5) The harness settings of a checkout quarantined by no_public_proof still follow its public root.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-029",
+          "SP-030"
+        ],
+        "status": "open"
       }
     ]
   },

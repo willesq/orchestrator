@@ -204,7 +204,9 @@ func TestScanSpaces(t *testing.T) {
 		"lib":           {"oss-org", "public", "oss", "placed"},
 		"moved":         {"acme", "private", "acme", "placed"},
 		"probe-unbound": {"stranger", "public", "oss", "placed"},
-		"anon":          {"", "", "oss", "placed"},
+		// An anonymous checkout under a public root has nothing to prove it
+		// public (SP-030, D-50).
+		"anon": {"", "", spaces.Quarantine, "quarantined"},
 	} {
 		c := got[rel]
 		if c.GetOwner() != w[0] || c.GetVisibility() != w[1] || c.GetSpace() != w[2] || c.GetOutcome() != w[3] || c.GetRule() == "" {

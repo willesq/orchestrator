@@ -47,6 +47,11 @@ type RefreshOpts struct {
 	// checkout's origin owner before each repo's docs are written (D-52);
 	// an error leaves that repo as last indexed.
 	CheckOwner func(ctx context.Context, owner string) error
+	// LeavesPublic, when set, reports whether a doc stored in space stored
+	// must leave the public space, written now as m (SP-030). A repo or
+	// owner source asks it about its stored docs before it walks anything;
+	// nil checks none.
+	LeavesPublic func(ctx context.Context, stored string, m rag.Meta) bool
 }
 
 // CheckoutURI is the URI a repo or owner source stores a local file under:
@@ -138,6 +143,7 @@ func refreshOwner(ctx context.Context, s Source, ing Ingester, opts RefreshOpts)
 	if err != nil {
 		return "missing", nil
 	}
+	leavePublic(ctx, CheckoutURI(resolve(base))+"/", ing, opts)
 	found := false
 	var skipped, refused, refusedPrefixes []string
 	// One listing of what this refresh stored under the owner serves every
@@ -177,6 +183,7 @@ func refreshRepo(ctx context.Context, s Source, repoPath, owner string, ing Inge
 	if !isDir(repoPath) {
 		return "missing", nil
 	}
+	leavePublic(ctx, CheckoutURI(resolve(repoPath))+"/", ing, opts)
 	r := ingestRepoMarkdown(ctx, repoPath, owner, s, ing, opts, nil)
 	var current []string
 	if r.refused != "" {

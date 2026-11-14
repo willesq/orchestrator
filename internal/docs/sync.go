@@ -89,6 +89,11 @@ type SyncOpts struct {
 	// a space's orgs sync as its own GitHub account; an error stops that
 	// owner's sync before anything is fetched. nil uses GH and Git.
 	Clients func(ctx context.Context, owner string) (GitHub, Git, error)
+	// LeavesPublic, when set, reports whether a doc stored in space stored
+	// must leave the public space, written now as m (SP-030). Each sync
+	// asks it about the docs of every repo GitHub does not report public
+	// before any repo is synced; nil checks none.
+	LeavesPublic func(ctx context.Context, stored string, m rag.Meta) bool
 }
 
 // Result is how one owner's sync went.
@@ -148,6 +153,10 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 		log.Printf("docs: %s: %s", o.Owner, reason)
 		return Result{Status: "error", Reason: reason}
 	}
+	// Reason: visibility is re-checked on every sync, and a repo that is no
+	// longer public leaves the public space before anything else is
+	// written (SP-030).
+	out := leavePublic(ctx, reg, ing, o, repos, opts)
 	var todo []Repo
 	for _, rp := range repos {
 		if (rp.IsArchived && !opts.IncludeArchived) || (rp.IsFork && !opts.IncludeForks) || !o.Covers(rp.Name) {
@@ -155,6 +164,7 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 		}
 		todo = append(todo, rp)
 	}
+	todo = firstOut(todo, out)
 	res := Result{Repos: len(todo)}
 	networkRun := 0
 	// wrote is set once a repo was synced since the owner was last checked.

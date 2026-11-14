@@ -94,6 +94,9 @@ type deps struct {
 	// spaces re-checks GitHub org bindings before content is written; nil
 	// checks none.
 	spaces *spaces.Engine
+	// placer takes docs that are no longer public out of the public space
+	// on each docs sync and sources refresh (SP-030); nil checks none.
+	placer *writePlacer
 }
 
 // subsystems lists orchd's supervised units in start order (stopped in reverse).
@@ -113,9 +116,9 @@ func subsystems(d deps) []supervisor.Unit {
 	}
 	sched := d.docs
 	if sched == nil {
-		sched = newDocsScheduler(d.settings, d.store, d.rag, nil, d.ghProfiles)
+		sched = newDocsScheduler(d.settings, d.store, d.rag, nil, d.ghProfiles, d.placer)
 	}
-	out = append(out, sourcesUnit(d.settings, d.store, d.rag, d.spaces), docsUnit(d.settings, sched))
+	out = append(out, sourcesUnit(d.settings, d.store, d.rag, d.spaces, d.placer), docsUnit(d.settings, sched))
 	if d.settingsSvc != nil {
 		out = append(out, settingsUnit(d.settingsSvc))
 	}
@@ -285,10 +288,10 @@ func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []str
 }
 
 // sourcesUnit refreshes registered web/repo/owner sources on a cadence.
-func sourcesUnit(s config.Settings, store *sql.DB, ing sources.Ingester, sp *spaces.Engine) supervisor.Unit {
+func sourcesUnit(s config.Settings, store *sql.DB, ing sources.Ingester, sp *spaces.Engine, placer *writePlacer) supervisor.Unit {
 	sched := sources.NewScheduler(sources.NewRegistry(store), ing,
 		sources.RefreshOpts{KnownRoots: expandRoots(s.Sources.KnownRoots), ExcludeDirs: s.Ingest.ExcludeDirs,
-			Guard: sourcesGuard(store), CheckOwner: docsOwnerCheck(sp)})
+			Guard: sourcesGuard(store), CheckOwner: docsOwnerCheck(sp), LeavesPublic: leavesPublic(placer)})
 	return supervisor.Unit{
 		Name:     UnitSources,
 		Detail:   "web/repo/owner source freshness",
@@ -300,8 +303,9 @@ func sourcesUnit(s config.Settings, store *sql.DB, ing sources.Ingester, sp *spa
 // newDocsScheduler builds the one docs scheduler orchd runs: the docs unit
 // ticks it and SyncDocs asks it to run now, so a sync never runs twice at once.
 // sp, when set, re-checks each owner's space binding before it syncs; ghp,
-// when set, syncs each owner as its space's gh login.
-func newDocsScheduler(s config.Settings, store *sql.DB, ing docs.Ingester, sp *spaces.Engine, ghp *ghProfiles) *docs.Scheduler {
+// when set, syncs each owner as its space's gh login. placer, when set,
+// takes docs of repos no longer public out of the public space (SP-030).
+func newDocsScheduler(s config.Settings, store *sql.DB, ing docs.Ingester, sp *spaces.Engine, ghp *ghProfiles, placer *writePlacer) *docs.Scheduler {
 	var clients func(context.Context, string) (docs.GitHub, docs.Git, error)
 	if ghp != nil {
 		clients = ghp.docsClients
@@ -316,7 +320,17 @@ func newDocsScheduler(s config.Settings, store *sql.DB, ing docs.Ingester, sp *s
 		Guard:           docsGuard(store),
 		CheckOwner:      docsOwnerCheck(sp),
 		Clients:         clients,
+		LeavesPublic:    leavesPublic(placer),
 	}, interval(s.Docs.ScanInterval, time.Minute))
+}
+
+// leavesPublic is placer's check for the docs sync and the sources refresh,
+// or nil without a placer.
+func leavesPublic(placer *writePlacer) func(context.Context, string, rag.Meta) bool {
+	if placer == nil {
+		return nil
+	}
+	return placer.leavesPublic
 }
 
 // docsTick is how often the docs unit checks for a requested sync. Checking

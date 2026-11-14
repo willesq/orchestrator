@@ -332,3 +332,39 @@ func TestWebPrefixBoundaries(t *testing.T) {
 		t.Errorf("a prefix with and without its slash was bound twice: %v", err)
 	}
 }
+
+// TestPublicRootNeedsProofForCheckouts is SP-030.1.a5 (D-50) in the
+// classifier: under a public root, a file in a checkout is public only when
+// GitHub reports its repo public or the operator bound a public root at or
+// inside the checkout. A file in no checkout is the root's; sessions keep
+// D-22, and stricter roots are unaffected.
+func TestPublicRootNeedsProofForCheckouts(t *testing.T) {
+	p := placementPolicy
+	p.Spaces = slices.Clone(p.Spaces)
+	p.Spaces[0].Roots = []string{"~/code", "~/code/declared", "~/code/mono/docs"}
+	res := resolvePlacement(t, p)
+	const h = "/home/u/code"
+	for _, c := range []struct {
+		name  string
+		o     Origin
+		space string
+		rule  PlaceRule
+	}{
+		{"checkout with no remote", Origin{System: SystemFS, Path: h + "/gl/a.md", Checkout: h + "/gl"}, Quarantine, PlaceNoPublicProof},
+		{"declared at the checkout", Origin{System: SystemFS, Path: h + "/declared/a.md", Checkout: h + "/declared"}, "oss", PlaceRoot},
+		{"declared inside the checkout", Origin{System: SystemFS, Path: h + "/mono/docs/a.md", Checkout: h + "/mono"}, "oss", PlaceRoot},
+		{"outside the declared folder", Origin{System: SystemFS, Path: h + "/mono/src/a.md", Checkout: h + "/mono"}, Quarantine, PlaceNoPublicProof},
+		{"verified public on GitHub", Origin{System: SystemFS, Path: h + "/x/a.md", Checkout: h + "/x", Remote: repo("stranger", "x", VisibilityPublic)}, "oss", PlaceRoot},
+		{"in no checkout", Origin{System: SystemFS, Path: h + "/notes/a.md"}, "oss", PlaceRoot},
+		{"under a private root", Origin{System: SystemFS, Path: h + "/willesq/a.md", Checkout: h + "/willesq"}, "personal", PlaceRoot},
+		{"session under a public root", Origin{System: SystemSession, Path: h + "/gl", Checkout: h + "/gl"}, "personal", PlacePublicRootSession},
+	} {
+		got := Classify(c.o, res, Options{Confirmed: allConfirmed})
+		if got.Space != c.space || got.Rule != c.rule {
+			t.Errorf("%s = %s (%s), want %s (%s)", c.name, got.Space, got.Rule, c.space, c.rule)
+		}
+	}
+	if !within("/a/B/c", "/a/b") || within("/a/bc", "/a/b") || !within("/a/b", "/a/b/") {
+		t.Error("within")
+	}
+}

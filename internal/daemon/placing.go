@@ -72,6 +72,15 @@ func (w *writePlacer) place(ctx context.Context, m *rag.Meta) error {
 		// editing session's space).
 		p = quarantined("a local file placed only by its checkout's remote")
 	}
+	if p.Outcome == spaces.Placed && !mayWritePublic(m.Writer) {
+		if s, _ := res.Space(p.Space); s.Kind == spaces.Public {
+			// Reason: the public space is read by every session, so only
+			// the writers that verify content public reach it. Content a
+			// session wrote (an edited file in a public repo) goes where
+			// sessions under a public root write (D-22, SP-030).
+			p = publicRootSessions(res)
+		}
+	}
 	if p.Outcome == spaces.Conflict {
 		return fmt.Errorf("%s: %w", m.SourceURI, errWriteConflict)
 	}
@@ -135,6 +144,54 @@ func (w *writePlacer) sessionPlacement(ctx context.Context, res *spaces.Resolved
 		return spaces.Placement{Space: pin.Space, Outcome: spaces.Placed, Rule: spaces.PlaceWriter}, nil
 	}
 	return quarantined("the session's pin names no space of the applied policy"), nil
+}
+
+// mayWritePublic reports whether writer may place content in a public
+// space: only the docs sync and the sources refresh, which place by what
+// GitHub, a bound web prefix or an operator's public root verifies. Session
+// records, summaries, hand-offs and client notes never do (SP-030.1.a4).
+func mayWritePublic(writer string) bool {
+	return writer == rag.WriterDocs || writer == rag.WriterSources
+}
+
+// publicRootSessions is where session content that would otherwise be
+// public goes: the policy's public_root_sessions space, or quarantine.
+func publicRootSessions(res *spaces.Resolved) spaces.Placement {
+	p := spaces.Placement{Space: res.PublicRootSessions, Outcome: spaces.Placed, Rule: spaces.PlacePublicRootSession,
+		Reason: "session content never goes to a public space; it goes to public_root_sessions"}
+	if p.Space == "" || p.Space == spaces.Quarantine {
+		p.Space, p.Outcome = spaces.Quarantine, spaces.Quarantined
+	}
+	return p
+}
+
+// leavesPublic reports whether a source stored in space stored must leave
+// the public space (SP-030): stored is a public space of the applied policy
+// and m, written now, would be placed outside every public space. A write
+// that cannot be placed now is not proven public, so it leaves too. With no
+// policy, or one that does not verify, nothing is moved.
+func (w *writePlacer) leavesPublic(ctx context.Context, stored string, m rag.Meta) bool {
+	if w == nil || w.spaces == nil || stored == "" {
+		return false
+	}
+	res, _, err := w.spaces.CurrentRevision()
+	if err != nil || !res.Configured() {
+		return false
+	}
+	if s, ok := res.Space(stored); !ok || s.Kind != spaces.Public {
+		return false
+	}
+	unasked := false
+	err = w.place(withUnaskedNote(ctx, &unasked), &m)
+	if unasked {
+		// GitHub was not asked, so nothing was learned: decide next time.
+		return false
+	}
+	if err != nil {
+		return true
+	}
+	s, ok := res.Space(m.Space)
+	return !ok || s.Kind != spaces.Public
 }
 
 func quarantined(reason string) spaces.Placement {

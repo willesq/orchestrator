@@ -225,6 +225,9 @@ func (sc *spaceScanner) checkout(ctx context.Context, res *spaces.Resolved, dir 
 	out := &orchdv1.ScannedCheckout{Path: dir}
 	o := spaces.Origin{System: spaces.SystemFS, Path: dir}
 	c, ok := sc.checkoutAt(dir)
+	if ok {
+		o.Checkout = dir
+	}
 	switch {
 	case !ok, c.Anonymous:
 		// An anonymous checkout's .git could borrow any repo's identity.

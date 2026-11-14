@@ -142,6 +142,12 @@ func (s *server) placeCheckout(ctx context.Context, checkout string) (string, bo
 	if err != nil {
 		return "", false, err
 	}
+	// Reason: content from a checkout under a public root with nothing to
+	// prove it public is quarantined (SP-030), but the folder's rules are
+	// still its root's: the root decided, and quarantine has no rules.
+	if p.Rule == spaces.PlaceNoPublicProof && len(p.Roots) > 0 {
+		return p.Roots[len(p.Roots)-1].Space, true, nil
+	}
 	byRoot := p.Rule == spaces.PlaceRoot || p.Rule == spaces.PlaceRootStricter || p.Rule == spaces.PlaceAgree
 	return p.Space, p.Outcome == spaces.Placed && byRoot, nil
 }

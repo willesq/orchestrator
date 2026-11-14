@@ -335,7 +335,9 @@ func TestPlacementOutcomes(t *testing.T) {
 		{rag.Origin{System: rag.OriginGitHub, RepoOwner: "oss-org", RepoName: "lib", Visibility: "public"}, "oss"},
 		{rag.Origin{System: rag.OriginGitHub, RepoOwner: "oss-org", RepoName: "secret"}, spaces.Quarantine},
 	} {
-		m := rag.Meta{SourceURI: "x", Origin: c.o}
+		// The writers that may place content in public: the sources refresh
+		// for pages, the docs sync for GitHub (SP-030).
+		m := rag.Meta{SourceURI: "x", Origin: c.o, Writer: map[string]string{rag.OriginWeb: rag.WriterSources, rag.OriginGitHub: rag.WriterDocs}[c.o.System]}
 		if err := p.place(ctx, &m); err != nil || m.Space != c.space || m.LabelsV != e.rev {
 			t.Errorf("%+v placed in %q (labels_v %d), %v; want %s", c.o, m.Space, m.LabelsV, err, c.space)
 		}
