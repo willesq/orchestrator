@@ -7016,7 +7016,7 @@
       "attempts": 1,
       "criteria_sha256": "01ef9bae725c1b6ed0ccbd6b3194d8d30de872c6e7cceb59eb24d0db1046735b",
       "branch": "feat/sp-076-public-paths",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/189"
     }
   ],
   "criteria_hash_recipe": "criteria_sha256 = sha256 of json.dumps([{id, title, acceptance} for each checkpoint], sort_keys=True, separators=(',', ':'), ensure_ascii=False) encoded as UTF-8. 'evidence' is excluded so recording evidence does not change the hash.",
