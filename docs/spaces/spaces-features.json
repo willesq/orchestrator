@@ -6706,7 +6706,8 @@
       },
       {
         "feature": "SP-030",
-        "rc_range": "RC-400..RC-449"
+        "rc_range": "RC-400..RC-449",
+        "note": "blocked on RC-400 (user decision); PR #180"
       },
       {
         "feature": "SP-048",
@@ -6715,11 +6716,15 @@
       {
         "feature": "SP-051",
         "rc_range": "RC-500..RC-549"
+      },
+      {
+        "feature": "SP-045",
+        "rc_range": "RC-550..RC-599",
+        "note": "started 2026-11-14 when SP-030 stopped on RC-400; keeps its CLI code in new files away from SP-074's"
       }
     ],
-    "next_rc_block": "RC-550",
+    "next_rc_block": "RC-600",
     "queued": [
-      "SP-045 after SP-074's internal/cli changes merge",
       "SP-075 after SP-074 (changes orchd.proto and adds a migration)",
       "SP-025 and SP-027 after SP-024",
       "SP-052 and SP-054 after SP-051"
