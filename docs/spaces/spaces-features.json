@@ -5561,7 +5561,7 @@
       "attempts": 1,
       "criteria_sha256": "4f938c395fd884456515aa918dc77679f7a6eeab255ddd19b523e7bfad99e52b",
       "branch": "feat/sp-027-relabel",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/187"
     },
     {
       "id": "SP-071",
