@@ -197,7 +197,7 @@ func (q *QdrantStore) Collection() string { return q.collection }
 
 // WithCollection returns a store for another collection on the same server.
 func (q *QdrantStore) WithCollection(name string) *QdrantStore {
-	return &QdrantStore{baseURL: q.baseURL, collection: name, apiKey: q.apiKey, http: q.http}
+	return &QdrantStore{baseURL: q.baseURL, collection: name, apiKey: q.apiKey, http: q.http, dials: q.dials}
 }
 
 type collectionInfo struct {
@@ -264,7 +264,7 @@ func (q *QdrantStore) EnsureCollection(ctx context.Context, dim int) error {
 	}
 	// Reads and deletes filter by source, prunes by writer and searches by tag and
 	// type, so index them all.
-	for _, field := range append([]string{"source_uri", fieldWriter}, searchIndexFields...) {
+	for _, field := range append([]string{"source_uri", fieldWriter, fieldSpace}, searchIndexFields...) {
 		if err := q.EnsureIndex(ctx, field); err != nil {
 			return err
 		}
@@ -392,6 +392,12 @@ type queryResponse struct {
 // each chunk's sparse vector, with Qdrant applying IDF. Hits carry their dense
 // vector. An empty query vector matches nothing.
 func (q *QdrantStore) KeywordSearch(ctx context.Context, query bm25.Vector, topK int, must map[string]string, anyTags, allTags []string, tr TimeRange) ([]SearchHit, error) {
+	return q.keywordSearch(ctx, query, topK, must, anyTags, allTags, tr, true)
+}
+
+// keywordSearch is KeywordSearch, returning each hit's dense vector only when
+// vectors is set: the vectors are most of the request's cost.
+func (q *QdrantStore) keywordSearch(ctx context.Context, query bm25.Vector, topK int, must map[string]string, anyTags, allTags []string, tr TimeRange, vectors bool) ([]SearchHit, error) {
 	if query.IsEmpty() {
 		return nil, nil
 	}
@@ -400,7 +406,10 @@ func (q *QdrantStore) KeywordSearch(ctx context.Context, query bm25.Vector, topK
 		"using":        sparseName,
 		"limit":        topK,
 		"with_payload": true,
-		"with_vector":  []string{denseName},
+		"with_vector":  false,
+	}
+	if vectors {
+		body["with_vector"] = []string{denseName}
 	}
 	if filter := buildFilter(must, anyTags, allTags, tr); filter != nil {
 		body["filter"] = filter
@@ -411,6 +420,28 @@ func (q *QdrantStore) KeywordSearch(ctx context.Context, query bm25.Vector, topK
 		return nil, err
 	}
 	return resp.Result.Points, nil
+}
+
+type vectorsResponse struct {
+	Result []struct {
+		ID     any                        `json:"id"`
+		Vector map[string]json.RawMessage `json:"vector"`
+	} `json:"result"`
+}
+
+// DenseVectors returns the dense vectors of the points with the given ids,
+// by id; a point that does not exist is left out.
+func (q *QdrantStore) DenseVectors(ctx context.Context, ids []string) (map[string]json.RawMessage, error) {
+	var resp vectorsResponse
+	if err := q.do(ctx, http.MethodPost, q.path("/points"),
+		map[string]any{"ids": ids, "with_payload": false, "with_vector": []string{denseName}}, &resp); err != nil {
+		return nil, err
+	}
+	out := make(map[string]json.RawMessage, len(resp.Result))
+	for _, p := range resp.Result {
+		out[fmt.Sprint(p.ID)] = p.Vector[denseName]
+	}
+	return out, nil
 }
 
 type searchResponse struct {

@@ -3,6 +3,7 @@ package prs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"slices"
 	"sort"
@@ -35,6 +36,10 @@ type Account struct {
 	Name  string
 	Login string
 	GH    func(ctx context.Context, args ...string) ([]byte, error)
+	// Deferred skips the account's searches this sweep, keeping the items
+	// routed to it from the last one: its hourly GitHub budget is spent
+	// (SP-074). A search that fails with github.ErrQuota defers it too.
+	Deferred bool
 }
 
 // WatchSource reports the current Watch.
@@ -136,23 +141,36 @@ func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 	byURL := map[string]*PR{}
 	via := map[string]ghRunner{}
 	var order []string
+	// Reason: the PR cache is readable by tasks in any space, so a profile's
+	// items, like the default login's, are kept only for a scope the user
+	// enabled.
+	kept := func(owner, repo string) bool {
+		sc, ok := watched[strings.ToLower(owner)]
+		return ok && sc.Watches(repo)
+	}
+	deferred := map[string]bool{}
 	for _, acct := range append([]Account{{Login: w.Login, GH: b.gh}}, w.Accounts...) {
+		if acct.Deferred && acct.Name != "" {
+			deferred[acct.Name] = true
+			continue
+		}
 		// Reason: each owner's items come only through its space's account,
 		// so a call about one space's org never runs as another's login.
 		mine := func(owner string) bool {
 			name, ok := route(owner)
 			return ok && name == acct.Name
 		}
-		// Reason: the PR cache is readable by tasks in any space, so a
-		// profile's items, like the default login's, are kept only for a
-		// scope the user enabled.
-		kept := func(owner, repo string) bool {
-			sc, ok := watched[strings.ToLower(owner)]
-			return ok && sc.Watches(repo)
+		err := b.searchAs(ctx, acct, mine, kept, everything, everythingRepos, byURL, via, &order)
+		if errors.Is(err, github.ErrQuota) && acct.Name != "" {
+			deferred[acct.Name] = true
+			continue
 		}
-		if err := b.searchAs(ctx, acct, mine, kept, everything, everythingRepos, byURL, via, &order); err != nil {
+		if err != nil {
 			return nil, err
 		}
+	}
+	if len(deferred) > 0 {
+		b.keepDeferred(route, kept, deferred, byURL, &order)
 	}
 
 	out := make([]PR, 0, len(order))
@@ -166,7 +184,7 @@ func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 		}
 		sortReasons(item.Reasons)
 		// CI and review state only matter where the PR can need the user.
-		if item.IsPR() && (item.Authored() || slices.Contains(item.Reasons, ReasonReviewRequested)) {
+		if via[url] != nil && item.IsPR() && (item.Authored() || slices.Contains(item.Reasons, ReasonReviewRequested)) {
 			enrich(ctx, via[url], item)
 		}
 		out = append(out, *item)
@@ -176,6 +194,33 @@ func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 		log.Printf("pr-babysitter: %d item(s) left out: their org's space binding is not confirmed", dropped)
 	}
 	return out, nil
+}
+
+// keepDeferred adds to byURL the last sweep's items routed to a deferred
+// account and still in an enabled scope, so a spent budget does not read as
+// the items closing. They keep their last CI and review state.
+func (b *Babysitter) keepDeferred(route func(string) (string, bool), kept func(owner, repo string) bool,
+	deferred map[string]bool, byURL map[string]*PR, order *[]string) {
+	old := LoadState(b.stateFile).PRs
+	urls := make([]string, 0, len(old))
+	for url := range old {
+		urls = append(urls, url)
+	}
+	sort.Strings(urls)
+	n := 0
+	for _, url := range urls {
+		item := old[url]
+		owner, repo, _ := strings.Cut(item.Repo, "/")
+		name, ok := route(owner)
+		if _, seen := byURL[url]; seen || !ok || !deferred[name] || !kept(owner, repo) {
+			continue
+		}
+		byURL[url] = &item
+		*order = append(*order, url)
+		n++
+	}
+	// Reason: tasks can read orchd's log, so the line names no account.
+	log.Printf("pr-babysitter: %d account(s) spent their hourly GitHub budget; %d of their item(s) kept from the last sweep", len(deferred), n)
 }
 
 // ownerChecks returns whether an owner is refused, asking check at most once

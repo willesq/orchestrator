@@ -234,4 +234,11 @@ public protocol SpacesAPI: Sendable {
     func enforcement() async throws -> EnforcementState
     func setEnforcement(layer: String, state: String, forSeconds: Int64) async throws -> EnforcementChangeResult
     func explainPlacement(target: String) async throws -> PlacementExplanation
+    /// Each space's gh login and Claude Code configuration (SP-074).
+    func spaceLogins() async throws -> [SpaceLogin]
+}
+
+extension SpacesAPI {
+    /// A source without login reports, such as a daemon that cannot be reached.
+    public func spaceLogins() async throws -> [SpaceLogin] { [] }
 }
