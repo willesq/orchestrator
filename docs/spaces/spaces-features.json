@@ -4893,14 +4893,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "6a08b877987f9cc1a3bcf4ab2dc6baad1afdea4ab59a51e1c0d1455c73e20bf3",
-      "branch": null,
+      "branch": "feat/sp-024-collection-per-space",
       "pr": null
     },
     {
