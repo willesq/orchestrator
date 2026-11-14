@@ -5471,7 +5471,14 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: internal/daemon TestPrivateRepoInPublicOrgIsQuarantined passes (docs sync oss-org/secret private -> quarantine, oss-org/lib -> oss; sources checkout of oss-org/secret -> quarantine). commit ade4584",
+            "a2: internal/daemon TestRepoTurnedPrivateLeavesPublicInTheSameSync passes (same HEAD, lib now private: left public before aaa was cloned, cloned first, re-placed in quarantine in the same sync); internal/docs TestRepoTurnedPrivateLeavesPublicFirst (exact delete/clone/write order); internal/sources TestCheckoutNoLongerPublicLeavesFirst (sources do it before walking, skipped checkouts included). Fails with the leave pass removed.",
+            "a3: internal/daemon TestUnreadableVisibilityIsPrivate passes (repo listed without owner node ID leaves public and syncs to quarantine; checkout whose repo GitHub will not show -> quarantine and leaves public); TestLookupErrorsThatSayNothingMoveNothing, TestUnaskedLookupMovesNothing (budget/outage never placed public, but move nothing).",
+            "a4: internal/daemon TestSessionWritersNeverTargetPublic 4/4 subtests pass: session (transcript+record of a session pinned to public -> quarantine), summary (-> quarantine), hand-off (file in verified-public repo under the public root -> personal = public_root_sessions, while its sources copy -> oss), client (note and public-prefix page from a session pinned to public -> quarantine).",
+            "a5: internal/daemon TestCheckoutWithoutGitHubRemoteNeedsProofUnderPublicRoot passes (GitLab remote and no-remote checkouts under the public root -> quarantine no_public_proof via write and ExplainPlacement; public after operator binds a public root at the checkout / inside it; plain folder and verified public GitHub checkout stay public); internal/spaces TestPublicRootNeedsProofForCheckouts; TestSymlinkedGitIsACheckout.",
+            "Validation: go test ./... 4726 passed; go vet ./... clean; gofmt -l empty; make cover All files >= 80% (classify.go 98.8%, docs/public.go 93.0%, sources/public.go 96.2%, placing.go 92.8%)."
+          ]
         }
       ],
       "status": "in_progress",
