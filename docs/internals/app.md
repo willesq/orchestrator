@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches and the directory validator (`Spaces`, `SpacesModel`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches and the directory validator (`Spaces`, `SpacesModel`), the Spaces pane's Overview and badge (`SpacesOverview`, `SpacesOverviewModel`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`, `SpacesView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 | `OrchAppSnapshots` | Renders app views to PNGs in light and dark from sample data, with no orchd; runs only when `ORCH_SNAPSHOT_DIR` is set (see [Snapshots](#snapshots)) |
 
@@ -96,6 +96,53 @@ and asks.
   longer matches what orchd answers; `ORCH_UPDATE_APP_FIXTURE=1 go test ./internal/daemon -run
   TestAppPlacementFixture` rewrites it.
 
+### Spaces pane: Overview (SP-051)
+
+The sidebar's **Spaces** pane shows the applied policy at a glance (`SpacesView`,
+`SpacesOverviewModel`, `SpacesOverview`). It reads `ListSpaces`, then, when a policy is applied,
+`ListSessions`, `SummarizeToolLog` (last 7 days) and `DiffSpaces` (only its unconfirmed GitHub
+orgs). All four are operator-only in orchd, so the pane works in an app the user opened.
+
+- **Header:** the applied revision and any newer draft, the **Basic / Advanced** switch (kept in
+  user defaults as `spacesDetail`) and **Screen-Share Safe…**.
+- **Needs you:** conflicts, quarantine, drift, relabel progress and refusals. A live session pinned
+  to quarantine is a conflict when `ExplainPlacement` on its first folder answers `conflict` now (at
+  most 20 asked per refresh; the rest count as quarantine); otherwise it is quarantine, as is every
+  applied GitHub org whose new content goes to quarantine until confirmed. Drift is a saved draft
+  not applied, an applied revision changed outside orchd, or a policy orchd cannot read. Relabel
+  progress has no RPC yet (SP-027), so it never shows today. Refusals are the guard's refused
+  calls over 7 days.
+- **Space cards:** kind ("Isolated · job", "Private · personal", "Public · readable everywhere"),
+  GitHub orgs and folders, and live sessions, tool calls, directory moves (with moves into another
+  space) and refusals over 7 days. Advanced adds web prefixes, chat tenants, the gh profile folder,
+  the outbound terms file's path (never its terms) and the other spaces it reads. Chunk counts per
+  space wait for a collection per space (SP-024).
+- **Sessions:** every live pin with its harness, short session ID, state (active, idle, unpinned),
+  space, first folder (`~` for home), tool events, refusals and last activity; Advanced adds ended
+  sessions and harness PIDs. Basic hides detail, never something that needs the user.
+- **Fitting:** an `AdaptiveSplit` with the spaces beside the sessions, or one at a time behind a
+  Spaces/Sessions picker when narrow; the header wraps at the 320 pt companion width.
+- **Sidebar badge:** the most pressing of conflicts (red count), quarantine (orange count), drift
+  (orange dot), then relabel progress (accent dot), in that order (`SpacesBadge.pick`); "Not set up"
+  (grey dot) with no policy applied. `SpacesOverviewModel` reads every 60 s from the moment the
+  window opens, and when the pane shows or "Refresh everything" runs.
+- **Screen-share-safe mode (D-21):** **Screen-Share Safe…** picks one space. The model then keeps
+  only that space's card (without the spaces it reads), its own sessions, drift and its own
+  refusals: other spaces' data is dropped before it is stored, and conflicts, quarantine and relabel
+  progress, which are about other spaces' content, are neither shown nor asked about. The window
+  shows the Spaces pane alone (the sidebar lists only Spaces, the companion column shows the pane),
+  ⌘K does nothing, no notification is posted, and the links into Settings (whose validator answers
+  for every space) are hidden. A failed read shows a fixed message rather than orchd's, which could
+  name another space. Filtering uses orchd's own space names, not their display-safe form.
+  **Show All Spaces** ends it. The choice is kept in user defaults (`spacesShareSafe`), so a
+  relaunch during a share stays safe. The other panes' models keep loading in the background but
+  nothing of theirs is drawn. Not covered yet: the menu bar panel (RC-500).
+- **Tests:** `SpacesBadgeTests` checks the badge order over every combination; `SpacesOverviewTests`
+  checks the cards, sessions and needs-you strip in both modes, and that in screen-share-safe mode
+  nothing the model holds names, paths or counts of another space
+  (`screenShareSafeModeHoldsNothingOfAnotherSpace`). `SpacesPaneSnapshots` renders the pane at both
+  widths in light and dark (see [Snapshots](#snapshots)).
+
 ## Launching
 
 Orch.app lives in the menu bar and, by default, the Dock. With the Dock icon turned off, opening it
@@ -139,7 +186,8 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
 - **Appearance:** follows the system's light or dark mode by default. A picker at the foot of the
   sidebar and in the menu bar panel keeps Light or Dark instead (`appearance` in user defaults,
   applied to the whole app, menu bar panel included, at launch and on change).
-- **Sidebar badges:** Docs shows how many repos failed to sync, GitHub how many PRs need you, and
+- **Sidebar badges:** Spaces shows conflicts, quarantine, drift or relabel progress (see
+  [Spaces pane](#spaces-pane-overview-sp-051)), Docs how many repos failed to sync, GitHub how many PRs need you, and
   Settings a dot for the most pressing thing inside it: changes waiting for a restart, then a Safety
   Net state that is not good, then items removed or missing from their files. Its own list marks the
   same per section. They come from the models the tabs use; a `PeriodicRefresh` reloads docs, Safety
@@ -585,8 +633,9 @@ rebuild.
 - **Tests:** `make app-test` runs the tests, and `make app-cover` applies the 80%-per-file gate
   to `OrchKit` (generated code excluded).
 - <a id="snapshots"></a>**Snapshots:** `ORCH_SNAPSHOT_DIR=<folder> swift test --package-path macos
-  --filter OrchAppSnapshots` renders the Spaces section, the "enforcement off" banner and the menu
-  bar panel's switches in light and dark from sample data, writing one PNG each. It draws offscreen
+  --filter OrchAppSnapshots` renders the Spaces section, the "enforcement off" banner, the menu
+  bar panel's switches and the Spaces pane (at 790 pt and the 320 pt companion width, and in
+  screen-share-safe mode) in light and dark from sample data, writing one PNG each. It draws offscreen
   (`cacheDisplay`), so no window appears, the installed app and orchd are not involved, and no
   Screen Recording permission is needed. Without `ORCH_SNAPSHOT_DIR` the suite is skipped.
 - **CI:** `app.yml` runs on pull requests to `main` that touch `macos/**`, `orchd.proto` or the

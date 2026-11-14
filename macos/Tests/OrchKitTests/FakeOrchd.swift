@@ -534,6 +534,14 @@ func withFakeOrchd(
     _ service: FakeOrchdService,
     _ body: (String) async throws -> Void
 ) async throws {
+    try await withFakeOrchd(services: [service], body)
+}
+
+/// Serves `services` on a fresh socket for `body`, like a running orchd.
+func withFakeOrchd(
+    services: [any RegistrableRPCService],
+    _ body: (String) async throws -> Void
+) async throws {
     let dir = try TempDir()
     let socket = dir.url.appendingPathComponent("orchd.sock").path
     let server = GRPCServer(
@@ -541,7 +549,7 @@ func withFakeOrchd(
             address: .unixDomainSocket(path: socket),
             transportSecurity: .plaintext
         ),
-        services: [service]
+        services: services
     )
     try await withThrowingTaskGroup(of: Void.self) { group in
         group.addTask { try await server.serve() }

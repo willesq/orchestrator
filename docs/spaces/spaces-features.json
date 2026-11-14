@@ -2655,6 +2655,72 @@
           "SP-042"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-500",
+        "kind": "follow-up",
+        "topic": "Screen-share-safe mode does not cover the menu bar panel",
+        "detail": "SP-051's screen-share-safe mode (D-21) hides every pane but Spaces in the main window, disables the command palette and stops notifications, but the menu bar panel (TrayMenu.swift, outside SP-051's files) still lists every space's PRs and needs-you items when opened. Proposed: while SpacesOverviewModel.shareSafe is set, the panel shows only the enforcement banner and a 'Sharing only <space>' line, or filters PRs by owner using ListSpaces' github_orgs.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-055"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-501",
+        "kind": "follow-up",
+        "topic": "Counts the Overview cannot show yet",
+        "detail": "The Spaces pane shows no chunk counts per space (needs a collection per space, SP-024), counts quarantine as live sessions pinned to quarantine plus unconfirmed GitHub orgs rather than quarantined chunks (SP-028), and never shows relabel progress (SP-027): no RPC reports them. SpacesOverviewModel takes a relabel source and SpacesBadge already orders relabel last. Adding them needs fields in ListSpaces or SpacesStatus, an orchd.proto change for the coordinator to schedule.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-024",
+          "SP-027",
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-502",
+        "kind": "decision",
+        "topic": "How the app tells a conflict from other quarantine",
+        "detail": "SessionInfo has no placement outcome: a session in a conflict and one under no root are both pinned to 'quarantine'. The app asks ExplainPlacement about each live quarantined session's first folder (at most 20 per refresh) and counts 'conflict' answers as conflicts. That reflects the policy applied now, not the one at pin time. Options: (a) keep this; (b) add the pin's placement outcome to SessionInfo (orchd.proto change). Recommendation: (b) when the next proto change is scheduled.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-017"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-503",
+        "kind": "decision",
+        "topic": "What screen-share-safe mode hides beyond the Spaces pane",
+        "detail": "SP-051.1 a3 is tested on the Spaces pane's view models (SpacesOverviewModel and SpacesOverview hold only the chosen space; other spaces' data is dropped before it is stored). For the rest of the app, the window shows only the Spaces pane, the palette is off and notifications are not posted, but the other panes' models (PRs, tasks, docs, memory) keep loading every space's data in memory, undrawn. Options: (a) accept this reading; (b) also pause or clear those models while sharing. Recommendation: (a).",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-504",
+        "kind": "decision",
+        "topic": "'Not set up' dot on the Spaces row",
+        "detail": "As the design says, with no spaces policy applied the Spaces sidebar row shows a grey dot labelled 'Not set up'. Every install that does not use spaces sees it permanently. Options: (a) keep it; (b) show nothing until a draft exists. Recommendation: (a) until the setup wizard (SP-052) ships, then revisit.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-052"
+        ],
+        "status": "open"
       }
     ]
   },
