@@ -105,6 +105,12 @@ long it sits idle, only cut to its newest 50 MB, and past 500 MB in total the se
 ended first go early, all but their refused calls. `verify` shows how far retention cut a
 session, and orchd's log names every cut. See [internals/daemon.md](internals/daemon.md#command-log).
 
+Each call the guard or the outbound terms check refuses is also appended to
+`~/.local/share/orch/events/spaces.jsonl` (owner-only) as one `refusal` event naming the session,
+its space, the tool and the rule, and for a term its space, terms-file line and hash; never the
+command or the term. The macOS app posts a notification for each one made while it runs. See
+[internals/hooks.md](internals/hooks.md#refusal-events).
+
 Each enforcement layer has a switch for isolating behavior when debugging: `memory` (memory
 filtering), `guard` (`block-other-jobs` by default, `strict`, `log` or `off`), `terms`
 (outbound terms), `sandbox` (generated sandbox rules) and `hooks` (Claude Code's pre-tool-use and

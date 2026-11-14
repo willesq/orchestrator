@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"syscall"
 )
 
 // streamName is what a stream may be called. Streams are named by session IDs
@@ -20,17 +21,28 @@ var streamName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 // ErrInvalidStream rejects a stream name that cannot safely name a file.
 var ErrInvalidStream = errors.New("invalid event stream name")
 
+// ErrNotRegular rejects a stream path that is not a regular file.
+var ErrNotRegular = errors.New("event stream is not a regular file")
+
 // Event is one entry in a stream.
 type Event struct {
-	Kind      string `json:"kind"` // complete | blocked | failed | info
+	Kind      string `json:"kind"` // complete | blocked | failed | info | refusal
 	Source    string `json:"source"`
 	TaskID    string `json:"task_id,omitempty"`
 	Summary   string `json:"summary"`
 	Timestamp string `json:"timestamp"` // RFC3339
+	// Refusal is set on a refusal event (KindRefusal) only.
+	Refusal *Refusal `json:"refusal,omitempty"`
 }
 
 // Append writes one event to <dir>/<stream>.jsonl, creating the dir/file as needed.
 func Append(dir, stream string, e Event) error {
+	return appendMode(dir, stream, e, 0o644)
+}
+
+// appendMode is Append creating the file with perm. With an owner-only
+// perm it also narrows an existing file to it.
+func appendMode(dir, stream string, e Event, perm os.FileMode) error {
 	path, err := streamPath(dir, stream)
 	if err != nil {
 		return err
@@ -38,11 +50,24 @@ func Append(dir, stream string, e Event) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	// Reason: a FIFO or a link planted at the path must not block the
+	// writer (orch-hook writes refusals while the harness waits) or send
+	// the event elsewhere.
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, perm)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = f.Close() }()
+	if fi, err := f.Stat(); err != nil {
+		return err
+	} else if !fi.Mode().IsRegular() {
+		return ErrNotRegular
+	}
+	if perm&0o077 == 0 {
+		if err := f.Chmod(perm); err != nil {
+			return err
+		}
+	}
 	b, err := json.Marshal(e)
 	if err != nil {
 		return err

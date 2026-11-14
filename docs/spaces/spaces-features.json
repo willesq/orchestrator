@@ -2655,6 +2655,55 @@
           "SP-042"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-450",
+        "kind": "follow-up",
+        "topic": "Refusals in the app's Needs-you list",
+        "detail": "SP-048's summary names the app's Needs-you section. This lane kept its Swift changes to the Notifier (SP-051 owns the Spaces pane, SP-074 may edit macos/Sources), so refusals reach the user as macOS notifications only; the menu's Needs you list (NeedsYouSection) still shows PRs. RefusalMonitor.recent (OrchKit) keeps the latest 20 refusals for a list. Proposed: show recent refusals in the Needs-you list or the Spaces pane's needs-you strip once SP-051 merges.",
+        "source": "https://github.com/willesq/orchestrator/pull/179",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-048",
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-451",
+        "kind": "user-action",
+        "topic": "Check refusal notifications in Orch.app by hand",
+        "detail": "Not verifiable by tests (UNUserNotificationCenter needs the app bundle). With a spaces policy applied and the guard enforcing, run a session call into another job's folder while Orch.app built from PR #179 runs: one 'Tool call refused' notification should appear (subtitle 'space <space> · <tool>', body 'Rule <rule> in session <id>.', no command or path); four or more refusals within 5 s should give one 'N tool calls refused' summary; clicking either should open Settings > Spaces. Refusals made before the app started are not announced.",
+        "source": "https://github.com/willesq/orchestrator/pull/179",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-048"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-452",
+        "kind": "decision",
+        "topic": "Refusal events are written by orch-hook, not orchd",
+        "detail": "SP-048's event needs the term's line and hash, which only the hook knows: RecordToolEventRequest has no field for it, and adding one changes orchd.proto (coordinator-scheduled under D-63). So orch-hook appends the refusal to the spaces stream after printing the deny. Its session is the harness's session_id, the one the guard read the pin for (the space comes from that orchd-written pin); orchd's command log stays the authoritative, caller-resolved record. Upside: refusals stay visible while orchd is down. Confirm, or schedule a proto field (e.g. guard_term_line, guard_term_hash) so orchd writes the event with its resolved identity.",
+        "source": "https://github.com/willesq/orchestrator/pull/179",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-048"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-453",
+        "kind": "follow-up",
+        "topic": "Refusal event lows from the SP-048 security audit",
+        "detail": "Low/info, accepted for now: (1) any process running as the user can append well-formed refusal lines and so trigger notifications (it can post notifications itself anyway); (2) a refusal write still running at the hook's 100 ms deadline is cut off when the hook exits and that event is lost (the command log keeps the refusal); a partial line is skipped by readers; (3) every event stream is now opened with O_NOFOLLOW|O_NONBLOCK, so a stream file that is itself a symlink is no longer written; (4) the spaces stream, like the other streams, has no size cap or rotation (the app reads at most 1 MiB per poll, from its end at launch); (5) after the app skips a line over 1 MiB, the rest of that line is parsed as the next and dropped.",
+        "source": "https://github.com/willesq/orchestrator/pull/179",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-048"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -5829,7 +5878,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestRefusalEventPerRefusal (internal/hook/refusal_test.go) runs the real pre-tool-use hook (run()) over 11 cases: 8 refusals (other_job_path, other_job_repo in strict, self_protection by the Write tool, pin_missing, policy_unreadable, guard_timeout, outbound_term, outbound_unchecked) each put exactly one event on the operator's spaces stream (<data>/events/spaces.jsonl, mode 0600) with kind refusal, source guard, timestamp, and refusal.session, .space (the pin's: job/acme, '' when refused before a pin is read), .tool (Bash/Write), .rule, and for outbound_term only term {space globex, line 1, 12-hex hash}; the raw stream holds none of the call's command marker, '/scratch', the term (zephyr/Zephyr), 'git commit', 'echo', 'cat ', the repo owner or the written file's name. An allowed call, the guard in log and the guard off emit no event. TestRefusalEventsAccumulate: 3 refusals in a row -> 3 events, a cwd-changed into another job (never refused) adds none. Pass.",
+            "a1 (supporting): internal/events TestNewRefusal (field shape checks: hostile session/space/tool/rule/hash replaced or dropped; summary built from checked fields only), TestAppendSpaces (owner-only stream, narrowed from 0644), TestAppendSpacesRefusesOddFiles (FIFO and symlink refused without blocking), TestAppendSpacesErrors; internal/hook TestRefusalReportNeverChangesTheDeny (write error or panic keeps the deny), TestRefusalReportBounded (a stalled write does not hold the hook), TestSessionNamedLikeSharedStream (a session named 'spaces' never reads the stream); internal/daemon TestSwitchEventStream (orchd's switch events also 0600). App: macos/Tests/OrchKitTests/RefusalsTests.swift, 13 tests (RefusalStream parsing, whole lines only, replaced/missing stream, 1 MiB read cap, 8 hostile lines rejected; RefusalMonitor announces only refusals after launch, keeps 20; RefusalNotificationPlan each up to 3 then one summary). Pass.",
+            "DOD: go test ./... exit 0; go vet ./... exit 0; make cover 'All files >= 80%' (events/refusal.go 100%, events/events.go 89.6%, hook/guard.go 100%, hook/updates.go 97.4%, hook/sessions.go 91.9%, spaces/guard_files.go 91.1%, daemon/enforcement.go 98.5%, daemon/sandbox_setting.go 94.7%); go test -race on internal/hook and internal/events pass; gofmt -l: 0 lines; git diff --check clean; swift test 424 tests pass; macos/scripts/cover.sh 80 passes (Refusals.swift 98.37%); make app builds and signs build/app.noindex/Orch.app (not installed). Security audit (security-audit agent, 2 rounds, 2026-11-14): round 1 0 critical/high, 2 medium (a FIFO at the stream path could block the hook past the harness timeout; a session whose ID is 'spaces' read the stream as its own), 1 low (orchd created the stream 0644), all fixed; round 2 found 1 low (data race in the bounded write under -race), fixed; remaining info/low in RC-453."
+          ]
         }
       ],
       "status": "in_progress",
@@ -5840,7 +5893,7 @@
       "attempts": 1,
       "criteria_sha256": "c5aabd610b376971547b4771af9a15d3b76323aa3b29aef2ecfc3fefe7ae0eec",
       "branch": "feat/sp-048-refusal-events",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/179"
     },
     {
       "id": "SP-050",

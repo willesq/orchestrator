@@ -58,6 +58,17 @@ first, each with its reason (see the PR babysitter in [tasks.md](tasks.md)). Cli
   characters), polled by `ReviewMonitor` from `ListPRReviews` every 20 s for the whole app; none is
   posted for verdicts that already existed at launch. A failed poll keeps the
   last good list, so a briefly unreadable cache cannot make every PR look new. Notifications need the app bundle, so a bare `swift run` binary skips them.
+- **Refusals** (spaces SP-048): `RefusalMonitor` reads the operator's `spaces` event stream
+  (`<data dir>/events/spaces.jsonl`, the data dir as `OrchPaths` finds it) every 5 s from where it
+  ended when the app started, so only refusals made while the app runs are announced. Each tool
+  call the spaces guard or the outbound terms check refused posts "Tool call refused", with the
+  space and tool as the subtitle and the rule, session and (for a term) the term's space, line and
+  hash as the body ([hooks.md](hooks.md#refusal-events)); more than three in one poll become one
+  "N tool calls refused" summary naming their spaces. Clicking one opens Settings > Spaces. The
+  stream is a file any process running as the user can append to, so `RefusalStream` takes only
+  whole lines whose every field has the shape orch writes, and reads at most 1 MiB per poll. The
+  monitor keeps the latest 20 (`recent`) for a future list; the menu's Needs you list still shows
+  PRs only.
 
 ## Spaces
 

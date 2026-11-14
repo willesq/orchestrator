@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -566,6 +567,10 @@ func TestSwitchEventStream(t *testing.T) {
 	evs, err := events.Read(paths.EventsDir(), spacesEventStream)
 	if err != nil || len(evs) != 1 || !strings.Contains(evs[0].Summary, "terms (outbound terms) switched from on to off by operator") {
 		t.Fatalf("events = %v, %v", evs, err)
+	}
+	// The operator's stream is owner-only from its first write (SP-048).
+	if fi, err := os.Stat(filepath.Join(paths.EventsDir(), spacesEventStream+".jsonl")); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("stream mode: %v, %v", fi, err)
 	}
 }
 

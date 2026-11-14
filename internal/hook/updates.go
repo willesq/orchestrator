@@ -20,7 +20,9 @@ import (
 // tasks report. The PR babysitter's stream refreshes every few minutes and stays
 // in the SessionStart digest only.
 func updateStreams(sessionID string) []string {
-	if !sessionIDPattern.MatchString(sessionID) {
+	// Reason: a session named like a shared stream ("spaces") must not
+	// read it as its own; the spaces stream is the operator's.
+	if !sessionIDPattern.MatchString(sessionID) || sharedStreams[sessionID] {
 		return []string{taskEventStream}
 	}
 	return []string{sessionID, taskEventStream}
