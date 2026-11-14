@@ -2655,6 +2655,57 @@
           "SP-042"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-300",
+        "kind": "follow-up",
+        "topic": "gh_config_dir checks: path race, ACLs and budget key (security audit, low)",
+        "detail": "SP-074 audit of PR #182: github.CheckProfileDir resolves symbolic links to check the directory, but gh is started with the unresolved gh_config_dir, so a link swapped between the check and the run is not caught; macOS ACLs are not checked; the hourly budget is keyed on the gh_config_dir string, so two spellings of one folder would get two budgets (validation only rejects equal expanded paths). Proposed: pass the resolved path as GH_CONFIG_DIR, reject folders with an extended ACL, key the budget on the resolved path.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074",
+          "SP-063"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-301",
+        "kind": "follow-up",
+        "topic": "GitHub budget counts gh calls, not API requests (security audit, low)",
+        "detail": "SP-074.2: a gh api --paginate call counts as one call however many pages it fetches, and counts live in orchd memory, so a restart starts a new hour. Proposed: count pages (or weight paginated calls) and keep the window across restarts if that matters.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-302",
+        "kind": "decision",
+        "topic": "Profile-only orgs: agents can still read the PR cache file and synced docs (security audit, low)",
+        "detail": "SP-074 lets an org that only a space's own gh profile reaches be watched. ListPRs, ListGitHubItems, ListGitHubScopes and ListGitHubRepos now leave such owners out for agents, but the PR cache file (pr_babysitter_state.json) stays readable by every process of the user, and ListDocs, GetDocument and GetDocsSync (task-callable) may return docs synced through a space's profile (SP-063 design). Options: (a) deny the cache file to other spaces` sandboxes and filter the docs RPCs per caller space (once records carry a space, SP-030/INV); (b) accept and document.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074",
+          "SP-063"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-303",
+        "kind": "follow-up",
+        "topic": "Claude config folder is not vetted before claude auth status runs (security audit, low)",
+        "detail": "SP-074.3.a2: orchd runs claude auth status with a space's claude_config_dir without a CheckProfileDir-style check (absolute, under home, owner-only). Only status is read; nothing is written. Proposed: apply the same directory check and report refused folders.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074",
+          "SP-046"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -4545,7 +4596,12 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestProfileOnlyOrgIsWatchedThroughItsProfile (internal/daemon): org acme reachable only via its space profile is offered as a disabled scope, turned on via SetGitHubScope, its PR is found and enriched by the PR watcher and a review is posted, every gh run about acme with GH_CONFIG_DIR=/profiles/acme; TestServiceRoutesProfileOnlyOrgs (internal/github); TestProfileOwnedGitHubDataIsTheOperators (agents do not see profile-owned scopes, repos or PR items; enabling a refused profile's scope fails).",
+            "a2: TestProfileCallsItCannotReadAreRefused (internal/daemon): a 404 as the profile fails with github.ErrNoAccess, runs once and only as the profile; a 0755 profile dir and one outside $HOME are refused before any gh run and named for the operator with the fix; TestCheckProfileDir and TestMarkNoAccess (internal/github).",
+            "a3: TestRepoPickerAndPROutcomesUseTheSpacesProfile (internal/daemon): ListGitHubRepos and the PR-outcome sweep (newAttributor) read acme as its profile, the outcome is good, and the default login is never asked; TestAttributorCountsPRsAsTheirSpacesAccount (internal/evidence).",
+            "go test ./... and go vet ./... pass; make cover: All files >= 80% (ghprofiles.go 97.6%, ghprofiles_routes.go 94.3%, github/accounts.go 91.9%, evidence.go 93.2%); security-audit: one high and two mediums fixed and re-audited clean, lows recorded as RC-300..RC-303."
+          ]
         },
         {
           "id": "SP-074.2",
@@ -4559,7 +4615,10 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestIsolatedAccountBudget (internal/daemon): with github.isolated_account_hourly_budget=3 an isolated profile's docs sync and PR-watch calls return github.ErrQuota after 3 calls (logged once, naming no space), PR-outcome reads wait too, reviews run up to 2x, a private space's profile and the default login are unaffected, and the budget renews after the hour; TestGHBudgetWindow; TestPRWatchDefersASpentAccount and TestDeferredAccountKeepsItsItems (internal/prs): a spent account is not searched and its items stay cached while others refresh.",
+            "Config key github.isolated_account_hourly_budget (default 1000, 0 = no cap) in internal/config/schema.go; make cover passes."
+          ]
         },
         {
           "id": "SP-074.3",
@@ -4594,7 +4653,12 @@
               "threshold": "true"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestOneLoginForEverySpace (internal/daemon): with no space naming a gh profile, docs sync, PR watching, reviews, the guard's repo lookups and generated checkout settings (spacesettings.For/ClaudeFragment/LauncherFragment) all run with no GH_CONFIG_DIR and status reports no problem; a space naming gh_config_dir uses it for its orgs; also TestGHProfilesIsolatedSpaceWithoutLoginIsNotSynced (amended for D-59).",
+            "a2: TestSpaceLoginsDetection, TestClaudeLoginCache, TestRunClaudeAuth (internal/daemon): per space, which gh login and Claude config (default or own) and whether each is logged in, in one-login and two-login layouts, from gh auth status --json hosts and claude auth status --json only (no token asked for; email and org not kept; credential env vars stripped).",
+            "a3: not done; showing logins in orch status and the app needs an orchd.proto field (waiting for the coordinator's go-ahead).",
+            "a4: docs/INSTALL.md (GitHub accounts per space) and docs/OPERATIONS.md (spaces) describe the single-login default, adding a per-space gh profile or claude_config_dir, and that one login is not a boundary between jobs."
+          ]
         }
       ],
       "status": "in_progress",
