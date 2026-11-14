@@ -556,6 +556,41 @@
         "id": "D-62",
         "decision": "Merge SP-046 (PR #171) now, as admin without review, with the security-audit gate (DOD-6) not met: RC-215 (high), RC-216 and RC-217 (medium) stay open, together with the decisions in RC-210 and RC-213. SP-046 stays 'blocked' on main until they are settled and the independent verifier passes. With no spaces policy applied nothing changes (INV-10). The coordinator's recommendations, not yet confirmed by the user: RC-215 guard refuses tool calls in checkouts whose settings re-open another space's folders; RC-216 one-time start digest note after a sandbox setting change; RC-217 'auto' also triggers when another space has its own login folder; RC-210 documented limit, solved in SP-074; RC-213 use allowMachLookup com.apple.trustd.agent instead of enableWeakerNetworkIsolation.",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-63",
+        "decision": "Features may be worked in parallel lanes, up to 5 at a time, each lane a separate session on one feature, following the swim lanes the coordinator proposed on 2026-11-14: first wave SP-074, SP-024, SP-030, SP-048, SP-051; SP-045 after SP-074's cli changes; SP-075 after SP-074. Each lane has its own RC-id range and its own progress file; only the coordinator assigns D-ids and schedules changes to orchd.proto and DB migrations. This amends session_procedure steps 2, 3, 5 and 12 and adds step 13.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-65",
+        "decision": "Local folders reach the public space only through an explicit list of path patterns per public space in the applied policy ('public_paths'), never by what is on disk: a .git a session can create no longer counts as a declaration. Three forms only: an exact folder ('~/code/x', the files directly in it), '*' matching one folder name, and '**' matching any depth ('~/code/x/**'); no '!' negation and no other gitignore rules. Patterns must sit inside a public root and are checked at apply; the deepest root still decides first, so a private or isolated root nested inside a '**' pattern keeps its own space. Until SP-076 builds the list, all local content under public roots is quarantined. This replaces the 'or declares that folder public' path of D-50 and the checkout-declaration part of D-64, and settles RC-401 and RC-405 (SP-030). The list is built by new feature SP-076.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-66",
+        "decision": "RC-601 (SP-075): each command log record stores the outbound rules revision it was judged under (a toollog column and a RecordToolEvent field), and a replay uses that revision instead of looking the rules up by time.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-67",
+        "decision": "RC-215 (SP-046): option (b). The tool guard (SP-041) refuses tool calls in a checkout whose own settings (a tracked .claude/settings.json or the user's entries in settings.local.json) re-open a folder orch's sandbox denies.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-68",
+        "decision": "RC-216 (SP-046): option (a). After any change to the sandbox setting, and after any restart while it is off, the next start digest of each session names the setting once.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-69",
+        "decision": "RC-217 (SP-046): option (a). Under 'auto', orch also writes sandbox rules when they would deny another space's own login folder (gh_config_dir or claude_config_dir), not only another isolated space's roots.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-70",
+        "decision": "Review results and merge order, 2026-11-14: the user approved the SP-051.1.a1 snapshots and the SP-072.1.a2 snapshots, and told the coordinator to merge the ready lane PRs (#178, #182, #183, #184, #179, #181) in the order it sees fit, before the remaining hands-on checks. The hands-on checks SP-072.1.a1 (switch each layer from the app, RC-160) and RC-451 (SP-048 refusal notifications) are done by the user after merging; SP-072 stays in_progress until a1 is confirmed.",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -2108,7 +2143,7 @@
           "SP-072"
         ],
         "status": "open",
-        "note": "2026-11-12: PR #169 merged before these checks (D-57). The user's first attempt showed 'unknown method GetEnforcement' because the running Homebrew orchd (started 2026-11-09) predates SP-070; the switch check needs an orchd built from main or a separate test orchd."
+        "note": "2026-11-14: a2 confirmed by the user (snapshots regenerated from main); a1 still to do after merging (D-70)."
       },
       {
         "id": "RC-161",
@@ -2604,7 +2639,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "resolved",
+        "resolution": "Settled by the user on 2026-11-14 as D-67; implemented by the SP-046 follow-up lane."
       },
       {
         "id": "RC-216",
@@ -2617,7 +2653,8 @@
           "SP-046",
           "SP-070"
         ],
-        "status": "open"
+        "status": "resolved",
+        "resolution": "Settled by the user on 2026-11-14 as D-68; implemented by the SP-046 follow-up lane."
       },
       {
         "id": "RC-217",
@@ -2629,7 +2666,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "resolved",
+        "resolution": "Settled by the user on 2026-11-14 as D-69; implemented by the SP-046 follow-up lane."
       },
       {
         "id": "RC-218",
@@ -4704,7 +4742,8 @@
           ],
           "evidence": [
             "a2 (awaiting the user's review): light and dark snapshots rendered at 61d1f9c with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter OrchAppSnapshots` (offscreen, sample data, no orchd): /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/spaces-section-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/spaces-section-dark.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/enforcement-banner-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/enforcement-banner-dark.png (plus the menu bar panel's switches: /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/menu-bar-spaces-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/menu-bar-spaces-dark.png). Not yet reviewed by the user.",
-            "a1 (awaiting the user): not yet observed. Supporting tests at 61d1f9c: EnforcementModelTests.everyLayerCanBeSwitchedToEachOfItsStates (6 layer x state changes plus back to default), switchingOffAsksFirstAndSendsOnlyOnConfirm, tighteningIsSentAtOnceAndTheSameStateIsNotSent, aRefusalStaysWithItsLayer, pollsAtTheIntervalOrJustAfterTheNextTimer; EnforcementSwitchTests.countdown; PlacementValidatorTests.enforcementRoundTrip (GetEnforcement/SetEnforcement over gRPC with for_seconds). SetEnforcement is operator-only, so the check must be run by the user from an app they opened, not from an agent session."
+            "a1 (awaiting the user): not yet observed. Supporting tests at 61d1f9c: EnforcementModelTests.everyLayerCanBeSwitchedToEachOfItsStates (6 layer x state changes plus back to default), switchingOffAsksFirstAndSendsOnlyOnConfirm, tighteningIsSentAtOnceAndTheSameStateIsNotSent, aRefusalStaysWithItsLayer, pollsAtTheIntervalOrJustAfterTheNextTimer; EnforcementSwitchTests.countdown; PlacementValidatorTests.enforcementRoundTrip (GetEnforcement/SetEnforcement over gRPC with for_seconds). SetEnforcement is operator-only, so the check must be run by the user from an app they opened, not from an agent session.",
+            "a2: confirmed by user on 2026-11-14 after reviewing spaces-section and enforcement-banner snapshots, light and dark, regenerated from main at d1f44bb with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter OrchAppSnapshots` (D-70)."
           ]
         },
         {
@@ -5792,7 +5831,7 @@
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": "2026-11-14: D-61 is implemented and every SP-046 acceptance item has evidence at 6baf911 (unit tests, make cover, and the full TestClaudeE2E suite PASS), but DOD-6 is not met. The security audit's HIGH, RC-215 (measured: an allowRead or allowWrite in a checkout's own .claude/settings.json, or the user's own entries in settings.local.json, re-opens orch's sandbox denies for sessions started in the checkout; orch now reports it but cannot prevent it without editing tracked files or users' entries, which SP-046.1.a2 forbids), and two MEDIUMs that follow from D-61's own text, RC-216 (a consistent forged setting is taken at restart and never marks a digest) and RC-217 (auto judges only isolated roots), need user decisions. The independent verifier was not run.",
+      "blocked_reason": "2026-11-14: D-61 is implemented and every SP-046 acceptance item has evidence at 6baf911 (unit tests, make cover, and the full TestClaudeE2E suite PASS), but DOD-6 is not met. The security audit's HIGH, RC-215 (measured: an allowRead or allowWrite in a checkout's own .claude/settings.json, or the user's own entries in settings.local.json, re-opens orch's sandbox denies for sessions started in the checkout; orch now reports it but cannot prevent it without editing tracked files or users' entries, which SP-046.1.a2 forbids), and two MEDIUMs that follow from D-61's own text, RC-216 (a consistent forged setting is taken at restart and never marks a digest) and RC-217 (auto judges only isolated roots), need user decisions. The independent verifier was not run. 2026-11-14: the user settled RC-215/216/217 as D-67, D-68 and D-69; a follow-up lane implements them, then runs the audit and the independent verifier.",
       "attempts": 2,
       "criteria_sha256": "cba1332a2b5973eb9c82362ed430d3a8c28df32d635b00bfea8a90589908f887",
       "branch": "feat/sp-046-per-space-harness-settings",
@@ -6512,6 +6551,80 @@
       "criteria_sha256": "f09b8ebcceabae3c53278bbf89426eec5db6e7a09c656b08af71fa359704171c",
       "branch": null,
       "pr": null
+    },
+    {
+      "id": "SP-076",
+      "phase": "P2",
+      "priority": 32.5,
+      "title": "Explicit public paths (D-65)",
+      "summary": "Each public space in the applied policy lists 'public_paths' patterns (exact folder, '*' one folder name, '**' any depth; no '!'). Local content under a public root reaches public only when a pattern matches; nothing on disk, such as a .git, counts as a declaration. Patterns are checked at apply and shown by 'orch spaces explain'. Editing them in the app belongs to SP-053.",
+      "why": "RC-405: orch cannot tell a checkout the operator declared public from a .git any session can create, so a declaration must live in the operator-applied policy.",
+      "depends_on": [
+        "SP-020",
+        "SP-030"
+      ],
+      "touches": [
+        "internal/spaces/",
+        "internal/daemon/ (placement)",
+        "internal/cli/ (orch spaces explain)"
+      ],
+      "docs_to_update": [
+        "docs/internals/memory.md",
+        "docs/internals/config.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-076.1",
+          "title": "Explicit public paths",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Patterns match exactly as D-65 says: an exact folder matches only the files directly in it; '*' matches one folder name; '**' matches any depth; '!' and any other gitignore syntax are rejected.",
+              "measure": "table test over the three forms and the rejected syntax",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "Apply rejects a public_paths pattern that is outside every root of its public space, malformed, or uses '!'; the last applied policy stays active and the error does not echo outbound terms.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "Under a public root, local content (plain folders, checkouts, session-registered sources) is public only when a public_paths pattern matches it; otherwise it is quarantined. Creating a .git at, above or inside a public root changes no placement. A private or isolated root nested inside a '**' pattern keeps its own space.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "'orch spaces explain <path>' names the public_paths pattern that made a path public, or says none matched.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a5",
+              "type": "doc",
+              "check": "docs/internals/memory.md and docs/internals/config.md describe public_paths and its three forms, and the D-50 text that used to mention declaring a folder public points to it.",
+              "measure": "files changed in the diff",
+              "threshold": "both"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "01ef9bae725c1b6ed0ccbd6b3194d8d30de872c6e7cceb59eb24d0db1046735b",
+      "branch": null,
+      "pr": null
     }
   ],
   "criteria_hash_recipe": "criteria_sha256 = sha256 of json.dumps([{id, title, acceptance} for each checkpoint], sort_keys=True, separators=(',', ':'), ensure_ascii=False) encoded as UTF-8. 'evidence' is excluded so recording evidence does not change the hash.",
@@ -6619,6 +6732,14 @@
     {
       "date": "2026-11-14",
       "change": "D-62: user merged SP-046 (#171) with RC-215/216/217 open; SP-046 stays blocked until they are fixed and verified."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-63: parallel lanes (up to 5) with separate RC-id ranges and per-feature progress files; first wave SP-074, SP-024, SP-030, SP-048, SP-051."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-65 to D-70: explicit public_paths (new feature SP-076), command log records its rules revision, SP-046's RC-215/216/217 settled, SP-051 a1 and SP-072 a2 approved, lane PRs merged before the remaining hands-on checks."
     }
   ],
   "plan_location": {
@@ -6628,8 +6749,8 @@
     "main_checkout": "/Users/williamesquivel/code/willesq/orchestrator",
     "note": "Status on origin/main is authoritative. A feature's status changes on its feature branch and reaches main when its PR merges.",
     "progress_file": {
-      "path": "/Users/williamesquivel/code/willesq/orchestrator/docs/spaces/progress.local.json",
-      "purpose": "Live progress for the user and the next session. The plan's status only changes on main when a PR merges; this file shows what is happening now. It is never committed (listed in .git/info/exclude).",
+      "path": "<main checkout>/docs/spaces/progress.<ID>.local.json",
+      "purpose": "Live progress for the user and the next session. The plan's status only changes on main when a PR merges; this file shows what is happening now. It is never committed (listed in .git/info/exclude). Under D-63 each lane writes its own file named by its feature id; the coordinator keeps progress.local.json (read by the reader) as a summary of all lanes.",
       "schema": {
         "updated_at": "UTC ISO 8601, set on every write",
         "session_id": "the harness session id",
@@ -6656,26 +6777,93 @@
   },
   "session_procedure": [
     "1. Sync. In the main checkout (/Users/williamesquivel/code/willesq/orchestrator) run `git fetch origin`. Read the plan from origin/main: `git show origin/main:docs/spaces/spaces-features.json`. That copy is authoritative for status; local copies may be stale.",
-    "2. Pick exactly one feature: the first feature in ascending 'priority' whose status on origin/main is not 'done' or 'superseded'. Never skip it, never choose another, never work on two at once. Run one session at a time.",
-    "3. Look for existing work on it. First read the live progress file (/Users/williamesquivel/code/willesq/orchestrator/docs/spaces/progress.local.json): if it names a different session_id with status 'in_progress' and updated_at less than 30 minutes ago, another session is working. Stop and tell the user. Then check branches and PRs: the branch is feat/<id in lowercase>-<short-slug> (e.g. feat/sp-020-spaces-config); run `git branch -a --list '*feat/<id>-*'` and `gh pr list --state all --search '<ID> in:title'`.",
+    "2. Pick your feature. Under D-63 up to 5 lanes run in parallel, each a separate session on one feature. A lane session works only on the feature the coordinator assigned it in parallel_lanes.active (or, with no assignment, the first feature in ascending 'priority' whose status on origin/main is not 'done' or 'superseded' and that no active lane holds). Never work on two features in one session, never take a feature another lane holds, and never take one whose depends_on are not all 'done' on origin/main.",
+    "3. Look for existing work on it. First read this feature's live progress file (<main checkout>/docs/spaces/progress.<ID>.local.json, e.g. progress.SP-024.local.json): if it names a different session_id with status 'in_progress' and updated_at less than 30 minutes ago, another session is working. Stop and tell the user. Then check branches and PRs: the branch is feat/<id in lowercase>-<short-slug> (e.g. feat/sp-020-spaces-config); run `git branch -a --list '*feat/<id>-*'` and `gh pr list --state all --search '<ID> in:title'`.",
     "3a. If an open PR exists whose plan copy already shows the feature 'done' with verification, it is waiting for the user to review and merge. Report the PR link and stop. Do not start the next feature.",
     "3b. If a branch or open PR exists but the feature isn't done there, resume it: use its existing worktree under /Users/williamesquivel/code/willesq/orchestrator.worktrees/feat/..., or recreate it with ~/.claude/orchestrator/scripts/git_worktree_create.sh <branch> and answer 'y' to reuse the existing branch.",
     "3c. If the PR was merged but origin/main doesn't show the feature done, or a PR was closed unmerged, stop and ask the user what happened.",
     "3d. If nothing exists, run ~/.claude/orchestrator/scripts/git_worktree_create.sh feat/<id>-<slug> from the main checkout and work only in that worktree.",
     "4. Preconditions. Every depends_on feature must be 'done' on origin/main, and no entry in decisions.open may list this feature in 'blocks'. If either fails, stop and tell the user. (Priority order makes the first case unexpected.)",
-    "5. On the feature branch, set the feature's status to 'in_progress', increment 'attempts', and set 'branch'. Commit (signed). Push, open a draft PR titled 'feat(spaces): <summary> (<ID>)' early, record its URL in the feature's 'pr' field, and register it in ~/.pr-watch.json. Write the live progress file now and after every later step, checkpoint, block or finish (schema in plan_location.progress_file); make sure docs/spaces/progress.local.json is listed in the main checkout's .git/info/exclude.",
+    "5. On the feature branch, set the feature's status to 'in_progress', increment 'attempts', and set 'branch'. Commit (signed). Push, open a draft PR titled 'feat(spaces): <summary> (<ID>)' early, record its URL in the feature's 'pr' field, and register it in ~/.pr-watch.json. Write the live progress file now and after every later step, checkpoint, block or finish (schema in plan_location.progress_file); make sure docs/spaces/progress.*.local.json is listed in the main checkout's .git/info/exclude.",
     "6. Do the checkpoints in order. After each one, record evidence (test names, command output, measured numbers, or 'confirmed by user on <date>' for manual items) in that checkpoint's 'evidence' array and commit. Update the live progress file (checkpoint, checkpoints_done, note, a history entry) at the start and end of each checkpoint.",
     "7. Manual items need the user: ask them to perform or confirm the step and wait. If you can't continue for any reason (missing input, a criterion that is wrong or impossible, 3 failed fix rounds), set status 'blocked' with a specific blocked_reason, commit, push, and stop. Never move past a blocked feature. When you stop or need the user, the live file's status and note must say so.",
     "8. When every checkpoint has evidence meeting its threshold, run every definition_of_done check yourself. Then spawn an independent verifier: a fresh subagent that gets only the diff (origin/main...HEAD), this feature's JSON, the invariants it appears in, and definition_of_done. It re-runs every test, command and metric itself and reports pass or fail for each acceptance item and each DOD check. It does not see your reasoning.",
     "9. If the verifier reports any failure, fix it and verify again, up to 3 rounds; after that, set 'blocked'. If everything passes, set status 'done', passes=true, verified_sha to the commit that was verified, verified_at to the current UTC time (ISO 8601). Commit that change (signed) and push. Leave the PR as a draft; the user marks it ready and merges.",
     "10. Never delete, renumber or reorder features, checkpoints or acceptance items, and never edit acceptance criteria (criteria_sha256 detects it). Only the user may mark a feature 'superseded'. If you discover new work, describe it under 'Proposed new features' in the PR body; it is appended to the plan, with the next free ID, only after the user approves.",
     "11. Finish with a short report: the feature, its PR link, the verification result, what is waiting on the user, and which feature step 2 will pick next once this one is merged. Leave the live progress file with the final status ('done', 'blocked' or 'idle') and a note matching your report.",
-    "12. Record decisions as you go, until the last feature is done. A decision the user makes goes to decisions.confirmed_by_user with the next D-id and the date. Everything else that needs the user later goes to decisions.reconvene with the next RC-id: proposed features or acceptance items (also listed in the PR body per step 10), low or accepted security findings, deferred follow-ups, unverified assumptions, and actions the user must take. Give each a kind (decision, follow-up or user-action), topic, detail, source (PR, issue or session URI), raised date, affects and status 'open'. Reconvene items never block work; an item the user settles moves to confirmed_by_user (or becomes a feature) and its status becomes 'resolved' with a note. Before reporting in step 11, check that your session's items are recorded."
+    "12. Record decisions as you go, until the last feature is done. A decision the user makes goes to decisions.confirmed_by_user with the next D-id and the date; only the coordinator assigns D-ids, so a lane reports the user's decision to the coordinator instead. Everything else that needs the user later goes to decisions.reconvene with the next free RC-id inside your lane's range in parallel_lanes (never outside it): proposed features or acceptance items (also listed in the PR body per step 10), low or accepted security findings, deferred follow-ups, unverified assumptions, and actions the user must take. Give each a kind (decision, follow-up or user-action), topic, detail, source (PR, issue or session URI), raised date, affects and status 'open'. Reconvene items never block work; an item the user settles moves to confirmed_by_user (or becomes a feature) and its status becomes 'resolved' with a note. Before reporting in step 11, check that your session's items are recorded.",
+    "13. Parallel lanes (D-63). A lane edits only its own feature object, its own RC range and its own progress file. When several lane PRs edit spaces-features.json, the later PR rebases on origin/main and keeps both sides; RC entries from different ranges are never renumbered. Only one lane at a time changes internal/rpc/orchdv1/orchd.proto or adds a numbered DB migration; the coordinator schedules them. Each lane uses its own ORCH_CONFIG_DIR, ORCH_DATA_DIR, socket and Qdrant collection prefix named after its feature (e.g. sp-024) and removes them when finished. Manual items and user decisions go through the coordinator, which asks the user and keeps docs/spaces/progress.local.json as the summary of all lanes for the reader."
   ],
   "local_safety": [
     "This Mac runs the orch you are changing. Exercise install changes with a temporary --home only; never write to the real ~/.claude, ~/.codex, ~/.gemini, ~/.config/orch, or any repo's git hooks.",
     "Don't restart or replace the running orchd, and don't run `orch install` for real. For anything that needs a daemon or Qdrant, use a separate ORCH_CONFIG_DIR, ORCH_DATA_DIR, socket and Qdrant collection, and remove them when finished.",
     "To capture harness payloads (SP-001), use project-local hook settings in a scratch repository and ask the user before launching each harness session.",
     "Never read, print or store credentials. Use `gh auth status` only; never `gh auth token` or token files."
-  ]
+  ],
+  "parallel_lanes": {
+    "decision": "D-63",
+    "max_parallel": 5,
+    "id_ranges_note": "Only the coordinator session assigns D-ids. RC-ids: the coordinator uses RC-229 to RC-299; each lane gets a block of 50 when it is assigned. Blocks are never reused.",
+    "coordinator": {
+      "rc_range": "RC-229..RC-299"
+    },
+    "active": [
+      {
+        "feature": "SP-074",
+        "rc_range": "RC-300..RC-349",
+        "note": "done and verified at 4da29c1; PR #182 waits for the user"
+      },
+      {
+        "feature": "SP-024",
+        "rc_range": "RC-350..RC-399",
+        "note": "done and verified; PR #183 waits for the user; SP-025 and SP-027 start when it merges"
+      },
+      {
+        "feature": "SP-030",
+        "rc_range": "RC-400..RC-449",
+        "note": "resumed to implement D-65's safe default (all local content under public roots quarantined); PR #180"
+      },
+      {
+        "feature": "SP-048",
+        "rc_range": "RC-450..RC-499",
+        "note": "done and verified; PR #179 waits for the user"
+      },
+      {
+        "feature": "SP-051",
+        "rc_range": "RC-500..RC-549",
+        "note": "a1 approved (D-70); resumed for the independent verifier; PR #181"
+      },
+      {
+        "feature": "SP-045",
+        "rc_range": "RC-550..RC-599",
+        "note": "done and verified; PR #184 waits for the user"
+      },
+      {
+        "feature": "SP-075",
+        "rc_range": "RC-600..RC-649",
+        "note": "resumed for D-66's non-proto parts (migration slot); proto after #182 merges; PR #185"
+      },
+      {
+        "feature": "SP-046",
+        "rc_range": "RC-650..RC-699",
+        "note": "follow-up lane implementing D-67, D-68 and D-69 on a new branch, then audit and independent verifier"
+      }
+    ],
+    "next_rc_block": "RC-700",
+    "queued": [
+      "SP-025 and SP-027 after #183 merges",
+      "SP-052 and SP-054 after #181 merges",
+      "SP-076 after SP-030 merges"
+    ],
+    "d_ids_reserved": [],
+    "next_d_id": "D-71",
+    "proto_slot": {
+      "holder": "none (SP-074 finished editing at eff7585)",
+      "next": "SP-075, after PR #182 merges"
+    },
+    "migration_slot": {
+      "holder": "SP-075",
+      "granted": "2026-11-14"
+    }
+  }
 }
