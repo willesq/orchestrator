@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -50,7 +51,8 @@ const (
 	// RulePinMissing: the calling session has no pin, so its space is
 	// unknown; enforcing modes fail closed (INV-13).
 	RulePinMissing GuardRule = "pin_missing"
-	// RuleSelfProtection: a file tool writes to a path orch protects.
+	// RuleSelfProtection: the call writes to a path orch protects, or
+	// reads a terms file or credential (SP-042).
 	RuleSelfProtection GuardRule = "self_protection"
 	// RuleOtherJobPath: the cwd, a path, a cd destination, a git dir or a
 	// glob prefix lies in another isolated space.
@@ -58,8 +60,8 @@ const (
 	// RuleOtherJobAncestor: a path, git dir or prefix contains another
 	// isolated space's root, so the call may reach into it (grep -r ~/code).
 	RuleOtherJobAncestor GuardRule = "other_job_ancestor"
-	// RuleOtherJobRepo: a GitHub repo is owned by an org bound to another
-	// isolated space.
+	// RuleOtherJobRepo: a GitHub repo, or an account the call reaches
+	// (SP-043), is owned by or is an org bound to another isolated space.
 	RuleOtherJobRepo GuardRule = "other_job_repo"
 	// RuleUnreadableSpace: strict only; a target lies in, contains or is a
 	// repo of a space the session may not read.
@@ -100,6 +102,9 @@ type GuardPolicy struct {
 	res       *Resolved
 	roots     []guardRoot
 	protected [][]string
+	// self is the rest of the protection (SP-042): name patterns, paths
+	// protected anywhere, and paths no call may read.
+	self selfProtection
 }
 
 // guardRoot is one bound root under every spelling a target may use.
@@ -149,7 +154,14 @@ func spellings(pr *pathResolver, p string) []string {
 // guardKey is how paths compare: cleaned, Unicode NFC and case-folded, as
 // macOS volumes usually treat names.
 func guardKey(p string) string {
-	return strings.ToLower(norm.NFC.String(filepath.Clean(p)))
+	return foldName(filepath.Clean(p))
+}
+
+// foldName is s in NFC with Unicode case folding. Reason: full folding, not
+// lower-casing: APFS takes U+017F (long s) for "s", so a name spelled with
+// it must match the protected one (SP-042 security review).
+func foldName(s string) string {
+	return cases.Fold().String(norm.NFC.String(s))
 }
 
 // under reports whether key is base or lies below it.
@@ -173,6 +185,9 @@ type GuardEnforcement struct {
 	// the guard does not know is read as GuardStrict, so a damaged state
 	// never enforces less.
 	Guard GuardMode
+	// Terms is the outbound terms layer's state (SP-044). Decide does not
+	// read it; a replay does, to carry recorded terms verdicts. "" is on.
+	Terms string
 }
 
 // GuardEvent is one hook event, with its targets already extracted.
@@ -202,8 +217,8 @@ type GuardDecision struct {
 	Enforced bool
 }
 
-// writeTools are file tools whose path fields are written. Shell tools'
-// writes cannot be told from reads in Targets; SP-042 adds those.
+// writeTools are file tools whose path fields are written. Shell writes
+// come from Targets' Writes (SP-042).
 var writeTools = map[string]bool{
 	"Write": true, "Edit": true, "MultiEdit": true, "NotebookEdit": true, "apply_patch": true,
 }
@@ -273,7 +288,7 @@ func assess(pol GuardPolicy, pin GuardPin, mode GuardMode, ev GuardEvent) (Verdi
 		own = ""
 	}
 	t := ev.Targets
-	if writeTools[ev.Tool] && pol.anyProtected(t.Paths, t.CdDest, t.GitDirs, t.Prefixes) {
+	if pol.selfProtected(ev.Tool, t) {
 		return Refuse, RuleSelfProtection
 	}
 	g := guardScope{pol: pol, own: own, strict: mode == GuardStrict}
@@ -343,6 +358,16 @@ func assess(pol GuardPolicy, pin GuardPin, mode GuardMode, ev GuardEvent) (Verdi
 		case reachUnreadable:
 			note(RuleUnreadableSpace)
 		}
+	}
+	r, malformed := g.judgeOrgs(t.GHOrgs)
+	if r == reachJob {
+		return Refuse, RuleOtherJobRepo
+	}
+	if r == reachUnreadable {
+		note(RuleUnreadableSpace)
+	}
+	if malformed {
+		note(RuleMalformedTarget)
 	}
 	if weakest != "" {
 		return Refuse, weakest

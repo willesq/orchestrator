@@ -12,13 +12,45 @@ import (
 	"time"
 
 	"github.com/willesq/orchestrator/internal/db"
+	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/spaces"
 )
 
-// termsSetup applies, in a fresh data directory, a policy where acme (org
-// acme) and globex (org globex) each have a terms file, and returns a git
-// checkout of acme/app with nothing unpushed.
-func termsSetup(t *testing.T) string {
+// termsPolicy is a policy where acme and globex each have a terms file
+// (acme's term falcon, globex's zephyr) written under dir. Binding orgs
+// needs GitHub at apply, so the checkouts' orgs are in no space, which
+// holds neither space's terms.
+func termsPolicy(t *testing.T, dir string) spaces.Policy {
+	t.Helper()
+	for name, body := range map[string]string{"acme.txt": "falcon\n", "globex.txt": "zephyr\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return spaces.Policy{Spaces: []spaces.Space{
+		{Name: "acme", Kind: spaces.Isolated, TermsFile: filepath.Join(dir, "acme.txt")},
+		{Name: "globex", Kind: spaces.Isolated, TermsFile: filepath.Join(dir, "globex.txt")},
+	}}
+}
+
+// termsSnapshot writes the guard's snapshot of p (revision 7) with the
+// guard in mode and the terms layer's switch terms, and pins session "s"
+// to acme.
+func termsSnapshot(t *testing.T, p spaces.Policy, mode string, terms spaces.GuardSwitch) {
+	t.Helper()
+	if err := spaces.WriteGuardSnapshot(paths.GuardDir(), spaces.GuardSnapshot{Revision: 7, Policy: &p, Home: "/Users/user",
+		Protection: spaces.Protection{Write: []string{paths.GuardDir()}}, Guard: spaces.GuardSwitch{State: mode}, Terms: terms}); err != nil {
+		t.Fatal(err)
+	}
+	if err := spaces.WriteGuardPin(paths.GuardDir(), spaces.GuardPinFile{SessionID: "s", Space: "acme", Revision: 7}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// termsSetup writes, in a fresh data directory, the guard's snapshot of
+// termsPolicy with the guard in mode and the terms layer on, and returns a
+// git checkout of acme/app with nothing unpushed.
+func termsSetup(t *testing.T, mode string) string {
 	t.Helper()
 	if _, err := osexec.LookPath("git"); err != nil {
 		t.Skip("git is not installed")
@@ -26,35 +58,7 @@ func termsSetup(t *testing.T) string {
 	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	terms := t.TempDir()
-	for name, body := range map[string]string{"acme.txt": "falcon\n", "globex.txt": "zephyr\n"} {
-		if err := os.WriteFile(filepath.Join(terms, name), []byte(body), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	conn, err := db.Open()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = conn.Close() })
-	ctx := context.Background()
-	e, err := spaces.Open(ctx, conn, spaces.Env{InGitTree: func(string) bool { return false }})
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := spaces.Policy{Spaces: []spaces.Space{
-		{Name: "acme", Kind: spaces.Isolated, TermsFile: filepath.Join(terms, "acme.txt")},
-		{Name: "globex", Kind: spaces.Isolated, TermsFile: filepath.Join(terms, "globex.txt")},
-	}}
-	// Reason: binding orgs needs GitHub at apply; the checkout's org is
-	// then in no space, which holds neither job's terms.
-	r, ps, err := e.SaveDraft(ctx, p, "test", true)
-	if err != nil || ps != nil {
-		t.Fatal(err, ps)
-	}
-	if _, err := e.Apply(ctx, r.Number, "test", false, nil); err != nil {
-		t.Fatal(err)
-	}
+	termsSnapshot(t, termsPolicy(t, t.TempDir()), mode, spaces.GuardSwitch{})
 	dir, _ := filepath.EvalSymlinks(t.TempDir())
 	for _, args := range [][]string{
 		{"init", "-q"}, {"remote", "add", "origin", "https://github.com/acme/app.git"},
@@ -76,92 +80,214 @@ func termsPayload(t *testing.T, cmd, cwd string) []byte {
 	return b
 }
 
-// TestOutboundTermsRefusedByHook: pre-tool-use refuses a commit that
-// would send a term out, with a reason that names no term, and logs the
-// event; other calls are untouched.
-func TestOutboundTermsRefusedByHook(t *testing.T) {
-	dir := termsSetup(t)
+// stageTerm stages a file holding globex's term in dir.
+func stageTerm(t *testing.T, dir string) {
+	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, "n.md"), []byte("the Zephyr plan\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if out, err := osexec.Command("git", "-C", dir, "add", "n.md").CombinedOutput(); err != nil {
 		t.Fatal(err, string(out))
 	}
-	c := &toolEventClient{fakeClient: &fakeClient{}}
+}
+
+// preToolUse runs pre-tool-use for cmd in dir and returns the deny reason
+// (ok false when none was printed) and the events handed to orchd.
+func preToolUse(t *testing.T, cmd, dir string) (reason string, ok bool, c *toolEventClient) {
+	t.Helper()
+	c = &toolEventClient{fakeClient: &fakeClient{}}
 	var out bytes.Buffer
-	if err := run([]string{"pre-tool-use"}, bytes.NewReader(termsPayload(t, `git commit -m "notes"`, dir)), &out, factory(c, nil)); err != nil {
+	if err := run([]string{"pre-tool-use"}, bytes.NewReader(termsPayload(t, cmd, dir)), &out, factory(c, nil)); err != nil {
 		t.Fatal(err)
 	}
-	var d struct {
-		HookSpecificOutput map[string]string `json:"hookSpecificOutput"`
+	if n := bytes.Count(bytes.TrimSpace(out.Bytes()), []byte("\n")); n != 0 {
+		t.Fatalf("%q: printed %d lines, want one deny at most: %q", cmd, n+1, out.String())
 	}
-	if err := json.Unmarshal(out.Bytes(), &d); err != nil || d.HookSpecificOutput["permissionDecision"] != "deny" {
-		t.Fatalf("output %q: %v", out.String(), err)
-	}
-	reason := d.HookSpecificOutput["permissionDecisionReason"]
-	if strings.Contains(strings.ToLower(reason), "zephyr") || !strings.Contains(reason, "outbound_term") || !strings.Contains(reason, `"globex"`) {
-		t.Errorf("reason %q", reason)
-	}
-	if len(c.events) != 1 {
-		t.Errorf("events %d, want the refused call logged", len(c.events))
-	}
-	// Ordinary calls print nothing.
-	out.Reset()
-	for _, cmd := range []string{"git status", "ls", `git commit -m "falcon"`} {
-		if strings.Contains(cmd, "falcon") {
-			// acme's term to an org in no space is refused too.
-			continue
-		}
-		if err := run([]string{"pre-tool-use"}, bytes.NewReader(termsPayload(t, cmd, dir)), &out, factory(c, nil)); err != nil || out.Len() != 0 {
-			t.Errorf("%q: printed %q, %v", cmd, out.String(), err)
-		}
+	reason, ok = denyOf(t, out.Bytes())
+	return reason, ok, c
+}
+
+// TestOutboundTermsRefusedByHook is RC-116 end to end in the hook: with
+// the guard logging or enforcing, a commit that would send a term out is
+// refused through the guard's one deny, whose reason names the rule and
+// the term's space and not the term, and is handed to orchd as an enforced
+// refusal with rule outbound_term and the snapshot's revision. Other calls
+// are untouched.
+func TestOutboundTermsRefusedByHook(t *testing.T) {
+	for _, mode := range []string{spaces.SwitchLog, spaces.SwitchBlockOtherJobs, spaces.SwitchOff} {
+		t.Run(mode, func(t *testing.T) {
+			dir := termsSetup(t, mode)
+			stageTerm(t, dir)
+			reason, ok, c := preToolUse(t, `git commit -m "notes"`, dir)
+			if !ok {
+				t.Fatal("not refused")
+			}
+			if strings.Contains(strings.ToLower(reason), "zephyr") || !strings.Contains(reason, "outbound_term") ||
+				!strings.Contains(reason, `"globex"`) || !strings.Contains(reason, "orch spaces log") {
+				t.Errorf("reason %q", reason)
+			}
+			if len(c.events) != 1 {
+				t.Fatalf("events %d, want the refused call logged", len(c.events))
+			}
+			ev := c.events[0]
+			if ev.GuardVerdict != "refuse" || ev.GuardRule != string(spaces.RuleOutboundTerm) || !ev.GuardEnforced || ev.GuardPolicyRev != 7 {
+				t.Errorf("event handed to orchd: verdict %q rule %q enforced %v rev %d", ev.GuardVerdict, ev.GuardRule, ev.GuardEnforced, ev.GuardPolicyRev)
+			}
+			for _, cmd := range []string{"git status", "ls", "git log --oneline"} {
+				if r, ok, c := preToolUse(t, cmd, dir); ok {
+					t.Errorf("%q refused: %q", cmd, r)
+				} else if len(c.events) != 1 || c.events[0].GuardRule == string(spaces.RuleOutboundTerm) {
+					t.Errorf("%q: events %v", cmd, c.events)
+				}
+			}
+		})
 	}
 }
 
-// TestOutboundTermsSwitchedOff: with the terms layer switched off the
-// check does not run.
-func TestOutboundTermsSwitchedOff(t *testing.T) {
-	dir := termsSetup(t)
+// TestOutboundTermsUncheckedRecorded: a command the check cannot read is
+// refused as outbound_unchecked, through the same deny and record.
+func TestOutboundTermsUncheckedRecorded(t *testing.T) {
+	dir := termsSetup(t, spaces.SwitchLog)
+	reason, ok, c := preToolUse(t, `git commit -m "$(date)"`, dir)
+	if !ok || !strings.Contains(reason, "outbound_unchecked") {
+		t.Fatalf("reason %q, refused %v", reason, ok)
+	}
+	if ev := c.events[0]; ev.GuardVerdict != "refuse" || ev.GuardRule != string(spaces.RuleOutboundUnchecked) || !ev.GuardEnforced {
+		t.Errorf("event: %v", ev)
+	}
+}
+
+// TestOutboundTermsAfterGuard: a call the enforcing guard refuses gets
+// the guard's deny alone; the terms check does not run for it.
+func TestOutboundTermsAfterGuard(t *testing.T) {
+	dir := termsSetup(t, spaces.SwitchBlockOtherJobs)
+	stageTerm(t, dir)
+	called := false
+	old := checkOutbound
+	t.Cleanup(func() { checkOutbound = old })
+	checkOutbound = func(ctx context.Context, p Payload, g spaces.GuardTerms) spaces.OutboundResult {
+		called = true
+		return old(ctx, p, g)
+	}
+	// Session "x" holds no pin: the guard refuses it as pin_missing.
+	b, _ := json.Marshal(map[string]any{"session_id": "x", "cwd": dir, "tool_name": "Bash",
+		"tool_input": map[string]string{"command": `git commit -m "notes"`}})
+	c := &toolEventClient{fakeClient: &fakeClient{}}
+	var out bytes.Buffer
+	if err := run([]string{"pre-tool-use"}, bytes.NewReader(b), &out, factory(c, nil)); err != nil {
+		t.Fatal(err)
+	}
+	reason, ok := denyOf(t, out.Bytes())
+	if !ok || !strings.Contains(reason, string(spaces.RulePinMissing)) || called {
+		t.Errorf("reason %q, terms checked %v", reason, called)
+	}
+	if c.events[0].GuardRule != string(spaces.RulePinMissing) {
+		t.Errorf("rule %q", c.events[0].GuardRule)
+	}
+}
+
+// TestOutboundTermsSwitchFromSnapshot: the check reads the terms layer's
+// switch from the guard's snapshot (RC-116), not orch.db: off there, it
+// does not run; a timed off switch whose time is up is on again; a
+// snapshot without the switch holds the default, on.
+func TestOutboundTermsSwitchFromSnapshot(t *testing.T) {
+	dir := termsSetup(t, spaces.SwitchLog)
+	p := termsPolicy(t, t.TempDir())
+	cmd := `git commit --allow-empty -m "zephyr"`
+	for _, tc := range []struct {
+		name   string
+		sw     spaces.GuardSwitch
+		refuse bool
+	}{
+		{"off", spaces.GuardSwitch{State: spaces.SwitchOff}, false},
+		{"off for an hour", spaces.GuardSwitch{State: spaces.SwitchOff, Until: time.Now().Add(time.Hour), Previous: spaces.SwitchOn}, false},
+		{"off until a minute ago", spaces.GuardSwitch{State: spaces.SwitchOff, Until: time.Now().Add(-time.Minute), Previous: spaces.SwitchOn}, true},
+		{"on", spaces.GuardSwitch{State: spaces.SwitchOn}, true},
+		{"absent", spaces.GuardSwitch{}, true},
+	} {
+		termsSnapshot(t, p, spaces.SwitchLog, tc.sw)
+		if _, ok, _ := preToolUse(t, cmd, dir); ok != tc.refuse {
+			t.Errorf("%s: refused %v, want %v", tc.name, ok, tc.refuse)
+		}
+	}
+	// An orch.db that says off does not switch the check off while the
+	// snapshot says on.
 	conn, err := db.Open()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
 	ctx := context.Background()
-	c, sw, _, err := spaces.NextSwitch(spaces.DefaultEnforcement(), spaces.LayerTerms, spaces.SwitchOff, "operator", 0, time.Now())
+	ch, sw, _, err := spaces.NextSwitch(spaces.DefaultEnforcement(), spaces.LayerTerms, spaces.SwitchOff, "operator", 0, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := spaces.WriteSwitch(ctx, conn, c, sw); err != nil {
+	if err := spaces.WriteSwitch(ctx, conn, ch, sw); err != nil {
 		t.Fatal(err)
 	}
-	var out bytes.Buffer
-	if err := run([]string{"pre-tool-use"}, bytes.NewReader(termsPayload(t, `git commit --allow-empty -m "zephyr"`, dir)), &out, factory(&toolEventClient{fakeClient: &fakeClient{}}, nil)); err != nil || out.Len() != 0 {
-		t.Errorf("terms off: printed %q, %v", out.String(), err)
+	termsSnapshot(t, p, spaces.SwitchLog, spaces.GuardSwitch{State: spaces.SwitchOn})
+	if _, ok, _ := preToolUse(t, cmd, dir); !ok {
+		t.Error("orch.db's switch was read instead of the snapshot's")
 	}
 }
 
-// TestOutboundTermsUnreadablePolicy: an orch.db whose policy cannot be
-// read refuses an outbound call, and only that.
+// TestOutboundTermsUnreadablePolicy: while the snapshot cannot be read
+// and a policy was applied, an outbound call is refused (the terms cannot
+// be known) unless orch.db says the terms layer is off; other calls are
+// not. With nothing ever applied nothing is checked.
 func TestOutboundTermsUnreadablePolicy(t *testing.T) {
 	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
-	if err := os.MkdirAll(os.Getenv("ORCH_DATA_DIR"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(os.Getenv("ORCH_DATA_DIR"), "orch.db"), bytes.Repeat([]byte("junk "), 200), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	ctx := context.Background()
-	r := defaultCheckOutbound(ctx, Payload{ToolName: "Bash", Cwd: "/w", ToolInput: []byte(`{"command":"git push"}`)})
-	if !r.Refuse || r.Rule != spaces.RuleOutboundUnchecked {
-		t.Errorf("git push: %+v", r)
+	g := func() spaces.GuardTerms {
+		return decideWithin(time.Second, spaces.GuardInput{Kind: spaces.EventPreToolUse, SessionID: "s", Tool: "Bash"}).Terms
 	}
-	if r := defaultCheckOutbound(ctx, Payload{ToolName: "Bash", Cwd: "/w", ToolInput: []byte(`{"command":"ls"}`)}); r.Refuse {
-		t.Errorf("ls: %+v", r)
-	}
-	// No orch.db at all: no policy, nothing checked.
-	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "none"))
-	if r := defaultCheckOutbound(ctx, Payload{ToolName: "Bash", Cwd: "/w", ToolInput: []byte(`{"command":"git push"}`)}); r.Refuse {
+	push := Payload{ToolName: "Bash", Cwd: "/w", ToolInput: []byte(`{"command":"git push"}`)}
+	ls := Payload{ToolName: "Bash", Cwd: "/w", ToolInput: []byte(`{"command":"ls"}`)}
+	// No orch.db, no snapshot: no policy, nothing checked.
+	if r := defaultCheckOutbound(ctx, push, g()); r.Refuse {
 		t.Errorf("no store: %+v", r)
+	}
+	// A policy applied, the guard logging, the snapshot gone.
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	e, err := spaces.Open(ctx, conn, spaces.Env{InGitTree: func(string) bool { return false }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, ps, err := e.SaveDraft(ctx, termsPolicy(t, t.TempDir()), "test", true)
+	if err != nil || ps != nil {
+		t.Fatal(err, ps)
+	}
+	if _, err := e.Apply(ctx, r.Number, "test", false, nil); err != nil {
+		t.Fatal(err)
+	}
+	if res := defaultCheckOutbound(ctx, push, g()); !res.Refuse || res.Rule != spaces.RuleOutboundUnchecked {
+		t.Errorf("git push: %+v", res)
+	}
+	if res := defaultCheckOutbound(ctx, ls, g()); res.Refuse {
+		t.Errorf("ls: %+v", res)
+	}
+	ch, sw, _, err := spaces.NextSwitch(spaces.DefaultEnforcement(), spaces.LayerTerms, spaces.SwitchOff, "operator", 0, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := spaces.WriteSwitch(ctx, conn, ch, sw); err != nil {
+		t.Fatal(err)
+	}
+	if res := defaultCheckOutbound(ctx, push, g()); res.Refuse {
+		t.Errorf("terms off in orch.db: %+v", res)
+	}
+}
+
+// TestOutboundTermsPanicFailsClosed: a check that panics refuses the call.
+func TestOutboundTermsPanicFailsClosed(t *testing.T) {
+	old := checkOutbound
+	t.Cleanup(func() { checkOutbound = old })
+	checkOutbound = func(context.Context, Payload, spaces.GuardTerms) spaces.OutboundResult { panic("boom") }
+	if r := outboundTerms(Payload{}, spaces.GuardTerms{}); !r.Refuse || r.Rule != spaces.RuleOutboundUnchecked {
+		t.Errorf("%+v", r)
 	}
 }

@@ -202,15 +202,21 @@ from its existing binding is refused with `ErrOrgChanged` (`FailedPrecondition`)
 `confirm_github_orgs` names it (`--confirm-github-org`). So an apply made for another reason
 never accepts a changed org by accident. Re-binding clears a suspension.
 
-Each docs sync of an owner first calls `Engine.CheckOrg` (`docs.SyncOpts.CheckOwner`). An owner
+Each docs sync of an owner first calls `Engine.CheckOrg` (`docs.SyncOpts.CheckOwner`), and calls
+it again before each further repo it clones and writes, so an org whose identity changes during a
+long sync has nothing more written (D-52). The sources refresh (before each checkout whose origin
+names a GitHub owner), the PR watcher (once per owner each sweep, before caching its items) and
+the review watcher (before starting a review and before recording a verdict) run the same check
+(SP-023); a refused owner's content is not written. An owner
 that no space binds syncs as before, with no GitHub call. For a bound owner, orchd looks it up
 again. If the node ID differs from the binding, the binding is suspended: `suspended_at` and
 `seen_node_id` are set, and orchd logs that a bound org changed. The log line names no org,
 because tasks can read orchd's log. A suspended binding
 stays suspended even if GitHub later returns the original node ID; only an apply clears it. While
 an org is suspended, or was applied before bindings existed and has no row, `OrgSpace` and
-`CheckOrg` return `quarantine` for its new content. Content does not yet carry a space (SP-023),
-so for now quarantining means the sync indexes nothing for that owner: its result is `error`,
+`CheckOrg` return `quarantine` for its new content. A changed identity means the content may
+belong to someone else, so rather than quarantining it the sync indexes nothing for that owner
+(D-52): its result is `error`,
 with a reason that points to `orch spaces diff`. A failed lookup also stops that owner's sync
 without suspending. The reason is the same in both cases and has no lookup detail, since agent
 sessions can list docs owners. `Status` adds an error that counts the unconfirmed orgs without naming them,

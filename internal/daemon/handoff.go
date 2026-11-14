@@ -165,7 +165,7 @@ func storeSession(ctx context.Context, ing summaryIngester, s handoff.Session) e
 	// found under the day each part happened.
 	_, err = ing.IngestText(ctx, session.TranscriptText(msgs), rag.Meta{
 		SourceURI: "session://" + s.ID + "/transcript", SourceType: "session_transcript", Tags: s.Tags, Writer: rag.WriterSession,
-		Timeline: true, StartedAt: start, EndedAt: end,
+		Timeline: true, StartedAt: start, EndedAt: end, Origin: sessionOrigin(s.ID, "", s.TranscriptPath),
 	})
 	return err
 }
@@ -188,7 +188,7 @@ func storeRecord(ctx context.Context, ing summaryIngester, s handoff.Session, st
 	recStart, recEnd := rec.Span()
 	_, err = ing.IngestText(ctx, rec.Text(), rag.Meta{
 		SourceURI: "session://" + s.ID + "/record", SourceType: "session_record", Tags: s.Tags, Writer: rag.WriterSession,
-		StartedAt: recStart, EndedAt: recEnd,
+		StartedAt: recStart, EndedAt: recEnd, Origin: sessionOrigin(s.ID, rec.Cwd, s.TranscriptPath),
 	})
 	return err
 }
@@ -256,7 +256,8 @@ func storeFile(ctx context.Context, ing summaryIngester, f handoff.File, home st
 	if synced, err := canonicalStored(ctx, ing, canonical, uri, resolved, rag.ContentHash(text)); synced || err != nil {
 		return err
 	}
-	_, err = ing.IngestText(ctx, text, rag.Meta{SourceURI: uri, SourceType: sourceType, Writer: rag.WriterFile})
+	_, err = ing.IngestText(ctx, text, rag.Meta{SourceURI: uri, SourceType: sourceType, Writer: rag.WriterFile,
+		Origin: rag.Origin{System: rag.OriginFS, Path: resolved}})
 	return err
 }
 

@@ -4,7 +4,8 @@
 event JSON from stdin and writes context for the agent to stdout as plain Markdown.
 
 **Contract:** a hook never fails and never blocks the agent. Every handler returns success, a
-panic is recovered and exits zero; slow
+panic is recovered and exits zero. The one exception is the [enforcing guard](#enforcing-guard)
+in `pre-tool-use`: while it enforces, a call it cannot decide is refused (INV-13). Slow
 work is handed to orchd ([hand-offs](#hand-offs)); each orchd call has a short deadline (0.5 s for
 writes, 3 s for prompt search, 20 ms for [tool hooks](#tool-hooks)). Unknown events, empty input and read errors are no-ops.
 
@@ -23,8 +24,8 @@ they name a file.
 | `pre-compact` | Writes `sessions/<id>.checkpoint.yaml` with the last request and reply. |
 | `session-end` | See [session end](#session-end). |
 | `subagent-stop` | Appends `{kind: complete, source: subagent_type, summary}` (redacted, 200 bytes) to the parent session's event stream. |
-| `pre-tool-use` | Refuses a call that would send another space's [outbound terms](#outbound-terms) out, then hands the tool call to orchd for the command log; otherwise prints nothing, so the call goes ahead. See [tool hooks](#tool-hooks). Claude Code and Codex. |
-| `cwd-changed` | Hands the directory change (`old_cwd`, `new_cwd`) to orchd and prints nothing. See [tool hooks](#tool-hooks). Claude Code only; Codex has no such event. |
+| `pre-tool-use` | Decides the call with the [enforcing guard](#enforcing-guard) and then the [outbound terms](#outbound-terms) check, prints one deny when either refuses, and hands the call with the decision to orchd for the command log. See [tool hooks](#tool-hooks). Claude Code and Codex. |
+| `cwd-changed` | Hands the directory change (`old_cwd`, `new_cwd`) to orchd with the verdict the guard would give, and prints nothing. See [tool hooks](#tool-hooks). Claude Code only; Codex has no such event. |
 | `post-tool-use` | After `gh pr create\|ready\|close\|merge\|reopen\|edit`, requests a PR refresh, and after `gh pr create` (also `rtk gh pr create`) registers the PR with PR Watch (below). After `Edit`/`Write`/`MultiEdit` of markdown or a file under `~/.claude/`, hands the file off to be stored again. |
 
 ## Tool hooks
@@ -37,14 +38,17 @@ orchd takes the event and answers at once; it decides whose event it is from the
 process ([caller sessions](daemon.md#caller-sessions)), never from `session_id`. Queued tasks send
 their events too.
 
-They always allow: the hooks print nothing, which Claude Code and Codex read as no decision, so
-the call runs as it would without them. A panic, a payload that does not parse, or an orchd that
-is down, refuses or does not answer within 20 ms loses the event and nothing else. Measured with
-the real binary against orchd's server (`TestToolHookCost`, M3 Max): p50 10.8 ms, p99 13.4 ms from
-process start to exit over 1,000 runs. The tool guard (SP-041) will add refusals to
-`pre-tool-use`. That is why Claude Code runs it synchronously, while `cwd-changed` runs in the
-background ([install.md](install.md#claude-code)). orchd stores the events in its
-[command log](daemon.md#command-log).
+`pre-tool-use` decides each call first ([enforcing guard](#enforcing-guard)); an allowed call
+prints nothing, which Claude Code and Codex read as no decision. Handing the event to orchd is
+separate: an orchd that is down, refuses or does not answer within 20 ms (250 ms for a refused
+call, which is refused whatever orchd says) loses the event and nothing else. A payload that
+cannot be read or does not parse has no session, so the guard refuses it as `pin_missing` while
+it enforces and allows it otherwise. A panic in the decision refuses like a timeout; one
+elsewhere in the hook, after the decision, changes nothing it printed. Measured with the real binary against orchd's server,
+reading the guard's files and deciding (`TestToolHookCost`, M3 Max, 2026-11-12): p50 13.0 ms,
+p99 18.9 ms from process start to exit over 1,000 runs. Claude Code runs `pre-tool-use`
+synchronously, while `cwd-changed` runs in the background ([install.md](install.md#claude-code)).
+orchd stores the events in its [command log](daemon.md#command-log).
 
 The tool hooks are an [enforcement switch](daemon.md#enforcement-switches) (D-40): orch settings
 cannot turn them off or on (`SetSettingEnabled` refuses), and `orch install` writes them whatever a
@@ -58,7 +62,34 @@ stored, with decision `not enforced`.
 
 `spaces.Targets(tool, tool_input, cwd)` (`internal/spaces/targets*.go`, SP-013) lists everything
 a tool call reaches, for the command log and the tool guard: `paths`, `cd_dest`, `git_dirs`,
-`gh_repos` (lowercase `owner/repo`), `prefixes` and `opaque` with `opaque_reasons`. Checking `cd`
+`gh_repos` (lowercase `owner/repo`), `gh_orgs`, `prefixes`, `writes` and `opaque` with `opaque_reasons`.
+`writes` (SP-042, `targets_writes.go`) lists, apart from what the call only reads, what it
+writes: a file tool's `file_path`/`notebook_path` (not paths its content mentions), Codex
+`apply_patch` files, output redirections (`>`, `>>`, `&>`, `>|`, `2>`), `tee`'s and `sed -i`'s
+files, the destination of `cp`, `install`, `ln`, `rsync` and `ditto` (the last operand, or the
+`-t` / `--target-directory` value, also attached or in a flag cluster), every operand of `mv`,
+`rm`, `rmdir`, `unlink`, `touch`, `truncate`, `chmod`, `chown`, `shred` and `patch`, the sources
+of a hard link (`ln` without `-s`, `cp -l`), `dd`'s `of=`, `curl -o`/`--output-dir`, `wget
+-O`/`-P`, `unzip -d`, `tar -C` when extracting and `tar -f` when creating, and the working
+directory of a download or extraction that names no output; a word known only up to a variable
+or glob is listed as its prefix. Each is also listed under `paths` or `prefixes`.
+`gh_orgs` (SP-043, `targets_github.go`) are GitHub accounts the call reaches without naming one
+repo: `gh api orgs/<o>…` and `users/<o>…`, `gh repo list <o>`, `gh search`'s `--owner` and its
+`owner:`/`org:`/`user:` qualifiers (`repo:` adds a repo), and `github.com/orgs/<o>`,
+`github.com/users/<o>` and bare `github.com/<o>` URLs (also `www.` and `gist.`; a login follows
+GitHub's grammar, so a sentence-ending period is not part of it). When `git fetch`, `pull`,
+`push`, `ls-remote` or `remote update` names a remote rather than a URL, its `url` and
+`pushurl` are read from the checkout's git config (`targets_gitconfig.go`: a linked worktree's
+common directory, a symlinked `.git`, or the `--git-dir` the command gives; quoting, comments,
+continued lines, keys on a header line and legacy `[remote.x]` headers are read as git reads
+them) and added to `gh_repos`. Named remote groups expand to their members, `--multiple`,
+`--all` and a bare `remote update` take every remote, and valued flags (`--depth 1`) are not
+read as the remote. With no remote named, the remote git would use is taken: the current
+branch's `pushRemote`, `remote.pushDefault`, its `remote`, then `origin`; every remote when
+HEAD cannot be read. A config remote that is a local path or `file://` URL is a git target; one
+on a host whose name does not say GitHub (an ssh alias), or that cannot be read, a name that is
+no remote, a config with `url.*.insteadOf` or an include, and a config over 256 KiB or not a
+regular file make the call opaque. Checking `cd`
 alone would be easy to get around, so it reads every form the call can take, and it flags what
 it cannot read rather than returning less. It is best-effort by decision (D-28): no static
 reading of shell is complete, so it is evidence for the guard, and the OS sandbox and per-job
@@ -117,8 +148,10 @@ accounts remain the hard boundary.
   but a short allowlist such as `user.*`), git flags and subcommands that run a command
   (`rebase -x`, `fetch --upload-pack`, `bisect run`, `submodule foreach`, `filter-branch`),
   `make VAR=…` and `make -f -`, `sed`'s `e` command, `shopt`/`setopt`/`set -o`, `gh search`,
-  `gh alias`, `gh extension`, `gh repo list` and `gh api` endpoints outside `repos/<o>/<r>` (other
-  than a few about the signed-in account). Also: variables that run code or redirect tools
+  `gh alias`, `gh extension`, `gh repo list` and `gh api` endpoints outside `repos/<o>/<r>`,
+  `orgs/<o>` and `users/<o>` (other than a few about the signed-in account). The accounts and
+  repos such a command names are still listed, so one that names another job's org is refused
+  before its opacity counts. Also: variables that run code or redirect tools
   (`CDPATH`, `PS4`, `EDITOR`, `VISUAL`, `PAGER`, `LESSOPEN`, `HOME`, `GIT_SSH*`, `GIT_CONFIG*`,
   `BASH_ENV`, anything ending in `_COMMAND`, `EDITOR` or `PAGER`); namerefs; zsh `$var[…]`
   subscripts; command, process and arithmetic substitution; unknown
@@ -149,14 +182,15 @@ path. The guard decides on it ([Guard decision](#guard-decision)).
 
 `spaces.Decide(policy, pin, enforcement, event)` (`internal/spaces/guard.go`, SP-040) turns one
 hook event and its targets into `allow` or `refuse` plus a rule id. It is pure: it reads only its
-arguments, so a logged event replays to the same verdict and rule. Nothing calls it yet. The
-enforcing hook (SP-041) will call it from `pre-tool-use`, and the operator's switches (SP-070) set
-its mode. `spaces.NewGuardPolicy(policy, protected)` prepares the policy once: Targets reports
+arguments, so a logged event replays to the same verdict and rule. The
+[enforcing guard](#enforcing-guard) calls it from `pre-tool-use`, and the operator's switches
+(SP-070) set its mode. `spaces.NewGuardPolicy(policy, protected)` prepares the policy once: Targets reports
 physical paths, so each root and protected path is matched both as written and with its symlinks
 resolved (`~/code` linked to another volume). That is the only filesystem read, and Decide
 itself stays pure; a replay gives the same answer against the same policy snapshot, which must be
 rebuilt when roots or their links change. A protected path that is not absolute is an error.
-Paths compare cleaned, in Unicode NFC and case-folded, as macOS treats names.
+Paths compare cleaned, in Unicode NFC and with full Unicode case folding (not lower-casing: APFS
+takes `ſ` for `s`), as macOS treats names.
 
 - **Modes (D-12).** `off` and `log` never refuse. The decision still carries the verdict
   `block-other-jobs` would give (`would`), for the command log. `block-other-jobs` is the default,
@@ -172,7 +206,8 @@ Paths compare cleaned, in Unicode NFC and case-folded, as macOS treats names.
   `cd ~/code && rg x` reach every job under `~/code`; RC-36). The cwd counts as containing only in
   `strict`: otherwise a session started under a public root such as `~/code` would be refused
   every call. So in `block-other-jobs`, a command there that searches its cwd by default
-  (`grep -r x`, `rg x`, `find`) is not caught (RC-76). `gh_repos` are placed by the space their owner is bound to. A path in no space
+  (`grep -r x`, `rg x`, `find`) is not caught (RC-76). `gh_repos` are placed by the space their owner is bound to, and `gh_orgs` by the space the
+  account is bound to (SP-043). A path in no space
   (`/tmp`, `/usr`) is allowed: the guard separates spaces, and the sandbox covers the rest.
   Worktree paths come with their main checkout's path, so an outside worktree counts as its
   repo's space. Moving within the session's own space is allowed (D-09). Subagents share the
@@ -181,11 +216,11 @@ Paths compare cleaned, in Unicode NFC and case-folded, as macOS treats names.
   reported is the one ranked first here, whatever order the targets come in:
   1. `no_policy`: no spaces are configured, so the call is allowed (INV-10).
   2. `pin_missing`: the session has no pin, so the call is refused (INV-13).
-  3. `self_protection`: `Write`, `Edit`, `MultiEdit`, `NotebookEdit` or `apply_patch` writes to a
-     protected path, so the call is refused. The caller supplies the list (SP-042). Reads are not
-     refused. Shell writes to protected paths are SP-042's.
+  3. `self_protection` ([self-protection](#self-protection), SP-042): the call writes to a
+     protected path, by a file tool or a shell command, or reads a terms file or credential, so
+     it is refused. Other reads of protected paths are allowed.
   4. `other_job_path`, `other_job_ancestor` and `other_job_repo`: a target lies in, contains, or
-     is a repo of an isolated space other than the session's. The call is refused.
+     is a repo or account of an isolated space other than the session's. The call is refused.
   5. `unreadable_space` (`strict` only): a target lies in, contains, or is a repo of a non-public
      space the session may not read. The call is refused.
   6. `malformed_target`: the cwd or a target is not an absolute path, or a repo is not
@@ -206,12 +241,200 @@ The rule id is safe to show and log: it never names the matched path or text. `T
 runs 43 cases in all four modes, covering every SP-040.1 form, and `TestDecideDeterministic`
 replays 20,000 random inputs.
 
+### Enforcing guard
+
+`pre-tool-use` enforces the guard itself (spaces SP-041, D-11, INV-13; `internal/hook/guard.go`,
+`internal/spaces/guard_files.go`). The hook starts for every call and cannot wait on orchd, so it
+decides from files orchd writes under `<data>/guard/` (directories 0700, files 0600, each
+replaced through a temporary file and a rename):
+
+- **`policy.json`**, the snapshot: the applied policy and its revision (none when no spaces are
+  applied), whether the applied revision no longer verifies, the home that expands `~`, the
+  whole [self-protection](#self-protection) (`protection`: `write`, `anywhere` and `read`, from
+  `spaces.GuardProtection` for the applied policy, RC-110), the guard's switch and the
+  [outbound terms](#outbound-terms) layer's (`terms`, RC-116), each with a timed switch's end and
+  the state it reverts to; a snapshot without `terms` holds the layer's default, on. The format is version 2; a snapshot of another
+  version (version 1 carried only the guard directory) is unreadable: allowed as no policy when
+  `orch.db` never applied one, otherwise refused while the guard enforces, until orchd rewrites
+  it at startup. `brew upgrade` relinks the hook at once but does not restart orchd, so with a
+  policy applied, restart it after upgrading (`brew services restart orch`) (RC-201). A snapshot
+  with no version is damaged, not another release's. orchd writes it at startup, after
+  `ApplySpaces`, and after every switch change or timed revert (`internal/daemon/guardfiles.go`).
+  A snapshot it cannot rewrite is removed, never left stale, so the hook falls back to
+  `orch.db` and refuses while a policy is applied.
+  The hook applies a timed switch's end itself, so it reverts on time even if orchd is down.
+- **`pins/<session_id>.json`**: the session's pinned space, written when `PinSession` succeeds
+  (new, `/clear`, subagent copy or resume). Every 10 minutes and at startup orchd rewrites the
+  files of sessions whose harness process still runs and removes the others.
+
+For each call the hook reads the snapshot, validates its policy (without the git-tree rule, as
+orchd does at startup), builds the guard policy with `spaces.NewGuardPolicyProtecting` from the
+snapshot's protection, reads the session's pin file, runs `Targets` and
+calls `Decide`. What it cannot read becomes a rule, refused in the enforcing modes
+(`block-other-jobs`, `strict`) and only logged with the guard `off` or in `log`:
+
+- `policy_unreadable`: the snapshot is damaged, of another version, marks a policy that no
+  longer verifies, holds a policy or protected path that does not validate (a `write` or `read`
+  entry not absolute, an `anywhere` entry empty or absolute), or holds a policy with no `write`
+  protection: orchd always protects its own directories, so the guard never enforces a policy
+  it wrote without its self-protection (a consistency check, not tamper detection: the guard
+  directory's own write protection keeps the snapshot orchd's). The protection is not checked
+  while no policy is configured. A missing snapshot, or one of another version, is read as no
+  policy only when `orch.db` has never applied one (or does not exist);
+  otherwise the guard's switch is read from `orch.db` read-only and the call refused unless it
+  is `off` or `log`, and as `strict` when `orch.db` cannot be read.
+- `pin_missing`: no readable pin file for the payload's `session_id` (from `Decide`). Queued
+  tasks have no session pin, so while spaces are configured and the guard enforces, their calls
+  are refused (RC-100).
+- `guard_timeout`: the decision did not finish within 250 ms, or panicked. The mode, once the
+  snapshot has given it, decides whether that refuses; before that it refuses.
+
+With no spaces configured the call is allowed without reading a pin (INV-10). A `cwd-changed`
+event is never refused; its would-be verdict is logged. It is judged as running in `old_cwd` and
+moving to `new_cwd`, as a replay of the command log builds it, so a replay (SP-047) gives the
+verdict the hook recorded. The guard's mode is not stored per record: an enforced decision is
+`refused`/`allowed` with a bare rule id, one not enforced `would <verdict> (<rule>)`. The decision, the would-be verdict when
+not enforced, the rule and the policy revision go to orchd in `RecordToolEvent`
+(`guard_verdict`, `guard_rule`, `guard_enforced`, `guard_policy_rev`); orchd stores them as the
+record's decision (`refused`, `allowed`) or as `would refuse (<rule>)` (RC-86), and keeps queue
+room for refusals ([command log](daemon.md#command-log), D-37).
+
+A call the guard lets through (allowed, or only logged) then goes to the
+[outbound terms](#outbound-terms) check, which reads the policy and the terms layer's switch from
+the same snapshot. Its refusal takes effect whatever the guard's mode (the terms layer has its own
+switch) and goes through the same deny and the same `RecordToolEvent` fields, as an enforced
+`refuse` with rule `outbound_term` or `outbound_unchecked` and the snapshot's revision, so the
+command log stores it as `refused` with that rule (RC-116).
+
+A refusal prints the deny SP-001 recorded both harnesses honoring, one JSON line:
+`{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"orch spaces guard refused this call (rule <rule>): <why>. ..."}}`.
+The reason names the rule and what to do, never the path, repo or text that matched; Codex needs
+it non-empty. A terms refusal's reason is the terms check's own (below), ending with the same
+pointer to `orch spaces log`. The hook still exits 0: a deny is only ever this output (RC-34). A Go runtime fatal
+error would exit 2, which Claude Code reads as blocking the call, so a crash fails closed.
+
+Measured (`TestGuardDecisionLatency`, M3 Max, 2026-11-12): the decision, file reads included,
+over the recorded payloads takes p50 0.09 ms and p99 0.21 ms; the whole hook process p99 18.9 ms
+(above). `TestGuardReplaysFixtures` replays every recorded PreToolUse call of both harnesses under
+`block-other-jobs`: none is refused for a target in its own space.
+
+The hook reads each file through one handle, opened without following a symlink, and checks
+it is a regular file of at most 2 MiB.
+
+**Limits.** The guard's files and `orch.db` are protected by the guard itself, from file tools
+and from the shell writes `Targets` sees ([self-protection](#self-protection)). A pin file is looked up by the payload's `session_id`, which
+the harness sets. The hook finds its files through `ORCH_DATA_DIR`, `XDG_DATA_HOME` and `HOME`,
+which a session can change for a harness it starts inside itself; such a nested harness could
+point its hook at an empty directory and run unguarded. Accepted (2026-11-12): the same nested
+harness can drop every hook already (`CLAUDE_CONFIG_DIR`, `--settings`), so this adds no new
+way around the guard; the OS sandbox is the boundary (RC-102). The guard is best-effort target
+extraction (D-28); the OS sandbox (SP-046) and per-job GitHub accounts (SP-063) are the hard
+boundary.
+
+### Live GitHub guard
+
+With one `gh` login an agent could read another employer's org directly, bypassing memory, so
+the guard judges what `gh` and `git` commands reach on GitHub (spaces SP-043): `gh api
+repos/<o>/<r>`, `-R`/`--repo`, `GH_REPO`, `gh repo clone|view <o>/<r>`, `git clone`, `fetch`,
+`pull`, `push` and `ls-remote` to a GitHub URL or to a remote whose URL the checkout's config
+gives, and the accounts in `gh_orgs` (`gh api orgs/<o>`, `gh repo list <o>`, `gh search --owner`
+and qualifiers, `github.com/<o>` URLs, including `curl` of the API). A repo is placed by its
+owner's binding and an account by its own; one bound to another isolated space is refused
+(`other_job_repo`), in both enforcing modes. The session's own org and public orgs are allowed;
+in `strict`, so is a private space the session reads. `TestGitHubGuardCases` covers 24 forms
+against another job's org (also upper-cased), the session's own org and a public one (96 cases);
+`TestGitRemoteReviewCases`, `TestGitConfigParsing` and `TestGitHubURLReviewCases` hold the
+security review's reproducers.
+
+**Limits.** What Targets marks opaque is refused only in `strict`: a remote behind an ssh alias
+whose name does not say GitHub, `insteadOf` rewrites and includes (the user's global git config
+is not read either), `gh api graphql`, `gh` aliases and extensions. A token used with `curl`
+against an endpoint Targets does not read, and `GIT_DIR` set as a variable, are not caught.
+Per-job GitHub accounts (SP-063) are the boundary.
+
+### Self-protection
+
+The guard refuses agent writes to what keeps orch's layers working (spaces SP-042,
+`internal/spaces/guard_selfprotect.go`): otherwise an agent could remove orch's hooks, edit its
+pin or switch the guard off. `spaces.ProtectedPaths(home, configDir, dataDir, policy)` is the one
+list, and `spaces.GuardProtection` adds what only the running install knows: the guard
+directory (named although it lies in the data directory) and the `orch`, `orchd` and `orch-hook`
+binaries in the directory orchd runs from (as written and with links resolved: under
+`brew services` that is `opt/orch/bin` and the Cellar files it leads to, which the
+`bin/orch-hook` link in harness settings also resolves to). orch's directories are matched as
+written, even when a name holds `*`, `?` or `[`. `spaces.NewGuardPolicyProtecting(policy, protection)` builds the guard
+policy with it. orchd computes it for the applied policy and writes it into the
+[enforcing guard](#enforcing-guard)'s snapshot, which the hook decides from; orchd's
+`ReplaySpaces` and the CLI's payload replay compute it the same way (`guardWriter.protection`,
+`localProtection`) for each revision they replay, so a recorded self-protection refusal replays
+as one (RC-110):
+
+- **Never written:** orch's config directory (`~/.config/orch`) and data directory
+  (`~/.local/share/orch`, which holds `orch.db`, the command log and the guard's policy snapshot
+  and pin files), `~/.claude/settings*`, `~/.codex/hooks.json` and `config.toml`,
+  `~/.gemini/settings.json`; the launch surfaces `~/.claude.json` (MCP server commands),
+  `~/.claude/plugins` (plugins bring their own hooks), orchd's launchd job
+  (`~/Library/LaunchAgents/*orch*`: `orch install`'s `com.orchestrator.orchd.plist` and
+  `brew services`' `homebrew.mxcl.orch.plist`) and orch's binaries. A directory protects everything
+  below it, and writing a directory that holds a protected path (`rm -rf ~/.config`,
+  `mv ~/.local/share/orch …`) is writing it.
+- **Never written, in any directory:** `.git/hooks`, `.git/config` (whose `core.hooksPath` and
+  `core.fsmonitor` run commands), `.claude/settings*`, `.codex/hooks.json`,
+  `.codex/config.toml` and `.gemini/settings.json`, so a checkout's own harness settings (which
+  can turn every hook off) and git hooks are covered too. Removing or moving the `.git`,
+  `.claude`, `.codex` or `.gemini` folder itself is a write.
+- **Never read either:** each space's terms file, the files in each space's gh profile directory
+  (`gh_config_dir`) and in the default one (`~/.config/gh`), which hold their logins (the
+  directory itself may still be named, as `GH_CONFIG_DIR=<dir> gh …` does), orch's `qdrant-api-key`,
+  `~/.netrc`, `~/.aws/credentials` and `~/.ssh/id_*` (not `*.pub`). A glob or unknown word
+  whose prefix lies in a protected entry's directory (`cat ~/.ssh/*`) reads it; one further up
+  (`ls ~/*`) does not. Listing or searching a directory that holds one (`ls ~/.ssh`,
+  `grep -r x ~/.ssh`) is not refused; the OS sandbox is the boundary there. A terms file whose
+  name holds `*`, `?` or `[` is matched as written.
+
+Writes are read from `Targets`' `writes`; a record stored before SP-042 has none, and then a file
+tool's paths count as written. Paths compare as the guard's do: cleaned, NFC, with full Unicode
+case folding (APFS takes `ſ` for `s`), and
+both as written and with symlinks resolved (for the fixed paths; the "any directory" patterns
+match the resolved path). Like every guard rule, it applies only while spaces are configured.
+`TestSelfProtectionRefusesWrites` covers 15 protected paths with each of `Write`, `Edit`,
+`MultiEdit`, `>`, `>>`, `tee`, `sed -i`, `cp` and `mv` (135 cases, all refused);
+`TestSelfProtectionAllowsReads`, `TestSelfProtectionForms` and
+`TestSelfProtectionReviewCases` (the security review's reproducers) cover reads and other forms.
+`TestGuardSelfProtectionLive` runs the live path, orchd's snapshot writer and `PinSession` into
+the hook's `GuardFiles.Decide`: `Write`, `Edit` and shell redirections into
+`~/.claude/settings.json`, a checkout's `.git/hooks`, `orch.db`, the guard's files, orch's
+config, `orch-hook` and the other launch surfaces, and reads of a terms file, are refused,
+ordinary calls in the space allowed.
+`TestReplaySpacesReproducesSelfProtection` and `TestSpacesReplayFixturesSelfProtection` replay
+such refusals through orchd and the CLI.
+
+**Limits.** Writes Targets cannot see (an interpreter's `open()`, a variable holding the whole
+path, `git config core.hooksPath`) are not caught; D-28 applies. The directories come from
+orchd's environment (it usually runs under launchd without `ORCH_*` or `XDG_*` variables); a
+config directory or harness home that only the user's shell moves (`XDG_CONFIG_HOME`,
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) is not the one protected (RC-200). The binaries protected
+are those beside orchd; an `orch-hook` installed elsewhere (`orch install --bin-dir`) is not, and
+moving the whole directory that holds the harness settings' `bin/orch-hook` link is not refused
+(RC-202). The CLI's payload replay takes the directories and binaries from its own environment,
+which can differ from orchd's (RC-203). An orchd run from a checkout's build output protects that
+output's `orch`, `orchd` and `orch-hook` too, so an agent working on orch cannot replace the
+running hook. `*orch*` also covers other launch agents whose name holds `orch` (`com.pytorch.…`).
+
 ### Outbound terms
 
 Each space may have a terms file ([config.md](config.md#spaces-policy)): words and patterns that
 belong to that space. `pre-tool-use` refuses an outbound action whose text holds a term of a
 space that one of its possible destinations does not hold (spaces SP-044,
-`internal/hook/terms.go`, `internal/spaces/terms.go`, `outbound*.go`).
+`internal/hook/terms.go`, `internal/spaces/terms.go`, `outbound*.go`). It runs after the
+[enforcing guard](#enforcing-guard) lets a call through, from the policy and the terms layer's
+switch in the guard's snapshot (not `orch.db`; while the snapshot cannot be read, the switch is
+read from `orch.db` as the guard's is, and an outbound call refused because the terms cannot be
+known), and refuses through the guard's deny and command log fields (RC-116). A replay of the
+command log ([SP-047](daemon.md#command-log)) cannot run the check again: the log never keeps the
+text checked (INV-07) and the checkout has moved on. It carries a recorded `outbound_term` or
+`outbound_unchecked` refusal as the replayed verdict while the replayed guard lets the call
+through and the terms layer is on now; otherwise the row shows the guard's verdict as changed.
 
 - **Outbound actions** (`spaces.OutboundActions`, read from the shell command with
   `mvdan.cc/sh`, in any letter case (macOS runs `GIT` as git) and with zsh's `=git`, following
@@ -257,7 +480,7 @@ space that one of its possible destinations does not hold (spaces SP-044,
   or push, or in git's config; a file that cannot be read or is stdin (other than a literal
   here-document); a
   terms
-  file or `orch.db` policy that cannot be read; git failing, its output over 16 MiB, or the check
+  file or a policy snapshot that cannot be read; git failing, its output over 16 MiB, or the check
   taking over 5 s. A command that cannot be parsed is refused too. With the layer off, or no
   spaces or terms, nothing is checked.
 - **git runs safely.** The check's git runs with `core.fsmonitor=false`, no external diff,
@@ -280,8 +503,7 @@ security-review rounds each found new forms, and the residual risk is open for t
 (the plan's SP-044 entry). Text sent by other means (a script, alias or shell function from the
 user's profile, or program that runs git itself, an interpreter, `curl` to the API, a tool other
 than a shell) is not checked. SP-045's git hooks check commits and pushes on their real content. A push is judged against the local
-remote-tracking refs, which a session could move. The check runs in the hook, independently of
-the tool guard (SP-041), until the two are combined.
+remote-tracking refs, which a session could move.
 
 ## Prompt context
 

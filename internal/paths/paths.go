@@ -51,6 +51,10 @@ func DBFile() string { return filepath.Join(DataDir(), "orch.db") }
 // from orch.db so it can be owner-only (D-29).
 func ToolLogFile() string { return filepath.Join(DataDir(), "toollog.db") }
 
+// GuardDir holds the files orchd writes for the tool guard in orch-hook
+// (spaces SP-041): the policy snapshot and one pin file per session.
+func GuardDir() string { return filepath.Join(DataDir(), "guard") }
+
 // SessionsDir holds per-session records + checkpoints.
 func SessionsDir() string { return filepath.Join(DataDir(), "sessions") }
 

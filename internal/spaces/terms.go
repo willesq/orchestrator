@@ -2,16 +2,11 @@ package spaces
 
 import (
 	"bytes"
-	"context"
 	"crypto/hmac"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -222,32 +217,6 @@ func SpaceTerms(res *Resolved, home string) (lists []TermList, errs map[string]e
 		lists = append(lists, l)
 	}
 	return lists, errs
-}
-
-// ReadApplied reads the applied policy from the orch.db at dbPath,
-// read-only and verified as orchd verifies it at startup, for the hooks,
-// which run whether or not orchd does. A missing store, or one that never
-// applied a policy, has none (nil).
-func ReadApplied(ctx context.Context, dbPath string, env Env) (*Resolved, error) {
-	if _, err := os.Stat(dbPath); errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	dsn := (&url.URL{Scheme: "file", Path: dbPath, RawQuery: "mode=ro&_pragma=busy_timeout(1000)"}).String()
-	conn, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-	a, err := LoadApplied(ctx, conn, env)
-	switch {
-	case err != nil && strings.Contains(err.Error(), "no such table"):
-		return nil, nil
-	case err != nil:
-		return nil, err
-	case a == nil:
-		return nil, nil
-	}
-	return a.Resolved, nil
 }
 
 // TermsPaths are the terms files of res's spaces, by space, expanded as

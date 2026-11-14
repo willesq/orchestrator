@@ -10,7 +10,12 @@ struct OrchApp: App {
             TrayMenu(
                 monitor: delegate.model.monitor, prMonitor: delegate.model.prMonitor,
                 loginItem: delegate.model.loginItem, control: delegate.model.control,
-                openMainWindow: { delegate.showMainWindow() }
+                enforcement: delegate.model.enforcement,
+                openMainWindow: { delegate.showMainWindow() },
+                openSpaces: {
+                    delegate.model.navigator.showSettings(.spaces)
+                    delegate.showMainWindow()
+                }
             )
         } label: {
             TrayLabel(monitor: delegate.model.monitor, prMonitor: delegate.model.prMonitor)
@@ -50,12 +55,14 @@ final class AppModel {
     let claude: SettingsModel
     let config: ConfigModel
     let docsOwners: DocsOwnersModel
+    let enforcement: EnforcementModel
+    let placement: PlacementValidator
     /// Keeps the sidebar's badges current between visits to their tabs.
     private(set) var badges: PeriodicRefresh?
 
     init() {
         let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & PRReviewAPI & PRLandingAPI & SystemAPI & CatalogAPI
-            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI
+            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -85,6 +92,8 @@ final class AppModel {
         safetyNet = SafetyNetModel(api: api)
         claude = SettingsModel(api: api, providers: ["claude-code", "cc-safety-net", "orch-instructions"])
         config = ConfigModel(api: api, restartDaemon: { [control] in try await control.perform(.restart) })
+        enforcement = EnforcementModel(api: api)
+        placement = PlacementValidator(api: api)
         docsOwners = DocsOwnersModel(api: api, knownOwners: { [api] in try await api.gitHubScopes(refresh: false).scopes.map(\.owner) })
     }
 
@@ -109,6 +118,8 @@ final class AppModel {
             showWindow?()
         }
         system.startSampling()
+        // The "enforcement off" banner must show without opening anything.
+        enforcement.start()
         // Docs, Safety Net and Claude change rarely; every few minutes is
         // plenty for a badge, and each tab reloads itself when opened.
         let badges = PeriodicRefresh(interval: .seconds(300), actions: [
@@ -224,6 +235,12 @@ extension UnreachableDaemon: ConfigAPI, DocsOwnersAPI {
     func saveDocsOwner(owner: String, enabled: Bool, mode: DocsRepoMode, repos: [String]) async throws -> DocsOwner { throw failure }
     func removeDocsOwner(owner: String, purge: Bool) async throws -> DocsPurgeResult { throw failure }
     func purgeDocs(owner: String, repos: [String]) async throws -> DocsPurgeResult { throw failure }
+}
+
+extension UnreachableDaemon: SpacesAPI {
+    func enforcement() async throws -> EnforcementState { throw failure }
+    func setEnforcement(layer: String, state: String, forSeconds: Int64) async throws -> EnforcementChangeResult { throw failure }
+    func explainPlacement(target: String) async throws -> PlacementExplanation { throw failure }
 }
 
 extension UnreachableDaemon: PRLandingAPI {

@@ -24,6 +24,10 @@ type Watch struct {
 	// items, as its space has no working gh profile. nil routes every owner
 	// to the default login.
 	Route func(owner string) (account string, ok bool)
+	// CheckOwner, when set, re-checks an owner's GitHub org binding once a
+	// sweep before its items are cached (D-52); an owner it refuses has none
+	// of its items kept.
+	CheckOwner func(ctx context.Context, owner string) error
 }
 
 // Account is a gh login the babysitter searches as.
@@ -152,8 +156,14 @@ func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 	}
 
 	out := make([]PR, 0, len(order))
+	refused := ownerChecks(ctx, w.CheckOwner)
+	dropped := 0
 	for _, url := range order {
 		item := byURL[url]
+		if owner, _, _ := strings.Cut(item.Repo, "/"); refused(owner) {
+			dropped++
+			continue
+		}
 		sortReasons(item.Reasons)
 		// CI and review state only matter where the PR can need the user.
 		if item.IsPR() && (item.Authored() || slices.Contains(item.Reasons, ReasonReviewRequested)) {
@@ -161,7 +171,29 @@ func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 		}
 		out = append(out, *item)
 	}
+	if dropped > 0 {
+		// Reason: tasks can read orchd's log, so the line names no org.
+		log.Printf("pr-babysitter: %d item(s) left out: their org's space binding is not confirmed", dropped)
+	}
 	return out, nil
+}
+
+// ownerChecks returns whether an owner is refused, asking check at most once
+// per owner for the sweep.
+func ownerChecks(ctx context.Context, check func(context.Context, string) error) func(owner string) bool {
+	seen := map[string]bool{}
+	return func(owner string) bool {
+		if check == nil {
+			return false
+		}
+		key := strings.ToLower(owner)
+		refused, ok := seen[key]
+		if !ok {
+			refused = check(ctx, owner) != nil
+			seen[key] = refused
+		}
+		return refused
+	}
 }
 
 // searchAs runs the sweep's searches as acct, for the owners mine accepts,

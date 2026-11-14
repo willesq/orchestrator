@@ -5,6 +5,8 @@
 // Crash-safety contract (matches the Python system): a hook must NEVER block or
 // fail the user's session. Every handler degrades to a no-op on any error and
 // returns nil; problems go to stderr, never stdout (stdout is context injection).
+// The one exception is the enforcing tool guard in pre-tool-use (SP-041):
+// while it enforces, it refuses a call it cannot decide (guard.go).
 package hook
 
 import (
@@ -69,7 +71,12 @@ func run(args []string, in io.Reader, out io.Writer, cf clientFactory) (err erro
 	// parses and the handlers run without its fields.
 	data, err := io.ReadAll(io.LimitReader(in, maxPayload))
 	if err != nil {
-		return nil
+		// Reason: the enforcing guard must still decide a call it cannot
+		// read (INV-13); without a session it refuses as pin_missing.
+		if args[0] != "pre-tool-use" {
+			return nil
+		}
+		data = nil
 	}
 	var p Payload
 	if len(data) > 0 {
@@ -97,12 +104,7 @@ func dispatch(event string, p Payload, out io.Writer, cf clientFactory) error {
 	case "post-tool-use":
 		return postToolUse(p)
 	case "pre-tool-use", "cwd-changed":
-		if event == "pre-tool-use" {
-			// Reason: outbound terms (SP-044) refuse before the call runs;
-			// the event is still logged.
-			refuseOutboundTerms(p, out)
-		}
-		recordToolEvent(event, p, cf)
+		guardToolEvent(event, p, out, cf)
 		return nil
 	default:
 		return nil

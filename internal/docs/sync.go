@@ -33,6 +33,11 @@ type Repo struct {
 	HeadSHA    string // default-branch HEAD commit oid ("" for an empty repo)
 	IsArchived bool
 	IsFork     bool
+	// Private is whether GitHub reports the repo private, and OwnerNodeID
+	// its owner's GitHub node ID (SP-023). A repo listed without its
+	// owner's node ID has an unknown visibility, which is never public.
+	Private     bool
+	OwnerNodeID string
 }
 
 // GitHub enumerates an owner's repositories (one API call per page, HEAD SHAs
@@ -76,8 +81,9 @@ type SyncOpts struct {
 	Dates func(ctx context.Context, dir string) gitdates.Dates
 	// Guard caps deletions across syncs; nil caps each sync on its own.
 	Guard PruneGuard
-	// CheckOwner, when set, runs before an owner's repos are listed; an
-	// error stops that owner's sync before anything is ingested.
+	// CheckOwner, when set, runs before an owner's repos are listed and
+	// again before each further repo is synced (D-52); an error stops that
+	// owner's sync before anything more is ingested.
 	CheckOwner func(ctx context.Context, owner string) error
 	// Clients, when set, picks the GitHub and Git an owner's sync uses, so
 	// a space's orgs sync as its own GitHub account; an error stops that
@@ -151,6 +157,8 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 	}
 	res := Result{Repos: len(todo)}
 	networkRun := 0
+	// wrote is set once a repo was synced since the owner was last checked.
+	wrote := false
 	// Refusals this sync still stands by: those it made, and those of repos
 	// skipped as unchanged (the same tree would be refused again).
 	var current []string
@@ -167,6 +175,21 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 			report(opts, i+1, len(todo), rp.Name)
 			continue
 		}
+		// Reason: an org's identity can change during a long sync, so it is
+		// checked again before each further repo whose content is written;
+		// content from an org that no longer checks out is not (D-52).
+		// Repos skipped as unchanged write nothing and cost no lookup.
+		if wrote && opts.CheckOwner != nil {
+			if err := opts.CheckOwner(ctx, o.Owner); err != nil {
+				res.NotTried = len(todo) - i
+				res.Status, res.Reason = "error", fmt.Sprintf("stopped: %v; %d not tried", err, res.NotTried)
+				// Reason: tasks can read orchd's log, so the line does not
+				// tie an org to its binding (as CheckOrg's own line does not).
+				log.Printf("docs: an owner's sync stopped: its org binding no longer checks out")
+				return res
+			}
+		}
+		wrote = true
 		dest := filepath.Join(opts.RepoCache, o.Owner, rp.Name)
 		cloneCtx, cancel := context.WithTimeout(ctx, cloneTimeout)
 		err := opts.Git.Sync(cloneCtx, o.Owner, rp.Name, dest)
@@ -197,7 +220,7 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 			continue
 		}
 		networkRun = 0
-		files, refused := ingestRepoMarkdown(ctx, reg, dest, o, rp.Name, ing, opts)
+		files, refused := ingestRepoMarkdown(ctx, reg, dest, o, rp, ing, opts)
 		if refused != "" {
 			current = append(current, "repo://"+o.Owner+"/"+rp.Name+"/")
 			// The repo records its new HEAD, so it is not cloned again until
@@ -315,7 +338,8 @@ func classify(err error) failure {
 
 // ingestRepoMarkdown walks a cloned repo for *.md and ingests each file, skipping
 // files whose content hash is unchanged (unless opts.Force). Returns file count.
-func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o Owner, repo string, ing Ingester, opts SyncOpts) (int, string) {
+func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o Owner, rp Repo, ing Ingester, opts SyncOpts) (int, string) {
+	repo := rp.Name
 	now := opts.Now
 	if now == nil {
 		now = func() int64 { return 0 }
@@ -361,6 +385,7 @@ func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o O
 			StartedAt:  changed,
 			EndedAt:    changed,
 			Writer:     rag.WriterDocs,
+			Origin:     repoOrigin(o.Owner, rp),
 		}); err == nil {
 			_ = reg.SetHash(ctx, uri, h, now())
 			n++
@@ -371,6 +396,19 @@ func ingestRepoMarkdown(ctx context.Context, reg *Registry, repoPath string, o O
 		refused = pruneRemoved(ctx, reg, ing, opts, o, prefix, seen)
 	}
 	return n, refused
+}
+
+// repoOrigin is what a docs sync reports about a repo's docs: the repo and
+// its owner as GitHub listed them. The space is orchd's to decide.
+func repoOrigin(owner string, rp Repo) rag.Origin {
+	o := rag.Origin{System: rag.OriginGitHub, RepoOwner: owner, RepoName: rp.Name, OwnerNodeID: rp.OwnerNodeID}
+	switch {
+	case rp.Private:
+		o.Visibility = "private"
+	case rp.OwnerNodeID != "":
+		o.Visibility = "public"
+	}
+	return o
 }
 
 // Copier reads what is stored for a source (implemented by *rag.Service).
@@ -639,7 +677,7 @@ func lastLines(b []byte) string {
 	return strings.Join(keep, " ")
 }
 
-const repoQuery = `query($owner:String!,$cursor:String){repositoryOwner(login:$owner){repositories(first:100,after:$cursor,ownerAffiliations:OWNER){pageInfo{hasNextPage endCursor}nodes{name isArchived isFork defaultBranchRef{target{oid}}}}}}`
+const repoQuery = `query($owner:String!,$cursor:String){repositoryOwner(login:$owner){repositories(first:100,after:$cursor,ownerAffiliations:OWNER){pageInfo{hasNextPage endCursor}nodes{name isArchived isFork isPrivate owner{id} defaultBranchRef{target{oid}}}}}}`
 
 type ghGitHub struct{ run runFunc }
 
@@ -681,9 +719,13 @@ func parseGraphQLPage(b []byte) (repos []Repo, hasNext bool, endCursor string, e
 						EndCursor   string `json:"endCursor"`
 					} `json:"pageInfo"`
 					Nodes []struct {
-						Name             string `json:"name"`
-						IsArchived       bool   `json:"isArchived"`
-						IsFork           bool   `json:"isFork"`
+						Name       string `json:"name"`
+						IsArchived bool   `json:"isArchived"`
+						IsFork     bool   `json:"isFork"`
+						IsPrivate  bool   `json:"isPrivate"`
+						Owner      *struct {
+							ID string `json:"id"`
+						} `json:"owner"`
 						DefaultBranchRef *struct {
 							Target *struct {
 								Oid string `json:"oid"`
@@ -699,7 +741,10 @@ func parseGraphQLPage(b []byte) (repos []Repo, hasNext bool, endCursor string, e
 	}
 	page := resp.Data.RepositoryOwner.Repositories
 	for _, n := range page.Nodes {
-		r := Repo{Name: n.Name, IsArchived: n.IsArchived, IsFork: n.IsFork}
+		r := Repo{Name: n.Name, IsArchived: n.IsArchived, IsFork: n.IsFork, Private: n.IsPrivate}
+		if n.Owner != nil {
+			r.OwnerNodeID = n.Owner.ID
+		}
 		if n.DefaultBranchRef != nil && n.DefaultBranchRef.Target != nil {
 			r.HeadSHA = n.DefaultBranchRef.Target.Oid
 		}

@@ -1,0 +1,306 @@
+[
+  {
+    "path": "$CODE",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "the deepest root holding it is bound to oss",
+      "roots": [
+        {
+          "kind": "public",
+          "root": "$CODE",
+          "space": "oss"
+        }
+      ],
+      "rule": "root",
+      "sessionReads": "oss",
+      "sessionSpace": "personal",
+      "space": "oss",
+      "targetKind": "path"
+    }
+  },
+  {
+    "path": "$CODE/tools",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "the deepest root holding it is bound to oss",
+      "roots": [
+        {
+          "kind": "public",
+          "root": "$CODE",
+          "space": "oss"
+        }
+      ],
+      "rule": "root",
+      "sessionReads": "oss",
+      "sessionSpace": "personal",
+      "space": "oss",
+      "targetKind": "path"
+    }
+  },
+  {
+    "path": "$CODE/willesq/deep/x",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "the deepest root holding it is bound to personal",
+      "roots": [
+        {
+          "kind": "public",
+          "root": "$CODE",
+          "space": "oss"
+        },
+        {
+          "kind": "private",
+          "root": "$CODE/willesq",
+          "space": "personal"
+        }
+      ],
+      "rule": "root",
+      "sessionReads": "personal",
+      "sessionSpace": "personal",
+      "space": "personal",
+      "targetKind": "path"
+    }
+  },
+  {
+    "path": "$CODE/company1/svc/x",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "the deepest root holding it is bound to acme",
+      "roots": [
+        {
+          "kind": "public",
+          "root": "$CODE",
+          "space": "oss"
+        },
+        {
+          "kind": "isolated",
+          "root": "$CODE/company1",
+          "space": "acme"
+        }
+      ],
+      "rule": "root",
+      "sessionReads": "acme",
+      "sessionSpace": "acme",
+      "space": "acme",
+      "targetKind": "path"
+    }
+  },
+  {
+    "path": "$CODE/company1/app/main.go",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "its root and its remote's owner are both bound to acme",
+      "remote": {
+        "effect": "owner bound to acme (isolated)",
+        "kind": "isolated",
+        "owner": "acme",
+        "repo": "app",
+        "space": "acme",
+        "visibility": "private"
+      },
+      "roots": [
+        {
+          "kind": "public",
+          "root": "$CODE",
+          "space": "oss"
+        },
+        {
+          "kind": "isolated",
+          "root": "$CODE/company1",
+          "space": "acme"
+        }
+      ],
+      "rule": "root_and_remote_agree",
+      "sessionReads": "acme",
+      "sessionSpace": "acme",
+      "space": "acme",
+      "targetKind": "path"
+    }
+  },
+  {
+    "path": "$CODE/willesq/app",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "its remote's owner is bound to acme, stricter than its root",
+      "remote": {
+        "effect": "owner bound to acme (isolated)",
+        "kind": "isolated",
+        "owner": "acme",
+        "repo": "app",
+        "space": "acme",
+        "visibility": "private"
+      },
+      "roots": [
+        {
+          "kind": "public",
+          "root": "$CODE",
+          "space": "oss"
+        },
+        {
+          "kind": "private",
+          "root": "$CODE/willesq",
+          "space": "personal"
+        }
+      ],
+      "rule": "remote_stricter",
+      "sessionReads": "acme",
+      "sessionSpace": "acme",
+      "space": "acme",
+      "targetKind": "path"
+    }
+  },
+  {
+    "path": "$CODE/company1/lib",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "its root is bound to acme, stricter than its remote's owner",
+      "remote": {
+        "effect": "owner bound to oss (public)",
+        "kind": "public",
+        "owner": "oss-org",
+        "repo": "lib",
+        "space": "oss",
+        "visibility": "public"
+      },
+      "roots": [
+        {
+          "kind": "public",
+          "root": "$CODE",
+          "space": "oss"
+        },
+        {
+          "kind": "isolated",
+          "root": "$CODE/company1",
+          "space": "acme"
+        }
+      ],
+      "rule": "root_stricter",
+      "sessionReads": "acme",
+      "sessionSpace": "acme",
+      "space": "acme",
+      "targetKind": "path"
+    }
+  },
+  {
+    "path": "$CODE/company1/x",
+    "explanation": {
+      "outcome": "conflict",
+      "reason": "its root is in acme and its remote's owner in globex (both isolated)",
+      "remote": {
+        "effect": "owner bound to globex (isolated)",
+        "kind": "isolated",
+        "owner": "globex",
+        "repo": "x",
+        "space": "globex",
+        "visibility": "private"
+      },
+      "roots": [
+        {
+          "kind": "public",
+          "root": "$CODE",
+          "space": "oss"
+        },
+        {
+          "kind": "isolated",
+          "root": "$CODE/company1",
+          "space": "acme"
+        }
+      ],
+      "rule": "conflict",
+      "sessionSpace": "quarantine",
+      "space": "quarantine",
+      "targetKind": "path"
+    }
+  },
+  {
+    "path": "$CODE/lib",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "its root and its remote's owner are both bound to oss",
+      "remote": {
+        "effect": "owner bound to oss (public)",
+        "kind": "public",
+        "owner": "oss-org",
+        "repo": "lib",
+        "space": "oss",
+        "visibility": "public"
+      },
+      "roots": [
+        {
+          "kind": "public",
+          "root": "$CODE",
+          "space": "oss"
+        }
+      ],
+      "rule": "root_and_remote_agree",
+      "sessionReads": "oss",
+      "sessionSpace": "personal",
+      "space": "oss",
+      "targetKind": "path"
+    }
+  },
+  {
+    "path": "$CODE/secret",
+    "explanation": {
+      "outcome": "quarantined",
+      "reason": "it would be public, but its repo is not verified public",
+      "remote": {
+        "effect": "owner bound to oss, but the repo is not verified public",
+        "kind": "public",
+        "owner": "oss-org",
+        "repo": "secret",
+        "space": "oss",
+        "visibility": "private"
+      },
+      "roots": [
+        {
+          "kind": "public",
+          "root": "$CODE",
+          "space": "oss"
+        }
+      ],
+      "rule": "not_verified_public",
+      "sessionSpace": "quarantine",
+      "space": "quarantine",
+      "targetKind": "path"
+    }
+  },
+  {
+    "path": "$CODE/moved",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "its remote's owner is bound to acme, stricter than its root",
+      "remote": {
+        "effect": "owner bound to acme (isolated)",
+        "kind": "isolated",
+        "owner": "acme",
+        "repo": "moved",
+        "space": "acme",
+        "visibility": "private"
+      },
+      "roots": [
+        {
+          "kind": "public",
+          "root": "$CODE",
+          "space": "oss"
+        }
+      ],
+      "rule": "remote_stricter",
+      "sessionReads": "acme",
+      "sessionSpace": "acme",
+      "space": "acme",
+      "targetKind": "path"
+    }
+  },
+  {
+    "path": "/nonexistent-root/x",
+    "explanation": {
+      "outcome": "quarantined",
+      "reason": "no root holds it and its remote's owner is bound to no space",
+      "rule": "unmatched",
+      "sessionSpace": "quarantine",
+      "space": "quarantine",
+      "targetKind": "path"
+    }
+  }
+]

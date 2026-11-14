@@ -269,9 +269,12 @@ func (s *server) logToolEvent(ev toolEvent) {
 	if !ok || !s.toolLog.admitProcess(key.Owner) {
 		return
 	}
-	s.toolLog.writer.Enqueue(key, eventSize(ev.req), func() toollog.Record {
-		return s.toolRecord(ev, harness)
-	})
+	build := func() toollog.Record { return s.toolRecord(ev, harness) }
+	if guardRefused(ev.req, key.Owner) {
+		s.toolLog.writer.EnqueueDecision(key, eventSize(ev.req), build)
+		return
+	}
+	s.toolLog.writer.Enqueue(key, eventSize(ev.req), build)
 }
 
 // eventSize is what an event holds in memory while it waits, for the log's
@@ -364,6 +367,7 @@ func (s *server) toolRecord(ev toolEvent, harness string) toollog.Record {
 			r.PolicyRev = rev
 		}
 	}
+	applyHookDecision(&r, req)
 	s.markGuardState(&r)
 	tv.withhold(&r)
 	return r

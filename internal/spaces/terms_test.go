@@ -1,7 +1,6 @@
 package spaces
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -160,32 +159,5 @@ func TestSpaceTerms(t *testing.T) {
 		if _, err := ReadTerms("acme", filepath.Join(home, "acme.txt")); err == nil {
 			t.Error("unreadable terms file read")
 		}
-	}
-}
-
-// TestReadApplied reads the applied policy read-only, as the hooks do.
-func TestReadApplied(t *testing.T) {
-	ctx := context.Background()
-	if r, err := ReadApplied(ctx, filepath.Join(t.TempDir(), "none.db"), testEnv()); r != nil || err != nil {
-		t.Errorf("missing store: %v %v", r, err)
-	}
-	empty := filepath.Join(t.TempDir(), "empty.db")
-	writeFile(t, empty, "")
-	if r, err := ReadApplied(ctx, empty, testEnv()); r != nil || err != nil {
-		t.Errorf("store without tables: %v %v", r, err)
-	}
-	conn := openStore(t)
-	dbPath := filepath.Join(os.Getenv("ORCH_DATA_DIR"), "orch.db")
-	if r, err := ReadApplied(ctx, dbPath, testEnv()); r != nil || err != nil {
-		t.Errorf("nothing applied: %v %v", r, err)
-	}
-	saveAndApply(t, openEngine(t, conn), validPolicy)
-	if r, err := ReadApplied(ctx, dbPath, testEnv()); err != nil || !r.Configured() {
-		t.Errorf("applied: %v %v", r, err)
-	}
-	garbage := filepath.Join(t.TempDir(), "garbage.db")
-	writeFile(t, garbage, strings.Repeat("not a database ", 100))
-	if _, err := ReadApplied(ctx, garbage, testEnv()); err == nil {
-		t.Error("a damaged store read")
 	}
 }
