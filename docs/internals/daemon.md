@@ -601,6 +601,10 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
   drift ([hooks.md](hooks.md#events)). When orchd does not answer, the digest reads `orch.db`'s
   switches read-only (`spaces.ReadEnforcement`), so stopping orchd does not hide a switched-off
   layer. `orch status` names them in its `spaces` section, with who set them for the operator.
+- **Refusals** (SP-048) go to the same `spaces` stream, written by orch-hook rather than orchd:
+  one `refusal` event per tool call the enforcing guard or the outbound terms check refuses (see
+  [hooks.md](hooks.md#refusal-events)). With the guard off or logging nothing is refused, so no
+  refusal event is written; the command log still records the would-be verdict.
 - **The hooks switch** (D-40): orch settings cannot turn the Claude Code tool hooks on or off
   (`SetSettingEnabled` refuses them with `FailedPrecondition`), and `orch install` writes them
   whatever a settings toggle says ([install.md](install.md#claude-code)). Switching `hooks` off
@@ -829,7 +833,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `<data>/models/minilm/` | embedding model |
 | `<data>/sessions/` | session records and checkpoints (YAML), per-session hook state |
 | `<data>/handoff/` (0700) | work hooks left for orchd; `failed/` after 8 attempts; `pr-sweep` request |
-| `<data>/events/` | JSONL event streams (`queue`, `routing`, `pr-babysitter`, per session) |
+| `<data>/events/` | JSONL event streams (`queue`, `routing`, `pr-babysitter`, per session; `spaces`, the operator's, 0600: enforcement switch changes and refusals) |
 | `<data>/pr_babysitter_state.json`, `routing_evaluator_state.json` | subsystem state |
 | `<data>/marketplaces/orch-pinned/` | the orch-owned Claude Code marketplace pinning cc-safety-net |
 | `<data>/repos/`, `tasks/`, `codex/`, `migrations/`, `eval/`, `backups/` | repo clones, task scratch, Codex state, migration markers, eval runs, install backups (0600 files) |
