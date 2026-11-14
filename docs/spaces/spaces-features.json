@@ -3038,6 +3038,85 @@
           "SP-041"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-750",
+        "kind": "follow-up",
+        "topic": "INV-08 inside a collection needs reads to filter on labels_v",
+        "detail": "A relabel moves every stale chunk to its space's collection, so content stored in the base or in another space's collection is not read by a search of the spaces it belongs to. But after the operator applies a new revision, a chunk that stays in its own space's collection is stale and still readable there until the relabel stamps it: no read path filters on labels_v. SP-025 should add labels_v = applied revision to the second layer (spaceStore.must) for named spaces, or orchd should relabel right after each apply.",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-027"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-751",
+        "kind": "decision",
+        "topic": "Session content stored before SP-023 whose transcript is gone is quarantined",
+        "detail": "The relabel places a session record or transcript stored without an origin by the session's pin only when the record names a transcript that is that session's own, where its harness keeps it (the check live writes get, against planted hand-off entries). Claude Code deletes old transcripts, so older sessions' records and transcripts go to quarantine. Option: trust the pin alone for writer=session chunks stored before SP-023 (the writer field is orchd's own, but pre-SP-023 hand-offs did not check transcript locations). Recommendation: keep quarantine; the operator retags what is wanted (SP-071).",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-023",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-752",
+        "kind": "follow-up",
+        "topic": "A relabelled source is embedded again at its next write",
+        "detail": "The write hash includes the space and labels_v, and the relabel cannot recompute it (a source's original text and write options are not stored), so the next write of a relabelled source is stored again rather than skipped as unchanged: one embedding per source after each relabel, and every revision applied makes every chunk stale. Option: store a placement-free write hash, or skip rewrites whose content hash matches and restamp them instead.",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-753",
+        "kind": "follow-up",
+        "topic": "Relabel of docs stored without an origin is paced by GitHub's lookup budget",
+        "detail": "Docs chunks stored before SP-023 carry no visibility, so the relabel asks GitHub about each repo through the shared repo lookups (30 per minute, shared with live placement; a dry run spends them too). A repo it cannot ask about stays stale and is counted as left stale; the operator runs the relabel again. Option: pace or batch relabel lookups separately, or use the docs sync's repo listing.",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-030"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-754",
+        "kind": "user-action",
+        "topic": "Run the relabel on the real store once 'orch rag relabel' lands",
+        "detail": "Agents never run it against the user's store. After the RPC and command land and a policy is applied: run 'orch rag relabel --dry-run', review the per-transition counts, then run it for real (repeat while it reports chunks left stale). Content stored before writers were recorded (2026-10-28), client notes, sessions whose transcripts are gone and conflicts go to quarantine, to be retagged (SP-071). Supersedes the action in RC-355.",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-025",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-755",
+        "kind": "follow-up",
+        "topic": "SP-027 security audit lows and accepted limits",
+        "detail": "From two security-audit rounds on the relabel (all medium findings fixed): (1) orchd's local log line for a source the placer could not place includes the placer's error, which can name its source URI (orchd's log already names paths elsewhere); (2) the stale-source list per collection is held in memory, one entry per source, and a source is moved whole: fine at 40,000 chunks, unbounded in principle; (3) a hand-off chunk stored without an origin is placed by the path it was edited at; a process that can write there could swap a link for a file before the relabel (documented in docs/internals/memory.md); (4) the report names spaces, so the planned Relabel RPC must be operator-only; (5) chunks with a stored origin reuse the visibility recorded at write time.",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -5536,7 +5615,12 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestRelabelMakesStaleChunksReadableInTheirSpace (internal/rag): chunks stored unplaced or SP-023-placed in the base, and a chunk a revision change put in another space, are not found by a search of the space they belong to before the relabel and are found there after, each in its own space's collection with its vector unchanged. TestRelabelPlacesStoredContent (internal/daemon): orchd's relabel placer over the example policy, 17 stored sources (stored origin; docs, sources, hand-off and session URIs with no origin; client notes; no writer; links; unpinned sessions; a conflict) land in the expected space or quarantine (INV-03). Partial for INV-08: a stale chunk left in its own space's collection by a revision change stays readable there until reads filter on labels_v (RC-750).",
+            "a2: TestRelabelSecondRunChangesNothing: the second run reports Changed=0 and Stale=0 and sends no write request. TestIntegrationRelabel40k: the second run on real Qdrant 1.17.1 reports Changed=0.",
+            "a3: TestRelabelResumesAfterInterruption (a run stopped between copy and delete; a run cancelled part-way): count before = count after the resumed run, no source in two collections, a third run changes 0. TestRelabelChangedPlacementAfterInterruption: a source copied by a stopped run and then placed elsewhere, with a failed clean-up in between, ends in the second space only.",
+            "a4: TestRelabelDryRunOutputHasOnlyCountsAndSpaceNames: a dry run sends no write request, and rag.WriteRelabelReport's output contains only fixed words, counts and space names (no source URI, chunk text or collection name). The 'orch rag relabel --dry-run' command that prints it waits for the Relabel RPC (proto slot); the item is complete when the CLI test runs through it."
+          ]
         },
         {
           "id": "SP-027.2",
@@ -5550,14 +5634,16 @@
               "threshold": "<= 5 min"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestIntegrationRelabel40k (ORCH_QDRANT_BENCH=1, its own Qdrant 1.17.1 on 127.0.0.1:6471, temporary storage, collections sp-027-*): the SP-002 corpus of 40,000 chunks (384 dimensions) stored unplaced in one base collection, every chunk placed and moved with its vectors to one of four space collections: 35.7 s, and 36.0 s after the security-audit fixes. Threshold <= 5 min met."
+          ]
         }
       ],
-      "status": "in_progress",
+      "status": "blocked",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": null,
+      "blocked_reason": "Waiting for the orchd.proto slot (D-63). 'orch rag relabel [--dry-run]' needs a Relabel RPC (request: apply; response: revision, totals, changed, moved, left stale and per-transition counts), operator-only like ReindexKeywords, then the CLI command, its test for SP-027.1.a4 and docs/internals/cli.md. The rag engine (rag.Service.Relabel) and orchd's relabel placer (server.relabel) are done and tested.",
       "attempts": 1,
       "criteria_sha256": "4f938c395fd884456515aa918dc77679f7a6eeab255ddd19b523e7bfad99e52b",
       "branch": "feat/sp-027-relabel",
