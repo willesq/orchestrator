@@ -47,16 +47,24 @@ func TestShortTmpLayout(t *testing.T) {
 			t.Errorf("deny %v lacks the real path %s", a.Deny, want)
 		}
 	}
+	// The hashed folder fits under DefaultLayout's root; TmpDir only
+	// computes paths. Reason: the test root above is a random-length
+	// MkdirTemp name, longer than /tmp/orch-<uid>, so with a 4-digit uid
+	// (CI runners) a hashed folder in it can exceed claudeTmpMax.
+	def := Layout{Dir: w.layout.Dir, Tmp: DefaultLayout().Tmp}
 	long1, long2 := strings.Repeat("x", 32), strings.Repeat("y", 32)
-	d1, d2 := w.layout.TmpDir(long1), w.layout.TmpDir(long2)
-	if d1 == d2 || !strings.HasPrefix(filepath.Base(d1), "_") || filepath.Dir(d1) != w.layout.Tmp {
+	d1, d2 := def.TmpDir(long1), def.TmpDir(long2)
+	if d1 == d2 || !strings.HasPrefix(filepath.Base(d1), "_") || filepath.Dir(d1) != def.Tmp {
 		t.Errorf("long names: %s, %s", d1, d2)
 	}
 	if ClaudeSandboxTmp(d1) == SharedClaudeTmp() {
 		t.Errorf("hashed folder %s still too long", d1)
 	}
-	if w.layout.TmpDir(long1) != d1 {
+	if def.TmpDir(long1) != d1 {
 		t.Error("hashed folder not stable")
+	}
+	if h := w.layout.TmpDir(long1); !strings.HasPrefix(filepath.Base(h), "_") || filepath.Dir(h) != w.layout.Tmp {
+		t.Errorf("long name under the test root: %s", h)
 	}
 	u := ForUnplaced(w.res, filepath.Join(w.code, "a", "x"), w.layout)
 	if !slices.Contains(u.Deny, a.TmpDir) || !slices.Contains(u.Deny, b.TmpDir) {
