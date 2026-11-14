@@ -167,4 +167,7 @@ orch rag migrate-hybrid --drop-backup --apply  # delete the backup once you trus
 New ingests reach both collections while the copy runs, and an interrupted run can be repeated.
 `orch status` shows progress. Writes after the switch exist only in the new collection, so a
 rollback loses them. `--drop-backup` deletes only the backup recorded in config and refuses one
-`orchd` is still using.
+`orchd` is still using. With memory spaces each space has its own collection, named after the
+active one (`<collection>__<space>`): migration copies and switches them together, rollback
+switches them back, `--drop-backup` deletes the backup's space collections with it, and
+`orch rag reindex-keywords` covers every one.
