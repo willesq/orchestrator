@@ -200,11 +200,15 @@ func TestScanSpaces(t *testing.T) {
 		t.Fatalf("checkouts = %v, want %v", paths, want)
 	}
 	for rel, w := range map[string][4]string{ // owner, visibility, space, outcome
-		"company1/app":  {"acme", "private", "acme", "placed"},
-		"lib":           {"oss-org", "public", "oss", "placed"},
-		"moved":         {"acme", "private", "acme", "placed"},
-		"probe-unbound": {"stranger", "public", "oss", "placed"},
-		"anon":          {"", "", "oss", "placed"},
+		"company1/app": {"acme", "private", "acme", "placed"},
+		// Local checkouts under the broad public root are not public
+		// (SP-030, D-64), even of a verified public repo.
+		"lib":           {"oss-org", "public", spaces.Quarantine, "quarantined"},
+		"moved":         {"acme", "private", spaces.Quarantine, "quarantined"},
+		"probe-unbound": {"stranger", "public", spaces.Quarantine, "quarantined"},
+		// An anonymous checkout under a public root has nothing to prove it
+		// public (SP-030, D-50).
+		"anon": {"", "", spaces.Quarantine, "quarantined"},
 	} {
 		c := got[rel]
 		if c.GetOwner() != w[0] || c.GetVisibility() != w[1] || c.GetSpace() != w[2] || c.GetOutcome() != w[3] || c.GetRule() == "" {

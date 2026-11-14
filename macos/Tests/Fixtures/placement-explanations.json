@@ -2,8 +2,8 @@
   {
     "path": "$CODE",
     "explanation": {
-      "outcome": "placed",
-      "reason": "the deepest root holding it is bound to oss",
+      "outcome": "quarantined",
+      "reason": "it is local content under a public root, which is never proof it is public; the operator can retag it",
       "roots": [
         {
           "kind": "public",
@@ -11,18 +11,18 @@
           "space": "oss"
         }
       ],
-      "rule": "root",
+      "rule": "no_public_proof",
       "sessionReads": "oss",
       "sessionSpace": "personal",
-      "space": "oss",
+      "space": "quarantine",
       "targetKind": "path"
     }
   },
   {
     "path": "$CODE/tools",
     "explanation": {
-      "outcome": "placed",
-      "reason": "the deepest root holding it is bound to oss",
+      "outcome": "quarantined",
+      "reason": "it is local content under a public root, which is never proof it is public; the operator can retag it",
       "roots": [
         {
           "kind": "public",
@@ -30,10 +30,10 @@
           "space": "oss"
         }
       ],
-      "rule": "root",
+      "rule": "no_public_proof",
       "sessionReads": "oss",
       "sessionSpace": "personal",
-      "space": "oss",
+      "space": "quarantine",
       "targetKind": "path"
     }
   },
@@ -215,8 +215,8 @@
   {
     "path": "$CODE/lib",
     "explanation": {
-      "outcome": "placed",
-      "reason": "its root and its remote's owner are both bound to oss",
+      "outcome": "quarantined",
+      "reason": "it is local content under a public root, which is never proof it is public; the operator can retag it",
       "remote": {
         "effect": "owner bound to oss (public)",
         "kind": "public",
@@ -232,10 +232,10 @@
           "space": "oss"
         }
       ],
-      "rule": "root_and_remote_agree",
+      "rule": "no_public_proof",
       "sessionReads": "oss",
       "sessionSpace": "personal",
-      "space": "oss",
+      "space": "quarantine",
       "targetKind": "path"
     }
   },
@@ -243,7 +243,7 @@
     "path": "$CODE/secret",
     "explanation": {
       "outcome": "quarantined",
-      "reason": "it would be public, but its repo is not verified public",
+      "reason": "it is local content under a public root, which is never proof it is public; the operator can retag it",
       "remote": {
         "effect": "owner bound to oss, but the repo is not verified public",
         "kind": "public",
@@ -259,7 +259,7 @@
           "space": "oss"
         }
       ],
-      "rule": "not_verified_public",
+      "rule": "no_public_proof",
       "sessionSpace": "quarantine",
       "space": "quarantine",
       "targetKind": "path"
@@ -268,8 +268,8 @@
   {
     "path": "$CODE/moved",
     "explanation": {
-      "outcome": "placed",
-      "reason": "its remote's owner is bound to acme, stricter than its root",
+      "outcome": "quarantined",
+      "reason": "it is local content under a public root, which is never proof it is public; the operator can retag it",
       "remote": {
         "effect": "owner bound to acme (isolated)",
         "kind": "isolated",
@@ -285,10 +285,10 @@
           "space": "oss"
         }
       ],
-      "rule": "remote_stricter",
+      "rule": "no_public_proof",
       "sessionReads": "acme",
       "sessionSpace": "acme",
-      "space": "acme",
+      "space": "quarantine",
       "targetKind": "path"
     }
   },

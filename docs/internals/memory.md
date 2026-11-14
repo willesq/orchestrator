@@ -219,9 +219,9 @@ no origin, or that the placer leaves without a space, stores nothing.
 | Writer | Origin it reports | Placed by |
 |---|---|---|
 | docs sync | `github`: owner, repo, visibility (`private`/`public`; unknown when GitHub listed no owner node ID) and the owner's node ID, from the `gh api graphql` repo listing (`isPrivate`, `owner{id}`) | the owner's binding; public only when GitHub said the repo is public |
-| sources refresh | `fs` with the file's path (repo and owner sources); `web` with the URL | the deepest root and the checkout's remote, never the remote alone; the bound web prefix |
+| sources refresh | `fs` with the file's path (repo and owner sources); `web` with the URL the page was fetched from, after redirects | the deepest root; a checkout's remote can only keep it out, never place it (D-65), and nothing under a public root is public; the bound web prefix of the URL the content came from |
 | session hand-off, summaries | `session` with its first directory, from its record, and the session ID when the transcript is that session's, where its harness keeps it | the session's pin only; quarantine with no pin or no tied session |
-| edit hand-off | `fs` with the resolved file path | the deepest root and the checkout's remote; never the remote alone |
+| edit hand-off | `fs` with the resolved file path | the deepest root and the checkout's remote; never the remote alone; never public (goes to `public_root_sessions` instead) |
 | Ingest RPC | `client` with the caller kind (`session`, `task`, `operator`, `none`), the space the caller's pin writes to, and the URL when the URI is one | the caller's pinned space; quarantine for any other caller |
 | migration copy (`rag`) | carried over from the stored chunk | not placed again: `origin`, `space` and `labels_v` are copied as stored |
 
@@ -244,14 +244,50 @@ no origin, or that the placer leaves without a space, stores nothing.
   space's transcript into its own space nor push a file it named after another session into that
   session's space, short of writing into the harness's own transcript folders, which the OS
   sandbox can deny (SP-046). Recording the transcript path at the pin would close that too.
+- **A local file is not placed by its remote.** A remote that would place a file in a stricter
+  space than its root (`remote_stricter`) quarantines it for every writer (SP-030, D-65): a session
+  can write a `.git` naming another job's org beside files it registers as a source. Sessions are
+  still pinned by a stricter remote (SP-022).
 - **A local file is not placed by its remote alone.** An agent can write a `.git` naming any org
   beside a file it edits, or register such a folder as a repo source (any session may), so a file
   under no root that only its checkout's remote would place goes to quarantine. An edited file is
   also quarantined when its remote is stricter than the root it is under, until hand-offs carry the
-  editing session's space (SP-029); a registered source there is placed by the stricter remote, as
-  a session started there is. So a `.git` an agent writes under a root can still move a source it
-  registers into a stricter space, never into public; that risk is accepted, as for pins. Edit hand-offs use cached repo lookups only, so files an agent picks
-  spend none of GitHub's budget.
+  editing session's space (SP-029), and since SP-030 so is a registered source there (above).
+  Edit hand-offs use cached repo lookups only, so files an agent picks spend none of GitHub's
+  budget.
+- **The public-space write gate (SP-030, D-64, D-65).** Only the docs sync and the sources
+  refresh may place content in a public space, and only by what verifies it public: a repo GitHub
+  reports public (docs sync) or a bound web prefix. Local content under a public root such as
+  `~/code` is quarantined, whatever its remote ([Placement](#placement)), because any job's session
+  can write there, create a `.git` there or register a folder there as a source. Local folders
+  will reach public only through the applied policy's explicit `public_paths` list (SP-076). Session
+  records, summaries, edit hand-offs and client notes never land in public: sessions and client
+  notes from a session pinned to a public space go to quarantine, and an edit hand-off that would
+  be public (a file in a verified public repo under a public root) goes to `public_root_sessions`,
+  where sessions under a public root write (D-22). Only an operator retag (SP-071) moves other
+  content into public.
+- **Content that is no longer public leaves first.** Visibility is re-checked on every docs sync
+  from the repo listing. Before any repo is cloned or written, the sync asks the placer about each
+  stored doc of every listed repo that GitHub does not report public (private, or listed without
+  its owner's node ID, which counts as private): a doc stored in a public space that would not be
+  public if written now is deleted, its hash and the repo's HEAD are forgotten, and the repo is
+  synced first, so its docs are written again where they belong now in the same sync. A clone
+  that fails leaves them out of public and the repo is tried again next sync. A listing GitHub refuses
+  (the owner is gone, or this login lost access) takes every recorded repo's public docs out; a
+  listing that fails for another reason (network, credentials) keeps them until one succeeds. A repo or owner
+  source does the same for its stored docs before it walks anything, so a checkout left as last
+  indexed (off its default branch, or its org binding not checking out) does not keep a public
+  copy. A doc whose placement cannot be decided now (a conflict, a repo GitHub says it cannot
+  find) is not proven public, so it leaves too. Since no local content is public now, a public
+  copy of a checkout leaves whatever GitHub answers. These deletions are not capped by the prune
+  guard: a cap would keep content that is not public readable by every session. With no policy, or one that does not verify,
+  nothing is moved.
+  The docs sync does the same for recorded repos missing from a successful listing (deleted,
+  transferred out, no longer visible) and for every recorded repo of an owner whose org binding
+  no longer checks out. Once an hour a sources scan also checks every doc the sources refresh ever
+  stored, registered or not, so a removed source or a deleted folder keeps no public copy.
+  `TestRepoTurnedPrivateLeavesPublicInTheSameSync`, `TestCheckoutNoLongerPublicLeavesFirst`,
+  `TestUnlistedReposLeavePublic`, `TestScanSweepsOrphansOutOfPublic`.
 - **A client cannot replace another space's source.** A write replaces and prunes every chunk under
   its URI, so the Ingest RPC refuses (`FailedPrecondition`, naming no space) a write over a source
   placed in another space than the one the write would go to. Sources stored before placement are
@@ -269,7 +305,10 @@ no origin, or that the placer leaves without a space, stores nothing.
   [Storage](#storage-qdrant)), but no read path passes the caller's spaces or filters by
   `labels_v` yet (SP-025): a search without `SearchOpts.Spaces` reads every collection. Chunks stored before SP-023 have
   no placement; `orch rag relabel` (SP-027) places them. A docs file whose content and repo HEAD
-  did not change is not stored again, so it keeps its earlier placement until relabelled.
+  did not change is not stored again, so it keeps its earlier placement until relabelled, except
+  that a public copy of a repo no longer public leaves (above). When the repo listing fails
+  other than by GitHub refusing the owner, every repo keeps its docs as last indexed, public ones
+  included, until a listing succeeds.
 
 Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<path>`,
 `file://<path>`, `claude://<path under ~/.claude>`, web URLs, and anything given to `orch ingest`.
@@ -764,8 +803,16 @@ matching root and the remote's effect.
   candidate the origin is `unmatched`. A docs sync has no path, so only its remote counts.
 - **Public needs proof.** A result that would be public is quarantined (`not_verified_public`)
   whenever the checkout has a remote that GitHub has not confirmed is public, whoever owns it. That
-  includes the times GitHub cannot be reached. A folder with no remote under a public root is
-  public, as the operator declared.
+  includes the times GitHub cannot be reached. A public root is never proof for local content
+  (D-50, D-65, SP-030): every file whose deepest root is public and that would be placed public
+  is quarantined (`no_public_proof`), whatever its checkout or remote (GitHub, another host, none,
+  an anonymous or symlinked `.git`), and so is one GitHub has not confirmed public. Nothing on
+  disk, not even a public root bound exactly at the folder, declares it: a session can create any
+  of it. Local folders will reach public only through the policy's `public_paths` (SP-076) or an
+  operator retag; public repos reach public through the docs sync. A stricter root nested in the
+  public one still decides first; a stricter remote does not (it is quarantined too). Sessions keep D-22 (below), an edit hand-off of such a file goes to
+  `public_root_sessions` unless its repo is not verified public, and a checkout's harness
+  settings still follow its root.
 - **Org bindings must hold.** A remote whose owner's binding is suspended or unconfirmed
   (SP-021) sends the content to quarantine (`org_unconfirmed`). `Engine.Place` reads the binding
   from `orch.db`. A nil `Options.Confirmed` confirms nothing.
