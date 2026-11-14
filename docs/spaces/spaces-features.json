@@ -7008,14 +7008,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "01ef9bae725c1b6ed0ccbd6b3194d8d30de872c6e7cceb59eb24d0db1046735b",
-      "branch": null,
+      "branch": "feat/sp-076-public-paths",
       "pr": null
     }
   ],
