@@ -295,7 +295,8 @@ moving to `new_cwd`, as a replay of the command log builds it, so a replay (SP-0
 verdict the hook recorded. The guard's mode is not stored per record: an enforced decision is
 `refused`/`allowed` with a bare rule id, one not enforced `would <verdict> (<rule>)`. The decision, the would-be verdict when
 not enforced, the rule and the policy revision go to orchd in `RecordToolEvent`
-(`guard_verdict`, `guard_rule`, `guard_enforced`, `guard_policy_rev`); orchd stores them as the
+(`guard_verdict`, `guard_rule`, `guard_enforced`, `guard_policy_rev`, and `guard_rules_rev`, the
+[outbound rules](#outbound-rules) revision of the snapshot, D-66); orchd stores them as the
 record's decision (`refused`, `allowed`) or as `would refuse (<rule>)` (RC-86), and keeps queue
 room for refusals ([command log](daemon.md#command-log), D-37).
 
@@ -597,7 +598,9 @@ the check; a rule switched off or removed stops applying at once. Added rules ar
 **Never shown.** A rule's value may name what the operator keeps private, so like a term (INV-07)
 it never appears in orchd's log, events, errors, refusals, `orch` output, the app or indexed
 content: everything names a rule by its id, and errors about a value never quote it. The value
-lives only in `orch.db` and the guard snapshot. The session's own command is logged as before
+lives only in `orch.db` and the guard snapshot; the guard refuses any tool call that reads the
+snapshot ([self-protection](#self-protection)), while `orch.db` stays readable as SP-042 decided
+(RC-603). The session's own command is logged as before
 (only terms are redacted from it): a pattern that must stay out of the command log belongs in a
 terms file too.
 

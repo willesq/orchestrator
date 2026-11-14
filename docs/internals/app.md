@@ -81,6 +81,18 @@ and asks.
   and time left. It sits above every Settings section (with **Show Switches**) and at the top of the
   menu bar panel, and the Spaces section in the Settings list gets a warning dot.
 - **Menu bar panel:** the switches in compact form, with **Spaces Settings…** to open the section.
+- **Outbound rules** (SP-075): Settings → Spaces lists the [outbound terms check's
+  rules](hooks.md#outbound-rules) from `ListOutboundRules`: every baseline rule with a switch and what
+  it does (marked when switching it off reads commands strictly), then the rules the operator added
+  by id and kind, each with a switch and a remove button, and a form to add one (kind, and a secure
+  field for its value, cleared once orchd took it; the new rule's id is shown, never its value).
+  Switching a baseline rule off relaxes the check, so it is confirmed first; anything else is sent
+  at once through `ChangeOutboundRule`. orchd's refusal (operator-only) shows under the rule or the
+  form. A warning says when the terms layer is off (from the switches above, so no rule applies) or
+  when orch.db's rules cannot be read. `OutboundRulesModel` (held by `EnforcementModel`) reads the
+  rules when the section opens and takes each change's answer. `SpacesAPI.outboundRules` defaults to
+  unavailable, shown in place of the list. Tests: `OutboundRulesModelTests`; snapshot
+  `outbound-rules-{light,dark}.png` (`SpacesSnapshots`).
 - **Logins** (SP-074.3, D-59): Settings → Spaces lists each space of the applied policy with the gh
   login and Claude Code configuration it uses: the default one or its own (with the folder), the
   state orchd read (logged in, not logged in, refused, unknown), the gh account and where its token

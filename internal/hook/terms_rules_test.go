@@ -35,7 +35,11 @@ func TestOutboundRulesReachHook(t *testing.T) {
 	rs, _, _ = rs.Switch(string(spaces.OutboundPlainVariables), false)
 	rulesSnapshot(t, &rs, false)
 
-	reason, ok, _ := preToolUse(t, "./deploy-prod --now", dir)
+	reason, ok, c := preToolUse(t, "./deploy-prod --now", dir)
+	// The hook hands orchd the rules revision it judged under (D-66).
+	if len(c.events) != 1 || c.events[0].GuardRulesRev == nil || *c.events[0].GuardRulesRev != 3 {
+		t.Errorf("rules revision sent: %+v", c.events)
+	}
 	if !ok || !strings.Contains(reason, "outbound_unchecked") || !strings.Contains(reason, "user-1") ||
 		strings.Contains(reason, "deploy-prod") {
 		t.Errorf("fail_closed rule: %v %q", ok, reason)

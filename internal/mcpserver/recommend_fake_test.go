@@ -303,3 +303,11 @@ func (f *fakeClient) ListSpaces(context.Context, *orchdv1.ListSpacesRequest, ...
 func (f *fakeClient) ScanSpaces(context.Context, *orchdv1.ScanSpacesRequest, ...grpc.CallOption) (*orchdv1.ScanSpacesResponse, error) {
 	return &orchdv1.ScanSpacesResponse{}, nil
 }
+
+func (f *fakeClient) ListOutboundRules(context.Context, *orchdv1.ListOutboundRulesRequest, ...grpc.CallOption) (*orchdv1.OutboundRules, error) {
+	return &orchdv1.OutboundRules{}, nil
+}
+
+func (f *fakeClient) ChangeOutboundRule(context.Context, *orchdv1.ChangeOutboundRuleRequest, ...grpc.CallOption) (*orchdv1.ChangeOutboundRuleResponse, error) {
+	return &orchdv1.ChangeOutboundRuleResponse{}, nil
+}

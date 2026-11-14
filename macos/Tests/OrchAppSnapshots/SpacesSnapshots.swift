@@ -41,6 +41,27 @@ private struct SampleSpaces: SpacesAPI {
         throw CancellationError()
     }
 
+    /// The baseline with plain_variables off, and two rules the operator
+    /// added (SP-075), named by id only.
+    func outboundRules() async throws -> OutboundRulesState {
+        OutboundRulesState(rules: [
+            OutboundRule(id: "fail_closed_unreadable", kind: "baseline", on: true,
+                         summary: "refuse an outbound command that cannot be read in full", baseline: true),
+            OutboundRule(id: "gh_default_repo", kind: "baseline", on: true, loosens: true,
+                         summary: "a gh write without -R goes to the repo gh would use, not every remote", baseline: true),
+            OutboundRule(id: "plain_variables", kind: "baseline", on: false, loosens: true,
+                         summary: "read $PWD, $USER and $HOME", baseline: true),
+            OutboundRule(id: "user-1", kind: "fail_closed", on: true,
+                         summary: "refuses a tool call whose tool name or text matches a pattern"),
+            OutboundRule(id: "user-2", kind: "destination", on: false,
+                         summary: "treats an owner or repo as holding no space, so no space's terms may reach it"),
+        ], revision: 4, setAt: now.addingTimeInterval(-1800), setBy: "operator (process 4242)", termsLayer: "off")
+    }
+
+    func changeOutboundRule(action: String, id: String, kind: String, value: String) async throws -> OutboundRuleChangeResult {
+        throw CancellationError()
+    }
+
     /// A checkout under the private root whose remote belongs to an
     /// isolated org: the remote is stricter and decides.
     func explainPlacement(target: String) async throws -> PlacementExplanation {
@@ -65,6 +86,7 @@ struct SpacesSnapshots {
         let api = SampleSpaces(now: Date())
         let enforcement = EnforcementModel(api: api)
         await enforcement.load()
+        await enforcement.outboundRules.load()
         let validator = PlacementValidator(api: api, home: "/Users/me")
         validator.path = "~/code/willesq/app"
         await validator.check()
@@ -74,6 +96,12 @@ struct SpacesSnapshots {
                 SpacesSettingsView(enforcement: enforcement, validator: validator).frame(width: 640, height: 680),
                 size: NSSize(width: 640, height: 680), appearance: appearance,
                 to: dir.appendingPathComponent("spaces-section-\(name).png")
+            )
+            try render(
+                Form { OutboundRulesSection(model: enforcement.outboundRules, termsLayerOff: true) }
+                    .formStyle(.grouped).frame(width: 640, height: 560),
+                size: NSSize(width: 640, height: 560), appearance: appearance,
+                to: dir.appendingPathComponent("outbound-rules-\(name).png")
             )
             try render(
                 EnforcementBanner(model: enforcement, show: {}).padding(8).frame(width: 640, alignment: .top)

@@ -256,3 +256,11 @@ func TestSessionStartIgnoresSandboxSetting(t *testing.T) {
 		t.Errorf("timed switch: digest = %q", out.String())
 	}
 }
+
+func (f *fakeClient) ListOutboundRules(context.Context, *orchdv1.ListOutboundRulesRequest, ...grpc.CallOption) (*orchdv1.OutboundRules, error) {
+	return nil, errors.New("hooks read the outbound rules from the guard snapshot")
+}
+
+func (f *fakeClient) ChangeOutboundRule(context.Context, *orchdv1.ChangeOutboundRuleRequest, ...grpc.CallOption) (*orchdv1.ChangeOutboundRuleResponse, error) {
+	return nil, errors.New("hooks never change the outbound rules")
+}

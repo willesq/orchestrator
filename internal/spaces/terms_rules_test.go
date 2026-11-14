@@ -314,6 +314,15 @@ func TestParseUserRuleRejects(t *testing.T) {
 	}
 }
 
+// TestGuardSnapshotReadProtected: the guard snapshot carries the rules'
+// values, so no tool call may read it (INV-07).
+func TestGuardSnapshotReadProtected(t *testing.T) {
+	p := GuardProtection("/h", "/h/.config/orch", "/h/data", "/h/data/guard", "", nil)
+	if !slicesContains(p.Read, GuardSnapshotPath("/h/data/guard")) {
+		t.Errorf("snapshot not read-protected: %v", p.Read)
+	}
+}
+
 // TestOutboundRulesChanges covers Switch, Add, Remove and Validate.
 func TestOutboundRulesChanges(t *testing.T) {
 	var rs OutboundRules

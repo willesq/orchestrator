@@ -336,8 +336,8 @@ type GuardTerms struct {
 	// check then refuses every call they may have covered.
 	Rules       *OutboundRules
 	RulesBroken bool
-	// RulesRev is the rules' revision, which the hook will hand to orchd
-	// with the call (D-66) once RecordToolEvent carries it.
+	// RulesRev is the rules' revision, which the hook hands to orchd with
+	// the call (guard_rules_rev, D-66).
 	RulesRev int64
 }
 

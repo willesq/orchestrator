@@ -100,6 +100,6 @@ func (s *server) RecordToolEvent(ctx context.Context, req *orchdv1.RecordToolEve
 		}
 	}
 	s.toolEvents.take(toolEvent{caller: callerOf(ctx), req: req, received: time.Now(),
-		rulesRev: s.termsRules.revision()})
+		rulesRev: s.termsRules.recordedRulesRev(req.GuardRulesRev)})
 	return &orchdv1.RecordToolEventResponse{}, nil
 }
