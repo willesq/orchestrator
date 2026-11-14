@@ -6078,11 +6078,11 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
-      "blocked_reason": "2026-11-14: D-61 is implemented and every SP-046 acceptance item has evidence at 6baf911 (unit tests, make cover, and the full TestClaudeE2E suite PASS), but DOD-6 is not met. The security audit's HIGH, RC-215 (measured: an allowRead or allowWrite in a checkout's own .claude/settings.json, or the user's own entries in settings.local.json, re-opens orch's sandbox denies for sessions started in the checkout; orch now reports it but cannot prevent it without editing tracked files or users' entries, which SP-046.1.a2 forbids), and two MEDIUMs that follow from D-61's own text, RC-216 (a consistent forged setting is taken at restart and never marks a digest) and RC-217 (auto judges only isolated roots), need user decisions. The independent verifier was not run. 2026-11-14: the user settled RC-215/216/217 as D-67, D-68 and D-69; a follow-up lane implements them, then runs the audit and the independent verifier.",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "e963791232c2f3fe9ad0ab5f2ea40fcc700df59e",
+      "verified_at": "2026-11-14T23:34:21Z",
+      "blocked_reason": null,
       "attempts": 3,
       "criteria_sha256": "cba1332a2b5973eb9c82362ed430d3a8c28df32d635b00bfea8a90589908f887",
       "branch": "feat/sp-046-audit-followups",
