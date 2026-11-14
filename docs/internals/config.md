@@ -291,6 +291,13 @@ token without `read:org` lists only public memberships.
 
 Every other caller sees only how many problems there are.
 
+**Claude Code folder per space** (SP-046, D-59; `Resolved.ClaudeConfigDir`). A space may name
+`claude_config_dir`, a Claude Code configuration folder. Only `orch run <space> -- claude` uses
+it, as the session's `CLAUDE_CONFIG_DIR`, so its sessions have that folder's own login and
+transcripts; a space naming none runs with the user's own configuration. Other spaces' sessions
+are denied the folder ([install.md](install.md#per-space-harness-settings)). orch never writes
+or reads inside it.
+
 **Validation** (`spaces.Validate`) reports every problem with a rule name: an unknown kind; a
 bad or reserved name (`quarantine`, `shared`); a GitHub org that is not a well-formed GitHub login;
 a GitHub org, web prefix (scheme and host compared
@@ -300,10 +307,11 @@ a root of one isolated space inside another's; an isolated space reading an isol
 private space reading an isolated one; a public space reading anything; a read of a space that
 does not exist; a terms file inside a git working tree (a `.git` in any parent, after resolving
 symlinks); a `gh_config_dir` that is not absolute, is inside a git working tree (gh may keep a
-token in it) or is shared by two spaces (one profile is one account); a policy over the size
+token in it) or is shared by two spaces (one profile is one account); a `claude_config_dir`
+with the same faults (it holds a Claude Code login and transcripts); a policy over the size
 limits; and a
 `public_root_sessions` that is not a private or isolated space. Roots, terms files and
-`gh_config_dir` may start with `~` and must otherwise be absolute. Roots are compared case-insensitively, since macOS
+`gh_config_dir` and `claude_config_dir` may start with `~` and must otherwise be absolute. Roots are compared case-insensitively, since macOS
 volumes usually are. With `public_root_sessions` unset, session content from under a public root
 goes to the only private space when there is exactly one, else to quarantine.
 

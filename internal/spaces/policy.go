@@ -64,6 +64,10 @@ type Space struct {
 	// GitHub calls run with. An isolated space's orgs are synced only through
 	// it, once the user has logged it in with gh.
 	GHConfigDir string `json:"gh_config_dir,omitempty"`
+	// ClaudeConfigDir is the Claude Code configuration folder
+	// (CLAUDE_CONFIG_DIR) 'orch run' starts the space's sessions with; ""
+	// keeps the user's own (D-59). It holds that folder's own login.
+	ClaudeConfigDir string `json:"claude_config_dir,omitempty"`
 }
 
 // Policy is a whole spaces policy, as saved in one revision.
@@ -133,12 +137,12 @@ func checkSize(p Policy) error {
 				}
 			}
 		}
-		for _, v := range []string{s.Name, string(s.Kind), s.TermsFile, s.GHConfigDir} {
+		for _, v := range []string{s.Name, string(s.Kind), s.TermsFile, s.GHConfigDir, s.ClaudeConfigDir} {
 			if len(v) > maxString {
 				return fmt.Errorf("spaces policy: a value is over %d bytes", maxString)
 			}
 		}
-		for _, path := range append([]string{s.TermsFile, s.GHConfigDir}, s.Roots...) {
+		for _, path := range append([]string{s.TermsFile, s.GHConfigDir, s.ClaudeConfigDir}, s.Roots...) {
 			if strings.Count(path, "/") > maxDepth {
 				return fmt.Errorf("spaces policy: a path is more than %d folders deep", maxDepth)
 			}

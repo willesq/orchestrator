@@ -35,16 +35,18 @@ operator applied.
   orch spaces enforce [<layer> <state>] [--for 15m]
                                      show or switch an enforcement layer
                                      (switching is operator only)
+  orch spaces sandbox [auto|on|off]  show or set whether orch writes sandbox
+                                     rules (setting is operator only)
   orch spaces replay <session> [--policy <rev|file>]
                                      decide recorded tool calls again and list
                                      the verdicts that change (operator only)
 
-Diff, apply, log verify, replay and enforce <layer> <state> are refused inside an agent session (Claude Code, Codex) and
+Diff, apply, log verify, replay, enforce <layer> <state> and sandbox <mode> are refused inside an agent session (Claude Code, Codex) and
 inside tasks orchd runs: run them in your own terminal or use Orch.app. An
 agent session may save a draft; applying one needs --accept-agent-draft.`,
 	}
 	cmd.AddCommand(newSpacesDraftCmd(cf), newSpacesDiffCmd(cf), newSpacesApplyCmd(cf), newSpacesWhyCmd(cf),
-		newSpacesLogCmd(cf), newSpacesEnforceCmd(cf), newSpacesReplayCmd(cf))
+		newSpacesLogCmd(cf), newSpacesEnforceCmd(cf), newSpacesSandboxCmd(cf), newSpacesReplayCmd(cf))
 	return cmd
 }
 

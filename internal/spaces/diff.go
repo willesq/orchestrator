@@ -113,5 +113,11 @@ func changedFields(x, y Space) fieldChanges {
 		c.fields = append(c.fields, "gh_config_dir")
 		c.details = append(c.details, fmt.Sprintf("gh_config_dir: %q -> %q", x.GHConfigDir, y.GHConfigDir))
 	}
+	if x.ClaudeConfigDir != y.ClaudeConfigDir {
+		// Reason: as with gh_config_dir, it changes which login the space's
+		// launched sessions run as.
+		c.fields = append(c.fields, "claude_config_dir")
+		c.details = append(c.details, fmt.Sprintf("claude_config_dir: %q -> %q", x.ClaudeConfigDir, y.ClaudeConfigDir))
+	}
 	return c
 }

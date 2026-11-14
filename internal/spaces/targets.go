@@ -120,6 +120,7 @@ type extractor struct {
 	mayCreate   bool
 	missing     bool
 	scriptBytes int
+	scriptReads int
 	// writing is set while the paths added are written by the call.
 	writing int
 	// spec is set while walking text that may or may not be shell code,

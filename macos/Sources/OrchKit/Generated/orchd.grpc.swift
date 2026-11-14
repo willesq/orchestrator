@@ -826,6 +826,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "SetSandboxSetting" metadata.
+        public enum SetSandboxSetting: Sendable {
+            /// Request type for "SetSandboxSetting".
+            public typealias Input = Orchd_V1_SetSandboxSettingRequest
+            /// Response type for "SetSandboxSetting".
+            public typealias Output = Orchd_V1_SetSandboxSettingResponse
+            /// Descriptor for "SetSandboxSetting".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SetSandboxSetting",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -1098,6 +1111,7 @@ public enum Orchd_V1_Orchd: Sendable {
             ReplaySpaces.descriptor,
             GetEnforcement.descriptor,
             SetEnforcement.descriptor,
+            SetSandboxSetting.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -2641,6 +2655,33 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SetEnforcementResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetEnforcementResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetSandboxSetting" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetSandboxSetting sets the sandbox setting, auto | on | off (spaces
+        /// > D-61): whether orch writes its sandbox rules, as a lasting choice
+        /// > apart from the sandbox layer's switch. GetEnforcement and Status show
+        /// > it. Operator-only like SetEnforcement; every change is logged with its
+        /// > time and caller and emits an event on the "spaces" stream.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetSandboxSettingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetSandboxSettingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SetSandboxSettingResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setSandboxSetting<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetSandboxSettingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetSandboxSettingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SetSandboxSettingResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetSandboxSettingResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListRegisteredSources" method.
@@ -5234,6 +5275,44 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "SetSandboxSetting" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetSandboxSetting sets the sandbox setting, auto | on | off (spaces
+        /// > D-61): whether orch writes its sandbox rules, as a lasting choice
+        /// > apart from the sandbox layer's switch. GetEnforcement and Status show
+        /// > it. Operator-only like SetEnforcement; every change is logged with its
+        /// > time and caller and emits an event on the "spaces" stream.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetSandboxSettingRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetSandboxSettingRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SetSandboxSettingResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setSandboxSetting<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetSandboxSettingRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetSandboxSettingRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SetSandboxSettingResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetSandboxSettingResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SetSandboxSetting.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -7669,6 +7748,39 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetEnforcementRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SetEnforcementResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetSandboxSetting" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetSandboxSetting sets the sandbox setting, auto | on | off (spaces
+    /// > D-61): whether orch writes its sandbox rules, as a lasting choice
+    /// > apart from the sandbox layer's switch. GetEnforcement and Status show
+    /// > it. Operator-only like SetEnforcement; every change is logged with its
+    /// > time and caller and emits an event on the "spaces" stream.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SetSandboxSettingRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setSandboxSetting<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SetSandboxSettingRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetSandboxSettingResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setSandboxSetting(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetSandboxSettingRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SetSandboxSettingResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -10275,6 +10387,43 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.setEnforcement(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetSandboxSetting" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetSandboxSetting sets the sandbox setting, auto | on | off (spaces
+    /// > D-61): whether orch writes its sandbox rules, as a lasting choice
+    /// > apart from the sandbox layer's switch. GetEnforcement and Status show
+    /// > it. Operator-only like SetEnforcement; every change is logged with its
+    /// > time and caller and emits an event on the "spaces" stream.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setSandboxSetting<Result>(
+        _ message: Orchd_V1_SetSandboxSettingRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetSandboxSettingResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SetSandboxSettingRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setSandboxSetting(
             request: request,
             options: options,
             onResponse: handleResponse

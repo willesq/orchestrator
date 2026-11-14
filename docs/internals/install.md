@@ -261,8 +261,9 @@ file set a distinct `env` marker, and the run recorded which markers reached the
   single-slash form `Read(/<absolute path>/**)` did not block (presumably because it is resolved
   against the settings file).
 - A fresh `CLAUDE_CONFIG_DIR`, or a temporary `HOME`, starts logged out (`Not logged in · Please
-  run /login`). A per-space profile for `orch run` needs its own login. Whether that login then
-  persists per profile was not tested.
+  run /login`). A space that names its own `claude_config_dir` for `orch run` needs its own login
+  there (D-59; spaces that name none use your own). Whether that login then persists per folder
+  was not tested.
 - In auto permission mode, the auto-mode classifier can refuse a Bash call before the sandbox is
   reached. Tests of the sandbox itself must use `--permission-mode default`.
 
@@ -291,6 +292,314 @@ extends = ":workspace"
   checkout cannot weaken a profile the launcher supplies.
 - The `:workspace` base still lets the shell write `/tmp` and `$TMPDIR`, which every space
   shares; a read deny on other roots does not close that channel.
+
+## Per-space harness settings
+
+Spaces plan SP-046 (D-23, D-53) puts each space's OS sandbox and file-tool denies, its gh profile
+and its own temporary folder into the sessions that work for it, two ways. Code:
+`internal/settings/spacesettings`, `internal/daemon/checkout_settings.go`, `internal/cli/run_cmd.go`.
+
+**Rules for a space** (`spacesettings.For`). A session in space A is denied, for both reading and
+writing, every root of every other isolated space, every other space's folder under
+`<data dir>/spaces/` and its temp folder, every other space's `gh_config_dir` (it can hold that
+account's token, and `GH_CONFIG_DIR` pointed at it acts as that account) and `claude_config_dir`
+(its login and transcripts), and `<data dir>/spaces/.orch/`, orchd's record of the checkout files and their
+backups. Nothing of A, of a public space or of a private space is denied; memory filtering and the tool guard cover those, as
+in `block-other-jobs` (D-12). A folder reached through a link is denied by its link path and its
+real path. The space's environment is `GH_CONFIG_DIR` (its `gh_config_dir`, only when it names
+one; otherwise the variable is not set and gh uses the default login, D-59), `TMPDIR` and `CLAUDE_CODE_TMPDIR`, both the space's temp folder `/tmp/orch-<uid>/<space>`
+(`/tmp/orch-<uid>/_<hash>` for a name too long; the root and the folder are created `0700`, and a
+root that is a link or another user's is refused: orchd then reports it and the space's checkout
+settings name no temp folder at all, rather than one another user controls). A checkout with no space (its root and its remote name different
+jobs, or it is quarantined) is denied every isolated root that does not hold it, every space's
+folder, gh profile and Claude Code folder, the default gh folder and `.orch/`, and gets no environment.
+
+*gh logins inside the sandbox (D-61, RC-208 option a).* A space reads only its own gh login. One
+naming no `gh_config_dir` (the default login, D-59) gets the default gh folder (orchd's
+`$GH_CONFIG_DIR`, else `$XDG_CONFIG_HOME/gh`, else `~/.config/gh`; `spacesettings.DefaultGHDir`)
+in `sandbox.filesystem.allowRead`; one naming its own profile gets that profile there and is
+denied the default folder; every other space's profile stays denied to both. An `allowRead` that
+would hold a denied folder (another space's profile inside `~/.config/gh`) is left out, as it
+would re-open it. Reason: `orch install` puts `Read(~/.config/gh/**)` in `~/.claude/settings.json`
+to keep the file tools off gh's files, and Claude Code applies a Read deny to sandboxed commands
+too, so without the `allowRead` gh could not start in the shell. A placed space's rules also let
+gh work in the sandbox: `api.github.com` and `github.com` in `sandbox.network.allowedDomains`
+(otherwise each connection needs an approval a headless session cannot give) and
+`sandbox.enableWeakerNetworkIsolation: true` (see the measurements below). The guard's
+self-protection (SP-042) still refuses any tool call or shell command that names a file in a gh
+profile, the default one included, so the folder is readable to gh, not by name.
+
+In Claude Code settings this is `sandbox.enabled: true`, `sandbox.allowUnsandboxedCommands: false`,
+each denied folder in `sandbox.filesystem.denyRead` and `denyWrite` and as `Read(//<path>/**)` and
+`Edit(//<path>/**)` in `permissions.deny` (Read rules also cover Grep and Glob, Edit rules Write
+and the other edit tools), the space's temp folder in `sandbox.filesystem.allowWrite`, its gh
+login folder in `sandbox.filesystem.allowRead`, the gh hosts in `sandbox.network.allowedDomains`
+and `sandbox.enableWeakerNetworkIsolation: true` (the last two for a placed space only),
+`enableAllProjectMcpServers: false` (a project `.mcp.json`, which the session's file tools can
+write, would otherwise start servers outside the sandbox when every project server is enabled),
+and the environment in `env`. A path holding a character Claude Code's rules read as a pattern
+(`*?[]{}()!\`) gets no permission rule; the sandbox still denies it to shell commands.
+
+**gh in the sandbox (measured, Claude Code 2.1.309, 2026-11-14).** Sessions started in a temp
+checkout with the user's real `~/.claude/settings.json` (which holds `Read(~/.config/gh/**)`) and a
+`settings.local.json` with `sandbox.enabled: true` and `allowUnsandboxedCommands: false`, running
+`gh auth status` in the sandboxed shell:
+
+| `settings.local.json` adds | `gh auth status` in the sandbox |
+|---|---|
+| nothing | `failed to read configuration: open ~/.config/gh/config.yml: operation not permitted` |
+| `filesystem.allowRead: ["~/.config/gh"]` (or the absolute path) | config read, token read from the keyring, then `deny network-outbound api.github.com:443 (user denied)` |
+| and `network.allowedDomains: ["api.github.com", "github.com"]` | `tls: failed to verify certificate: x509: OSStatus -26276` (curl to the same host: HTTP 200) |
+| and `enableWeakerNetworkIsolation: true` (or `network.allowMachLookup: ["com.apple.trustd.agent"]`) | `Logged in to github.com account <login> (keyring)`, exit 0 |
+
+So an `allowRead` overrides a permission-rule Read deny for sandboxed commands; gh reaches the
+login keychain from the sandbox without any extra setting; and Go programs need the
+`com.apple.trustd.agent` lookup to verify certificates. Claude Code describes
+`enableWeakerNetworkIsolation` as opening "a potential data exfiltration vector through the trustd
+service" (RC-213). All three keys are honoured from a checkout's `settings.local.json` and from
+`--settings`. `TestClaudeE2E`'s `gh`, `launcher/gh`, `gh-guard` and `two-logins` probes check it in
+real sessions.
+
+**Temp folders (measured, Claude Code 2.1.309).** Claude Code gives sandboxed commands
+`TMPDIR=$CLAUDE_CODE_TMPDIR/claude-<uid>`, and `/tmp/claude-<uid>` (shared by every session of the
+user) when that path is longer than 44 bytes, whatever `TMPDIR` says. Only the environment Claude
+Code starts with sets it: `CLAUDE_CODE_TMPDIR` or `TMPDIR` in a settings file's `env` changes
+neither the sandboxed `TMPDIR` nor the `CLAUDE_CODE_TMPDIR` the shell sees (other `env` entries,
+`GH_CONFIG_DIR` included, do reach the shell), and no `sandbox` setting names a temp folder. That
+is why the temp folders sit under `/tmp` rather than in orch's data directory, which is too long.
+So `orch run` gives a session its space's own sandboxed `TMPDIR`, and its rules also deny the
+shared `/tmp/claude-<uid>`; a session started in a checkout without `orch run` uses the shared
+folder, which every other such session can read, whatever its space. That is accepted as a
+documented limit until Claude Code honours a settings value for it (D-58, which resolved RC-206). Denying that folder
+in a checkout's settings would break every command that reads back a temp file (`mktemp` failed
+with `Operation not permitted`), so orch does not. Every space's settings still deny every other
+space's temp folder, so a file a launched session writes under its `TMPDIR` is unreadable from
+other spaces' sessions however they started.
+
+**Per-checkout files.** orchd keeps `.claude/settings.local.json` in every git checkout (a folder
+with a `.git` folder or file) under a space's roots. SP-004 measured that the checkout root's
+`settings.local.json` applies wherever in the checkout a session starts, while its `settings.json`
+may not, so every key is written there together. Each checkout's file also denies shell writes to
+the checkout's own `.claude` folder (`denyWrite`) and file-tool edits of its `settings.json` and
+`settings.local.json` (`Edit(//...)`), so the session cannot change or replace the settings that
+hold its rules. (Claude Code 2.1.309's sandbox already denies shell writes to those two files
+and to `.claude/skills`, `agents`, `commands` and `hooks` in a writable folder.)
+
+- *Discovery:* every root of the applied policy is walked at most 6 folders deep, not into a
+  checkout below the root (a root that is itself a checkout is walked), a hidden folder, `node_modules`, `vendor`, `Library`, `__pycache__`, `target`, `dist`
+  or `build`, and not through links below the root; at most 50,000 folders per sync. On the
+  developer's Mac, `~/code` (135 checkouts) took 0.38 s to walk.
+- *Placement:* each checkout is placed as content from it is (its deepest root and its remote's
+  owner, `placementOrigin` and `PlaceUnder`), but gets a space's rules only when its folder root
+  decided that: by itself, with the remote agreeing, or being the stricter. A checkout only its
+  remote places (say a job's repo cloned under a personal root) gets the rules of a checkout with
+  no space. Reason: the remote comes from `.git/config`, which the session in the checkout can
+  rewrite, and for deny rules a stricter space would unlock that space's folders and gh profile.
+- *Fail closed:* a checkout orch wrote keeps its rules while it is still a folder under a root,
+  even when a sync does not find it (its `.git` renamed, or the walk cut short) or cannot place
+  it; it gets its last space's rules, or a checkout with no space's when that space is gone. A
+  new checkout that cannot be placed gets a checkout with no space's rules. Only the `sandbox`
+  switch, the policy (a root removed) or the folder going takes orch's entries out.
+- *When:* at orchd start, every 30 s, at once after `ApplySpaces`, and at once when the
+  `sandbox` switch or the sandbox setting changes. A new clone gets its file within one interval plus one sync.
+- *Merge:* orch records in `<data dir>/spaces/.orch/checkouts.json` (`0600`) exactly what it added to
+  each file: list entries the file did not already hold, values it set with the value before, and
+  objects it created. A later sync takes out only those (an entry the user had before stays,
+  even when orch wants the same one), sets values back as they were unless the user changed them
+  since, and removes a file orch created once nothing is left in it. Other keys and the user's
+  own entries are never touched. A second sync with nothing changed writes nothing. The file as it
+  was before orch's first change is kept once in `<data dir>/spaces/.orch/backups/<hash>/`
+  (`0600`, with the checkout's path beside it).
+- *Unusable entries:* a `.claude` that is a link or not a folder, or a settings file that is a
+  link, not a regular file or over 4 MiB, is renamed to `<name>.orch-moved-<time>` beside it (the
+  link itself, never what it points at) and orch's file written; this is reported, and the report
+  is the only record of where it went (switching off does not move it back). An entry git tracks
+  is never moved, and nothing is moved when git cannot say. With the switch off nothing is moved.
+- *Unmergeable file:* a file orch cannot merge into (not JSON, or a key orch writes holding the
+  wrong kind of value) is kept as `invalid-<time>.json` beside the backup and replaced by one
+  holding only orch's rules, which orch then owns; this is reported. With the switch off it is
+  only reported.
+- *Writes:* the file is written beside itself and renamed over, after reading it again; when
+  Claude Code (saving a permission) or anyone else changed it meanwhile, nothing is written and
+  the next sync tries again. `.claude` and the file are opened without following links, so a
+  session cannot make orchd write elsewhere by replacing them with links.
+- *Git:* before the file holds anything of orch's, `git check-ignore` must report it ignored.
+  When no rule covers it orch appends `/.claude/settings.local.json` to the checkout's
+  `info/exclude` (`git rev-parse --git-path`, shared by a worktree's main checkout); it never
+  edits a `.gitignore`. It writes only a file named `exclude` in a folder `info` of a folder
+  holding `HEAD`, opening each without following links and creating only `info`. A checkout whose file is tracked is refused and reported. git runs with
+  `core.fsmonitor` and the untracked cache off, since a checkout's `.git/config` is writable by
+  the session in it.
+- *Switch:* with the `sandbox` layer off, or no policy applied, every sync takes orch's entries out
+  of every file it wrote and leaves the user's; switched on, they come back at the next sync. While
+  the applied policy does not verify, files are left as the last good policy wrote them.
+- *Setting:* where the sandbox setting writes no rules (below), a checkout keeps only
+  `env.GH_CONFIG_DIR` for a space naming its own `gh_config_dir` (which account it uses, D-59, not
+  a sandbox rule) and nothing for one on the default login; no temp folder is made for it.
+- Problems (a tracked or unmergeable file, a link, a placement error) are logged by orchd when
+  they change.
+
+**Launcher.** `orch run <space> -- claude|codex [args...]` starts a session with the space's
+profile from any folder. It reads the applied policy through `DiffSpaces` (operator-only), so it
+works in your own terminal and not inside an agent session. It refuses a space not in the policy,
+and a folder another space holds or whose space cannot be decided unless `--force`; a folder no
+root or remote places is allowed. It then replaces itself with the harness (`exec`), with the
+variables set for the harness only:
+
+- *Claude Code:* the space's rules (the per-checkout settings without the `.claude` protections,
+  plus denies of the shared `/tmp/claude-<uid>`) as one compact JSON string in `--settings`,
+  before your arguments; no file holds them. Claude Code adds flag settings to your own
+  (`$CLAUDE_CONFIG_DIR` or `~/.claude`) and the project's, merging the lists, so your hooks,
+  instructions and login carry over. `CLAUDE_CONFIG_DIR` is set only when the space names its own
+  `claude_config_dir` (D-59); otherwise the session uses your own configuration and login.
+  Because Claude Code takes one `--settings`, the launcher refuses one of yours while the rules
+  apply.
+- *Codex:* `-c default_permissions="orch_<space>"` and `-c permissions.orch_<space>={extends=
+  ":workspace",filesystem={"<path>"="deny",...}}` before your arguments, with your own
+  `CODEX_HOME` and login. A checkout's `.codex/config.toml` cannot change it (SP-004). Codex has no
+  per-checkout settings path, so the launcher is how a Codex session gets the denies.
+- *Environment:* `TMPDIR` and `CLAUDE_CODE_TMPDIR` are always the space's. `GH_CONFIG_DIR` and
+  (for Claude Code) `CLAUDE_CONFIG_DIR` are set only when the space names a `gh_config_dir` or
+  `claude_config_dir`, replacing inherited values, and then the inherited variables that would
+  override that login are dropped with a note naming each (never its value): gh's `GH_TOKEN`,
+  `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN` and `GH_HOST`, as orchd's own
+  gh calls drop them, and Claude Code's `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and
+  `CLAUDE_CODE_OAUTH_TOKEN`. Otherwise an inherited value is your own login and is passed on,
+  unless it names a folder another space names (compared case-insensitively, made absolute and
+  with links resolved), which is dropped with a note so the session cannot run as that space's
+  account.
+- With the `sandbox` layer off, or the sandbox setting giving this space no rules, the session gets
+  no deny rules but keeps the environment, and the launcher says which. When orchd cannot report
+  the switch and the setting, the rules apply.
+
+**Sandbox setting (D-61).** Whether orch writes its sandbox rules is the operator's lasting choice,
+`orch spaces sandbox auto|on|off` (operator-only, refused inside agent sessions and orchd's
+tasks; stored in orch.db, each change logged with its time and caller; see
+[daemon.md](daemon.md#sandbox-setting)):
+
+- `auto` (the default): rules only for a session they keep out of another isolated space's root
+  (`Rules.OtherJobs`): a checkout of a space when another isolated space has a root, a checkout of
+  no space when an isolated root does not hold it. A policy with one isolated job and nothing else
+  writes none; add a second job, or a public space whose checkouts must stay out of the job, and
+  they come.
+- `on`: rules for every space's sessions while a policy is applied.
+- `off`: none, by choice.
+
+The setting applies to checkouts and `orch run` alike (`spacesettings.Choice`). Without the rules
+the per-space `TMPDIR` is not written into checkouts (Claude Code ignores it there anyway, D-58),
+a space's own `GH_CONFIG_DIR` stays, and `orch run` still sets the space's temp folder and login
+variables. The tool guard, memory filtering and outbound terms are unaffected: this applies to the
+sandbox layer only (D-11 and INV-16 hold for the others). `orch status`, `orch spaces sandbox`,
+`orch spaces enforce` and the app (Status and GetEnforcement carry it) show the setting and
+whether any space is sandboxed now; unlike the `sandbox` switch it never marks a session's start
+digest (INV-16 as amended). The SP-070 `sandbox` switch stays for debugging: switched off (timed
+or not) it takes every entry out, the gh profile included, and every digest says so.
+
+**Logins (D-59).** One login works by default: a space that names neither `gh_config_dir` nor
+`claude_config_dir` uses whichever gh login is already authenticated and your normal Claude Code
+configuration, in checkouts and with `orch run`, and needs no setup. The trade-off is that the
+GitHub account is then not a boundary between jobs; the guard, memory spaces and the folder
+denies still are. A space may name its own:
+
+- `gh_config_dir`: log in to it once with `GH_CONFIG_DIR=<gh_config_dir> gh auth login`.
+- `claude_config_dir` (a folder outside every git tree, not shared with another space): only
+  this needs a separate Claude login. SP-004 measured that a fresh `CLAUDE_CONFIG_DIR` starts
+  logged out (`Not logged in · Please run /login`), so log in once with
+  `orch run <space> -- claude` and `/login` in it, or `CLAUDE_CONFIG_DIR=<claude_config_dir>
+  claude`. Whether that login then persists per folder was not measured (RC-191). orch does not
+  write into the folder: its settings, hooks, instructions and plugins are whatever you put
+  there (copy or link them from `~/.claude`), and the space's rules still come from
+  `--settings`.
+
+orch never handles either token. Showing which login each space will use is SP-074.3.
+
+**Limits.**
+- Root paths of other jobs are written into every checkout's settings, so a session can read
+  which folders are denied (not what they hold). Name job roots neutrally. The launcher's
+  `--settings` JSON carries the same paths in the process arguments, which other local users
+  can see with `ps`.
+- Denying another space's `gh_config_dir` or `claude_config_dir` covers what is in the folder,
+  not the macOS login keychain, where gh keeps its token by default (`gh auth login` without
+  `--insecure-storage`) and Claude Code keeps its login. Measured 2026-11-14 (Claude Code
+  2.1.309, `TestClaudeE2E` `two-logins/keychain`, account metadata only): a session of a space
+  naming its own gh profile wrote a profile folder of its own naming the default account, and
+  `GH_CONFIG_DIR=<it> gh auth status` in its sandboxed shell reported that account logged in
+  from the keyring. So any sandboxed session can use any gh login whose token is in the keychain,
+  by naming its account. Adding `~/Library/Keychains` to a session's `denyRead` stopped gh
+  reaching the keyring (`The token in default is invalid`), but also breaks every keyring login
+  in that session. Which mitigation to take is open (RC-210). A per-space login is only as
+  separate as where its token is stored.
+- A space on the default login has its gh folder readable by every sandboxed command (D-61): with
+  gh's default keyring storage `hosts.yml` names the account but holds no token; with
+  `--insecure-storage` it holds the token. The guard refuses commands and tools that name the
+  files, not a program that opens them itself.
+- `sandbox.enableWeakerNetworkIsolation` lets sandboxed commands look up
+  `com.apple.trustd.agent`, which Claude Code calls a potential exfiltration path; it is what
+  lets gh (and other Go programs) verify certificates in the sandbox (RC-213). Claude Code
+  2.1.309's own messages say a machine whose sandbox has such a setting serves no "device tools"
+  (read from its messages, not measured).
+- `sandbox.network.allowedDomains` lets every sandboxed command, not only gh, reach
+  `github.com` and `api.github.com` without an approval; the outbound terms check (SP-044) reads
+  `gh` and `git` commands, not other programs. A GitHub Enterprise host in a space's own profile
+  is not added (RC-214).
+- Claude Code's settings files with hooks (`~/.claude/settings*.json` and a checkout's
+  `.claude/settings*.json`) are not denied to the file tools by the space rules; the guard's
+  self-protection (SP-042), which refuses writes to them, is the protection (D-61, RC-211).
+- An `allowRead` or `allowWrite` that orch did not write re-opens orch's denies below it.
+  Measured 2026-11-14 (Claude Code 2.1.309): with orch-style `denyRead` of a folder in a
+  checkout's `settings.local.json`, a sandboxed `cat` of a file in it printed the file when the
+  checkout's own `.claude/settings.json` (a repository can commit one) or the same
+  `settings.local.json` held `sandbox.filesystem.allowRead` of that folder; a `settings.json`
+  `excludedCommands: ["cat"]` did not. In a session started as `orch run` starts it, whose
+  denies come from `--settings`, the same `settings.json` in the launch folder did not re-open
+  them (`TestClaudeE2E` `loosening`). orch cannot change a repository's file and keeps the
+  user's own entries, so each sync reports such an entry, and any settings file or `.claude` it
+  cannot check (a link, not a regular file, over 4 MiB, not JSON), as a problem in orchd's log,
+  and `orch run` prints it as a warning (`spacesettings.Loosening`, which reads only the
+  checkout's own two files, without following links); what to do about it is open (RC-215). The
+  file-tool `Read(//...)` denies still hold.
+- `auto` judges only isolated roots: with one isolated job and other spaces that are not
+  isolated, the job's sessions get no rules, so nothing denies them those spaces'
+  `gh_config_dir` or `claude_config_dir` or `.orch/` (RC-217).
+- Deny paths are written as the policy spells them, plus their real path; a root spelled in
+  another case than on disk relies on the sandbox matching case-insensitively, which was not
+  measured (RC-218).
+- Paths match by case in Claude Code's permission rules; macOS volumes are usually not case
+  sensitive, so a tool given a differently cased path may pass the `Read` rule (the sandbox
+  matches the real path).
+- The shared `/tmp` stays writable by every space (D-53); only `TMPDIR` is per space, and for
+  Claude Code only in sessions started with `orch run` (sessions started in a checkout share
+  `/tmp/claude-<uid>`, a documented limit under D-58).
+- With the default logins (D-59), every space's shell runs gh as the same account, and every
+  session started without a `claude_config_dir` shares one Claude Code configuration, its
+  transcripts under `~/.claude/projects` included.
+- `/tmp` is cleaned by the system; orch makes the temp folders again at each sync and launch.
+- Harness transcripts under `~/.claude/projects` and `~/.codex/sessions` are shared by sessions
+  started without the launcher and are not denied.
+- A settings file a session edits is put right at the next sync (30 s), but a running session
+  may already have read it.
+- A checkout seen as ignored is not checked again until orch changes its file.
+- The session in a checkout controls its `.git`, so it can point the `info/exclude` orch appends
+  to at another repository's git folder; orch then adds its one ignore line there.
+- A `.claude` the user linked on purpose (a shared folder) is moved aside like any other link.
+- A moved-aside name is not git-ignored, so `git add -A` could pick it up.
+- A checkout whose settings file is tracked by git (a cloned repo can commit one) gets no rules:
+  orch never writes a tracked file, and reports it. A session in a checkout orch already wrote can
+  track the file with `git add -f`; its rules then stay as they are but no longer follow policy
+  changes. Refusing sessions in such a checkout is the enforcing guard's (SP-041).
+- The `Edit(//...)` denies on the checkout's settings files match the path a tool names. Whether
+  Claude Code resolves links and case before matching was not measured; the opt-in Claude Code
+  test's `protect` probe checks it.
+- The deny rules are only as complete as the folders they name: orch's data folder outside
+  `spaces/` (`orch.db`, the command log) stays readable to every space, and the default gh login
+  folder to every space that uses it (it is denied to spaces naming their own profile and to
+  checkouts of no space); self-protection (SP-042) covers orch's own files. A space's
+  `claude_config_dir` is denied to other spaces' sessions, but the guard's self-protection does
+  not treat its files as credentials as it does a gh profile's.
+- Shell commands in a checkout cannot write its `.claude` folder, so a `git checkout` or `git pull`
+  run by the session that changes tracked files under `.claude/` fails there; the file tools
+  still edit them, and the user's own terminal is not sandboxed.
+- Gemini is not covered (D-20).
 
 ## Status checks
 

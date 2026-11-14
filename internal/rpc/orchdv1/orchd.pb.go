@@ -1674,8 +1674,10 @@ type SpacesStatus struct {
 	Relaxed []*EnforcementSwitch `protobuf:"bytes,6,rep,name=relaxed,proto3" json:"relaxed,omitempty"`
 	// Set when orch.db's switches differ from orchd's or could not be read.
 	EnforcementError string `protobuf:"bytes,7,opt,name=enforcement_error,json=enforcementError,proto3" json:"enforcement_error,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// The sandbox setting (D-61); unset when spaces are unavailable.
+	Sandbox       *SandboxSetting `protobuf:"bytes,8,opt,name=sandbox,proto3" json:"sandbox,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SpacesStatus) Reset() {
@@ -1755,6 +1757,13 @@ func (x *SpacesStatus) GetEnforcementError() string {
 		return x.EnforcementError
 	}
 	return ""
+}
+
+func (x *SpacesStatus) GetSandbox() *SandboxSetting {
+	if x != nil {
+		return x.Sandbox
+	}
+	return nil
 }
 
 // MigrationProgress is how far a running hybrid migration has got.
@@ -13598,9 +13607,12 @@ type EnforcementState struct {
 	// Set when orchd could not read the switches at startup, or orch.db's
 	// differ from the ones orchd enforces (changed outside orchd); the
 	// affected layers enforce.
-	Error         string `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Error string `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	// The sandbox setting (D-61), which is not a switch: it never marks a
+	// session's start digest.
+	SandboxSetting *SandboxSetting `protobuf:"bytes,3,opt,name=sandbox_setting,json=sandboxSetting,proto3" json:"sandbox_setting,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *EnforcementState) Reset() {
@@ -13647,6 +13659,218 @@ func (x *EnforcementState) GetError() string {
 	return ""
 }
 
+func (x *EnforcementState) GetSandboxSetting() *SandboxSetting {
+	if x != nil {
+		return x.SandboxSetting
+	}
+	return nil
+}
+
+// SandboxSetting is whether orch writes its sandbox rules (spaces D-61):
+// auto writes them only for sessions another isolated space's folders are
+// denied to, on always while a policy is applied, off never.
+type SandboxSetting struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Mode        string                 `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"`                                  // auto | on | off
+	DefaultMode string                 `protobuf:"bytes,2,opt,name=default_mode,json=defaultMode,proto3" json:"default_mode,omitempty"` // auto
+	Modes       []string               `protobuf:"bytes,3,rep,name=modes,proto3" json:"modes,omitempty"`
+	SetAt       int64                  `protobuf:"varint,4,opt,name=set_at,json=setAt,proto3" json:"set_at,omitempty"` // unix seconds; 0 when never set
+	SetBy       string                 `protobuf:"bytes,5,opt,name=set_by,json=setBy,proto3" json:"set_by,omitempty"`  // shown to the operator only
+	// Whether some space's sessions get orch's sandbox rules now: false
+	// with off, with auto when no space has another isolated space's
+	// folders to deny, with no policy, or while the sandbox switch is off.
+	Active bool `protobuf:"varint,6,opt,name=active,proto3" json:"active,omitempty"`
+	// The state in words, for orch status and the app.
+	Detail string `protobuf:"bytes,7,opt,name=detail,proto3" json:"detail,omitempty"`
+	// Set when orch.db's setting differs from orchd's or did not match its
+	// change log at startup (the setting is then auto).
+	Problem       string `protobuf:"bytes,8,opt,name=problem,proto3" json:"problem,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SandboxSetting) Reset() {
+	*x = SandboxSetting{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[192]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SandboxSetting) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SandboxSetting) ProtoMessage() {}
+
+func (x *SandboxSetting) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[192]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SandboxSetting.ProtoReflect.Descriptor instead.
+func (*SandboxSetting) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{192}
+}
+
+func (x *SandboxSetting) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *SandboxSetting) GetDefaultMode() string {
+	if x != nil {
+		return x.DefaultMode
+	}
+	return ""
+}
+
+func (x *SandboxSetting) GetModes() []string {
+	if x != nil {
+		return x.Modes
+	}
+	return nil
+}
+
+func (x *SandboxSetting) GetSetAt() int64 {
+	if x != nil {
+		return x.SetAt
+	}
+	return 0
+}
+
+func (x *SandboxSetting) GetSetBy() string {
+	if x != nil {
+		return x.SetBy
+	}
+	return ""
+}
+
+func (x *SandboxSetting) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+func (x *SandboxSetting) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *SandboxSetting) GetProblem() string {
+	if x != nil {
+		return x.Problem
+	}
+	return ""
+}
+
+type SetSandboxSettingRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Mode          string                 `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"` // auto | on | off
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSandboxSettingRequest) Reset() {
+	*x = SetSandboxSettingRequest{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[193]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSandboxSettingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSandboxSettingRequest) ProtoMessage() {}
+
+func (x *SetSandboxSettingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[193]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSandboxSettingRequest.ProtoReflect.Descriptor instead.
+func (*SetSandboxSettingRequest) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{193}
+}
+
+func (x *SetSandboxSettingRequest) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+type SetSandboxSettingResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Current       *SandboxSetting        `protobuf:"bytes,1,opt,name=current,proto3" json:"current,omitempty"`
+	Changed       bool                   `protobuf:"varint,2,opt,name=changed,proto3" json:"changed,omitempty"` // false when the setting already had that mode
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSandboxSettingResponse) Reset() {
+	*x = SetSandboxSettingResponse{}
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[194]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSandboxSettingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSandboxSettingResponse) ProtoMessage() {}
+
+func (x *SetSandboxSettingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[194]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSandboxSettingResponse.ProtoReflect.Descriptor instead.
+func (*SetSandboxSettingResponse) Descriptor() ([]byte, []int) {
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{194}
+}
+
+func (x *SetSandboxSettingResponse) GetCurrent() *SandboxSetting {
+	if x != nil {
+		return x.Current
+	}
+	return nil
+}
+
+func (x *SetSandboxSettingResponse) GetChanged() bool {
+	if x != nil {
+		return x.Changed
+	}
+	return false
+}
+
 type SetEnforcementRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Layer string                 `protobuf:"bytes,1,opt,name=layer,proto3" json:"layer,omitempty"`
@@ -13660,7 +13884,7 @@ type SetEnforcementRequest struct {
 
 func (x *SetEnforcementRequest) Reset() {
 	*x = SetEnforcementRequest{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[192]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[195]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13672,7 +13896,7 @@ func (x *SetEnforcementRequest) String() string {
 func (*SetEnforcementRequest) ProtoMessage() {}
 
 func (x *SetEnforcementRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[192]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[195]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13685,7 +13909,7 @@ func (x *SetEnforcementRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetEnforcementRequest.ProtoReflect.Descriptor instead.
 func (*SetEnforcementRequest) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{192}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{195}
 }
 
 func (x *SetEnforcementRequest) GetLayer() string {
@@ -13721,7 +13945,7 @@ type SetEnforcementResponse struct {
 
 func (x *SetEnforcementResponse) Reset() {
 	*x = SetEnforcementResponse{}
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[193]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[196]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -13733,7 +13957,7 @@ func (x *SetEnforcementResponse) String() string {
 func (*SetEnforcementResponse) ProtoMessage() {}
 
 func (x *SetEnforcementResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[193]
+	mi := &file_internal_rpc_orchdv1_orchd_proto_msgTypes[196]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -13746,7 +13970,7 @@ func (x *SetEnforcementResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetEnforcementResponse.ProtoReflect.Descriptor instead.
 func (*SetEnforcementResponse) Descriptor() ([]byte, []int) {
-	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{193}
+	return file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP(), []int{196}
 }
 
 func (x *SetEnforcementResponse) GetCurrent() *EnforcementSwitch {
@@ -13927,7 +14151,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"subsystems\x18\x03 \x03(\v2\x19.orchd.v1.SubsystemStatusR\n" +
 	"subsystems\x129\n" +
 	"\tmigration\x18\x04 \x01(\v2\x1b.orchd.v1.MigrationProgressR\tmigration\x12.\n" +
-	"\x06spaces\x18\x05 \x01(\v2\x16.orchd.v1.SpacesStatusR\x06spaces\"\x90\x02\n" +
+	"\x06spaces\x18\x05 \x01(\v2\x16.orchd.v1.SpacesStatusR\x06spaces\"\xc4\x02\n" +
 	"\fSpacesStatus\x12\x1e\n" +
 	"\n" +
 	"configured\x18\x01 \x01(\bR\n" +
@@ -13937,7 +14161,8 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x05drift\x18\x04 \x03(\tR\x05drift\x12\x14\n" +
 	"\x05error\x18\x05 \x01(\tR\x05error\x125\n" +
 	"\arelaxed\x18\x06 \x03(\v2\x1b.orchd.v1.EnforcementSwitchR\arelaxed\x12+\n" +
-	"\x11enforcement_error\x18\a \x01(\tR\x10enforcementError\"\xaa\x01\n" +
+	"\x11enforcement_error\x18\a \x01(\tR\x10enforcementError\x122\n" +
+	"\asandbox\x18\b \x01(\v2\x18.orchd.v1.SandboxSettingR\asandbox\"\xaa\x01\n" +
 	"\x11MigrationProgress\x12\x16\n" +
 	"\x06target\x18\x01 \x01(\tR\x06target\x12!\n" +
 	"\fsources_done\x18\x02 \x01(\x05R\vsourcesDone\x12#\n" +
@@ -14941,10 +15166,25 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"reverts_to\x18\n" +
 	" \x01(\tR\trevertsTo\x12\x18\n" +
 	"\aproblem\x18\v \x01(\tR\aproblem\"\x17\n" +
-	"\x15GetEnforcementRequest\"a\n" +
+	"\x15GetEnforcementRequest\"\xa4\x01\n" +
 	"\x10EnforcementState\x127\n" +
 	"\bswitches\x18\x01 \x03(\v2\x1b.orchd.v1.EnforcementSwitchR\bswitches\x12\x14\n" +
-	"\x05error\x18\x02 \x01(\tR\x05error\"d\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12A\n" +
+	"\x0fsandbox_setting\x18\x03 \x01(\v2\x18.orchd.v1.SandboxSettingR\x0esandboxSetting\"\xd5\x01\n" +
+	"\x0eSandboxSetting\x12\x12\n" +
+	"\x04mode\x18\x01 \x01(\tR\x04mode\x12!\n" +
+	"\fdefault_mode\x18\x02 \x01(\tR\vdefaultMode\x12\x14\n" +
+	"\x05modes\x18\x03 \x03(\tR\x05modes\x12\x15\n" +
+	"\x06set_at\x18\x04 \x01(\x03R\x05setAt\x12\x15\n" +
+	"\x06set_by\x18\x05 \x01(\tR\x05setBy\x12\x16\n" +
+	"\x06active\x18\x06 \x01(\bR\x06active\x12\x16\n" +
+	"\x06detail\x18\a \x01(\tR\x06detail\x12\x18\n" +
+	"\aproblem\x18\b \x01(\tR\aproblem\".\n" +
+	"\x18SetSandboxSettingRequest\x12\x12\n" +
+	"\x04mode\x18\x01 \x01(\tR\x04mode\"i\n" +
+	"\x19SetSandboxSettingResponse\x122\n" +
+	"\acurrent\x18\x01 \x01(\v2\x18.orchd.v1.SandboxSettingR\acurrent\x12\x18\n" +
+	"\achanged\x18\x02 \x01(\bR\achanged\"d\n" +
 	"\x15SetEnforcementRequest\x12\x14\n" +
 	"\x05layer\x18\x01 \x01(\tR\x05layer\x12\x14\n" +
 	"\x05state\x18\x02 \x01(\tR\x05state\x12\x1f\n" +
@@ -14953,7 +15193,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x16SetEnforcementResponse\x125\n" +
 	"\acurrent\x18\x01 \x01(\v2\x1b.orchd.v1.EnforcementSwitchR\acurrent\x12\x18\n" +
 	"\achanged\x18\x02 \x01(\bR\achanged\x12\x14\n" +
-	"\x05notes\x18\x03 \x03(\tR\x05notes2\xa7.\n" +
+	"\x05notes\x18\x03 \x03(\tR\x05notes2\x85/\n" +
 	"\x05Orchd\x125\n" +
 	"\x04Ping\x12\x15.orchd.v1.PingRequest\x1a\x16.orchd.v1.PingResponse\x12;\n" +
 	"\x06Ingest\x12\x17.orchd.v1.IngestRequest\x1a\x18.orchd.v1.IngestResponse\x12;\n" +
@@ -15024,7 +15264,8 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\x10SummarizeToolLog\x12!.orchd.v1.SummarizeToolLogRequest\x1a\x18.orchd.v1.ToolLogSummary\x12M\n" +
 	"\fReplaySpaces\x12\x1d.orchd.v1.ReplaySpacesRequest\x1a\x1e.orchd.v1.ReplaySpacesResponse\x12M\n" +
 	"\x0eGetEnforcement\x12\x1f.orchd.v1.GetEnforcementRequest\x1a\x1a.orchd.v1.EnforcementState\x12S\n" +
-	"\x0eSetEnforcement\x12\x1f.orchd.v1.SetEnforcementRequest\x1a .orchd.v1.SetEnforcementResponse\x12h\n" +
+	"\x0eSetEnforcement\x12\x1f.orchd.v1.SetEnforcementRequest\x1a .orchd.v1.SetEnforcementResponse\x12\\\n" +
+	"\x11SetSandboxSetting\x12\".orchd.v1.SetSandboxSettingRequest\x1a#.orchd.v1.SetSandboxSettingResponse\x12h\n" +
 	"\x15ListRegisteredSources\x12&.orchd.v1.ListRegisteredSourcesRequest\x1a'.orchd.v1.ListRegisteredSourcesResponse\x12E\n" +
 	"\n" +
 	"SaveSource\x12\x1b.orchd.v1.SaveSourceRequest\x1a\x1a.orchd.v1.RegisteredSource\x12M\n" +
@@ -15056,7 +15297,7 @@ func file_internal_rpc_orchdv1_orchd_proto_rawDescGZIP() []byte {
 	return file_internal_rpc_orchdv1_orchd_proto_rawDescData
 }
 
-var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 197)
+var file_internal_rpc_orchdv1_orchd_proto_msgTypes = make([]protoimpl.MessageInfo, 200)
 var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*PingRequest)(nil),                     // 0: orchd.v1.PingRequest
 	(*PingResponse)(nil),                    // 1: orchd.v1.PingResponse
@@ -15250,11 +15491,14 @@ var file_internal_rpc_orchdv1_orchd_proto_goTypes = []any{
 	(*EnforcementSwitch)(nil),               // 189: orchd.v1.EnforcementSwitch
 	(*GetEnforcementRequest)(nil),           // 190: orchd.v1.GetEnforcementRequest
 	(*EnforcementState)(nil),                // 191: orchd.v1.EnforcementState
-	(*SetEnforcementRequest)(nil),           // 192: orchd.v1.SetEnforcementRequest
-	(*SetEnforcementResponse)(nil),          // 193: orchd.v1.SetEnforcementResponse
-	nil,                                     // 194: orchd.v1.SystemMetrics.TasksEntry
-	nil,                                     // 195: orchd.v1.SetConfigRequest.ValuesEntry
-	nil,                                     // 196: orchd.v1.AddSettingRequest.FieldsEntry
+	(*SandboxSetting)(nil),                  // 192: orchd.v1.SandboxSetting
+	(*SetSandboxSettingRequest)(nil),        // 193: orchd.v1.SetSandboxSettingRequest
+	(*SetSandboxSettingResponse)(nil),       // 194: orchd.v1.SetSandboxSettingResponse
+	(*SetEnforcementRequest)(nil),           // 195: orchd.v1.SetEnforcementRequest
+	(*SetEnforcementResponse)(nil),          // 196: orchd.v1.SetEnforcementResponse
+	nil,                                     // 197: orchd.v1.SystemMetrics.TasksEntry
+	nil,                                     // 198: orchd.v1.SetConfigRequest.ValuesEntry
+	nil,                                     // 199: orchd.v1.AddSettingRequest.FieldsEntry
 }
 var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	6,   // 0: orchd.v1.SearchResponse.hits:type_name -> orchd.v1.SearchHit
@@ -15268,226 +15512,231 @@ var file_internal_rpc_orchdv1_orchd_proto_depIdxs = []int32{
 	23,  // 8: orchd.v1.StatusResponse.migration:type_name -> orchd.v1.MigrationProgress
 	22,  // 9: orchd.v1.StatusResponse.spaces:type_name -> orchd.v1.SpacesStatus
 	189, // 10: orchd.v1.SpacesStatus.relaxed:type_name -> orchd.v1.EnforcementSwitch
-	29,  // 11: orchd.v1.RecommendModelResponse.route:type_name -> orchd.v1.Route
-	18,  // 12: orchd.v1.TaskEvent.tasks:type_name -> orchd.v1.Task
-	50,  // 13: orchd.v1.ListPRsResponse.prs:type_name -> orchd.v1.PullRequest
-	53,  // 14: orchd.v1.GitHubIdentity.teams:type_name -> orchd.v1.GitHubTeam
-	56,  // 15: orchd.v1.ListGitHubScopesResponse.scopes:type_name -> orchd.v1.GitHubScope
-	56,  // 16: orchd.v1.SetGitHubScopeRequest.scope:type_name -> orchd.v1.GitHubScope
-	56,  // 17: orchd.v1.SetGitHubScopeResponse.scope:type_name -> orchd.v1.GitHubScope
-	61,  // 18: orchd.v1.ListGitHubReposResponse.repos:type_name -> orchd.v1.GitHubRepo
-	66,  // 19: orchd.v1.ListGitHubItemsResponse.items:type_name -> orchd.v1.GitHubItem
-	69,  // 20: orchd.v1.TailLogsResponse.entries:type_name -> orchd.v1.LogEntry
-	72,  // 21: orchd.v1.SystemMetrics.processes:type_name -> orchd.v1.ProcessMetrics
-	73,  // 22: orchd.v1.SystemMetrics.data:type_name -> orchd.v1.DataSize
-	194, // 23: orchd.v1.SystemMetrics.tasks:type_name -> orchd.v1.SystemMetrics.TasksEntry
-	79,  // 24: orchd.v1.ListDocsResponse.owners:type_name -> orchd.v1.DocOwner
-	135, // 25: orchd.v1.ListDocsResponse.files:type_name -> orchd.v1.DocFile
-	78,  // 26: orchd.v1.ListDocsResponse.sync:type_name -> orchd.v1.DocsSyncState
-	134, // 27: orchd.v1.DocOwner.repos:type_name -> orchd.v1.DocRepo
-	79,  // 28: orchd.v1.ListDocsOwnersResponse.owners:type_name -> orchd.v1.DocOwner
-	83,  // 29: orchd.v1.ListDocsOwnerReposResponse.repos:type_name -> orchd.v1.DocsOwnerRepo
-	195, // 30: orchd.v1.SetConfigRequest.values:type_name -> orchd.v1.SetConfigRequest.ValuesEntry
-	91,  // 31: orchd.v1.ConfigState.fields:type_name -> orchd.v1.ConfigField
-	95,  // 32: orchd.v1.SpacesDraft.problems:type_name -> orchd.v1.SpacesProblem
-	98,  // 33: orchd.v1.SpacesDiff.changes:type_name -> orchd.v1.SpacesChange
-	95,  // 34: orchd.v1.SpacesDiff.problems:type_name -> orchd.v1.SpacesProblem
-	103, // 35: orchd.v1.PlacementExplanation.roots:type_name -> orchd.v1.PlacementRoot
-	104, // 36: orchd.v1.PlacementExplanation.remote:type_name -> orchd.v1.PlacementRemote
-	22,  // 37: orchd.v1.ListSpacesResponse.status:type_name -> orchd.v1.SpacesStatus
-	107, // 38: orchd.v1.ListSpacesResponse.spaces:type_name -> orchd.v1.SpaceInfo
-	110, // 39: orchd.v1.ScanSpacesResponse.checkouts:type_name -> orchd.v1.ScannedCheckout
-	111, // 40: orchd.v1.ScanSpacesResponse.accounts:type_name -> orchd.v1.ScannedAccount
-	118, // 41: orchd.v1.ListSessionsResponse.sessions:type_name -> orchd.v1.SessionInfo
-	123, // 42: orchd.v1.VerifyToolLogResponse.problems:type_name -> orchd.v1.ToolLogProblem
-	128, // 43: orchd.v1.ReplaySpacesResponse.rows:type_name -> orchd.v1.ReplayedEvent
-	126, // 44: orchd.v1.ListToolEventsResponse.events:type_name -> orchd.v1.ToolEvent
-	132, // 45: orchd.v1.ToolLogSummary.spaces:type_name -> orchd.v1.SpaceToolActivity
-	140, // 46: orchd.v1.ListRegisteredSourcesResponse.sources:type_name -> orchd.v1.RegisteredSource
-	140, // 47: orchd.v1.SaveSourceRequest.source:type_name -> orchd.v1.RegisteredSource
-	149, // 48: orchd.v1.SafetyNetState.legacy:type_name -> orchd.v1.SafetyNetInstall
-	150, // 49: orchd.v1.SafetyNetState.rules:type_name -> orchd.v1.SafetyNetRules
-	153, // 50: orchd.v1.SafetyNetState.action:type_name -> orchd.v1.SafetyNetAction
-	151, // 51: orchd.v1.SafetyNetRules.rulebooks:type_name -> orchd.v1.SafetyNetRulebook
-	152, // 52: orchd.v1.SafetyNetRulebook.rules:type_name -> orchd.v1.SafetyNetRule
-	156, // 53: orchd.v1.ListSettingsResponse.providers:type_name -> orchd.v1.SettingsProvider
-	159, // 54: orchd.v1.ListSettingsResponse.items:type_name -> orchd.v1.SettingItem
-	157, // 55: orchd.v1.SettingsProvider.kinds:type_name -> orchd.v1.SettingKind
-	158, // 56: orchd.v1.SettingKind.fields:type_name -> orchd.v1.SettingField
-	196, // 57: orchd.v1.AddSettingRequest.fields:type_name -> orchd.v1.AddSettingRequest.FieldsEntry
-	166, // 58: orchd.v1.ListPRReviewsResponse.reviews:type_name -> orchd.v1.PRReview
-	173, // 59: orchd.v1.PRDetail.reviews:type_name -> orchd.v1.PRReviewerState
-	174, // 60: orchd.v1.PRDetail.checks:type_name -> orchd.v1.PRCheck
-	175, // 61: orchd.v1.PRDetail.files:type_name -> orchd.v1.PRFile
-	177, // 62: orchd.v1.TaskActivity.steps:type_name -> orchd.v1.TaskActivityStep
-	178, // 63: orchd.v1.TaskActivity.tools:type_name -> orchd.v1.TaskActivityTool
-	179, // 64: orchd.v1.TaskActivity.files_edited:type_name -> orchd.v1.TaskActivityFile
-	183, // 65: orchd.v1.ListPRLandingsResponse.decisions:type_name -> orchd.v1.PRLandingDecision
-	187, // 66: orchd.v1.PRLanding.commits:type_name -> orchd.v1.PRLandingCommit
-	175, // 67: orchd.v1.PRLanding.files:type_name -> orchd.v1.PRFile
-	189, // 68: orchd.v1.EnforcementState.switches:type_name -> orchd.v1.EnforcementSwitch
-	189, // 69: orchd.v1.SetEnforcementResponse.current:type_name -> orchd.v1.EnforcementSwitch
-	0,   // 70: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
-	2,   // 71: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
-	4,   // 72: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
-	7,   // 73: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
-	10,  // 74: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
-	12,  // 75: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
-	14,  // 76: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
-	16,  // 77: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
-	20,  // 78: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
-	25,  // 79: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
-	27,  // 80: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
-	30,  // 81: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
-	32,  // 82: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
-	34,  // 83: orchd.v1.Orchd.RetryTask:input_type -> orchd.v1.RetryTaskRequest
-	36,  // 84: orchd.v1.Orchd.CancelTask:input_type -> orchd.v1.CancelTaskRequest
-	38,  // 85: orchd.v1.Orchd.WatchTasks:input_type -> orchd.v1.WatchTasksRequest
-	40,  // 86: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
-	42,  // 87: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
-	46,  // 88: orchd.v1.Orchd.ReindexKeywords:input_type -> orchd.v1.ReindexKeywordsRequest
-	44,  // 89: orchd.v1.Orchd.BackfillSessions:input_type -> orchd.v1.BackfillSessionsRequest
-	48,  // 90: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
-	51,  // 91: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
-	54,  // 92: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
-	57,  // 93: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
-	59,  // 94: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
-	62,  // 95: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
-	64,  // 96: orchd.v1.Orchd.RequestGitHubSweep:input_type -> orchd.v1.RequestGitHubSweepRequest
-	164, // 97: orchd.v1.Orchd.ListPRReviews:input_type -> orchd.v1.ListPRReviewsRequest
-	167, // 98: orchd.v1.Orchd.WatchPRReview:input_type -> orchd.v1.WatchPRReviewRequest
-	168, // 99: orchd.v1.Orchd.SetPRReviewUpdateInPlace:input_type -> orchd.v1.SetPRReviewUpdateInPlaceRequest
-	169, // 100: orchd.v1.Orchd.StopPRReview:input_type -> orchd.v1.StopPRReviewRequest
-	171, // 101: orchd.v1.Orchd.GetPRDetail:input_type -> orchd.v1.GetPRDetailRequest
-	67,  // 102: orchd.v1.Orchd.TailLogs:input_type -> orchd.v1.TailLogsRequest
-	70,  // 103: orchd.v1.Orchd.GetSystemMetrics:input_type -> orchd.v1.GetSystemMetricsRequest
-	74,  // 104: orchd.v1.Orchd.ListDocs:input_type -> orchd.v1.ListDocsRequest
-	136, // 105: orchd.v1.Orchd.GetDocument:input_type -> orchd.v1.GetDocumentRequest
-	76,  // 106: orchd.v1.Orchd.SyncDocs:input_type -> orchd.v1.SyncDocsRequest
-	77,  // 107: orchd.v1.Orchd.GetDocsSync:input_type -> orchd.v1.GetDocsSyncRequest
-	80,  // 108: orchd.v1.Orchd.ListDocsOwners:input_type -> orchd.v1.ListDocsOwnersRequest
-	82,  // 109: orchd.v1.Orchd.ListDocsOwnerRepos:input_type -> orchd.v1.ListDocsOwnerReposRequest
-	85,  // 110: orchd.v1.Orchd.SaveDocsOwner:input_type -> orchd.v1.SaveDocsOwnerRequest
-	86,  // 111: orchd.v1.Orchd.RemoveDocsOwner:input_type -> orchd.v1.RemoveDocsOwnerRequest
-	87,  // 112: orchd.v1.Orchd.PurgeDocs:input_type -> orchd.v1.PurgeDocsRequest
-	89,  // 113: orchd.v1.Orchd.GetConfig:input_type -> orchd.v1.GetConfigRequest
-	90,  // 114: orchd.v1.Orchd.SetConfig:input_type -> orchd.v1.SetConfigRequest
-	93,  // 115: orchd.v1.Orchd.RemoveLegacyConfig:input_type -> orchd.v1.RemoveLegacyConfigRequest
-	94,  // 116: orchd.v1.Orchd.SetSpacesDraft:input_type -> orchd.v1.SetSpacesDraftRequest
-	97,  // 117: orchd.v1.Orchd.DiffSpaces:input_type -> orchd.v1.DiffSpacesRequest
-	100, // 118: orchd.v1.Orchd.ApplySpaces:input_type -> orchd.v1.ApplySpacesRequest
-	102, // 119: orchd.v1.Orchd.ExplainPlacement:input_type -> orchd.v1.ExplainPlacementRequest
-	106, // 120: orchd.v1.Orchd.ListSpaces:input_type -> orchd.v1.ListSpacesRequest
-	109, // 121: orchd.v1.Orchd.ScanSpaces:input_type -> orchd.v1.ScanSpacesRequest
-	113, // 122: orchd.v1.Orchd.PinSession:input_type -> orchd.v1.PinSessionRequest
-	115, // 123: orchd.v1.Orchd.EndSession:input_type -> orchd.v1.EndSessionRequest
-	117, // 124: orchd.v1.Orchd.ListSessions:input_type -> orchd.v1.ListSessionsRequest
-	120, // 125: orchd.v1.Orchd.RecordToolEvent:input_type -> orchd.v1.RecordToolEventRequest
-	122, // 126: orchd.v1.Orchd.VerifyToolLog:input_type -> orchd.v1.VerifyToolLogRequest
-	125, // 127: orchd.v1.Orchd.ListToolEvents:input_type -> orchd.v1.ListToolEventsRequest
-	131, // 128: orchd.v1.Orchd.SummarizeToolLog:input_type -> orchd.v1.SummarizeToolLogRequest
-	127, // 129: orchd.v1.Orchd.ReplaySpaces:input_type -> orchd.v1.ReplaySpacesRequest
-	190, // 130: orchd.v1.Orchd.GetEnforcement:input_type -> orchd.v1.GetEnforcementRequest
-	192, // 131: orchd.v1.Orchd.SetEnforcement:input_type -> orchd.v1.SetEnforcementRequest
-	138, // 132: orchd.v1.Orchd.ListRegisteredSources:input_type -> orchd.v1.ListRegisteredSourcesRequest
-	141, // 133: orchd.v1.Orchd.SaveSource:input_type -> orchd.v1.SaveSourceRequest
-	142, // 134: orchd.v1.Orchd.RemoveSource:input_type -> orchd.v1.RemoveSourceRequest
-	144, // 135: orchd.v1.Orchd.RefreshSource:input_type -> orchd.v1.RefreshSourceRequest
-	146, // 136: orchd.v1.Orchd.GetSafetyNet:input_type -> orchd.v1.GetSafetyNetRequest
-	147, // 137: orchd.v1.Orchd.InstallSafetyNet:input_type -> orchd.v1.InstallSafetyNetRequest
-	154, // 138: orchd.v1.Orchd.ListSettings:input_type -> orchd.v1.ListSettingsRequest
-	160, // 139: orchd.v1.Orchd.SetSettingEnabled:input_type -> orchd.v1.SetSettingEnabledRequest
-	161, // 140: orchd.v1.Orchd.AddSetting:input_type -> orchd.v1.AddSettingRequest
-	162, // 141: orchd.v1.Orchd.RemoveSetting:input_type -> orchd.v1.RemoveSettingRequest
-	176, // 142: orchd.v1.Orchd.GetTaskActivity:input_type -> orchd.v1.GetTaskActivityRequest
-	181, // 143: orchd.v1.Orchd.GetPRLanding:input_type -> orchd.v1.PRLandingRequest
-	182, // 144: orchd.v1.Orchd.ListPRLandings:input_type -> orchd.v1.ListPRLandingsRequest
-	185, // 145: orchd.v1.Orchd.LandPR:input_type -> orchd.v1.LandPRRequest
-	181, // 146: orchd.v1.Orchd.UndoPRLanding:input_type -> orchd.v1.PRLandingRequest
-	186, // 147: orchd.v1.Orchd.DiscardPRLanding:input_type -> orchd.v1.DiscardPRLandingRequest
-	1,   // 148: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
-	3,   // 149: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
-	5,   // 150: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
-	8,   // 151: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
-	11,  // 152: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
-	13,  // 153: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
-	15,  // 154: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
-	17,  // 155: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
-	21,  // 156: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
-	26,  // 157: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
-	28,  // 158: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
-	31,  // 159: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
-	33,  // 160: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
-	35,  // 161: orchd.v1.Orchd.RetryTask:output_type -> orchd.v1.RetryTaskResponse
-	37,  // 162: orchd.v1.Orchd.CancelTask:output_type -> orchd.v1.CancelTaskResponse
-	39,  // 163: orchd.v1.Orchd.WatchTasks:output_type -> orchd.v1.TaskEvent
-	41,  // 164: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
-	43,  // 165: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
-	47,  // 166: orchd.v1.Orchd.ReindexKeywords:output_type -> orchd.v1.ReindexKeywordsResponse
-	45,  // 167: orchd.v1.Orchd.BackfillSessions:output_type -> orchd.v1.BackfillSessionsResponse
-	49,  // 168: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
-	52,  // 169: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
-	55,  // 170: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
-	58,  // 171: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
-	60,  // 172: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
-	63,  // 173: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
-	65,  // 174: orchd.v1.Orchd.RequestGitHubSweep:output_type -> orchd.v1.RequestGitHubSweepResponse
-	165, // 175: orchd.v1.Orchd.ListPRReviews:output_type -> orchd.v1.ListPRReviewsResponse
-	166, // 176: orchd.v1.Orchd.WatchPRReview:output_type -> orchd.v1.PRReview
-	166, // 177: orchd.v1.Orchd.SetPRReviewUpdateInPlace:output_type -> orchd.v1.PRReview
-	170, // 178: orchd.v1.Orchd.StopPRReview:output_type -> orchd.v1.StopPRReviewResponse
-	172, // 179: orchd.v1.Orchd.GetPRDetail:output_type -> orchd.v1.PRDetail
-	68,  // 180: orchd.v1.Orchd.TailLogs:output_type -> orchd.v1.TailLogsResponse
-	71,  // 181: orchd.v1.Orchd.GetSystemMetrics:output_type -> orchd.v1.SystemMetrics
-	75,  // 182: orchd.v1.Orchd.ListDocs:output_type -> orchd.v1.ListDocsResponse
-	137, // 183: orchd.v1.Orchd.GetDocument:output_type -> orchd.v1.Document
-	78,  // 184: orchd.v1.Orchd.SyncDocs:output_type -> orchd.v1.DocsSyncState
-	78,  // 185: orchd.v1.Orchd.GetDocsSync:output_type -> orchd.v1.DocsSyncState
-	81,  // 186: orchd.v1.Orchd.ListDocsOwners:output_type -> orchd.v1.ListDocsOwnersResponse
-	84,  // 187: orchd.v1.Orchd.ListDocsOwnerRepos:output_type -> orchd.v1.ListDocsOwnerReposResponse
-	79,  // 188: orchd.v1.Orchd.SaveDocsOwner:output_type -> orchd.v1.DocOwner
-	88,  // 189: orchd.v1.Orchd.RemoveDocsOwner:output_type -> orchd.v1.PurgeDocsResponse
-	88,  // 190: orchd.v1.Orchd.PurgeDocs:output_type -> orchd.v1.PurgeDocsResponse
-	92,  // 191: orchd.v1.Orchd.GetConfig:output_type -> orchd.v1.ConfigState
-	92,  // 192: orchd.v1.Orchd.SetConfig:output_type -> orchd.v1.ConfigState
-	92,  // 193: orchd.v1.Orchd.RemoveLegacyConfig:output_type -> orchd.v1.ConfigState
-	96,  // 194: orchd.v1.Orchd.SetSpacesDraft:output_type -> orchd.v1.SpacesDraft
-	99,  // 195: orchd.v1.Orchd.DiffSpaces:output_type -> orchd.v1.SpacesDiff
-	101, // 196: orchd.v1.Orchd.ApplySpaces:output_type -> orchd.v1.ApplySpacesResponse
-	105, // 197: orchd.v1.Orchd.ExplainPlacement:output_type -> orchd.v1.PlacementExplanation
-	108, // 198: orchd.v1.Orchd.ListSpaces:output_type -> orchd.v1.ListSpacesResponse
-	112, // 199: orchd.v1.Orchd.ScanSpaces:output_type -> orchd.v1.ScanSpacesResponse
-	114, // 200: orchd.v1.Orchd.PinSession:output_type -> orchd.v1.SessionPin
-	116, // 201: orchd.v1.Orchd.EndSession:output_type -> orchd.v1.EndSessionResponse
-	119, // 202: orchd.v1.Orchd.ListSessions:output_type -> orchd.v1.ListSessionsResponse
-	121, // 203: orchd.v1.Orchd.RecordToolEvent:output_type -> orchd.v1.RecordToolEventResponse
-	124, // 204: orchd.v1.Orchd.VerifyToolLog:output_type -> orchd.v1.VerifyToolLogResponse
-	130, // 205: orchd.v1.Orchd.ListToolEvents:output_type -> orchd.v1.ListToolEventsResponse
-	133, // 206: orchd.v1.Orchd.SummarizeToolLog:output_type -> orchd.v1.ToolLogSummary
-	129, // 207: orchd.v1.Orchd.ReplaySpaces:output_type -> orchd.v1.ReplaySpacesResponse
-	191, // 208: orchd.v1.Orchd.GetEnforcement:output_type -> orchd.v1.EnforcementState
-	193, // 209: orchd.v1.Orchd.SetEnforcement:output_type -> orchd.v1.SetEnforcementResponse
-	139, // 210: orchd.v1.Orchd.ListRegisteredSources:output_type -> orchd.v1.ListRegisteredSourcesResponse
-	140, // 211: orchd.v1.Orchd.SaveSource:output_type -> orchd.v1.RegisteredSource
-	143, // 212: orchd.v1.Orchd.RemoveSource:output_type -> orchd.v1.RemoveSourceResponse
-	145, // 213: orchd.v1.Orchd.RefreshSource:output_type -> orchd.v1.RefreshSourceResponse
-	148, // 214: orchd.v1.Orchd.GetSafetyNet:output_type -> orchd.v1.SafetyNetState
-	148, // 215: orchd.v1.Orchd.InstallSafetyNet:output_type -> orchd.v1.SafetyNetState
-	155, // 216: orchd.v1.Orchd.ListSettings:output_type -> orchd.v1.ListSettingsResponse
-	159, // 217: orchd.v1.Orchd.SetSettingEnabled:output_type -> orchd.v1.SettingItem
-	159, // 218: orchd.v1.Orchd.AddSetting:output_type -> orchd.v1.SettingItem
-	163, // 219: orchd.v1.Orchd.RemoveSetting:output_type -> orchd.v1.RemoveSettingResponse
-	180, // 220: orchd.v1.Orchd.GetTaskActivity:output_type -> orchd.v1.TaskActivity
-	188, // 221: orchd.v1.Orchd.GetPRLanding:output_type -> orchd.v1.PRLanding
-	184, // 222: orchd.v1.Orchd.ListPRLandings:output_type -> orchd.v1.ListPRLandingsResponse
-	188, // 223: orchd.v1.Orchd.LandPR:output_type -> orchd.v1.PRLanding
-	188, // 224: orchd.v1.Orchd.UndoPRLanding:output_type -> orchd.v1.PRLanding
-	188, // 225: orchd.v1.Orchd.DiscardPRLanding:output_type -> orchd.v1.PRLanding
-	148, // [148:226] is the sub-list for method output_type
-	70,  // [70:148] is the sub-list for method input_type
-	70,  // [70:70] is the sub-list for extension type_name
-	70,  // [70:70] is the sub-list for extension extendee
-	0,   // [0:70] is the sub-list for field type_name
+	192, // 11: orchd.v1.SpacesStatus.sandbox:type_name -> orchd.v1.SandboxSetting
+	29,  // 12: orchd.v1.RecommendModelResponse.route:type_name -> orchd.v1.Route
+	18,  // 13: orchd.v1.TaskEvent.tasks:type_name -> orchd.v1.Task
+	50,  // 14: orchd.v1.ListPRsResponse.prs:type_name -> orchd.v1.PullRequest
+	53,  // 15: orchd.v1.GitHubIdentity.teams:type_name -> orchd.v1.GitHubTeam
+	56,  // 16: orchd.v1.ListGitHubScopesResponse.scopes:type_name -> orchd.v1.GitHubScope
+	56,  // 17: orchd.v1.SetGitHubScopeRequest.scope:type_name -> orchd.v1.GitHubScope
+	56,  // 18: orchd.v1.SetGitHubScopeResponse.scope:type_name -> orchd.v1.GitHubScope
+	61,  // 19: orchd.v1.ListGitHubReposResponse.repos:type_name -> orchd.v1.GitHubRepo
+	66,  // 20: orchd.v1.ListGitHubItemsResponse.items:type_name -> orchd.v1.GitHubItem
+	69,  // 21: orchd.v1.TailLogsResponse.entries:type_name -> orchd.v1.LogEntry
+	72,  // 22: orchd.v1.SystemMetrics.processes:type_name -> orchd.v1.ProcessMetrics
+	73,  // 23: orchd.v1.SystemMetrics.data:type_name -> orchd.v1.DataSize
+	197, // 24: orchd.v1.SystemMetrics.tasks:type_name -> orchd.v1.SystemMetrics.TasksEntry
+	79,  // 25: orchd.v1.ListDocsResponse.owners:type_name -> orchd.v1.DocOwner
+	135, // 26: orchd.v1.ListDocsResponse.files:type_name -> orchd.v1.DocFile
+	78,  // 27: orchd.v1.ListDocsResponse.sync:type_name -> orchd.v1.DocsSyncState
+	134, // 28: orchd.v1.DocOwner.repos:type_name -> orchd.v1.DocRepo
+	79,  // 29: orchd.v1.ListDocsOwnersResponse.owners:type_name -> orchd.v1.DocOwner
+	83,  // 30: orchd.v1.ListDocsOwnerReposResponse.repos:type_name -> orchd.v1.DocsOwnerRepo
+	198, // 31: orchd.v1.SetConfigRequest.values:type_name -> orchd.v1.SetConfigRequest.ValuesEntry
+	91,  // 32: orchd.v1.ConfigState.fields:type_name -> orchd.v1.ConfigField
+	95,  // 33: orchd.v1.SpacesDraft.problems:type_name -> orchd.v1.SpacesProblem
+	98,  // 34: orchd.v1.SpacesDiff.changes:type_name -> orchd.v1.SpacesChange
+	95,  // 35: orchd.v1.SpacesDiff.problems:type_name -> orchd.v1.SpacesProblem
+	103, // 36: orchd.v1.PlacementExplanation.roots:type_name -> orchd.v1.PlacementRoot
+	104, // 37: orchd.v1.PlacementExplanation.remote:type_name -> orchd.v1.PlacementRemote
+	22,  // 38: orchd.v1.ListSpacesResponse.status:type_name -> orchd.v1.SpacesStatus
+	107, // 39: orchd.v1.ListSpacesResponse.spaces:type_name -> orchd.v1.SpaceInfo
+	110, // 40: orchd.v1.ScanSpacesResponse.checkouts:type_name -> orchd.v1.ScannedCheckout
+	111, // 41: orchd.v1.ScanSpacesResponse.accounts:type_name -> orchd.v1.ScannedAccount
+	118, // 42: orchd.v1.ListSessionsResponse.sessions:type_name -> orchd.v1.SessionInfo
+	123, // 43: orchd.v1.VerifyToolLogResponse.problems:type_name -> orchd.v1.ToolLogProblem
+	128, // 44: orchd.v1.ReplaySpacesResponse.rows:type_name -> orchd.v1.ReplayedEvent
+	126, // 45: orchd.v1.ListToolEventsResponse.events:type_name -> orchd.v1.ToolEvent
+	132, // 46: orchd.v1.ToolLogSummary.spaces:type_name -> orchd.v1.SpaceToolActivity
+	140, // 47: orchd.v1.ListRegisteredSourcesResponse.sources:type_name -> orchd.v1.RegisteredSource
+	140, // 48: orchd.v1.SaveSourceRequest.source:type_name -> orchd.v1.RegisteredSource
+	149, // 49: orchd.v1.SafetyNetState.legacy:type_name -> orchd.v1.SafetyNetInstall
+	150, // 50: orchd.v1.SafetyNetState.rules:type_name -> orchd.v1.SafetyNetRules
+	153, // 51: orchd.v1.SafetyNetState.action:type_name -> orchd.v1.SafetyNetAction
+	151, // 52: orchd.v1.SafetyNetRules.rulebooks:type_name -> orchd.v1.SafetyNetRulebook
+	152, // 53: orchd.v1.SafetyNetRulebook.rules:type_name -> orchd.v1.SafetyNetRule
+	156, // 54: orchd.v1.ListSettingsResponse.providers:type_name -> orchd.v1.SettingsProvider
+	159, // 55: orchd.v1.ListSettingsResponse.items:type_name -> orchd.v1.SettingItem
+	157, // 56: orchd.v1.SettingsProvider.kinds:type_name -> orchd.v1.SettingKind
+	158, // 57: orchd.v1.SettingKind.fields:type_name -> orchd.v1.SettingField
+	199, // 58: orchd.v1.AddSettingRequest.fields:type_name -> orchd.v1.AddSettingRequest.FieldsEntry
+	166, // 59: orchd.v1.ListPRReviewsResponse.reviews:type_name -> orchd.v1.PRReview
+	173, // 60: orchd.v1.PRDetail.reviews:type_name -> orchd.v1.PRReviewerState
+	174, // 61: orchd.v1.PRDetail.checks:type_name -> orchd.v1.PRCheck
+	175, // 62: orchd.v1.PRDetail.files:type_name -> orchd.v1.PRFile
+	177, // 63: orchd.v1.TaskActivity.steps:type_name -> orchd.v1.TaskActivityStep
+	178, // 64: orchd.v1.TaskActivity.tools:type_name -> orchd.v1.TaskActivityTool
+	179, // 65: orchd.v1.TaskActivity.files_edited:type_name -> orchd.v1.TaskActivityFile
+	183, // 66: orchd.v1.ListPRLandingsResponse.decisions:type_name -> orchd.v1.PRLandingDecision
+	187, // 67: orchd.v1.PRLanding.commits:type_name -> orchd.v1.PRLandingCommit
+	175, // 68: orchd.v1.PRLanding.files:type_name -> orchd.v1.PRFile
+	189, // 69: orchd.v1.EnforcementState.switches:type_name -> orchd.v1.EnforcementSwitch
+	192, // 70: orchd.v1.EnforcementState.sandbox_setting:type_name -> orchd.v1.SandboxSetting
+	192, // 71: orchd.v1.SetSandboxSettingResponse.current:type_name -> orchd.v1.SandboxSetting
+	189, // 72: orchd.v1.SetEnforcementResponse.current:type_name -> orchd.v1.EnforcementSwitch
+	0,   // 73: orchd.v1.Orchd.Ping:input_type -> orchd.v1.PingRequest
+	2,   // 74: orchd.v1.Orchd.Ingest:input_type -> orchd.v1.IngestRequest
+	4,   // 75: orchd.v1.Orchd.Search:input_type -> orchd.v1.SearchRequest
+	7,   // 76: orchd.v1.Orchd.ListSources:input_type -> orchd.v1.ListSourcesRequest
+	10,  // 77: orchd.v1.Orchd.DeleteSource:input_type -> orchd.v1.DeleteSourceRequest
+	12,  // 78: orchd.v1.Orchd.Dispatch:input_type -> orchd.v1.DispatchRequest
+	14,  // 79: orchd.v1.Orchd.ListTasks:input_type -> orchd.v1.ListTasksRequest
+	16,  // 80: orchd.v1.Orchd.GetTask:input_type -> orchd.v1.GetTaskRequest
+	20,  // 81: orchd.v1.Orchd.Status:input_type -> orchd.v1.StatusRequest
+	25,  // 82: orchd.v1.Orchd.Restart:input_type -> orchd.v1.RestartRequest
+	27,  // 83: orchd.v1.Orchd.SummarizeSession:input_type -> orchd.v1.SummarizeSessionRequest
+	30,  // 84: orchd.v1.Orchd.RecommendModel:input_type -> orchd.v1.RecommendModelRequest
+	32,  // 85: orchd.v1.Orchd.RateTask:input_type -> orchd.v1.RateTaskRequest
+	34,  // 86: orchd.v1.Orchd.RetryTask:input_type -> orchd.v1.RetryTaskRequest
+	36,  // 87: orchd.v1.Orchd.CancelTask:input_type -> orchd.v1.CancelTaskRequest
+	38,  // 88: orchd.v1.Orchd.WatchTasks:input_type -> orchd.v1.WatchTasksRequest
+	40,  // 89: orchd.v1.Orchd.MigrateHybrid:input_type -> orchd.v1.MigrateHybridRequest
+	42,  // 90: orchd.v1.Orchd.DropBackup:input_type -> orchd.v1.DropBackupRequest
+	46,  // 91: orchd.v1.Orchd.ReindexKeywords:input_type -> orchd.v1.ReindexKeywordsRequest
+	44,  // 92: orchd.v1.Orchd.BackfillSessions:input_type -> orchd.v1.BackfillSessionsRequest
+	48,  // 93: orchd.v1.Orchd.ListPRs:input_type -> orchd.v1.ListPRsRequest
+	51,  // 94: orchd.v1.Orchd.GetGitHubIdentity:input_type -> orchd.v1.GetGitHubIdentityRequest
+	54,  // 95: orchd.v1.Orchd.ListGitHubScopes:input_type -> orchd.v1.ListGitHubScopesRequest
+	57,  // 96: orchd.v1.Orchd.SetGitHubScope:input_type -> orchd.v1.SetGitHubScopeRequest
+	59,  // 97: orchd.v1.Orchd.ListGitHubRepos:input_type -> orchd.v1.ListGitHubReposRequest
+	62,  // 98: orchd.v1.Orchd.ListGitHubItems:input_type -> orchd.v1.ListGitHubItemsRequest
+	64,  // 99: orchd.v1.Orchd.RequestGitHubSweep:input_type -> orchd.v1.RequestGitHubSweepRequest
+	164, // 100: orchd.v1.Orchd.ListPRReviews:input_type -> orchd.v1.ListPRReviewsRequest
+	167, // 101: orchd.v1.Orchd.WatchPRReview:input_type -> orchd.v1.WatchPRReviewRequest
+	168, // 102: orchd.v1.Orchd.SetPRReviewUpdateInPlace:input_type -> orchd.v1.SetPRReviewUpdateInPlaceRequest
+	169, // 103: orchd.v1.Orchd.StopPRReview:input_type -> orchd.v1.StopPRReviewRequest
+	171, // 104: orchd.v1.Orchd.GetPRDetail:input_type -> orchd.v1.GetPRDetailRequest
+	67,  // 105: orchd.v1.Orchd.TailLogs:input_type -> orchd.v1.TailLogsRequest
+	70,  // 106: orchd.v1.Orchd.GetSystemMetrics:input_type -> orchd.v1.GetSystemMetricsRequest
+	74,  // 107: orchd.v1.Orchd.ListDocs:input_type -> orchd.v1.ListDocsRequest
+	136, // 108: orchd.v1.Orchd.GetDocument:input_type -> orchd.v1.GetDocumentRequest
+	76,  // 109: orchd.v1.Orchd.SyncDocs:input_type -> orchd.v1.SyncDocsRequest
+	77,  // 110: orchd.v1.Orchd.GetDocsSync:input_type -> orchd.v1.GetDocsSyncRequest
+	80,  // 111: orchd.v1.Orchd.ListDocsOwners:input_type -> orchd.v1.ListDocsOwnersRequest
+	82,  // 112: orchd.v1.Orchd.ListDocsOwnerRepos:input_type -> orchd.v1.ListDocsOwnerReposRequest
+	85,  // 113: orchd.v1.Orchd.SaveDocsOwner:input_type -> orchd.v1.SaveDocsOwnerRequest
+	86,  // 114: orchd.v1.Orchd.RemoveDocsOwner:input_type -> orchd.v1.RemoveDocsOwnerRequest
+	87,  // 115: orchd.v1.Orchd.PurgeDocs:input_type -> orchd.v1.PurgeDocsRequest
+	89,  // 116: orchd.v1.Orchd.GetConfig:input_type -> orchd.v1.GetConfigRequest
+	90,  // 117: orchd.v1.Orchd.SetConfig:input_type -> orchd.v1.SetConfigRequest
+	93,  // 118: orchd.v1.Orchd.RemoveLegacyConfig:input_type -> orchd.v1.RemoveLegacyConfigRequest
+	94,  // 119: orchd.v1.Orchd.SetSpacesDraft:input_type -> orchd.v1.SetSpacesDraftRequest
+	97,  // 120: orchd.v1.Orchd.DiffSpaces:input_type -> orchd.v1.DiffSpacesRequest
+	100, // 121: orchd.v1.Orchd.ApplySpaces:input_type -> orchd.v1.ApplySpacesRequest
+	102, // 122: orchd.v1.Orchd.ExplainPlacement:input_type -> orchd.v1.ExplainPlacementRequest
+	106, // 123: orchd.v1.Orchd.ListSpaces:input_type -> orchd.v1.ListSpacesRequest
+	109, // 124: orchd.v1.Orchd.ScanSpaces:input_type -> orchd.v1.ScanSpacesRequest
+	113, // 125: orchd.v1.Orchd.PinSession:input_type -> orchd.v1.PinSessionRequest
+	115, // 126: orchd.v1.Orchd.EndSession:input_type -> orchd.v1.EndSessionRequest
+	117, // 127: orchd.v1.Orchd.ListSessions:input_type -> orchd.v1.ListSessionsRequest
+	120, // 128: orchd.v1.Orchd.RecordToolEvent:input_type -> orchd.v1.RecordToolEventRequest
+	122, // 129: orchd.v1.Orchd.VerifyToolLog:input_type -> orchd.v1.VerifyToolLogRequest
+	125, // 130: orchd.v1.Orchd.ListToolEvents:input_type -> orchd.v1.ListToolEventsRequest
+	131, // 131: orchd.v1.Orchd.SummarizeToolLog:input_type -> orchd.v1.SummarizeToolLogRequest
+	127, // 132: orchd.v1.Orchd.ReplaySpaces:input_type -> orchd.v1.ReplaySpacesRequest
+	190, // 133: orchd.v1.Orchd.GetEnforcement:input_type -> orchd.v1.GetEnforcementRequest
+	195, // 134: orchd.v1.Orchd.SetEnforcement:input_type -> orchd.v1.SetEnforcementRequest
+	193, // 135: orchd.v1.Orchd.SetSandboxSetting:input_type -> orchd.v1.SetSandboxSettingRequest
+	138, // 136: orchd.v1.Orchd.ListRegisteredSources:input_type -> orchd.v1.ListRegisteredSourcesRequest
+	141, // 137: orchd.v1.Orchd.SaveSource:input_type -> orchd.v1.SaveSourceRequest
+	142, // 138: orchd.v1.Orchd.RemoveSource:input_type -> orchd.v1.RemoveSourceRequest
+	144, // 139: orchd.v1.Orchd.RefreshSource:input_type -> orchd.v1.RefreshSourceRequest
+	146, // 140: orchd.v1.Orchd.GetSafetyNet:input_type -> orchd.v1.GetSafetyNetRequest
+	147, // 141: orchd.v1.Orchd.InstallSafetyNet:input_type -> orchd.v1.InstallSafetyNetRequest
+	154, // 142: orchd.v1.Orchd.ListSettings:input_type -> orchd.v1.ListSettingsRequest
+	160, // 143: orchd.v1.Orchd.SetSettingEnabled:input_type -> orchd.v1.SetSettingEnabledRequest
+	161, // 144: orchd.v1.Orchd.AddSetting:input_type -> orchd.v1.AddSettingRequest
+	162, // 145: orchd.v1.Orchd.RemoveSetting:input_type -> orchd.v1.RemoveSettingRequest
+	176, // 146: orchd.v1.Orchd.GetTaskActivity:input_type -> orchd.v1.GetTaskActivityRequest
+	181, // 147: orchd.v1.Orchd.GetPRLanding:input_type -> orchd.v1.PRLandingRequest
+	182, // 148: orchd.v1.Orchd.ListPRLandings:input_type -> orchd.v1.ListPRLandingsRequest
+	185, // 149: orchd.v1.Orchd.LandPR:input_type -> orchd.v1.LandPRRequest
+	181, // 150: orchd.v1.Orchd.UndoPRLanding:input_type -> orchd.v1.PRLandingRequest
+	186, // 151: orchd.v1.Orchd.DiscardPRLanding:input_type -> orchd.v1.DiscardPRLandingRequest
+	1,   // 152: orchd.v1.Orchd.Ping:output_type -> orchd.v1.PingResponse
+	3,   // 153: orchd.v1.Orchd.Ingest:output_type -> orchd.v1.IngestResponse
+	5,   // 154: orchd.v1.Orchd.Search:output_type -> orchd.v1.SearchResponse
+	8,   // 155: orchd.v1.Orchd.ListSources:output_type -> orchd.v1.ListSourcesResponse
+	11,  // 156: orchd.v1.Orchd.DeleteSource:output_type -> orchd.v1.DeleteSourceResponse
+	13,  // 157: orchd.v1.Orchd.Dispatch:output_type -> orchd.v1.DispatchResponse
+	15,  // 158: orchd.v1.Orchd.ListTasks:output_type -> orchd.v1.ListTasksResponse
+	17,  // 159: orchd.v1.Orchd.GetTask:output_type -> orchd.v1.GetTaskResponse
+	21,  // 160: orchd.v1.Orchd.Status:output_type -> orchd.v1.StatusResponse
+	26,  // 161: orchd.v1.Orchd.Restart:output_type -> orchd.v1.RestartResponse
+	28,  // 162: orchd.v1.Orchd.SummarizeSession:output_type -> orchd.v1.SummarizeSessionResponse
+	31,  // 163: orchd.v1.Orchd.RecommendModel:output_type -> orchd.v1.RecommendModelResponse
+	33,  // 164: orchd.v1.Orchd.RateTask:output_type -> orchd.v1.RateTaskResponse
+	35,  // 165: orchd.v1.Orchd.RetryTask:output_type -> orchd.v1.RetryTaskResponse
+	37,  // 166: orchd.v1.Orchd.CancelTask:output_type -> orchd.v1.CancelTaskResponse
+	39,  // 167: orchd.v1.Orchd.WatchTasks:output_type -> orchd.v1.TaskEvent
+	41,  // 168: orchd.v1.Orchd.MigrateHybrid:output_type -> orchd.v1.MigrateHybridResponse
+	43,  // 169: orchd.v1.Orchd.DropBackup:output_type -> orchd.v1.DropBackupResponse
+	47,  // 170: orchd.v1.Orchd.ReindexKeywords:output_type -> orchd.v1.ReindexKeywordsResponse
+	45,  // 171: orchd.v1.Orchd.BackfillSessions:output_type -> orchd.v1.BackfillSessionsResponse
+	49,  // 172: orchd.v1.Orchd.ListPRs:output_type -> orchd.v1.ListPRsResponse
+	52,  // 173: orchd.v1.Orchd.GetGitHubIdentity:output_type -> orchd.v1.GitHubIdentity
+	55,  // 174: orchd.v1.Orchd.ListGitHubScopes:output_type -> orchd.v1.ListGitHubScopesResponse
+	58,  // 175: orchd.v1.Orchd.SetGitHubScope:output_type -> orchd.v1.SetGitHubScopeResponse
+	60,  // 176: orchd.v1.Orchd.ListGitHubRepos:output_type -> orchd.v1.ListGitHubReposResponse
+	63,  // 177: orchd.v1.Orchd.ListGitHubItems:output_type -> orchd.v1.ListGitHubItemsResponse
+	65,  // 178: orchd.v1.Orchd.RequestGitHubSweep:output_type -> orchd.v1.RequestGitHubSweepResponse
+	165, // 179: orchd.v1.Orchd.ListPRReviews:output_type -> orchd.v1.ListPRReviewsResponse
+	166, // 180: orchd.v1.Orchd.WatchPRReview:output_type -> orchd.v1.PRReview
+	166, // 181: orchd.v1.Orchd.SetPRReviewUpdateInPlace:output_type -> orchd.v1.PRReview
+	170, // 182: orchd.v1.Orchd.StopPRReview:output_type -> orchd.v1.StopPRReviewResponse
+	172, // 183: orchd.v1.Orchd.GetPRDetail:output_type -> orchd.v1.PRDetail
+	68,  // 184: orchd.v1.Orchd.TailLogs:output_type -> orchd.v1.TailLogsResponse
+	71,  // 185: orchd.v1.Orchd.GetSystemMetrics:output_type -> orchd.v1.SystemMetrics
+	75,  // 186: orchd.v1.Orchd.ListDocs:output_type -> orchd.v1.ListDocsResponse
+	137, // 187: orchd.v1.Orchd.GetDocument:output_type -> orchd.v1.Document
+	78,  // 188: orchd.v1.Orchd.SyncDocs:output_type -> orchd.v1.DocsSyncState
+	78,  // 189: orchd.v1.Orchd.GetDocsSync:output_type -> orchd.v1.DocsSyncState
+	81,  // 190: orchd.v1.Orchd.ListDocsOwners:output_type -> orchd.v1.ListDocsOwnersResponse
+	84,  // 191: orchd.v1.Orchd.ListDocsOwnerRepos:output_type -> orchd.v1.ListDocsOwnerReposResponse
+	79,  // 192: orchd.v1.Orchd.SaveDocsOwner:output_type -> orchd.v1.DocOwner
+	88,  // 193: orchd.v1.Orchd.RemoveDocsOwner:output_type -> orchd.v1.PurgeDocsResponse
+	88,  // 194: orchd.v1.Orchd.PurgeDocs:output_type -> orchd.v1.PurgeDocsResponse
+	92,  // 195: orchd.v1.Orchd.GetConfig:output_type -> orchd.v1.ConfigState
+	92,  // 196: orchd.v1.Orchd.SetConfig:output_type -> orchd.v1.ConfigState
+	92,  // 197: orchd.v1.Orchd.RemoveLegacyConfig:output_type -> orchd.v1.ConfigState
+	96,  // 198: orchd.v1.Orchd.SetSpacesDraft:output_type -> orchd.v1.SpacesDraft
+	99,  // 199: orchd.v1.Orchd.DiffSpaces:output_type -> orchd.v1.SpacesDiff
+	101, // 200: orchd.v1.Orchd.ApplySpaces:output_type -> orchd.v1.ApplySpacesResponse
+	105, // 201: orchd.v1.Orchd.ExplainPlacement:output_type -> orchd.v1.PlacementExplanation
+	108, // 202: orchd.v1.Orchd.ListSpaces:output_type -> orchd.v1.ListSpacesResponse
+	112, // 203: orchd.v1.Orchd.ScanSpaces:output_type -> orchd.v1.ScanSpacesResponse
+	114, // 204: orchd.v1.Orchd.PinSession:output_type -> orchd.v1.SessionPin
+	116, // 205: orchd.v1.Orchd.EndSession:output_type -> orchd.v1.EndSessionResponse
+	119, // 206: orchd.v1.Orchd.ListSessions:output_type -> orchd.v1.ListSessionsResponse
+	121, // 207: orchd.v1.Orchd.RecordToolEvent:output_type -> orchd.v1.RecordToolEventResponse
+	124, // 208: orchd.v1.Orchd.VerifyToolLog:output_type -> orchd.v1.VerifyToolLogResponse
+	130, // 209: orchd.v1.Orchd.ListToolEvents:output_type -> orchd.v1.ListToolEventsResponse
+	133, // 210: orchd.v1.Orchd.SummarizeToolLog:output_type -> orchd.v1.ToolLogSummary
+	129, // 211: orchd.v1.Orchd.ReplaySpaces:output_type -> orchd.v1.ReplaySpacesResponse
+	191, // 212: orchd.v1.Orchd.GetEnforcement:output_type -> orchd.v1.EnforcementState
+	196, // 213: orchd.v1.Orchd.SetEnforcement:output_type -> orchd.v1.SetEnforcementResponse
+	194, // 214: orchd.v1.Orchd.SetSandboxSetting:output_type -> orchd.v1.SetSandboxSettingResponse
+	139, // 215: orchd.v1.Orchd.ListRegisteredSources:output_type -> orchd.v1.ListRegisteredSourcesResponse
+	140, // 216: orchd.v1.Orchd.SaveSource:output_type -> orchd.v1.RegisteredSource
+	143, // 217: orchd.v1.Orchd.RemoveSource:output_type -> orchd.v1.RemoveSourceResponse
+	145, // 218: orchd.v1.Orchd.RefreshSource:output_type -> orchd.v1.RefreshSourceResponse
+	148, // 219: orchd.v1.Orchd.GetSafetyNet:output_type -> orchd.v1.SafetyNetState
+	148, // 220: orchd.v1.Orchd.InstallSafetyNet:output_type -> orchd.v1.SafetyNetState
+	155, // 221: orchd.v1.Orchd.ListSettings:output_type -> orchd.v1.ListSettingsResponse
+	159, // 222: orchd.v1.Orchd.SetSettingEnabled:output_type -> orchd.v1.SettingItem
+	159, // 223: orchd.v1.Orchd.AddSetting:output_type -> orchd.v1.SettingItem
+	163, // 224: orchd.v1.Orchd.RemoveSetting:output_type -> orchd.v1.RemoveSettingResponse
+	180, // 225: orchd.v1.Orchd.GetTaskActivity:output_type -> orchd.v1.TaskActivity
+	188, // 226: orchd.v1.Orchd.GetPRLanding:output_type -> orchd.v1.PRLanding
+	184, // 227: orchd.v1.Orchd.ListPRLandings:output_type -> orchd.v1.ListPRLandingsResponse
+	188, // 228: orchd.v1.Orchd.LandPR:output_type -> orchd.v1.PRLanding
+	188, // 229: orchd.v1.Orchd.UndoPRLanding:output_type -> orchd.v1.PRLanding
+	188, // 230: orchd.v1.Orchd.DiscardPRLanding:output_type -> orchd.v1.PRLanding
+	152, // [152:231] is the sub-list for method output_type
+	73,  // [73:152] is the sub-list for method input_type
+	73,  // [73:73] is the sub-list for extension type_name
+	73,  // [73:73] is the sub-list for extension extendee
+	0,   // [0:73] is the sub-list for field type_name
 }
 
 func init() { file_internal_rpc_orchdv1_orchd_proto_init() }
@@ -15501,7 +15750,7 @@ func file_internal_rpc_orchdv1_orchd_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_rpc_orchdv1_orchd_proto_rawDesc), len(file_internal_rpc_orchdv1_orchd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   197,
+			NumMessages:   200,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

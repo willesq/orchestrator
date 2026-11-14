@@ -35,6 +35,10 @@ func (f *fakeClient) SetEnforcement(context.Context, *orchdv1.SetEnforcementRequ
 	return nil, errors.New("hooks never switch enforcement")
 }
 
+func (f *fakeClient) SetSandboxSetting(context.Context, *orchdv1.SetSandboxSettingRequest, ...grpc.CallOption) (*orchdv1.SetSandboxSettingResponse, error) {
+	return nil, errors.New("hooks never change the sandbox setting")
+}
+
 func setEnforcementFake(t *testing.T, rep *orchdv1.EnforcementState, err error) {
 	t.Helper()
 	enforcementFake.rep, enforcementFake.err, enforcementFake.calls = rep, err, 0
@@ -188,5 +192,67 @@ func TestSessionStartReadsSwitchesWithoutOrchd(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "could not be read, so a layer may be switched off") {
 		t.Errorf("digest with an unreadable store:\n%s", out.String())
+	}
+}
+
+// TestSessionStartIgnoresSandboxSetting is the digest half of SP-046.4.a2
+// (INV-16 as amended by D-61): the sandbox setting off, or auto with
+// nothing to deny, adds nothing to a session's digest, whether orchd
+// answers or the hook reads orch.db itself; a timed sandbox switch does.
+func TestSessionStartIgnoresSandboxSetting(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	for _, sb := range []*orchdv1.SandboxSetting{
+		{Mode: "off", DefaultMode: "auto", Detail: "off by choice"},
+		{Mode: "auto", DefaultMode: "auto", Detail: "auto: no other isolated space's folders to deny"},
+	} {
+		setEnforcementFake(t, &orchdv1.EnforcementState{SandboxSetting: sb, Switches: []*orchdv1.EnforcementSwitch{
+			{Layer: "sandbox", Title: "generated sandbox rules", State: "on", DefaultState: "on"},
+		}}, nil)
+		var out bytes.Buffer
+		if err := dispatch("session-start", Payload{SessionID: "sid"}, &out, factory(&fakeClient{}, nil)); err != nil {
+			t.Fatal(err)
+		}
+		if out.Len() != 0 {
+			t.Errorf("setting %s: digest = %q, want none", sb.GetMode(), out.String())
+		}
+	}
+
+	// orchd down: the hook reads orch.db, where the setting is off.
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	c, s, _, err := spaces.NextSandboxSetting(spaces.DefaultSandboxSetting(), spaces.SandboxOff, "operator (process 1)", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := spaces.WriteSandboxSetting(ctx, conn, c, s); err != nil {
+		t.Fatal(err)
+	}
+	setEnforcementFake(t, nil, errors.New("unavailable"))
+	var out bytes.Buffer
+	if err := dispatch("session-start", Payload{SessionID: "sid"}, &out, factory(&fakeClient{}, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("setting off in orch.db: digest = %q, want none", out.String())
+	}
+
+	// A timed sandbox switch to off is named.
+	cs, sw, _, err := spaces.NextSwitch(spaces.DefaultEnforcement(), spaces.LayerSandbox, spaces.SwitchOff, "operator (process 1)", time.Hour, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := spaces.WriteSwitch(ctx, conn, cs, sw); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.Close()
+	out.Reset()
+	if err := dispatch("session-start", Payload{SessionID: "sid"}, &out, factory(&fakeClient{}, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "sandbox (generated sandbox rules) is switched off since") {
+		t.Errorf("timed switch: digest = %q", out.String())
 	}
 }

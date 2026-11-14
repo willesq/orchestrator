@@ -131,3 +131,47 @@ func TestSpacesSectionNamesRelaxedLayers(t *testing.T) {
 		}
 	}
 }
+
+// TestSpacesSectionShowsSandboxSetting is the orch status half of
+// SP-046.4.a1 (D-61): the sandbox setting shows once, as one line, with what
+// it does now and who set it; off is a warning, a problem with orch.db's
+// copy is bad, and it is not an enforcement line.
+func TestSpacesSectionShowsSandboxSetting(t *testing.T) {
+	at := time.Date(2026, 11, 14, 9, 30, 0, 0, time.Local)
+	d := healthyDeps(t)
+	var resp *orchdv1.StatusResponse
+	d.Orchd = func(context.Context) (*orchdv1.StatusResponse, error) { return resp, nil }
+
+	resp = &orchdv1.StatusResponse{Spaces: &orchdv1.SpacesStatus{Configured: true, AppliedRevision: 2,
+		Sandbox: &orchdv1.SandboxSetting{Mode: "auto", DefaultMode: "auto", Detail: "auto: no other isolated space's folders to deny, so no sandbox rules are written"}}}
+	sec := section(t, Collect(context.Background(), d), "spaces")
+	if len(sec.Lines) != 2 {
+		t.Fatalf("lines = %+v", sec.Lines)
+	}
+	if l := sec.Lines[1]; l.Name != "sandbox" || l.Value != "auto (default)" || l.Level != LevelOK ||
+		!strings.Contains(l.Detail, "no sandbox rules are written") || !strings.Contains(l.Detail, "orch spaces sandbox auto|on|off") {
+		t.Errorf("auto line = %+v", l)
+	}
+
+	resp = &orchdv1.StatusResponse{Spaces: &orchdv1.SpacesStatus{Configured: true, AppliedRevision: 2,
+		Sandbox: &orchdv1.SandboxSetting{Mode: "off", DefaultMode: "auto", SetAt: at.Unix(), SetBy: "operator (process 9)", Detail: "off by choice\x1b[2J"}}}
+	sec = section(t, Collect(context.Background(), d), "spaces")
+	if l := sec.Lines[1]; l.Value != "off" || l.Level != LevelWarn || !strings.Contains(l.Detail, "set 2026-11-14 09:30") ||
+		!strings.Contains(l.Detail, "by operator (process 9)") || strings.Contains(l.Detail, "\x1b") {
+		t.Errorf("off line = %+v", l)
+	}
+
+	// Without a policy, a setting the operator set still shows; one never
+	// set does not open the section.
+	resp = &orchdv1.StatusResponse{Spaces: &orchdv1.SpacesStatus{Sandbox: &orchdv1.SandboxSetting{Mode: "on", DefaultMode: "auto", SetAt: at.Unix(), Problem: "changed outside orchd"}}}
+	sec = section(t, Collect(context.Background(), d), "spaces")
+	if l := sec.Lines[len(sec.Lines)-1]; l.Name != "sandbox" || l.Level != LevelBad || !strings.Contains(l.Detail, "changed outside orchd") {
+		t.Errorf("problem line = %+v", sec.Lines)
+	}
+	resp = &orchdv1.StatusResponse{Spaces: &orchdv1.SpacesStatus{Sandbox: &orchdv1.SandboxSetting{Mode: "auto", DefaultMode: "auto"}}}
+	for _, s := range Collect(context.Background(), d).Sections {
+		if s.Title == "spaces" {
+			t.Errorf("spaces section without spaces: %+v", s)
+		}
+	}
+}

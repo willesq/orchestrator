@@ -568,7 +568,7 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
 | `memory` | `on`, `off` | memory filtering by space (SP-025) |
 | `guard` | `block-other-jobs`, `off`, `log`, `strict` | the pre-tool-use guard's mode (SP-040, SP-041) |
 | `terms` | `on`, `off` | outbound term checks (SP-044, SP-045) |
-| `sandbox` | `on`, `off` | generated sandbox deny rules (SP-046) |
+| `sandbox` | `on`, `off` | generated sandbox deny rules (SP-046), for debugging; the lasting choice is the [sandbox setting](#sandbox-setting) |
 | `hooks` | `on`, `off` | the tool hooks themselves (pre-tool-use, cwd-changed) |
 
 - **Stored** in `orch.db` (migration `0029`): `spaces_enforcement` holds one row per switched
@@ -628,10 +628,47 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
   the digest included, without any switch; the hooks check reads only the user's
   `~/.claude/settings.json`. When orchd does not answer, the digest's fallback reads only the
   switches in `orch.db`, not whether the tool hooks are still in `settings.json`.
-- **Consumers:** the guard switch sets the enforcing guard's mode: orchd writes it into the
+- **The sandbox switch** (SP-046): orchd's checkout sync reads it at every sync, and a change
+  asks for a sync at once. Off takes orch's entries out of every per-checkout settings file and
+  `orch run` adds no deny rules; on puts them back, as the [sandbox setting](#sandbox-setting)
+  decides ([install.md](install.md#per-space-harness-settings)).
+- **The guard switch** sets the enforcing guard's mode: orchd writes it into the
   guard's snapshot after every change and timed revert, so the next tool call of every running
-  session uses it ([hooks.md](hooks.md#enforcing-guard), SP-041). Memory filtering, terms and
-  sandbox rules read `enforcement.state` when SP-025, SP-044 and SP-046 land.
+  session uses it ([hooks.md](hooks.md#enforcing-guard), SP-041).
+- **Not yet:** memory filtering and terms read `enforcement.state` when SP-025 and SP-044 land.
+
+### Sandbox setting
+
+The sandbox layer is also a user choice (spaces D-61; `internal/spaces/sandbox_setting.go`,
+`internal/daemon/sandbox_setting.go`, `spacesettings.Choice`): `auto` (default), `on` or `off`
+decides whether orch writes its sandbox rules into checkouts and gives them to `orch run`
+([install.md](install.md#per-space-harness-settings)). With `auto`, a session gets them only when
+they keep it out of another isolated space's root.
+
+- **Stored** beside the switches, under the key `sandbox-setting` in `spaces_enforcement` and
+  `spaces_enforcement_log` (no migration): the row holds the value, time and caller, and every
+  change is appended to the log in the same transaction. The switch readers (`LoadEnforcement`,
+  `LoadVerified`, the hooks' `ReadEnforcement`) skip it, as it is not a layer, so it can never mark
+  a digest. At startup a row that does not match its newest log entry, a log entry without a row,
+  or an unknown value makes the setting `on` (the strictest, as a switch that does not verify
+  enforces) and is reported, as does a setting orchd cannot read; while orchd runs its copy
+  wins, and an edit to `orch.db` is reported as drift (`problem`) until the next set.
+- **Set** by `SetSandboxSetting` (`orch spaces sandbox auto|on|off`), operator-only like
+  `SetEnforcement` (`refuseNonOperator`). Setting the value it has changes nothing. A change is
+  logged by orchd, appended to the `spaces` event stream (`[info] enforcement: the sandbox setting
+  changed from X to Y by <caller>`) and asks for a checkout sync at once.
+- **Shown** by `GetEnforcement` (`sandbox_setting`, open to every caller; who set it only to the
+  operator) and by `Status` (`spaces.sandbox`, which the app reads): the value, whether any space's
+  sessions are sandboxed now (`active`) and what that means (`detail`). `orch status` prints one
+  `sandbox` line; `off` is a warning there, a problem with `orch.db`'s copy an error.
+- **Not a switch** (INV-16 as amended by D-61): `off`, or `auto` with nothing to deny, does not
+  mark any session's start digest. The `sandbox` switch still does whenever it is off, timed or
+  not, and while it is off no rules are written whatever the setting says.
+- **Limits:** as for the switches, a process running as the user can write a matching row and
+  log entry while orchd is stopped, which the next start takes; for the setting nothing then
+  warns in a digest, only `orch status` and the app show it (RC-216). Sandboxed shells cannot
+  write `orch.db` (it is outside every space's writable folders) and the guard refuses tool calls
+  that name it.
 
 ## gRPC API
 

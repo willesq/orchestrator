@@ -156,6 +156,9 @@ type server struct {
 	// enforcement holds the enforcement switches (SP-070); nil without a
 	// store, when every layer enforces.
 	enforcement *enforcement
+	// checkouts keeps per-checkout harness settings (SP-046); nil when not
+	// running.
+	checkouts *checkoutSettings
 	// guardVerdict is the guard's verdict on a tool event, recorded while
 	// the guard is off or logging; nil until the guard decides (SP-040).
 	guardVerdict guardVerdictFunc
@@ -786,6 +789,11 @@ func Run(ctx context.Context) error {
 	if srv.enforcement != nil {
 		go srv.enforcement.run(runCtx, enforcementTick)
 	}
+	srv.checkouts = newCheckoutSettings()
+	if srv.enforcement != nil {
+		srv.enforcement.onSandbox = srv.checkouts.nudge
+	}
+	go srv.runCheckoutSettings(runCtx, checkoutSettingsEvery)
 	go srv.runTaskAnchors(runCtx)
 	orchdv1.RegisterOrchdServer(gs, srv)
 	go func() {

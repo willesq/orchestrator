@@ -81,6 +81,7 @@ const (
 	Orchd_ReplaySpaces_FullMethodName             = "/orchd.v1.Orchd/ReplaySpaces"
 	Orchd_GetEnforcement_FullMethodName           = "/orchd.v1.Orchd/GetEnforcement"
 	Orchd_SetEnforcement_FullMethodName           = "/orchd.v1.Orchd/SetEnforcement"
+	Orchd_SetSandboxSetting_FullMethodName        = "/orchd.v1.Orchd/SetSandboxSetting"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName               = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName             = "/orchd.v1.Orchd/RemoveSource"
@@ -309,6 +310,12 @@ type OrchdClient interface {
 	// descended from a harness or from orchd. Every change is logged with its
 	// time and caller and emits an event on the "spaces" stream.
 	SetEnforcement(ctx context.Context, in *SetEnforcementRequest, opts ...grpc.CallOption) (*SetEnforcementResponse, error)
+	// SetSandboxSetting sets the sandbox setting, auto | on | off (spaces
+	// D-61): whether orch writes its sandbox rules, as a lasting choice
+	// apart from the sandbox layer's switch. GetEnforcement and Status show
+	// it. Operator-only like SetEnforcement; every change is logged with its
+	// time and caller and emits an event on the "spaces" stream.
+	SetSandboxSetting(ctx context.Context, in *SetSandboxSettingRequest, opts ...grpc.CallOption) (*SetSandboxSettingResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -996,6 +1003,16 @@ func (c *orchdClient) SetEnforcement(ctx context.Context, in *SetEnforcementRequ
 	return out, nil
 }
 
+func (c *orchdClient) SetSandboxSetting(ctx context.Context, in *SetSandboxSettingRequest, opts ...grpc.CallOption) (*SetSandboxSettingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetSandboxSettingResponse)
+	err := c.cc.Invoke(ctx, Orchd_SetSandboxSetting_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -1366,6 +1383,12 @@ type OrchdServer interface {
 	// descended from a harness or from orchd. Every change is logged with its
 	// time and caller and emits an event on the "spaces" stream.
 	SetEnforcement(context.Context, *SetEnforcementRequest) (*SetEnforcementResponse, error)
+	// SetSandboxSetting sets the sandbox setting, auto | on | off (spaces
+	// D-61): whether orch writes its sandbox rules, as a lasting choice
+	// apart from the sandbox layer's switch. GetEnforcement and Status show
+	// it. Operator-only like SetEnforcement; every change is logged with its
+	// time and caller and emits an event on the "spaces" stream.
+	SetSandboxSetting(context.Context, *SetSandboxSettingRequest) (*SetSandboxSettingResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -1609,6 +1632,9 @@ func (UnimplementedOrchdServer) GetEnforcement(context.Context, *GetEnforcementR
 }
 func (UnimplementedOrchdServer) SetEnforcement(context.Context, *SetEnforcementRequest) (*SetEnforcementResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetEnforcement not implemented")
+}
+func (UnimplementedOrchdServer) SetSandboxSetting(context.Context, *SetSandboxSettingRequest) (*SetSandboxSettingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSandboxSetting not implemented")
 }
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
@@ -2788,6 +2814,24 @@ func _Orchd_SetEnforcement_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_SetSandboxSetting_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSandboxSettingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SetSandboxSetting(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SetSandboxSetting_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SetSandboxSetting(ctx, req.(*SetSandboxSettingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -3326,6 +3370,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetEnforcement",
 			Handler:    _Orchd_SetEnforcement_Handler,
+		},
+		{
+			MethodName: "SetSandboxSetting",
+			Handler:    _Orchd_SetSandboxSetting_Handler,
 		},
 		{
 			MethodName: "ListRegisteredSources",

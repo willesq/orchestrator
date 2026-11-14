@@ -378,7 +378,8 @@ func spacesSection(resp *orchdv1.StatusResponse, err error) (sec Section, ok boo
 	sp := resp.GetSpaces()
 	if err != nil || sp == nil ||
 		(sp.GetAppliedRevision() == 0 && sp.GetDraftRevision() == 0 && len(sp.GetDrift()) == 0 && sp.GetError() == "" &&
-			len(sp.GetRelaxed()) == 0 && sp.GetEnforcementError() == "") {
+			len(sp.GetRelaxed()) == 0 && sp.GetEnforcementError() == "" && sp.GetSandbox().GetSetAt() == 0 &&
+			sp.GetSandbox().GetProblem() == "") {
 		return sec, false
 	}
 	policy := Line{Name: "policy", Value: "none applied", Level: LevelOK, Detail: "one shared space, as before spaces"}
@@ -406,6 +407,9 @@ func spacesSection(resp *orchdv1.StatusResponse, err error) (sec Section, ok boo
 	}
 	for _, sw := range sp.GetRelaxed() {
 		sec.Lines = append(sec.Lines, relaxedLine(sw))
+	}
+	if sb := sp.GetSandbox(); sb != nil && (sp.GetConfigured() || sb.GetSetAt() > 0 || sb.GetProblem() != "") {
+		sec.Lines = append(sec.Lines, sandboxLine(sb))
 	}
 	if e := sp.GetEnforcementError(); e != "" {
 		sec.Lines = append(sec.Lines, Line{Name: "enforcement", Value: "switches in orch.db not taken", Level: LevelBad, Detail: printable(e)})
@@ -442,6 +446,36 @@ func relaxedLine(sw *orchdv1.EnforcementSwitch) Line {
 		parts = append(parts, "set by "+by)
 	}
 	parts = append(parts, "switch back with 'orch spaces enforce "+sw.GetLayer()+" "+sw.GetDefaultState()+"'")
+	l.Detail = printable(strings.Join(parts, "; "))
+	return l
+}
+
+// sandboxLine reports the sandbox setting (D-61) once: what it is, what it
+// does now, and who set it. It is a choice, not a switch, so only off and a
+// problem with orch.db's copy are more than informational.
+func sandboxLine(sb *orchdv1.SandboxSetting) Line {
+	l := Line{Name: "sandbox", Level: LevelOK, Value: printable(sb.GetMode())}
+	if sb.GetMode() == sb.GetDefaultMode() {
+		l.Value += " (default)"
+	}
+	if sb.GetMode() == "off" {
+		l.Level = LevelWarn
+	}
+	var parts []string
+	if d := sb.GetDetail(); d != "" {
+		parts = append(parts, d)
+	}
+	if at := sb.GetSetAt(); at > 0 {
+		parts = append(parts, "set "+time.Unix(at, 0).Local().Format("2006-01-02 15:04"))
+	}
+	if by := sb.GetSetBy(); by != "" {
+		parts = append(parts, "by "+by)
+	}
+	if p := sb.GetProblem(); p != "" {
+		l.Level = LevelBad
+		parts = append(parts, p)
+	}
+	parts = append(parts, "change with 'orch spaces sandbox auto|on|off'")
 	l.Detail = printable(strings.Join(parts, "; "))
 	return l
 }

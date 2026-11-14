@@ -9,9 +9,12 @@ import (
 
 const (
 	// maxScript bounds one script file Targets reads; maxScriptBytes all
-	// the script files of one call.
+	// the script files of one call; maxScriptReads how many script files
+	// one call reads, so a script sourcing small files thousands of times
+	// is opaque however fast the machine is.
 	maxScript      = 64 << 10
 	maxScriptBytes = 256 << 10
+	maxScriptReads = 256
 )
 
 // wrapper describes a command that runs another command: its flags that

@@ -61,6 +61,7 @@ func NewRootCmd(cf clientFactory) *cobra.Command {
 		newSettingsCmd(cf),
 		newSpacesCmd(cf),
 		newSessionsCmd(cf),
+		newRunCmd(cf),
 	)
 	return root
 }

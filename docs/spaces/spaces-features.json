@@ -182,9 +182,10 @@
     },
     {
       "id": "INV-16",
-      "rule": "Enforcement switches are operator-only, every change is logged with time and caller, and while any layer is off every session's start digest says so.",
+      "rule": "Enforcement switches are operator-only, every change is logged with time and caller, and while any layer is off every session's start digest says so. Exception (D-61): the sandbox layer's persistent setting ('auto' with nothing to deny, or 'off' by choice) is shown in orch status and the app but does not mark start digests; a timed sandbox switch still does.",
       "verified_by": [
-        "SP-070"
+        "SP-070",
+        "SP-046"
       ]
     }
   ],
@@ -534,6 +535,26 @@
       {
         "id": "D-60",
         "decision": "SP-044's outbound terms hook check is best-effort static reading of shell, like D-28; SP-045's git hooks and per-job accounts are the boundary for git. The residual classes in RC-117 (MCP tools, scripts and programs that run git, interpreters, curl, forged tracking refs) stay accepted risk. The baseline is loosened in SP-044: a gh write without -R counts only the repo gh would use (its default repo, else the checkout's base remote), not every remote; plain variables ($PWD, $USER, $HOME) and literal assignments made earlier in the same command are read instead of refused; more harmless 'git -c' keys are allowed. Making the rules configurable (baseline rules switchable by id, user-added stricter rules, CLI and app, stored in orch.db, operator-only) is SP-075.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-58",
+        "decision": "RC-206 option (c): Claude Code sessions started inside a checkout share Claude Code's own temp folder (/tmp/claude-<uid>) across spaces, because Claude Code takes its sandbox temp folder only from its startup environment. This is accepted as a documented limit until Claude Code honours a settings value; 'orch run <space>' gives each space its own temp folder. For SP-046.1.a6 the per-checkout side is met by this decision, the launcher side by test.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-59",
+        "decision": "Revisits D-18. One login works by default: orch uses whichever gh login is already authenticated for every space, and 'orch run' uses the user's normal Claude config. A space may optionally name its own gh profile (gh_config_dir) and Claude config dir; only then does orch switch to them. orch detects and shows which login each space will use (orch status and the app) without reading credentials. Accepted trade-off: with a single login the GitHub account is not a boundary between jobs; the guard, memory spaces and folder deny rules still are. SP-046.1.a1 and SP-046.2.a1 are amended to set GH_CONFIG_DIR/CLAUDE_CONFIG_DIR only when the space names one; SP-074 gains checkpoint SP-074.3 for detection and display.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-61",
+        "decision": "The sandbox layer is a user choice, not only a debugging switch. It gets a persistent setting stored in orch.db with three values: 'auto' (default: orch writes sandbox rules for a checkout only when another isolated space exists whose folders they would deny), 'on' (always, while a policy is applied) and 'off' (off by choice). 'off' or 'auto' with nothing to deny shows once in 'orch status' and the app, but does not mark sessions' start digests as enforcement off; a timed SP-070 switch that turns the sandbox off for debugging still warns as INV-16 says. Only the operator can change the setting, and each change is logged. When the sandbox is on: a space that uses the default gh login may read the default gh config folder inside the sandbox (RC-208 option a), a space that names its own gh profile reads only that profile, and other spaces' profiles stay denied. Multiple GitHub logins are supported as D-59 allows and are tested side by side. RC-211 is accepted: the SP-042 guard is the protection for writes to ~/.claude/settings*. This applies to the sandbox layer only; the other layers keep D-11 and INV-16 unchanged.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-62",
+        "decision": "Merge SP-046 (PR #171) now, as admin without review, with the security-audit gate (DOD-6) not met: RC-215 (high), RC-216 and RC-217 (medium) stay open, together with the decisions in RC-210 and RC-213. SP-046 stays 'blocked' on main until they are settled and the independent verifier passes. With no spaces policy applied nothing changes (INV-10). The coordinator's recommendations, not yet confirmed by the user: RC-215 guard refuses tool calls in checkouts whose settings re-open another space's folders; RC-216 one-time start digest note after a sandbox setting change; RC-217 'auto' also triggers when another space has its own login folder; RC-210 documented limit, solved in SP-074; RC-213 use allowMachLookup com.apple.trustd.agent instead of enableWeakerNetworkIsolation.",
         "date": "2026-11-14"
       }
     ],
@@ -2304,6 +2325,334 @@
         "raised": "2026-11-14",
         "affects": [
           "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-180",
+        "kind": "user-action",
+        "topic": "Run the Claude Code checks for SP-046 (a5, a7, a6's Claude side, 2.a2)",
+        "detail": "Needs real Claude Code sessions (haiku, about 15 short headless runs) using your Claude login read-only; they add transcripts under ~/.claude/projects for temp folders. Steps: (1) optional for a5's gh part: mkdir -p <dir> && GH_CONFIG_DIR=<dir> gh auth login (a job or test account). (2) optional for 2.a2: pick a folder L, run CLAUDE_CONFIG_DIR=L/joba/claude claude and /login once, then exit. (3) cd /Users/williamesquivel/code/willesq/orchestrator.worktrees/feat/sp-046-per-space-harness-settings && ORCH_CLAUDE_E2E=1 [ORCH_E2E_GH_PROFILE=<dir>] [ORCH_E2E_LAYOUT=L] go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1. The 'protect' probe also checks whether Claude Code's Edit deny on the settings files holds against a link or other-case path (security audit P-1; high if it fails).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "resolved",
+        "note": "2026-11-12: run with the user's approval without ORCH_E2E_GH_PROFILE and ORCH_E2E_LAYOUT: read, grep, glob, write, bash, edit, launched-tmpdir and protect PASS, tmpdir SKIP (RC-206). Still needed: steps (1) and (2) for a5's gh part and 2.a2. 2026-11-14: D-59 makes per-space logins optional; the e2e checks run with the default gh login and Claude config. 2026-11-14: run again at 1c054e0 with the user's approval and default logins (no profile or layout needed under D-59): read, grep, glob, write, bash, edit, protect, launched-tmpdir and launcher/read, grep, glob, write, bash PASS (SP-046.2.a2 observed); tmpdir SKIP (D-58); gh and launcher/gh FAIL: gh cannot read ~/.config/gh in the sandbox (RC-208). Steps (1) and (2) are now optional (named profiles only). 2026-11-14: run again at 6baf911 with the user's approval and default logins: every subtest PASS including gh, launcher/gh, gh-guard and two-logins; tmpdir SKIP (D-58). Steps (1) and (2) remain optional, for named profiles only. Resolved 2026-11-14: the user directed automatic verification with the current logins, and the run observed every SP-046 Claude check."
+      },
+      {
+        "id": "RC-181",
+        "kind": "decision",
+        "topic": "Which folders the generated rules deny",
+        "detail": "Rules deny only other isolated spaces' roots (plus other spaces' orch folders and gh profiles), never public roots or private spaces, matching block-other-jobs (D-12). A job session can therefore read a private space it does not list (e.g. personal) through the shell. Options: keep; or also deny private roots an isolated space does not read.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-182",
+        "kind": "follow-up",
+        "topic": "Cross-space channels the deny rules leave open",
+        "detail": "Not denied: harness transcripts under ~/.claude/projects and ~/.codex/sessions (shared by sessions started without the launcher), orch's data folder outside spaces/ (orch.db, toollog.db; SP-042), the default gh login ~/.config/gh, the shared /tmp (D-53 residual) and /tmp/claude, which checkouts with no space share (no per-checkout TMPDIR).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046",
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-183",
+        "kind": "follow-up",
+        "topic": "What the rules reveal and how exactly they match",
+        "detail": "Each checkout's settings name other jobs' root paths (sessions can read which folders are denied; name roots neutrally). Claude Code permission rules match by case while APFS usually is not case sensitive; paths holding glob characters get only the sandbox deny.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-184",
+        "kind": "follow-up",
+        "topic": "Unverified Claude Code behaviour SP-046 relies on",
+        "detail": "Read from the Claude Code 2.1.309 binary, not measured: sandboxed commands get TMPDIR=$CLAUDE_CODE_TMPDIR (set through settings env), and the sandbox already denies shell writes to .claude/settings*.json. Not known: whether sandbox.filesystem.allowRead in a subfolder's own .claude (which applies to sessions started there, SP-004) or in a project settings.json can re-allow a denied folder; such subfolder files are not managed. RC-180's run checks the first.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "resolved",
+        "note": "2026-11-12, measured with Claude Code 2.1.309 headless haiku sessions: the first part was wrong. A settings file's env CLAUDE_CODE_TMPDIR or TMPDIR (settings.local.json, also with a 12-byte path) does not change the sandboxed TMPDIR, which stayed /tmp/claude-<uid>, nor the CLAUDE_CODE_TMPDIR the shell sees (also /tmp/claude-<uid>); other env entries (GH_CONFIG_DIR, an arbitrary name) do reach the shell. CLAUDE_CODE_TMPDIR in the process environment does: TMPDIR=<it>/claude-<uid>, but only when that path is at most 44 bytes; a 66-byte one fell back to /tmp/claude-<uid> (the binary names the AF_UNIX socket limit). No sandbox setting names a temp folder. SP-046 now keeps temp folders under /tmp/orch-<uid> and sets them through 'orch run' (RC-206 for sessions started without it). The second part held in the 'protect' probe (shell writes to .claude refused). Still not known: whether a subfolder's own .claude settings can re-allow a denied folder. 2026-11-14: RC-208 depends on the remaining question in a related form: whether sandbox.filesystem.allowRead can re-allow a folder that a permissions.deny Read rule (orch's installed Read(~/.config/gh/**)) denies to sandboxed commands. Not measured. 2026-11-14, measured with Claude Code 2.1.309: sandbox.filesystem.allowRead in a checkout's settings.local.json re-opens a folder that a permissions.deny Read rule (the installed Read(~/.config/gh/**)) denies to sandboxed commands; an allowRead in the checkout's own .claude/settings.json, or beside the deny in settings.local.json, re-opens a sandbox.filesystem.denyRead there too (RC-215); a denyRead given through --settings was not re-opened by a project settings.json allowRead. Resolved: the open question is answered."
+      },
+      {
+        "id": "RC-185",
+        "kind": "follow-up",
+        "topic": "Checkout placement spends GitHub lookups",
+        "detail": "Each sync places every checkout through orchd's repo lookups (30 per minute, cached 10 minutes), shared with session pins. With many checkouts some fall back to the remote's owner with unknown visibility until cached; rules can flip between a space's and a checkout with no space's. Consider cache-only lookups or a longer TTL for the sync.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-186",
+        "kind": "follow-up",
+        "topic": "Show checkout-settings problems outside orchd's log",
+        "detail": "Tracked files (no rules), entries moved aside, unmergeable files replaced and a truncated walk are logged by orchd only. Surface them in orch status and the app (SP-072), and recheck ignore status periodically (a checkout seen ignored is not checked again until orch changes its file).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046",
+          "SP-072"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-187",
+        "kind": "decision",
+        "topic": "A checkout only its remote places gets no space's rules",
+        "detail": "After the security audit (H-1), a checkout gets a space's rules only when its folder root decided the placement; a job repo cloned under a personal root gets a checkout-with-no-space's rules (no GH_CONFIG_DIR, no TMPDIR). Options: keep (move such clones under the job's root); or let the operator pin a checkout to a space.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-188",
+        "kind": "decision",
+        "topic": "Which folders 'orch run' accepts",
+        "detail": "Interpretation of SP-046.2.a1 'a space the current folder resolves outside of': refused when the folder is placed in another space or its placement is a conflict or quarantine; allowed in the space's own folders and in folders no root or remote places (e.g. ~/scratch). --force allows any.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-189",
+        "kind": "follow-up",
+        "topic": "Sandboxed git cannot change tracked .claude files",
+        "detail": "Each checkout's rules deny shell writes to its .claude folder, so a git checkout or pull run by the session that changes tracked files under .claude/ fails; the file tools and the user's terminal are unaffected.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-190",
+        "kind": "follow-up",
+        "topic": "SP-046 security audit lows (four rounds)",
+        "detail": "Accepted: (1) the session controls .git, so it can point the info/exclude orch appends its one ignore line to at another repository's git folder, and appendLine follows links in folders above the git folder; (2) moved-aside names (*.orch-moved-*) are not git-ignored and moving does not re-check the entry just before the rename; (3) a .claude or settings file that cannot be opened (mode 000, a socket) is reported but not moved, leaving that checkout without rules; (4) a tracked settings file gets no rules and a session can freeze its rules with git add -f (the enforcing guard, SP-041, is the answer); (5) the launcher's profile links share plugins and skills across spaces; (6) GetEnforcement is open to every caller (pre-existing).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-191",
+        "kind": "user-action",
+        "topic": "Confirm a per-space Claude Code login persists",
+        "detail": "SP-004 measured that a fresh CLAUDE_CONFIG_DIR starts logged out but not whether its login persists. After the first 'orch run <space> -- claude' and /login, start it again and note whether it asks to log in.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open",
+        "note": "2026-11-14: D-59 makes per-space logins optional; the e2e checks run with the default gh login and Claude config. 2026-11-14: now applies only to a space that names its own claude_config_dir (D-59); the per-space profile orch generated under <data dir>/spaces/<space>/claude is gone, 'orch run' uses the user's own config otherwise. Not exercised in the 2026-11-14 run."
+      },
+      {
+        "id": "RC-206",
+        "kind": "decision",
+        "topic": "Claude Code sessions started in a checkout share one TMPDIR across spaces (SP-046.1.a6)",
+        "detail": "Measured 2026-11-12 with Claude Code 2.1.309 (RC-184 note): only CLAUDE_CODE_TMPDIR in the environment Claude Code starts with sets its sandboxed commands' TMPDIR; a settings file cannot, and no sandbox setting can. So a session started in a checkout without 'orch run' writes its temp files to /tmp/claude-<uid>, which every such session of every space can read; the per-checkout settings cannot give a space its own TMPDIR, and SP-046.1.a6 is not met on that path. Denying /tmp/claude-<uid> in the checkout settings breaks temp files (mktemp 'Operation not permitted'). What holds: 'orch run' sessions get their space's TMPDIR (/tmp/orch-<uid>/<space>/claude-<uid>), are denied /tmp/claude-<uid>, and every space's settings deny every other space's temp folder, so a file a launched session writes there is unreadable from other spaces however they start. Options: (a) require 'orch run' for Claude Code sessions in isolated spaces and treat a6's per-checkout half as the launcher's (needs a criteria change by the user); (b) deny /tmp/claude-<uid> in isolated spaces' checkout settings and accept broken temp files there; (c) accept the shared folder as a documented limit until Claude Code honours a settings value (ask upstream); (d) have orch start sessions some other way that sets the environment (shell alias or wrapper the user installs).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "resolved",
+        "note": "Resolved 2026-11-14 as D-58 (option c)."
+      },
+      {
+        "id": "RC-207",
+        "kind": "follow-up",
+        "topic": "Security audit lows on the /tmp temp folders (SP-046)",
+        "detail": "From the 2026-11-12 audit of the temp-folder move (its medium, settings naming a temp folder orch could not make its own, was fixed: such a space gets no TMPDIR, TestSyncFailsClosedOnTmpRoot). Lows left: (1) a temp folder of a deleted or renamed space stays under /tmp/orch-<uid> and is no longer denied, and the root itself is not denied, so any session can list the space names in it; remove or deny entries that belong to no current space. (2) hashed folder names use 48 bits and a collision between two long names is not detected (both spaces would share and deny one folder). (3) EnsurePrivateDir makes an existing root of orch's own owner-only after the fact; entries others made while it was open are not checked. (4) After a reboot clears /tmp, another local user can make /tmp/orch-<uid> before orchd's first sync; orchd then refuses it and reports it, and sessions get no TMPDIR until the user removes it. Re-audit lows: (5) a /tmp/orch-<uid> root another user planted as a link, with space-named entries linking elsewhere, makes the real-path step add those targets to every space's denies (extra denies only, so sessions can break, nothing is exposed); skip denying a space's temp folder by its real path when the root failed its check. (6) Likewise a planted /tmp/claude-<uid> link adds its target to the launcher profile's denies.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-208",
+        "kind": "decision",
+        "topic": "gh in sandboxed agent shells with the default login (SP-046.1.a5)",
+        "detail": "Measured 2026-11-14 (Claude Code 2.1.309, TestClaudeE2E gh and launcher/gh): with the sandbox on, 'gh auth status' in a sandboxed shell fails with 'open ~/.config/gh/config.yml: operation not permitted', in checkout and launched sessions alike. orch's per-space rules do not deny ~/.config/gh; the Read(~/.config/gh/**) credential deny that 'orch install' adds to ~/.claude/settings.json does, since Claude Code applies Read deny rules to sandboxed commands too (SP-004). So under D-59 gh does not work at all in an agent shell of a space without its own gh profile. Options: (a) orch's checkout and launcher settings add the default gh folder ($GH_CONFIG_DIR or ~/.config/gh) to sandbox.filesystem.allowRead for spaces naming no gh profile (unmeasured whether allowRead overrides a permission-rule deny, RC-184; whether gh then reaches the keychain and api.github.com from the sandbox is also unmeasured; sandboxed commands could then read hosts.yml, which with keyring storage names the user but holds no token); (b) sandbox.excludedCommands ['gh'] so gh runs outside the sandbox (gh could then read or upload other jobs' files, weakening the deny); (c) narrow or drop orch's installed Read(~/.config/gh/**) deny (cc-safety-net still guards shell commands that name the files); (d) amend SP-046.1.a5 so the gh part applies only to a space with its own gh profile, documenting that gh does not work in sandboxed shells with the default login.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "resolved",
+        "note": "Resolved 2026-11-14 as D-61 (option a, plus the sandbox setting auto|on|off). 2026-11-14: implemented as D-61 decided: allowRead of the default gh folder for a space on the default login, its own profile for one naming it; measured that gh also needs sandbox.network.allowedDomains (api.github.com, github.com) and sandbox.enableWeakerNetworkIsolation (Go TLS through trustd), which orch writes too (RC-213). TestClaudeE2E gh and launcher/gh PASS at 6baf911."
+      },
+      {
+        "id": "RC-209",
+        "kind": "follow-up",
+        "topic": "D-59 and orchd's GitHub routing for isolated spaces without a gh profile",
+        "detail": "D-59 says orch uses whichever gh login is already authenticated for every space. orchd's gh routing from SP-063 (internal/daemon/ghprofiles.go, docs/internals/config.md 'Which login a call runs as') still makes no gh call at all for an org bound to an isolated space that names no gh_config_dir: its docs are not synced, its PRs are dropped from the PR watcher and reviews are refused; docs/INSTALL.md still tells users to give each job its own account. SP-046 did not change this (outside its scope). Decide whether SP-063's rule changes under D-59 (and in which feature).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-063",
+          "SP-074"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-210",
+        "kind": "decision",
+        "topic": "Per-space logins kept in the macOS keychain are outside the denied folders (security audit, unconfirmed high)",
+        "detail": "2026-11-14 audit of PR #171: denying another space's gh_config_dir or claude_config_dir denies the folder, but gh's default keyring storage keeps the token in the login keychain (service gh:github.com, account = the GitHub login) and Claude Code on macOS keeps its login in the keychain too. If a sandboxed shell can reach the keychain, a session in one space could use another space's account (e.g. gh auth token --user <login>). Not measured: the probe would run a credential command, which agents here must not; the user can measure it (reporting only success or failure). Mitigations: log per-space gh profiles in with 'gh auth login --insecure-storage' so the token stays in the denied folder; orchd could warn when a profile reports keyring storage; Bash denies for 'gh auth token' and 'security find-generic-password' as defence in depth. Documented in docs/internals/install.md Limits.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046",
+          "SP-063"
+        ],
+        "status": "open",
+        "note": "2026-11-14: to be measured by SP-046.4.a4 (metadata only, D-61). 2026-11-14, measured by SP-046.4.a4 (TestClaudeE2E two-logins/keychain at 6baf911, account metadata only): GH_CONFIG_DIR pointed at another space's profile folder is denied ('operation not permitted') both ways, but a session of a space naming its own gh profile wrote its own profile folder naming the default account (no token) and 'GH_CONFIG_DIR=<it> gh auth status' in its sandboxed shell reported 'Logged in to github.com account willesq (keyring)'. So the keychain is reachable from every sandboxed shell, and any gh login stored there can be used by naming its account; the high is confirmed. Also measured: adding ~/Library/Keychains to a session's sandbox denyRead stopped gh reaching the keyring ('The token in default is invalid'), and would break every keyring login in that session. Options: (a) for spaces naming their own profile, require 'gh auth login --insecure-storage' and deny ~/Library/Keychains to them (the default-login spaces still reach every keyring login); (b) require --insecure-storage for every login, including the default, and deny ~/Library/Keychains everywhere (gh's own token then sits in hosts.yml, readable to that space's shell); (c) accept: with keychain-stored logins the GitHub account is not a boundary between spaces (as D-59 already accepts for the single-login case) and document it. Needs a decision."
+      },
+      {
+        "id": "RC-211",
+        "kind": "follow-up",
+        "topic": "Claude Code settings files with hooks are editable from space sessions (security audit medium, existing before D-59)",
+        "detail": "2026-11-14 audit: neither the checkout settings nor the launcher's --settings deny the file tools ~/.claude/settings.json and settings.local.json (shared by every space's sessions that name no claude_config_dir) or a launch folder's .claude/settings*.json. A session whose Edit is approved could add a hook, and hooks run outside the sandbox in the next session of any space. The checkout path had this before D-59. Claude Code's own protection of its settings files was not measured. Denying them in every space would also block the user asking an agent to change their own settings; needs a decision.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "resolved",
+        "note": "Accepted 2026-11-14 in D-61: the SP-042 guard is the protection. 2026-11-14: docs/internals/install.md Limits now say the SP-042 guard, which refuses writes to ~/.claude/settings* and .claude/settings*, is the protection (D-61)."
+      },
+      {
+        "id": "RC-212",
+        "kind": "follow-up",
+        "topic": "claude_config_dir validation and leftover per-space profiles (security audit lows)",
+        "detail": "2026-11-14 audit lows: (1) validation refuses only an exact (case-insensitive) duplicate claude_config_dir; it does not refuse one nested in another space's, one equal to or inside a gh_config_dir, an isolated root or orch's data folder, ~/.claude itself, or two spellings of one folder through a link. (2) Earlier builds of this branch made <data dir>/spaces/<space>/claude profiles (with a /login and transcripts, and a keychain item); nothing removes them, though they stay denied to other spaces. (3) The launcher's --settings JSON is visible to other local users in ps (paths only; documented).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open",
+        "note": "2026-11-14: unchanged by D-61. Related: an allowRead that would hold another space's denied folder (by link or real path) or holds a pattern character is now left out (so a gh_config_dir inside the default gh folder leaves default-login spaces without gh in the sandbox, silently); validation still does not refuse a gh_config_dir or claude_config_dir nested in another's, inside the default gh folder, or holding pattern characters."
+      },
+      {
+        "id": "RC-213",
+        "kind": "decision",
+        "topic": "gh in the sandbox needs enableWeakerNetworkIsolation and allowedDomains (D-61)",
+        "detail": "Measured 2026-11-14 (Claude Code 2.1.309): with allowRead alone gh fails ('deny network-outbound api.github.com:443', then 'x509: OSStatus -26276'); it works with sandbox.network.allowedDomains [api.github.com, github.com] and sandbox.enableWeakerNetworkIsolation: true (or network.allowMachLookup ['com.apple.trustd.agent']). orch writes both for every placed space's sessions. Trade-offs: Claude Code calls the trustd lookup 'a potential data exfiltration vector'; its messages say a machine whose sandbox has such a setting serves no 'device tools' (not measured); allowedDomains lets every sandboxed program, not only gh and git (which the SP-044 outbound check reads), reach github.com without an approval. The security audit rated it medium. Options: keep; write them only for spaces that opt in to gh in the sandbox; use allowMachLookup instead of the boolean.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046",
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-214",
+        "kind": "follow-up",
+        "topic": "GitHub Enterprise and other gh hosts are not in allowedDomains",
+        "detail": "orch adds only api.github.com and github.com to sandbox.network.allowedDomains. A space whose gh profile logs in to a GitHub Enterprise host, or gh commands that reach other hosts (release downloads from objects.githubusercontent.com, codeload.github.com), still need an approval a headless session cannot give. orch never reads hosts.yml to learn the host.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-215",
+        "kind": "decision",
+        "topic": "Settings orch did not write can re-open its sandbox denies (security audit high, measured)",
+        "detail": "2026-11-14 audit of PR #171, measured with Claude Code 2.1.309: with orch's denyRead of a folder in a checkout's settings.local.json, a sandboxed cat of a file in it succeeded when the checkout's own .claude/settings.json (a repository can commit one) or the same settings.local.json held sandbox.filesystem.allowRead of that folder (TestClaudeE2E 'loosening': job B's file read = true); a settings.json excludedCommands ['cat'] did not unsandbox cat; a session started as 'orch run' starts it (denies in --settings) was not re-opened by the same file (read = false). Under auto, an isolated space alone gets no rules, so its unsandboxed sessions could plant such entries before rules arrive (audit medium). orch now reports such entries, and settings files it cannot check, in each sync's problems and as 'orch run' warnings, but cannot remove them: a tracked settings.json is the repository's, and SP-046.1.a2 keeps users' own entries. Options: (a) require 'orch run' for isolated spaces' Claude Code sessions (its denies held); (b) have the guard (SP-041) refuse tool calls in a checkout whose settings re-open a deny; (c) take loosening entries out of settings.local.json (amending SP-046.1.a2) and handle settings.json with (a) or (b); (d) make 'orch run' refuse to launch from a folder whose settings loosen the rules unless --force (re-audit suggestion); (e) accept and document. Blocks SP-046 (DOD-6).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-216",
+        "kind": "decision",
+        "topic": "A forged sandbox setting is taken at restart and never marks a digest (security audit medium)",
+        "detail": "D-61 makes the setting quiet: it shows in orch status and the app, not in start digests. A process running as the user (not a sandboxed shell: orch.db is outside every space's writable folders, and the guard refuses tool calls naming it) can write a matching spaces_enforcement row and log entry for 'off' while orchd is stopped; the next start takes it with no problem, as it would a switch, but no digest says so. An inconsistent edit now makes the setting on and is reported. Options: (a) name the setting in the next digest once after each change or restart where it is off; (b) a keyed MAC over the row and log, with the key outside orch.db; (c) accept as D-61 decided. Blocks SP-046 (DOD-6) until decided.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046",
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-217",
+        "kind": "decision",
+        "topic": "auto judges only isolated roots, not other spaces' login folders (security audit medium)",
+        "detail": "D-61: auto writes rules 'only when another isolated space exists whose folders they would deny'. A policy with one isolated job and a personal or public space that names its own gh_config_dir (stored with --insecure-storage) or claude_config_dir gives the job's checkouts no rules, so nothing denies its sessions those folders or <data>/spaces/.orch (users' settings backups and the list of every space's checkouts). Options: (a) also write rules when the rules would deny another space's login folder; (b) always write them while .orch holds anything; (c) keep D-61's text and document it (done in docs/internals/install.md Limits). Blocks SP-046 (DOD-6) until decided.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-218",
+        "kind": "follow-up",
+        "topic": "Security audit lows and info on the D-61 rules",
+        "detail": "From the 2026-11-14 audits of PR #171: (1) deny paths are written as the policy spells them plus their real path, not their on-disk case; a root spelled in another case relies on the sandbox matching case-insensitively (not measured); (2) samePlace compares case-sensitively (safe: the default folder is then denied, not exposed); (3) spaces.SwitchHistory also returns sandbox-setting entries, whose Layer is not a layer (no caller today); (4) Loosening does not read ~/.claude settings, managed settings or other --settings files, does not expand '~user/', and cleans '..' before resolving links. Fixed in the same PR: link and real forms of an allowRead are dropped together, an allowRead with a pattern character is never written, a setting that does not verify or cannot be read is on, and settings files are read without following links, blocking or reading more than 4 MiB.",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-219",
+        "kind": "user-action",
+        "topic": "The orch installed on this Mac has no tool guard, so D-61's allowRead exposes the default gh folder by name until it is upgraded",
+        "detail": "2026-11-14: the installed orch is 0.45.1 (commit cf031dc), whose Claude Code hooks have no PreToolUse entry. In the first TestClaudeE2E run of this branch, a session in a default-login space with orch's new allowRead of ~/.config/gh ran 'cat ~/.config/gh/config.yml | wc -c' and got the file's size: neither the installed hooks nor cc-safety-net refused it (the Read tool was refused by the installed Read(~/.config/gh/**) rule). The gh-guard probe now runs this tree's orch-hook and is refused (self_protection). Per-checkout files from this branch only reach the user when this release is installed with its PreToolUse hook; until then nothing changes. After upgrading, check 'orch status' lists the tool hooks and 'orch spaces enforce' shows the guard enforcing. With the guard off or logging, a default-login space's shell can read ~/.config/gh/hosts.yml (with keyring storage it names the account but holds no token).",
+        "source": "https://github.com/willesq/orchestrator/pull/171",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046",
+          "SP-042"
         ],
         "status": "open"
       }
@@ -4147,7 +4496,7 @@
       "phase": "P1",
       "priority": 21.5,
       "title": "Per-job GitHub account follow-ups",
-      "summary": "Follow-ups to SP-063 decided on 2026-11-10 (D-54): scopes and PR watching for orgs reachable only through a space's profile; GitHub calls a space's profile cannot read are refused, with stricter gh_config_dir checks; the repo picker and PR-outcome tracker use the space's profile; a GitHub API quota cap per isolated account.",
+      "summary": "Follow-ups to SP-063 decided on 2026-11-10 (D-54): scopes and PR watching for orgs reachable only through a space's profile; GitHub calls a space's profile cannot read are refused, with stricter gh_config_dir checks; the repo picker and PR-outcome tracker use the space's profile; a GitHub API quota cap per isolated account. Since D-59 (2026-11-14): one gh login works by default for every space and a space's own profile is optional; orch detects and shows which login each space uses.",
       "why": "D-54.",
       "depends_on": [
         "SP-063",
@@ -4158,11 +4507,16 @@
         "internal/daemon/ghprofiles.go",
         "internal/reviews/",
         "internal/prs/",
-        "internal/config/schema.go"
+        "internal/config/schema.go",
+        "internal/settings/spacesettings/",
+        "internal/cli/",
+        "macos/Sources/"
       ],
       "docs_to_update": [
         "docs/internals/daemon.md",
-        "docs/OPERATIONS.md"
+        "docs/OPERATIONS.md",
+        "docs/INSTALL.md",
+        "docs/internals/app.md"
       ],
       "checkpoints": [
         {
@@ -4206,6 +4560,41 @@
             }
           ],
           "evidence": []
+        },
+        {
+          "id": "SP-074.3",
+          "title": "Single or multiple logins (D-59)",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "With no space naming a gh profile, docs sync, PR watching, reviews, the guard's GitHub checks and generated checkout settings all use the default gh login, with no extra setup and no GH_CONFIG_DIR set; a space that names gh_config_dir uses that profile and never the default for its orgs.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "orch detects, per space, which gh login and which Claude config it will use (default or the space's own) and whether each is authenticated, using only 'gh auth status'-style metadata; no token, cookie or credential file content is read, logged or stored.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "'orch status' and the app's Spaces section show each space's login source (default or own profile) and its state; a test covers one-login and two-login layouts.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "doc",
+              "check": "docs/INSTALL.md and OPERATIONS.md describe the single-login default, how to add a per-space gh profile or Claude config, and the trade-off that one login is not a boundary between jobs.",
+              "measure": "documented",
+              "threshold": "true"
+            }
+          ],
+          "evidence": []
         }
       ],
       "status": "todo",
@@ -4214,7 +4603,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "64dfe8fa4b93ec62bf243535b8f8d41a15cbbdafbcdcab2c948ff91ed70e4ded",
+      "criteria_sha256": "2da46d2348de350e8f61196826bc0dc17990a6e620ad2419bcfdbe65138a815d",
       "branch": null,
       "pr": null
     },
@@ -5236,7 +5625,7 @@
             {
               "id": "a1",
               "type": "test",
-              "check": "Generated settings for a checkout in space A deny every other isolated root, deny nothing in A, public or opted-in private spaces, and set GH_CONFIG_DIR to A's profile.",
+              "check": "Generated settings for a checkout in space A deny every other isolated root, deny nothing in A, public or opted-in private spaces, and set GH_CONFIG_DIR to A's profile when A names one (D-59); with none, the default gh login is used and GH_CONFIG_DIR is not set.",
               "measure": "test",
               "threshold": "passes"
             },
@@ -5283,7 +5672,25 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (2026-11-12): tests TestGeneratedSettingsDenyOtherJobsOnly, TestGeneratedSettingsOtherSpaces, TestOtherProfilesAndOrchDirDenied, TestUnplacedCheckout (internal/settings/spacesettings) and TestPlaceCheckoutIgnoresStricterRemote (internal/daemon) pass: a checkout in job A denies job B's and C's roots, other spaces' folders and gh profiles, never anything in A, the public root or the private space A reads; env GH_CONFIG_DIR is A's gh_config_dir.",
+            "a2 (2026-11-12): TestMergePreservesUserEntries (user entries kept, orch never claims an entry the user had, removal restores the file's meaning), TestMergeIdempotent + TestSyncIdempotent (second run writes nothing, same bytes and mtime), TestSyncKeepsBackupOfFirstChange (original kept once, 0600, never replaced) pass: 3 pass.",
+            "a3 (2026-11-12): TestSyncIgnoresEveryCheckout passes: 5/5 writable checkouts (plain repo, one whose committed .gitignore covers the file, one whose info/exclude covers it, a main checkout and its linked worktree) report 'git check-ignore' ignored = 100%; an exclude line was added only where no rule covered it (plain; main, shared by the worktree); the .gitignore is unchanged; a checkout with the file tracked is refused and not written.",
+            "a4 (2026-11-12): TestSyncPicksUpNewClone and TestCheckoutSettingsLoop pass (a clone appearing under a root is written at the next sync; the loop syncs on start, every tick and on nudge). orchd syncs every 30 s (checkoutSettingsEvery). Measured on this Mac: a sync of 136 temp checkouts that finds and writes one new clone took 57 ms (first, cold sync of 135: 3.2 s); walking the real ~/code (135 checkouts) took 0.38 s. Worst case after a clone appears is about 30 s + one sync, <= 60 s.",
+            "a5: partly observed, the rest waiting on the user (RC-180). 2026-11-12, Claude Code 2.1.309, ORCH_CLAUDE_E2E=1 TestClaudeE2E 'bash' probe (temp home, session started in a subfolder of job A's checkout with orch's settings.local.json): the sandboxed 'cat' of job B's root file -> 'Operation not permitted (os error 1)', of a file under job B's temp folder -> 'Operation not permitted', the control in job A's folder printed its content. The 'gh auth status' part did not run: it needs ORCH_E2E_GH_PROFILE set to a gh profile the user logged in to (GH_CONFIG_DIR=<dir> gh auth login); settings env GH_CONFIG_DIR was measured to reach the sandboxed shell (a probe session printed GH=<the settings value>).",
+            "a6 (2026-11-12): launcher side holds, per-checkout side does not (RC-206). Unit: TestPerSpaceTmpDir, TestShortTmpLayout (temp folders under a short /tmp root, other spaces' folders denied by written and real path before they exist), TestClaudeSandboxTmp, TestLauncherFragment, TestEnsureTmpDir, TestRunClaudeTmp, TestRunSetsProfileForChildOnly pass; TestCodexSandboxPerSpaceTmp (codex-cli sandbox, temp folders under /tmp) -> own TMPDIR written and read, B's TMPDIR file read and write 'Operation not permitted', B's root 'Operation not permitted'. Claude Code 2.1.309, TestClaudeE2E 'launched-tmpdir' (sessions started with the space's launcher environment and LauncherFragment via --settings): job B's TMPDIR=/tmp/oe332566413/r/jobb/claude-501 and it wrote b-launch.txt there; job A's TMPDIR=/tmp/oe332566413/r/joba/claude-501, own file written and read, cat of B's file -> 'Operation not permitted', cat of a file in the shared /tmp/claude-501 -> 'Operation not permitted'; job A's per-checkout session: cat of B's file -> 'Operation not permitted'. Not met: TestClaudeE2E 'tmpdir' SKIP: a session started in the checkout without 'orch run' has TMPDIR=/tmp/claude-501, the folder every such session of every space shares. Measured: a settings file's env CLAUDE_CODE_TMPDIR/TMPDIR does not change it (also not with a 12-byte path), there is no sandbox setting for it, and denying /tmp/claude-<uid> in the settings breaks mktemp ('Operation not permitted'). Re-run after the audit fixes (2026-11-12, same code as committed): read, grep, glob, write, bash, edit, launched-tmpdir, protect PASS, tmpdir SKIP with TMPDIR=/tmp/claude-501; job A launched TMPDIR=/tmp/oe990965985/r/joba/claude-501, B's file and the shared file 'Operation not permitted'.",
+            "a7 (2026-11-12): Claude Code 2.1.309, ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E: sessions started in <checkout>/sub/deep with orch's root settings.local.json (sandbox.enabled, allowUnsandboxedCommands=false, Read(//...)/Edit(//...) denies) were refused on job B's root: Read -> 'File is in a directory that is denied by your permission settings', Grep and Glob -> 'Permission to read .../code/b has been denied', Write -> denied and no file created, Edit -> called and job B's file unchanged; each control on job A's folder succeeded (read, grep, glob, write, edit subtests PASS).",
+            "a1 (2026-11-14, amended by D-59): TestGeneratedSettingsDenyOtherJobsOnly (job A names gh_config_dir: settings env GH_CONFIG_DIR = A's profile, and no checkout settings ever set CLAUDE_CONFIG_DIR), TestGeneratedSettingsOtherSpaces (oss and jobb name none: neither Rules.Env nor CheckoutFragment sets GH_CONFIG_DIR, so the default gh login is used; their TMPDIR is still set), TestOtherProfilesAndOrchDirDenied (every other space is denied A's gh_config_dir and claude_config_dir, A is not) (internal/settings/spacesettings) and TestClaudeConfigDir (internal/spaces: claude_config_dir expanded, refused when relative, in a git tree or shared, shown by Compare) pass; the deny tests of 2026-11-12 still pass.",
+            "a5 (2026-11-14): sandboxed cat part observed again; 'gh auth status' part NOT met (RC-208). Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 1c054e0 on 2026-11-14, with the user's default Claude Code configuration and default gh login and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14. 'bash' subtest PASS: the session started in a subfolder of job A's checkout ran 'cat' of job B's root file -> 'Operation not permitted (os error 1)', of job B's temp file -> 'Operation not permitted', control in job A's folder printed its content. 'gh' and 'launcher/gh' subtests FAIL: in both a checkout session and a launched one, 'gh auth status' in the sandboxed shell exited 1 with 'failed to read configuration: open ~/.config/gh/config.yml: operation not permitted' (no account shown; outside the session gh reports account willesq). orch's settings do not deny ~/.config/gh for a space naming no gh profile; the deny comes from the Read(~/.config/gh/**) credential rule 'orch install' puts in the user's ~/.claude/settings.json, which Claude Code also applies to sandboxed commands once the sandbox is on (as SP-004 measured for Read rules). Making it pass needs a user decision (RC-208).",
+            "a6 (2026-11-14): launcher side by test, per-checkout side met by D-58. Launcher: TestPerSpaceTmpDir, TestShortTmpLayout, TestClaudeSandboxTmp, TestLauncherFragment, TestEnsureTmpDir, TestRunClaudeTmp, TestRunSetsProfileForChildOnly, TestCodexSandboxPerSpaceTmp pass, and TestClaudeE2E 'launched-tmpdir' PASS (Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 1c054e0 on 2026-11-14, with the user's default Claude Code configuration and default gh login and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14): sessions started as 'orch run' starts them (spacesettings.ClaudeLaunch: inline --settings and the space's environment, no CLAUDE_CONFIG_DIR): job B's TMPDIR=/tmp/oe4248650927/r/jobb/claude-501, it wrote b-launch.txt there; job A's TMPDIR=/tmp/oe4248650927/r/joba/claude-501, own file written and read, cat of B's file and of a file in the shared /tmp/claude-501 -> 'Operation not permitted'; job A's per-checkout session could not read B's file either. Per-checkout side: met by D-58 (sessions started in a checkout share Claude Code's /tmp/claude-<uid>, a documented limit); TestClaudeE2E 'tmpdir' SKIP citing D-58 (TMPDIR=/tmp/claude-501).",
+            "a1 (2026-11-14, D-61): still met at 6baf911: TestGeneratedSettingsDenyOtherJobsOnly, TestGeneratedSettingsOtherSpaces, TestOtherProfilesAndOrchDirDenied, TestUnplacedCheckout (internal/settings/spacesettings) and TestPlaceCheckoutIgnoresStricterRemote (internal/daemon) pass (go test ./... (0 failures), go vet ./..., gofmt -l (none) and make cover (all files >= 80%) at 6baf911 on 2026-11-14). D-61 adds TestGHReadRules: a space naming no gh profile gets the default gh folder in allowRead and no GH_CONFIG_DIR; a space naming one keeps env GH_CONFIG_DIR=its profile, reads only that and is denied the default folder; other spaces' profiles stay denied.",
+            "a2 (2026-11-14, D-61): TestMergePreservesUserEntries, TestMergeIdempotent, TestSyncIdempotent and TestSyncKeepsBackupOfFirstChange pass at 6baf911 (3 pass); TestSyncFollowsSandboxChoice also keeps the user's own entry through auto, on, off and the switch.",
+            "a3 (2026-11-14, D-61): TestSyncIgnoresEveryCheckout passes at 6baf911 (5/5 checkouts ignored = 100%); TestSyncFollowsSandboxChoice checks 'git check-ignore' also for a file holding only GH_CONFIG_DIR (setting auto, nothing to deny).",
+            "a4 (2026-11-14): TestSyncPicksUpNewClone and TestCheckoutSettingsLoop pass at 6baf911 (the loop test sets the sandbox setting on, as one isolated space alone gets no rules under auto, D-61); orchd still syncs every 30 s and at once on a setting change; the 2026-11-12 measurement (<= 30 s + one sync, <= 60 s) stands.",
+            "a5 (2026-11-14, D-61): both true. Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14. 'bash' PASS: a session started in job A's checkout subfolder ran cat of job B's root file and of job B's temp file -> 'Operation not permitted', the control in job A's folder printed its content. 'gh' PASS: 'gh auth status' in that session's sandboxed shell -> 'Logged in to github.com account willesq (keyring)', exit 0 (job A uses the default login, D-59; the settings carry allowRead of ~/.config/gh, allowedDomains api.github.com/github.com and enableWeakerNetworkIsolation, RC-208 option a). 'launcher/gh' PASS the same in a launched session.",
+            "a6 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14: 'launched-tmpdir' PASS (job B's launched TMPDIR=/tmp/oe2955965139/r/jobb/claude-501 holding b-launch.txt; job A's /tmp/oe2955965139/r/joba/claude-501 written and read; cat of B's file and of a file in the shared /tmp/claude-501 -> 'Operation not permitted'; job A's per-checkout session could not read B's file); 'tmpdir' SKIP citing D-58. Unit tests TestPerSpaceTmpDir, TestShortTmpLayout, TestClaudeSandboxTmp, TestLauncherFragment, TestEnsureTmpDir, TestRunClaudeTmp, TestRunSetsProfileForChildOnly pass at 6baf911.",
+            "a7 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14: read, grep, glob, write and edit PASS (job B's root refused to Read, Grep, Glob, Write and Edit from a session started in <checkout>/sub/deep; each control on job A's folder succeeded); 'protect' PASS (settings unchanged)."
+          ]
         },
         {
           "id": "SP-046.2",
@@ -5292,7 +5699,7 @@
             {
               "id": "a1",
               "type": "test",
-              "check": "'orch run <space> -- claude' sets CLAUDE_CONFIG_DIR (and GH_CONFIG_DIR) for the child process only, and refuses an unknown space or a space the current folder resolves outside of unless --force is given.",
+              "check": "'orch run <space> -- claude' sets CLAUDE_CONFIG_DIR and GH_CONFIG_DIR for the child process only, each only when the space names one (D-59), and refuses an unknown space or a space the current folder resolves outside of unless --force is given.",
               "measure": "tests",
               "threshold": "3 pass"
             },
@@ -5311,7 +5718,17 @@
               "threshold": "true"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (2026-11-12): TestRunSetsProfileForChildOnly (CLAUDE_CONFIG_DIR, GH_CONFIG_DIR, TMPDIR set in the exec'd harness's environment only, inherited values replaced, orch's own environment unchanged), TestRunRefusesUnknownSpace (unknown space and no applied policy refused, nothing started) and TestRunRefusesOtherSpaceFolder (a folder in another space or undecidable refused unless --force; own space and unplaced folders allowed) pass: 3 pass. Also TestRunCodex, TestRunSandboxOff, TestRunUsage.",
+            "a2: waiting on the user (RC-180): not run on 2026-11-12, as ORCH_E2E_LAYOUT was not set (it needs a per-space profile the user logged in to once). TestClaudeE2E with ORCH_E2E_LAYOUT runs the read, grep, glob, write and bash probes from a folder outside every root with the launcher's profile (CLAUDE_CONFIG_DIR, LauncherFragment) and environment.",
+            "a3 (2026-11-12): documented from SP-004 (a fresh CLAUDE_CONFIG_DIR starts 'Not logged in'; persistence per profile not measured) with the setup steps in docs/internals/install.md 'Per-space harness settings' (Logging in to a per-space profile) and docs/OPERATIONS.md.",
+            "a1 (2026-11-14, amended by D-59): TestRunSetsProfileForChildOnly (joba names gh_config_dir and claude_config_dir: CLAUDE_CONFIG_DIR and GH_CONFIG_DIR are those, replacing inherited values; jobb names neither: the inherited values stay as they were and with nothing inherited neither is set; TMPDIR/CLAUDE_CODE_TMPDIR always the space's; the rules go in as --settings; orch's own environment unchanged), TestRunRefusesUnknownSpace and TestRunRefusesOtherSpaceFolder pass: 3 pass. Also TestRunDropsOtherSpaceLogin, TestRunDropsLoginOverrides, TestRunRefusesUserSettings, TestSamePath, TestRunClaudeTmp, TestRunCodex, TestRunSandboxOff, TestRunUsage (internal/cli) and TestClaudeLaunch (internal/settings/spacesettings).",
+            "a2 (2026-11-14): observed in real Claude Code sessions. Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 1c054e0 on 2026-11-14, with the user's default Claude Code configuration and default gh login and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14. The 'launcher' subtests started sessions the way 'orch run joba -- claude' does (spacesettings.ClaudeLaunch: the launcher's rules as inline --settings, environment TMPDIR and CLAUDE_CODE_TMPDIR=/tmp/oe4248650927/r/joba, no CLAUDE_CONFIG_DIR, so the normal Claude config and no second login) from <temp>/scratch, a folder outside every root. launcher/read, launcher/grep, launcher/glob, launcher/write, launcher/bash PASS with the same outcomes as read, grep, glob, write, bash (PASS) in a session started inside job A's checkout: Read -> 'File is in a directory that is denied by your permission settings', Grep and Glob -> 'Permission to read .../code/b has been denied', Write -> denied and no file created, cat of job B's root and temp files -> 'Operation not permitted'; each control on job A's folder succeeded. true.",
+            "a3 (2026-11-14, D-59): docs/internals/install.md 'Logins (D-59)' and docs/OPERATIONS.md now say a separate Claude login is needed only when a space names its own claude_config_dir (SP-004: a fresh CLAUDE_CONFIG_DIR starts 'Not logged in'), with the setup steps (orch run <space> -- claude then /login, or CLAUDE_CONFIG_DIR=<dir> claude); spaces naming none use the user's own login. Whether such a login persists per folder is still not measured (RC-191).",
+            "a1 (2026-11-14, D-61): TestRunSetsProfileForChildOnly, TestRunRefusesUnknownSpace and TestRunRefusesOtherSpaceFolder pass at 6baf911 (3 pass); also TestRunFollowsSandboxSetting (auto, on, off; GH_CONFIG_DIR and TMPDIR set either way) and TestRunWarnsOfLooseningSettings.",
+            "a2 (2026-11-14): true. Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14: launcher/read, grep, glob, write, bash and gh PASS from <temp>/scratch outside every root, with the same outcomes as the checkout session.",
+            "a3 (2026-11-14): unchanged; docs/internals/install.md 'Logins (D-59)' and docs/OPERATIONS.md document when a separate Claude login is needed and how."
+          ]
         },
         {
           "id": "SP-046.3",
@@ -5325,18 +5742,61 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (2026-11-12): TestSandboxSwitch (internal/settings/spacesettings) and TestCheckoutSettingsFollowPolicyAndSwitch (internal/daemon) pass: switching the sandbox layer off takes orch's entries out of all 3 files, leaves the user's file meaning-equal to its original and removes the files orch created; switching on restores the same content; the switch change asks for a sync at once; with no policy the entries go too.",
+            "a1 (2026-11-14, D-61): TestSandboxSwitch and TestCheckoutSettingsFollowPolicyAndSwitch pass at 6baf911; TestSyncFollowsSandboxChoice shows the switch takes every entry out (GH_CONFIG_DIR included) and leaves the user's entry; TestSandboxSettingDecidesCheckouts shows a timed switch to off empties the files and its revert restores them."
+          ]
+        },
+        {
+          "id": "SP-046.4",
+          "title": "Sandbox as a choice and logins (D-61)",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "The sandbox setting (auto|on|off, default auto) is stored in orch.db, survives an orchd restart, is shown by 'orch status', and can be changed only by the operator through the CLI (callers descended from a harness or orchd are refused, INV-06); each change is logged with time and caller.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "With 'auto', a checkout gets orch's sandbox rules only when another isolated space exists whose folders they deny; with 'off' none are written and start digests do not report enforcement off; with 'on' they are always written; a timed SP-070 switch to off still marks start digests (INV-16).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "In a real Claude Code session with the sandbox on (TestClaudeE2E), a space using the default gh login runs 'gh auth status' successfully, and the default gh config folder stays unreadable by name through the guard (SP-042).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "With two spaces side by side, one on the default gh login and one naming its own gh profile, each session's 'gh auth status' shows only its own space's login source, and a session cannot use the other space's profile (GH_CONFIG_DIR pointed at it is denied); only account metadata is observed, never a token (RC-210).",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": [
+            "a1 (2026-11-14): TestSandboxSettingOperatorOnly (internal/daemon: auto by default; claude, codex, orchd-started, queued, unreadable and peerless callers refused with PermissionDenied and nothing changed; operator set logged in spaces_enforcement_log with time and 'operator (process 42)'; shown by GetEnforcement (set_by for the operator only) and Status; back after a restart via newEnforcement), TestSandboxSettingStore and TestSandboxSettingTampered (internal/spaces), TestSandboxSettingChangedOutsideOrchd (drift reported, orchd keeps its own; a restart over an edited row is on), TestSpacesSandboxCmd (internal/cli) and TestSpacesSectionShowsSandboxSetting (internal/status: one 'sandbox' line) pass at 6baf911.",
+            "a2 (2026-11-14): TestSandboxChoice and TestSyncFollowsSandboxChoice (internal/settings/spacesettings), TestSandboxSettingDecidesCheckouts (internal/daemon: auto writes only the public checkout kept out of job a, nothing with job a alone; on writes it; off clears it; no switch reads relaxed and orch status names none; a 15 min timed switch to off is relaxed and clears the files, and its revert restores them), TestSandboxSettingIsNotASwitch (internal/spaces) and TestSessionStartIgnoresSandboxSetting (internal/hook: no digest line for off or auto-with-nothing, from orchd or orch.db; a timed sandbox switch is named), and TestRunFollowsSandboxSetting (internal/cli) pass at 6baf911.",
+            "a3 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14. 'gh' and 'launcher/gh' PASS ('Logged in to github.com account willesq (keyring)'). 'gh-guard' PASS: a session running this tree's orch-hook as its PreToolUse hook (temp ORCH_DATA_DIR, guard snapshot of the test policy, job A pin) was refused 'cat ~/.config/gh/config.yml | wc -c' by the guard ('orch spaces guard refused this call (rule self_protection)') and the Read tool by the installed Read(~/.config/gh/**) rule; the file's size never came back. Unit: TestGHReadRules and the guard's credential-read test in internal/spaces pass. Measured on the way (docs/internals/install.md): allowRead overrides the installed Read deny for sandboxed commands; gh then needs allowedDomains (else 'deny network-outbound api.github.com:443') and enableWeakerNetworkIsolation or allowMachLookup com.apple.trustd.agent (else 'x509: OSStatus -26276').",
+            "a4 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14; job B names its own gh profile, an unauthenticated temp folder whose config.yml sets git_protocol https (the default login uses ssh). two-logins/joba PASS (account willesq, GH_CONFIG_DIR empty), two-logins/jobb PASS ('You are not logged into any GitHub hosts', git_protocol https, GH=<its profile>), two-logins/joba-uses-jobb PASS (GH_CONFIG_DIR=<job B's profile> -> 'open .../gh-b/config.yml: operation not permitted'), two-logins/jobb-uses-default PASS (GH_CONFIG_DIR=~/.config/gh -> 'operation not permitted'). Metadata only. Measured beside it (RC-210, does not fail the test): a profile folder job B made itself naming the default account made gh report that account logged in from the keyring."
+          ]
         }
       ],
-      "status": "todo",
+      "status": "blocked",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": null,
-      "attempts": 0,
-      "criteria_sha256": "0ed90500129ff80453d9ab01f9e541da7d9f62defe2a9d070c09806eae31aa3a",
-      "branch": null,
-      "pr": null
+      "blocked_reason": "2026-11-14: D-61 is implemented and every SP-046 acceptance item has evidence at 6baf911 (unit tests, make cover, and the full TestClaudeE2E suite PASS), but DOD-6 is not met. The security audit's HIGH, RC-215 (measured: an allowRead or allowWrite in a checkout's own .claude/settings.json, or the user's own entries in settings.local.json, re-opens orch's sandbox denies for sessions started in the checkout; orch now reports it but cannot prevent it without editing tracked files or users' entries, which SP-046.1.a2 forbids), and two MEDIUMs that follow from D-61's own text, RC-216 (a consistent forged setting is taken at restart and never marks a digest) and RC-217 (auto judges only isolated roots), need user decisions. The independent verifier was not run.",
+      "attempts": 2,
+      "criteria_sha256": "cba1332a2b5973eb9c82362ed430d3a8c28df32d635b00bfea8a90589908f887",
+      "branch": "feat/sp-046-per-space-harness-settings",
+      "pr": "https://github.com/willesq/orchestrator/pull/171"
     },
     {
       "id": "SP-048",
@@ -6143,6 +6603,22 @@
     {
       "date": "2026-11-14",
       "change": "SP-044 verified and done (190d97191df42f39b8706ff883225a12e39e2b1d); RC-116 resolved."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-58 (RC-206 option c: shared Claude temp folder in checkout sessions is a documented limit) and D-59 (one gh/Claude login by default, per-space logins optional; revisits D-18). With the user's approval: SP-046.1.a1 and SP-046.2.a1 amended to set GH_CONFIG_DIR/CLAUDE_CONFIG_DIR only when the space names one, SP-074 gains SP-074.3 (login detection and display); both criteria_sha256 recomputed."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-61: sandbox layer setting auto|on|off (default auto, 'off' by choice is quiet), RC-208 option (a), RC-211 accepted, multiple GitHub logins tested side by side. SP-046 gains SP-046.4 with the user's approval (criteria_sha256 recomputed); INV-16 notes the sandbox exception."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "SP-046 under D-61: sandbox setting auto|on|off (orch spaces sandbox), gh in the sandbox (RC-208 option a, measured), two-login e2e. Evidence recorded for every SP-046 item at 6baf911; SP-046 blocked on the audit's high RC-215 and mediums RC-216, RC-217 (DOD-6). RC-180 and RC-184 resolved; RC-210 confirmed by measurement and made a decision; RC-213 to RC-219 added."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-62: user merged SP-046 (#171) with RC-215/216/217 open; SP-046 stays blocked until they are fixed and verified."
     }
   ],
   "plan_location": {

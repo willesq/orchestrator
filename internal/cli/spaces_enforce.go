@@ -24,7 +24,9 @@ debugging:
   memory    on | off                                memory filtering
   guard     block-other-jobs | strict | log | off   the tool guard
   terms     on | off                                outbound terms
-  sandbox   on | off                                generated sandbox rules
+  sandbox   on | off                                generated sandbox rules (for
+                                                    debugging; the lasting choice
+                                                    is 'orch spaces sandbox')
   hooks     on | off                                the tool hooks (pre-tool-use,
                                                     cwd-changed) in Claude Code
 
@@ -55,7 +57,11 @@ tasks orchd runs: run it in your own terminal or use Orch.app.`,
 					if err != nil {
 						return err
 					}
-					return printSwitches(c.OutOrStdout(), rep)
+					if err := printSwitches(c.OutOrStdout(), rep); err != nil {
+						return err
+					}
+					printSandboxSetting(c.OutOrStdout(), rep.GetSandboxSetting())
+					return nil
 				})
 			}
 			if forDur < 0 || (forDur > 0 && forDur < time.Second) {

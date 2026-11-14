@@ -15,10 +15,12 @@ import (
 // enforceFake is what fakeClient's GetEnforcement and SetEnforcement answer
 // and record.
 var enforceFake struct {
-	get    *orchdv1.EnforcementState
-	set    *orchdv1.SetEnforcementResponse
-	err    error
-	setReq *orchdv1.SetEnforcementRequest
+	get        *orchdv1.EnforcementState
+	set        *orchdv1.SetEnforcementResponse
+	err        error
+	setReq     *orchdv1.SetEnforcementRequest
+	sandbox    *orchdv1.SetSandboxSettingResponse
+	sandboxReq *orchdv1.SetSandboxSettingRequest
 }
 
 func (f *fakeClient) GetEnforcement(context.Context, *orchdv1.GetEnforcementRequest, ...grpc.CallOption) (*orchdv1.EnforcementState, error) {
@@ -30,10 +32,19 @@ func (f *fakeClient) SetEnforcement(_ context.Context, req *orchdv1.SetEnforceme
 	return enforceFake.set, enforceFake.err
 }
 
+func (f *fakeClient) SetSandboxSetting(_ context.Context, req *orchdv1.SetSandboxSettingRequest, _ ...grpc.CallOption) (*orchdv1.SetSandboxSettingResponse, error) {
+	enforceFake.sandboxReq = req
+	return enforceFake.sandbox, enforceFake.err
+}
+
 func resetEnforceFake(t *testing.T) {
 	t.Helper()
-	enforceFake.get, enforceFake.set, enforceFake.err, enforceFake.setReq = nil, nil, nil, nil
-	t.Cleanup(func() { enforceFake.get, enforceFake.set, enforceFake.err, enforceFake.setReq = nil, nil, nil, nil })
+	reset := func() {
+		enforceFake.get, enforceFake.set, enforceFake.err, enforceFake.setReq = nil, nil, nil, nil
+		enforceFake.sandbox, enforceFake.sandboxReq = nil, nil
+	}
+	reset()
+	t.Cleanup(reset)
 }
 
 func TestSpacesEnforceList(t *testing.T) {
@@ -100,5 +111,58 @@ func TestEventDetailShowsRule(t *testing.T) {
 	}
 	if d := eventDetail(&orchdv1.ToolEvent{Event: "cwd-changed", OldCwd: "/a", NewCwd: "/b"}); d != "/a -> /b" {
 		t.Errorf("detail = %q", d)
+	}
+}
+
+// TestSpacesSandboxCmd (SP-046.4.a1): 'orch spaces sandbox' shows the
+// setting and what it does; with a value it asks orchd to set it (orchd
+// refuses anyone but the operator) and says whether it changed.
+func TestSpacesSandboxCmd(t *testing.T) {
+	resetEnforceFake(t)
+	at := time.Date(2026, 11, 14, 9, 30, 0, 0, time.Local)
+	enforceFake.get = &orchdv1.EnforcementState{SandboxSetting: &orchdv1.SandboxSetting{
+		Mode: "off", DefaultMode: "auto", SetAt: at.Unix(), SetBy: "operator (process 9)",
+		Detail: "off by choice", Problem: "changed outside orchd",
+	}}
+	out, err := run(factory(&fakeClient{}, nil), "", "spaces", "sandbox")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"sandbox setting: off; set 2026-11-14 09:30 by operator (process 9)", "  off by choice", "warning: changed outside orchd"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+	out, err = run(factory(&fakeClient{}, nil), "", "spaces", "enforce")
+	if err != nil || !strings.Contains(out, "sandbox setting: off") {
+		t.Errorf("enforce listing: %v\n%s", err, out)
+	}
+	enforceFake.get = &orchdv1.EnforcementState{SandboxSetting: &orchdv1.SandboxSetting{Mode: "auto", DefaultMode: "auto"}}
+	if out, _ := run(factory(&fakeClient{}, nil), "", "spaces", "sandbox"); !strings.Contains(out, "sandbox setting: auto (default)") {
+		t.Errorf("default:\n%s", out)
+	}
+	enforceFake.get = &orchdv1.EnforcementState{}
+	if out, _ := run(factory(&fakeClient{}, nil), "", "spaces", "sandbox"); !strings.Contains(out, "unknown") {
+		t.Errorf("no setting:\n%s", out)
+	}
+
+	enforceFake.sandbox = &orchdv1.SetSandboxSettingResponse{Changed: true, Current: &orchdv1.SandboxSetting{Mode: "on", Detail: "on: every space's sessions get orch's sandbox rules"}}
+	out, err = run(factory(&fakeClient{}, nil), "", "spaces", "sandbox", "on")
+	if err != nil || enforceFake.sandboxReq.GetMode() != "on" || !strings.Contains(out, "the sandbox setting is now on") || !strings.Contains(out, "every space") {
+		t.Errorf("set: %v %+v\n%s", err, enforceFake.sandboxReq, out)
+	}
+	enforceFake.sandbox = &orchdv1.SetSandboxSettingResponse{Current: &orchdv1.SandboxSetting{Mode: "on"}}
+	if out, _ := run(factory(&fakeClient{}, nil), "", "spaces", "sandbox", "on"); !strings.Contains(out, "already on") {
+		t.Errorf("unchanged:\n%s", out)
+	}
+	enforceFake.err = errors.New("only the operator can change the sandbox setting")
+	if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "sandbox", "off"); err == nil || !strings.Contains(err.Error(), "operator") {
+		t.Errorf("refused: %v", err)
+	}
+	if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "sandbox"); err == nil {
+		t.Error("a failed read was not reported")
+	}
+	if _, err := run(factory(&fakeClient{}, nil), "", "spaces", "sandbox", "on", "off"); err == nil {
+		t.Error("two values accepted")
 	}
 }
