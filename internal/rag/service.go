@@ -75,16 +75,25 @@ type Service struct {
 	// copy of the same source never interleave, while other sources proceed.
 	stripes [64]sync.Mutex
 	// mu guards the fields below: a migration adds a shadow that writes also
-	// reach, then swaps it in as the active store.
+	// reach, then swaps it in as the active store. Both are base collections:
+	// each space's collection is named after them (SpaceCollection).
 	mu     sync.RWMutex
 	store  *QdrantStore
 	shadow *QdrantStore
 	// touched records sources a live write has fully written to the shadow
-	// during a migration; the copy leaves those alone.
+	// during a migration; the copy leaves those alone. Keyed by sourceKey:
+	// a source is copied per space collection.
 	touched map[string]bool
 	// dirty records sources a write left inconsistent between the two stores
 	// during a migration; the migration copies them again before it switches.
 	dirty map[string]bool
+	// derivedMu guards derived, the stores of space collections by name,
+	// lists, each base's known space collections, and noted.
+	derivedMu sync.Mutex
+	derived   map[string]*QdrantStore
+	lists     map[string]spaceList
+	// noted holds, by base, the space collections this process created.
+	noted map[string]map[string]bool
 	// StateDir holds migration markers, so an interrupted migration can be
 	// told apart from a finished one.
 	StateDir string
@@ -123,6 +132,10 @@ type Service struct {
 	// MarkdownSections chunks markdown by heading section instead of by word
 	// window (embedder.markdown_sections).
 	MarkdownSections bool
+	// lazyVectors makes a search of one collection fetch keyword hits'
+	// vectors afterwards, as a search of several does; the SP-024.3
+	// benchmark sets it to compare the layouts like with like.
+	lazyVectors bool
 	// Place decides every write's space from its origin (SP-023). Set once,
 	// before the service is shared; nil stores writes unplaced, as tools and
 	// tests do.
@@ -168,31 +181,33 @@ func (s *Service) lockSource(uri string) func() {
 // shadowResult records how a write fared against the shadow: only a source
 // fully written there is left alone by the copy, and one that is not is marked
 // dirty, so the migration copies it again from the active store before it
-// switches.
-func (s *Service) shadowResult(uri string, err error) {
+// switches. key is the source in its space (sourceKey).
+func (s *Service) shadowResult(key string, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.touched == nil {
 		return
 	}
 	if err != nil {
-		delete(s.touched, uri)
-		s.dirty[uri] = true
+		delete(s.touched, key)
+		s.dirty[key] = true
+		_, uri := splitKey(key)
 		log.Printf("rag: %s reached the active store but not the migration target (%v); it is copied again before the switch", uri, err)
 		return
 	}
-	s.touched[uri] = true
-	delete(s.dirty, uri)
+	s.touched[key] = true
+	delete(s.dirty, key)
 }
 
-// markDirty records that a write left a source possibly inconsistent between
-// the stores (it failed part-way on the active one) during a migration.
-func (s *Service) markDirty(uri string) {
+// markDirty records that a write left a source (key, see sourceKey) possibly
+// inconsistent between the stores (it failed part-way on the active one)
+// during a migration.
+func (s *Service) markDirty(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.dirty != nil {
-		delete(s.touched, uri)
-		s.dirty[uri] = true
+		delete(s.touched, key)
+		s.dirty[key] = true
 	}
 }
 
@@ -258,6 +273,11 @@ func (s *Service) split(text string) []chunk {
 //
 // With a placer set (Place), the write is placed first and stamped with its
 // origin, space and labels_v; a write the placer refuses stores nothing.
+//
+// The write goes to its space's collection only (SpaceCollection). A source
+// lives in one space, so a copy another collection holds (the source was
+// placed elsewhere before) is deleted first; if that fails nothing is
+// written, and the next write tries again.
 func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, error) {
 	if err := s.place(ctx, &m); err != nil {
 		return 0, err
@@ -275,15 +295,22 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 		return 0, err
 	}
 	defer s.lockSource(m.SourceURI)()
-	active, shadow := s.stores()
+	if err := s.removeElsewhere(ctx, m); err != nil {
+		return 0, err
+	}
+	active, shadow := s.storeFor(m.Space)
+	key := sourceKey(m.Space, m.SourceURI)
+	// Noted before the write: a write that fails part-way may still have
+	// made the collection and left points in it.
+	s.noteCollection(s.active(), m.Space)
 	if err := writePoints(ctx, active, dim, m.SourceURI, points); err != nil {
 		if shadow != nil {
-			s.markDirty(m.SourceURI)
+			s.markDirty(key)
 		}
 		return 0, err
 	}
 	if shadow != nil {
-		s.shadowResult(m.SourceURI, writePoints(ctx, shadow, dim, m.SourceURI, points))
+		s.shadowResult(key, writePoints(ctx, shadow, dim, m.SourceURI, points))
 	}
 	return len(points), nil
 }
@@ -292,10 +319,13 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 // done meanwhile, whether the store already holds this exact write.
 func (s *Service) skipUnchanged(ctx context.Context, text string, m Meta) (int, bool) {
 	defer s.lockSource(m.SourceURI)()
-	active, shadow := s.stores()
+	active, shadow := s.storeFor(m.Space)
 	if shadow != nil {
 		return 0, false
 	}
+	// Reason: the stored copy is looked for in the write's own space only,
+	// so a write cached as unchanged in one space is never skipped for
+	// another (INV-11).
 	return s.unchanged(ctx, active, m.SourceURI, s.ingestHash(text, m))
 }
 
@@ -485,52 +515,61 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 
 	agg := map[string]*SourceSummary{}
 	total := 0
-	var offset any
-	// A server that returns a non-advancing cursor would otherwise spin forever:
-	// the per-request timeout bounds each call but not the loop.
-	for page := 0; ; page++ {
-		if page >= maxScrollPages {
-			return nil, 0, 0, fmt.Errorf("list sources: exceeded %d pages; aborting scan", maxScrollPages)
-		}
-		pts, next, err := s.active().Scroll(ctx, filter, fields, 1000, offset)
-		if err != nil {
-			return nil, 0, 0, err
-		}
-		for _, p := range pts {
-			uri := str(p.Payload["source_uri"])
-			if opts.URIPrefix != "" && !strings.HasPrefix(uri, opts.URIPrefix) {
-				continue
+	// Every space's collection is listed: which of them a caller may see is
+	// SP-025's decision, not this inventory's.
+	stores, err := s.allStores(ctx, s.active(), false)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	for _, ss := range stores {
+		st := ss.st
+		var offset any
+		// A server that returns a non-advancing cursor would otherwise spin forever:
+		// the per-request timeout bounds each call but not the loop.
+		for page := 0; ; page++ {
+			if page >= maxScrollPages {
+				return nil, 0, 0, fmt.Errorf("list sources: exceeded %d pages; aborting scan", maxScrollPages)
 			}
-			total++
-			cur, ok := agg[uri]
-			if !ok {
-				cur = &SourceSummary{
-					SourceURI:  uri,
-					SourceType: str(p.Payload["source_type"]),
-					Scope:      str(p.Payload["scope"]),
-					Tags:       strSlice(p.Payload["tags"]),
-					Writer:     str(p.Payload[fieldWriter]),
+			pts, next, err := st.Scroll(ctx, filter, fields, 1000, offset)
+			if err != nil {
+				return nil, 0, 0, err
+			}
+			for _, p := range pts {
+				uri := str(p.Payload["source_uri"])
+				if opts.URIPrefix != "" && !strings.HasPrefix(uri, opts.URIPrefix) {
+					continue
 				}
-				agg[uri] = cur
+				total++
+				cur, ok := agg[uri]
+				if !ok {
+					cur = &SourceSummary{
+						SourceURI:  uri,
+						SourceType: str(p.Payload["source_type"]),
+						Scope:      str(p.Payload["scope"]),
+						Tags:       strSlice(p.Payload["tags"]),
+						Writer:     str(p.Payload[fieldWriter]),
+					}
+					agg[uri] = cur
+				}
+				cur.Chunks++
+				if t := unixTime(p.Payload[fieldStartedAt]); !t.IsZero() && (cur.StartedAt.IsZero() || t.Before(cur.StartedAt)) {
+					cur.StartedAt = t
+				}
+				if t := unixTime(p.Payload[fieldEndedAt]); t.After(cur.EndedAt) {
+					cur.EndedAt = t
+				}
+				if t := unixTime(p.Payload[fieldIngestedAt]); t.After(cur.IngestedAt) {
+					cur.IngestedAt = t
+				}
 			}
-			cur.Chunks++
-			if t := unixTime(p.Payload[fieldStartedAt]); !t.IsZero() && (cur.StartedAt.IsZero() || t.Before(cur.StartedAt)) {
-				cur.StartedAt = t
+			if next == nil {
+				break
 			}
-			if t := unixTime(p.Payload[fieldEndedAt]); t.After(cur.EndedAt) {
-				cur.EndedAt = t
+			if offset != nil && fmt.Sprint(next) == fmt.Sprint(offset) {
+				return nil, 0, 0, fmt.Errorf("list sources: scroll cursor did not advance")
 			}
-			if t := unixTime(p.Payload[fieldIngestedAt]); t.After(cur.IngestedAt) {
-				cur.IngestedAt = t
-			}
+			offset = next
 		}
-		if next == nil {
-			break
-		}
-		if offset != nil && fmt.Sprint(next) == fmt.Sprint(offset) {
-			return nil, 0, 0, fmt.Errorf("list sources: scroll cursor did not advance")
-		}
-		offset = next
 	}
 
 	out := make([]SourceSummary, 0, len(agg))
@@ -551,36 +590,58 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 	return out, distinct, total, nil
 }
 
-// DeleteSource removes every chunk belonging to one source URI, returning how
-// many were removed. A missing source is not an error — it deletes nothing.
+// DeleteSource removes every chunk belonging to one source URI, from every
+// space's collection, returning how many were removed. A missing source is
+// not an error — it deletes nothing.
 func (s *Service) DeleteSource(ctx context.Context, uri string) (int, error) {
 	if uri == "" {
 		return 0, fmt.Errorf("source_uri is required")
 	}
 	defer s.lockSource(uri)()
 	active, shadow := s.stores()
-	n, err := deleteSource(ctx, active, uri)
+	// Reason: a forget must reach every space, so the list is read afresh
+	// rather than trusted from the cache.
+	stores, err := s.allStores(ctx, active, true)
 	if err != nil {
-		if shadow != nil {
-			s.markDirty(uri)
-		}
 		return 0, err
 	}
-	if shadow != nil {
-		// The shadow may hold the source even when the active store does not.
-		_, err := deleteSource(ctx, shadow, uri)
-		s.shadowResult(uri, err)
+	total := 0
+	for _, ss := range stores {
+		sp, _ := spaceOf(active.Collection(), ss.st.Collection())
+		key := sourceKey(sp, uri)
+		n, err := deleteSource(ctx, ss.st, uri)
+		if err != nil {
+			if shadow != nil {
+				s.markDirty(key)
+			}
+			return 0, err
+		}
+		total += n
+		if shadow != nil {
+			// The shadow may hold the source even when the active store does not.
+			_, err := deleteSource(ctx, s.derive(shadow, sp), uri)
+			s.shadowResult(key, err)
+		}
 	}
-	return n, nil
+	return total, nil
 }
 
-// HasSource reports whether any chunk is stored under uri.
+// HasSource reports whether any chunk is stored under uri, in any space.
 func (s *Service) HasSource(ctx context.Context, uri string) (bool, error) {
 	if uri == "" {
 		return false, nil
 	}
-	n, err := s.active().Count(ctx, EqFilter("source_uri", uri))
-	return n > 0, err
+	stores, err := s.allStores(ctx, s.active(), false)
+	if err != nil {
+		return false, err
+	}
+	for _, ss := range stores {
+		n, err := ss.st.Count(ctx, EqFilter("source_uri", uri))
+		if err != nil || n > 0 {
+			return n > 0, err
+		}
+	}
+	return false, nil
 }
 
 // pointID is a deterministic UUIDv5 so re-ingesting a source overwrites prior chunks.

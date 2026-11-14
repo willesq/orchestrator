@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -27,6 +28,20 @@ type fakeQdrant struct {
 	// failIndexes makes the next n payload-index requests fail; indexes
 	// counts them.
 	failIndexes, indexes int
+	// reqs records every request, in order.
+	reqs []fakeReq
+	// failVectorReads fails every read of points by id that asks for
+	// vectors.
+	failVectorReads bool
+	// onList runs while a collection listing is served, before it is read.
+	onList func()
+}
+
+// fakeReq is one request the fake served: its collection ("" for the
+// collection list), the action after it, the method and the body.
+type fakeReq struct {
+	collection, action, method string
+	body                       map[string]any
 }
 
 type fakeCollection struct {
@@ -56,9 +71,14 @@ func (f *fakeQdrant) collection(name string) *fakeCollection {
 
 // seed adds a dense-layout collection holding the given payloads.
 func (f *fakeQdrant) seed(name string, payloads ...map[string]any) {
+	f.seedLayout(name, LayoutDense, payloads...)
+}
+
+// seedLayout adds a collection of layout l holding the given payloads.
+func (f *fakeQdrant) seedLayout(name string, l Layout, payloads ...map[string]any) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	c := &fakeCollection{layout: LayoutDense, points: map[string]fakePoint{}}
+	c := &fakeCollection{layout: l, points: map[string]fakePoint{}}
 	for i, p := range payloads {
 		id := fmt.Sprintf("seed-%d", i)
 		if idx, ok := p["chunk_index"].(int); ok {
@@ -70,14 +90,41 @@ func (f *fakeQdrant) seed(name string, payloads ...map[string]any) {
 	f.collections[name] = c
 }
 
-func (f *fakeQdrant) serve(w http.ResponseWriter, r *http.Request) {
-	rest := strings.TrimPrefix(r.URL.Path, "/collections/")
-	name, action, _ := strings.Cut(rest, "/")
+// requests returns the requests recorded so far, and forgets them.
+func (f *fakeQdrant) requests() []fakeReq {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	out := f.reqs
+	f.reqs = nil
+	return out
+}
+
+func (f *fakeQdrant) serve(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r.URL.Path == "/collections" && r.Method == http.MethodGet {
+		f.reqs = append(f.reqs, fakeReq{action: "list", method: r.Method})
+		if f.onList != nil {
+			f.onList()
+		}
+		names := make([]string, 0, len(f.collections))
+		for n := range f.collections {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		var list []map[string]any
+		for _, n := range names {
+			list = append(list, map[string]any{"name": n})
+		}
+		writeJSON(w, map[string]any{"result": map[string]any{"collections": list}})
+		return
+	}
+	rest := strings.TrimPrefix(r.URL.Path, "/collections/")
+	name, action, _ := strings.Cut(rest, "/")
 	c := f.collections[name]
 	var body map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&body)
+	f.reqs = append(f.reqs, fakeReq{collection: name, action: action, method: r.Method, body: body})
 	switch {
 	case action == "" && r.Method == http.MethodGet:
 		if c == nil {
@@ -125,12 +172,18 @@ func (f *fakeQdrant) serve(w http.ResponseWriter, r *http.Request) {
 			c.points[p.ID] = p
 		}
 		writeJSON(w, map[string]any{"result": map[string]any{"status": "completed"}})
+	case action == "points" && r.Method == http.MethodPost && f.failVectorReads && body["with_vector"] != nil && body["with_vector"] != false:
+		http.Error(w, "injected failure", http.StatusInternalServerError)
 	case action == "points" && r.Method == http.MethodPost:
 		ids, _ := body["ids"].([]any)
 		var out []map[string]any
 		for _, id := range ids {
 			if p, ok := c.points[fmt.Sprint(id)]; ok {
-				out = append(out, map[string]any{"id": p.ID, "payload": p.Payload})
+				pt := map[string]any{"id": p.ID, "payload": p.Payload}
+				if _, want := body["with_vector"].([]any); want {
+					pt["vector"] = map[string]any{denseName: p.dense()}
+				}
+				out = append(out, pt)
 			}
 		}
 		writeJSON(w, map[string]any{"result": out})
@@ -187,13 +240,52 @@ func (f *fakeQdrant) serve(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"result": map[string]any{"status": "completed"}})
 	case action == "points/search":
 		var hits []map[string]any
-		for _, id := range c.sortedIDs() {
-			hits = append(hits, map[string]any{"score": 0.5, "payload": c.points[id].Payload})
+		for _, id := range c.ranked(body["filter"]) {
+			// A point marked keyword_only is found by its words alone.
+			if c.points[id].Payload["keyword_only"] == true {
+				continue
+			}
+			hits = append(hits, map[string]any{"id": id, "score": c.score(id), "payload": c.points[id].Payload})
 		}
 		writeJSON(w, map[string]any{"result": hits})
+	case action == "points/query":
+		var hits []map[string]any
+		for _, id := range c.ranked(body["filter"]) {
+			h := map[string]any{"id": id, "score": c.score(id), "payload": c.points[id].Payload}
+			if _, want := body["with_vector"].([]any); want {
+				h["vector"] = map[string]any{denseName: c.points[id].dense()}
+			}
+			hits = append(hits, h)
+		}
+		writeJSON(w, map[string]any{"result": map[string]any{"points": hits}})
 	default:
 		http.Error(w, "unsupported "+r.Method+" "+r.URL.Path, http.StatusBadRequest)
 	}
+}
+
+// dense is the point's dense vector, stored bare (dense layout) or named.
+func (p fakePoint) dense() json.RawMessage {
+	var named map[string]json.RawMessage
+	if json.Unmarshal(p.Vector, &named) == nil {
+		return named[denseName]
+	}
+	return p.Vector
+}
+
+// score is a point's search score: its payload's "score" when it has one,
+// else 0.5.
+func (c *fakeCollection) score(id string) float64 {
+	if v, ok := c.points[id].Payload["score"].(float64); ok {
+		return v
+	}
+	return 0.5
+}
+
+// ranked is matching's ids, highest score first, as Qdrant answers a search.
+func (c *fakeCollection) ranked(filter any) []string {
+	ids := c.matching(filter)
+	sort.SliceStable(ids, func(i, j int) bool { return c.score(ids[i]) > c.score(ids[j]) })
+	return ids
 }
 
 func (c *fakeCollection) sortedIDs() []string {
@@ -217,8 +309,14 @@ func (c *fakeCollection) matching(filter any) []string {
 		for _, cond := range must {
 			m := cond.(map[string]any)
 			key := m["key"].(string)
-			if match, has := m["match"].(map[string]any); has && str(p[key]) != str(match["value"]) {
-				ok = false
+			if match, has := m["match"].(map[string]any); has {
+				if anyOf, isAny := match["any"].([]any); isAny {
+					if !slices.ContainsFunc(anyOf, func(v any) bool { return slices.Contains(strSlice(p[key]), str(v)) }) {
+						ok = false
+					}
+				} else if str(p[key]) != str(match["value"]) {
+					ok = false
+				}
 			}
 			if rng, has := m["range"].(map[string]any); has {
 				// Like Qdrant, a point without the field never matches a range.
