@@ -3,7 +3,7 @@
   "plan_id": "orch-memory-spaces",
   "title": "orch memory spaces: isolation of memory, sessions and tools across contexts",
   "created": "2026-11-08",
-  "updated": "2026-11-10",
+  "updated": "2026-11-14",
   "repo": "willesq/orchestrator",
   "base_commit": "5796fa6",
   "origin": {
@@ -2188,6 +2188,120 @@
         "raised": "2026-11-12",
         "affects": [
           "SP-053",
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-220",
+        "kind": "decision",
+        "topic": "Programs that run git themselves (accepted risk, D-60)",
+        "detail": "Accepted under D-60 and RC-117, recorded by the SP-044 security reviews of 2026-11-14: gh pushing an unpushed head branch itself (its interactive prompt), external git-<name> subcommands on PATH (git town, git-spr) that an alias check finds no alias for, gh's interactive base-repo prompt for a fork under a PTY (Codex exec_command with a tty), and gh api --hostname or -R naming another host. The check does not read what these send; SP-045's git hooks and per-job accounts are the boundary.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-045"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-221",
+        "kind": "decision",
+        "topic": "Encoded content in outbound text (accepted risk, D-60)",
+        "detail": "Accepted under D-60: the outbound terms check matches text as written. A term inside compressed, base64, UTF-16 or otherwise encoded content, a binary file over 1 MiB or past the 64th binary file of one check, or a binary file only a merge commit adds is not found.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-222",
+        "kind": "follow-up",
+        "topic": "Non-github.com hosts in gh repo names",
+        "detail": "Low (SP-044 review round 1): parseRepo drops the host, so gh -R ghe.example.com/acme/x or a PR URL on an Enterprise host is placed by the github.com owner acme, while GH_REPO with a host gives no space. Proposed: treat a repo on another host than github.com as holding no space.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-043"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-223",
+        "kind": "follow-up",
+        "topic": "A terms refusal hides the logging guard's own verdict",
+        "detail": "Low (SP-044 review round 1): with the guard off or logging, a call the terms check refuses is recorded as refused with the terms rule, so the command log loses the would-verdict the guard gave the same call (RC-86). Proposed: record both, e.g. the guard's would-rule in a second field.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-224",
+        "kind": "follow-up",
+        "topic": "Replay of terms verdicts and redacted fields",
+        "detail": "Low (SP-044 review round 1, RC-116): replay cannot run the terms check again (the log never keeps the text, INV-07, and the checkout moves on), so it carries a recorded outbound_term or outbound_unchecked refusal while the replayed guard lets the call through and the terms layer is on. Replay and orchd's logging-mode verdicts are also computed on redacted directories and targets, so a root or repo whose name is a term can replay differently from the live verdict.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-225",
+        "kind": "follow-up",
+        "topic": "Outbound calls refused when the guard cannot decide",
+        "detail": "Low, fail-closed (SP-044 review round 1): when the guard's decision times out, or its snapshot cannot be read while the guard is off or logging, the terms check cannot know the terms or the layer's switch from the snapshot and refuses every outbound call (outbound_unchecked), even when no space has terms. While the snapshot is unreadable the switch is read from orch.db, so an operator who switched terms off is not refused.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-226",
+        "kind": "follow-up",
+        "topic": "Multi-word literal terms are whitespace-exact",
+        "detail": "Low (SP-044 review round 1): a literal term of two words matches only with the single space written; two spaces, a tab or a newline between the words is not found. Proposed: match any run of blanks between a literal term's words.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-227",
+        "kind": "follow-up",
+        "topic": "Command log keeps terms split by shell quoting",
+        "detail": "Low, INV-07 (SP-044 review round 2): the command log redacts the tool input's decoded JSON text, not the words as the shell passes them, so gh issue create -b fal''con is stored as written. The check itself reads the shell words. Proposed: redact, or withhold the command, when a shell-decoded word holds a term.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-053"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-228",
+        "kind": "follow-up",
+        "topic": "Which remote gh picks, unverified cases",
+        "detail": "Low (SP-044 review rounds 1-2): gh only counts remotes on hosts it is signed in to. When gh is signed in to an Enterprise host only, it skips github.com remotes and may pick a later one; the check assumes github.com is known. The check counts gh api's {owner}/{repo} as the marked repo plus the first remotes, since gh api may ignore gh repo set-default (not checked against gh's source). Whether GitHub resolves dot segments in API paths is unverified; such paths fail closed.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
           "SP-044"
         ],
         "status": "open"
@@ -5007,8 +5121,10 @@
             }
           ],
           "evidence": [
-            "a1: TestTermsMatching (internal/spaces/terms_test.go): one terms file with literal terms (one word, two words, with punctuation, non-ASCII, a dotted host) and regex terms (a ticket pattern, an alternation), 26 match/no-match cases, all pass: case-insensitive, word boundaries (not inside falconry, refalcon, falcon_x, Überwaldx), regex anchoring by boundaries (INV-123 and INV-12345 do not match INV-[0-9]{4}), comments and blank lines skipped, CRLF lines. TestTermsRejected: 8 invalid files rejected (invalid regex, invalid character class, empty pattern, a pattern matching empty text, a line over 512 bytes, not UTF-8, over 256 KiB, over 4,096 terms), and no error text names the term; the error names the line. TestTermsRedact (5 cases incl. back-to-back terms and a regex with its own groups), TestRedactJSONAndTargets (reserved group names rejected), TestSpaceTerms, TestReadApplied.",
-            "a2: TestOutboundStagedTermCaught (internal/spaces/outbound_test.go, a real git repository whose origin is github.com/acme/app): a globex term in a staged file, with an innocent message, is refused for git commit (outbound_term, globex, line 1, destination acme), and so are commit -a with an unstaged tracked change, a term in the message and in a -F file; acme's own term to acme is allowed. TestOutboundPushedTermCaught: a globex term in a local commit not on origin is refused for git push, git push origin main, HEAD:main and -u origin --all; once origin's tracking ref has it the push is allowed; acme's term pushed to a globex URL is refused. Further: TestOutboundDestinations, TestOutboundFailsClosed, TestOutboundActions, and the three security reviews' reproducers TestOutboundReviewCases, TestOutboundReview2Cases, TestOutboundReview3Cases and TestOutboundNoFilterRun (a repository's clean filter does not run)."
+            "a1: TestTermsMatching (internal/spaces/terms_test.go): one terms file with literal terms (one word, two words, with punctuation, non-ASCII, a dotted host) and regex terms (a ticket pattern, an alternation), 26 match/no-match cases, all pass: case-insensitive, word boundaries (not inside falconry, refalcon, falcon_x, Überwaldx), regex anchoring by boundaries (INV-123 and INV-12345 do not match INV-[0-9]{4}), comments and blank lines skipped, CRLF lines. TestTermsRejected: 8 invalid files rejected (invalid regex, invalid character class, empty pattern, a pattern matching empty text, a line over 512 bytes, not UTF-8, over 256 KiB, over 4,096 terms), and no error text names the term; the error names the line. TestTermsRedact (5 cases incl. back-to-back terms and a regex with its own groups), TestRedactJSONAndTargets (reserved group names rejected), TestRedactTargetsEveryField, TestSpaceTerms, TestOutboundMatchStopsWithContext.",
+            "a1 re-run 2026-11-14 after merging main (SP-041/042/047) and D-60: all pass. spaces.ReadApplied and TestReadApplied are gone: the hook reads the policy from the guard snapshot (RC-116).",
+            "a2: TestOutboundStagedTermCaught (internal/spaces/outbound_test.go, a real git repository whose origin is github.com/acme/app): a globex term in a staged file, with an innocent message, is refused for git commit (outbound_term, globex, line 1, destination acme), and so are commit -a with an unstaged tracked change, a term in the message and in a -F file; acme's own term to acme is allowed. TestOutboundPushedTermCaught: a globex term in a local commit not on origin is refused for git push, git push origin main, HEAD:main and -u origin --all; once origin's tracking ref has it the push is allowed; acme's term pushed to a globex URL is refused. Further: TestOutboundDestinations, TestOutboundFailsClosed, TestOutboundActions, TestOutboundNoFilterRun and the security reviews' reproducers TestOutboundReviewCases, TestOutboundReview2Cases, TestOutboundReview3Cases, TestOutboundReview4Cases, TestOutboundReview5Cases, TestOutboundReview6Cases (binary files, merges, replace refs, authors, tag-only commits, tags of blobs).",
+            "a2 D-60 baseline (internal/spaces/outbound_d60_test.go): TestOutboundGHDefaultRepo, TestOutboundPlainVariables, TestOutboundCommandAssignments, TestOutboundGitConfigKeys each hold commands the strict version refused (run against the pre-D-60 code at c6bccb1: every one refused) that are now allowed, beside commands that still reach another space's destination or carry its term and are still refused; TestOutboundBaselineRules pins the six rule ids. RC-116 in the hook (internal/hook/terms_test.go, under SP-041's TestMain): TestOutboundTermsRefusedByHook (guard log, block-other-jobs and off: one deny, recorded as an enforced refuse with rule outbound_term and revision 7), TestOutboundTermsUncheckedRecorded, TestOutboundTermsAfterGuard, TestOutboundTermsSwitchFromSnapshot, TestOutboundTermsUnreadablePolicy, TestOutboundTermsPanicFailsClosed; through orchd: TestGuardSnapshotCarriesTermsSwitch, TestTermsRefusalRecordedAndReplayed (internal/daemon/terms_guard_test.go); replay: TestReplayCarriesTermsVerdicts."
           ]
         },
         {
@@ -5024,16 +5140,16 @@
             }
           ],
           "evidence": [
-            "a1: TestTermsNeverLeak (internal/daemon/terms_redact_test.go): with two jobs' terms files (literal and regex terms) applied, 16 tool events carrying every fixture term in commands, paths, directories (cwd, old and new cwd) and a Write tool's content (after newline and tab escapes, and past the 2 KB command cap) are stored; the command log records, orchd's log output during the run, the Status RPC output and a refusal reason for each term hold 0 occurrences of any fixture term (commands read [term]). TestTermsWithheldWhenUnreadable: with a terms file gone, command, targets and directories are withheld. The hook's refusal text is checked too: TestOutboundTermsRefusedByHook (internal/hook/terms_test.go) prints the PreToolUse deny naming the rule and the term's space, and not the term."
+            "a1: TestTermsNeverLeak (internal/daemon/terms_redact_test.go): with two jobs' terms files (literal and regex terms) applied, tool events carrying every fixture term in commands, paths, directories (cwd, old and new cwd), a Write tool's content (after newline and tab escapes, and past the 2 KB command cap), written paths and gh orgs (targets Writes and GHOrgs) and a Codex argv that splits a two-word term across words are stored; the command log records, orchd's log output during the run, the Status RPC output and a refusal reason for each term hold 0 occurrences of any fixture term (commands read [term]). This test failed on the code before review round 1 (5 records held terms). TestTermsWithheldWhenUnreadable: with a terms file gone, command, targets and directories are withheld. Refusal text: TestOutboundTermsRefusedByHook (internal/hook/terms_test.go) prints the PreToolUse deny naming the rule and the term's space, and not the term; TestOutboundReasonNamesNoWord: an alias, gh subcommand or API method the session wrote is not echoed."
           ]
         }
       ],
-      "status": "blocked",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": "Needs a user decision on residual risk (DOD-6 cannot reach zero open findings by more fixing). Three security-audit rounds of the outbound terms check each found new ways around static shell reading (round 3: 4 high, 7 medium, all fixed in this branch with regression tests; a fourth round would likely find more, as D-28 recorded for target extraction). Proposed decision, like D-28: SP-044's hook check is best-effort; SP-045's git hooks (commit-msg, pre-push on real content) and per-job GitHub accounts (D-18) are the boundary for git, and the residual classes (zsh and profile aliases/functions, scripts and programs that run git, interpreters, curl, non-shell tools, forged tracking refs) are accepted risk recorded in RC-117/RC-118. Confirm, or say what more SP-044 must cover. All acceptance items pass locally; the independent verifier and CI were not run because of this block.",
-      "attempts": 1,
+      "blocked_reason": null,
+      "attempts": 2,
       "criteria_sha256": "3025c7e6d0152b605a402bbbfebe2786f6649b26a8a33bd596e2d27c53437060",
       "branch": "feat/sp-044-outbound-terms",
       "pr": "https://github.com/willesq/orchestrator/pull/177"
@@ -6018,6 +6134,10 @@
     {
       "date": "2026-11-14",
       "change": "D-60: SP-044 is best-effort with a loosened baseline; added SP-075 'Configurable outbound rules' (priority 34.5) with the user's approval."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "SP-044 resumed under D-60: merged main, RC-116 wiring, loosened baseline with rule ids, three security-review rounds (RC-220 to RC-228)."
     }
   ],
   "plan_location": {
