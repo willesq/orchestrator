@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
 	"sync/atomic"
 	"time"
 
 	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/paths"
+	"github.com/willesq/orchestrator/internal/settings/spacesettings"
 	"github.com/willesq/orchestrator/internal/spaces"
 )
 
@@ -27,6 +29,12 @@ var guardTimeout = 250 * time.Millisecond
 // guardFilesFor returns the guard's inputs; tests replace it.
 var guardFilesFor = func() spaces.GuardFiles {
 	return spaces.GuardFiles{Dir: paths.GuardDir(), DB: paths.DBFile()}
+}
+
+// reopenedFor lists the entries of the checkout settings around dirs that
+// re-open orch's sandbox denies (D-67); tests replace it.
+var reopenedFor = func(dirs []string) ([]string, error) {
+	return spacesettings.Reopened(spacesettings.DefaultLayout().StateFile(), dirs)
 }
 
 // decideGuard runs one decision; tests replace it to stall a decision.
@@ -139,7 +147,8 @@ func decideWithin(limit time.Duration, in spaces.GuardInput) spaces.GuardResult 
 				done <- spaces.TimedOut(m)
 			}
 		}()
-		done <- decide(ctx, filesFor(), in, func(m spaces.GuardMode) { mode.Store(m) })
+		r := decide(ctx, filesFor(), in, func(m spaces.GuardMode) { mode.Store(m) })
+		done <- checkReopened(r, in)
 	}()
 	select {
 	case r := <-done:
@@ -152,6 +161,27 @@ func decideWithin(limit time.Duration, in spaces.GuardInput) spaces.GuardResult 
 		}
 		return r
 	}
+}
+
+// checkReopened refuses, in r's mode, a tool call the guard would allow
+// while spaces are configured when a checkout it runs in holds orch's
+// sandbox denies and its own Claude Code settings re-open one, or cannot
+// be checked (D-67, RC-215). Reason: such an entry lets every sandboxed
+// command of a session started there into the denied folder, and orch may
+// not remove it. The folders are the call's cwd and the session's project
+// folder, from which Claude Code loaded its settings.
+func checkReopened(r spaces.GuardResult, in spaces.GuardInput) spaces.GuardResult {
+	if in.Kind != spaces.EventPreToolUse || r.Would == spaces.Refuse || r.Rule == spaces.RuleNoPolicy {
+		return r
+	}
+	dirs := []string{in.Cwd}
+	if d := os.Getenv("CLAUDE_PROJECT_DIR"); d != "" && d != in.Cwd {
+		dirs = append(dirs, d)
+	}
+	if found, err := reopenedFor(dirs); err != nil || len(found) > 0 {
+		return spaces.SettingsReopened(r)
+	}
+	return r
 }
 
 // guardReasons say why a call was refused, by rule. They name the rule and
@@ -168,6 +198,7 @@ var guardReasons = map[spaces.GuardRule]string{
 	spaces.RuleOpaqueStrict:     "part of the call cannot be checked (strict mode)",
 	spaces.RulePolicyUnreadable: "the spaces policy orchd wrote for the guard cannot be read; check that orchd is running",
 	spaces.RuleGuardTimeout:     "the check did not finish in time",
+	spaces.RuleSettingsReopen:   "this checkout's own Claude Code settings (.claude/settings.json, or your entries in .claude/settings.local.json) re-open a folder orch's sandbox denies, or orch cannot check them; remove that sandbox allowRead or allowWrite entry (orchd's log and 'orch run' name it)",
 }
 
 // writeDeny prints the deny both Claude Code and Codex read from a

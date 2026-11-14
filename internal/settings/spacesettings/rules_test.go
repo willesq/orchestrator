@@ -52,6 +52,22 @@ func TestGeneratedSettingsDenyOtherJobsOnly(t *testing.T) {
 	if f.Scalars[keySandboxOn] != true || f.Scalars[keyUnsandboxed] != false || f.Scalars[keyAllProjectMCP] != false {
 		t.Errorf("sandbox scalars = %v", f.Scalars)
 	}
+	// The hooks stay on and find orch's data folder whatever a project
+	// file says (D-67); with no data folder in the layout none is pinned.
+	if f.Scalars[keyNoHooks] != false {
+		t.Errorf("disableAllHooks = %v", f.Scalars[keyNoHooks])
+	}
+	if _, ok := f.Scalars["env."+envOrchData]; ok {
+		t.Errorf("ORCH_DATA_DIR pinned without a data folder: %v", f.Scalars)
+	}
+	l := w.layout
+	l.DataDir = filepath.Join(w.home, "data")
+	if got := ClaudeFragment(For(w.res, "joba", l)).Scalars["env."+envOrchData]; got != l.DataDir {
+		t.Errorf("env.ORCH_DATA_DIR = %v, want %s", got, l.DataDir)
+	}
+	if got := ClaudeFragment(ForUnplaced(w.res, filepath.Join(w.code, "x"), l)).Scalars["env."+envOrchData]; got != l.DataDir {
+		t.Errorf("unplaced env.ORCH_DATA_DIR = %v", got)
+	}
 	for _, want := range []string{"Read(/" + b + "/**)", "Edit(/" + b + "/**)", "Read(/" + c + "/**)"} {
 		if !slices.Contains(f.Lists[keyPermDeny], want) {
 			t.Errorf("permissions.deny %v lacks %s", f.Lists[keyPermDeny], want)
