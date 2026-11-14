@@ -535,9 +535,13 @@ tasks; stored in orch.db, each change logged with its time and caller; see
 
 - `auto` (the default): rules only for a session they keep out of another isolated space's root
   (`Rules.OtherJobs`): a checkout of a space when another isolated space has a root, a checkout of
-  no space when an isolated root does not hold it. A policy with one isolated job and nothing else
-  writes none; add a second job, or a public space whose checkouts must stay out of the job, and
-  they come.
+  no space when an isolated root does not hold it; or out of another space's own login folder,
+  its `gh_config_dir` or `claude_config_dir`, whatever that space's kind, or out of the default
+  gh login's folder, which a space naming its own `gh_config_dir` and a checkout of no space are
+  denied (`Rules.OtherLogins`, D-69). A policy with one isolated job on the default logins and
+  nothing else writes none; add a second job, a public space whose checkouts must stay out of
+  the job, a space naming its own login folder, or give the job its own gh profile, and they
+  come.
 - `on`: rules for every space's sessions while a policy is applied.
 - `off`: none, by choice.
 
@@ -548,7 +552,9 @@ variables. The tool guard, memory filtering and outbound terms are unaffected: t
 sandbox layer only (D-11 and INV-16 hold for the others). `orch status`, `orch spaces sandbox`,
 `orch spaces enforce` and the app (Status and GetEnforcement carry it) show the setting and
 whether any space is sandboxed now; unlike the `sandbox` switch it never marks a session's start
-digest (INV-16 as amended). The SP-070 `sandbox` switch stays for debugging: switched off (timed
+digest as enforcement off (INV-16 as amended). A session's next start digest names it once after
+each change to it, and after each orchd start while it is off (D-68,
+[daemon.md](daemon.md#sandbox-setting)). The SP-070 `sandbox` switch stays for debugging: switched off (timed
 or not) it takes every entry out, the gh profile included, and every digest says so.
 
 **Logins (D-59).** One login works by default: a space that names neither `gh_config_dir` nor
@@ -608,15 +614,43 @@ orch never handles either token. Showing which login each space will use is SP-0
   `settings.local.json` held `sandbox.filesystem.allowRead` of that folder; a `settings.json`
   `excludedCommands: ["cat"]` did not. In a session started as `orch run` starts it, whose
   denies come from `--settings`, the same `settings.json` in the launch folder did not re-open
-  them (`TestClaudeE2E` `loosening`). orch cannot change a repository's file and keeps the
-  user's own entries, so each sync reports such an entry, and any settings file or `.claude` it
-  cannot check (a link, not a regular file, over 4 MiB, not JSON), as a problem in orchd's log,
-  and `orch run` prints it as a warning (`spacesettings.Loosening`, which reads only the
-  checkout's own two files, without following links); what to do about it is open (RC-215). The
-  file-tool `Read(//...)` denies still hold.
-- `auto` judges only isolated roots: with one isolated job and other spaces that are not
-  isolated, the job's sessions get no rules, so nothing denies them those spaces'
-  `gh_config_dir` or `claude_config_dir` or `.orch/` (RC-217).
+  them. orch cannot change a repository's file and keeps the user's own entries, so each sync
+  reports such an entry, and any settings file or `.claude` it cannot check (a link, not a
+  regular file, over 4 MiB, not JSON), as a problem in orchd's log, and `orch run` prints it as
+  a warning (`spacesettings.Loosening`, which reads only the checkout's own two files, without
+  following links). The tool guard refuses tool calls there (D-67, rule `settings_reopen`,
+  [hooks.md](hooks.md#enforcing-guard)): each sync records in `.orch/checkouts.json` the folders
+  a checkout's file denies while it holds orch's sandbox rules, and the guard reads every
+  `.claude` folder from the call's `cwd` and the session's project folder
+  (`CLAUDE_PROJECT_DIR`) up to such a checkout (`spacesettings.Reopened`); an entry that
+  re-opens one of them, or a file there it cannot check, refuses the call until it goes
+  (`TestClaudeE2E` `loosening`). A subfolder that is gone or is a link is skipped (its target
+  is checked as the folder's real path); the checkout's own folder is always checked.
+- The same project file could otherwise turn the guard off. Measured 2026-11-14 (Claude Code
+  2.1.309, `TestClaudeE2E` `hook-pin` and a measurement before it): a project `settings.json`
+  with `"disableAllHooks": true` turns off every hook, those given by `--settings` included,
+  and its `env` reaches the hooks over the environment Claude Code started with, so an
+  `ORCH_DATA_DIR` there would point the guard at an empty folder, where it allows everything as
+  `no_policy`; in both cases a `settings.local.json` value wins. So orch's rules also write
+  `"disableAllHooks": false` and `env.ORCH_DATA_DIR` (orchd's data folder) into the checkout's
+  file and the launcher's `--settings`, and `Loosening` reports, and the guard refuses on, a
+  `disableAllHooks: true` or an `env` entry for `ORCH_DATA_DIR`, `ORCH_CONFIG_DIR` or
+  `ORCH_SOCKET` in the checkout's own files that orch did not write. Measured the same day
+  (`TestClaudeE2E` `permission-rules`): a project `permissions.allow` `Edit(//<root>/**)` or
+  `Read(//<root>/**)`, or `permissions.additionalDirectories` naming another job's root, does
+  not re-open the sandbox (a sandboxed write and read with paths built at run time both
+  failed), so those keys are not checked.
+- Limits of the check: it does not stop the sandboxed commands themselves (only tool calls,
+  and every shell command is one); it judges the files as they are at each call; a checkout
+  that gained orch's rules less than one sync ago (up to 30 s) is not yet in the record; folders
+  above the checkout are not read (which ancestors Claude Code loads was not measured), and a
+  folder spelled in another Unicode normalization than the record is not matched (RC-652). The
+  user's own `~/.claude` settings, managed settings and other `--settings` files merge the
+  same way and are not checked. The file-tool `Read(//...)` denies still hold.
+- `auto` also writes the rules when they would deny another space's own login folder (D-69),
+  but not for `.orch/` alone: with one isolated job and spaces naming no login folder, the job's
+  sessions get no rules, so nothing in the sandbox denies them `.orch/` (D-69 chose login
+  folders, not `.orch/`).
 - Deny paths are written as the policy spells them, plus their real path; a root spelled in
   another case than on disk relies on the sandbox matching case-insensitively, which was not
   measured (RC-218).

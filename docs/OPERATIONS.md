@@ -160,10 +160,13 @@ gets its file within a minute.
 
 The sandbox setting is your lasting choice, `orch spaces sandbox auto|on|off` (from your own
 terminal; each change is logged with its time and caller). `auto`, the default, writes the rules
-only for sessions another isolated space's folders are denied to, so one job alone gets none; `on`
+only for sessions another isolated space's folders, another space's own `gh_config_dir` or
+`claude_config_dir`, or (for a space naming its own `gh_config_dir`) your default gh login's
+folder are denied to, so one job alone on your default logins gets none; `on`
 writes them for every space while a policy is applied; `off` writes none (a space's own
-`GH_CONFIG_DIR` stays). `orch status` and Orch.app show it, but it does not make session digests
-warn. `orch spaces enforce sandbox off [--for 15m]` is the debugging switch: it takes everything
+`GH_CONFIG_DIR` stays). `orch status` and Orch.app show it; it does not make session digests
+warn that enforcement is off, but each session's next start digest names it once after you change
+it, and after orchd starts while it is off. `orch spaces enforce sandbox off [--for 15m]` is the debugging switch: it takes everything
 out, and every digest says so while it is off.
 
 ### Outbound terms rules

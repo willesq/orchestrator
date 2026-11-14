@@ -221,7 +221,9 @@ The per-space harness settings orchd keeps in each checkout's `.claude/settings.
 and follow the applied spaces policy, the `sandbox` enforcement switch and the operator's
 [sandbox setting](daemon.md#sandbox-setting) (`orch spaces sandbox auto|on|off`, D-61) instead. The Claude Code
 provider reads only `~/.claude/settings.json`, so it never sees them. Their merge, ownership
-record, backups and git handling are in [install.md](install.md#per-space-harness-settings).
+record, backups and git handling are in [install.md](install.md#per-space-harness-settings). The
+ownership record (`.orch/checkouts.json`) also keeps the folders each file denies, which the tool
+guard reads to refuse calls in a checkout whose own settings re-open one (D-67).
 
 ## Limits and accepted risks
 

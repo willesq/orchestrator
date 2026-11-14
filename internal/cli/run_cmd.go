@@ -147,7 +147,7 @@ func (l *launcher) run(out io.Writer, space string, argv []string, force bool) e
 	case !on && choice.Setting == spaces.SandboxOff:
 		fmt.Fprintln(out, "orch run: the sandbox setting is off; the session gets no deny rules")
 	case !on:
-		fmt.Fprintln(out, "orch run: no other isolated space's folders to deny (sandbox setting auto); the session gets no deny rules")
+		fmt.Fprintln(out, "orch run: no other isolated space's folders or login folders to deny (sandbox setting auto); the session gets no deny rules")
 	}
 	var (
 		args     = slices.Clone(argv)

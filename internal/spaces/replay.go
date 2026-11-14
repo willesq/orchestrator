@@ -131,6 +131,12 @@ func ReplayWithRules(events []ReplayEvent, pin GuardPin, enf GuardEnforcement, p
 				// recorded terms verdict is the one the call got.
 				row.Verdict, row.Rule = Refuse, ev.Recorded.Rule
 			}
+			if d.Would != Refuse && carriesReopen(ev.Recorded) {
+				// Reason: as for terms, the hook decides this from the
+				// checkout's settings files at the time, which the log
+				// does not keep (D-67).
+				row.Verdict, row.Rule = Refuse, ev.Recorded.Rule
+			}
 			if ev.Recorded.OK {
 				rep.Compared++
 				row.Changed = row.Verdict != ev.Recorded.Verdict || row.Rule != ev.Recorded.Rule
@@ -172,6 +178,13 @@ func ruleRefuses(rules ReplayRules, ev ReplayEvent, res *Resolved) (bool, error)
 // (SP-044), which a replay carries rather than decides (RC-116).
 func carriesTerms(r RecordedDecision) bool {
 	return r.OK && r.Verdict == Refuse && (r.Rule == RuleOutboundTerm || r.Rule == RuleOutboundUnchecked)
+}
+
+// carriesReopen reports whether r is a refusal, or a would-refuse, by the
+// check of a checkout's own settings (RuleSettingsReopen), which a replay
+// carries rather than decides.
+func carriesReopen(r RecordedDecision) bool {
+	return r.OK && r.Verdict == Refuse && r.Rule == RuleSettingsReopen
 }
 
 // Recorded decision forms. orchd stores a call the guard decided as its

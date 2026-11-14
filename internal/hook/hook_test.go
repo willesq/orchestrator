@@ -32,7 +32,7 @@ type fakeClient struct {
 }
 
 func (f *fakeClient) Ping(context.Context, *orchdv1.PingRequest, ...grpc.CallOption) (*orchdv1.PingResponse, error) {
-	return nil, f.err
+	return pingFake, f.err
 }
 
 func (f *fakeClient) Ingest(_ context.Context, req *orchdv1.IngestRequest, _ ...grpc.CallOption) (*orchdv1.IngestResponse, error) {

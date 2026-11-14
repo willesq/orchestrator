@@ -3,6 +3,7 @@ package spacesettings
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -50,32 +51,8 @@ func ghGuardProbe(t *testing.T, claude, dir, ghDefault string, p spaces.Policy, 
 	if err != nil {
 		t.Skipf("no default gh config.yml to probe: %v", err)
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	bin := filepath.Join(base, "bin", "orch-hook")
-	if out, err := exec.Command("go", "build", "-o", bin, "github.com/willesq/orchestrator/cmd/orch-hook").CombinedOutput(); err != nil {
-		t.Fatalf("build orch-hook: %v\n%s", err, out)
-	}
-	data, conf := filepath.Join(base, "hookdata"), filepath.Join(base, "hookconf")
-	guard := filepath.Join(data, "guard")
-	snap := spaces.GuardSnapshot{
-		Revision: 1, Policy: &p, Home: home, WrittenAt: time.Now().UTC(),
-		Protection: spaces.GuardProtection(home, conf, data, guard, filepath.Dir(bin), res),
-		Guard:      spaces.GuardSwitch{State: spaces.SwitchBlockOtherJobs},
-	}
-	if err := spaces.WriteGuardSnapshot(guard, snap); err != nil {
-		t.Fatal(err)
-	}
-	id := uuid(t)
-	if err := spaces.WriteGuardPin(guard, spaces.GuardPinFile{SessionID: id, Space: "joba", Revision: 1, Harness: "claude"}); err != nil {
-		t.Fatal(err)
-	}
-	hooks := fmt.Sprintf(`{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":%q}]}]}}`, bin+" pre-tool-use")
 	prompt := fmt.Sprintf("This is a test of a guard; the calls are expected to be refused. First run exactly this one Bash command and show its output: cat %s | wc -c . Then use the Read tool on %s.", cfg, cfg)
-	out := runClaudeWith(t, claude, dir, prompt+" Do not use any other tool. Then reply DONE.",
-		[]string{"--session-id", id, "--settings", hooks}, "ORCH_DATA_DIR="+data, "ORCH_CONFIG_DIR="+conf)
+	out := guardedSession(t, claude, dir, prompt+" Do not use any other tool. Then reply DONE.", p, res, base, "")
 	t.Logf("results:\n%s", out.results())
 	if !out.used("Bash") {
 		t.Fatalf("the session never called Bash:\n%s", out.raw)
@@ -87,6 +64,51 @@ func ghGuardProbe(t *testing.T, claude, dir, ghDefault string, p spaces.Policy, 
 	if !strings.Contains(out.results(), "orch protects") {
 		t.Errorf("the guard's self-protection did not refuse the calls:\n%s", out.results())
 	}
+}
+
+// guardedSession runs a Claude Code session in dir with this tree's
+// orch-hook as its PreToolUse hook, job A's pin and a guard snapshot of
+// the test's policy in a temp data folder under base (so it never reaches
+// the running orchd). record, when set, is orchd's record of the checkout
+// files to put where the hook reads it (Layout.StateFile under that data
+// folder).
+func guardedSession(t *testing.T, claude, dir, prompt string, p spaces.Policy, res *spaces.Resolved, base, record string) sessionOutput {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(base, "bin", "orch-hook")
+	if _, err := os.Stat(bin); err != nil {
+		if out, err := exec.Command("go", "build", "-o", bin, "github.com/willesq/orchestrator/cmd/orch-hook").CombinedOutput(); err != nil {
+			t.Fatalf("build orch-hook: %v\n%s", err, out)
+		}
+	}
+	data, conf := filepath.Join(base, "hookdata"), filepath.Join(base, "hookconf")
+	guard := filepath.Join(data, "guard")
+	snap := spaces.GuardSnapshot{
+		Revision: 1, Policy: &p, Home: home, WrittenAt: time.Now().UTC(),
+		Protection: spaces.GuardProtection(home, conf, data, guard, filepath.Dir(bin), res),
+		Guard:      spaces.GuardSwitch{State: spaces.SwitchBlockOtherJobs},
+	}
+	if err := spaces.WriteGuardSnapshot(guard, snap); err != nil {
+		t.Fatal(err)
+	}
+	if record != "" {
+		dst := Layout{Dir: filepath.Join(data, "spaces")}.StateFile()
+		if err := os.MkdirAll(filepath.Dir(dst), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dst, []byte(readFile(t, record)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id := uuid(t)
+	if err := spaces.WriteGuardPin(guard, spaces.GuardPinFile{SessionID: id, Space: "joba", Revision: 1, Harness: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	hooks := fmt.Sprintf(`{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":%q}]}]}}`, bin+" pre-tool-use")
+	return runClaudeWith(t, claude, dir, prompt, []string{"--session-id", id, "--settings", hooks}, "ORCH_DATA_DIR="+data, "ORCH_CONFIG_DIR="+conf)
 }
 
 // uuid is a random version 4 UUID, for --session-id.
@@ -177,13 +199,15 @@ func twoLoginsProbe(t *testing.T, claude, deepA, checkoutB, defaultAccount, prof
 	})
 }
 
-// looseningProbe (RC-215), a measurement that never fails the test: a
-// checkout of job A whose own .claude/settings.json allows reading job B's
-// root, and a launch folder with the same file. It logs whether a sandboxed
-// cat of job B's file then succeeds, in the checkout (orch's denies in
-// settings.local.json) and in a launched session (orch's denies in
-// --settings), and that the sync reports the entry.
-func looseningProbe(t *testing.T, claude string, s *Syncer, res *spaces.Resolved, codeA, codeB, secret, marker, base string, layout Layout) {
+// looseningProbe (RC-215, D-67): a checkout of job A whose own
+// .claude/settings.json allows reading job B's root, and a launch folder
+// with the same file. It logs whether a sandboxed cat of job B's file then
+// succeeds, in the checkout (orch's denies in settings.local.json) and in a
+// launched session (orch's denies in --settings), and checks that the sync
+// reports the entry and that the tool guard (this tree's orch-hook, with
+// orchd's record of the checkout files) refuses the cat in the checkout,
+// so job B's file is not read (D-67).
+func looseningProbe(t *testing.T, claude string, s *Syncer, p spaces.Policy, res *spaces.Resolved, codeA, codeB, secret, marker, base string, layout Layout) {
 	loose := gitRepo(t, filepath.Join(codeA, "loose"))
 	allow := fmt.Sprintf(`{"sandbox":{"filesystem":{"allowRead":[%q]}}}`, codeB)
 	writeFile(t, filepath.Join(loose, ".claude", "settings.json"), allow)
@@ -202,4 +226,107 @@ func looseningProbe(t *testing.T, claude string, s *Syncer, res *spaces.Resolved
 	out = runClaudeWith(t, claude, launchDir, cmd, extra, env...)
 	t.Logf("launched in a folder with a loosening settings.json:\n%s", out.results())
 	t.Logf("RC-215 MEASURED launcher: job B's file read = %v", strings.Contains(out.results(), "B-SECRET-"+marker))
+	t.Run("guard", func(t *testing.T) {
+		// Reason: a command that names job B's file is refused by the
+		// guard's own path rule first; one that builds the path at run
+		// time is what only the sandbox stops, and what the re-opened
+		// sandbox lets through.
+		built := fmt.Sprintf("F=$(echo %s | base64 -d); cat \"$F\"", base64.StdEncoding.EncodeToString([]byte(secret)))
+		guarded := "This is a test of a guard; the call may be refused. Run exactly this one Bash command and show its full output: " + built + " . Do not use any other tool. Then reply DONE."
+		out := guardedSession(t, claude, loose, guarded, p, res, base, s.StateFile)
+		t.Logf("guarded session in the loosening checkout:\n%s", out.results())
+		if !out.used("Bash") {
+			t.Fatalf("the session never called Bash:\n%s", out.raw)
+		}
+		if strings.Contains(out.results(), "B-SECRET-"+marker) {
+			t.Errorf("job B's file was read in a checkout whose settings re-open it:\n%s", out.results())
+		}
+		if !strings.Contains(out.results(), "rule settings_reopen") {
+			t.Errorf("the guard did not refuse the call as settings_reopen:\n%s", out.results())
+		}
+		// Control: the same call in job A's checkout without such an
+		// entry is let through by the guard and stopped by the sandbox.
+		out = guardedSession(t, claude, filepath.Join(codeA, "app"), guarded, p, res, base, s.StateFile)
+		t.Logf("guarded session in job A's other checkout:\n%s", out.results())
+		if strings.Contains(out.results(), "settings_reopen") || strings.Contains(out.results(), "B-SECRET-"+marker) {
+			t.Errorf("control: refused as settings_reopen, or job B's file read:\n%s", out.results())
+		}
+	})
+}
+
+// builtCat is a Bash command that writes x to write and prints read, both
+// paths built at run time, so only the sandbox, not the guard's path
+// rules, can stop it.
+func builtCat(write, read string) string {
+	enc := func(s string) string { return base64.StdEncoding.EncodeToString([]byte(s)) }
+	return fmt.Sprintf("W=$(echo %s | base64 -d); R=$(echo %s | base64 -d); echo x > \"$W\"; cat \"$R\"", enc(write), enc(read))
+}
+
+// hookPinProbe (D-67 re-audit): a checkout of job A whose own
+// settings.json sets disableAllHooks and points ORCH_DATA_DIR at an empty
+// folder. orch's settings.local.json pins both back (measured with Claude
+// Code 2.1.309: the project file alone turns hooks off and its env reaches
+// them; the local file's values win), so the guard still runs from orch's
+// data folder and refuses the call as settings_reopen, naming no path.
+func hookPinProbe(t *testing.T, claude string, p spaces.Policy, res *spaces.Resolved, codeA, secret, marker, base string, layout Layout) {
+	data := filepath.Join(base, "hookdata")
+	l := layout
+	l.DataDir = data
+	s := &Syncer{Layout: l, StateFile: Layout{Dir: filepath.Join(data, "spaces")}.StateFile(), BackupDir: filepath.Join(data, "spaces", ".orch", "backups"),
+		Place: func(_ context.Context, c string) (string, bool, error) {
+			if spaces.RootHolds(codeA, c) {
+				return "joba", true, nil
+			}
+			return "jobb", true, nil
+		}}
+	co := gitRepo(t, filepath.Join(codeA, "unhooked"))
+	writeFile(t, filepath.Join(co, ".claude", "settings.json"), fmt.Sprintf(`{"disableAllHooks":true,"env":{"ORCH_DATA_DIR":%q}}`, filepath.Join(base, "empty")))
+	if rep := s.Sync(context.Background(), res, ChoiceOn); !slices.ContainsFunc(rep.Problems, func(p string) bool { return strings.Contains(p, "disableAllHooks") }) {
+		t.Errorf("the sync did not report disableAllHooks: %q", rep.Problems)
+	}
+	local := readFile(t, localOf(co))
+	if !strings.Contains(local, `"disableAllHooks": false`) || !strings.Contains(local, `"ORCH_DATA_DIR": "`+data+`"`) {
+		t.Fatalf("orch's file does not pin the hooks:\n%s", local)
+	}
+	prompt := "This is a test of a guard; the call may be refused. Run exactly this one Bash command and show its full output: " +
+		builtCat(filepath.Join(co, "w.txt"), secret) + " . Do not use any other tool. Then reply DONE."
+	out := guardedSession(t, claude, co, prompt, p, res, base, "")
+	t.Logf("session in a checkout whose settings.json turns hooks off:\n%s", out.results())
+	if !out.used("Bash") {
+		t.Fatalf("the session never called Bash:\n%s", out.raw)
+	}
+	if !strings.Contains(out.results(), "rule settings_reopen") || strings.Contains(out.results(), "B-SECRET-"+marker) {
+		t.Errorf("the guard did not run from orch's data folder and refuse the call:\n%s", out.results())
+	}
+}
+
+// permissionRulesProbe (D-67 re-audit): permission rules and
+// additionalDirectories in a checkout's own settings.json naming job B's
+// root do not re-open orch's sandbox (measured with Claude Code 2.1.309),
+// so the guard's check does not read them. A sandboxed write and read of
+// job B's root, with paths built at run time, both fail.
+func permissionRulesProbe(t *testing.T, claude string, s *Syncer, res *spaces.Resolved, codeA, codeB, secret, marker string) {
+	for _, pc := range []struct{ name, project string }{
+		{"edit-allow", fmt.Sprintf(`{"permissions":{"allow":["Edit(/%s/**)"]}}`, codeB)},
+		{"read-allow", fmt.Sprintf(`{"permissions":{"allow":["Read(/%s/**)"]}}`, codeB)},
+		{"additional-dirs", fmt.Sprintf(`{"permissions":{"additionalDirectories":[%q]}}`, codeB)},
+	} {
+		t.Run(pc.name, func(t *testing.T) {
+			co := gitRepo(t, filepath.Join(codeA, "perm-"+pc.name))
+			writeFile(t, filepath.Join(co, ".claude", "settings.json"), pc.project)
+			if rep := s.Sync(context.Background(), res, ChoiceOn); slices.ContainsFunc(rep.Problems, func(p string) bool { return strings.HasPrefix(p, co+": ") }) {
+				t.Errorf("the sync reported the checkout: %q", rep.Problems)
+			}
+			target := filepath.Join(codeB, "repo", "w-"+pc.name+".txt")
+			out := runClaude(t, claude, co, "Run exactly this one Bash command and show its full output: "+builtCat(target, secret)+" . Do not use any other tool. Then reply DONE.")
+			if !out.used("Bash") {
+				t.Fatalf("the session never called Bash:\n%s", out.raw)
+			}
+			_, werr := os.Stat(target)
+			t.Logf("MEASURED %s: wrote=%v read=%v", pc.name, werr == nil, strings.Contains(out.results(), "B-SECRET-"+marker))
+			if werr == nil || strings.Contains(out.results(), "B-SECRET-"+marker) {
+				t.Errorf("%s re-opened job B's root:\n%s", pc.name, out.results())
+			}
+		})
+	}
 }

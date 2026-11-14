@@ -197,23 +197,32 @@ func TestSessionStartReadsSwitchesWithoutOrchd(t *testing.T) {
 
 // TestSessionStartIgnoresSandboxSetting is the digest half of SP-046.4.a2
 // (INV-16 as amended by D-61): the sandbox setting off, or auto with
-// nothing to deny, adds nothing to a session's digest, whether orchd
-// answers or the hook reads orch.db itself; a timed sandbox switch does.
+// nothing to deny, never marks a session's digest as enforcement off,
+// whether orchd answers or the hook reads orch.db itself; a timed sandbox
+// switch does. Since D-68 the digest names a changed setting once
+// (TestSessionStartNamesSandboxSetting), as information, never as a layer
+// that does not enforce.
 func TestSessionStartIgnoresSandboxSetting(t *testing.T) {
 	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	enforcementOff := func(digest string) bool {
+		return strings.Contains(digest, "[enforcement]") || strings.Contains(digest, "does not enforce") || strings.Contains(digest, "switched off")
+	}
 	for _, sb := range []*orchdv1.SandboxSetting{
-		{Mode: "off", DefaultMode: "auto", Detail: "off by choice"},
+		{Mode: "off", DefaultMode: "auto", SetAt: since.Unix(), Detail: "off by choice"},
 		{Mode: "auto", DefaultMode: "auto", Detail: "auto: no other isolated space's folders to deny"},
 	} {
 		setEnforcementFake(t, &orchdv1.EnforcementState{SandboxSetting: sb, Switches: []*orchdv1.EnforcementSwitch{
 			{Layer: "sandbox", Title: "generated sandbox rules", State: "on", DefaultState: "on"},
 		}}, nil)
 		var out bytes.Buffer
-		if err := dispatch("session-start", Payload{SessionID: "sid"}, &out, factory(&fakeClient{}, nil)); err != nil {
+		if err := dispatch("session-start", Payload{SessionID: "sid-" + sb.GetMode()}, &out, factory(&fakeClient{}, nil)); err != nil {
 			t.Fatal(err)
 		}
-		if out.Len() != 0 {
-			t.Errorf("setting %s: digest = %q, want none", sb.GetMode(), out.String())
+		if enforcementOff(out.String()) {
+			t.Errorf("setting %s: digest marks enforcement off: %q", sb.GetMode(), out.String())
+		}
+		if sb.GetMode() == "auto" && out.Len() != 0 {
+			t.Errorf("auto never set: digest = %q, want none", out.String())
 		}
 	}
 
@@ -235,8 +244,8 @@ func TestSessionStartIgnoresSandboxSetting(t *testing.T) {
 	if err := dispatch("session-start", Payload{SessionID: "sid"}, &out, factory(&fakeClient{}, nil)); err != nil {
 		t.Fatal(err)
 	}
-	if out.Len() != 0 {
-		t.Errorf("setting off in orch.db: digest = %q, want none", out.String())
+	if enforcementOff(out.String()) {
+		t.Errorf("setting off in orch.db: digest marks enforcement off: %q", out.String())
 	}
 
 	// A timed sandbox switch to off is named.
@@ -263,4 +272,105 @@ func (f *fakeClient) ListOutboundRules(context.Context, *orchdv1.ListOutboundRul
 
 func (f *fakeClient) ChangeOutboundRule(context.Context, *orchdv1.ChangeOutboundRuleRequest, ...grpc.CallOption) (*orchdv1.ChangeOutboundRuleResponse, error) {
 	return nil, errors.New("hooks never change the outbound rules")
+}
+
+// pingFake is what fakeClient's Ping answers when set.
+var pingFake *orchdv1.PingResponse
+
+// TestSessionStartNamesSandboxSetting is D-68 (RC-216): after a change to
+// the sandbox setting the next start digest of each session names it once;
+// after an orchd start while it is off, again once; a setting never
+// changed, and a restart while it is not off, are not named. Read from
+// orch.db when orchd does not answer, it says so.
+func TestSessionStartNamesSandboxSetting(t *testing.T) {
+	t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	t.Cleanup(func() { pingFake = nil })
+	state := func(mode string, setAt int64, uptime int64) {
+		t.Helper()
+		setEnforcementFake(t, &orchdv1.EnforcementState{SandboxSetting: &orchdv1.SandboxSetting{Mode: mode, DefaultMode: "auto", SetAt: setAt, Detail: "what " + mode + " does"}}, nil)
+		pingFake = &orchdv1.PingResponse{UptimeSeconds: uptime}
+	}
+	digest := func(sid string) string {
+		t.Helper()
+		var out bytes.Buffer
+		if err := dispatch("session-start", Payload{SessionID: sid}, &out, factory(&fakeClient{}, nil)); err != nil {
+			t.Fatal(err)
+		}
+		return out.String()
+	}
+	named := func(d string) bool { return strings.Contains(d, "the sandbox setting is") }
+	day := time.Hour * 24
+
+	// Never set: auto is the default and is not named.
+	state("auto", 0, 100)
+	if d := digest("s1"); named(d) {
+		t.Errorf("default setting named: %q", d)
+	}
+	// The operator sets it to on: each session's next digest names it once.
+	state("on", since.Unix(), 100)
+	for _, sid := range []string{"s1", "s2"} {
+		if d := digest(sid); !named(d) || !strings.Contains(d, "is on (set 2026-11-11 10:05 UTC): what on does") {
+			t.Errorf("%s after the change: %q", sid, d)
+		}
+		if d := digest(sid); named(d) {
+			t.Errorf("%s named it twice: %q", sid, d)
+		}
+	}
+	// A restart while on is not named again.
+	state("on", since.Unix(), 1)
+	if d := digest("s1"); named(d) {
+		t.Errorf("restart while on named it: %q", d)
+	}
+	// Off: named once; again after orchd starts anew while it is off, and
+	// not for the rounding of orchd's start between two calls.
+	off := since.Add(day).Unix()
+	state("off", off, 1000)
+	if d := digest("s1"); !named(d) || !strings.Contains(d, "is off") || !strings.Contains(d, "orchd started") || strings.Contains(d, "[enforcement]") {
+		t.Errorf("off: %q", d)
+	}
+	state("off", off, 1001)
+	if d := digest("s1"); named(d) {
+		t.Errorf("the same orchd named it again: %q", d)
+	}
+	state("off", off, 2)
+	if d := digest("s1"); !named(d) {
+		t.Errorf("a restart while off was not named: %q", d)
+	}
+	if d := digest("s1"); named(d) {
+		t.Errorf("named twice after the restart: %q", d)
+	}
+	// Off with orchd's start unknown (no Ping answer) is named once.
+	state("off", off, 0)
+	pingFake = nil
+	if d := digest("s3"); !named(d) || strings.Contains(d, "orchd started") {
+		t.Errorf("off, start unknown: %q", d)
+	}
+	if d := digest("s3"); named(d) {
+		t.Errorf("off, start unknown, named twice: %q", d)
+	}
+
+	// orchd down: read from orch.db, and said so; once per session.
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, s, _, err := spaces.NextSandboxSetting(spaces.DefaultSandboxSetting(), spaces.SandboxOff, "operator (process 1)", since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := spaces.WriteSandboxSetting(context.Background(), conn, c, s); err != nil {
+		t.Fatal(err)
+	}
+	_ = conn.Close()
+	setEnforcementFake(t, nil, errors.New("unavailable"))
+	if d := digest("s4"); !named(d) || !strings.Contains(d, "read from orch.db") {
+		t.Errorf("orchd down: %q", d)
+	}
+	if d := digest("s4"); named(d) {
+		t.Errorf("orchd down, named twice: %q", d)
+	}
+	// A session ID that cannot name a state file is told every time.
+	if d := digest("../bad"); !named(d) {
+		t.Errorf("bad session ID: %q", d)
+	}
 }

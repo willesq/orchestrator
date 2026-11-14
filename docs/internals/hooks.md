@@ -18,7 +18,7 @@ they name a file.
 
 | Event | Does |
 |---|---|
-| `session-start` | Asks orchd to pin the session (`PinSession`, 2 s; skipped in queued tasks), sending the session ID, `cwd` and `parent_session_id` for every source: orchd keeps an existing pin, so resume, clear and compact change nothing ([daemon.md](daemon.md#session-pins)). Then prints `## Orchestrator digest`: the last 5 events of this session's stream and of `pr-babysitter`, `routing`, `queue`, plus a count of pending-ingest items. After compaction (`source=compact`) it first prints the [resume brief](#resume-brief). Marks the session and `queue` streams seen, so the next prompt's updates skip them. Before the events, the digest names each [enforcement layer](daemon.md#enforcement-switches) the operator switched off (or the guard set to `log`), with since when and when a timed switch reverts, plus a tool-hooks layer that does not enforce though its switch is on and any drift orchd reports. The [sandbox setting](daemon.md#sandbox-setting) (D-61) is not a switch and is never named there. It asks orchd (`GetEnforcement`, 0.5 s); when orchd does not answer it reads `orch.db`'s switches read-only and marks the lines "read from orch.db", and says when it cannot read them either. Queued tasks get it too. |
+| `session-start` | Asks orchd to pin the session (`PinSession`, 2 s; skipped in queued tasks), sending the session ID, `cwd` and `parent_session_id` for every source: orchd keeps an existing pin, so resume, clear and compact change nothing ([daemon.md](daemon.md#session-pins)). Then prints `## Orchestrator digest`: the last 5 events of this session's stream and of `pr-babysitter`, `routing`, `queue`, plus a count of pending-ingest items. After compaction (`source=compact`) it first prints the [resume brief](#resume-brief). Marks the session and `queue` streams seen, so the next prompt's updates skip them. Before the events, the digest names each [enforcement layer](daemon.md#enforcement-switches) the operator switched off (or the guard set to `log`), with since when and when a timed switch reverts, plus a tool-hooks layer that does not enforce though its switch is on and any drift orchd reports. The [sandbox setting](daemon.md#sandbox-setting) (D-61) is not a switch and is never named among them; after them the digest names the setting once per session as an `[info]` line after each change to it, and after each orchd start while it is off (D-68, orchd's start from `Ping`). It asks orchd (`GetEnforcement`, 0.5 s); when orchd does not answer it reads `orch.db`'s switches read-only and marks the lines "read from orch.db", and says when it cannot read them either. Queued tasks get it too. |
 | `user-prompt-submit` | Prints the [updates block](#updates-block) (not inside queued tasks), then [prompt context](#prompt-context). |
 | `stop` | Parses the transcript (redacted) and writes `sessions/<id>.yaml`. No orchd call. |
 | `pre-compact` | Writes `sessions/<id>.checkpoint.yaml` with the last request and reply. |
@@ -288,6 +288,20 @@ calls `Decide`. What it cannot read becomes a rule, refused in the enforcing mod
   are refused (RC-100).
 - `guard_timeout`: the decision did not finish within 250 ms, or panicked. The mode, once the
   snapshot has given it, decides whether that refuses; before that it refuses.
+- `settings_reopen` (D-67, RC-215): a `pre-tool-use` call `Decide` lets through, while spaces
+  are configured, runs where a checkout holds orch's sandbox denies (the folders orchd's
+  `.orch/checkouts.json` records for it) and a `.claude/settings.json` or `settings.local.json`
+  between the call's `cwd`, or the session's `CLAUDE_PROJECT_DIR`, and that checkout has a
+  `sandbox.filesystem.allowRead` or `allowWrite` entry orch did not write that re-opens one of
+  them, a `disableAllHooks: true`, an `env` entry for `ORCH_DATA_DIR`, `ORCH_CONFIG_DIR` or
+  `ORCH_SOCKET` orch did not write, or a settings file orch cannot check; or that record exists
+  but cannot be read
+  (`spacesettings.Reopened`). Reason: such an entry re-opens orch's sandbox for every sandboxed
+  command of a session started there, and orch may not remove it
+  ([install.md](install.md#per-space-harness-settings)). The reason shown names the rule and
+  what to remove, never the path; orchd's log and `orch run` name the entry. A replay carries a
+  recorded `settings_reopen` verdict, as it does the outbound terms' (the files are not in the
+  log).
 
 With no spaces configured the call is allowed without reading a pin (INV-10). A `cwd-changed`
 event is never refused; its would-be verdict is logged. It is judged as running in `old_cwd` and
@@ -326,7 +340,9 @@ it is a regular file of at most 2 MiB.
 and from the shell writes `Targets` sees ([self-protection](#self-protection)). A pin file is looked up by the payload's `session_id`, which
 the harness sets. The hook finds its files through `ORCH_DATA_DIR`, `XDG_DATA_HOME` and `HOME`,
 which a session can change for a harness it starts inside itself; such a nested harness could
-point its hook at an empty directory and run unguarded. Accepted (2026-11-12): the same nested
+point its hook at an empty directory and run unguarded. A project's settings `env` reaches the
+hooks too; in a checkout holding orch's sandbox rules orch's `settings.local.json` pins
+`ORCH_DATA_DIR`, which wins (D-67). Accepted (2026-11-12): the same nested
 harness can drop every hook already (`CLAUDE_CONFIG_DIR`, `--settings`), so this adds no new
 way around the guard; the OS sandbox is the boundary (RC-102). The guard is best-effort target
 extraction (D-28); the OS sandbox (SP-046) and per-job GitHub accounts (SP-063) are the hard

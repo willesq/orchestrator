@@ -210,7 +210,14 @@ func TestClaudeE2E(t *testing.T) {
 	})
 	// Last: it adds a checkout and syncs again (RC-215).
 	t.Run("loosening", func(t *testing.T) {
-		looseningProbe(t, claude, s, res, codeA, codeB, secret, marker, base, layout)
+		looseningProbe(t, claude, s, p, res, codeA, codeB, secret, marker, base, layout)
+	})
+	t.Run("permission-rules", func(t *testing.T) {
+		permissionRulesProbe(t, claude, s, res, codeA, codeB, secret, marker)
+	})
+	// Last: its own sync rewrites every checkout with the hooks pinned.
+	t.Run("hook-pin", func(t *testing.T) {
+		hookPinProbe(t, claude, p, res, codeA, secret, marker, base, layout)
 	})
 }
 
