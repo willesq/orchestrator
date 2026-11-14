@@ -140,6 +140,11 @@ func TestCheckoutSettingsLoop(t *testing.T) {
 	if _, err := s.ApplySpaces(operatorCtx, &orchdv1.ApplySpacesRequest{ReviewedRevision: d.GetRevision()}); err != nil {
 		t.Fatal(err)
 	}
+	// Reason: with one isolated space and nothing else, the default setting
+	// (auto) writes no rules (D-61).
+	if _, err := s.enforcement.setSandbox(context.Background(), spaces.SandboxOn, "test"); err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { s.runCheckoutSettings(ctx, time.Hour); close(done) }()

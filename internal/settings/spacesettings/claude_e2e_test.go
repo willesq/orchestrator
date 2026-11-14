@@ -44,13 +44,16 @@ import (
 // (CLAUDE_CONFIG_DIR=<it>/joba/claude claude, then /login), and the
 // launched sessions run with it as CLAUDE_CONFIG_DIR.
 //
-// The gh probes (SP-046.1.a5) run 'gh auth status' in the sandboxed shell
-// of a checkout session and of a launched one; it must name the account
-// gh reports outside the session (metadata only: gh masks the token). By
-// default that is the user's default gh login (D-59). With
-// ORCH_E2E_GH_PROFILE set to a gh profile folder the user logged in to
-// (GH_CONFIG_DIR=<it> gh auth login), it is job A's gh_config_dir and the
-// session must name that profile's account.
+// The gh probes (SP-046.1.a5, SP-046.4.a3) run 'gh auth status' in the
+// sandboxed shell of a checkout session and of a launched one of job A,
+// which uses the user's default gh login (D-59); it must name the account
+// gh reports outside the session (metadata only: gh masks the token), and
+// the default gh folder must stay unreadable by name. The two-login probes
+// (SP-046.4.a4, claude_e2e_gh_test.go) put job B, which names its own gh
+// profile, beside it: by default an unauthenticated profile in a temp
+// folder (gh still shows that it used it), or, with ORCH_E2E_GH_PROFILE
+// set to a gh profile folder the user logged in to (GH_CONFIG_DIR=<it> gh
+// auth login), that profile and its account.
 func TestClaudeE2E(t *testing.T) {
 	if os.Getenv("ORCH_CLAUDE_E2E") != "1" {
 		t.Skip("set ORCH_CLAUDE_E2E=1 to run real Claude Code sessions")
@@ -63,14 +66,17 @@ func TestClaudeE2E(t *testing.T) {
 	base := realDir(t)
 	marker := randHex(t)
 	codeA, codeB := filepath.Join(base, "code", "a"), filepath.Join(base, "code", "b")
-	ghProfile := os.Getenv("ORCH_E2E_GH_PROFILE")
+	ghProfileB := os.Getenv("ORCH_E2E_GH_PROFILE")
+	if ghProfileB == "" {
+		ghProfileB = unauthenticatedProfile(t, filepath.Join(base, "gh-b"))
+	}
 	claudeProfile := ""
 	if d := os.Getenv("ORCH_E2E_LAYOUT"); d != "" {
 		claudeProfile = filepath.Join(d, "joba", "claude")
 	}
 	p := spaces.Policy{Spaces: []spaces.Space{
-		{Name: "joba", Kind: spaces.Isolated, Roots: []string{codeA}, GHConfigDir: ghProfile, ClaudeConfigDir: claudeProfile},
-		{Name: "jobb", Kind: spaces.Isolated, Roots: []string{codeB}},
+		{Name: "joba", Kind: spaces.Isolated, Roots: []string{codeA}, ClaudeConfigDir: claudeProfile},
+		{Name: "jobb", Kind: spaces.Isolated, Roots: []string{codeB}, GHConfigDir: ghProfileB},
 	}}
 	res, err := spaces.Validate(p, spaces.Env{Home: base, InGitTree: func(string) bool { return false }})
 	if err != nil {
@@ -78,7 +84,8 @@ func TestClaudeE2E(t *testing.T) {
 	}
 	// The temp folders sit under a short /tmp root, as with DefaultLayout:
 	// Claude Code ignores a longer CLAUDE_CODE_TMPDIR (RC-184).
-	layout := Layout{Dir: filepath.Join(base, "data", "spaces"), Tmp: filepath.Join(shortTmp(t), "r")}
+	// GHDefault is the user's real default gh folder, as orchd uses it.
+	layout := Layout{Dir: filepath.Join(base, "data", "spaces"), Tmp: filepath.Join(shortTmp(t), "r"), GHDefault: DefaultGHDir()}
 	if d := os.Getenv("ORCH_E2E_LAYOUT"); d != "" {
 		layout.Dir = d
 	}
@@ -88,6 +95,7 @@ func TestClaudeE2E(t *testing.T) {
 		}
 	}
 	checkout := gitRepo(t, filepath.Join(codeA, "app"))
+	checkoutB := gitRepo(t, filepath.Join(codeB, "app"))
 	deep := filepath.Join(checkout, "sub", "deep")
 	writeFile(t, filepath.Join(deep, "a-control.txt"), "A-OK-"+marker)
 	writeFile(t, filepath.Join(codeB, "repo", "b-"+marker+".txt"), "B-SECRET-"+marker)
@@ -101,7 +109,7 @@ func TestClaudeE2E(t *testing.T) {
 			return "jobb", true, nil
 		},
 	}
-	if rep := s.Sync(context.Background(), res, true); len(rep.Written) != 1 || len(rep.Problems) != 0 {
+	if rep := s.Sync(context.Background(), res, ChoiceOn); len(rep.Written) != 2 || len(rep.Problems) != 0 {
 		t.Fatalf("sync: %+v", rep)
 	}
 	t.Logf("settings written:\n%s", readFile(t, localOf(checkout)))
@@ -128,10 +136,16 @@ func TestClaudeE2E(t *testing.T) {
 			})
 		}
 	}
-	ghWant := ghAccount(t, ghProfile)
+	ghWant := ghAccount(t, "")
 	runProbes(t, deep, nil, nil)
 	t.Run("gh", func(t *testing.T) {
 		ghProbe(t, claude, deep, ghWant, nil, nil)
+	})
+	t.Run("gh-guard", func(t *testing.T) {
+		ghGuardProbe(t, claude, deep, layout.GHDefault, p, res, base)
+	})
+	t.Run("two-logins", func(t *testing.T) {
+		twoLoginsProbe(t, claude, deep, checkoutB, ghWant, ghProfileB, os.Getenv("ORCH_E2E_GH_PROFILE") != "", layout)
 	})
 	t.Run("launcher", func(t *testing.T) {
 		extra, env := launchOf(t, res, "joba", layout)
@@ -224,7 +238,7 @@ func ghProbe(t *testing.T, claude, dir, want string, extra, env []string) {
 	switch r := out.results(); {
 	case strings.Contains(r, "account "+want):
 	case strings.Contains(r, "operation not permitted"):
-		// Measured 2026-11-14 (RC-208): with the sandbox on, the
+		// Measured 2026-11-14 (RC-208): without the allowRead of D-61 the
 		// Read(~/.config/gh/**) credential deny orch installs also denies
 		// the sandboxed shell the default gh folder, so gh cannot start.
 		t.Errorf("the sandbox denied gh its configuration folder (RC-208), so it cannot show %s:\n%s", want, r)

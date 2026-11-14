@@ -68,10 +68,12 @@ type state struct {
 	Checkouts map[string]fileState `json:"checkouts"`
 }
 
-// Sync brings every checkout under res's roots up to date. With on false
-// (the sandbox layer switched off) or no policy, it takes orch's entries out
-// of every file it wrote and leaves the rest of each file as it is.
-func (s *Syncer) Sync(ctx context.Context, res *spaces.Resolved, on bool) Report {
+// Sync brings every checkout under res's roots up to date as choice says:
+// orch's sandbox rules where they apply (Choice.Sandboxes), elsewhere only
+// a space's own gh profile. With the switch off or no policy, it takes
+// orch's entries out of every file it wrote and leaves the rest of each
+// file as it is.
+func (s *Syncer) Sync(ctx context.Context, res *spaces.Resolved, choice Choice) Report {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var rep Report
@@ -81,7 +83,7 @@ func (s *Syncer) Sync(ctx context.Context, res *spaces.Resolved, on bool) Report
 		return rep
 	}
 	want := map[string]Rules{}
-	if on && res.Configured() {
+	if !choice.SwitchedOff && res.Configured() {
 		var roots []string
 		for _, r := range res.BoundRoots() {
 			roots = append(roots, r.Root)
@@ -116,6 +118,10 @@ func (s *Syncer) Sync(ctx context.Context, res *spaces.Resolved, on bool) Report
 		// could read or link elsewhere.
 		bad := map[string]bool{}
 		for _, n := range res.Names() {
+			if !choice.Sandboxes(For(res, n, s.Layout)) {
+				// Its sessions get no TMPDIR from orch's rules.
+				continue
+			}
 			if err := s.Layout.EnsureTmpDir(n); err != nil {
 				bad[n] = true
 				rep.Problems = append(rep.Problems, "create the TMPDIR of space "+n+": "+err.Error()+"; its sessions get none")
@@ -148,7 +154,7 @@ func (s *Syncer) Sync(ctx context.Context, res *spaces.Resolved, on bool) Report
 		fs := st.Checkouts[c]
 		var frag Fragment
 		if wanted {
-			frag = CheckoutFragment(r, c)
+			frag = choice.CheckoutFor(r, c)
 		}
 		next, outcome, err := s.syncOne(ctx, c, frag, fs)
 		switch {

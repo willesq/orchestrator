@@ -23,9 +23,11 @@ type runClient struct {
 	applied   string
 	placement *orchdv1.PlacementExplanation
 	sandbox   string
-	diffErr   error
-	enfErr    error
-	placeErr  error
+	// setting is the sandbox setting orchd reports; "" reports none.
+	setting  string
+	diffErr  error
+	enfErr   error
+	placeErr error
 }
 
 func (c *runClient) DiffSpaces(context.Context, *orchdv1.DiffSpacesRequest, ...grpc.CallOption) (*orchdv1.SpacesDiff, error) {
@@ -46,9 +48,13 @@ func (c *runClient) GetEnforcement(context.Context, *orchdv1.GetEnforcementReque
 	if c.enfErr != nil {
 		return nil, c.enfErr
 	}
-	return &orchdv1.EnforcementState{Switches: []*orchdv1.EnforcementSwitch{
+	st := &orchdv1.EnforcementState{Switches: []*orchdv1.EnforcementSwitch{
 		{Layer: "guard", State: "block-other-jobs"}, {Layer: "sandbox", State: c.sandbox},
-	}}, nil
+	}}
+	if c.setting != "" {
+		st.SandboxSetting = &orchdv1.SandboxSetting{Mode: c.setting}
+	}
+	return st, nil
 }
 
 // launch is one launcher run with its exec captured.
@@ -458,5 +464,56 @@ func TestRunUsage(t *testing.T) {
 	}
 	if got := doLaunch(t, home, c, "joba", "--", "bash"); got.err == nil || !strings.Contains(got.err.Error(), "claude or codex") {
 		t.Errorf("bash: %v", got.err)
+	}
+}
+
+// TestRunFollowsSandboxSetting (SP-046.4.a2, D-61): the launcher writes the
+// rules as the checkouts get them. With auto it gives them only when another
+// isolated space's folders are denied; with off never; the space's gh
+// profile and temp folder are set either way. With the rules, a space on the
+// default gh login may read that folder and one naming its own profile is
+// denied it (RC-208 option a).
+func TestRunFollowsSandboxSetting(t *testing.T) {
+	home, policy := runWorld(t)
+	def := filepath.Join(home, ".config", "gh")
+	layout := spacesettings.Layout{Dir: filepath.Join(home, "data", "spaces"), GHDefault: def}
+
+	got := doLaunchIn(t, home, layout, &runClient{applied: policy, placement: unmatched(), sandbox: "on", setting: "auto"}, "jobb", "--", "claude")
+	if got.err != nil {
+		t.Fatal(got.err)
+	}
+	set := claudeSettings(got.argv)
+	if !strings.Contains(set, `"allowRead":["`+def+`"]`) || !strings.Contains(set, `"enableWeakerNetworkIsolation":true`) ||
+		!strings.Contains(set, `"allowedDomains":["api.github.com","github.com"]`) {
+		t.Errorf("auto, two jobs, default login: %s", set)
+	}
+	got = doLaunchIn(t, home, layout, &runClient{applied: policy, placement: unmatched(), sandbox: "on", setting: "auto"}, "joba", "--", "claude")
+	if set := claudeSettings(got.argv); !strings.Contains(set, `"Read(/`+def+`/**)"`) || strings.Contains(set, `"allowRead":["`+def) {
+		t.Errorf("auto, own profile: %s", set)
+	}
+
+	solo := fmt.Sprintf(`{"spaces":[{"name":"joba","kind":"isolated","roots":[%q],"gh_config_dir":%q}]}`,
+		filepath.Join(home, "code", "a"), filepath.Join(home, "gh", "a"))
+	for _, tt := range []struct {
+		setting, says string
+	}{
+		{"auto", "no other isolated space's folders to deny"},
+		{"off", "the sandbox setting is off"},
+	} {
+		got := doLaunchIn(t, home, layout, &runClient{applied: solo, placement: unmatched(), sandbox: "on", setting: tt.setting}, "joba", "--", "claude")
+		if got.err != nil || claudeSettings(got.argv) != "" || !strings.Contains(got.out, tt.says) {
+			t.Errorf("%s: %v %q %q", tt.setting, got.err, got.argv, got.out)
+		}
+		if gh := envOf(got.env, "GH_CONFIG_DIR"); len(gh) != 1 || gh[0] != filepath.Join(home, "gh", "a") || len(envOf(got.env, "TMPDIR")) != 1 {
+			t.Errorf("%s: env %q", tt.setting, got.env)
+		}
+		got = doLaunchIn(t, home, layout, &runClient{applied: solo, placement: unmatched(), sandbox: "on", setting: tt.setting}, "joba", "--", "codex")
+		if got.err != nil || !slices.Equal(got.argv, []string{"codex"}) {
+			t.Errorf("%s codex: %v %q", tt.setting, got.err, got.argv)
+		}
+	}
+	got = doLaunchIn(t, home, layout, &runClient{applied: solo, placement: unmatched(), sandbox: "on", setting: "on"}, "joba", "--", "claude")
+	if got.err != nil || claudeSettings(got.argv) == "" {
+		t.Errorf("on, one job: %v %q", got.err, got.argv)
 	}
 }

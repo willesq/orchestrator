@@ -25,7 +25,7 @@ func TestSyncKeepsBackupOfFirstChange(t *testing.T) {
 	s := w.syncer()
 	ctx := context.Background()
 
-	rep := s.Sync(ctx, w.res, true)
+	rep := s.Sync(ctx, w.res, ChoiceOn)
 	if len(rep.Problems) != 0 || !slices.Contains(rep.Written, repo) {
 		t.Fatalf("first sync: %+v", rep)
 	}
@@ -42,10 +42,10 @@ func TestSyncKeepsBackupOfFirstChange(t *testing.T) {
 
 	// The user edits the file; orch changes it again (the policy moved).
 	writeFile(t, localOf(repo), strings.Replace(readFile(t, localOf(repo)), `"opus"`, `"sonnet"`, 1))
-	if rep := s.Sync(ctx, w.res, false); len(rep.Problems) != 0 || !slices.Contains(rep.Cleared, repo) {
+	if rep := s.Sync(ctx, w.res, Choice{SwitchedOff: true}); len(rep.Problems) != 0 || !slices.Contains(rep.Cleared, repo) {
 		t.Fatalf("clear: %+v", rep)
 	}
-	if rep := s.Sync(ctx, w.res, true); len(rep.Problems) != 0 {
+	if rep := s.Sync(ctx, w.res, ChoiceOn); len(rep.Problems) != 0 {
 		t.Fatalf("again: %+v", rep)
 	}
 	if readFile(t, backups[0]) != userLocal {
@@ -59,12 +59,12 @@ func TestSyncIdempotent(t *testing.T) {
 	repo := gitRepo(t, filepath.Join(w.code, "b", "svc"))
 	s := w.syncer()
 	ctx := context.Background()
-	if rep := s.Sync(ctx, w.res, true); len(rep.Written) != 1 || len(rep.Problems) != 0 {
+	if rep := s.Sync(ctx, w.res, ChoiceOn); len(rep.Written) != 1 || len(rep.Problems) != 0 {
 		t.Fatalf("first: %+v", rep)
 	}
 	before := readFile(t, localOf(repo))
 	info1, _ := os.Stat(localOf(repo))
-	rep := s.Sync(ctx, w.res, true)
+	rep := s.Sync(ctx, w.res, ChoiceOn)
 	if len(rep.Written)+len(rep.Cleared)+len(rep.Ignored)+len(rep.Problems) != 0 {
 		t.Errorf("second sync did something: %+v", rep)
 	}
@@ -101,7 +101,7 @@ func TestSyncIgnoresEveryCheckout(t *testing.T) {
 	git(t, tracked, "commit", "-q", "-m", "tracked")
 
 	s := w.syncer()
-	rep := s.Sync(context.Background(), w.res, true)
+	rep := s.Sync(context.Background(), w.res, ChoiceOn)
 	if rep.Checkouts != 6 {
 		t.Fatalf("found %d checkouts: %+v", rep.Checkouts, rep)
 	}
@@ -148,13 +148,13 @@ func TestSyncPicksUpNewClone(t *testing.T) {
 	w := newWorld(t)
 	s := w.syncer()
 	ctx := context.Background()
-	if rep := s.Sync(ctx, w.res, true); rep.Checkouts != 0 {
+	if rep := s.Sync(ctx, w.res, ChoiceOn); rep.Checkouts != 0 {
 		t.Fatalf("%+v", rep)
 	}
 	src := gitRepo(t, filepath.Join(w.home, "src"))
 	clone := filepath.Join(w.code, "b", "clone")
 	git(t, w.home, "clone", "-q", src, clone)
-	if rep := s.Sync(ctx, w.res, true); !slices.Contains(rep.Written, clone) {
+	if rep := s.Sync(ctx, w.res, ChoiceOn); !slices.Contains(rep.Written, clone) {
 		t.Fatalf("clone not written: %+v", rep)
 	}
 	if !strings.Contains(readFile(t, localOf(clone)), "Read(/"+filepath.Join(w.code, "a")+"/**)") {
@@ -163,7 +163,7 @@ func TestSyncPicksUpNewClone(t *testing.T) {
 	if err := os.RemoveAll(clone); err != nil {
 		t.Fatal(err)
 	}
-	s.Sync(ctx, w.res, true)
+	s.Sync(ctx, w.res, ChoiceOn)
 	st, _, err := s.load()
 	if err != nil || len(st.Checkouts) != 0 {
 		t.Errorf("state after removal: %+v %v", st, err)
@@ -181,13 +181,13 @@ func TestSandboxSwitch(t *testing.T) {
 	s := w.syncer()
 	ctx := context.Background()
 
-	on := s.Sync(ctx, w.res, true)
+	on := s.Sync(ctx, w.res, ChoiceOn)
 	if len(on.Written) != 3 || len(on.Problems) != 0 {
 		t.Fatalf("on: %+v", on)
 	}
 	enforced := readFile(t, localOf(withUser))
 
-	off := s.Sync(ctx, w.res, false)
+	off := s.Sync(ctx, w.res, Choice{SwitchedOff: true})
 	if len(off.Cleared) != 3 || len(off.Problems) != 0 {
 		t.Fatalf("off: %+v", off)
 	}
@@ -200,7 +200,7 @@ func TestSandboxSwitch(t *testing.T) {
 		}
 	}
 
-	again := s.Sync(ctx, w.res, true)
+	again := s.Sync(ctx, w.res, ChoiceOn)
 	if len(again.Written) != 3 || len(again.Problems) != 0 {
 		t.Fatalf("on again: %+v", again)
 	}
@@ -209,7 +209,7 @@ func TestSandboxSwitch(t *testing.T) {
 	}
 
 	// Without a policy (it was removed) orch's entries go too.
-	if none := s.Sync(ctx, nil, true); len(none.Cleared) != 3 {
+	if none := s.Sync(ctx, nil, ChoiceOn); len(none.Cleared) != 3 {
 		t.Errorf("no policy: %+v", none)
 	}
 }
@@ -235,7 +235,7 @@ func TestSyncMovesUnusableAside(t *testing.T) {
 	}
 	big := gitRepo(t, filepath.Join(w.code, "a", "big"))
 	writeFile(t, localOf(big), `{"sandbox":{"enabled":false}}`+strings.Repeat(" ", 5<<20))
-	rep := w.syncer().Sync(context.Background(), w.res, true)
+	rep := w.syncer().Sync(context.Background(), w.res, ChoiceOn)
 	if len(rep.Problems) != 3 || len(rep.Written) != 3 {
 		t.Errorf("report = %+v", rep)
 	}
@@ -268,7 +268,7 @@ func TestSyncMovesUnusableAside(t *testing.T) {
 		}
 		git(t, repo, "add", "-f", at)
 		git(t, repo, "commit", "-q", "-m", "link")
-		rep := w.syncer().Sync(context.Background(), w.res, true)
+		rep := w.syncer().Sync(context.Background(), w.res, ChoiceOn)
 		if !slices.ContainsFunc(rep.Problems, func(p string) bool { return strings.Contains(p, repo) && strings.Contains(p, "tracked") }) {
 			t.Errorf("%s: problems %v", at, rep.Problems)
 		}
@@ -283,7 +283,7 @@ func TestSyncMovesUnusableAside(t *testing.T) {
 	}
 	bs := w.syncer()
 	bs.Git = Git{Bin: filepath.Join(w.home, "no-git")}
-	if rep := bs.Sync(context.Background(), w.res, true); !slices.ContainsFunc(rep.Problems, func(p string) bool { return strings.Contains(p, broken) }) {
+	if rep := bs.Sync(context.Background(), w.res, ChoiceOn); !slices.ContainsFunc(rep.Problems, func(p string) bool { return strings.Contains(p, broken) }) {
 		t.Errorf("no git: %v", rep.Problems)
 	}
 	if info, _ := os.Lstat(filepath.Join(broken, ".claude")); info.Mode()&os.ModeSymlink == 0 {
@@ -301,7 +301,7 @@ func TestSyncMovesUnusableAside(t *testing.T) {
 	if _, err := MoveAside(plain); err == nil {
 		t.Error("moved a missing settings file")
 	}
-	w.syncer().Sync(context.Background(), w.res, false)
+	w.syncer().Sync(context.Background(), w.res, Choice{SwitchedOff: true})
 	if info, err := os.Lstat(filepath.Join(off, ".claude")); err != nil || info.Mode()&os.ModeSymlink == 0 {
 		t.Errorf("moved while switched off: %v", err)
 	}
@@ -321,7 +321,7 @@ func TestSyncProblems(t *testing.T) {
 		}
 		return w.placeByRoot(ctx, c)
 	}
-	rep := s.Sync(context.Background(), w.res, true)
+	rep := s.Sync(context.Background(), w.res, ChoiceOn)
 	if len(rep.Problems) != 2 || !slices.Contains(rep.Written, bad) {
 		t.Errorf("%+v", rep)
 	}
@@ -338,7 +338,7 @@ func TestSyncProblems(t *testing.T) {
 	if st, _, _ := s.load(); !st.Checkouts[bad].BackedUp {
 		t.Error("backed_up not recorded after the invalid file's backup")
 	}
-	if rep := s.Sync(context.Background(), w.res, false); !slices.Contains(rep.Cleared, bad) {
+	if rep := s.Sync(context.Background(), w.res, Choice{SwitchedOff: true}); !slices.Contains(rep.Cleared, bad) {
 		t.Errorf("off: %+v", rep)
 	}
 	if _, err := os.Stat(localOf(bad)); !os.IsNotExist(err) {
@@ -351,12 +351,12 @@ func TestSyncProblems(t *testing.T) {
 	if err := s.save(st, nil); err != nil {
 		t.Fatal(err)
 	}
-	if rep := s.Sync(context.Background(), w.res, false); len(rep.Problems) != 1 || readFile(t, localOf(bad)) != `{"sandbox":"on"}` {
+	if rep := s.Sync(context.Background(), w.res, Choice{SwitchedOff: true}); len(rep.Problems) != 1 || readFile(t, localOf(bad)) != `{"sandbox":"on"}` {
 		t.Errorf("off with a bad file: %+v", rep)
 	}
 
 	writeFile(t, s.StateFile, "not json")
-	if rep := s.Sync(context.Background(), w.res, true); len(rep.Problems) != 1 || !strings.Contains(rep.Problems[0], "checkouts.json") {
+	if rep := s.Sync(context.Background(), w.res, ChoiceOn); len(rep.Problems) != 1 || !strings.Contains(rep.Problems[0], "checkouts.json") {
 		t.Errorf("bad state: %+v", rep)
 	}
 }
@@ -367,7 +367,7 @@ func TestSyncUnplacedCheckout(t *testing.T) {
 	repo := gitRepo(t, filepath.Join(w.code, "a", "conflict"))
 	s := w.syncer()
 	s.Place = func(context.Context, string) (string, bool, error) { return "", false, nil }
-	if rep := s.Sync(context.Background(), w.res, true); len(rep.Written) != 1 {
+	if rep := s.Sync(context.Background(), w.res, ChoiceOn); len(rep.Written) != 1 {
 		t.Fatalf("%+v", rep)
 	}
 	got := readFile(t, localOf(repo))
@@ -388,32 +388,32 @@ func TestSyncFailsClosed(t *testing.T) {
 	repo := gitRepo(t, filepath.Join(w.code, "a", "app"))
 	s := w.syncer()
 	ctx := context.Background()
-	if rep := s.Sync(ctx, w.res, true); len(rep.Written) != 1 {
+	if rep := s.Sync(ctx, w.res, ChoiceOn); len(rep.Written) != 1 {
 		t.Fatalf("%+v", rep)
 	}
 	enforced := readFile(t, localOf(repo))
 	if err := os.Rename(filepath.Join(repo, ".git"), filepath.Join(repo, ".git.x")); err != nil {
 		t.Fatal(err)
 	}
-	if rep := s.Sync(ctx, w.res, true); len(rep.Cleared) != 0 || readFile(t, localOf(repo)) != enforced {
+	if rep := s.Sync(ctx, w.res, ChoiceOn); len(rep.Cleared) != 0 || readFile(t, localOf(repo)) != enforced {
 		t.Errorf(".git renamed: %+v\n%s", rep, readFile(t, localOf(repo)))
 	}
 	if err := os.Rename(filepath.Join(repo, ".git.x"), filepath.Join(repo, ".git")); err != nil {
 		t.Fatal(err)
 	}
 	s.Place = func(context.Context, string) (string, bool, error) { return "", false, errors.New("down") }
-	if rep := s.Sync(ctx, w.res, true); len(rep.Cleared) != 0 || readFile(t, localOf(repo)) != enforced {
+	if rep := s.Sync(ctx, w.res, ChoiceOn); len(rep.Cleared) != 0 || readFile(t, localOf(repo)) != enforced {
 		t.Errorf("place error: %+v", rep)
 	}
 	// A new checkout that cannot be placed gets the strictest rules.
 	fresh := gitRepo(t, filepath.Join(w.code, "a", "fresh"))
-	s.Sync(ctx, w.res, true)
+	s.Sync(ctx, w.res, ChoiceOn)
 	if got := readFile(t, localOf(fresh)); !strings.Contains(got, filepath.Join(w.code, "b")) || strings.Contains(got, "GH_CONFIG_DIR") {
 		t.Errorf("unplaceable new checkout:\n%s", got)
 	}
 	// Its root leaves the policy: the rules go.
 	gone := newWorld(t).res
-	if rep := s.Sync(ctx, gone, true); !slices.Contains(rep.Cleared, repo) {
+	if rep := s.Sync(ctx, gone, ChoiceOn); !slices.Contains(rep.Cleared, repo) {
 		t.Errorf("root gone: %+v", rep)
 	}
 }

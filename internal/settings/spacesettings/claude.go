@@ -26,7 +26,15 @@ const (
 	keyDenyRead    = "sandbox.filesystem.denyRead"
 	keyDenyWrite   = "sandbox.filesystem.denyWrite"
 	keyAllowWrite  = "sandbox.filesystem.allowWrite"
-	keyPermDeny    = "permissions.deny"
+	keyAllowRead   = "sandbox.filesystem.allowRead"
+	// keyDomains are hosts sandboxed commands may reach without asking.
+	keyDomains = "sandbox.network.allowedDomains"
+	// keyTrustd lets sandboxed commands reach com.apple.trustd.agent.
+	// Measured with Claude Code 2.1.309 (D-61): without it gh, like every
+	// Go program on macOS, cannot verify a TLS certificate in the sandbox
+	// ('x509: OSStatus -26276') although curl can.
+	keyTrustd   = "sandbox.enableWeakerNetworkIsolation"
+	keyPermDeny = "permissions.deny"
 	// keyAllProjectMCP turns off starting every project MCP server.
 	keyAllProjectMCP = "enableAllProjectMcpServers"
 	envGHConfigDir   = "GH_CONFIG_DIR"
@@ -88,10 +96,34 @@ func ClaudeFragment(r Rules) Fragment {
 	if r.TmpDir != "" {
 		f.Lists[keyAllowWrite] = []string{r.TmpDir}
 	}
+	if len(r.AllowRead) > 0 {
+		f.Lists[keyAllowRead] = r.AllowRead
+	}
+	if r.Space != "" {
+		// Reason: gh in the space's shell (D-61). Its hosts would
+		// otherwise need an approval a headless session cannot give, and
+		// its TLS checks need trustd.
+		f.Lists[keyDomains] = slices.Clone(ghDomains)
+		f.Scalars[keyTrustd] = true
+	}
 	for k, v := range r.Env() {
 		f.Scalars["env."+k] = v
 	}
 	return f
+}
+
+// ghDomains are the hosts gh needs for github.com.
+var ghDomains = []string{"api.github.com", "github.com"}
+
+// LoginFragment is what a checkout keeps when the sandbox setting writes
+// no rules for it (D-61): only the space's own gh profile as
+// GH_CONFIG_DIR, which is which account the space uses (D-59), not a
+// sandbox rule. Empty for a space using the default login.
+func LoginFragment(r Rules) Fragment {
+	if r.GHConfigDir == "" {
+		return Fragment{}
+	}
+	return Fragment{Scalars: map[string]any{"env." + envGHConfigDir: r.GHConfigDir}}
 }
 
 // LauncherFragment is ClaudeFragment for a session 'orch run' starts with

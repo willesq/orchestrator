@@ -94,6 +94,10 @@ type enforcement struct {
 	// problem says why orch.db's switches were not all taken at startup, or
 	// differ from cur now; "" when they match.
 	problem string
+	// sandbox is the sandbox setting (D-61), and sandboxProblem why orch.db's
+	// was not taken at startup or differs from it now.
+	sandbox        spaces.SandboxSetting
+	sandboxProblem string
 
 	// hooksMu guards the cached hooks check: every caller may ask, and a
 	// check reads Claude Code's settings.
@@ -131,6 +135,7 @@ func newEnforcement(ctx context.Context, db *sql.DB, svc *settings.Service) *enf
 		log.Printf("orchd: enforcement: %s", p)
 	}
 	e.cur = cur
+	e.loadSandbox(ctx)
 	return e
 }
 
@@ -388,7 +393,7 @@ func (s *server) switches(ctx context.Context) ([]*orchdv1.EnforcementSwitch, st
 
 func (s *server) GetEnforcement(ctx context.Context, _ *orchdv1.GetEnforcementRequest) (*orchdv1.EnforcementState, error) {
 	sw, problem := s.switches(ctx)
-	return &orchdv1.EnforcementState{Switches: sw, Error: problem}, nil
+	return &orchdv1.EnforcementState{Switches: sw, Error: problem, SandboxSetting: s.sandboxProto(ctx)}, nil
 }
 
 func (s *server) SetEnforcement(ctx context.Context, req *orchdv1.SetEnforcementRequest) (*orchdv1.SetEnforcementResponse, error) {

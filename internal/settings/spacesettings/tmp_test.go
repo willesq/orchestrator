@@ -186,7 +186,7 @@ func TestSyncFailsClosedOnTmpRoot(t *testing.T) {
 	}
 	s := w.syncer()
 	checkout := gitRepo(t, filepath.Join(w.code, "a", "app"))
-	rep := s.Sync(context.Background(), w.res, true)
+	rep := s.Sync(context.Background(), w.res, ChoiceOn)
 	if !slices.Contains(rep.Written, checkout) || !strings.Contains(strings.Join(rep.Problems, "\n"), "its sessions get none") {
 		t.Fatalf("%+v", rep)
 	}
@@ -203,7 +203,7 @@ func TestSyncFailsClosedOnTmpRoot(t *testing.T) {
 
 	long := newWorld(t)
 	long.layout.Tmp = filepath.Join(shortTmp(t), strings.Repeat("l", 30))
-	rep = long.syncer().Sync(context.Background(), long.res, true)
+	rep = long.syncer().Sync(context.Background(), long.res, ChoiceOn)
 	if !strings.Contains(strings.Join(rep.Problems, "\n"), "too long for Claude Code") {
 		t.Errorf("long root not reported: %+v", rep.Problems)
 	}

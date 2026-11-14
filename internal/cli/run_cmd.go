@@ -115,7 +115,7 @@ func (l *launcher) run(out io.Writer, space string, argv []string, force bool) e
 		return err
 	}
 	var res *spaces.Resolved
-	on := true
+	choice := spacesettings.ChoiceOn
 	err = withClient(l.cf, func(ctx context.Context, client orchdv1.OrchdClient) error {
 		var err error
 		if res, err = appliedPolicy(ctx, client); err != nil {
@@ -127,7 +127,7 @@ func (l *launcher) run(out io.Writer, space string, argv []string, force bool) e
 		if err := checkFolder(ctx, client, cwd, space, force); err != nil {
 			return err
 		}
-		on = sandboxOn(ctx, client)
+		choice = sandboxChoice(ctx, client)
 		return nil
 	})
 	if err != nil {
@@ -140,8 +140,14 @@ func (l *launcher) run(out io.Writer, space string, argv []string, force bool) e
 	if err := l.layout.EnsureTmpDir(space); err != nil {
 		return err
 	}
-	if !on {
+	on := choice.Sandboxes(rules)
+	switch {
+	case choice.SwitchedOff:
 		fmt.Fprintln(out, "orch run: the sandbox layer is switched off; the session gets no deny rules")
+	case !on && choice.Setting == spaces.SandboxOff:
+		fmt.Fprintln(out, "orch run: the sandbox setting is off; the session gets no deny rules")
+	case !on:
+		fmt.Fprintln(out, "orch run: no other isolated space's folders to deny (sandbox setting auto); the session gets no deny rules")
 	}
 	var (
 		args     = slices.Clone(argv)
@@ -225,19 +231,23 @@ func checkFolder(ctx context.Context, client orchdv1.OrchdClient, cwd, space str
 	return fmt.Errorf("this folder's space cannot be decided (%s); start the session from a folder of %s, or pass --force", e.GetReason(), space)
 }
 
-// sandboxOn reports whether the sandbox layer is on. When orchd cannot say,
-// the rules are applied.
-func sandboxOn(ctx context.Context, client orchdv1.OrchdClient) bool {
+// sandboxChoice is the sandbox layer's switch and setting (D-61). When
+// orchd cannot say, or names no setting, the rules are applied.
+func sandboxChoice(ctx context.Context, client orchdv1.OrchdClient) spacesettings.Choice {
 	st, err := client.GetEnforcement(ctx, &orchdv1.GetEnforcementRequest{})
 	if err != nil {
-		return true
+		return spacesettings.ChoiceOn
+	}
+	c := spacesettings.ChoiceOn
+	if m, err := spaces.ParseSandboxMode(st.GetSandboxSetting().GetMode()); err == nil {
+		c.Setting = m
 	}
 	for _, sw := range st.GetSwitches() {
 		if sw.GetLayer() == string(spaces.LayerSandbox) {
-			return sw.GetState() != spaces.SwitchOff
+			c.SwitchedOff = sw.GetState() == spaces.SwitchOff
 		}
 	}
-	return true
+	return c
 }
 
 // launchEnv is the harness's environment: environ with the temp folder

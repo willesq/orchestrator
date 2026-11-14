@@ -115,6 +115,7 @@ func (s *server) spacesStatus(ctx context.Context) *orchdv1.SpacesStatus {
 		Error:            st.Error,
 		Relaxed:          relaxed,
 		EnforcementError: enfErr,
+		Sandbox:          s.sandboxProto(ctx),
 	}
 	if probs := s.ghProfiles.problems(ctx); len(probs) > 0 {
 		// Reason: Status is open to every caller and the problems name

@@ -73,7 +73,8 @@ func (s *server) runCheckoutSettings(ctx context.Context, every time.Duration) {
 }
 
 // syncCheckoutSettings brings every checkout's file up to date with the
-// applied policy and the sandbox switch, and logs what changed.
+// applied policy, the sandbox switch and the sandbox setting (D-61), and
+// logs what changed.
 func (s *server) syncCheckoutSettings(ctx context.Context) spacesettings.Report {
 	c := s.checkouts
 	if c == nil || s.spaces == nil {
@@ -92,8 +93,7 @@ func (s *server) syncCheckoutSettings(ctx context.Context) spacesettings.Report 
 	if c.syncer.Place == nil {
 		c.syncer.Place = s.placeCheckout
 	}
-	on := s.enforcement.state(spaces.LayerSandbox) == spaces.SwitchOn
-	rep := c.syncer.Sync(ctx, res, on)
+	rep := c.syncer.Sync(ctx, res, s.enforcement.choice())
 	for _, p := range rep.Written {
 		log.Printf("orchd: spaces: wrote harness settings in %s", p)
 	}

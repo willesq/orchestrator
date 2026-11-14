@@ -138,6 +138,10 @@ var operatorActions = map[string]string{
 	// of another's; SetEnforcement is also refused to interactive harness
 	// sessions (refuseNonOperator).
 	orchdv1.Orchd_SetEnforcement_FullMethodName: "switch enforcement",
+	// Reason (D-61): the setting decides whether orch writes the sandbox
+	// rules; it is also refused to interactive harness sessions
+	// (refuseNonOperator).
+	orchdv1.Orchd_SetSandboxSetting_FullMethodName: "change the sandbox setting",
 	// Reason: a queued task's identity comes from its task record, so a pin
 	// would only give it a second, self-reported one. Interactive sessions'
 	// hooks still pin (PinSession checks the harness process itself).

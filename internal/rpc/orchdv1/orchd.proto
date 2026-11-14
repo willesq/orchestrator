@@ -210,6 +210,12 @@ service Orchd {
   // descended from a harness or from orchd. Every change is logged with its
   // time and caller and emits an event on the "spaces" stream.
   rpc SetEnforcement(SetEnforcementRequest) returns (SetEnforcementResponse);
+  // SetSandboxSetting sets the sandbox setting, auto | on | off (spaces
+  // D-61): whether orch writes its sandbox rules, as a lasting choice
+  // apart from the sandbox layer's switch. GetEnforcement and Status show
+  // it. Operator-only like SetEnforcement; every change is logged with its
+  // time and caller and emits an event on the "spaces" stream.
+  rpc SetSandboxSetting(SetSandboxSettingRequest) returns (SetSandboxSettingResponse);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -470,6 +476,8 @@ message SpacesStatus {
   repeated EnforcementSwitch relaxed = 6;
   // Set when orch.db's switches differ from orchd's or could not be read.
   string enforcement_error = 7;
+  // The sandbox setting (D-61); unset when spaces are unavailable.
+  SandboxSetting sandbox = 8;
 }
 
 // MigrationProgress is how far a running hybrid migration has got.
@@ -1824,6 +1832,38 @@ message EnforcementState {
   // differ from the ones orchd enforces (changed outside orchd); the
   // affected layers enforce.
   string error = 2;
+  // The sandbox setting (D-61), which is not a switch: it never marks a
+  // session's start digest.
+  SandboxSetting sandbox_setting = 3;
+}
+
+// SandboxSetting is whether orch writes its sandbox rules (spaces D-61):
+// auto writes them only for sessions another isolated space's folders are
+// denied to, on always while a policy is applied, off never.
+message SandboxSetting {
+  string mode = 1;           // auto | on | off
+  string default_mode = 2;   // auto
+  repeated string modes = 3;
+  int64 set_at = 4;          // unix seconds; 0 when never set
+  string set_by = 5;         // shown to the operator only
+  // Whether some space's sessions get orch's sandbox rules now: false
+  // with off, with auto when no space has another isolated space's
+  // folders to deny, with no policy, or while the sandbox switch is off.
+  bool active = 6;
+  // The state in words, for orch status and the app.
+  string detail = 7;
+  // Set when orch.db's setting differs from orchd's or did not match its
+  // change log at startup (the setting is then auto).
+  string problem = 8;
+}
+
+message SetSandboxSettingRequest {
+  string mode = 1;           // auto | on | off
+}
+
+message SetSandboxSettingResponse {
+  SandboxSetting current = 1;
+  bool changed = 2;          // false when the setting already had that mode
 }
 
 message SetEnforcementRequest {
