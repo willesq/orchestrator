@@ -6698,7 +6698,8 @@
     "active": [
       {
         "feature": "SP-074",
-        "rc_range": "RC-300..RC-349"
+        "rc_range": "RC-300..RC-349",
+        "note": "PR #182; holds the orchd.proto slot for SP-074.3.a3"
       },
       {
         "feature": "SP-024",
@@ -6736,6 +6737,12 @@
         "topic": "RC-400 settled with option (a): local content under a public root never reaches public automatically; recorded on the SP-030 branch (PR #180)"
       }
     ],
-    "next_d_id": "D-65"
+    "next_d_id": "D-65",
+    "proto_slot": {
+      "holder": "SP-074",
+      "granted": "2026-11-14",
+      "scope": "additive SpaceLogin logins field on ListSpacesResponse (SP-074.3.a3)",
+      "next": "SP-075"
+    }
   }
 }
