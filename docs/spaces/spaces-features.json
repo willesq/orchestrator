@@ -4597,14 +4597,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "2da46d2348de350e8f61196826bc0dc17990a6e620ad2419bcfdbe65138a815d",
-      "branch": null,
+      "branch": "feat/sp-074-gh-profile-follow-ups",
       "pr": null
     },
     {
