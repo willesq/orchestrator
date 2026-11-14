@@ -2655,6 +2655,83 @@
           "SP-042"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-350",
+        "kind": "follow-up",
+        "topic": "Read paths pass no spaces yet; what SP-025 must cover in the rag layer",
+        "detail": "SP-024 gives Search SearchOpts.Spaces, but orchd passes none, so every search still reads every collection (the base and each space's, Quarantine included), as before; Document, Copy, HasSource, ListSources and SourcesWrittenBy read every collection too. SP-025 must give each read path the caller's readable spaces. Notes for it: (1) 'shared' reads the base without the space filter, and the base still holds chunks SP-023 stored with other spaces and quarantine in their payload until SP-027 moves them, so a policy reader must never be given 'shared' (or the base must be filtered); (2) internal/daemon/handoff.go canonicalStored matches synced copies in any space and DeleteSource removes the path URI from every space: scope both to the writer's space; (3) Qdrant errors returned to clients carry collection names, which contain space names: return generic errors and keep detail in orchd's log; (4) the Ingest RPC ignores a Copy error (fail-open) for its sync-writer refusal, so a client in the same space can replace a synced doc when the store cannot be read (pre-existing; cross-space moves are refused in rag).",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-027"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-351",
+        "kind": "decision",
+        "topic": "Caches outside internal/rag that hold content are not keyed by space (INV-11)",
+        "detail": "SP-024 keys every cache in internal/rag by space or collection (the unchanged-write check, store objects and their layouts, the collection list). Elsewhere: orchd's PR detail cache (internal/daemon/reviews.go detailCache) holds PR titles and bodies keyed by URL only, served to whoever may call GetPRDetail; the docs sync's per-file hash cache (docs_files) decides whether a doc is written again and is keyed by URI (RC-124 covers its placement). Decide whether INV-11 requires keying these by space too, or whether SP-025's read enforcement (the caller's readable spaces) is the rule for them.",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-030"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-352",
+        "kind": "follow-up",
+        "topic": "Proposed: fetch keyword hits' vectors lazily for one collection too",
+        "detail": "SP-024.3 meets 1.3x because a search over several collections asks keyword requests for no vectors and fetches the dense vectors only of returned or tied keyword-only hits (same results). A search of one collection keeps the request it always made (INV-10). Measured on the SP-002 corpus, one collection with the lazy pattern is p95 8.3-8.4 ms against 18.0 ms today (default segments; 2.7-2.8 against 12.6 ms with 2 segments), so every search with no policy could be about twice as fast. Like for like, the collection-per-space layout still costs 2.0-2.4x one collection (D-24). Listed under 'Proposed new features' in PR #183.",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-024"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-353",
+        "kind": "decision",
+        "topic": "Collection names can read two ways when names contain \"__\"",
+        "detail": "Space collections are '<base>__<space>'. The policy's name pattern allows '_' (so 'a__b' is a valid space name) and rag.qdrant.collection and backup_collection are not checked for '__'; only a migration target containing '__' is refused. A backup drop therefore also deletes any collection named '<backup>__<lowercase name>' (another tool's, say), and a hand-set base containing '__' could read as another base's space (DropCollection refuses that case for the active and shadow base). Options: forbid '__' in space names (internal/spaces/validate.go) and in the two collection settings, or keep the list of a base's spaces in orch.db instead of parsing names.",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-020",
+          "SP-024"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-354",
+        "kind": "follow-up",
+        "topic": "Space collections: migration re-embeds, and per-collection overhead is unmeasured",
+        "detail": "MigrateHybrid copies space collections the way it copies the base, re-chunking and re-embedding them, though they are hybrid already; a raw copy of points with their vectors (which SP-071's retag needs anyway) would avoid the embedding cost. Each space collection has its own segments and HNSW index; memory and disk per collection with several spaces were not measured (SP-002 measured latency and relabel only). A space collection removed outside orchd stays in orchd's list until restart (reads treat it as empty).",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-024",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-355",
+        "kind": "user-action",
+        "topic": "After SP-024 merges, existing placed content stays in the base until relabelled",
+        "detail": "Chunks stored before SP-024 (including those SP-023 placed in a space) stay in the base collection; new writes go to space collections. Until SP-027's 'orch rag relabel' moves them, they are found only by searches that read every collection (today's default) or 'shared'. A docs file or source file that did not change is not written again (RC-124), so it is not moved by a sync either. Nothing to do while no policy is applied; with one applied, run the relabel once SP-027 lands.",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-025"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -4855,7 +4932,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (commit ab1a100): internal/rag TestWritesForASpaceTouchOnlyItsCollection passes: a write placed in acme, made against a recording fake Qdrant that already holds collections for globex, quarantine and the base, sends every write request (collection create, payload indexes, upsert, prune) to c__acme only; the other collections receive no write of any kind and keep every point, and the only request any of them sees is a points/count filtered on the write's own source_uri (the lookup for an older copy, since a source lives in one space). Related: TestWriteMovesASourceOutOfItsOldSpace (a re-placed source is removed from its old space), TestUnplacedAndSharedWritesUseTheBaseCollection (with no policy every write lands in the base and no other collection is asked anything, INV-10), TestClientWriteNeverMovesAnotherSpacesSource and TestClientWriteRefusesABaseCopyOfAnotherSpace (a client write never deletes another space's copy). End to end through orchd's placer: internal/daemon TestWritersStampOriginSpaceAndLabels and TestClientCannotChooseItsSpace now also assert every chunk sits in rag.SpaceCollection('c', space) (placing_test.go placedAs; memqdrant_test.go is per collection).",
+            "a2 (commit ab1a100): internal/rag TestSearchQueriesOnlyTheReadableCollections passes 3 of 3 subtests, one per space kind, under a validated policy (oss public, acme and globex isolated, me private reading notes): reader oss (public) reads [oss], acme (isolated) [acme oss], me (private) [me notes oss], computed with spaces.Resolved.CanRead over every space and quarantine. With every space and the base holding a matching chunk, hybrid and dense searches with SearchOpts.Spaces = that set return exactly those spaces' chunks, and the recording fake shows requests only to those spaces' collections (no listing, no request to globex, quarantine, the base or the unread private space).",
+            "a3 (commit ab1a100): internal/rag TestSearchFiltersOnSpaceInsideEachCollection passes: every search request (dense points/search and keyword points/query, 6 for one hybrid and one dense search of 2 spaces) sent to c__<space> carries the filter space = <space>, and a chunk labelled globex placed inside acme's collection is not returned by either mode. TestSearchSpacesEdges: Shared reads the base without the space filter (pre-spaces chunks carry none), an empty list reads and embeds nothing, unknown names are skipped."
+          ]
         },
         {
           "id": "SP-024.2",
@@ -4876,7 +4957,10 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (commit ab1a100): internal/rag TestMigrateHybridCopiesEverySpaceCollection passes: a dense base with hybrid space collections acme and quarantine; the plan counts 5 sources / 6 chunks across all three; the applied migration copies orchestrator__acme and orchestrator__quarantine to orchestrator-hybrid__acme/__quarantine with space and labels_v kept, leaves the old collections unmodified, commits the base switch, and a write after the switch lands in orchestrator-hybrid__acme. TestMigrateHybridLiveWriteToANewSpace (a write into a space with no collection, made mid-copy, reaches it under the new base), TestMigrateHybridRefusesAFinishedSpaceTarget (a space target with points and no marker, a dense space target, and a target containing '__' are refused). TestReindexKeywordsCoversEverySpaceCollection: plan Total 8 / Stale 8 over c, c__acme, c__quarantine; apply re-indexes all 8 and stamps bm25_v in every collection; a dense space collection is refused. TestDropBackupDropsEverySpaceCollection: the plan reports 3 points and spaces [acme quarantine]; the drop removes backup, backup__acme and backup__quarantine, leaves c__acme, refuses c__acme (an active space collection), and drops the space collections of a backup whose base is gone; TestDropRefusesABaseThatReadsAsASpace refuses dropping 'orchestrator' while 'orchestrator__v2' is active.",
+            "a2 (commit ab1a100): internal/rag TestWriteCacheIsKeyedBySpace passes: the unchanged-write check (ingest_hash) is read only in the write's own space's collection, so the same source and text written for acme is skipped for acme (1 embed) but embedded and stored for globex (2), and again for acme after that (3); TestStoreCachesAreKeyedByCollection: the store object and its cached layout are per collection (acme's hybrid layout is never used for globex's missing collection) and the list of space collections is cached per base (another base's list is never served); TestListingNeverHidesANotedCollection: a listing answered while a write created a collection never hides it. Every cache in internal/rag is listed in docs/internals/memory.md 'Caches keyed by space (INV-11)'; caches outside internal/rag are RC-351."
+          ]
         },
         {
           "id": "SP-024.3",
@@ -4890,7 +4974,9 @@
               "threshold": "<= 1.3x"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (commit ab1a100): internal/rag TestIntegrationSpaceCollectionsSearch (ORCH_QDRANT_BENCH=1, ORCH_QDRANT_BIN_DIR=~/.local/share/orch/bin, qdrant v1.17.1 native on 127.0.0.1:6431 with temporary storage and collections sp-024-*, Apple M3 Max, 2026-11-14), the SP-002 corpus of 40,000 chunks, 200 queries after 20 warm-up, interleaved. Baseline = the SP-002 baseline (Service.Search, hybrid, weighted, TopK 10, one collection filtered to 2 spaces); measured = Service.Search with Spaces [s0 s1] over sp-024-bench__s0..s3. Default segments, 2 quiet runs: baseline p95 18.06 / 18.03 ms, space collections p95 19.46 / 20.19 ms, ratio 1.08x / 1.12x (a third run under load: 32.59 vs 26.20 ms, 0.80x). ORCH_QDRANT_BENCH_SEGMENTS=2, 2 runs: baseline p95 12.60 / 12.65 ms, space collections 5.69 / 5.59 ms, ratio 0.45x / 0.44x. Threshold <= 1.3x met. Top-10 agreement with the baseline 99.7%. How: across collections keyword requests return no vectors and the vectors of keyword-only hits are fetched only for returned or tied hits (results equal to fetching all, TestSearchAcrossCollectionsMatchesOneCollection, TestTiedScoresFetchTheirCosine). Like for like, one collection searched with that same request pattern is p95 8.33-8.41 ms (default) and 2.70-2.83 ms (2 segments), so the layout itself still costs 2.0-2.4x, as SP-002 measured and D-24 accepted; giving single-collection search the cheaper pattern is RC-352."
+          ]
         }
       ],
       "status": "in_progress",
@@ -4901,7 +4987,7 @@
       "attempts": 1,
       "criteria_sha256": "6a08b877987f9cc1a3bcf4ab2dc6baad1afdea4ab59a51e1c0d1455c73e20bf3",
       "branch": "feat/sp-024-collection-per-space",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/183"
     },
     {
       "id": "SP-025",
