@@ -2655,6 +2655,55 @@
           "SP-042"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-550",
+        "kind": "follow-up",
+        "topic": "Agents can skip the git hooks with --no-verify",
+        "detail": "SP-045's hooks run for every commit and push in a repository, but git commit --no-verify and git push --no-verify skip them (git -c core.hooksPath=... is already refused by SP-044's check). Proposed: while a checkout has orch's hooks installed, the tool hook's outbound check refuses --no-verify (and -n for commit) on git commit, push and merge in agent sessions, so only the user's own terminal can skip them.",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-045",
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-551",
+        "kind": "decision",
+        "topic": "Low findings accepted in SP-045's git hooks",
+        "detail": "From the SP-045 security audit (2026-11-14), documented in docs/internals/install.md: (1) the hook finds the guard files from its own environment (ORCH_DATA_DIR, HOME), so git run with another home holding no snapshot and no orch.db reads as nothing configured and allows (INV-10); (2) on systems other than macOS and Linux the no-replace rename used to chain and restore hooks is check-then-rename, not atomic; on Linux filesystems without RENAME_NOREPLACE install fails with that error; (3) installing into a core.hooksPath tracked in the work tree (husky, .githooks) changes tracked files and writes the local orch path into them. Proposed if wanted: record the guard directory in the hook at install and refuse when it holds a snapshot the hook's own environment does not find.",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-045"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-552",
+        "kind": "follow-up",
+        "topic": "SP-044's push check trusts no-space remotes' tracking refs for a push to a URL",
+        "detail": "Found by the SP-045 security re-audit (2026-11-14): the tool hook's check (OutboundChecker.excluded, a push to a URL) leaves out commits on the tracking refs of every remote whose push URLs lie in the same spaces as the URL; for a URL in no space (another server, a local path) that is every other no-space remote, so commits on a remote of no space are not read when pushed to another place of no space, and tracking refs record fetch URLs rather than push URLs. SP-045's pre-push hook does not do this (only remotes fetched from the destination's own spaces, or for no space its own URL), and it runs on the real push. Proposed: use the same rule in the tool hook's check.",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-553",
+        "kind": "user-action",
+        "topic": "Install the git hooks in the repositories you want covered",
+        "detail": "SP-045 installs nothing by itself and was never run against a real repository (local_safety). To cover a repository, run `orch guard git-hook --install` in it to preview, then `--install --apply`; for every repository at once, point git's global core.hooksPath at a directory and run `orch guard git-hook --install --apply --hooks-dir <dir>`. `--uninstall --apply` restores the hooks that were there. The hooks run the orch binary that installed them (or orch on PATH).",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-045"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -5581,7 +5630,11 @@
               "threshold": "3 pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestGitHookInstallProperties (internal/install/githook_test.go, temp hooks directory holding a 0750 user commit-msg hook): (1) the dry run prints DRY RUN and 2 changes and writes no file or backup; (2) apply backs the user's hook up (0600 under <backups>/<UTC stamp>/) and (3) chains it as commit-msg.orch-prev with its mode and content, orch's hooks 0755 naming the orch binary; (4) a second install plans 0 changes and its apply writes nothing; (5) uninstall restores the directory exactly (names, modes, content) and a second uninstall plans 0 changes. Also TestGitHookInstallEmptyAndUpdate, TestGitHookInstallRefusals (hook and .orch-prev both present, relative paths, changed between plan and apply), TestGitHookUninstallLeavesOthersAlone, TestGitHookChainsSymlink, TestGitHookScript, TestGitHookInstallReview; CLI: TestGitHookCmdDryRun (no --apply writes nothing; --hooks-dir), TestGitHookCmdErrors. All in temp repositories and directories with ORCH_DATA_DIR and GIT_CONFIG_GLOBAL in temp.",
+            "a2: TestGitHookCommitRefused (internal/cli/guard_githook_cmd_test.go: a real temp repository with orch's hooks installed through `orch guard git-hook --install --apply` over a user commit-msg and pre-push hook, the hooks running this test binary as orch): a commit whose message holds globex's term is refused (rule outbound_term, space globex, the term absent from git's output); a term in a staged file with an innocent message, one a chained hook appends to the message, and commit -a with a tracked change are refused; a commit without a term passes and the user's commit-msg hook runs with .git/COMMIT_EDITMSG. TestGitHookPushRefused: a commit with a term made with --no-verify is refused at push (to the named remote, as a tag, to the URL itself) and the user's pre-push hook does not run; a clean push, a new branch and a deletion pass, and the user's pre-push hook gets git's arguments and ref lines. TestGitHookSwitchAndPolicy: terms layer off allows, nothing configured allows, an unreadable snapshot refuses (outbound_unchecked). TestGitHookRunInProcess. Check unit tests (internal/spaces/githook_test.go): TestGitHookCommitCheck, TestGitHookPushCheck, TestGitHookPushReview, TestGitHookPushNoSpaceRemotes, TestGitHookTagObjects, TestParsePushUpdates, TestGuardFilesReadTerms, TestCheckGitHookTerms.",
+            "2026-11-14 on 29ed33f: go test ./... 4729+ pass, go vet ./... clean, gofmt clean, make cover passes (guard_githook_cmd.go 87.7%, install/githook.go 89.6%, spaces/githook.go 95.4%, outbound_git.go 88.3%). Security audit (security-audit agent, two rounds): 0 critical/high; 5 medium (destination read from config instead of git's URL, tracking refs of other spaces trusted, ref names unchecked, annotated tags pushed by object unchecked, no-space remotes trusted for no-space destinations) and 4 low fixed with the review tests above; the remaining lows are RC-551."
+          ]
         }
       ],
       "status": "in_progress",
