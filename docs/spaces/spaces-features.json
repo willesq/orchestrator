@@ -556,6 +556,11 @@
         "id": "D-62",
         "decision": "Merge SP-046 (PR #171) now, as admin without review, with the security-audit gate (DOD-6) not met: RC-215 (high), RC-216 and RC-217 (medium) stay open, together with the decisions in RC-210 and RC-213. SP-046 stays 'blocked' on main until they are settled and the independent verifier passes. With no spaces policy applied nothing changes (INV-10). The coordinator's recommendations, not yet confirmed by the user: RC-215 guard refuses tool calls in checkouts whose settings re-open another space's folders; RC-216 one-time start digest note after a sandbox setting change; RC-217 'auto' also triggers when another space has its own login folder; RC-210 documented limit, solved in SP-074; RC-213 use allowMachLookup com.apple.trustd.agent instead of enableWeakerNetworkIsolation.",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-63",
+        "decision": "Features may be worked in parallel lanes, up to 5 at a time, each lane a separate session on one feature, following the swim lanes the coordinator proposed on 2026-11-14: first wave SP-074, SP-024, SP-030, SP-048, SP-051; SP-045 after SP-074's cli changes; SP-075 after SP-074. Each lane has its own RC-id range and its own progress file; only the coordinator assigns D-ids and schedules changes to orchd.proto and DB migrations. This amends session_procedure steps 2, 3, 5 and 12 and adds step 13.",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -6619,6 +6624,10 @@
     {
       "date": "2026-11-14",
       "change": "D-62: user merged SP-046 (#171) with RC-215/216/217 open; SP-046 stays blocked until they are fixed and verified."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-63: parallel lanes (up to 5) with separate RC-id ranges and per-feature progress files; first wave SP-074, SP-024, SP-030, SP-048, SP-051."
     }
   ],
   "plan_location": {
@@ -6628,8 +6637,8 @@
     "main_checkout": "/Users/williamesquivel/code/willesq/orchestrator",
     "note": "Status on origin/main is authoritative. A feature's status changes on its feature branch and reaches main when its PR merges.",
     "progress_file": {
-      "path": "/Users/williamesquivel/code/willesq/orchestrator/docs/spaces/progress.local.json",
-      "purpose": "Live progress for the user and the next session. The plan's status only changes on main when a PR merges; this file shows what is happening now. It is never committed (listed in .git/info/exclude).",
+      "path": "/Users/williamesquivel/code/willesq/orchestrator/docs/spaces/progress.<ID>.local.json",
+      "purpose": "Live progress for the user and the next session. The plan's status only changes on main when a PR merges; this file shows what is happening now. It is never committed (listed in .git/info/exclude). Under D-63 each lane writes its own file named by its feature id; the coordinator keeps progress.local.json (read by the reader) as a summary of all lanes.",
       "schema": {
         "updated_at": "UTC ISO 8601, set on every write",
         "session_id": "the harness session id",
@@ -6656,26 +6665,64 @@
   },
   "session_procedure": [
     "1. Sync. In the main checkout (/Users/williamesquivel/code/willesq/orchestrator) run `git fetch origin`. Read the plan from origin/main: `git show origin/main:docs/spaces/spaces-features.json`. That copy is authoritative for status; local copies may be stale.",
-    "2. Pick exactly one feature: the first feature in ascending 'priority' whose status on origin/main is not 'done' or 'superseded'. Never skip it, never choose another, never work on two at once. Run one session at a time.",
-    "3. Look for existing work on it. First read the live progress file (/Users/williamesquivel/code/willesq/orchestrator/docs/spaces/progress.local.json): if it names a different session_id with status 'in_progress' and updated_at less than 30 minutes ago, another session is working. Stop and tell the user. Then check branches and PRs: the branch is feat/<id in lowercase>-<short-slug> (e.g. feat/sp-020-spaces-config); run `git branch -a --list '*feat/<id>-*'` and `gh pr list --state all --search '<ID> in:title'`.",
+    "2. Pick your feature. Under D-63 up to 5 lanes run in parallel, each a separate session on one feature. A lane session works only on the feature the coordinator assigned it in parallel_lanes.active (or, with no assignment, the first feature in ascending 'priority' whose status on origin/main is not 'done' or 'superseded' and that no active lane holds). Never work on two features in one session, never take a feature another lane holds, and never take one whose depends_on are not all 'done' on origin/main.",
+    "3. Look for existing work on it. First read this feature's live progress file (/Users/williamesquivel/code/willesq/orchestrator/docs/spaces/progress.<ID>.local.json, e.g. progress.SP-024.local.json): if it names a different session_id with status 'in_progress' and updated_at less than 30 minutes ago, another session is working. Stop and tell the user. Then check branches and PRs: the branch is feat/<id in lowercase>-<short-slug> (e.g. feat/sp-020-spaces-config); run `git branch -a --list '*feat/<id>-*'` and `gh pr list --state all --search '<ID> in:title'`.",
     "3a. If an open PR exists whose plan copy already shows the feature 'done' with verification, it is waiting for the user to review and merge. Report the PR link and stop. Do not start the next feature.",
     "3b. If a branch or open PR exists but the feature isn't done there, resume it: use its existing worktree under /Users/williamesquivel/code/willesq/orchestrator.worktrees/feat/..., or recreate it with ~/.claude/orchestrator/scripts/git_worktree_create.sh <branch> and answer 'y' to reuse the existing branch.",
     "3c. If the PR was merged but origin/main doesn't show the feature done, or a PR was closed unmerged, stop and ask the user what happened.",
     "3d. If nothing exists, run ~/.claude/orchestrator/scripts/git_worktree_create.sh feat/<id>-<slug> from the main checkout and work only in that worktree.",
     "4. Preconditions. Every depends_on feature must be 'done' on origin/main, and no entry in decisions.open may list this feature in 'blocks'. If either fails, stop and tell the user. (Priority order makes the first case unexpected.)",
-    "5. On the feature branch, set the feature's status to 'in_progress', increment 'attempts', and set 'branch'. Commit (signed). Push, open a draft PR titled 'feat(spaces): <summary> (<ID>)' early, record its URL in the feature's 'pr' field, and register it in ~/.pr-watch.json. Write the live progress file now and after every later step, checkpoint, block or finish (schema in plan_location.progress_file); make sure docs/spaces/progress.local.json is listed in the main checkout's .git/info/exclude.",
+    "5. On the feature branch, set the feature's status to 'in_progress', increment 'attempts', and set 'branch'. Commit (signed). Push, open a draft PR titled 'feat(spaces): <summary> (<ID>)' early, record its URL in the feature's 'pr' field, and register it in ~/.pr-watch.json. Write the live progress file now and after every later step, checkpoint, block or finish (schema in plan_location.progress_file); make sure docs/spaces/progress.*.local.json is listed in the main checkout's .git/info/exclude.",
     "6. Do the checkpoints in order. After each one, record evidence (test names, command output, measured numbers, or 'confirmed by user on <date>' for manual items) in that checkpoint's 'evidence' array and commit. Update the live progress file (checkpoint, checkpoints_done, note, a history entry) at the start and end of each checkpoint.",
     "7. Manual items need the user: ask them to perform or confirm the step and wait. If you can't continue for any reason (missing input, a criterion that is wrong or impossible, 3 failed fix rounds), set status 'blocked' with a specific blocked_reason, commit, push, and stop. Never move past a blocked feature. When you stop or need the user, the live file's status and note must say so.",
     "8. When every checkpoint has evidence meeting its threshold, run every definition_of_done check yourself. Then spawn an independent verifier: a fresh subagent that gets only the diff (origin/main...HEAD), this feature's JSON, the invariants it appears in, and definition_of_done. It re-runs every test, command and metric itself and reports pass or fail for each acceptance item and each DOD check. It does not see your reasoning.",
     "9. If the verifier reports any failure, fix it and verify again, up to 3 rounds; after that, set 'blocked'. If everything passes, set status 'done', passes=true, verified_sha to the commit that was verified, verified_at to the current UTC time (ISO 8601). Commit that change (signed) and push. Leave the PR as a draft; the user marks it ready and merges.",
     "10. Never delete, renumber or reorder features, checkpoints or acceptance items, and never edit acceptance criteria (criteria_sha256 detects it). Only the user may mark a feature 'superseded'. If you discover new work, describe it under 'Proposed new features' in the PR body; it is appended to the plan, with the next free ID, only after the user approves.",
     "11. Finish with a short report: the feature, its PR link, the verification result, what is waiting on the user, and which feature step 2 will pick next once this one is merged. Leave the live progress file with the final status ('done', 'blocked' or 'idle') and a note matching your report.",
-    "12. Record decisions as you go, until the last feature is done. A decision the user makes goes to decisions.confirmed_by_user with the next D-id and the date. Everything else that needs the user later goes to decisions.reconvene with the next RC-id: proposed features or acceptance items (also listed in the PR body per step 10), low or accepted security findings, deferred follow-ups, unverified assumptions, and actions the user must take. Give each a kind (decision, follow-up or user-action), topic, detail, source (PR, issue or session URI), raised date, affects and status 'open'. Reconvene items never block work; an item the user settles moves to confirmed_by_user (or becomes a feature) and its status becomes 'resolved' with a note. Before reporting in step 11, check that your session's items are recorded."
+    "12. Record decisions as you go, until the last feature is done. A decision the user makes goes to decisions.confirmed_by_user with the next D-id and the date; only the coordinator assigns D-ids, so a lane reports the user's decision to the coordinator instead. Everything else that needs the user later goes to decisions.reconvene with the next free RC-id inside your lane's range in parallel_lanes (never outside it): proposed features or acceptance items (also listed in the PR body per step 10), low or accepted security findings, deferred follow-ups, unverified assumptions, and actions the user must take. Give each a kind (decision, follow-up or user-action), topic, detail, source (PR, issue or session URI), raised date, affects and status 'open'. Reconvene items never block work; an item the user settles moves to confirmed_by_user (or becomes a feature) and its status becomes 'resolved' with a note. Before reporting in step 11, check that your session's items are recorded.",
+    "13. Parallel lanes (D-63). A lane edits only its own feature object, its own RC range and its own progress file. When several lane PRs edit spaces-features.json, the later PR rebases on origin/main and keeps both sides; RC entries from different ranges are never renumbered. Only one lane at a time changes internal/rpc/orchdv1/orchd.proto or adds a numbered DB migration; the coordinator schedules them. Each lane uses its own ORCH_CONFIG_DIR, ORCH_DATA_DIR, socket and Qdrant collection prefix named after its feature (e.g. sp-024) and removes them when finished. Manual items and user decisions go through the coordinator, which asks the user and keeps docs/spaces/progress.local.json as the summary of all lanes for the reader."
   ],
   "local_safety": [
     "This Mac runs the orch you are changing. Exercise install changes with a temporary --home only; never write to the real ~/.claude, ~/.codex, ~/.gemini, ~/.config/orch, or any repo's git hooks.",
     "Don't restart or replace the running orchd, and don't run `orch install` for real. For anything that needs a daemon or Qdrant, use a separate ORCH_CONFIG_DIR, ORCH_DATA_DIR, socket and Qdrant collection, and remove them when finished.",
     "To capture harness payloads (SP-001), use project-local hook settings in a scratch repository and ask the user before launching each harness session.",
     "Never read, print or store credentials. Use `gh auth status` only; never `gh auth token` or token files."
-  ]
+  ],
+  "parallel_lanes": {
+    "decision": "D-63",
+    "max_parallel": 5,
+    "id_ranges_note": "Only the coordinator session assigns D-ids. RC-ids: the coordinator uses RC-229 to RC-299; each lane gets a block of 50 when it is assigned. Blocks are never reused.",
+    "coordinator": {
+      "rc_range": "RC-229..RC-299"
+    },
+    "active": [
+      {
+        "feature": "SP-074",
+        "rc_range": "RC-300..RC-349"
+      },
+      {
+        "feature": "SP-024",
+        "rc_range": "RC-350..RC-399"
+      },
+      {
+        "feature": "SP-030",
+        "rc_range": "RC-400..RC-449"
+      },
+      {
+        "feature": "SP-048",
+        "rc_range": "RC-450..RC-499"
+      },
+      {
+        "feature": "SP-051",
+        "rc_range": "RC-500..RC-549"
+      }
+    ],
+    "next_rc_block": "RC-550",
+    "queued": [
+      "SP-045 after SP-074's internal/cli changes merge",
+      "SP-075 after SP-074 (changes orchd.proto and adds a migration)",
+      "SP-025 and SP-027 after SP-024",
+      "SP-052 and SP-054 after SP-051"
+    ]
+  }
 }
