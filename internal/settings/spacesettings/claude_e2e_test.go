@@ -208,6 +208,10 @@ func TestClaudeE2E(t *testing.T) {
 			t.Errorf("the session changed its settings:\n%s", after)
 		}
 	})
+	// Last: it adds a checkout and syncs again (RC-215).
+	t.Run("loosening", func(t *testing.T) {
+		looseningProbe(t, claude, s, res, codeA, codeB, secret, marker, base, layout)
+	})
 }
 
 // launchOf is how 'orch run <space> -- claude' starts Claude Code: its

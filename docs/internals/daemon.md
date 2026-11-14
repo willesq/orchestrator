@@ -650,7 +650,8 @@ they keep it out of another isolated space's root.
   change is appended to the log in the same transaction. The switch readers (`LoadEnforcement`,
   `LoadVerified`, the hooks' `ReadEnforcement`) skip it, as it is not a layer, so it can never mark
   a digest. At startup a row that does not match its newest log entry, a log entry without a row,
-  or an unknown value leaves the setting at `auto` and is reported; while orchd runs its copy
+  or an unknown value makes the setting `on` (the strictest, as a switch that does not verify
+  enforces) and is reported, as does a setting orchd cannot read; while orchd runs its copy
   wins, and an edit to `orch.db` is reported as drift (`problem`) until the next set.
 - **Set** by `SetSandboxSetting` (`orch spaces sandbox auto|on|off`), operator-only like
   `SetEnforcement` (`refuseNonOperator`). Setting the value it has changes nothing. A change is
@@ -663,6 +664,11 @@ they keep it out of another isolated space's root.
 - **Not a switch** (INV-16 as amended by D-61): `off`, or `auto` with nothing to deny, does not
   mark any session's start digest. The `sandbox` switch still does whenever it is off, timed or
   not, and while it is off no rules are written whatever the setting says.
+- **Limits:** as for the switches, a process running as the user can write a matching row and
+  log entry while orchd is stopped, which the next start takes; for the setting nothing then
+  warns in a digest, only `orch status` and the app show it (RC-216). Sandboxed shells cannot
+  write `orch.db` (it is outside every space's writable folders) and the guard refuses tool calls
+  that name it.
 
 ## gRPC API
 

@@ -117,7 +117,7 @@ func TestSandboxSettingOperatorOnly(t *testing.T) {
 }
 
 // TestSandboxSettingChangedOutsideOrchd: a setting row written outside orchd
-// is drift; orchd keeps its own, and a restart takes the default.
+// is drift; orchd keeps its own, and a restart over it writes the rules (on).
 func TestSandboxSettingChangedOutsideOrchd(t *testing.T) {
 	s, _, _, _ := sandboxRig(t)
 	ctx := context.Background()
@@ -135,7 +135,7 @@ func TestSandboxSettingChangedOutsideOrchd(t *testing.T) {
 		t.Error("orchd took the edited setting")
 	}
 	restarted := newEnforcement(ctx, s.enforcement.db, nil)
-	if set, problem := restarted.sandboxSetting(ctx); set.Mode != spaces.SandboxAuto || !strings.Contains(problem, "does not match") {
+	if set, problem := restarted.sandboxSetting(ctx); set.Mode != spaces.SandboxOn || !strings.Contains(problem, "does not match") {
 		t.Errorf("restart over an edited row: %+v %q", set, problem)
 	}
 	// Setting it again writes a matching row and clears the problem.

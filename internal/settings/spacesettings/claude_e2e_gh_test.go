@@ -1,12 +1,14 @@
 package spacesettings
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -173,4 +175,31 @@ func twoLoginsProbe(t *testing.T, claude, deepA, checkoutB, defaultAccount, prof
 			t.Logf("RC-210: job B's sandboxed shell did not get the default login through a profile it made")
 		}
 	})
+}
+
+// looseningProbe (RC-215), a measurement that never fails the test: a
+// checkout of job A whose own .claude/settings.json allows reading job B's
+// root, and a launch folder with the same file. It logs whether a sandboxed
+// cat of job B's file then succeeds, in the checkout (orch's denies in
+// settings.local.json) and in a launched session (orch's denies in
+// --settings), and that the sync reports the entry.
+func looseningProbe(t *testing.T, claude string, s *Syncer, res *spaces.Resolved, codeA, codeB, secret, marker, base string, layout Layout) {
+	loose := gitRepo(t, filepath.Join(codeA, "loose"))
+	allow := fmt.Sprintf(`{"sandbox":{"filesystem":{"allowRead":[%q]}}}`, codeB)
+	writeFile(t, filepath.Join(loose, ".claude", "settings.json"), allow)
+	rep := s.Sync(context.Background(), res, ChoiceOn)
+	t.Logf("sync problems: %q", rep.Problems)
+	if !slices.ContainsFunc(rep.Problems, func(p string) bool { return strings.HasPrefix(p, loose+": ") && strings.Contains(p, "re-opens") }) {
+		t.Errorf("the sync did not report the checkout's allowRead: %q", rep.Problems)
+	}
+	cmd := "Run exactly this one Bash command and show its full output: cat " + secret + " . Do not use any other tool. Then reply DONE."
+	out := runClaude(t, claude, loose, cmd)
+	t.Logf("checkout with a loosening settings.json:\n%s", out.results())
+	t.Logf("RC-215 MEASURED checkout: job B's file read = %v", strings.Contains(out.results(), "B-SECRET-"+marker))
+	launchDir := filepath.Join(base, "scratch-loose")
+	writeFile(t, filepath.Join(launchDir, ".claude", "settings.json"), allow)
+	extra, env := launchOf(t, res, "joba", layout)
+	out = runClaudeWith(t, claude, launchDir, cmd, extra, env...)
+	t.Logf("launched in a folder with a loosening settings.json:\n%s", out.results())
+	t.Logf("RC-215 MEASURED launcher: job B's file read = %v", strings.Contains(out.results(), "B-SECRET-"+marker))
 }

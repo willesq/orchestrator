@@ -205,18 +205,26 @@ func samePlace(a, b string) bool {
 	return oka && okb && ra == rb
 }
 
-// allowedReads is allow with its real forms, less any entry that holds a
-// denied folder. Reason: an allowRead re-opens the sandbox's read denies
-// below it (measured with Claude Code 2.1.309), so one holding another
-// space's gh profile would hand that profile to this session.
+// allowedReads is allow with its real forms, less any folder one of whose
+// forms holds a denied folder (as written or by its real path), and less
+// any whose path holds a pattern character. Reason: an allowRead re-opens
+// the sandbox's read denies below it (measured with Claude Code 2.1.309),
+// so one holding another space's gh profile, by either spelling, or a
+// pattern matching it, would hand that profile to this session.
 func allowedReads(allow, deny []string) []string {
+	denied := withReal(deny)
 	var out []string
-	for _, a := range withReal(allow) {
-		if !slices.ContainsFunc(deny, func(d string) bool { return spaces.RootHolds(a, d) }) {
-			out = append(out, a)
+	for _, a := range allow {
+		forms := withReal([]string{a})
+		bad := slices.ContainsFunc(forms, func(f string) bool {
+			return !RuleSafe(f) || slices.ContainsFunc(denied, func(d string) bool { return spaces.RootHolds(f, d) })
+		})
+		if !bad {
+			out = append(out, forms...)
 		}
 	}
-	return out
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // otherSpace is what of space n another space's sessions are denied besides

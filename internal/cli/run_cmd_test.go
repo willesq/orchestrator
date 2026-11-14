@@ -517,3 +517,20 @@ func TestRunFollowsSandboxSetting(t *testing.T) {
 		t.Errorf("on, one job: %v %q", got.err, got.argv)
 	}
 }
+
+// TestRunWarnsOfLooseningSettings (RC-215): a launch folder whose own
+// Claude Code settings would re-open one of the space's denies is named.
+func TestRunWarnsOfLooseningSettings(t *testing.T) {
+	home, policy := runWorld(t)
+	scratch := filepath.Join(home, "scratch", ".claude")
+	if err := os.MkdirAll(scratch, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(scratch, "settings.json"), []byte(`{"sandbox":{"filesystem":{"allowRead":["`+filepath.Join(home, "code", "b")+`"]}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := doLaunch(t, home, &runClient{applied: policy, placement: unmatched(), sandbox: "on"}, "joba", "--", "claude")
+	if got.err != nil || !strings.Contains(got.out, "orch run: warning: .claude/settings.json: sandbox.filesystem.allowRead entry") {
+		t.Errorf("%v\n%s", got.err, got.out)
+	}
+}

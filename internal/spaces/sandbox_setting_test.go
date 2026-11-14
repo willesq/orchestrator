@@ -101,8 +101,8 @@ func TestSandboxSettingIsNotASwitch(t *testing.T) {
 }
 
 // TestSandboxSettingTampered: a row that does not match its change log, a
-// log entry without a row, or an unknown value leaves the setting auto and
-// says why.
+// log entry without a row, or an unknown value makes the setting on, the
+// strictest value, and says why.
 func TestSandboxSettingTampered(t *testing.T) {
 	ctx := context.Background()
 	for name, edit := range map[string]string{
@@ -119,7 +119,7 @@ func TestSandboxSettingTampered(t *testing.T) {
 				t.Fatal(err)
 			}
 			s, p, err := LoadSandboxSetting(ctx, conn)
-			if err != nil || s.Mode != SandboxAuto || !strings.Contains(p, "does not match") {
+			if err != nil || s.Mode != SandboxOn || !strings.Contains(p, "does not match") {
 				t.Errorf("%+v %q %v", s, p, err)
 			}
 		})

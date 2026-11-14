@@ -71,7 +71,9 @@ func DefaultSandboxSetting() SandboxSetting { return SandboxSetting{Mode: Sandbo
 // LoadSandboxSetting reads the setting from orch.db and checks it against
 // its newest change-log entry, as LoadVerified does for the switches. A row
 // that does not match, holds an unknown value, or a log entry with no row
-// leaves the setting at its default, and problem says why.
+// makes it on, the strictest value, and problem says why. Reason: as a
+// switch that does not verify enforces, so does a setting; auto could be
+// weaker than what the operator chose.
 func LoadSandboxSetting(ctx context.Context, q querier) (s SandboxSetting, problem string, err error) {
 	s = DefaultSandboxSetting()
 	var state, setAt, setBy string
@@ -94,7 +96,7 @@ func LoadSandboxSetting(ctx context.Context, q querier) (s SandboxSetting, probl
 	mode, perr := ParseSandboxMode(state)
 	at, terr := time.Parse(time.RFC3339, setAt)
 	if !row || !logged || perr != nil || terr != nil || state != lState || setAt != lAt || setBy != lBy {
-		return s, "the sandbox setting in orch.db does not match its change log; it is at its default, auto", nil
+		return SandboxSetting{Mode: SandboxOn}, "the sandbox setting in orch.db does not match its change log; orch writes the sandbox rules (on) until the operator sets it", nil
 	}
 	return SandboxSetting{Mode: mode, SetAt: at, SetBy: setBy}, "", nil
 }

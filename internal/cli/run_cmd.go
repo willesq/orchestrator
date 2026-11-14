@@ -163,6 +163,12 @@ func (l *launcher) run(out io.Writer, space string, argv []string, force bool) e
 				return errors.New("orch run gives Claude Code the space's rules with --settings; put your own settings in a settings file instead")
 			}
 			frag = spacesettings.LauncherFragment(rules)
+			// Reason (RC-215): Claude Code adds this folder's own project
+			// settings, whose allowRead or allowWrite would re-open the
+			// space's denies; orch cannot change them, so it says so.
+			for _, l := range spacesettings.Loosening(cwd, rules.Deny, spacesettings.Owned{}) {
+				fmt.Fprintf(out, "orch run: warning: %s\n", l)
+			}
 		}
 		extra, env, err := spacesettings.ClaudeLaunch(rules, frag)
 		if err != nil {

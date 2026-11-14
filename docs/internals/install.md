@@ -545,6 +545,21 @@ orch never handles either token. Showing which login each space will use is SP-0
 - Claude Code's settings files with hooks (`~/.claude/settings*.json` and a checkout's
   `.claude/settings*.json`) are not denied to the file tools by the space rules; the guard's
   self-protection (SP-042), which refuses writes to them, is the protection (D-61, RC-211).
+- An `allowRead` or `allowWrite` that orch did not write re-opens orch's denies below it.
+  Measured 2026-11-14 (Claude Code 2.1.309): with orch-style `denyRead` of a folder in a
+  checkout's `settings.local.json`, a sandboxed `cat` of a file in it printed the file when the
+  checkout's own `.claude/settings.json` (a repository can commit one) or the same
+  `settings.local.json` held `sandbox.filesystem.allowRead` of that folder; a `settings.json`
+  `excludedCommands: ["cat"]` did not. orch cannot change a repository's file and keeps the
+  user's own entries, so each sync reports such an entry as a problem in orchd's log
+  (`spacesettings.Loosening`); what to do about it is open (RC-215). The file-tool `Read(//...)`
+  denies still hold.
+- `auto` judges only isolated roots: with one isolated job and other spaces that are not
+  isolated, the job's sessions get no rules, so nothing denies them those spaces'
+  `gh_config_dir` or `claude_config_dir` or `.orch/` (RC-217).
+- Deny paths are written as the policy spells them, plus their real path; a root spelled in
+  another case than on disk relies on the sandbox matching case-insensitively, which was not
+  measured (RC-218).
 - Paths match by case in Claude Code's permission rules; macOS volumes are usually not case
   sensitive, so a tool given a differently cased path may pass the `Read` rule (the sandbox
   matches the real path).

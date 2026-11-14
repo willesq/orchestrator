@@ -171,6 +171,11 @@ func (s *Syncer) Sync(ctx context.Context, res *spaces.Resolved, choice Choice) 
 		if next.note != "" {
 			rep.Problems = append(rep.Problems, c+": "+next.note)
 		}
+		if wanted && choice.Sandboxes(r) {
+			for _, l := range Loosening(c, r.Deny, next.st.Owned) {
+				rep.Problems = append(rep.Problems, c+": "+l)
+			}
+		}
 		next.st.Space = r.Space
 		if next.st.Owned.Empty() && !wanted {
 			delete(st.Checkouts, c)

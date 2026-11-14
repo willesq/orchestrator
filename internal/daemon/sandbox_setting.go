@@ -27,11 +27,11 @@ import (
 const sandboxDrift = "the sandbox setting in orch.db was changed outside orchd; orchd keeps the one it set"
 
 // loadSandbox takes the setting from orch.db at startup; one that does not
-// match its change log, or cannot be read, is auto.
+// match its change log, or cannot be read, is on, which writes the rules.
 func (e *enforcement) loadSandbox(ctx context.Context) {
 	s, problem, err := spaces.LoadSandboxSetting(ctx, e.db)
 	if err != nil {
-		s, problem = spaces.DefaultSandboxSetting(), "could not read the sandbox setting; it is auto: "+err.Error()
+		s, problem = spaces.SandboxSetting{Mode: spaces.SandboxOn}, "could not read the sandbox setting; orch writes the sandbox rules (on): "+err.Error()
 	}
 	if problem != "" {
 		log.Printf("orchd: enforcement: %s", problem)
