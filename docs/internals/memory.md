@@ -183,7 +183,7 @@ no origin, or that the placer leaves without a space, stores nothing.
 | Writer | Origin it reports | Placed by |
 |---|---|---|
 | docs sync | `github`: owner, repo, visibility (`private`/`public`; unknown when GitHub listed no owner node ID) and the owner's node ID, from the `gh api graphql` repo listing (`isPrivate`, `owner{id}`) | the owner's binding; public only when GitHub said the repo is public |
-| sources refresh | `fs` with the file's path (repo and owner sources); `web` with the URL | the deepest root and the checkout's remote, never the remote alone; the bound web prefix |
+| sources refresh | `fs` with the file's path (repo and owner sources); `web` with the URL | the deepest root and the checkout's remote, never the remote alone, and public only in a checkout the operator declared public (D-64); the bound web prefix |
 | session hand-off, summaries | `session` with its first directory, from its record, and the session ID when the transcript is that session's, where its harness keeps it | the session's pin only; quarantine with no pin or no tied session |
 | edit hand-off | `fs` with the resolved file path | the deepest root and the checkout's remote; never the remote alone; never public (goes to `public_root_sessions` instead) |
 | Ingest RPC | `client` with the caller kind (`session`, `task`, `operator`, `none`), the space the caller's pin writes to, and the URL when the URI is one | the caller's pinned space; quarantine for any other caller |
@@ -216,9 +216,13 @@ no origin, or that the placer leaves without a space, stores nothing.
   a session started there is. So a `.git` an agent writes under a root can still move a source it
   registers into a stricter space, never into public; that risk is accepted, as for pins. Edit hand-offs use cached repo lookups only, so files an agent picks
   spend none of GitHub's budget.
-- **The public-space write gate (SP-030).** Only the docs sync and the sources refresh may place
-  content in a public space, and only by what verifies it public: a repo GitHub reports public, a
-  bound web prefix, or a public root ([Placement](#placement) says when a root is proof). Session
+- **The public-space write gate (SP-030, D-64).** Only the docs sync and the sources refresh may
+  place content in a public space, and only by what verifies it public: a repo GitHub reports
+  public (docs sync), a bound web prefix, or a checkout the operator declared public by binding a
+  public root at its folder or inside it ([Placement](#placement)). Local content under a broader
+  public root such as `~/code` is quarantined, whatever its remote, because any job's session can
+  write there or register a folder there as a source. A declared folder can still be written by
+  any job's session; that risk is accepted (RC-404). Session
   records, summaries, edit hand-offs and client notes never land in public: sessions and client
   notes from a session pinned to a public space go to quarantine, and an edit hand-off that would
   be public (a file in a verified public repo under a public root) goes to `public_root_sessions`,
@@ -235,7 +239,8 @@ no origin, or that the placer leaves without a space, stores nothing.
   indexed (off its default branch, or its org binding not checking out) does not keep a public
   copy. A doc whose placement cannot be decided now (a conflict, a repo GitHub says it cannot
   find) is not proven public, so it leaves too. A repo lookup GitHub was not asked or did not
-  answer (budget spent, cache only, rate limit, outage) moves nothing until it answers, so no
+  answer (budget spent, cache only, rate limit, outage) moves nothing until it answers, unless no
+  answer could make the doc public (`no_public_proof`), so no
   caller can empty public by spending the budget; such a doc is still not placed public when it
   is written again. These deletions are not capped by the prune guard: a cap would keep content
   that is not public readable by every session. With no policy, or one that does not verify,
@@ -719,12 +724,17 @@ matching root and the remote's effect.
   candidate the origin is `unmatched`. A docs sync has no path, so only its remote counts.
 - **Public needs proof.** A result that would be public is quarantined (`not_verified_public`)
   whenever the checkout has a remote that GitHub has not confirmed is public, whoever owns it. That
-  includes the times GitHub cannot be reached. A public root alone is not proof for a checkout
-  (D-50, SP-030): a file in a checkout whose remote is not on GitHub, that has no remote, or whose
-  `.git` is anonymous is quarantined (`no_public_proof`) unless the operator bound a public root at
-  the checkout's own folder or inside it, or retags it. A file in no checkout under a public root
-  is public, as the operator declared. Sessions keep D-22 (below), and a checkout's harness
-  settings still follow its root.
+  includes the times GitHub cannot be reached. A public root alone is not proof for local
+  content (D-50, D-64, SP-030): a file under a public root is quarantined (`no_public_proof`)
+  unless it is in a checkout the operator declared public by binding a public root at the
+  checkout's own folder or inside it, whatever the checkout's remote (GitHub, another host, none,
+  an anonymous or symlinked `.git`). A `.git` at or above a broad root declares nothing: under a
+  broader root the checkout must lie strictly inside it, and a root that no broader root holds
+  declares only a checkout at exactly its folder, and only while it holds no other bound root
+  (RC-405). In a declared checkout a remote GitHub does not confirm public
+  still quarantines it (`not_verified_public`). A file in no checkout cannot be declared this way
+  (RC-401) and waits for an operator retag. Public repos reach public through the docs sync
+  instead. Sessions keep D-22 (below), and a checkout's harness settings still follow its root.
 - **Org bindings must hold.** A remote whose owner's binding is suspended or unconfirmed
   (SP-021) sends the content to quarantine (`org_unconfirmed`). `Engine.Place` reads the binding
   from `orch.db`. A nil `Options.Confirmed` confirms nothing.

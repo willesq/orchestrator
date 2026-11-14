@@ -38,9 +38,16 @@ type writePlacer struct {
 
 // place is a rag.PlaceFunc.
 func (w *writePlacer) place(ctx context.Context, m *rag.Meta) error {
+	_, err := w.placeRule(ctx, m)
+	return err
+}
+
+// placeRule places m and returns the rule that decided, "" when no policy
+// was consulted.
+func (w *writePlacer) placeRule(ctx context.Context, m *rag.Meta) (spaces.PlaceRule, error) {
 	if w.spaces == nil {
 		m.Space = spaces.Shared
-		return nil
+		return "", nil
 	}
 	res, rev, err := w.spaces.CurrentRevision()
 	switch {
@@ -48,12 +55,12 @@ func (w *writePlacer) place(ctx context.Context, m *rag.Meta) error {
 		// Reason: with no policy that verifies, nothing can be placed, and
 		// unplaceable content is quarantined, never shared (INV-03).
 		m.Space = spaces.Quarantine
-		return nil
+		return "", nil
 	case err != nil:
-		return err
+		return "", err
 	case !res.Configured():
 		m.Space, m.LabelsV = spaces.Shared, rev
-		return nil
+		return "", nil
 	}
 	if m.Writer == rag.WriterFile {
 		// Reason: an agent picks which files are handed off, so placing
@@ -62,7 +69,7 @@ func (w *writePlacer) place(ctx context.Context, m *rag.Meta) error {
 	}
 	p, err := w.placement(ctx, res, m.Origin)
 	if err != nil {
-		return fmt.Errorf("place %s: %w", m.SourceURI, err)
+		return "", fmt.Errorf("place %s: %w", m.SourceURI, err)
 	}
 	if remoteSteered(m, p) {
 		// Reason: an agent can write a .git naming any org beside a file it
@@ -82,10 +89,10 @@ func (w *writePlacer) place(ctx context.Context, m *rag.Meta) error {
 		}
 	}
 	if p.Outcome == spaces.Conflict {
-		return fmt.Errorf("%s: %w", m.SourceURI, errWriteConflict)
+		return p.Rule, fmt.Errorf("%s: %w", m.SourceURI, errWriteConflict)
 	}
 	m.Space, m.LabelsV = p.Space, rev
-	return nil
+	return p.Rule, nil
 }
 
 // remoteSteered reports whether p placed a local file by its checkout's
@@ -182,9 +189,10 @@ func (w *writePlacer) leavesPublic(ctx context.Context, stored string, m rag.Met
 		return false
 	}
 	unasked := false
-	err = w.place(withUnaskedNote(ctx, &unasked), &m)
-	if unasked {
+	rule, err := w.placeRule(withUnaskedNote(ctx, &unasked), &m)
+	if unasked && rule != spaces.PlaceNoPublicProof {
 		// GitHub was not asked, so nothing was learned: decide next time.
+		// Content no answer could make public (no_public_proof) leaves now.
 		return false
 	}
 	if err != nil {

@@ -301,29 +301,70 @@ func placeCheckout(path string, remote *Repo, res *Resolved, opt Options) Placem
 	return placed(p, c.space, rule, describe(rule, c.space))
 }
 
-// publicProof quarantines a local file that only a public root would make
-// public while it sits in a checkout nothing proves public (SP-030, D-50).
-// Reason: a public root such as ~/code holds every clone the user makes, and
-// a checkout from GitLab, or with no remote at all, can be any employer's
-// code; the root alone is not proof. A remote GitHub reports public is
-// proof, and so is a public root the operator bound at the checkout's own
-// folder or inside it. Content in no checkout is the operator's to declare
-// by the root that holds it.
+// publicProof quarantines local content that only a broad public root
+// would make public (SP-030, D-50, D-64). Reason: a public root such as
+// ~/code holds every folder the user, or any job's session, creates, so
+// neither the root nor a checkout's remote proves that what sits there on
+// disk is public. Local content reaches public only when the operator
+// declared its checkout public by binding a public root at the checkout's
+// folder or inside it; even then a remote GitHub does not report public
+// keeps it out (not_verified_public). Content in no checkout cannot be
+// declared this way, and a placement a stricter remote decided is kept.
 func publicProof(p *Placement, o Origin, res *Resolved) {
-	if p.Outcome != Placed || o.Checkout == "" || len(p.Roots) == 0 {
+	if len(p.Roots) == 0 {
 		return
 	}
-	if s, _ := res.Space(p.Space); s.Kind != Public {
+	deep := p.Roots[len(p.Roots)-1]
+	if deep.Kind != Public {
 		return
 	}
-	if o.Remote != nil && o.Remote.Visibility == VisibilityPublic {
-		return
+	// Reason: a repo not verified public under an undeclared public root
+	// is out of public whatever GitHub says, so it is named for that
+	// (no_public_proof), not for the remote a lookup may not have read.
+	if p.Rule != PlaceNotVerifiedPublic {
+		if p.Outcome != Placed {
+			return
+		}
+		if s, _ := res.Space(p.Space); s.Kind != Public {
+			return
+		}
 	}
-	if deep := p.Roots[len(p.Roots)-1]; within(deep.Root, o.Checkout) {
+	if declared(res, p.Roots, o.Checkout) {
 		return
 	}
 	*p = quarantine(*p, PlaceNoPublicProof,
-		"it is under a public root, but its checkout has no remote GitHub reports public; the operator can retag it or bind its folder as a public root")
+		"it is local content under a public root the operator did not declare for it; the operator can retag it or bind its checkout's folder as a public root")
+}
+
+// declared reports whether the operator declared checkout public: the
+// deepest root holding the content is bound at the checkout's folder or
+// inside it, and the checkout does not reach up to a broader root. Reason:
+// a .git can be planted at or above a broad public root (git init ~/code, a
+// dotfiles repo at ~), which would otherwise make the broad root look bound
+// at "its" checkout. So under a broader root the checkout must lie strictly
+// inside it; with no broader root the root must be bound exactly at the
+// checkout's folder and hold no other bound root, as a broad root does.
+func declared(res *Resolved, roots []RootMatch, checkout string) bool {
+	if checkout == "" || len(roots) == 0 {
+		return false
+	}
+	deep := roots[len(roots)-1]
+	if !within(deep.Root, checkout) {
+		return false
+	}
+	if len(roots) == 1 {
+		if !within(checkout, deep.Root) {
+			return false
+		}
+		for _, r := range res.roots {
+			if r.path != deep.Root && within(r.path, deep.Root) {
+				return false
+			}
+		}
+		return true
+	}
+	outer := roots[len(roots)-2].Root
+	return within(checkout, outer) && !within(outer, checkout)
 }
 
 // within reports whether path is dir or lies inside it, compared as roots

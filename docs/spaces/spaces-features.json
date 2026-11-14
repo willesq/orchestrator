@@ -556,6 +556,11 @@
         "id": "D-62",
         "decision": "Merge SP-046 (PR #171) now, as admin without review, with the security-audit gate (DOD-6) not met: RC-215 (high), RC-216 and RC-217 (medium) stay open, together with the decisions in RC-210 and RC-213. SP-046 stays 'blocked' on main until they are settled and the independent verifier passes. With no spaces policy applied nothing changes (INV-10). The coordinator's recommendations, not yet confirmed by the user: RC-215 guard refuses tool calls in checkouts whose settings re-open another space's folders; RC-216 one-time start digest note after a sandbox setting change; RC-217 'auto' also triggers when another space has its own login folder; RC-210 documented limit, solved in SP-074; RC-213 use allowMachLookup com.apple.trustd.agent instead of enableWeakerNetworkIsolation.",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-64",
+        "decision": "Public-space write gate (SP-030): local content under a public root does not reach the public space automatically. Public content comes from the GitHub docs sync, bound web URL prefixes, operator retags (SP-071), and, as D-50 already allows, a checkout folder the operator explicitly declares public by binding a public root at that folder or inside it. Local content under a broader public root (such as ~/code) that was not declared that way, including a folder a session registered as a source and a checkout of a public GitHub repo, goes to quarantine; edit hand-offs go to public_root_sessions as before. The user kept D-50's declaration path knowing that a folder they declared public can still be written by any job's session (accepted risk, RC-404) (was RC-400).",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -2668,20 +2673,22 @@
           "SP-046",
           "SP-071"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14: option (a) with D-50's folder declaration kept; see D-64. The remaining risk for folders the operator declared public is accepted and tracked as RC-404."
       },
       {
         "id": "RC-401",
         "kind": "decision",
         "topic": "What counts as declaring a folder public (D-50)",
-        "detail": "Implemented as follows. A checkout under a public root is public only when GitHub reports its repo public, or when the operator bound a public root at the checkout's own folder or inside it. Content that is in no checkout (no .git anywhere above it, a symlinked .git included) is placed by the public root that holds it, following the summary's 'files under a root the operator declared public'. Confirm, or quarantine non-checkout content too (see RC-400).",
+        "detail": "Implemented under D-64: under a public root, local content is public only in a checkout the operator declared by binding a public root at the checkout's folder or inside it (a .git anywhere above the file, symlinked included, makes it a checkout); a remote GitHub does not report public still keeps it out. Content in no checkout is quarantined.",
         "source": "https://github.com/willesq/orchestrator/pull/180",
         "raised": "2026-11-14",
         "affects": [
           "SP-030",
           "SP-071"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "Partly settled by D-64 on 2026-11-14: declaring a checkout public means binding a public root at the checkout's folder or inside it. Still undecided: content in no checkout (a plain folder) cannot be declared this way; it is quarantined under any public root, even one bound at that folder, and reaches public only by an operator retag. Decide whether a public root bound at a plain folder should declare it, and how to tell such a root from a broad one like ~/code."
       },
       {
         "id": "RC-402",
@@ -2708,6 +2715,33 @@
           "SP-027",
           "SP-029",
           "SP-030"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-404",
+        "kind": "decision",
+        "topic": "accepted risk: sessions can write into a folder the operator declared public",
+        "detail": "Under D-64, a checkout folder the operator declared public (a public root bound at or inside it) is placed in public by the sources refresh. Any job's session can write files there (the guard and the sandbox allow writes to public roots), so it could stage another job's content in a declared folder and have it indexed into public. The user accepted this on 2026-11-14 when keeping D-50's declaration path. Possible later mitigations: SP-046 sandbox rules denying job sessions writes to declared public folders, or making repo/owner source registration operator-only.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-405",
+        "kind": "decision",
+        "topic": "A declaration of a checkout public cannot be told from a .git a session plants (security audit high)",
+        "detail": "D-64 keeps D-50's declaration: a checkout the operator declared public by binding a public root at its folder or inside it. orch can only see a checkout as a .git on disk when content is placed, and any job's session can create one at any time. A .git planted at a broad public root (git init ~/code) or between it and an enclosing root (~/work/.git with ~ bound and ~/work/code public) makes the broad root look declared, so plain content anywhere under it, including folders a session registers as sources, goes to public. SP-030 already rejects a .git above the broad root and a lone root that holds other bound roots, but no rule based on what is on disk closes every case. Options: (a) make the declaration explicit in the operator-applied policy (e.g. a per-public-space list of declared checkout folders, validated at apply, changing the SP-020 policy schema, CLI and app), and until then no folder counts as declared, so all local content under public roots is quarantined; (b) record at apply time which public roots sit exactly at a checkout and count only those (needs storage with the applied revision); (c) accept that a session can turn a public root into a declared one (widens RC-404 to every public root). Recommendation: (a). Blocks SP-030 (DOD-6) until decided.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-020",
+          "SP-050"
         ],
         "status": "open"
       }
@@ -5486,7 +5520,7 @@
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": "DOD-6: the security audit has one open medium that needs a user decision, RC-400 (any job session can stage local files under a public root, e.g. by registering a source, and get them placed public). All acceptance items pass and the independent verifier passed them at e1e103c (DOD-1..5, 7, 8 pass; CI green).",
+      "blocked_reason": "DOD-6: the security audit of the D-64 change has an open high, RC-405. orch cannot tell a checkout the operator declared public from a .git a session plants at a public root, so the D-50/D-64 declaration path lets a session publish plain content. This needs a user decision.",
       "attempts": 1,
       "criteria_sha256": "285ce77da8c1a9b5024a92a920ea21f2b54cf013a465814d3808d27d29495726",
       "branch": "feat/sp-030-public-write-gate",
