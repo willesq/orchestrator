@@ -47,6 +47,11 @@ type RefreshOpts struct {
 	// checkout's origin owner before each repo's docs are written (D-52);
 	// an error leaves that repo as last indexed.
 	CheckOwner func(ctx context.Context, owner string) error
+	// LeavesPublic, when set, reports whether a doc stored in space stored
+	// must leave the public space, written now as m (SP-030). A repo or
+	// owner source asks it about its stored docs before it walks anything;
+	// nil checks none.
+	LeavesPublic func(ctx context.Context, stored string, m rag.Meta) bool
 }
 
 // CheckoutURI is the URI a repo or owner source stores a local file under:
@@ -101,9 +106,17 @@ func refreshWeb(ctx context.Context, s Source, ing Ingester, opts RefreshOpts) (
 		text = stripHTML(text)
 	}
 	text, _ = redact.Redact(text)
+	// Reason: a page is placed by the URL its content came from. A
+	// registered URL under a bound prefix can redirect anywhere (an open
+	// redirect, a renamed repo), and the page it lands on must not take the
+	// prefix's space (SP-030).
+	from := s.URI
+	if resp.Request != nil && resp.Request.URL != nil {
+		from = resp.Request.URL.String()
+	}
 	if _, err := ing.IngestText(ctx, text, rag.Meta{
 		SourceURI: s.URI, SourceType: KindWeb, Scope: s.Scope, Tags: s.Tags, Writer: rag.WriterSources,
-		Origin: rag.Origin{System: rag.OriginWeb, URL: s.URI},
+		Origin: rag.Origin{System: rag.OriginWeb, URL: from},
 	}); err != nil {
 		return "error", err
 	}
@@ -138,6 +151,7 @@ func refreshOwner(ctx context.Context, s Source, ing Ingester, opts RefreshOpts)
 	if err != nil {
 		return "missing", nil
 	}
+	leavePublic(ctx, CheckoutURI(resolve(base))+"/", ing, opts)
 	found := false
 	var skipped, refused, refusedPrefixes []string
 	// One listing of what this refresh stored under the owner serves every
@@ -177,6 +191,7 @@ func refreshRepo(ctx context.Context, s Source, repoPath, owner string, ing Inge
 	if !isDir(repoPath) {
 		return "missing", nil
 	}
+	leavePublic(ctx, CheckoutURI(resolve(repoPath))+"/", ing, opts)
 	r := ingestRepoMarkdown(ctx, repoPath, owner, s, ing, opts, nil)
 	var current []string
 	if r.refused != "" {

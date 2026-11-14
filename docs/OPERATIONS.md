@@ -65,6 +65,7 @@ orch spaces sandbox [auto|on|off]     # show or set whether orch writes sandbox 
 orch spaces terms rules               # the outbound terms check's rules and their state
 orch spaces terms rules disable plain_variables   # relax a baseline rule (operator only)
 orch spaces terms rules add fail_closed < rule.txt   # add a stricter rule; the value is read from input (operator only)
+orch guard git-hook --install [--apply]   # git hooks that refuse commits and pushes carrying another space's terms
 orch sessions list [--all]   # sessions and their state: active, idle, ended (with --all), unpinned
 orch run <space> -- claude   # start Claude Code with the space's profile, from any folder
 orch run <space> -- codex    # the same for Codex
@@ -118,6 +119,12 @@ long it sits idle, only cut to its newest 50 MB, and past 500 MB in total the se
 ended first go early, all but their refused calls. `verify` shows how far retention cut a
 session, and orchd's log names every cut. See [internals/daemon.md](internals/daemon.md#command-log).
 
+Each call the guard or the outbound terms check refuses is also appended to
+`~/.local/share/orch/events/spaces.jsonl` (owner-only) as one `refusal` event naming the session,
+its space, the tool and the rule, and for a term its space, terms-file line and hash; never the
+command or the term. The macOS app posts a notification for each one made while it runs. See
+[internals/hooks.md](internals/hooks.md#refusal-events).
+
 Each enforcement layer has a switch for isolating behavior when debugging: `memory` (memory
 filtering), `guard` (`block-other-jobs` by default, `strict`, `log` or `off`), `terms`
 (outbound terms), `sandbox` (generated sandbox rules) and `hooks` (Claude Code's pre-tool-use and
@@ -130,6 +137,14 @@ In Orch.app, Settings → Spaces (and the menu bar panel) has the same switches 
 shows a banner while any layer is off, and checks a folder: every root holding it, what its git
 remote changes, and the space it lands in, as `orch spaces why` reports. See
 [internals/app.md](internals/app.md#spaces).
+
+**Git hooks for outbound terms.** The terms check in the tool hook reads only what an agent's
+command says. `orch guard git-hook --install --apply`, run in a repository (or with `--repo` or
+`--hooks-dir` for a shared `core.hooksPath`), adds `commit-msg` and `pre-push` hooks that run
+the same check on every commit and push there, including your own and those scripts make. A
+hook already there keeps running after orch's check passes; `--uninstall --apply` puts it back.
+Without `--apply` both only show what they would change. `--no-verify` skips the hooks. See
+[internals/install.md](internals/install.md#git-hooks-for-outbound-terms).
 
 **Per-space harness settings.** While a policy is applied and the sandbox setting writes rules
 for a checkout, orchd keeps `.claude/settings.local.json` in every git checkout under a space's

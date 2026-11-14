@@ -63,6 +63,12 @@ type Outbound struct {
 	// ExcludeAll is set for a push to a URL: no remote's tracking refs
 	// are known to be its destination's.
 	ExcludeAll bool
+	// Have are commits the destination already holds, which a push does
+	// not send again: the remote objects a pre-push hook is given (SP-045).
+	Have []string
+	// HaveRemotes are remotes whose tracking refs a push need not send
+	// again, read with ExcludeAll (SP-045's pre-push hook).
+	HaveRemotes []string
 }
 
 // OutboundActions lists the outbound actions of a tool call. unknown is set

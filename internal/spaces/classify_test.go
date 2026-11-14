@@ -34,6 +34,8 @@ func repo(owner, name string, v Visibility) *Repo {
 	return &Repo{Owner: owner, Name: name, Visibility: v}
 }
 
+// Local content under the broad public root ~/code is quarantined
+// (no_public_proof, SP-030, D-64); the matching roots still show.
 func TestClassifyCases(t *testing.T) {
 	res := resolvePlacement(t, placementPolicy)
 	const h = "/home/u/code"
@@ -48,32 +50,32 @@ func TestClassifyCases(t *testing.T) {
 	}{
 		{name: "repo in isolated org", o: Origin{System: SystemFS, Remote: repo("acme", "app", VisibilityPrivate)}, space: "acme", rule: PlaceRemote},
 		{name: "fork owned by job org with public parent", o: Origin{System: SystemFS, Path: h + "/company1/fork", Remote: repo("acme", "oss-lib-fork", VisibilityPublic)}, space: "acme", rule: PlaceAgree, roots: []string{"oss", "acme"}},
-		{name: "public repo in public org", o: Origin{System: SystemFS, Path: h + "/lib", Remote: repo("oss-org", "lib", VisibilityPublic)}, space: "oss", rule: PlaceAgree, roots: []string{"oss"}},
-		{name: "private repo in public org", o: Origin{System: SystemFS, Path: h + "/secret", Remote: repo("oss-org", "secret", VisibilityPrivate)}, space: Quarantine, rule: PlaceNotVerifiedPublic, roots: []string{"oss"}},
+		{name: "public repo in public org", o: Origin{System: SystemFS, Path: h + "/lib", Remote: repo("oss-org", "lib", VisibilityPublic)}, space: Quarantine, rule: PlaceNoPublicProof, roots: []string{"oss"}},
+		{name: "private repo in public org", o: Origin{System: SystemFS, Path: h + "/secret", Remote: repo("oss-org", "secret", VisibilityPrivate)}, space: Quarantine, rule: PlaceNoPublicProof, roots: []string{"oss"}},
 		{name: "public org repo with unchecked visibility", o: Origin{System: SystemGitHub, Remote: repo("oss-org", "lib", VisibilityUnknown)}, space: Quarantine, rule: PlaceNotVerifiedPublic},
 		{name: "private repo of public org under private root", o: Origin{System: SystemFS, Path: h + "/willesq/secret", Remote: repo("oss-org", "secret", VisibilityPrivate)}, space: "personal", rule: PlaceRootStricter, roots: []string{"oss", "personal"}},
-		{name: "repo transferred from public org to job org", o: Origin{System: SystemFS, Path: h + "/lib", Remote: repo("acme", "lib", VisibilityPrivate)}, space: "acme", rule: PlaceRemoteStricter, roots: []string{"oss"}},
+		{name: "repo transferred from public org to job org", o: Origin{System: SystemFS, Path: h + "/lib", Remote: repo("acme", "lib", VisibilityPrivate)}, space: Quarantine, rule: PlaceNoPublicProof, roots: []string{"oss"}},
 		{name: "repo transferred between job orgs", o: Origin{System: SystemFS, Path: h + "/company1/app", Remote: repo("globex", "app", VisibilityPrivate)}, space: Quarantine, rule: PlaceConflict, roots: []string{"oss", "acme"}},
 		{name: "root and remote agree", o: Origin{System: SystemFS, Path: h + "/company1/app", Remote: repo("acme", "app", VisibilityPrivate)}, space: "acme", rule: PlaceAgree, roots: []string{"oss", "acme"}},
 		{name: "remote stricter than root", o: Origin{System: SystemFS, Path: h + "/willesq/app", Remote: repo("acme", "app", VisibilityPrivate)}, space: "acme", rule: PlaceRemoteStricter, roots: []string{"oss", "personal"}},
 		{name: "root stricter than remote", o: Origin{System: SystemFS, Path: h + "/company1/lib", Remote: repo("oss-org", "lib", VisibilityPublic)}, space: "acme", rule: PlaceRootStricter, roots: []string{"oss", "acme"}},
 		{name: "root and remote in two isolated spaces", o: Origin{System: SystemFS, Path: h + "/company1/x", Remote: repo("globex", "x", VisibilityPrivate)}, space: Quarantine, rule: PlaceConflict, roots: []string{"oss", "acme"}},
-		{name: "nested: public root", o: Origin{System: SystemFS, Path: h}, space: "oss", rule: PlaceRoot, roots: []string{"oss"}},
-		{name: "nested: under public root", o: Origin{System: SystemFS, Path: h + "/tools/a.go"}, space: "oss", rule: PlaceRoot, roots: []string{"oss"}},
+		{name: "nested: public root", o: Origin{System: SystemFS, Path: h}, space: Quarantine, rule: PlaceNoPublicProof, roots: []string{"oss"}},
+		{name: "nested: under public root", o: Origin{System: SystemFS, Path: h + "/tools/a.go"}, space: Quarantine, rule: PlaceNoPublicProof, roots: []string{"oss"}},
 		{name: "nested: private root", o: Origin{System: SystemFS, Path: h + "/willesq"}, space: "personal", rule: PlaceRoot, roots: []string{"oss", "personal"}},
 		{name: "nested: under private root", o: Origin{System: SystemFS, Path: h + "/willesq/orch/main.go"}, space: "personal", rule: PlaceRoot, roots: []string{"oss", "personal"}},
 		{name: "nested: isolated root", o: Origin{System: SystemFS, Path: h + "/company1"}, space: "acme", rule: PlaceRoot, roots: []string{"oss", "acme"}},
 		{name: "nested: under isolated root", o: Origin{System: SystemFS, Path: h + "/company1/svc/deep/x.go"}, space: "acme", rule: PlaceRoot, roots: []string{"oss", "acme"}},
 		{name: "nested: case differs", o: Origin{System: SystemFS, Path: "/home/u/Code/Company1/x"}, space: "acme", rule: PlaceRoot, roots: []string{"oss", "acme"}},
-		{name: "nested: sibling sharing a prefix is not under the root", o: Origin{System: SystemFS, Path: h + "/company10/x"}, space: "oss", rule: PlaceRoot, roots: []string{"oss"}},
+		{name: "nested: sibling sharing a prefix is not under the root", o: Origin{System: SystemFS, Path: h + "/company10/x"}, space: Quarantine, rule: PlaceNoPublicProof, roots: []string{"oss"}},
 		{name: "remote only, no root", o: Origin{System: SystemFS, Path: "/srv/notes", Remote: repo("willesq", "notes", VisibilityPrivate)}, space: "personal", rule: PlaceRemote},
 		{name: "docs sync ignores any path", o: Origin{System: SystemGitHub, Path: h + "/willesq/x", Remote: repo("acme", "docs", VisibilityPrivate)}, space: "acme", rule: PlaceRemote},
 		{name: "no root and no remote", o: Origin{System: SystemFS, Path: "/tmp/scratch"}, space: Quarantine, rule: PlaceUnmatched},
 		{name: "relative path matches no root", o: Origin{System: SystemFS, Path: "code/company1"}, space: Quarantine, rule: PlaceUnmatched},
 		{name: "unbound org outside roots", o: Origin{System: SystemGitHub, Remote: repo("stranger", "x", VisibilityPublic)}, space: Quarantine, rule: PlaceUnmatched},
-		{name: "unbound private repo under public root", o: Origin{System: SystemFS, Path: h + "/x", Remote: repo("stranger", "x", VisibilityPrivate)}, space: Quarantine, rule: PlaceNotVerifiedPublic, roots: []string{"oss"}},
-		{name: "unbound repo of unchecked visibility under public root", o: Origin{System: SystemFS, Path: h + "/x", Remote: repo("stranger", "x", VisibilityUnknown)}, space: Quarantine, rule: PlaceNotVerifiedPublic, roots: []string{"oss"}},
-		{name: "unbound public repo under public root", o: Origin{System: SystemFS, Path: h + "/x", Remote: repo("stranger", "x", VisibilityPublic)}, space: "oss", rule: PlaceRoot, roots: []string{"oss"}},
+		{name: "unbound private repo under public root", o: Origin{System: SystemFS, Path: h + "/x", Remote: repo("stranger", "x", VisibilityPrivate)}, space: Quarantine, rule: PlaceNoPublicProof, roots: []string{"oss"}},
+		{name: "unbound repo of unchecked visibility under public root", o: Origin{System: SystemFS, Path: h + "/x", Remote: repo("stranger", "x", VisibilityUnknown)}, space: Quarantine, rule: PlaceNoPublicProof, roots: []string{"oss"}},
+		{name: "unbound public repo under public root", o: Origin{System: SystemFS, Path: h + "/x", Remote: repo("stranger", "x", VisibilityPublic)}, space: Quarantine, rule: PlaceNoPublicProof, roots: []string{"oss"}},
 		{name: "dot segments cannot climb above a site's root", o: Origin{System: SystemWeb, URL: "https://docs.oss.dev/x/../../../wiki/a", WriterSpace: "acme"}, space: "acme", rule: PlaceWriterStricter},
 		{name: "dot segments resolve into a prefix", o: Origin{System: SystemWeb, URL: "https://wiki.globex.example/a/../b"}, space: "globex", rule: PlaceWebPrefix},
 		{name: "encoded path resolves into a prefix", o: Origin{System: SystemWeb, URL: "https://wiki.globex.example/%61"}, space: "globex", rule: PlaceWebPrefix},
@@ -330,5 +332,42 @@ func TestWebPrefixBoundaries(t *testing.T) {
 	}}, testEnv())
 	if ps, _ := err.(Problems); !ps.Has(RulePrefixBoundTwice) {
 		t.Errorf("a prefix with and without its slash was bound twice: %v", err)
+	}
+}
+
+// TestPublicRootNeedsProofForCheckouts is SP-030.1.a5 (D-50, D-65) in the
+// classifier: until public_paths exist (SP-076), no local content under a
+// public root is placed public, whatever the remote and however the roots
+// are nested, even with a public root bound exactly at the folder. A repo
+// GitHub does not report public is named for the root's lack of proof too.
+// Sessions keep D-22, and stricter roots and remotes are unaffected.
+func TestPublicRootNeedsProofForCheckouts(t *testing.T) {
+	p := placementPolicy
+	p.Spaces = slices.Clone(p.Spaces)
+	p.Spaces[0].Roots = []string{"~/code", "~/code/declared"}
+	res := resolvePlacement(t, p)
+	const h = "/home/u/code"
+	for _, c := range []struct {
+		name  string
+		o     Origin
+		space string
+		rule  PlaceRule
+	}{
+		{"no remote", Origin{System: SystemFS, Path: h + "/gl/a.md"}, Quarantine, PlaceNoPublicProof},
+		{"verified public on GitHub", Origin{System: SystemFS, Path: h + "/x/a.md", Remote: repo("stranger", "x", VisibilityPublic)}, Quarantine, PlaceNoPublicProof},
+		{"public org repo", Origin{System: SystemFS, Path: h + "/lib/a.md", Remote: repo("oss-org", "lib", VisibilityPublic)}, Quarantine, PlaceNoPublicProof},
+		{"private repo of public org", Origin{System: SystemFS, Path: h + "/s/a.md", Remote: repo("oss-org", "s", VisibilityPrivate)}, Quarantine, PlaceNoPublicProof},
+		{"under a public root bound at its folder", Origin{System: SystemFS, Path: h + "/declared/a.md", Remote: repo("stranger", "d", VisibilityPublic)}, Quarantine, PlaceNoPublicProof},
+		{"under a private root", Origin{System: SystemFS, Path: h + "/willesq/a.md"}, "personal", PlaceRoot},
+		{"stricter remote under a public root", Origin{System: SystemFS, Path: h + "/x/a.md", Remote: repo("acme", "x", VisibilityPrivate)}, Quarantine, PlaceNoPublicProof},
+		{"stricter remote under a private root", Origin{System: SystemFS, Path: h + "/willesq/x/a.md", Remote: repo("acme", "x", VisibilityPrivate)}, "acme", PlaceRemoteStricter},
+		{"session with a stricter remote under a public root", Origin{System: SystemSession, Path: h + "/x", Remote: repo("acme", "x", VisibilityPrivate)}, "acme", PlaceRemoteStricter},
+		{"session under a public root", Origin{System: SystemSession, Path: h + "/gl"}, "personal", PlacePublicRootSession},
+		{"docs sync of a public repo", Origin{System: SystemGitHub, Remote: repo("oss-org", "lib", VisibilityPublic)}, "oss", PlaceRemote},
+	} {
+		got := Classify(c.o, res, Options{Confirmed: allConfirmed})
+		if got.Space != c.space || got.Rule != c.rule {
+			t.Errorf("%s = %s (%s), want %s (%s)", c.name, got.Space, got.Rule, c.space, c.rule)
+		}
 	}
 }

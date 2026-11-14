@@ -101,7 +101,7 @@ func (e *enforcement) setSandbox(ctx context.Context, mode spaces.SandboxMode, b
 		e.emit(c, nil)
 		return true, nil
 	}
-	if err := events.Append(paths.EventsDir(), spacesEventStream, events.Event{
+	if err := events.AppendSpaces(paths.EventsDir(), events.Event{
 		Kind: "info", Source: "enforcement", Summary: summary, Timestamp: c.At.UTC().Format(time.RFC3339),
 	}); err != nil {
 		log.Printf("orchd: enforcement: record event: %v", err)
