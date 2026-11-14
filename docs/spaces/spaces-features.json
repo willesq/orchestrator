@@ -6709,7 +6709,7 @@
       {
         "feature": "SP-030",
         "rc_range": "RC-400..RC-449",
-        "note": "RC-400 settled by the user as option (a), D-64; lane resumed to implement it; PR #180"
+        "note": "blocked on RC-405 (how to declare public folders); design proposed to the user 2026-11-14; PR #180"
       },
       {
         "feature": "SP-048",
@@ -6724,7 +6724,7 @@
       {
         "feature": "SP-045",
         "rc_range": "RC-550..RC-599",
-        "note": "started 2026-11-14 when SP-030 stopped on RC-400; keeps its CLI code in new files away from SP-074's"
+        "note": "done and verified; PR #184 waits for the user"
       },
       {
         "feature": "SP-075",
