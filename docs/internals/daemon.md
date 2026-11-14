@@ -556,7 +556,15 @@ keeps the text the check read (INV-07), and the checkout it read has moved on. `
 carries that recorded verdict while the replayed guard lets the call through (its `Verdict` is not
 `refuse` in the replayed mode) and the terms layer's switch is on now
 (`GuardEnforcement.Terms`); otherwise the row shows the guard's verdict, as changed. A call the
-check let through is judged by the guard alone.
+check let through is judged by the guard alone, and then by the operator's
+[outbound rules](#outbound-rules) in force when it was recorded (SP-075,
+`spaces.ReplayWithRules`): the rules timeline (`spaces.LoadRulesTimeline`) gives, for the
+event's time, the newest change made before it, and an on `fail_closed` rule matching the tool and
+the stored command refuses the call as `outbound_unchecked` while the event's policy names a
+terms file and the terms layer is on. Events recorded under rules that do not verify are
+problems. The rest of the check needs the text the log never keeps, so it is not judged again;
+the stored command is redacted (terms, credentials) and capped, so a pattern that only matches
+redacted text is not found.
 
 ### Enforcement switches
 
@@ -636,6 +644,36 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
   guard's snapshot after every change and timed revert, so the next tool call of every running
   session uses it ([hooks.md](hooks.md#enforcing-guard), SP-041).
 - **Not yet:** memory filtering and terms read `enforcement.state` when SP-025 and SP-044 land.
+
+### Outbound rules
+
+The operator's configuration of the [outbound terms check](hooks.md#outbound-rules) (SP-075;
+`internal/spaces/terms_rules.go`, `terms_rules_store.go`, `internal/daemon/terms_rules.go`):
+which baseline rules are on, and the stricter rules the operator added.
+
+- **Stored** in `spaces_terms_rules` (migration `0030`): one row per change, never updated or
+  deleted, holding the time, the caller, the action (`enable`, `disable`, `add`, `remove`), the
+  rule's id, the whole rule set after the change as JSON and its SHA-256. The newest row applies;
+  with none, the baseline (every rule on, none added). orchd reads it at startup; a newest row
+  whose hash, time or rules do not verify is reported in orchd's log and makes the rules broken:
+  the snapshot says so and the hook refuses every shell command and MCP tool while some space has
+  terms ([hooks.md](hooks.md#outbound-rules)), until the operator's next change, which starts
+  again from the baseline. The hash finds damage and careless edits, not a writer who recomputes
+  it (RC-600).
+- **Changed** only by the operator (INV-06, `refuseNonOperator`): callers descended from a harness
+  or orchd, queued tasks and callers orchd cannot place are refused. Each change is written to
+  `orch.db` first, then the guard snapshot is rewritten, and the change is logged by orchd and
+  appended to the `spaces` event stream as `outbound rule <id>: <action> by <caller> (rules
+  revision <n>)`, never with a value. A change that changes nothing is not stored. A rule that
+  would loosen the check, or a value its kind cannot take, is `InvalidArgument`; an unknown id
+  `NotFound`.
+- **Read back** without values: a list shows each rule's id, kind (`baseline` or the added kind),
+  state, whether a baseline rule loosens, and what its kind does.
+- **Replayed** by time: a [policy replay](#policy-replay) judges each event with the rules in force
+  when it was recorded; an event without a time cannot be placed and is a problem.
+- **Limits:** as for the switches, a process running as the user can append a matching row while
+  orchd is stopped, which the next start takes; sandboxed shells cannot write `orch.db` and the
+  guard refuses tool calls that name it.
 
 ### Sandbox setting
 
@@ -847,6 +885,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `config_values`, `config_import` | orch's settings that differ from a default (key, JSON value, updated_at, updated_by); whether the old config.yaml was imported ([config.md](config.md)) |
 | `session_pins` | session_id (key), harness, harness_pid, harness_started (unix ns), first_cwd, main_checkout, space, policy_revision, pinned_at, ended_at, inherited_from, resumed_at, exited_at ([session pins](#session-pins)) |
 | `spaces_enforcement`, `spaces_enforcement_log` | layer (key), state, set_at, set_by, until, previous; every change with at, layer, state, previous, by, until, expired ([enforcement switches](#enforcement-switches)) |
+| `spaces_terms_rules` | rev (key), at, by, action, rule_id, rules (JSON), hash; one row per change of the [outbound rules](#outbound-rules) |
 | `settings_items` | provider, kind, identity (key), enabled, origin (`orch`/`you`/`found`), payload (JSON), present, removed_at, created_at, updated_at ([settings.md](settings.md)) |
 
 ## Invariants

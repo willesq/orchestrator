@@ -2655,6 +2655,44 @@
           "SP-042"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-600",
+        "kind": "follow-up",
+        "topic": "The outbound rules' hash in orch.db finds damage, not a writer who recomputes it",
+        "detail": "2026-11-14, SP-075 security audit (low): each spaces_terms_rules row holds a plain SHA-256 of its rules. A process running as the user can write orch.db while orchd is stopped (or while the guard is off or logging) and insert a correctly hashed row with every baseline rule off, or delete the newest row to roll back to looser rules; the next orchd start takes it. Same limit as the enforcement switches and the sandbox setting (RC-216). Options: (a) accept and document (done in docs/internals/daemon.md); (b) HMAC rows with a key orchd keeps in a 0600 file in its protected data dir and keep orchd's highest revision to detect a rollback. Recommendation: (a) now, (b) together with the switches if they get one.",
+        "source": "https://github.com/willesq/orchestrator/pull/185",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-075",
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-601",
+        "kind": "decision",
+        "topic": "How replay judges events with the outbound rules: by the event's time, and only fail_closed rules",
+        "detail": "2026-11-14, SP-075.1.a3 says replay judges 'with the rules recorded for the event's policy revision'. Rules change apart from policy revisions, so SP-075 stores every rules change with its time (spaces_terms_rules) and a replay uses the rules in force at each event's recorded time (spaces.RulesTimeline), which is exact and needs no change to the hash-chained command log. Only fail_closed rules are judged again (against the stored, redacted, capped command); command and destination rules and the baseline switches need the text the log never keeps (INV-07) and the checkout as it was, so a recorded terms verdict is carried (RC-116) as before. Alternative: record the rules revision in each command log record (a toollog column plus a RecordToolEvent field), which would also let a replay report which rules a call was judged under. Recommendation: keep the time-based lookup; confirm the interpretation.",
+        "source": "https://github.com/willesq/orchestrator/pull/185",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-075",
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-602",
+        "kind": "follow-up",
+        "topic": "An on fail_closed rule makes every tool call read the terms files and match its patterns",
+        "detail": "2026-11-14, SP-075 security audit (low): fail_closed rules may match any tool (MCP tools included), so while one is on every PreToolUse reads the spaces' terms files and matches up to 256 patterns over the call's text; a call over 4 MiB is refused. RE2 keeps matching linear and the check is bounded by the hook's 2.5 s, but a large Write or Edit costs more. Options: accept (documented in docs/internals/hooks.md), or cache compiled rules and terms per snapshot in the hook. Recommendation: accept; measure if users report slow hooks.",
+        "source": "https://github.com/willesq/orchestrator/pull/185",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-075"
+        ],
+        "status": "open"
       }
     ]
   },
