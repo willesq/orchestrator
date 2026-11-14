@@ -73,7 +73,7 @@ func LoadOutboundRules(ctx context.Context, q querier) (s StoredRules, problem s
 }
 
 // RulesTimeline is every stored rule set, oldest first, for a replay to
-// judge each event with the rules in force when it was recorded.
+// judge each event with the rules revision it was recorded with (D-66).
 type RulesTimeline []StoredRules
 
 // LoadRulesTimeline reads every stored rule set. A row that does not verify
@@ -93,15 +93,6 @@ func LoadRulesTimeline(ctx context.Context, q querier) (RulesTimeline, error) {
 		}
 		s, problem := verifyRules(rev, at, by, doc, hash)
 		s.Broken = problem != ""
-		if s.Broken {
-			// Reason: a row whose time cannot be read still orders by
-			// rev; it takes the time of the row before it.
-			if t, err := time.Parse(rulesTime, at); err == nil {
-				s.At = t
-			} else if len(out) > 0 {
-				s.At = out[len(out)-1].At
-			}
-		}
 		out = append(out, s)
 	}
 	return out, rows.Err()
@@ -111,28 +102,23 @@ func LoadRulesTimeline(ctx context.Context, q querier) (RulesTimeline, error) {
 // not verify.
 var ErrRulesUnreadable = errors.New("the outbound rules in force then cannot be read")
 
-// At is the rule set in force at at (unix nanoseconds): the newest change
-// made at or before it; nil (the baseline) before any change. An event
-// without a time cannot be placed.
-func (tl RulesTimeline) At(at int64) (*OutboundRules, error) {
-	if at <= 0 {
-		return nil, ErrRulesUnreadable
-	}
-	var cur *StoredRules
-	for i := range tl {
-		if tl[i].At.UnixNano() > at {
-			break
-		}
-		cur = &tl[i]
-	}
-	switch {
-	case cur == nil:
+// Rev is rules revision rev; nil (the baseline) for 0. A revision the
+// store does not hold, or one that does not verify, cannot be judged with.
+func (tl RulesTimeline) Rev(rev int64) (*OutboundRules, error) {
+	if rev == 0 {
 		return nil, nil
-	case cur.Broken:
-		return nil, ErrRulesUnreadable
 	}
-	r := cur.Rules
-	return &r, nil
+	for i := range tl {
+		if tl[i].Rev != rev {
+			continue
+		}
+		if tl[i].Broken {
+			return nil, ErrRulesUnreadable
+		}
+		r := tl[i].Rules
+		return &r, nil
+	}
+	return nil, ErrRulesUnreadable
 }
 
 // rulesTime is how a change's time is stored. Reason: fixed width, so

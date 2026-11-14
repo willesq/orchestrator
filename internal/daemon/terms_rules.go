@@ -69,6 +69,22 @@ func (t *termsRules) current() (spaces.StoredRules, string) {
 	return t.cur, t.problem
 }
 
+// unreadableRulesRev is recorded while orchd holds no readable rules and
+// no stored revision to name; a replay cannot judge with it.
+const unreadableRulesRev = -1
+
+// revision is the rules revision orchd applies; 0 for the baseline or
+// without a store. Rules that cannot be read keep their stored revision
+// (which does not verify), or unreadableRulesRev when none could be read,
+// so a replay never judges such a call under the baseline.
+func (t *termsRules) revision() int64 {
+	cur, problem := t.current()
+	if problem != "" && cur.Rev == 0 {
+		return unreadableRulesRev
+	}
+	return cur.Rev
+}
+
 // change applies one change as by: it stores the new rules, then logs and
 // announces the change. changed is false when nothing changed. Rules that
 // could not be read are replaced: the change starts from the baseline.
@@ -108,8 +124,8 @@ func (t *termsRules) change(ctx context.Context, action spaces.RuleAction, id, k
 	return c, true, nil
 }
 
-// replayRules gives a replay the rules in force when each event was
-// recorded; nil (judge none) without a store.
+// replayRules gives a replay the rules of the revision each event was
+// recorded with (D-66); nil (judge none) without a store.
 func (t *termsRules) replayRules(ctx context.Context) (spaces.ReplayRules, error) {
 	if t == nil {
 		return nil, nil
@@ -118,7 +134,7 @@ func (t *termsRules) replayRules(ctx context.Context) (spaces.ReplayRules, error
 	if err != nil {
 		return nil, err
 	}
-	return tl.At, nil
+	return tl.Rev, nil
 }
 
 // setTermsRules takes the rules after a change and rewrites the snapshot.

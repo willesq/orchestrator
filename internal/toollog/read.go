@@ -70,7 +70,7 @@ func scanRecordsUntil(rows *sql.Rows, keep func(Record) bool) (out []Record, mor
 		if err := rows.Scan(&r.OwnerKind, &r.OwnerID, &r.Seq, &r.TS, &r.HookAt, &r.Kind, &r.Harness,
 			&r.Event, &r.Tool, &r.ClaimedSession, &r.ToolUseID, &r.AgentID, &r.AgentType, &r.Cwd,
 			&r.OldCwd, &r.NewCwd, &r.Targets, &r.Command, &r.InputSize, &r.Decision, &r.Rule,
-			&r.PolicyRev, &r.Dropped, &r.PrevHash, &r.Hash); err != nil {
+			&r.PolicyRev, &r.RulesRev, &r.Dropped, &r.PrevHash, &r.Hash); err != nil {
 			return nil, false, err
 		}
 		if !keep(r) {

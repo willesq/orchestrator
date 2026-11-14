@@ -23,6 +23,9 @@ type ReplayEvent struct {
 	// Recorded is the verdict recorded with it; ok is false when the record
 	// carries none (RecordedVerdict).
 	Recorded RecordedDecision
+	// RulesRev is the outbound rules revision it was judged under (D-66);
+	// 0 for the baseline.
+	RulesRev int64
 	// Command is the command text the log kept (credentials and terms
 	// redacted, capped); "" for none.
 	Command string
@@ -66,9 +69,9 @@ type ReplayReport struct {
 // revision recorded with it. Replaying under one fixed policy ignores rev.
 type ReplayPolicies func(rev int64) (GuardPolicy, error)
 
-// ReplayRules returns the operator's outbound rules (SP-075) in force when
-// an event was recorded (unix nanoseconds); nil is the baseline.
-type ReplayRules func(at int64) (*OutboundRules, error)
+// ReplayRules returns the operator's outbound rules (SP-075) of the
+// revision an event was recorded with (D-66); nil is the baseline.
+type ReplayRules func(rev int64) (*OutboundRules, error)
 
 // Replay decides every event again under pin, enf and the policy policies
 // gives for it. It calls the live guard's Decide, so a replay judges exactly
@@ -80,8 +83,8 @@ func Replay(events []ReplayEvent, pin GuardPin, enf GuardEnforcement, policies R
 }
 
 // ReplayWithRules is Replay that also judges each call the guard lets
-// through with the operator's outbound rules in force when it was recorded
-// (rules; nil judges none): a call an on fail_closed rule matches, while
+// through with the operator's outbound rules of the revision it was
+// recorded with (rules; nil judges none): a call an on fail_closed rule matches, while
 // the policy names a terms file, is refused as outbound_unchecked, as the
 // hook refuses it. The rest of the terms check needs the text the log
 // never keeps and the checkout as it was, so a recorded terms verdict is
@@ -147,14 +150,14 @@ func ReplayWithRules(events []ReplayEvent, pin GuardPin, enf GuardEnforcement, p
 	return rep
 }
 
-// ruleRefuses reports whether an on fail_closed rule in force when ev was
-// recorded refuses it. Like the hook's check, the rules apply only while
+// ruleRefuses reports whether an on fail_closed rule of the revision ev was
+// recorded with refuses it. Like the hook's check, the rules apply only while
 // some space has terms; here, while the policy names a terms file.
 func ruleRefuses(rules ReplayRules, ev ReplayEvent, res *Resolved) (bool, error) {
 	if rules == nil || ev.Command == "" || len(TermsPaths(res, "")) == 0 {
 		return false, nil
 	}
-	r, err := rules(ev.At)
+	r, err := rules(ev.RulesRev)
 	if err != nil {
 		return false, err
 	}

@@ -56,24 +56,24 @@ func TestOutboundRulesStore(t *testing.T) {
 		}
 	}
 
-	// The timeline gives each moment's rules.
+	// The timeline gives each revision's rules (D-66).
 	tl, err := LoadRulesTimeline(ctx, conn)
 	if err != nil || len(tl) != 3 {
 		t.Fatalf("timeline: %v %v", tl, err)
 	}
-	for at, want := range map[time.Time]int{t0: -1, t0.Add(90 * time.Second): 1, t0.Add(2 * time.Minute): 1, t0.Add(time.Hour): 0} {
-		r, err := tl.At(at.UnixNano())
+	for rev, want := range map[int64]int{0: -1, 1: 1, 2: 1, 3: 0} {
+		r, err := tl.Rev(rev)
 		switch {
 		case err != nil:
-			t.Errorf("at %v: %v", at, err)
+			t.Errorf("rev %d: %v", rev, err)
 		case want < 0 && r != nil:
-			t.Errorf("at %v: %+v, want the baseline", at, r)
+			t.Errorf("rev %d: %+v, want the baseline", rev, r)
 		case want >= 0 && (r == nil || len(r.User) != want):
-			t.Errorf("at %v: %+v, want %d added", at, r, want)
+			t.Errorf("rev %d: %+v, want %d added", rev, r, want)
 		}
 	}
-	if _, err := tl.At(0); !errors.Is(err, ErrRulesUnreadable) {
-		t.Errorf("an event without a time: %v", err)
+	if _, err := tl.Rev(9); !errors.Is(err, ErrRulesUnreadable) {
+		t.Errorf("a revision the store does not hold: %v", err)
 	}
 
 	// A change made outside orchd does not verify.
@@ -87,10 +87,10 @@ func TestOutboundRulesStore(t *testing.T) {
 		t.Errorf("tampered: %+v %q %v", s, problem, err)
 	}
 	tl, err = LoadRulesTimeline(ctx, conn)
-	if err != nil || !tl[1].Broken || !tl[2].Broken || !tl[2].At.Equal(tl[1].At) {
+	if err != nil || tl[0].Broken || !tl[1].Broken || !tl[2].Broken {
 		t.Fatalf("timeline of tampered rows: %+v %v", tl, err)
 	}
-	if _, err := tl.At(t0.Add(150 * time.Second).UnixNano()); !errors.Is(err, ErrRulesUnreadable) {
+	if _, err := tl.Rev(2); !errors.Is(err, ErrRulesUnreadable) {
 		t.Errorf("event under a broken row: %v", err)
 	}
 
@@ -118,7 +118,7 @@ func TestOutboundRulesStore(t *testing.T) {
 }
 
 // TestReplayWithRules is SP-075.1.a3 in the replay: an event is judged
-// with the rules in force when it was recorded, only while the policy names
+// with the rules revision it was recorded with, only while the policy names
 // a terms file, and a recorded terms verdict is still carried.
 func TestReplayWithRules(t *testing.T) {
 	res := mustValid(t, Policy{Spaces: []Space{
@@ -130,31 +130,32 @@ func TestReplayWithRules(t *testing.T) {
 	}
 	policies := func(int64) (GuardPolicy, error) { return pol, nil }
 	strict, _, _ := OutboundRules{}.Add("fail_closed", "deploy-prod")
-	rules := func(at int64) (*OutboundRules, error) {
-		switch {
-		case at < 100:
+	rules := func(rev int64) (*OutboundRules, error) {
+		switch rev {
+		case 0:
 			return nil, nil
-		case at < 200:
+		case 1:
 			return &strict, nil
-		case at < 300:
+		case 2:
 			return &OutboundRules{Off: []OutboundRule{"nope"}}, nil
 		}
 		return nil, ErrRulesUnreadable
 	}
-	ev := func(at int64, cmd string, rec RecordedDecision) ReplayEvent {
-		return ReplayEvent{At: at, Command: cmd, Recorded: rec,
+	// Events are numbered by the rules revision they were recorded with.
+	ev := func(rev int64, cmd string, rec RecordedDecision) ReplayEvent {
+		return ReplayEvent{RulesRev: rev, Command: cmd, Recorded: rec,
 			Guard: GuardEvent{Kind: EventPreToolUse, Tool: "Bash", Cwd: "/w/acme"}}
 	}
 	allowed := RecordedDecision{OK: true, Verdict: Allow, Rule: RuleWithinSpace}
 	termRefused := RecordedDecision{OK: true, Verdict: Refuse, Rule: RuleOutboundTerm}
 	events := []ReplayEvent{
-		ev(50, "deploy-prod now", allowed),
-		ev(150, "deploy-prod now", allowed),
-		ev(150, "ls", allowed),
-		ev(150, "deploy-prod now", termRefused),
-		ev(250, "deploy-prod now", allowed),
-		ev(350, "deploy-prod now", allowed),
-		ev(150, "", allowed),
+		ev(0, "deploy-prod now", allowed),
+		ev(1, "deploy-prod now", allowed),
+		ev(1, "ls", allowed),
+		ev(1, "deploy-prod now", termRefused),
+		ev(2, "deploy-prod now", allowed),
+		ev(3, "deploy-prod now", allowed),
+		ev(1, "", allowed),
 	}
 	pin := GuardPin{Found: true, Space: "acme"}
 	rep := ReplayWithRules(events, pin, GuardEnforcement{Guard: GuardLog}, policies, rules)

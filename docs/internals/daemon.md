@@ -335,8 +335,10 @@ method of that name; calls through function values are not followed.
 - **What:** per record `seq`, `ts` (when orchd took it) and the hook's `hook_at`, `kind`
   (`event`, `gap` or `end`), harness, event, tool, tool_use_id, agent_id, agent_type, cwd,
   old/new cwd, `targets` (the JSON of [`spaces.Targets`](hooks.md#tool-call-targets)), the
-  command, the input size, `decision`, `rule`, `policy_rev` (the applied spaces revision) and
-  the hashes. The command is a shell tool's command (an argv list joined with spaces) or any
+  command, the input size, `decision`, `rule`, `policy_rev` (the applied spaces revision),
+  `rules_rev` (the [outbound rules](#outbound-rules) revision orchd applied when the event
+  arrived, D-66; 0 for the baseline, and left out of a record's hashed JSON when 0, so records
+  stored before it keep their hashes) and the hashes. The command is a shell tool's command (an argv list joined with spaces) or any
   other tool's input, credential-redacted with `redact.RedactCommand` (the rules RAG ingestion
   uses plus command-log-only ones that prefer losing text to keeping a secret: any `login -p`
   or `--password` value, quoted or not, an unquoted YAML `password:` ending its line, a private
@@ -473,7 +475,7 @@ method of that name; calls through function values are not followed.
     `auto_vacuum` is set once, on the connection that creates the tables, never in the
     connection string, where every new connection would take the write lock to set it and a read
     would wait behind any write. A log created before SP-015 is converted with one `VACUUM` at
-    open (schema version 2), before orchd serves; when that fails (no room for a copy, the file
+    open (schema version 2; version 3 adds `rules_rev` in place with `ALTER TABLE`), before orchd serves; when that fails (no room for a copy, the file
     held open) orchd logs it, the log works on without shrinking, and the next start tries again.
   - **Limits.** The total cap is the one place retention deletes records before their time, and
     anything that writes the log fills it: ten sessions busy at once, or an agent flooding events
@@ -557,12 +559,12 @@ carries that recorded verdict while the replayed guard lets the call through (it
 `refuse` in the replayed mode) and the terms layer's switch is on now
 (`GuardEnforcement.Terms`); otherwise the row shows the guard's verdict, as changed. A call the
 check let through is judged by the guard alone, and then by the operator's
-[outbound rules](#outbound-rules) in force when it was recorded (SP-075,
-`spaces.ReplayWithRules`): the rules timeline (`spaces.LoadRulesTimeline`) gives, for the
-event's time, the newest change made before it, and an on `fail_closed` rule matching the tool and
+[outbound rules](#outbound-rules) of the revision recorded with it (`rules_rev`; SP-075, D-66,
+`spaces.ReplayWithRules`), read from `spaces_terms_rules` (`spaces.LoadRulesTimeline`), so a later
+change of the rules never changes how an earlier call is judged; an on `fail_closed` rule matching the tool and
 the stored command refuses the call as `outbound_unchecked` while the event's policy names a
 terms file and the terms layer is on. Events recorded under rules that do not verify are
-problems. The rest of the check needs the text the log never keeps, so it is not judged again;
+problems, as are revisions the store does not hold. The rest of the check needs the text the log never keeps, so it is not judged again;
 the stored command is redacted (terms, credentials) and capped, so a pattern that only matches
 redacted text is not found.
 
@@ -669,8 +671,11 @@ which baseline rules are on, and the stricter rules the operator added.
   `NotFound`.
 - **Read back** without values: a list shows each rule's id, kind (`baseline` or the added kind),
   state, whether a baseline rule loosens, and what its kind does.
-- **Replayed** by time: a [policy replay](#policy-replay) judges each event with the rules in force
-  when it was recorded; an event without a time cannot be placed and is a problem.
+- **Recorded and replayed** by revision (D-66): every command log record stores the rules revision
+  orchd applied when the event arrived (`rules_rev`, taken at receipt, before the log's writer
+  builds the record; `-1` while no rules could be read at all, which no replay judges with), and a [policy replay](#policy-replay) judges each event with that revision.
+  Until `RecordToolEvent` carries the revision the hook judged under (it reads `rules_rev` from
+  the snapshot), orchd's revision at receipt stands in for it, as it does for `policy_rev`.
 - **Limits:** as for the switches, a process running as the user can append a matching row while
   orchd is stopped, which the next start takes; sandboxed shells cannot write `orch.db` and the
   guard refuses tool calls that name it.

@@ -64,8 +64,8 @@ func (s *server) ReplaySpaces(ctx context.Context, req *orchdv1.ReplaySpacesRequ
 	// Reason: a terms refusal is carried only while the terms layer is
 	// on, as the hook checks terms only then (RC-116).
 	enf := spaces.GuardEnforcement{Guard: spaces.GuardMode(mode), Terms: s.enforcement.state(spaces.LayerTerms)}
-	// Reason: each event is judged with the outbound rules in force when
-	// it was recorded (SP-075), not today's.
+	// Reason: each event is judged with the outbound rules revision it
+	// was recorded with (SP-075, D-66), not today's.
 	rules, err := s.termsRules.replayRules(ctx)
 	if err != nil {
 		log.Printf("orchd: ReplaySpaces: %v", err)
@@ -203,7 +203,7 @@ func (s *server) replayPages(ctx context.Context, owner toollog.Owner, decide fu
 			}
 			seen++
 			events = append(events, spaces.ReplayEvent{
-				Seq: r.Seq, At: r.TS, PolicyRev: r.PolicyRev, Command: r.Command,
+				Seq: r.Seq, At: r.TS, PolicyRev: r.PolicyRev, RulesRev: r.RulesRev, Command: r.Command,
 				Guard:    spaces.GuardEventOf(r.Event, r.Tool, r.Cwd, r.OldCwd, r.NewCwd, r.Targets),
 				Recorded: spaces.RecordedVerdict(r.Decision, r.Rule),
 			})

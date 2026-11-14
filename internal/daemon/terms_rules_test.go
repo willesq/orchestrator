@@ -20,7 +20,6 @@ import (
 	"github.com/willesq/orchestrator/internal/orchdclient"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/spaces"
-	"github.com/willesq/orchestrator/internal/toollog"
 )
 
 // rulesRig is s's outbound rules on orch.db with a fake clock, and the
@@ -169,6 +168,18 @@ func TestOutboundRulesOperatorOnly(t *testing.T) {
 			t.Errorf("view %s has no summary", v.ID)
 		}
 	}
+	// Rules that could not be read at all are recorded as a revision no
+	// replay can judge with.
+	broken := &termsRules{problem: "could not read the outbound rules"}
+	if rev := broken.revision(); rev != unreadableRulesRev {
+		t.Errorf("unreadable rules recorded as %d", rev)
+	}
+	if rev := (*termsRules)(nil).revision(); rev != 0 {
+		t.Errorf("no store recorded as %d", rev)
+	}
+	if _, err := (spaces.RulesTimeline{}).Rev(unreadableRulesRev); err == nil {
+		t.Error("a replay judged with the unreadable revision")
+	}
 	// Without a store there is nothing to change.
 	if _, _, err := (&server{}).changeOutboundRule(operatorCtx, method, spaces.RuleAdd, "", "command", "glab"); grpcstatus.Code(err) != codes.Unavailable {
 		t.Errorf("no store: %v", err)
@@ -269,9 +280,10 @@ func sameRules(a, b spaces.OutboundRules) bool {
 	return bytes.Equal(x, y)
 }
 
-// TestReplayJudgesWithRecordedRules is SP-075.1.a3 (replay): a replay
-// judges each event with the outbound rules in force when it was recorded,
-// not today's.
+// TestReplayJudgesWithRecordedRules is SP-075.1.a3 (replay, D-66): each
+// command log record stores the outbound rules revision it was judged
+// under, and a replay judges with that revision, not today's rules, even
+// after the rules change.
 func TestReplayJudgesWithRecordedRules(t *testing.T) {
 	r := newReplayRig(t)
 	rig := withTermsRules(t, r.s)
@@ -286,50 +298,63 @@ func TestReplayJudgesWithRecordedRules(t *testing.T) {
 	}
 	p.Spaces[3].TermsFile = terms
 	doc, _ := json.Marshal(p)
-	rev := applyPolicy(t, r.s, string(doc))
-	owner := sessionOwner("sess-acme")
-	t0 := rig.clock.now()
-	event := func(at time.Time, cmd string) {
-		logFixture(t, r.s, owner, at, toollog.Record{Event: toollog.EventPreToolUse, Tool: "Bash", Cwd: r.acme,
-			Command: cmd, Targets: "{}", Rule: "would allow (within_space)", PolicyRev: rev})
-	}
+	applyPolicy(t, r.s, string(doc))
+	ctx := pinnedCtx(t, r.s, "sess-acme")
 	const method = "/orchd.v1.Orchd/ChangeOutboundRule"
-	event(t0, "deploy-prod --now")
-	rig.clock.advance(time.Minute)
-	if _, _, err := r.s.changeOutboundRule(operatorCtx, method, spaces.RuleAdd, "", "fail_closed", "deploy-prod"); err != nil {
-		t.Fatal(err)
-	}
-	rig.clock.advance(time.Minute)
-	event(rig.clock.now(), "deploy-prod --now")
-	rig.clock.advance(time.Minute)
-	if _, _, err := r.s.changeOutboundRule(operatorCtx, method, spaces.RuleRemove, "user-1", "", ""); err != nil {
-		t.Fatal(err)
-	}
-	rig.clock.advance(time.Minute)
-	event(rig.clock.now(), "deploy-prod --now")
-	flushToolLog(t, r.s)
-
-	rep := replay(t, r.s, &orchdv1.ReplaySpacesRequest{Owner: "sess-acme", All: true})
-	rows := rep.GetRows()
-	if len(rows) != 3 {
-		t.Fatalf("rows: %v", rows)
-	}
-	// Before the rule and after its removal the call goes; while it was
-	// in force it is refused, though today's rules no longer hold it.
-	for i, wantRule := range []string{"within_space", string(spaces.RuleOutboundUnchecked), "within_space"} {
-		if rows[i].GetRule() != wantRule {
-			t.Errorf("row %d: %v, want rule %s", i, rows[i], wantRule)
+	const cmd = "deploy-prod --now"
+	change := func(action spaces.RuleAction, id, kind, value string) {
+		t.Helper()
+		if _, _, err := r.s.changeOutboundRule(operatorCtx, method, action, id, kind, value); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if rows[1].GetVerdict() != string(spaces.Refuse) || !rows[1].GetChanged() || rep.GetChanged() != 1 {
-		t.Errorf("row 1 not reported as changed: %v", rep)
+	record := func() {
+		t.Helper()
+		if _, err := r.s.RecordToolEvent(ctx, bashReq("sess-acme", r.acme, cmd)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	record()                                                 // revision 0, the baseline
+	change(spaces.RuleAdd, "", "fail_closed", "deploy-prod") // revision 1
+	record()
+	change(spaces.RuleRemove, "user-1", "", "") // revision 2
+	record()
+	flushToolLog(t, r.s)
+	recs := records(t, r.s, sessionOwner("sess-acme"))
+	if len(recs) != 3 || recs[0].RulesRev != 0 || recs[1].RulesRev != 1 || recs[2].RulesRev != 2 {
+		t.Fatalf("records' rules revisions: %+v", recs)
+	}
+	for _, rec := range recs {
+		assertNoRuleValues(t, "record rule", rec.Rule)
 	}
 
-	// Rules that do not verify make their events problems, not verdicts.
+	check := func(when string) *orchdv1.ReplaySpacesResponse {
+		t.Helper()
+		rep := replay(t, r.s, &orchdv1.ReplaySpacesRequest{Owner: "sess-acme", All: true})
+		rows := rep.GetRows()
+		if len(rows) != 3 {
+			t.Fatalf("%s: rows %v", when, rows)
+		}
+		// Only the call recorded under revision 1 is refused by the rule.
+		for i, row := range rows {
+			refused := row.GetRule() == string(spaces.RuleOutboundUnchecked)
+			if refused != (i == 1) || !refused && row.GetRule() != row.GetRecordedRule() {
+				t.Errorf("%s: row %d: %v", when, i, row)
+			}
+		}
+		return rep
+	}
+	check("rule removed")
+	// The rule is back (revision 3): today's rules would refuse every
+	// call, but each is judged under the revision it was recorded with.
+	change(spaces.RuleAdd, "", "fail_closed", "deploy-prod")
+	check("rule added again")
+
+	// A revision that does not verify makes its events problems.
 	if _, err := rig.t.db.Exec(`UPDATE spaces_terms_rules SET hash = 'x' WHERE rev = 1`); err != nil {
 		t.Fatal(err)
 	}
-	rep = replay(t, r.s, &orchdv1.ReplaySpacesRequest{Owner: "sess-acme", All: true})
+	rep := replay(t, r.s, &orchdv1.ReplaySpacesRequest{Owner: "sess-acme", All: true})
 	if rep.GetProblems() != 1 || !strings.Contains(rep.GetRows()[1].GetProblem(), "outbound rules") {
 		t.Errorf("broken rules replay: %v", rep)
 	}

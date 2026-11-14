@@ -26,6 +26,10 @@ type toolEvent struct {
 	caller   resolvedCaller
 	req      *orchdv1.RecordToolEventRequest
 	received time.Time
+	// rulesRev is the outbound rules revision orchd applied when the
+	// event arrived (D-66). Reason: taken at receipt, since the record is
+	// built later by the log's writer, after a change may have landed.
+	rulesRev int64
 }
 
 // toolEventIntake takes the events the tool hooks hand off (spaces plan
@@ -95,6 +99,7 @@ func (s *server) RecordToolEvent(ctx context.Context, req *orchdv1.RecordToolEve
 			return nil, grpcstatus.Error(codes.InvalidArgument, "a tool event field other than tool_input is over 4 KiB")
 		}
 	}
-	s.toolEvents.take(toolEvent{caller: callerOf(ctx), req: req, received: time.Now()})
+	s.toolEvents.take(toolEvent{caller: callerOf(ctx), req: req, received: time.Now(),
+		rulesRev: s.termsRules.revision()})
 	return &orchdv1.RecordToolEventResponse{}, nil
 }

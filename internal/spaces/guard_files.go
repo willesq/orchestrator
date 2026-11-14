@@ -336,6 +336,9 @@ type GuardTerms struct {
 	// check then refuses every call they may have covered.
 	Rules       *OutboundRules
 	RulesBroken bool
+	// RulesRev is the rules' revision, which the hook will hand to orchd
+	// with the call (D-66) once RecordToolEvent carries it.
+	RulesRev int64
 }
 
 // Decide decides in from the files. It never fails: what it cannot read
@@ -376,7 +379,7 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 		}
 		res = r
 	}
-	terms.Known, terms.Policy, terms.RulesBroken = true, res, snap.RulesBroken
+	terms.Known, terms.Policy, terms.RulesBroken, terms.RulesRev = true, res, snap.RulesBroken, snap.RulesRev
 	prot := snap.Protection
 	switch {
 	case !res.Configured():
