@@ -119,18 +119,20 @@ remote changes, and the space it lands in, as `orch spaces why` reports. See
 
 **Per-space harness settings.** While a policy is applied and the `sandbox` layer is on, orchd
 keeps `.claude/settings.local.json` in every git checkout under a space's roots: the OS sandbox on,
-and other jobs' folders denied to shell commands and to Claude Code's file tools, plus the space's
-`GH_CONFIG_DIR` and its own `TMPDIR` (Claude Code's sandboxed commands get the space's `TMPDIR`
-only in sessions started with `orch run`; sessions started in a checkout share Claude Code's
-`/tmp/claude-<uid>`). Your own entries in that file stay; orch adds the file to the
+and other jobs' folders denied to shell commands and to Claude Code's file tools, plus its own
+`TMPDIR` and, when the space names a `gh_config_dir`, its `GH_CONFIG_DIR` (otherwise gh uses your
+default login). Claude Code's sandboxed commands get the space's `TMPDIR` only in sessions started
+with `orch run`; sessions started in a checkout share Claude Code's `/tmp/claude-<uid>` (D-58). Your own entries in that file stay; orch adds the file to the
 checkout's `.git/info/exclude` when nothing ignores it, and never writes a tracked one. A new clone
 gets its file within a minute. `orch spaces enforce sandbox off` takes orch's entries out again.
 
 `orch run <space> -- claude|codex` gives a session the same rules from any folder (Codex has no
-per-checkout settings, so this is how Codex sessions get them). Claude Code then runs with a
-per-space `CLAUDE_CONFIG_DIR`, which starts logged out: the first time, run
-`orch run <space> -- claude` and `/login` in it. Log in to the space's gh profile with
-`GH_CONFIG_DIR=<gh_config_dir> gh auth login`. Run it in a folder of that space or in one no space
+per-checkout settings, so this is how Codex sessions get them). By default it uses your own
+logins (D-59): your normal Claude Code configuration, with the rules added through
+`--settings`, and your default gh login. Only a space that names its own `claude_config_dir`
+runs Claude Code with that folder as `CLAUDE_CONFIG_DIR`, which needs its own `/login` the first
+time; only one that names a `gh_config_dir` gets that `GH_CONFIG_DIR` (log in with
+`GH_CONFIG_DIR=<gh_config_dir> gh auth login`). Run it in a folder of that space or in one no space
 holds; `--force` allows another space's folder. See
 [internals/install.md](internals/install.md#per-space-harness-settings).
 

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -30,21 +31,26 @@ import (
 // job B's temp folder, each next to a control on job A's own folder.
 //
 // The tmpdir probes (SP-046.1.a6) also start sessions the way 'orch run'
-// does, with the space's environment and the launcher's rules given by
-// --settings instead of a per-space profile, so they need no second login:
-// job B's launched session writes under its TMPDIR, and job A's launched
-// and per-checkout sessions try to read it.
+// does (ClaudeLaunch: the space's environment and the launcher's rules
+// given by --settings): job B's launched session writes under its TMPDIR,
+// and job A's launched and per-checkout sessions try to read it.
 //
-// With ORCH_E2E_GH_PROFILE set to a gh profile folder the user logged in to
-// (GH_CONFIG_DIR=<it> gh auth login), it is job A's gh_config_dir and the
-// session's 'gh auth status' must name that profile's account.
-//
-// With ORCH_E2E_LAYOUT set to a folder, the per-space folders live there,
-// so job A's Claude Code profile (<it>/joba/claude) outlives the run; once
-// the user has logged in to it (CLAUDE_CONFIG_DIR=<it>/joba/claude claude,
-// then /login), the launcher probes (SP-046.2.a2) start sessions the way
+// The launcher probes (SP-046.2.a2) start sessions the way
 // 'orch run joba -- claude' does, from a folder outside every root, and
-// expect the same denies as inside the checkout.
+// expect the same denies as inside the checkout. By default (D-59) they use
+// the user's own Claude Code configuration and login, so they need no
+// setup. With ORCH_E2E_LAYOUT set to a folder, job A names its own Claude
+// Code folder, <it>/joba/claude, which the user has logged in to once
+// (CLAUDE_CONFIG_DIR=<it>/joba/claude claude, then /login), and the
+// launched sessions run with it as CLAUDE_CONFIG_DIR.
+//
+// The gh probes (SP-046.1.a5) run 'gh auth status' in the sandboxed shell
+// of a checkout session and of a launched one; it must name the account
+// gh reports outside the session (metadata only: gh masks the token). By
+// default that is the user's default gh login (D-59). With
+// ORCH_E2E_GH_PROFILE set to a gh profile folder the user logged in to
+// (GH_CONFIG_DIR=<it> gh auth login), it is job A's gh_config_dir and the
+// session must name that profile's account.
 func TestClaudeE2E(t *testing.T) {
 	if os.Getenv("ORCH_CLAUDE_E2E") != "1" {
 		t.Skip("set ORCH_CLAUDE_E2E=1 to run real Claude Code sessions")
@@ -58,8 +64,12 @@ func TestClaudeE2E(t *testing.T) {
 	marker := randHex(t)
 	codeA, codeB := filepath.Join(base, "code", "a"), filepath.Join(base, "code", "b")
 	ghProfile := os.Getenv("ORCH_E2E_GH_PROFILE")
+	claudeProfile := ""
+	if d := os.Getenv("ORCH_E2E_LAYOUT"); d != "" {
+		claudeProfile = filepath.Join(d, "joba", "claude")
+	}
 	p := spaces.Policy{Spaces: []spaces.Space{
-		{Name: "joba", Kind: spaces.Isolated, Roots: []string{codeA}, GHConfigDir: ghProfile},
+		{Name: "joba", Kind: spaces.Isolated, Roots: []string{codeA}, GHConfigDir: ghProfile, ClaudeConfigDir: claudeProfile},
 		{Name: "jobb", Kind: spaces.Isolated, Roots: []string{codeB}},
 	}}
 	res, err := spaces.Validate(p, spaces.Env{Home: base, InGitTree: func(string) bool { return false }})
@@ -111,37 +121,33 @@ func TestClaudeE2E(t *testing.T) {
 		{"write", "Write", fmt.Sprintf("Use the Write tool to create %s containing hello, then the Write tool to create %s containing hello.", filepath.Join(codeB, "repo", "new.txt"), filepath.Join(deep, "new.txt")), "", ""},
 		{"bash", "Bash", fmt.Sprintf("Run exactly this one Bash command and show its full output: cat %s; cat %s; cat %s; echo TMPDIR=$TMPDIR", secret, bTmp, filepath.Join(deep, "a-control.txt")), "B-", "A-OK-" + marker},
 	}
-	runProbes := func(t *testing.T, dir string, env ...string) {
+	runProbes := func(t *testing.T, dir string, extra, env []string) {
 		for _, pr := range probes {
 			t.Run(pr.name, func(t *testing.T) {
-				probe(t, claude, dir, pr.prompt, pr.tool, pr.leak, pr.control, env...)
+				probe(t, claude, dir, pr.prompt, pr.tool, pr.leak, pr.control, extra, env...)
 			})
 		}
 	}
-	runProbes(t, deep)
-	if os.Getenv("ORCH_E2E_LAYOUT") != "" {
-		t.Run("launcher", func(t *testing.T) {
-			userDir := os.Getenv("CLAUDE_CONFIG_DIR")
-			if userDir == "" {
-				home, _ := os.UserHomeDir()
-				userDir = filepath.Join(home, ".claude")
-			}
-			r := For(res, "joba", layout)
-			profile, err := WriteClaudeProfile(layout, "joba", userDir, LauncherFragment(r))
-			if err != nil {
-				t.Fatal(err)
-			}
-			scratch := filepath.Join(base, "scratch")
-			if err := os.MkdirAll(scratch, 0o755); err != nil {
-				t.Fatal(err)
-			}
-			env := []string{"CLAUDE_CONFIG_DIR=" + profile}
-			for k, v := range r.Env() {
-				env = append(env, k+"="+v)
-			}
-			runProbes(t, scratch, env...)
+	ghWant := ghAccount(t, ghProfile)
+	runProbes(t, deep, nil, nil)
+	t.Run("gh", func(t *testing.T) {
+		ghProbe(t, claude, deep, ghWant, nil, nil)
+	})
+	t.Run("launcher", func(t *testing.T) {
+		extra, env := launchOf(t, res, "joba", layout)
+		if claudeProfile == "" && slices.ContainsFunc(env, func(kv string) bool { return strings.HasPrefix(kv, "CLAUDE_CONFIG_DIR=") }) {
+			t.Fatalf("the launcher sets CLAUDE_CONFIG_DIR for a space that names none: %q", env)
+		}
+		t.Logf("launched with %q and environment %q", extra[0], env)
+		scratch := filepath.Join(base, "scratch")
+		if err := os.MkdirAll(scratch, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		runProbes(t, scratch, extra, env)
+		t.Run("gh", func(t *testing.T) {
+			ghProbe(t, claude, scratch, ghWant, extra, env)
 		})
-	}
+	})
 	if _, err := os.Stat(filepath.Join(codeB, "repo", "new.txt")); !os.IsNotExist(err) {
 		t.Errorf("Write created a file in job B's root: %v", err)
 	}
@@ -163,9 +169,10 @@ func TestClaudeE2E(t *testing.T) {
 		switch res := out.results(); {
 		case strings.Contains(res, "TMPDIR="+want):
 		case strings.Contains(res, "TMPDIR="+SharedClaudeTmp()):
-			// Measured (RC-184, RC-206): a settings file cannot set the
-			// TMPDIR of Claude Code's sandboxed commands.
-			t.Skipf("a session started in the checkout without 'orch run' has the shared TMPDIR %s, not job A's %s (RC-206):\n%s", SharedClaudeTmp(), want, res)
+			// Measured (RC-184): a settings file cannot set the TMPDIR of
+			// Claude Code's sandboxed commands; accepted as a documented
+			// limit (D-58).
+			t.Skipf("a session started in the checkout without 'orch run' has the shared TMPDIR %s, not job A's %s (accepted limit, D-58):\n%s", SharedClaudeTmp(), want, res)
 		default:
 			t.Errorf("the session's TMPDIR is neither job A's (%s) nor the shared one:\n%s", want, res)
 		}
@@ -187,14 +194,42 @@ func TestClaudeE2E(t *testing.T) {
 			t.Errorf("the session changed its settings:\n%s", after)
 		}
 	})
-	if ghProfile != "" {
-		t.Run("gh", func(t *testing.T) {
-			want := ghAccount(t, ghProfile)
-			out := runClaude(t, claude, deep, "Run exactly this one Bash command and show its output: gh auth status. Do not use any other tool. Then reply DONE.")
-			if !strings.Contains(out.results(), want) {
-				t.Errorf("gh auth status in the session does not name %s:\n%s", want, out.results())
-			}
-		})
+}
+
+// launchOf is how 'orch run <space> -- claude' starts Claude Code: its
+// extra arguments (--settings with the launcher's rules) and environment.
+func launchOf(t *testing.T, res *spaces.Resolved, space string, layout Layout) (extra, env []string) {
+	t.Helper()
+	r := For(res, space, layout)
+	extra, m, err := ClaudeLaunch(r, LauncherFragment(r))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range m {
+		env = append(env, k+"="+v)
+	}
+	slices.Sort(env)
+	return extra, env
+}
+
+// ghProbe (SP-046.1.a5): 'gh auth status' in the session's sandboxed shell
+// names want, the account gh reports outside it. gh masks the token.
+func ghProbe(t *testing.T, claude, dir, want string, extra, env []string) {
+	t.Helper()
+	out := runClaudeWith(t, claude, dir, "Run exactly this one Bash command and show its full output: gh auth status. Do not use any other tool. Then reply DONE.", extra, env...)
+	if !out.used("Bash") {
+		t.Fatalf("the session never called Bash:\n%s", out.raw)
+	}
+	t.Logf("gh auth status in the session:\n%s", out.results())
+	switch r := out.results(); {
+	case strings.Contains(r, "account "+want):
+	case strings.Contains(r, "operation not permitted"):
+		// Measured 2026-11-14 (RC-208): with the sandbox on, the
+		// Read(~/.config/gh/**) credential deny orch installs also denies
+		// the sandboxed shell the default gh folder, so gh cannot start.
+		t.Errorf("the sandbox denied gh its configuration folder (RC-208), so it cannot show %s:\n%s", want, r)
+	default:
+		t.Errorf("gh auth status in the session does not name %s:\n%s", want, r)
 	}
 }
 
@@ -209,18 +244,8 @@ func launchedTmpProbe(t *testing.T, claude, base, deep string, res *spaces.Resol
 		t.Fatal(err)
 	}
 	launched := func(space, prompt string) sessionOutput {
-		r := For(res, space, layout)
-		m, err := Merge(nil, false, LauncherFragment(r), Owned{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		file := filepath.Join(base, "launch-"+space+".json")
-		writeFile(t, file, string(m.Data))
-		var env []string
-		for k, v := range r.Env() {
-			env = append(env, k+"="+v)
-		}
-		return runClaudeWith(t, claude, scratch, prompt+" Do not use any other tool. Then reply DONE.", []string{"--settings", file}, env...)
+		extra, env := launchOf(t, res, space, layout)
+		return runClaudeWith(t, claude, scratch, prompt+" Do not use any other tool. Then reply DONE.", extra, env...)
 	}
 	bTmp := ClaudeSandboxTmp(layout.TmpDir("jobb"))
 	bFile := filepath.Join(bTmp, "b-launch.txt")
@@ -256,9 +281,9 @@ func launchedTmpProbe(t *testing.T, claude, base, deep string, res *spaces.Resol
 
 // probe asks a session in dir to call tool on job B's folder and on a
 // control in job A's, and checks what came back.
-func probe(t *testing.T, claude, dir, prompt, tool, leak, control string, env ...string) {
+func probe(t *testing.T, claude, dir, prompt, tool, leak, control string, extra []string, env ...string) {
 	t.Helper()
-	out := runClaude(t, claude, dir, prompt+" Do not use any other tool. Then reply DONE.", env...)
+	out := runClaudeWith(t, claude, dir, prompt+" Do not use any other tool. Then reply DONE.", extra, env...)
 	if !out.used(tool) {
 		t.Fatalf("the session never called %s:\n%s", tool, out.raw)
 	}
@@ -280,14 +305,18 @@ func randHex(t *testing.T) string {
 	return hex.EncodeToString(b[:])
 }
 
-// ghAccount is the account the gh profile is logged in to, as gh prints it.
+// ghAccount is the account gh is logged in to outside the session: the
+// profile's when profile is set, else the default login (D-59). It asks gh
+// for the login only; no token is read or printed.
 func ghAccount(t *testing.T, profile string) string {
 	t.Helper()
 	cmd := exec.Command("gh", "api", "user", "--jq", ".login")
-	cmd.Env = append(os.Environ(), "GH_CONFIG_DIR="+profile)
+	if profile != "" {
+		cmd.Env = append(os.Environ(), "GH_CONFIG_DIR="+profile)
+	}
 	out, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("gh profile %s is not logged in: %v", profile, err)
+		t.Fatalf("gh is not logged in (profile %q): %v", profile, err)
 	}
 	return strings.TrimSpace(string(out))
 }

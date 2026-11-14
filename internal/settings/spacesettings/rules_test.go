@@ -12,7 +12,9 @@ import (
 
 // TestGeneratedSettingsDenyOtherJobsOnly (SP-046.1.a1): a checkout in job A
 // denies every other isolated root, nothing in A, the public space or the
-// private space A reads, and sets GH_CONFIG_DIR to A's profile.
+// private space A reads, and sets GH_CONFIG_DIR to the gh profile A names
+// (D-59). CLAUDE_CONFIG_DIR is never in a checkout's settings: only the
+// launcher can choose Claude Code's folder.
 func TestGeneratedSettingsDenyOtherJobsOnly(t *testing.T) {
 	w := newWorld(t)
 	a, b, c := filepath.Join(w.code, "a"), filepath.Join(w.code, "b"), filepath.Join(w.code, "c")
@@ -44,6 +46,9 @@ func TestGeneratedSettingsDenyOtherJobsOnly(t *testing.T) {
 	if f.Scalars["env.GH_CONFIG_DIR"] != filepath.Join(w.home, "gh", "a") {
 		t.Errorf("env.GH_CONFIG_DIR = %v", f.Scalars["env.GH_CONFIG_DIR"])
 	}
+	if _, ok := f.Scalars["env.CLAUDE_CONFIG_DIR"]; ok {
+		t.Errorf("checkout settings set CLAUDE_CONFIG_DIR: %v", f.Scalars)
+	}
 	if f.Scalars[keySandboxOn] != true || f.Scalars[keyUnsandboxed] != false || f.Scalars[keyAllProjectMCP] != false {
 		t.Errorf("sandbox scalars = %v", f.Scalars)
 	}
@@ -65,28 +70,32 @@ func TestGeneratedSettingsDenyOtherJobsOnly(t *testing.T) {
 }
 
 // TestOtherProfilesAndOrchDirDenied: every space is denied other spaces'
-// gh profiles and orchd's own folder, never its own profile.
+// gh profiles and Claude Code folders and orchd's own folder, never its own.
 func TestOtherProfilesAndOrchDirDenied(t *testing.T) {
 	w := newWorld(t)
-	gh := filepath.Join(w.home, "gh", "a")
+	gh, cl := filepath.Join(w.home, "gh", "a"), filepath.Join(w.home, "claude", "a")
 	for _, space := range []string{"jobb", "oss", "personal"} {
 		r := For(w.res, space, w.layout)
-		if !slices.Contains(r.Deny, gh) || !slices.Contains(r.Deny, w.layout.OrchDir()) {
-			t.Errorf("%s deny %v lacks joba's gh profile or orch's folder", space, r.Deny)
+		if !slices.Contains(r.Deny, gh) || !slices.Contains(r.Deny, cl) || !slices.Contains(r.Deny, w.layout.OrchDir()) {
+			t.Errorf("%s deny %v lacks joba's gh profile, Claude folder or orch's folder", space, r.Deny)
 		}
 	}
 	a := For(w.res, "joba", w.layout)
-	if slices.Contains(a.Deny, gh) || !slices.Contains(a.Deny, w.layout.OrchDir()) {
+	if slices.Contains(a.Deny, gh) || slices.Contains(a.Deny, cl) || !slices.Contains(a.Deny, w.layout.OrchDir()) {
 		t.Errorf("joba deny %v", a.Deny)
 	}
+	if a.ClaudeConfigDir != cl || For(w.res, "jobb", w.layout).ClaudeConfigDir != "" {
+		t.Errorf("ClaudeConfigDir = %q", a.ClaudeConfigDir)
+	}
 	u := ForUnplaced(w.res, filepath.Join(w.code, "a", "x"), w.layout)
-	if !slices.Contains(u.Deny, gh) || !slices.Contains(u.Deny, w.layout.OrchDir()) {
+	if !slices.Contains(u.Deny, gh) || !slices.Contains(u.Deny, cl) || !slices.Contains(u.Deny, w.layout.OrchDir()) || u.ClaudeConfigDir != "" {
 		t.Errorf("unplaced deny %v", u.Deny)
 	}
 }
 
-// TestGeneratedSettingsOtherSpaces: a public checkout denies every job's
-// root; a space without a gh profile sets no GH_CONFIG_DIR.
+// TestGeneratedSettingsOtherSpaces (SP-046.1.a1, D-59): a public checkout
+// denies every job's root; a space that names no gh profile (oss, jobb)
+// sets no GH_CONFIG_DIR, so its sessions use the default gh login.
 func TestGeneratedSettingsOtherSpaces(t *testing.T) {
 	w := newWorld(t)
 	r := For(w.res, "oss", w.layout)
@@ -98,8 +107,18 @@ func TestGeneratedSettingsOtherSpaces(t *testing.T) {
 	if slices.Contains(r.Deny, filepath.Join(w.code, "me")) {
 		t.Errorf("public deny %v holds a private root; only isolated roots are denied", r.Deny)
 	}
-	if _, ok := r.Env()[envGHConfigDir]; ok || r.GHConfigDir != "" {
-		t.Errorf("env %v sets a gh profile the space does not have", r.Env())
+	for _, space := range []string{"oss", "jobb"} {
+		r := For(w.res, space, w.layout)
+		if _, ok := r.Env()[envGHConfigDir]; ok || r.GHConfigDir != "" {
+			t.Errorf("%s env %v sets a gh profile the space does not have", space, r.Env())
+		}
+		f := CheckoutFragment(r, filepath.Join(w.code, "x"))
+		if _, ok := f.Scalars["env."+envGHConfigDir]; ok {
+			t.Errorf("%s checkout settings set GH_CONFIG_DIR: %v", space, f.Scalars)
+		}
+		if f.Scalars["env."+envTmpDir] != w.layout.TmpDir(space) {
+			t.Errorf("%s checkout settings lack its TMPDIR: %v", space, f.Scalars)
+		}
 	}
 }
 
@@ -193,10 +212,10 @@ func TestDenyAddsRealPath(t *testing.T) {
 // TestNoPolicyLookups: without a policy the lookups are empty.
 func TestNoPolicyLookups(t *testing.T) {
 	var res *spaces.Resolved
-	if res.BoundRoots() != nil || res.Names() != nil || res.GHConfigDir("x") != "" {
+	if res.BoundRoots() != nil || res.Names() != nil || res.GHConfigDir("x") != "" || res.ClaudeConfigDir("x") != "" {
 		t.Error("nil policy has lookups")
 	}
-	if l := DefaultLayout(); !strings.HasSuffix(l.Dir, "spaces") || l.ClaudeDir("x") != filepath.Join(l.Dir, "x", "claude") {
+	if l := DefaultLayout(); !strings.HasSuffix(l.Dir, "spaces") || l.SpaceDir("x") != filepath.Join(l.Dir, "x") {
 		t.Errorf("layout %+v", l)
 	}
 }

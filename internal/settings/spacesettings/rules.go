@@ -1,7 +1,8 @@
 // Package spacesettings writes per-space harness settings (spaces plan
 // SP-046, D-23, D-53): the OS sandbox and file-tool denies that keep one
 // job's sessions out of another job's folders, the space's gh profile
-// (GH_CONFIG_DIR) and its own temporary directory. orchd keeps them in every
+// (GH_CONFIG_DIR, only when the space names one, D-59) and its own
+// temporary directory. orchd keeps them in every
 // checkout's .claude/settings.local.json under a space's roots; 'orch run'
 // passes them to a session started anywhere. See docs/internals/install.md
 // "Per-space harness settings".
@@ -20,10 +21,9 @@ import (
 	"github.com/willesq/orchestrator/internal/spaces"
 )
 
-// Layout places orch's per-space directories: <Dir>/<space>/claude is the
-// space's Claude Code profile for 'orch run', and TmpDir its TMPDIR. Each
-// space's directories are denied to every other space, so neither temp
-// files nor a profile's transcripts cross between them.
+// Layout places orch's per-space directories: <Dir>/<space> is the space's
+// folder, and TmpDir its TMPDIR. Each space's directories are denied to
+// every other space, so temp files do not cross between them.
 type Layout struct {
 	Dir string
 	// Tmp holds every space's temp folder; "" keeps it at
@@ -98,9 +98,6 @@ func ClaudeSandboxTmp(dir string) string {
 	return SharedClaudeTmp()
 }
 
-// ClaudeDir is the space's CLAUDE_CONFIG_DIR for 'orch run'.
-func (l Layout) ClaudeDir(space string) string { return filepath.Join(l.SpaceDir(space), "claude") }
-
 // OrchDir holds orchd's own record of the checkout files and their backups.
 // It is denied to every space: the record names every space's checkouts
 // and the backups hold users' own settings. Space names start with a
@@ -120,6 +117,9 @@ type Rules struct {
 	TmpDir string
 	// GHConfigDir is the space's gh profile; "" for the default login.
 	GHConfigDir string
+	// ClaudeConfigDir is the space's Claude Code folder for 'orch run';
+	// "" for the user's own (D-59).
+	ClaudeConfigDir string
 }
 
 // For returns the rules of a session in space. It denies every isolated
@@ -128,7 +128,7 @@ type Rules struct {
 // a private space space reads: those are left to memory filtering and the
 // tool guard, as in block-other-jobs mode (D-12).
 func For(res *spaces.Resolved, space string, l Layout) Rules {
-	r := Rules{Space: space, TmpDir: l.TmpDir(space), GHConfigDir: res.GHConfigDir(space)}
+	r := Rules{Space: space, TmpDir: l.TmpDir(space), GHConfigDir: res.GHConfigDir(space), ClaudeConfigDir: res.ClaudeConfigDir(space)}
 	deny := []string{l.OrchDir()}
 	for _, root := range res.BoundRoots() {
 		if root.Kind == spaces.Isolated && root.Space != space {
@@ -145,9 +145,10 @@ func For(res *spaces.Resolved, space string, l Layout) Rules {
 }
 
 // otherSpace is what of space n another space's sessions are denied besides
-// its roots: its folders under the layout and its gh profile. Reason: a gh
-// profile can hold the account's token in hosts.yml, and GH_CONFIG_DIR
-// pointed at it acts as that account.
+// its roots: its folders under the layout, its gh profile and its Claude
+// Code folder. Reason: a gh profile can hold the account's token in
+// hosts.yml, and GH_CONFIG_DIR pointed at it acts as that account; a Claude
+// Code folder holds its login and the space's transcripts.
 func otherSpace(res *spaces.Resolved, n string, l Layout) []string {
 	out := []string{l.SpaceDir(n)}
 	if l.Tmp != "" {
@@ -156,13 +157,17 @@ func otherSpace(res *spaces.Resolved, n string, l Layout) []string {
 	if gh := res.GHConfigDir(n); gh != "" {
 		out = append(out, gh)
 	}
+	if cl := res.ClaudeConfigDir(n); cl != "" {
+		out = append(out, cl)
+	}
 	return out
 }
 
 // ForUnplaced returns the rules of a checkout at path that has no space: its
 // root and its remote name different jobs, or it is quarantined. It denies
-// every isolated root that does not hold path, every space's directory and
-// gh profile, and orchd's own folder, and sets no gh profile or TMPDIR.
+// every isolated root that does not hold path, every space's directory, gh
+// profile and Claude Code folder, and orchd's own folder, and sets no gh
+// profile or TMPDIR.
 func ForUnplaced(res *spaces.Resolved, path string, l Layout) Rules {
 	deny := []string{l.OrchDir()}
 	for _, root := range res.BoundRoots() {

@@ -1,109 +1,40 @@
 package spacesettings
 
 import (
+	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
-
-	"github.com/willesq/orchestrator/internal/settings"
 )
 
-// profileLinks are what a space's Claude Code profile shares with the
-// user's own configuration folder, so a launched session has the user's
-// instructions, agents, commands, skills and plugins. Settings are copied
-// instead (with the space's rules merged in), and the login is the
-// profile's own (SP-004: a fresh CLAUDE_CONFIG_DIR starts logged out).
-var profileLinks = []string{"CLAUDE.md", "agents", "commands", "skills", "plugins"}
+// envClaudeConfigDir is Claude Code's configuration folder variable.
+const envClaudeConfigDir = "CLAUDE_CONFIG_DIR"
 
-// WriteClaudeProfile writes the space's Claude Code profile for 'orch run'
-// and returns its folder (the session's CLAUDE_CONFIG_DIR). Its
-// settings.json is the user's settings.json in userDir with frag merged in,
-// rewritten at every launch so it follows the user's own changes (orch's
-// hooks included). Each shared entry is linked to the user's unless the
-// profile has its own file there.
-func WriteClaudeProfile(l Layout, space, userDir string, frag Fragment) (string, error) {
-	dir := l.ClaudeDir(space)
-	if err := EnsurePrivateDir(l.SpaceDir(space)); err != nil {
-		return "", err
+// ClaudeLaunch is how 'orch run' starts Claude Code for r's space (D-59).
+// Args give the session frag through --settings, as a JSON string before
+// the user's own arguments, so no file holds it; nil when frag is empty
+// (the sandbox layer off). Env is r's environment plus CLAUDE_CONFIG_DIR
+// only when the space names its own Claude Code folder: otherwise the
+// session runs with the user's own configuration and login, which
+// --settings adds to (Claude Code merges its lists and lets its values
+// override the user's and the project's settings).
+func ClaudeLaunch(r Rules, frag Fragment) (args []string, env map[string]string, err error) {
+	env = r.Env()
+	if r.ClaudeConfigDir != "" {
+		env[envClaudeConfigDir] = r.ClaudeConfigDir
 	}
-	if err := EnsurePrivateDir(dir); err != nil {
-		return "", err
+	if frag.Empty() {
+		return nil, env, nil
 	}
-	user, err := settings.ReadFile(filepath.Join(userDir, "settings.json"))
+	m, err := Merge(nil, false, frag, Owned{})
 	if err != nil {
-		return "", err
+		return nil, nil, err
 	}
-	m, err := Merge(user, user != nil, frag, Owned{})
-	if err != nil {
-		return "", fmt.Errorf("%s: %w", filepath.Join(userDir, "settings.json"), err)
+	var b bytes.Buffer
+	if err := json.Compact(&b, m.Data); err != nil {
+		return nil, nil, err
 	}
-	data := m.Data
-	if data == nil {
-		data = []byte("{}\n")
-	}
-	if err := replaceFile(filepath.Join(dir, "settings.json"), data); err != nil {
-		return "", err
-	}
-	for _, name := range profileLinks {
-		if err := linkShared(filepath.Join(userDir, name), filepath.Join(dir, name)); err != nil {
-			return "", err
-		}
-	}
-	return dir, nil
-}
-
-// replaceFile writes path owner-only through a temp file and rename, so a
-// link at path is replaced rather than followed.
-func replaceFile(path string, data []byte) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".orch-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	_, werr := tmp.Write(data)
-	if err := errors.Join(werr, tmp.Chmod(0o600), tmp.Close()); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
-}
-
-// linkShared links at to target when the user has target, replacing only a
-// link orch made before; a real file or folder at stays the profile's own.
-func linkShared(target, at string) error {
-	if _, err := os.Stat(target); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return removeLink(at)
-		}
-		return err
-	}
-	info, err := os.Lstat(at)
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-	case err != nil:
-		return err
-	case info.Mode()&os.ModeSymlink == 0:
-		return nil
-	default:
-		if cur, err := os.Readlink(at); err == nil && cur == target {
-			return nil
-		}
-		if err := os.Remove(at); err != nil {
-			return err
-		}
-	}
-	return os.Symlink(target, at)
-}
-
-// removeLink removes at only when it is a link.
-func removeLink(at string) error {
-	info, err := os.Lstat(at)
-	if err != nil || info.Mode()&os.ModeSymlink == 0 {
-		return nil
-	}
-	return os.Remove(at)
+	return []string{"--settings", b.String()}, env, nil
 }
 
 // CodexProfile is the name of the space's Codex permissions profile.

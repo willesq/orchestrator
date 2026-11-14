@@ -53,25 +53,39 @@ func (c *runClient) GetEnforcement(context.Context, *orchdv1.GetEnforcementReque
 
 // launch is one launcher run with its exec captured.
 type launch struct {
-	path       string
-	argv, env  []string
-	out        string
-	err        error
-	userClaude string
-	layout     spacesettings.Layout
+	path      string
+	argv, env []string
+	out       string
+	err       error
+	layout    spacesettings.Layout
 }
 
-// runWorld is a temp home with job roots code/a (joba, gh profile gh/a)
-// and code/b (jobb).
+// parentEnv is the environment the launcher inherits in tests.
+var parentEnv = []string{"PATH=/usr/bin", "GH_CONFIG_DIR=/parent/gh", "TMPDIR=/parent/tmp", "CLAUDE_CONFIG_DIR=/parent/claude"}
+
+// runWorld is a temp home with job roots code/a (joba, which names its own
+// gh profile gh/a and Claude Code folder claude/a) and code/b (jobb, which
+// names neither and so uses the default logins, D-59).
 func runWorld(t *testing.T) (home, policy string) {
 	t.Helper()
 	home, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	policy = fmt.Sprintf(`{"spaces":[{"name":"joba","kind":"isolated","roots":[%q],"gh_config_dir":%q},{"name":"jobb","kind":"isolated","roots":[%q]}]}`,
-		filepath.Join(home, "code", "a"), filepath.Join(home, "gh", "a"), filepath.Join(home, "code", "b"))
+	policy = fmt.Sprintf(`{"spaces":[{"name":"joba","kind":"isolated","roots":[%q],"gh_config_dir":%q,"claude_config_dir":%q},{"name":"jobb","kind":"isolated","roots":[%q]}]}`,
+		filepath.Join(home, "code", "a"), filepath.Join(home, "gh", "a"), filepath.Join(home, "claude", "a"), filepath.Join(home, "code", "b"))
 	return home, policy
+}
+
+// claudeSettings is the --settings JSON the launcher gave Claude Code, ""
+// when none.
+func claudeSettings(argv []string) string {
+	for i, a := range argv {
+		if a == "--settings" && i+1 < len(argv) {
+			return argv[i+1]
+		}
+	}
+	return ""
 }
 
 func doLaunch(t *testing.T, home string, client *runClient, args ...string) launch {
@@ -82,17 +96,19 @@ func doLaunch(t *testing.T, home string, client *runClient, args ...string) laun
 // doLaunchIn is doLaunch with the per-space folders in layout.
 func doLaunchIn(t *testing.T, home string, layout spacesettings.Layout, client *runClient, args ...string) launch {
 	t.Helper()
+	return doLaunchEnv(t, home, layout, parentEnv, client, args...)
+}
+
+// doLaunchEnv is doLaunchIn with environ as the inherited environment.
+func doLaunchEnv(t *testing.T, home string, layout spacesettings.Layout, environ []string, client *runClient, args ...string) launch {
+	t.Helper()
 	var got launch
-	got.userClaude = filepath.Join(home, "dot-claude")
 	got.layout = layout
 	l := &launcher{
-		cf:        func() (orchdv1.OrchdClient, func(), error) { return client, func() {}, nil },
-		layout:    got.layout,
-		claudeDir: func() (string, error) { return got.userClaude, nil },
-		getwd:     func() (string, error) { return filepath.Join(home, "scratch"), nil },
-		environ: func() []string {
-			return []string{"PATH=/usr/bin", "HOME=" + home, "GH_CONFIG_DIR=/parent/gh", "TMPDIR=/parent/tmp", "CLAUDE_CONFIG_DIR=/parent/claude"}
-		},
+		cf:       func() (orchdv1.OrchdClient, func(), error) { return client, func() {}, nil },
+		layout:   got.layout,
+		getwd:    func() (string, error) { return filepath.Join(home, "scratch"), nil },
+		environ:  func() []string { return slices.Clone(environ) },
 		lookPath: func(name string) (string, error) { return "/bin/" + filepath.Base(name), nil },
 		exec: func(path string, argv, env []string) error {
 			got.path, got.argv, got.env = path, argv, env
@@ -123,20 +139,22 @@ func unmatched() *orchdv1.PlacementExplanation {
 	return &orchdv1.PlacementExplanation{Outcome: "quarantined", Rule: "unmatched", Space: "quarantine"}
 }
 
-// TestRunSetsProfileForChildOnly (SP-046.2.a1): 'orch run <space> --
-// claude' gives the harness the space's CLAUDE_CONFIG_DIR, GH_CONFIG_DIR and
-// TMPDIR, replacing inherited values, and leaves orch's own environment
-// alone.
+// TestRunSetsProfileForChildOnly (SP-046.2.a1, D-59): 'orch run <space> --
+// claude' gives the harness the space's TMPDIR, replacing an inherited one,
+// and its rules with --settings; CLAUDE_CONFIG_DIR and GH_CONFIG_DIR are set
+// (replacing inherited values) only when the space names its own, and
+// orch's own environment is left alone.
 func TestRunSetsProfileForChildOnly(t *testing.T) {
 	home, policy := runWorld(t)
 	t.Setenv("GH_CONFIG_DIR", "/parent/gh")
-	got := doLaunch(t, home, &runClient{applied: policy, placement: unmatched(), sandbox: "on"}, "joba", "--", "claude", "-p", "hi")
+	t.Setenv("CLAUDE_CONFIG_DIR", "/parent/claude")
+	client := &runClient{applied: policy, placement: unmatched(), sandbox: "on"}
+	got := doLaunch(t, home, client, "joba", "--", "claude", "-p", "hi")
 	if got.err != nil {
 		t.Fatal(got.err)
 	}
-	wantDir := got.layout.ClaudeDir("joba")
-	if v := envOf(got.env, "CLAUDE_CONFIG_DIR"); !slices.Equal(v, []string{wantDir}) {
-		t.Errorf("CLAUDE_CONFIG_DIR = %v, want [%s]", v, wantDir)
+	if v := envOf(got.env, "CLAUDE_CONFIG_DIR"); !slices.Equal(v, []string{filepath.Join(home, "claude", "a")}) {
+		t.Errorf("CLAUDE_CONFIG_DIR = %v", v)
 	}
 	if v := envOf(got.env, "GH_CONFIG_DIR"); !slices.Equal(v, []string{filepath.Join(home, "gh", "a")}) {
 		t.Errorf("GH_CONFIG_DIR = %v", v)
@@ -150,24 +168,152 @@ func TestRunSetsProfileForChildOnly(t *testing.T) {
 	if v := envOf(got.env, "PATH"); !slices.Equal(v, []string{"/usr/bin"}) {
 		t.Errorf("PATH not passed on: %v", v)
 	}
-	if os.Getenv("GH_CONFIG_DIR") != "/parent/gh" || os.Getenv("CLAUDE_CONFIG_DIR") == wantDir {
+	if os.Getenv("GH_CONFIG_DIR") != "/parent/gh" || os.Getenv("CLAUDE_CONFIG_DIR") != "/parent/claude" {
 		t.Error("the launcher changed its own environment")
 	}
-	if got.path != "/bin/claude" || !slices.Equal(got.argv, []string{"claude", "-p", "hi"}) {
-		t.Errorf("exec %s %v", got.path, got.argv)
+	settings := claudeSettings(got.argv)
+	if got.path != "/bin/claude" || len(got.argv) != 5 || got.argv[0] != "claude" || got.argv[1] != "--settings" || !slices.Equal(got.argv[3:], []string{"-p", "hi"}) {
+		t.Errorf("exec %s %q", got.path, got.argv)
 	}
-	settings, err := os.ReadFile(filepath.Join(wantDir, "settings.json"))
-	if err != nil || !strings.Contains(string(settings), "Read(/"+filepath.Join(home, "code", "b")+"/**)") {
-		t.Errorf("profile settings: %s %v", settings, err)
+	if !strings.Contains(settings, "Read(/"+filepath.Join(home, "code", "b")+"/**)") || !strings.Contains(settings, `"allowUnsandboxedCommands":false`) {
+		t.Errorf("--settings = %s", settings)
+	}
+	if !strings.Contains(got.out, "Claude Code configuration "+filepath.Join(home, "claude", "a")) {
+		t.Errorf("output %q", got.out)
 	}
 	if info, err := os.Stat(got.layout.TmpDir("joba")); err != nil || info.Mode().Perm() != 0o700 {
 		t.Errorf("tmp dir: %v %v", info, err)
+	}
+
+	// jobb names neither: the session keeps the user's own logins, as
+	// inherited, and its rules deny joba's gh profile and Claude folder.
+	got = doLaunch(t, home, client, "jobb", "--", "claude")
+	if got.err != nil {
+		t.Fatal(got.err)
+	}
+	if v := envOf(got.env, "CLAUDE_CONFIG_DIR"); !slices.Equal(v, []string{"/parent/claude"}) {
+		t.Errorf("default CLAUDE_CONFIG_DIR = %v", v)
+	}
+	if v := envOf(got.env, "GH_CONFIG_DIR"); !slices.Equal(v, []string{"/parent/gh"}) {
+		t.Errorf("default GH_CONFIG_DIR = %v", v)
+	}
+	if v := envOf(got.env, "TMPDIR"); !slices.Equal(v, []string{got.layout.TmpDir("jobb")}) {
+		t.Errorf("jobb TMPDIR = %v", v)
+	}
+	settings = claudeSettings(got.argv)
+	for _, d := range []string{filepath.Join(home, "gh", "a"), filepath.Join(home, "claude", "a")} {
+		if !strings.Contains(settings, "Read(/"+d+"/**)") {
+			t.Errorf("jobb's --settings do not deny %s: %s", d, settings)
+		}
+	}
+	if !strings.Contains(got.out, "your own Claude Code configuration") {
+		t.Errorf("output %q", got.out)
+	}
+
+	// With nothing inherited, nothing is set.
+	got = doLaunchEnv(t, home, got.layout, []string{"PATH=/usr/bin"}, client, "jobb", "--", "claude")
+	if got.err != nil || len(envOf(got.env, "CLAUDE_CONFIG_DIR")) != 0 || len(envOf(got.env, "GH_CONFIG_DIR")) != 0 {
+		t.Errorf("unnamed logins set: %v %q", got.err, got.env)
+	}
+}
+
+// TestRunDropsOtherSpaceLogin (D-59): an inherited CLAUDE_CONFIG_DIR or
+// GH_CONFIG_DIR naming another space's folder is not passed on to a space
+// that names none, so the session cannot run as that space's account.
+func TestRunDropsOtherSpaceLogin(t *testing.T) {
+	home, policy := runWorld(t)
+	environ := []string{"PATH=/usr/bin", "GH_CONFIG_DIR=" + filepath.Join(home, "GH", "a") + "/", "CLAUDE_CONFIG_DIR=" + filepath.Join(home, "claude", "a")}
+	got := doLaunchEnv(t, home, spacesettings.Layout{Dir: filepath.Join(home, "data", "spaces")}, environ,
+		&runClient{applied: policy, placement: unmatched(), sandbox: "on"}, "jobb", "--", "codex")
+	if got.err != nil {
+		t.Fatal(got.err)
+	}
+	if len(envOf(got.env, "GH_CONFIG_DIR")) != 0 || len(envOf(got.env, "CLAUDE_CONFIG_DIR")) != 0 {
+		t.Errorf("another space's login passed on: %q", got.env)
+	}
+	if strings.Count(got.out, "names another space's folder") != 2 {
+		t.Errorf("output %q", got.out)
+	}
+}
+
+// TestRunDropsLoginOverrides: when the space names its own login folders,
+// inherited variables that would override them (GH_TOKEN and the like,
+// ANTHROPIC_API_KEY and the like) are not passed on; for a space naming
+// none they stay, as the user's own login.
+func TestRunDropsLoginOverrides(t *testing.T) {
+	home, policy := runWorld(t)
+	environ := []string{"PATH=/usr/bin", "GH_TOKEN=x", "GH_HOST=h", "ANTHROPIC_API_KEY=y", "CLAUDE_CODE_OAUTH_TOKEN=z"}
+	layout := spacesettings.Layout{Dir: filepath.Join(home, "data", "spaces")}
+	client := &runClient{applied: policy, placement: unmatched(), sandbox: "on"}
+	got := doLaunchEnv(t, home, layout, environ, client, "joba", "--", "claude")
+	if got.err != nil {
+		t.Fatal(got.err)
+	}
+	for _, k := range []string{"GH_TOKEN", "GH_HOST", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"} {
+		if len(envOf(got.env, k)) != 0 {
+			t.Errorf("%s passed on to a space with its own login", k)
+		}
+		if !strings.Contains(got.out, "not passing on "+k) {
+			t.Errorf("no note for %s: %q", k, got.out)
+		}
+	}
+	if strings.Contains(got.out, "=x") || strings.Contains(got.out, "=y") {
+		t.Errorf("a value was printed: %q", got.out)
+	}
+	got = doLaunchEnv(t, home, layout, environ, client, "jobb", "--", "claude")
+	if got.err != nil || len(envOf(got.env, "GH_TOKEN")) != 1 || len(envOf(got.env, "ANTHROPIC_API_KEY")) != 1 {
+		t.Errorf("default logins changed: %v %q", got.err, got.env)
+	}
+}
+
+// TestSamePath: an inherited folder matches another space's by case, by a
+// trailing slash, through a link and from a relative path.
+func TestSamePath(t *testing.T) {
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	real := filepath.Join(dir, "gh")
+	if err := os.MkdirAll(real, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	for _, v := range []string{real, strings.ToUpper(real) + "/", link, "gh", "./link"} {
+		if !samePath(real, v) {
+			t.Errorf("samePath(%q, %q) = false", real, v)
+		}
+	}
+	for _, v := range []string{"", filepath.Join(dir, "other"), "/"} {
+		if samePath(real, v) {
+			t.Errorf("samePath(%q, %q) = true", real, v)
+		}
+	}
+}
+
+// TestRunRefusesUserSettings: with the rules on, a --settings of the user's
+// own would replace the space's, so it is refused; with the sandbox layer
+// off it is passed on.
+func TestRunRefusesUserSettings(t *testing.T) {
+	home, policy := runWorld(t)
+	for _, arg := range [][]string{{"--settings", "x.json"}, {"--settings=x.json"}} {
+		got := doLaunch(t, home, &runClient{applied: policy, placement: unmatched(), sandbox: "on"}, append([]string{"joba", "--", "claude"}, arg...)...)
+		if got.err == nil || !strings.Contains(got.err.Error(), "--settings") || got.path != "" {
+			t.Errorf("%q: %v", arg, got.err)
+		}
+	}
+	got := doLaunch(t, home, &runClient{applied: policy, placement: unmatched(), sandbox: "off"}, "joba", "--", "claude", "--settings", "x.json")
+	if got.err != nil || !slices.Equal(got.argv, []string{"claude", "--settings", "x.json"}) {
+		t.Errorf("off: %v %q", got.err, got.argv)
 	}
 }
 
 // TestRunClaudeTmp (SP-046.1.a6): with the temp folders under a short root,
 // as DefaultLayout has them, the launched session's CLAUDE_CODE_TMPDIR is
-// one Claude Code uses, and its profile denies the shared folder sessions
+// one Claude Code uses, and its --settings deny the shared folder sessions
 // started without the launcher use. A folder too long for Claude Code is
 // reported and the shared folder is left alone.
 func TestRunClaudeTmp(t *testing.T) {
@@ -189,9 +335,8 @@ func TestRunClaudeTmp(t *testing.T) {
 	if info, err := os.Lstat(tmp); err != nil || info.Mode().Perm() != 0o700 {
 		t.Errorf("tmp dir: %v %v", info, err)
 	}
-	settings, err := os.ReadFile(filepath.Join(layout.ClaudeDir("joba"), "settings.json"))
-	if err != nil || !strings.Contains(string(settings), "Read(/"+spacesettings.SharedClaudeTmp()+"/**)") {
-		t.Errorf("profile settings do not deny the shared folder: %s %v", settings, err)
+	if settings := claudeSettings(got.argv); !strings.Contains(settings, "Read(/"+spacesettings.SharedClaudeTmp()+"/**)") {
+		t.Errorf("--settings do not deny the shared folder: %s", settings)
 	}
 	if strings.Contains(got.out, "too long") {
 		t.Errorf("warned: %s", got.out)
@@ -272,8 +417,8 @@ func TestRunCodex(t *testing.T) {
 	if !strings.Contains(got.argv[4], fmt.Sprintf("%q=\"deny\"", filepath.Join(home, "code", "b"))) {
 		t.Errorf("no deny of job b: %s", got.argv[4])
 	}
-	if len(envOf(got.env, "CLAUDE_CONFIG_DIR")) != 0 {
-		t.Errorf("codex got CLAUDE_CONFIG_DIR")
+	if v := envOf(got.env, "CLAUDE_CONFIG_DIR"); !slices.Equal(v, []string{"/parent/claude"}) {
+		t.Errorf("codex got the space's CLAUDE_CONFIG_DIR: %v", v)
 	}
 	if v := envOf(got.env, "TMPDIR"); !slices.Equal(v, []string{got.layout.TmpDir("joba")}) {
 		t.Errorf("TMPDIR = %v", v)
@@ -292,9 +437,8 @@ func TestRunSandboxOff(t *testing.T) {
 	if got.err != nil {
 		t.Fatal(got.err)
 	}
-	b, _ := os.ReadFile(filepath.Join(got.layout.ClaudeDir("joba"), "settings.json"))
-	if strings.Contains(string(b), "Read(") || len(envOf(got.env, "GH_CONFIG_DIR")) != 1 {
-		t.Errorf("off profile: %s", b)
+	if !slices.Equal(got.argv, []string{"claude"}) || len(envOf(got.env, "GH_CONFIG_DIR")) != 1 || len(envOf(got.env, "CLAUDE_CONFIG_DIR")) != 1 {
+		t.Errorf("off: %q %q", got.argv, got.env)
 	}
 	// orchd not answering about the switches applies the rules.
 	got = doLaunch(t, home, &runClient{applied: policy, placement: unmatched(), enfErr: errors.New("x")}, "joba", "--", "codex")

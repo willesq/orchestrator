@@ -44,6 +44,16 @@ func (r *Resolved) GHConfigDir(space string) string {
 	return r.ghDirs[space]
 }
 
+// ClaudeConfigDir returns the space's claude_config_dir, expanded; "" when
+// the space names none, so 'orch run' keeps the user's own Claude Code
+// configuration (D-59).
+func (r *Resolved) ClaudeConfigDir(space string) string {
+	if !r.Configured() {
+		return ""
+	}
+	return r.claudeDirs[space]
+}
+
 // RootHolds reports whether root, a bound root as BoundRoots returns it,
 // holds path or is path. Paths compare case-insensitively, as placement
 // does, since macOS volumes usually are.

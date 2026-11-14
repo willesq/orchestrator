@@ -9,83 +9,46 @@ import (
 	"testing"
 )
 
-// TestClaudeProfile: the profile's settings are the user's with the space's
-// rules merged in, rewritten at each launch; the user's instructions,
-// agents and the rest are linked, and a profile's own file is kept.
-func TestClaudeProfile(t *testing.T) {
+// TestClaudeLaunch (SP-046.2.a1, D-59): 'orch run' gives Claude Code the
+// launcher's rules as one compact --settings JSON, the space's environment,
+// and CLAUDE_CONFIG_DIR only when the space names its own folder; with the
+// sandbox layer off (an empty fragment) there is no --settings.
+func TestClaudeLaunch(t *testing.T) {
 	w := newWorld(t)
-	user := filepath.Join(w.home, "dot-claude")
-	writeFile(t, filepath.Join(user, "settings.json"), `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"/bin/orch-hook session-start"}]}]},"model":"opus"}`)
-	writeFile(t, filepath.Join(user, "CLAUDE.md"), "# mine")
-	if err := os.MkdirAll(filepath.Join(user, "skills"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	frag := ClaudeFragment(For(w.res, "joba", w.layout))
-	dir, err := WriteClaudeProfile(w.layout, "joba", user, frag)
+	a := For(w.res, "joba", w.layout)
+	args, env, err := ClaudeLaunch(a, LauncherFragment(a))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(args) != 2 || args[0] != "--settings" || strings.Contains(args[1], "\n") {
+		t.Fatalf("args = %q", args)
+	}
 	var got map[string]any
-	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(dir, "settings.json"))), &got); err != nil {
+	if err := json.Unmarshal([]byte(args[1]), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["model"] != "opus" || got["hooks"] == nil || at(got, "sandbox", "enabled") != true {
-		t.Errorf("profile settings = %v", got)
+	if at(got, "sandbox", "enabled") != true || at(got, "sandbox", "allowUnsandboxedCommands") != false {
+		t.Errorf("settings = %v", got)
 	}
-	if info, _ := os.Stat(filepath.Join(dir, "settings.json")); info.Mode().Perm() != 0o600 {
-		t.Errorf("settings mode %v", info.Mode())
+	if !strings.Contains(args[1], "Read(/"+filepath.Join(w.code, "b")+"/**)") {
+		t.Errorf("settings do not deny job b: %s", args[1])
 	}
-	if info, _ := os.Stat(w.layout.SpaceDir("joba")); info.Mode().Perm() != 0o700 {
-		t.Errorf("space dir mode %v", info.Mode())
+	if env[envClaudeConfigDir] != filepath.Join(w.home, "claude", "a") || env[envGHConfigDir] != filepath.Join(w.home, "gh", "a") || env[envTmpDir] != a.TmpDir {
+		t.Errorf("joba env = %v", env)
 	}
-	if l, err := os.Readlink(filepath.Join(dir, "CLAUDE.md")); err != nil || l != filepath.Join(user, "CLAUDE.md") {
-		t.Errorf("CLAUDE.md link %q %v", l, err)
+	b := For(w.res, "jobb", w.layout)
+	args, env, err = ClaudeLaunch(b, Fragment{})
+	if err != nil || args != nil {
+		t.Errorf("off: %q %v", args, err)
 	}
-	if _, err := os.Lstat(filepath.Join(dir, "agents")); !os.IsNotExist(err) {
-		t.Errorf("agents linked though the user has none: %v", err)
+	if _, ok := env[envClaudeConfigDir]; ok {
+		t.Errorf("jobb env names a Claude folder: %v", env)
 	}
-
-	// The user's settings change; the profile follows. A link the user's
-	// folder no longer backs is removed; the profile's own file stays.
-	writeFile(t, filepath.Join(user, "settings.json"), `{"model":"sonnet"}`)
-	if err := os.Remove(filepath.Join(user, "CLAUDE.md")); err != nil {
-		t.Fatal(err)
+	if _, ok := env[envGHConfigDir]; ok || env[envTmpDir] != b.TmpDir {
+		t.Errorf("jobb env = %v", env)
 	}
-	writeFile(t, filepath.Join(dir, "commands"), "profile's own")
-	writeFile(t, filepath.Join(user, "commands", "x.md"), "x")
-	if err := os.Remove(filepath.Join(dir, "skills")); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink("/elsewhere", filepath.Join(dir, "skills")); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := WriteClaudeProfile(w.layout, "joba", user, Fragment{}); err != nil {
-		t.Fatal(err)
-	}
-	if s := readFile(t, filepath.Join(dir, "settings.json")); !strings.Contains(s, "sonnet") || strings.Contains(s, "sandbox") {
-		t.Errorf("rewritten settings = %s", s)
-	}
-	if _, err := os.Lstat(filepath.Join(dir, "CLAUDE.md")); !os.IsNotExist(err) {
-		t.Errorf("stale link kept: %v", err)
-	}
-	if readFile(t, filepath.Join(dir, "commands")) != "profile's own" {
-		t.Error("profile's own file replaced")
-	}
-	if l, _ := os.Readlink(filepath.Join(dir, "skills")); l != filepath.Join(user, "skills") {
-		t.Errorf("skills link = %q", l)
-	}
-
-	// No user settings at all; then settings the profile cannot merge into.
-	empty := filepath.Join(w.home, "none")
-	if _, err := WriteClaudeProfile(w.layout, "jobb", empty, Fragment{}); err != nil {
-		t.Fatal(err)
-	}
-	if s := readFile(t, filepath.Join(w.layout.ClaudeDir("jobb"), "settings.json")); s != "{}\n" {
-		t.Errorf("empty profile settings = %q", s)
-	}
-	writeFile(t, filepath.Join(user, "settings.json"), `{"sandbox":1}`)
-	if _, err := WriteClaudeProfile(w.layout, "joba", user, frag); err == nil {
-		t.Error("unmergeable user settings accepted")
+	if _, _, err := ClaudeLaunch(b, Fragment{Scalars: map[string]any{"a": 1, "a.b": 2}}); err == nil {
+		t.Error("an unmergeable fragment was accepted")
 	}
 }
 
@@ -153,41 +116,4 @@ func TestCodexSandboxPerSpaceTmp(t *testing.T) {
 		t.Errorf("wrote into job B's TMPDIR: %v", err)
 	}
 	t.Logf("codex sandbox output:\n%s", s)
-}
-
-// TestClaudeProfileErrors: a space folder that is a file, a profile folder
-// that is a file, and user settings that cannot be read are errors.
-func TestClaudeProfileErrors(t *testing.T) {
-	w := newWorld(t)
-	user := filepath.Join(w.home, "dot-claude")
-	writeFile(t, w.layout.SpaceDir("joba"), "file")
-	if _, err := WriteClaudeProfile(w.layout, "joba", user, Fragment{}); err == nil {
-		t.Error("space folder is a file")
-	}
-	writeFile(t, w.layout.ClaudeDir("jobb"), "file")
-	if _, err := WriteClaudeProfile(w.layout, "jobb", user, Fragment{}); err == nil {
-		t.Error("profile folder is a file")
-	}
-	if err := os.MkdirAll(filepath.Join(user, "settings.json"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := WriteClaudeProfile(w.layout, "jobc", user, Fragment{}); err == nil {
-		t.Error("user settings a folder")
-	}
-	if err := replaceFile(filepath.Join(w.home, "absent", "x"), nil); err == nil {
-		t.Error("replace in a missing folder")
-	}
-	unreadable := filepath.Join(w.home, "locked")
-	if err := os.MkdirAll(unreadable, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(filepath.Join(unreadable, "x"), filepath.Join(unreadable, "loop")); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(filepath.Join(unreadable, "loop"), filepath.Join(unreadable, "x")); err != nil {
-		t.Fatal(err)
-	}
-	if err := linkShared(filepath.Join(unreadable, "x"), filepath.Join(w.home, "at")); err == nil {
-		t.Error("link to a looping target")
-	}
 }

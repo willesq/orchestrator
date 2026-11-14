@@ -13,7 +13,8 @@ import (
 
 // world is a temp home with a code folder holding one root per space:
 // code (public oss), code/me (private personal), code/a, code/b and code/c
-// (isolated jobs; joba reads personal and has a gh profile).
+// (isolated jobs; joba reads personal and names its own gh profile and
+// Claude Code folder, D-59; the others use the default logins).
 type world struct {
 	home, code string
 	res        *spaces.Resolved
@@ -39,7 +40,7 @@ func newWorld(t *testing.T) world {
 	p := spaces.Policy{Spaces: []spaces.Space{
 		{Name: "oss", Kind: spaces.Public, Roots: []string{"~/code"}},
 		{Name: "personal", Kind: spaces.Private, Roots: []string{"~/code/me"}},
-		{Name: "joba", Kind: spaces.Isolated, Roots: []string{"~/code/a"}, Reads: []string{"personal"}, GHConfigDir: "~/gh/a"},
+		{Name: "joba", Kind: spaces.Isolated, Roots: []string{"~/code/a"}, Reads: []string{"personal"}, GHConfigDir: "~/gh/a", ClaudeConfigDir: "~/claude/a"},
 		{Name: "jobb", Kind: spaces.Isolated, Roots: []string{"~/code/b"}},
 		{Name: "jobc", Kind: spaces.Isolated, Roots: []string{"~/code/c"}},
 	}}

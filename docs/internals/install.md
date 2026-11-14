@@ -261,8 +261,9 @@ file set a distinct `env` marker, and the run recorded which markers reached the
   single-slash form `Read(/<absolute path>/**)` did not block (presumably because it is resolved
   against the settings file).
 - A fresh `CLAUDE_CONFIG_DIR`, or a temporary `HOME`, starts logged out (`Not logged in · Please
-  run /login`). A per-space profile for `orch run` needs its own login. Whether that login then
-  persists per profile was not tested.
+  run /login`). A space that names its own `claude_config_dir` for `orch run` needs its own login
+  there (D-59; spaces that name none use your own). Whether that login then persists per folder
+  was not tested.
 - In auto permission mode, the auto-mode classifier can refuse a Bash call before the sandbox is
   reached. Tests of the sandbox itself must use `--permission-mode default`.
 
@@ -300,18 +301,18 @@ and its own temporary folder into the sessions that work for it, two ways. Code:
 
 **Rules for a space** (`spacesettings.For`). A session in space A is denied, for both reading and
 writing, every root of every other isolated space, every other space's folder under
-`<data dir>/spaces/` (which holds its `claude/` profile) and its temp folder, every other
-space's `gh_config_dir` (it can hold that account's token, and `GH_CONFIG_DIR` pointed at it acts
-as that account), and `<data dir>/spaces/.orch/`, orchd's record of the checkout files and their
+`<data dir>/spaces/` and its temp folder, every other space's `gh_config_dir` (it can hold that
+account's token, and `GH_CONFIG_DIR` pointed at it acts as that account) and `claude_config_dir`
+(its login and transcripts), and `<data dir>/spaces/.orch/`, orchd's record of the checkout files and their
 backups. Nothing of A, of a public space or of a private space is denied; memory filtering and the tool guard cover those, as
 in `block-other-jobs` (D-12). A folder reached through a link is denied by its link path and its
-real path. The space's environment is `GH_CONFIG_DIR` (its `gh_config_dir`, when it names one),
-`TMPDIR` and `CLAUDE_CODE_TMPDIR`, both the space's temp folder `/tmp/orch-<uid>/<space>`
+real path. The space's environment is `GH_CONFIG_DIR` (its `gh_config_dir`, only when it names
+one; otherwise the variable is not set and gh uses the default login, D-59), `TMPDIR` and `CLAUDE_CODE_TMPDIR`, both the space's temp folder `/tmp/orch-<uid>/<space>`
 (`/tmp/orch-<uid>/_<hash>` for a name too long; the root and the folder are created `0700`, and a
 root that is a link or another user's is refused: orchd then reports it and the space's checkout
 settings name no temp folder at all, rather than one another user controls). A checkout with no space (its root and its remote name different
 jobs, or it is quarantined) is denied every isolated root that does not hold it, every space's
-folder and gh profile and `.orch/`, and gets no environment.
+folder, gh profile and Claude Code folder and `.orch/`, and gets no environment.
 
 In Claude Code settings this is `sandbox.enabled: true`, `sandbox.allowUnsandboxedCommands: false`,
 each denied folder in `sandbox.filesystem.denyRead` and `denyWrite` and as `Read(//<path>/**)` and
@@ -329,9 +330,10 @@ Code starts with sets it: `CLAUDE_CODE_TMPDIR` or `TMPDIR` in a settings file's 
 neither the sandboxed `TMPDIR` nor the `CLAUDE_CODE_TMPDIR` the shell sees (other `env` entries,
 `GH_CONFIG_DIR` included, do reach the shell), and no `sandbox` setting names a temp folder. That
 is why the temp folders sit under `/tmp` rather than in orch's data directory, which is too long.
-So `orch run` gives a session its space's own sandboxed `TMPDIR`, and its profile also denies the
+So `orch run` gives a session its space's own sandboxed `TMPDIR`, and its rules also deny the
 shared `/tmp/claude-<uid>`; a session started in a checkout without `orch run` uses the shared
-folder, which every other such session can read, whatever its space (RC-206). Denying that folder
+folder, which every other such session can read, whatever its space. That is accepted as a
+documented limit until Claude Code honours a settings value for it (D-58, which resolved RC-206). Denying that folder
 in a checkout's settings would break every command that reads back a temp file (`mktemp` failed
 with `Operation not permitted`), so orch does not. Every space's settings still deny every other
 space's temp folder, so a file a launched session writes under its `TMPDIR` is unreadable from
@@ -404,32 +406,71 @@ and a folder another space holds or whose space cannot be decided unless `--forc
 root or remote places is allowed. It then replaces itself with the harness (`exec`), with the
 variables set for the harness only:
 
-- *Claude Code:* `CLAUDE_CONFIG_DIR=<data dir>/spaces/<space>/claude`. Its `settings.json` is your
-  own (`$CLAUDE_CONFIG_DIR` or `~/.claude`) with the space's rules merged in, rewritten at every
-  launch, so orch's hooks and your later changes carry over. `CLAUDE.md`, `agents`, `commands`,
-  `skills` and `plugins` are links to yours, unless the profile has its own file there.
+- *Claude Code:* the space's rules (the per-checkout settings without the `.claude` protections,
+  plus denies of the shared `/tmp/claude-<uid>`) as one compact JSON string in `--settings`,
+  before your arguments; no file holds them. Claude Code adds flag settings to your own
+  (`$CLAUDE_CONFIG_DIR` or `~/.claude`) and the project's, merging the lists, so your hooks,
+  instructions and login carry over. `CLAUDE_CONFIG_DIR` is set only when the space names its own
+  `claude_config_dir` (D-59); otherwise the session uses your own configuration and login.
+  Because Claude Code takes one `--settings`, the launcher refuses one of yours while the rules
+  apply.
 - *Codex:* `-c default_permissions="orch_<space>"` and `-c permissions.orch_<space>={extends=
   ":workspace",filesystem={"<path>"="deny",...}}` before your arguments, with your own
   `CODEX_HOME` and login. A checkout's `.codex/config.toml` cannot change it (SP-004). Codex has no
   per-checkout settings path, so the launcher is how a Codex session gets the denies.
+- *Environment:* `TMPDIR` and `CLAUDE_CODE_TMPDIR` are always the space's. `GH_CONFIG_DIR` and
+  (for Claude Code) `CLAUDE_CONFIG_DIR` are set only when the space names a `gh_config_dir` or
+  `claude_config_dir`, replacing inherited values, and then the inherited variables that would
+  override that login are dropped with a note naming each (never its value): gh's `GH_TOKEN`,
+  `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN` and `GH_HOST`, as orchd's own
+  gh calls drop them, and Claude Code's `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and
+  `CLAUDE_CODE_OAUTH_TOKEN`. Otherwise an inherited value is your own login and is passed on,
+  unless it names a folder another space names (compared case-insensitively, made absolute and
+  with links resolved), which is dropped with a note so the session cannot run as that space's
+  account.
 - With the `sandbox` layer off, the session gets no deny rules but keeps the environment, and the
   launcher says so. When orchd cannot report the switch, the rules apply.
 
-**Logging in to a per-space profile.** SP-004 measured that a fresh `CLAUDE_CONFIG_DIR` starts
-logged out (`Not logged in · Please run /login`), so each space's Claude Code profile needs its own
-login once: run `orch run <space> -- claude` and `/login` in it. Whether that login then persists
-per profile was not measured in SP-004. The gh profile is separate: log in to it with
-`GH_CONFIG_DIR=<gh_config_dir> gh auth login`; orch never handles either token.
+**Logins (D-59).** One login works by default: a space that names neither `gh_config_dir` nor
+`claude_config_dir` uses whichever gh login is already authenticated and your normal Claude Code
+configuration, in checkouts and with `orch run`, and needs no setup. The trade-off is that the
+GitHub account is then not a boundary between jobs; the guard, memory spaces and the folder
+denies still are. A space may name its own:
+
+- `gh_config_dir`: log in to it once with `GH_CONFIG_DIR=<gh_config_dir> gh auth login`.
+- `claude_config_dir` (a folder outside every git tree, not shared with another space): only
+  this needs a separate Claude login. SP-004 measured that a fresh `CLAUDE_CONFIG_DIR` starts
+  logged out (`Not logged in · Please run /login`), so log in once with
+  `orch run <space> -- claude` and `/login` in it, or `CLAUDE_CONFIG_DIR=<claude_config_dir>
+  claude`. Whether that login then persists per folder was not measured (RC-191). orch does not
+  write into the folder: its settings, hooks, instructions and plugins are whatever you put
+  there (copy or link them from `~/.claude`), and the space's rules still come from
+  `--settings`.
+
+orch never handles either token. Showing which login each space will use is SP-074.3.
 
 **Limits.**
 - Root paths of other jobs are written into every checkout's settings, so a session can read
-  which folders are denied (not what they hold). Name job roots neutrally.
+  which folders are denied (not what they hold). Name job roots neutrally. The launcher's
+  `--settings` JSON carries the same paths in the process arguments, which other local users
+  can see with `ps`.
+- Denying another space's `gh_config_dir` or `claude_config_dir` covers what is in the folder.
+  gh keeps its token in the macOS keychain by default (`gh auth login` without
+  `--insecure-storage`), and Claude Code keeps its login there too, outside the folder; whether a
+  sandboxed shell can reach another account's keychain item was not measured (RC-210). A
+  per-space login is only as separate as where its token is stored.
+- With the default logins (D-59), the sandbox turns orch's installed `Read(~/.config/gh/**)`
+  credential deny into a read deny on the default gh folder, so gh cannot start in a sandboxed
+  shell (measured 2026-11-14, RC-208).
 - Paths match by case in Claude Code's permission rules; macOS volumes are usually not case
   sensitive, so a tool given a differently cased path may pass the `Read` rule (the sandbox
   matches the real path).
 - The shared `/tmp` stays writable by every space (D-53); only `TMPDIR` is per space, and for
   Claude Code only in sessions started with `orch run` (sessions started in a checkout share
-  `/tmp/claude-<uid>`, RC-206).
+  `/tmp/claude-<uid>`, a documented limit under D-58).
+- With the default logins (D-59), every space's shell runs gh as the same account, and every
+  session started without a `claude_config_dir` shares one Claude Code configuration, its
+  transcripts under `~/.claude/projects` included.
 - `/tmp` is cleaned by the system; orch makes the temp folders again at each sync and launch.
 - Harness transcripts under `~/.claude/projects` and `~/.codex/sessions` are shared by sessions
   started without the launcher and are not denied.
@@ -449,7 +490,9 @@ per profile was not measured in SP-004. The gh profile is separate: log in to it
   test's `protect` probe checks it.
 - The deny rules are only as complete as the folders they name: orch's data folder outside
   `spaces/` (`orch.db`, the command log) and the default gh login (`~/.config/gh`) stay readable
-  to every space; self-protection (SP-042) covers orch's own files.
+  to every space; self-protection (SP-042) covers orch's own files. A space's
+  `claude_config_dir` is denied to other spaces' sessions, but the guard's self-protection does
+  not treat its files as credentials as it does a gh profile's.
 - Shell commands in a checkout cannot write its `.claude` folder, so a `git checkout` or `git pull`
   run by the session that changes tracked files under `.claude/` fails there; the file tools
   still edit them, and the user's own terminal is not sandboxed.

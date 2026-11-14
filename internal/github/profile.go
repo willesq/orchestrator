@@ -19,6 +19,11 @@ var profileOverrides = []string{
 	"GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST",
 }
 
+// ProfileOverrides returns the variables that would override a gh
+// profile's login or host, for callers that build a profile's environment
+// themselves ('orch run').
+func ProfileOverrides() []string { return slices.Clone(profileOverrides) }
+
 // ProfileEnv is the environment for running gh as the account logged in to
 // the gh profile directory dir: this process's environment, without anything
 // that would override the profile's login, and with GH_CONFIG_DIR set to dir.

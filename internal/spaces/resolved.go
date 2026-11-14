@@ -14,6 +14,8 @@ type Resolved struct {
 	roots []root
 	// ghDirs are each space's gh_config_dir, expanded, by space.
 	ghDirs map[string]string
+	// claudeDirs are each space's claude_config_dir, expanded, by space.
+	claudeDirs map[string]string
 }
 
 // Configured reports whether any space is defined. Without one, orch keeps

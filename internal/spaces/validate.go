@@ -37,6 +37,8 @@ const (
 	RuleTermsInGitTree        Rule = "terms_file_in_git_tree"
 	RuleGHProfileInGitTree    Rule = "gh_config_dir_in_git_tree"
 	RuleGHProfileShared       Rule = "gh_config_dir_shared"
+	RuleClaudeDirInGitTree    Rule = "claude_config_dir_in_git_tree"
+	RuleClaudeDirShared       Rule = "claude_config_dir_shared"
 	RulePublicRootSessions    Rule = "public_root_sessions"
 	RuleTooLarge              Rule = "too_large"
 	RuleUnparseable           Rule = "unparseable"
@@ -201,6 +203,8 @@ func Validate(p Policy, env Env) (*Resolved, error) {
 	var roots []root
 	ghDirs := map[string]string{}
 	ghDirOwner := map[string]string{}
+	claudeDirs := map[string]string{}
+	claudeDirOwner := map[string]string{}
 	for _, n := range names {
 		s := byName[n]
 		for _, org := range s.GitHubOrgs {
@@ -263,6 +267,24 @@ func Validate(p Policy, env Env) (*Resolved, error) {
 				ghDirs[n], ghDirOwner[key] = path, n
 			}
 		}
+		if s.ClaudeConfigDir != "" {
+			path := env.expand(s.ClaudeConfigDir)
+			key := strings.ToLower(path)
+			switch {
+			case path == "":
+				add(RuleBadBinding, n, "space %q has claude_config_dir %q, which is not an absolute path", n, s.ClaudeConfigDir)
+			case env.inGitTree(path):
+				// Reason: the folder holds the login and the session
+				// transcripts, which a repository would commit and push.
+				add(RuleClaudeDirInGitTree, n, "space %q has its claude_config_dir inside a git working tree", n)
+			case claudeDirOwner[key] != "":
+				// Reason: one folder is one login and one set of
+				// transcripts, which two spaces would then share.
+				add(RuleClaudeDirShared, n, "spaces %q and %q use the same claude_config_dir; give each its own", claudeDirOwner[key], n)
+			default:
+				claudeDirs[n], claudeDirOwner[key] = path, n
+			}
+		}
 	}
 	checkRoots(roots, add)
 
@@ -284,7 +306,7 @@ func Validate(p Policy, env Env) (*Resolved, error) {
 		}
 	}
 
-	res := &Resolved{Policy: p, spaces: byName, roots: roots, ghDirs: ghDirs}
+	res := &Resolved{Policy: p, spaces: byName, roots: roots, ghDirs: ghDirs, claudeDirs: claudeDirs}
 	res.PublicRootSessions = publicRootSessions(p.PublicRootSessions, byName, names, add)
 	if len(ps) > 0 {
 		return nil, ps
