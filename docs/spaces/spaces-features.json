@@ -4504,101 +4504,6 @@
       "pr": "https://github.com/willesq/orchestrator/pull/177"
     },
     {
-      "id": "SP-075",
-      "phase": "P3",
-      "priority": 34.5,
-      "title": "Configurable outbound rules",
-      "summary": "orch ships SP-044's outbound check as a baseline of named rules, each with a stable id (e.g. which commands count as outbound, how unreadable commands are treated, how gh destinations are chosen). The operator can switch any baseline rule on or off, add stricter rules of their own (extra commands or destinations to check, extra fail-closed patterns), and the whole terms layer stays switchable through SP-070. Rules are managed from the CLI ('orch spaces terms rules list|enable|disable|add|remove') and the app, stored in orch.db, and changed only by the operator, with every change logged.",
-      "why": "D-60: the user wants a looser default that each person can tighten or relax, without code changes, and wants it clear that the check can be turned off entirely.",
-      "depends_on": [
-        "SP-044",
-        "SP-070"
-      ],
-      "touches": [
-        "internal/spaces/terms.go",
-        "internal/spaces/terms_rules.go",
-        "internal/db/migrations/",
-        "internal/daemon/",
-        "internal/cli/",
-        "internal/rpc/orchdv1/orchd.proto",
-        "macos/Sources/"
-      ],
-      "docs_to_update": [
-        "docs/internals/hooks.md",
-        "docs/internals/config.md",
-        "docs/internals/cli.md",
-        "docs/internals/app.md",
-        "docs/OPERATIONS.md"
-      ],
-      "checkpoints": [
-        {
-          "id": "SP-075.1",
-          "title": "Rules model",
-          "acceptance": [
-            {
-              "id": "a1",
-              "type": "test",
-              "check": "Every baseline rule of SP-044's check has a stable id and default state; switching one off changes only that rule's verdicts (table test per rule, on and off).",
-              "measure": "test",
-              "threshold": "passes"
-            },
-            {
-              "id": "a2",
-              "type": "test",
-              "check": "A user-added rule can only make the check stricter (add commands, destinations or fail-closed patterns); a rule that would allow something the baseline refuses is rejected at save time.",
-              "measure": "test",
-              "threshold": "passes"
-            },
-            {
-              "id": "a3",
-              "type": "test",
-              "check": "Rules persist in orch.db, survive an orchd restart, reach the hook through orchd's guard snapshot, and replay (SP-047) judges with the rules recorded for the event's policy revision.",
-              "measure": "test",
-              "threshold": "passes"
-            }
-          ],
-          "evidence": []
-        },
-        {
-          "id": "SP-075.2",
-          "title": "Operator control",
-          "acceptance": [
-            {
-              "id": "a1",
-              "type": "test",
-              "check": "Enabling, disabling, adding or removing a rule is operator-only (callers descended from a harness or orchd are refused, INV-06) and each change is logged with time and caller; the CLI commands have tests.",
-              "measure": "test",
-              "threshold": "passes"
-            },
-            {
-              "id": "a2",
-              "type": "test",
-              "check": "The app lists baseline and user rules with their state, can switch and add them through the same operator-only RPCs, and shows that the whole terms layer can be turned off through SP-070.",
-              "measure": "test",
-              "threshold": "passes"
-            },
-            {
-              "id": "a3",
-              "type": "doc",
-              "check": "Docs state the baseline, how to relax or tighten it, how to switch the terms layer off entirely, and that rule text never appears in logs or refusals (INV-07).",
-              "measure": "documented",
-              "threshold": "true"
-            }
-          ],
-          "evidence": []
-        }
-      ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
-      "blocked_reason": null,
-      "attempts": 0,
-      "criteria_sha256": "f09b8ebcceabae3c53278bbf89426eec5db6e7a09c656b08af71fa359704171c",
-      "branch": null,
-      "pr": null
-    },
-    {
       "id": "SP-045",
       "phase": "P3",
       "priority": 35,
@@ -5393,6 +5298,101 @@
       "blocked_reason": null,
       "attempts": 0,
       "criteria_sha256": "d5adf4fa1d834d57546d631cb74c57828d452d27bed8e95c581c02ae5071274b",
+      "branch": null,
+      "pr": null
+    },
+    {
+      "id": "SP-075",
+      "phase": "P3",
+      "priority": 34.5,
+      "title": "Configurable outbound rules",
+      "summary": "orch ships SP-044's outbound check as a baseline of named rules, each with a stable id (e.g. which commands count as outbound, how unreadable commands are treated, how gh destinations are chosen). The operator can switch any baseline rule on or off, add stricter rules of their own (extra commands or destinations to check, extra fail-closed patterns), and the whole terms layer stays switchable through SP-070. Rules are managed from the CLI ('orch spaces terms rules list|enable|disable|add|remove') and the app, stored in orch.db, and changed only by the operator, with every change logged.",
+      "why": "D-60: the user wants a looser default that each person can tighten or relax, without code changes, and wants it clear that the check can be turned off entirely.",
+      "depends_on": [
+        "SP-044",
+        "SP-070"
+      ],
+      "touches": [
+        "internal/spaces/terms.go",
+        "internal/spaces/terms_rules.go",
+        "internal/db/migrations/",
+        "internal/daemon/",
+        "internal/cli/",
+        "internal/rpc/orchdv1/orchd.proto",
+        "macos/Sources/"
+      ],
+      "docs_to_update": [
+        "docs/internals/hooks.md",
+        "docs/internals/config.md",
+        "docs/internals/cli.md",
+        "docs/internals/app.md",
+        "docs/OPERATIONS.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-075.1",
+          "title": "Rules model",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Every baseline rule of SP-044's check has a stable id and default state; switching one off changes only that rule's verdicts (table test per rule, on and off).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "A user-added rule can only make the check stricter (add commands, destinations or fail-closed patterns); a rule that would allow something the baseline refuses is rejected at save time.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "Rules persist in orch.db, survive an orchd restart, reach the hook through orchd's guard snapshot, and replay (SP-047) judges with the rules recorded for the event's policy revision.",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
+        },
+        {
+          "id": "SP-075.2",
+          "title": "Operator control",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Enabling, disabling, adding or removing a rule is operator-only (callers descended from a harness or orchd are refused, INV-06) and each change is logged with time and caller; the CLI commands have tests.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "The app lists baseline and user rules with their state, can switch and add them through the same operator-only RPCs, and shows that the whole terms layer can be turned off through SP-070.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "doc",
+              "check": "Docs state the baseline, how to relax or tighten it, how to switch the terms layer off entirely, and that rule text never appears in logs or refusals (INV-07).",
+              "measure": "documented",
+              "threshold": "true"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "f09b8ebcceabae3c53278bbf89426eec5db6e7a09c656b08af71fa359704171c",
       "branch": null,
       "pr": null
     }
