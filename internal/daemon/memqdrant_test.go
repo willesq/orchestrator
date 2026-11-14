@@ -20,6 +20,7 @@ import (
 type memQdrant struct {
 	mu          sync.Mutex
 	collections map[string]map[string]map[string]any // collection -> id -> payload
+	vectors     map[string]map[string]any            // collection -> id -> vector
 }
 
 // unitEmbedder embeds every text as the same 2-dimensional vector.
@@ -39,7 +40,7 @@ func (unitEmbedder) Dimension(context.Context) (int, error) { return 2, nil }
 // p.
 func placedRAG(t *testing.T, p *writePlacer) (*rag.Service, *memQdrant) {
 	t.Helper()
-	q := &memQdrant{collections: map[string]map[string]map[string]any{}}
+	q := &memQdrant{collections: map[string]map[string]map[string]any{}, vectors: map[string]map[string]any{}}
 	srv := httptest.NewServer(http.HandlerFunc(q.serve))
 	t.Cleanup(srv.Close)
 	svc := rag.NewService(unitEmbedder{}, rag.NewQdrantStore(srv.URL, "c", ""), 200, 0)
@@ -131,6 +132,10 @@ func (q *memQdrant) serve(w http.ResponseWriter, r *http.Request) {
 		for _, raw := range pts {
 			p := raw.(map[string]any)
 			points[fmt.Sprint(p["id"])] = p["payload"].(map[string]any)
+			if q.vectors[name] == nil {
+				q.vectors[name] = map[string]any{}
+			}
+			q.vectors[name][fmt.Sprint(p["id"])] = p["vector"]
 		}
 		reply(map[string]any{"status": "completed"})
 	case action == "points" && r.Method == http.MethodPost:
@@ -152,9 +157,22 @@ func (q *memQdrant) serve(w http.ResponseWriter, r *http.Request) {
 	case action == "points/scroll":
 		var out []map[string]any
 		for _, id := range matching(points, body["filter"]) {
-			out = append(out, map[string]any{"id": id, "payload": points[id]})
+			pt := map[string]any{"id": id, "payload": points[id]}
+			if body["with_vector"] == true {
+				pt["vector"] = q.vectors[name][id]
+			}
+			out = append(out, pt)
 		}
 		reply(map[string]any{"points": out, "next_page_offset": nil})
+	case action == "points/payload":
+		ids, _ := body["points"].([]any)
+		add, _ := body["payload"].(map[string]any)
+		for _, id := range ids {
+			for k, v := range add {
+				points[fmt.Sprint(id)][k] = v
+			}
+		}
+		reply(map[string]any{"status": "completed"})
 	default:
 		http.Error(w, "unsupported "+r.Method+" "+r.URL.Path, http.StatusBadRequest)
 	}
@@ -164,6 +182,7 @@ func (q *memQdrant) serve(w http.ResponseWriter, r *http.Request) {
 func matching(points map[string]map[string]any, filter any) []string {
 	f, _ := filter.(map[string]any)
 	must, _ := f["must"].([]any)
+	mustNot, _ := f["must_not"].([]any)
 	var out []string
 	for id, p := range points {
 		ok := true
@@ -178,6 +197,12 @@ func matching(points map[string]map[string]any, filter any) []string {
 				if gte, has := rng["gte"].(float64); has && v < gte {
 					ok = false
 				}
+			}
+		}
+		for _, cond := range mustNot {
+			m := cond.(map[string]any)
+			if match, has := m["match"].(map[string]any); has && fmt.Sprint(p[m["key"].(string)]) == fmt.Sprint(match["value"]) {
+				ok = false
 			}
 		}
 		if ok {
