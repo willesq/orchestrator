@@ -30,6 +30,9 @@ type outboundWalker struct {
 	vars      map[string]string
 	uncertain int
 	noVars    bool
+	// pinned are names given an attribute that changes what they store
+	// (readonly, integer, case folding): unknown from then on.
+	pinned map[string]bool
 	// words are every static word of every command, decoded.
 	words []string
 	// staged is set once a command changed what is staged or committed;
@@ -214,6 +217,9 @@ func (w *outboundWalker) call(s *syntax.Stmt, c *syntax.CallExpr, dir string, pi
 	argv, dir = w.unwrap(argv, dir, env)
 	if len(argv) == 0 {
 		return dir
+	}
+	if declarers[strings.ToLower(filepath.Base(argv[0]))] {
+		w.pinArgs(argv[1:])
 	}
 	if !nameStatic || setsVars(strings.ToLower(filepath.Base(argv[0])), argv[1:]) {
 		// Reason: forgotten after the command, which still reads the

@@ -33,6 +33,9 @@ type Outbound struct {
 	// GHEnv holds the variables the command sets that change which repo
 	// gh picks (GH_HOST, GH_CONFIG_DIR), read before the hook's own.
 	GHEnv map[string]string
+	// GHUnmarked is set when gh may pick its first remote even though
+	// gh repo set-default marked another (gh api's {owner}/{repo}).
+	GHUnmarked bool
 	// NoRepo is set when the destination is no repo or org (a gist, a
 	// GraphQL call, the signed-in user): it holds no space.
 	NoRepo bool

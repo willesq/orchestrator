@@ -78,7 +78,9 @@ func (c OutboundChecker) pushed(ctx context.Context, a Outbound, diff []string) 
 			return nil, err
 		}
 	}
-	args := append([]string{"log", "-p", "--no-show-signature", "--format=%B"}, diff...)
+	// Reason: the author's and committer's names and emails are sent with
+	// each commit; --cc shows what a merge itself adds.
+	args := append([]string{"log", "-p", "--cc", "--no-show-signature", "--format=%an <%ae>%n%cn <%ce>%n%B"}, diff...)
 	if a.Pending {
 		// Reason: a branch or tag made earlier in the same call does not
 		// exist yet; its content is in what pending reads.
@@ -98,6 +100,9 @@ func (c OutboundChecker) pushed(ctx context.Context, a Outbound, diff []string) 
 	if err != nil {
 		return texts, err
 	}
+	if err := c.utf8Commits(ctx, a.Dir, args); err != nil {
+		return texts, err
+	}
 	for _, tag := range tags {
 		pattern := "refs/tags/" + tag
 		if tag == "*" {
@@ -106,13 +111,50 @@ func (c OutboundChecker) pushed(ctx context.Context, a Outbound, diff []string) 
 		if strings.HasPrefix(tag, "-") {
 			return texts, errors.New("a pushed tag looks like an option")
 		}
-		out, err := c.git(ctx, a.Dir, "for-each-ref", "--format=%(contents)", pattern)
+		out, err := c.git(ctx, a.Dir, "for-each-ref", "--format=%(taggername) %(taggeremail)%0a%(contents)", pattern)
 		texts = append(texts, string(out))
 		if err != nil {
 			return texts, err
 		}
 	}
 	return texts, nil
+}
+
+// utf8Commits fails when a commit the log args list declares an encoding
+// other than UTF-8: git re-encodes its message for the log, so a term in
+// it would not be read as written.
+func (c OutboundChecker) utf8Commits(ctx context.Context, dir string, logArgs []string) error {
+	args := []string{"log", "--format=%e"}
+	for _, a := range logArgs[1:] {
+		// Keep the refs and options that pick the commits, not the patch.
+		if a == "-p" || a == "--cc" || strings.HasPrefix(a, "--format=") || a == "--text" ||
+			strings.HasPrefix(a, "--unified") || a == "--no-ext-diff" || a == "--no-textconv" || a == "--no-color" {
+			continue
+		}
+		args = append(args, a)
+	}
+	out, err := c.git(ctx, dir, args...)
+	if err != nil {
+		return err
+	}
+	for _, e := range strings.Fields(string(out)) {
+		if l := strings.ToLower(e); l != "utf-8" && l != "utf8" {
+			return errors.New("a pushed commit declares another encoding")
+		}
+	}
+	return nil
+}
+
+// identity is who a commit made now would name as author and committer.
+// Reason: a commit that fails for want of one sends nothing, so an error
+// adds no text rather than failing closed.
+func (c OutboundChecker) identity(ctx context.Context, dir string) string {
+	var b strings.Builder
+	for _, v := range []string{"GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"} {
+		out, _ := c.git(ctx, dir, "var", v)
+		b.Write(out)
+	}
+	return b.String()
 }
 
 // gitScrubbed are variables RunGit drops from git's environment: they
@@ -124,8 +166,13 @@ var gitScrubbed = []string{"GIT_EXEC_PATH", "GIT_EXTERNAL_DIFF", "GIT_PAGER", "G
 // running anything the repository configures (fsmonitor, external diff
 // drivers, signature checks, pagers) and bounds its output and its wait.
 func RunGit(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	full := append([]string{"-C", dir, "-c", "core.fsmonitor=false", "-c", "diff.external=", "-c", "core.pager=cat",
-		"-c", "log.showSignature=false", "-c", "gpg.program=false", "-c", "core.sshCommand=false"}, args...)
+	// Reason: the repository's own config must not change what the check
+	// reads: replace refs, a hidden root commit, paths relative to a
+	// subdirectory, quoted non-ASCII paths and re-encoded messages.
+	full := append([]string{"--no-replace-objects", "-C", dir, "-c", "core.fsmonitor=false", "-c", "diff.external=",
+		"-c", "core.pager=cat", "-c", "log.showSignature=false", "-c", "gpg.program=false", "-c", "core.sshCommand=false",
+		"-c", "log.showRoot=true", "-c", "diff.relative=false", "-c", "core.quotePath=false",
+		"-c", "i18n.logOutputEncoding=UTF-8"}, args...)
 	cmd := osexec.CommandContext(ctx, "git", full...)
 	var env []string
 	for _, kv := range os.Environ() {

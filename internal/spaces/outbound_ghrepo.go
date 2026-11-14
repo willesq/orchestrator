@@ -69,7 +69,10 @@ type ghRemote struct{ name, url string }
 
 // ghDefaultURLs are the URLs of the repos a gh command run in dir without
 // a repo may write to; ok is false when they cannot be told.
-func (c OutboundChecker) ghDefaultURLs(ctx context.Context, dir string, cmdEnv map[string]string) (urls []string, ok bool) {
+//
+// unmarked is set for gh api's {owner}/{repo} placeholders, which gh may
+// fill from its first remote whatever the mark says: both then count.
+func (c OutboundChecker) ghDefaultURLs(ctx context.Context, dir string, cmdEnv map[string]string, unmarked bool) (urls []string, ok bool) {
 	if r := c.getenv("GH_REPO"); r != "" {
 		return []string{"https://github.com/" + r}, true
 	}
@@ -112,15 +115,23 @@ func (c OutboundChecker) ghDefaultURLs(ctx context.Context, dir string, cmdEnv m
 		return nil, false
 	}
 	for _, r := range remotes {
+		mark := ""
 		switch v := resolved[r.name]; {
 		case v == "base":
-			return []string{r.url}, true
+			mark = r.url
 		case v != "":
 			repo, ok := parseRepo(v)
 			if !ok {
 				return nil, false
 			}
-			return []string{"https://github.com/" + repo}, true
+			mark = "https://github.com/" + repo
+		}
+		if mark != "" && !unmarked {
+			return []string{mark}, true
+		}
+		if mark != "" {
+			urls = append(urls, mark)
+			break
 		}
 	}
 	for _, r := range remotes {

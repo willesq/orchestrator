@@ -235,7 +235,7 @@ func (c OutboundChecker) destinations(ctx context.Context, a Outbound) ([]string
 	case a.Dir == "":
 		return nil, false
 	case a.GHDefault:
-		urls, ok := c.ghDefaultURLs(ctx, a.Dir, a.GHEnv)
+		urls, ok := c.ghDefaultURLs(ctx, a.Dir, a.GHEnv, a.GHUnmarked)
 		if !ok {
 			return nil, false
 		}
@@ -345,7 +345,9 @@ func (c OutboundChecker) sent(ctx context.Context, a Outbound) ([]string, error)
 		}
 		texts = append(texts, string(b))
 	}
-	diff := []string{"--no-ext-diff", "--no-textconv", "--no-color", "--unified=0"}
+	// Reason: --text shows a binary file's bytes rather than "Binary files
+	// differ", which would hide a term in it.
+	diff := []string{"--no-ext-diff", "--no-textconv", "--no-color", "--unified=0", "--text"}
 	switch {
 	case a.Staged:
 		out, err := c.git(ctx, a.Dir, append([]string{"diff", "--cached"}, diff...)...)
@@ -353,6 +355,7 @@ func (c OutboundChecker) sent(ctx context.Context, a Outbound) ([]string, error)
 		if err != nil {
 			return texts, err
 		}
+		texts = append(texts, c.identity(ctx, a.Dir))
 		if a.All {
 			// Reason: tracked changes not staged yet; clean filters, which
 			// a repository can make run anything, are switched off.

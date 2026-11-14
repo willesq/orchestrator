@@ -444,9 +444,11 @@ through and the terms layer is on now; otherwise the row shows the guard's verdi
   `-i` and `-P`), `timeout`, `nice`, `sudo` and `rtk`, `bash -c`/`-lc`
   and a shell fed a literal here-document, and the commands inside `$(…)`, `<(…)` and
   redirections): `git commit`
-  (its message, `-F` and `-t` files and staged changes, or with `-a` the tracked changes too),
-  `git push` (the commits it sends, `git log -p <refs> --not --remotes=<remote>`, and the messages
-  of annotated tags it pushes, also with `push.followTags`; with no refspec, every branch when the
+  (its message, `-F` and `-t` files, staged changes and the author and committer git would
+  name, or with `-a` the tracked changes too),
+  `git push` (the commits it sends, `git log -p --cc --text <refs> --not --remotes=<remote>` with
+  each commit's author and committer, so binary files and what a merge itself adds are read, and
+  the messages and taggers of annotated tags it pushes, also with `push.followTags`; with no refspec, every branch when the
   remote's push refspec or `push.default=matching` says so, every ref for a mirror remote; to a
   URL, only remotes whose push URLs lie in the URL's own spaces are left out), `git tag` with a
   message, `git notes` with a file, every `gh`
@@ -469,7 +471,9 @@ through and the terms layer is on now; otherwise the row shows the guard's verdi
   counts remotes on hosts it knows, which the check cannot see (ssh aliases, Enterprise logins),
   so without a mark every remote before the first `github.com` one counts as well, and with
   `GH_HOST` naming another host, or `GH_CONFIG_DIR` set in the command, every remote does (the
-  command's own `GH_HOST` before the hook's). Every push URL of a git remote counts. A
+  command's own `GH_HOST` before the hook's). `gh api repos/{owner}/{repo}/…` (or `:owner/:repo`)
+  counts the marked repo and the first remotes too, since gh may fill the placeholders from its
+  first remote. Every push URL of a git remote counts. A
   term may reach a destination only when every possible destination is its own space. A remote's
   owner is placed by its binding; a gist, a GraphQL call, an owner bound to no space and a host
   that is not GitHub (`github.com`, a subdomain, or a dotless ssh alias naming github) hold none.
@@ -488,9 +492,11 @@ through and the terms layer is on now; otherwise the row shows the guard's verdi
   `GH_HOST` that cannot be read; a git alias the checkout defines, `git send-email`, `subtree`,
   `request-pull` or `push --recurse-submodules`; a gh alias or extension, or a gh write fed from a
   pipe or redirect; a fork, template, sync source, cloned labels or another owner's `--head`, an
-  issue transfer, a PR body filled from commits (`--fill`, `--fill-first`, `--fill-verbose`), a
+  issue transfer, a PR body filled from commits (`--fill`, `--fill-first`, `--fill-verbose`, `-f`
+  also in a bundle such as `-fB`), release notes from a local tag (`--notes-from-tag`), a
   `gh api` write to a `forks`, `transfer` or `generate` endpoint (each copies to a second
-  destination), and a URL whose host only ends in `github.com`; a
+  destination), a URL whose host only ends in `github.com`, a `gh api` URL on another host than
+  `api.github.com` and a `repos/` path it cannot read; a
   zsh glob qualifier or an `alias` that runs git; a file an earlier command of the call wrote
   (a redirection, `cp`, `sed -i`, `tee`, …) that the action sends, inside its checkout for a commit
   or push, or in git's config; a file that cannot be read or is stdin (other than a literal
@@ -503,7 +509,10 @@ through and the terms layer is on now; otherwise the row shows the guard's verdi
   A command that cannot be parsed is refused too. With the layer off, or no
   spaces or terms, nothing is checked.
 - **git runs safely.** The check's git runs with `core.fsmonitor=false`, no external diff,
-  textconv, pager or signature check, every configured clean/smudge/process filter switched off
+  textconv, pager or signature check, no replace refs, and `log.showRoot`, `diff.relative`,
+  `core.quotePath` and `i18n.logOutputEncoding` pinned so the repository's config cannot hide what
+  is sent; a pushed commit that declares an encoding other than UTF-8 fails closed. Every
+  configured clean/smudge/process filter is switched off
   for `commit -a`, variables that redirect what git runs removed, bounded output and a 1 s wait
   for stray children, so a repository's config cannot make the hook run a program.
 - **Refusal.** The PreToolUse deny names the rule (`outbound_term` or `outbound_unchecked`), the
@@ -532,7 +541,7 @@ loosened the first strict version with the four marked *loosens*:
 | `fail_closed_unreadable` | | An outbound command the check cannot read in full is refused as `outbound_unchecked`. |
 | `gh_default_repo` | yes | A gh write without `-R` goes to the repo gh would use (above), not to every remote of the checkout; before D-60 a fork whose upstream was another space's refused the session's own terms. |
 | `plain_variables` | yes | `$PWD` (the directory the walk is in; unknown after a `cd` it cannot follow), `$USER` (the hook's) and `$HOME`, also as `${NAME}`, are read as the shell expands them. |
-| `command_assignments` | yes | A variable given a literal value (or one built from known variables) earlier in the same command is read where that assignment always runs first: a top-level statement or the left side of `&&`/`\|\|`. It is unknown when assigned in a pipeline, subshell, `$(…)`, background job, the right side of `&&`/`\|\|` or a compound command; after `read`, `eval`, `source`, `unset`, `printf -v`, `declare`/`export` with other options than `-x`, `-r`, `-g`, a prefix assignment (`R=x cmd`), `${R:=…}`, arithmetic or a `for` loop over it; and for the rest of the command once it defines a function, `alias` or `trap`. A shell started with `bash -c` sees only exported values. |
+| `command_assignments` | yes | A variable given a literal value (or one built from known variables) earlier in the same command is read where that assignment always runs first: a top-level statement or the left side of `&&`/`\|\|`. It is unknown when assigned in a pipeline, subshell, `$(…)`, background job, the right side of `&&`/`\|\|` or a compound command; after `read`, `eval`, `source`, `unset`, `printf -v`, a prefix assignment (`R=x cmd`), `${R:=…}`, arithmetic or a `for` loop over it; and for the rest of the command once it defines a function, `alias` or `trap`, assigns `IFS` or makes a name reference (`declare -n`), and for a name once it is `readonly` or given another attribute than `-x` or `-g` (`declare -i`, `-l`, `-u`, `-r`, arrays, zsh's `integer` and `float`). A shell started with `bash -c` sees only exported values. |
 | `git_config_harmless_keys` | yes | `git -c` is read for keys that change neither where git sends, what it sends, nor what it runs: before D-60 `user.*`, `color.*`, `i18n.*`, `init.*`, `advice.*`, `log.*`, `commit.gpgsign`, `commit.verbose`, `core.quotepath`, `core.editor`, `gpg.format`, `tag.gpgsign`; D-60 added display and housekeeping keys (`core.commentChar`, `core.commentString`, `commit.cleanup`, `commit.status`, `core.abbrev`, `status.*`, `column.*`, `tag.sort`, `branch.sort`, `versionsort.*`, `gc.auto`, `gc.autoDetach`, `maintenance.auto`, `core.precomposeUnicode`, `core.longpaths`, `pull.rebase`, `pull.ff`, `rebase.autoStash`, `merge.conflictStyle`, `rerere.enabled`, `protocol.version`) and `push.autoSetupRemote` (it sets the upstream of a branch pushed to its default remote, which the check already reads). Keys that name a program (`core.pager`, `core.fsmonitor`, `core.hooksPath`, `credential.*`, `gpg.program`, `diff.external`), a destination or refs (`url.*`, `remote.*`, `push.default`, `push.followTags`) or a filter, and `help.autocorrect` (it can run another subcommand than the one written) still fail closed. Sections ending in `.*` match any key in them; the others match exactly. |
 | `pending_work_after_staging` | | After `git add`, `commit` or another command that changes what is staged or committed earlier in the call, a commit or push also sends the work tree, untracked files and, for a push, every branch. |
 

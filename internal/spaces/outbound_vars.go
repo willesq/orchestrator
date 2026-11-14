@@ -19,7 +19,11 @@ import (
 // follow; after one, no variable is known.
 var shellVarSetters = flagSet("read", "mapfile", "readarray", "getopts", "unset", "let", "eval", "source", ".",
 	"wait", "builtin", "coproc", "typeset", "export", "declare", "local", "readonly", "vared", "zparseopts",
-	"zstyle", "set", "shift")
+	"zstyle", "set", "shift", "integer", "float")
+
+// declarers are commands that give names attributes; run as plain
+// commands, every name they list stays unknown.
+var declarers = flagSet("typeset", "export", "declare", "local", "readonly", "integer", "float")
 
 // setsVars reports whether command name, given args, may set a shell
 // variable: a varSetters command, or printf -v and zsh's print -v.
@@ -78,12 +82,33 @@ func (w *outboundWalker) word(word *syntax.Word, dir string) (string, bool) {
 }
 
 // setVar records a shell variable's value, unknown where the assignment
-// may not run before a later use or may not last.
+// may not run before a later use or may not last, or once the name has an
+// attribute that changes what it stores.
 func (w *outboundWalker) setVar(name, v string) {
-	if w.uncertain > 0 {
+	if w.uncertain > 0 || w.pinned[name] {
 		v = unknownValue
 	}
 	w.vars[name] = v
+}
+
+// pin keeps name unknown for the rest of the command.
+func (w *outboundWalker) pin(name string) {
+	if w.pinned == nil {
+		w.pinned = map[string]bool{}
+	}
+	w.pinned[name] = true
+	w.vars[name] = unknownValue
+}
+
+// pinArgs pins the names a declaring command run as a plain command
+// (zsh's integer and float, or declare reached through command) names.
+func (w *outboundWalker) pinArgs(args []string) {
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "+") {
+			name, _, _ := strings.Cut(a, "=")
+			w.pin(name)
+		}
+	}
 }
 
 // forgetVars makes every variable unknown, the plain ones too, and the
@@ -170,11 +195,17 @@ func (w *outboundWalker) scanVars(node syntax.Node) {
 // integer, a name reference, an array, case folding) change the value,
 // which is then unknown. A plain export NAME exports the value it has.
 func (w *outboundWalker) decl(d *syntax.DeclClause, dir string) {
-	plain, exports := true, d.Variant != nil && d.Variant.Value == "export"
+	variant := ""
+	if d.Variant != nil {
+		variant = d.Variant.Value
+	}
+	// Reason: readonly makes later assignments fail, and -i, -l, -u, -r and
+	// arrays change what one stores, so such a name stays unknown.
+	plain, exports := variant != "readonly", variant == "export"
 	for _, a := range d.Args {
 		if a.Name == nil && a.Value != nil {
 			f, ok := staticWord(a.Value)
-			if !ok || strings.Trim(f, "-+xrg") != "" {
+			if !ok || strings.Trim(f, "-+xg") != "" {
 				plain = false
 			}
 			if !ok || strings.HasPrefix(f, "-") && strings.Contains(f, "n") {
@@ -201,12 +232,13 @@ func (w *outboundWalker) decl(d *syntax.DeclClause, dir string) {
 				w.env[name] = unknownValue
 			}
 			if !plain {
-				w.vars[name] = unknownValue
+				w.pin(name)
 			}
 			continue
 		}
 		v := w.assignValue(a, dir)
 		if !plain {
+			w.pin(name)
 			v = unknownValue
 		}
 		w.setVar(name, v)
