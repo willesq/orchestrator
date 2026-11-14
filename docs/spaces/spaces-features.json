@@ -2150,7 +2150,8 @@
           "SP-041",
           "SP-044"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "2026-11-14: resolved in PR #177 (merge commit c6bccb1, verified at 190d97191df42f39b8706ff883225a12e39e2b1d): one deny path (writeDeny), terms refusals recorded through RecordToolEvent as enforced refusals with rule outbound_term or outbound_unchecked, the hook's terms tests under SP-041's TestMain, the terms layer switch read from the guard snapshot (GuardSnapshot.Terms), and replay carrying recorded terms verdicts (GuardEnforcement.Terms)."
       },
       {
         "id": "RC-117",
@@ -5144,10 +5145,10 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "190d97191df42f39b8706ff883225a12e39e2b1d",
+      "verified_at": "2026-11-14T17:53:15Z",
       "blocked_reason": null,
       "attempts": 2,
       "criteria_sha256": "3025c7e6d0152b605a402bbbfebe2786f6649b26a8a33bd596e2d27c53437060",
@@ -6138,6 +6139,10 @@
     {
       "date": "2026-11-14",
       "change": "SP-044 resumed under D-60: merged main, RC-116 wiring, loosened baseline with rule ids, three security-review rounds (RC-220 to RC-228)."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "SP-044 verified and done (190d97191df42f39b8706ff883225a12e39e2b1d); RC-116 resolved."
     }
   ],
   "plan_location": {
