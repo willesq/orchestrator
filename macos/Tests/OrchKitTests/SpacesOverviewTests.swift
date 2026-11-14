@@ -422,11 +422,17 @@ private func everything(_ model: SpacesOverviewModel) -> String {
         let model = SpacesOverviewModel(api: api, defaults: freshDefaults(), home: home, interval: .milliseconds(20))
         model.start()
         model.start()
-        try await Task.sleep(for: .milliseconds(120))
+        // Waits for two reads rather than a fixed time, so a slow runner passes.
+        let deadline = ContinuousClock.now + .seconds(10)
+        while api.askedEnded.count < 2 && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(api.askedEnded.count >= 2)
         model.stop()
+        // A read already under way may finish; after that nothing more comes.
+        try await Task.sleep(for: .milliseconds(100))
         let reads = api.askedEnded.count
-        #expect(reads >= 2)
-        try await Task.sleep(for: .milliseconds(80))
+        try await Task.sleep(for: .milliseconds(100))
         #expect(api.askedEnded.count == reads)
     }
 
