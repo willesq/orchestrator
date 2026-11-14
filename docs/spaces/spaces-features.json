@@ -6703,7 +6703,8 @@
       },
       {
         "feature": "SP-024",
-        "rc_range": "RC-350..RC-399"
+        "rc_range": "RC-350..RC-399",
+        "note": "done and verified; PR #183 waits for the user; SP-025 and SP-027 start when it merges"
       },
       {
         "feature": "SP-030",
