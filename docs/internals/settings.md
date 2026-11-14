@@ -218,7 +218,8 @@ model).
 
 The per-space harness settings orchd keeps in each checkout's `.claude/settings.local.json`
 (spaces SP-046) are not settings items: they are not listed here, cannot be toggled one by one,
-and follow the applied spaces policy and the `sandbox` enforcement switch instead. The Claude Code
+and follow the applied spaces policy, the `sandbox` enforcement switch and the operator's
+[sandbox setting](daemon.md#sandbox-setting) (`orch spaces sandbox auto|on|off`, D-61) instead. The Claude Code
 provider reads only `~/.claude/settings.json`, so it never sees them. Their merge, ownership
 record, backups and git handling are in [install.md](install.md#per-space-harness-settings).
 

@@ -61,6 +61,7 @@ orch spaces log summary [--since 168h]   # per space: tool calls, directory move
 orch spaces log verify <session|task:ID>   # check a session's command log was not changed
 orch spaces enforce                   # every enforcement layer's switch
 orch spaces enforce guard off --for 15m   # switch a layer, optionally for a time (operator only)
+orch spaces sandbox [auto|on|off]     # show or set whether orch writes sandbox rules (operator only)
 orch sessions list [--all]   # sessions and their state: active, idle, ended (with --all), unpinned
 orch run <space> -- claude   # start Claude Code with the space's profile, from any folder
 orch run <space> -- codex    # the same for Codex
@@ -117,14 +118,25 @@ shows a banner while any layer is off, and checks a folder: every root holding i
 remote changes, and the space it lands in, as `orch spaces why` reports. See
 [internals/app.md](internals/app.md#spaces).
 
-**Per-space harness settings.** While a policy is applied and the `sandbox` layer is on, orchd
-keeps `.claude/settings.local.json` in every git checkout under a space's roots: the OS sandbox on,
-and other jobs' folders denied to shell commands and to Claude Code's file tools, plus its own
-`TMPDIR` and, when the space names a `gh_config_dir`, its `GH_CONFIG_DIR` (otherwise gh uses your
-default login). Claude Code's sandboxed commands get the space's `TMPDIR` only in sessions started
+**Per-space harness settings.** While a policy is applied and the sandbox setting writes rules
+for a checkout, orchd keeps `.claude/settings.local.json` in every git checkout under a space's
+roots: the OS sandbox on, and other jobs' folders denied to shell commands and to Claude Code's
+file tools, plus its own `TMPDIR` and, when the space names a `gh_config_dir`, its `GH_CONFIG_DIR`
+(otherwise gh uses your default login). gh works in the sandboxed shell: a space on your default
+login may read that login's folder inside the sandbox, a space naming its own profile reads only
+that profile, and gh may reach `github.com`; the guard still refuses anything that names gh's
+files. Claude Code's sandboxed commands get the space's `TMPDIR` only in sessions started
 with `orch run`; sessions started in a checkout share Claude Code's `/tmp/claude-<uid>` (D-58). Your own entries in that file stay; orch adds the file to the
 checkout's `.git/info/exclude` when nothing ignores it, and never writes a tracked one. A new clone
-gets its file within a minute. `orch spaces enforce sandbox off` takes orch's entries out again.
+gets its file within a minute.
+
+The sandbox setting is your lasting choice, `orch spaces sandbox auto|on|off` (from your own
+terminal; each change is logged with its time and caller). `auto`, the default, writes the rules
+only for sessions another isolated space's folders are denied to, so one job alone gets none; `on`
+writes them for every space while a policy is applied; `off` writes none (a space's own
+`GH_CONFIG_DIR` stays). `orch status` and Orch.app show it, but it does not make session digests
+warn. `orch spaces enforce sandbox off [--for 15m]` is the debugging switch: it takes everything
+out, and every digest says so while it is off.
 
 `orch run <space> -- claude|codex` gives a session the same rules from any folder (Codex has no
 per-checkout settings, so this is how Codex sessions get them). By default it uses your own
