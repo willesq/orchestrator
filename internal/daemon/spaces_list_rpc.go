@@ -54,7 +54,19 @@ func (s *server) ListSpaces(ctx context.Context, _ *orchdv1.ListSpacesRequest) (
 			GhConfigDir: sp.GHConfigDir,
 		})
 	}
+	// ListSpaces is operator-only, so the logins may name spaces and folders.
+	logins, err := s.spaceLogins(ctx)
+	if err != nil {
+		return out, nil
+	}
+	for _, l := range logins {
+		out.Logins = append(out.Logins, &orchdv1.SpaceLogin{Space: l.Space, Gh: loginPB(l.GH), Claude: loginPB(l.Claude)})
+	}
 	return out, nil
+}
+
+func loginPB(l loginState) *orchdv1.LoginState {
+	return &orchdv1.LoginState{Own: l.Own, Dir: l.Dir, State: l.State, Account: l.Account, Storage: l.Storage, Detail: l.Detail}
 }
 
 // ScanSpaces walks the folders the operator chose and reports what it finds

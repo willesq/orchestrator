@@ -1057,6 +1057,33 @@ message ListSpacesResponse {
   repeated SpaceInfo spaces = 2; // by name
   // Where sessions pinned under a public root write.
   string public_root_sessions = 3;
+  // Which gh login and Claude Code configuration each space uses and
+  // whether each is logged in (SP-074, D-59), by space name. Status
+  // metadata only: never a token.
+  repeated SpaceLogin logins = 4;
+}
+
+// SpaceLogin is one space's gh login and Claude Code configuration.
+message SpaceLogin {
+  string space = 1;
+  LoginState gh = 2;
+  LoginState claude = 3;
+}
+
+// LoginState is one login a space uses, from 'gh auth status' or
+// 'claude auth status'.
+message LoginState {
+  // own: the space names its own folder (gh_config_dir or
+  // claude_config_dir); false is the default login or configuration.
+  bool own = 1;
+  string dir = 2;     // that folder; "" for the default
+  string state = 3;   // logged in | not logged in | refused | unknown
+  // The gh account name, or Claude Code's sign-in method (e.g. claude.ai).
+  string account = 4;
+  // Where gh keeps the token: keyring | file | the variable it came from;
+  // "" for Claude Code.
+  string storage = 5;
+  string detail = 6;  // why, for any state but logged in
 }
 
 message ScanSpacesRequest {

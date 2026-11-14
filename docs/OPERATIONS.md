@@ -92,7 +92,9 @@ another job's org, or when the default login can see the org of a job that has i
 Each such account has an hourly GitHub API budget (`github.isolated_account_hourly_budget`);
 past it, its docs sync and PR watching wait for the next hour. Likewise `orch run <space> --
 claude` uses your normal Claude Code configuration unless the space names a `claude_config_dir`,
-which needs its own `/login` once.
+which needs its own `/login` once. `orch status` (spaces section) and Orch.app's Settings →
+Spaces show, for each space, which gh login and Claude Code configuration it uses and whether each
+is logged in, including where gh keeps the token (keychain or file).
 
 `orch spaces why` shows how the applied policy places a target: every bound root holding it from
 shallowest to deepest, what its GitHub remote contributes, the rule that decided and the result.

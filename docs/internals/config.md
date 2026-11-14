@@ -325,6 +325,19 @@ token without `read:org` lists only public memberships.
 
 Every other caller sees only how many problems there are.
 
+**Which login each space uses** (SP-074.3, `server.spaceLogins`, `logins.go`). For every space of
+the applied policy, orchd reports its gh login (the default or its `gh_config_dir`) and its Claude
+Code configuration (the user's own or its `claude_config_dir`), each with a state: logged in, not
+logged in, refused (a profile directory `CheckProfileDir` refuses; gh is not run) or unknown (the
+check could not run). For gh it adds the account and where the token is stored (`tokenSource`
+from `gh auth status --json hosts`: keyring, file, or a variable name). For Claude Code it runs
+`claude auth status --json` with `CLAUDE_CONFIG_DIR` set only for a space's own folder, and
+without `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` or `CLAUDE_CODE_OAUTH_TOKEN`, so an
+environment credential cannot answer for the folder. It decodes only `loggedIn` and `authMethod`,
+so the email and organization it prints are never kept. Answers are cached like the gh profile
+checks (5 minutes, 1 after a failure). They reach the operator only, through `ListSpaces`'s
+`logins`, which `orch status` and Orch.app show.
+
 **Claude Code folder per space** (SP-046, D-59; `Resolved.ClaudeConfigDir`). A space may name
 `claude_config_dir`, a Claude Code configuration folder. Only `orch run <space> -- claude` uses
 it, as the session's `CLAUDE_CONFIG_DIR`, so its sessions have that folder's own login and

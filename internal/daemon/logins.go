@@ -191,8 +191,15 @@ func (s *server) ghLogin(ctx context.Context, dir string) loginState {
 		key = defaultProfile
 	}
 	c := g.check(ctx, key)
-	if c.err != nil {
-		st.State, st.Detail = loginLoggedOut, github.Printable(c.err.Error(), 256)
+	switch {
+	case c.err != nil && c.login != "":
+		// Logged in, but its orgs could not be listed (offline, say).
+		st.State, st.Account, st.Storage = loginUnknown, c.login, c.storage
+		st.Detail = "logged in, but GitHub could not be asked for its orgs; checked again within a minute"
+		return st
+	case c.err != nil:
+		// Reason: a fixed hint rather than gh's own error text.
+		st.State, st.Detail = loginLoggedOut, "run: gh auth login"
 		if dir != "" {
 			st.Detail = fmt.Sprintf("run: GH_CONFIG_DIR=%s gh auth login", shellQuote(github.Printable(dir, 1024)))
 		}

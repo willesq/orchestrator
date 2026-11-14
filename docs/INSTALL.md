@@ -48,6 +48,8 @@ or its token. See [internals/config.md](internals/config.md#spaces-policy).
 
 A space can also name its own `claude_config_dir`, a Claude Code folder with its own login, used
 by `orch run <space> -- claude` ([internals/install.md](internals/install.md#per-space-harness-settings)).
+`orch status` and Orch.app's Settings → Spaces show which login each space uses and whether it is
+logged in; orch reads only `gh auth status` and `claude auth status`.
 
 Each isolated space's own account may make at most `github.isolated_account_hourly_budget` GitHub
 API calls an hour (1000 by default; 0 is no cap). Past it, that account's docs sync and PR

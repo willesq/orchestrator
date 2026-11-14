@@ -35,6 +35,7 @@ struct SpacesSettingsView: View {
                 Text("Only you can switch a layer, here or with `orch spaces enforce`. Every change is logged with its time, and while a layer is off every session's start digest says so. A timed switch reverts by itself.")
                     .textStyle(.caption)
             }
+            SpaceLoginsSection(model: enforcement.logins)
             Section {
                 PlacementCheck(validator: validator)
             } header: {
@@ -47,6 +48,62 @@ struct SpacesSettingsView: View {
         .formStyle(.grouped)
         .enforcementConfirmation(enforcement)
         .task { await enforcement.load() }
+        .task { await enforcement.logins.load() }
+    }
+}
+
+/// Which gh login and Claude Code configuration each space uses, and whether
+/// each is logged in (SP-074, D-59). Shown only when spaces are applied.
+struct SpaceLoginsSection: View {
+    let model: SpaceLoginsModel
+
+    var body: some View {
+        if let logins = model.logins, !logins.isEmpty {
+            Section {
+                ForEach(logins) { login in
+                    SpaceLoginRow(login: login)
+                }
+            } header: {
+                Text("Logins")
+            } footer: {
+                Text("A space uses your default gh login and Claude Code configuration unless it names its own `gh_config_dir` or `claude_config_dir`. With one login, the GitHub account is not a boundary between jobs.")
+                    .textStyle(.caption)
+            }
+        } else if let error = model.lastError {
+            Section("Logins") {
+                Label { Text(verbatim: error) } icon: { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange) }
+                    .textStyle(.supporting)
+            }
+        }
+    }
+}
+
+/// One space: its gh and Claude Code logins, with what to fix.
+struct SpaceLoginRow: View {
+    let login: SpaceLogin
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Image(systemName: login.needsAttention ? "exclamationmark.triangle.fill" : "checkmark.circle")
+                    .foregroundStyle(login.needsAttention ? .orange : .secondary)
+                Text(verbatim: displaySafe(login.space)).fontWeight(.medium)
+            }
+            line("gh", login.gh.summary(defaultName: "Default login", ownName: "Own profile"), login.gh)
+            line("Claude", login.claude.summary(defaultName: "Default configuration", ownName: "Own configuration"), login.claude)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func line(_ tool: String, _ text: String, _ state: LoginState) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(verbatim: "\(tool): \(text)").textStyle(.supporting)
+            if !state.dir.isEmpty || !state.detail.isEmpty {
+                Text(verbatim: displaySafe([state.dir, state.detail].filter { !$0.isEmpty }.joined(separator: " · ")))
+                    .textStyle(.caption)
+                    .textSelection(.enabled)
+            }
+        }
     }
 }
 

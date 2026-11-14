@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
 // fakeClaude answers 'claude auth status --json' per CLAUDE_CONFIG_DIR.
@@ -158,6 +160,16 @@ func TestSpaceLoginsDetection(t *testing.T) {
 			}
 		}
 
+		// Logged in but its orgs unreadable: unknown, not logged out.
+		s.ghProfiles.checked[acmeProfile] = profileCheck{login: "work-acme", storage: "file", err: errors.New("gh api: HTTP 502"), at: time.Now()}
+		if st := s.ghLogin(ctx, acmeProfile); st.State != loginUnknown || st.Account != "work-acme" || strings.Contains(st.Detail, "502") {
+			t.Errorf("orgs unreadable = %+v", st)
+		}
+		s.ghProfiles.checked[defaultProfile] = profileCheck{err: errors.New("gh: secret-ish stderr"), at: time.Now()}
+		if st := s.ghLogin(ctx, ""); st.State != loginLoggedOut || st.Detail != "run: gh auth login" {
+			t.Errorf("default logged out = %+v", st)
+		}
+
 		// A refused profile directory is reported as such, and gh never
 		// runs with it.
 		s.ghProfiles.checkDir = func(dir string) error {
@@ -255,4 +267,36 @@ func agentrunFindsNone() bool {
 		}
 	}
 	return true
+}
+
+// TestListSpacesCarriesLogins is SP-074.3.a3 at the RPC: ListSpaces, which
+// only the operator may call, carries each space's logins as status metadata.
+func TestListSpacesCarriesLogins(t *testing.T) {
+	f := newProfileGH(t)
+	f.login(t, "default", "default-me")
+	f.login(t, "acme", "work-acme", "acme")
+	fc := &fakeClaude{answers: map[string]string{"": claudeIn}}
+	s := loginsServer(t, `{"spaces":[
+ {"name":"acme","kind":"isolated","github_orgs":["acme"],"gh_config_dir":"/profiles/acme"},
+ {"name":"globex","kind":"isolated","github_orgs":["globex"]}]}`, fc)
+	r, err := s.ListSpaces(operatorCtx, &orchdv1.ListSpacesRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]*orchdv1.SpaceLogin{}
+	for _, l := range r.GetLogins() {
+		got[l.GetSpace()] = l
+	}
+	if a := got["acme"].GetGh(); !a.GetOwn() || a.GetDir() != acmeProfile || a.GetAccount() != "work-acme" || a.GetStorage() != "keyring" || a.GetState() != loginLoggedIn {
+		t.Errorf("acme gh = %v", a)
+	}
+	if g := got["globex"]; g.GetGh().GetOwn() || g.GetGh().GetAccount() != "default-me" || g.GetClaude().GetAccount() != "claude.ai" {
+		t.Errorf("globex = %v", g)
+	}
+	if strings.Contains(r.String(), "someone@example.com") {
+		t.Error("the reply carries the Claude account's email")
+	}
+	if _, err := s.ListSpaces(callerCtx(callerAuth{pid: 7, harness: "claude"}), &orchdv1.ListSpacesRequest{}); err == nil {
+		t.Error("an agent session listed the spaces' logins")
+	}
 }

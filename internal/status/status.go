@@ -129,6 +129,9 @@ type Deps struct {
 	InstructionLoad func() []Line
 	// DirSize sums a directory's bytes.
 	DirSize func(path string) int64
+	// SpaceLogins fetches each space's gh login and Claude Code
+	// configuration from orchd (operator only); nil leaves them out.
+	SpaceLogins func(ctx context.Context) ([]*orchdv1.SpaceLogin, error)
 }
 
 // Collect assembles the report in a fixed section order.
@@ -146,6 +149,9 @@ func Collect(ctx context.Context, d Deps) Report {
 		preconditionSection(d),
 	}
 	if sec, ok := spacesSection(resp, orchdErr); ok {
+		if resp.GetSpaces().GetConfigured() {
+			sec.Lines = append(sec.Lines, loginLines(ctx, d.SpaceLogins)...)
+		}
 		// After subsystems: what orchd enforces sits beside what it runs.
 		r.Sections = slices.Insert(r.Sections, 2, sec)
 	}
