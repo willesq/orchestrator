@@ -6712,21 +6712,27 @@
       },
       {
         "feature": "SP-048",
-        "rc_range": "RC-450..RC-499"
+        "rc_range": "RC-450..RC-499",
+        "note": "done and verified; PR #179 waits for the user"
       },
       {
         "feature": "SP-051",
-        "rc_range": "RC-500..RC-549"
+        "rc_range": "RC-500..RC-549",
+        "note": "waiting on the user's a1 snapshot review; PR #181"
       },
       {
         "feature": "SP-045",
         "rc_range": "RC-550..RC-599",
         "note": "started 2026-11-14 when SP-030 stopped on RC-400; keeps its CLI code in new files away from SP-074's"
+      },
+      {
+        "feature": "SP-075",
+        "rc_range": "RC-600..RC-649",
+        "note": "started 2026-11-14; changes orchd.proto only after PR #182 (SP-074) merges and it rebases; holds the migration slot"
       }
     ],
-    "next_rc_block": "RC-600",
+    "next_rc_block": "RC-650",
     "queued": [
-      "SP-075 after SP-074 (changes orchd.proto and adds a migration)",
       "SP-025 and SP-027 after SP-024",
       "SP-052 and SP-054 after SP-051"
     ],
@@ -6739,10 +6745,12 @@
     ],
     "next_d_id": "D-65",
     "proto_slot": {
-      "holder": "SP-074",
-      "granted": "2026-11-14",
-      "scope": "additive SpaceLogin logins field on ListSpacesResponse (SP-074.3.a3)",
+      "holder": "SP-074 (done editing, eff7585; slot released when PR #182 merges)",
       "next": "SP-075"
+    },
+    "migration_slot": {
+      "holder": "SP-075",
+      "granted": "2026-11-14"
     }
   }
 }
