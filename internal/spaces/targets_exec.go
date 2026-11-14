@@ -98,6 +98,11 @@ func (e *extractor) runScript(w word, at where, st *shellState, depth int, same 
 // compiled program is not a script. A script in another language is
 // searched for the paths written in it.
 func (e *extractor) scriptFile(p string, st *shellState, depth int) {
+	if e.scriptReads >= maxScriptReads {
+		e.opaque("too many scripts to read")
+		return
+	}
+	e.scriptReads++
 	data, err := readSmall(e.res.resolve(p).path, maxScript+1)
 	if err != nil {
 		e.opaque("script could not be read")
