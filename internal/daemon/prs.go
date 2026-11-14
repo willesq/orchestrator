@@ -15,7 +15,7 @@ import (
 
 // ListPRs serves the PR babysitter's cache. It reads the file the babysitter
 // writes and never calls gh, so it is cheap enough to poll.
-func (s *server) ListPRs(_ context.Context, req *orchdv1.ListPRsRequest) (*orchdv1.ListPRsResponse, error) {
+func (s *server) ListPRs(ctx context.Context, req *orchdv1.ListPRsRequest) (*orchdv1.ListPRsResponse, error) {
 	state, err := prs.ReadState(s.prStateFile)
 	if err != nil {
 		// Unavailable, not an empty list: the app keeps its last good list
@@ -30,7 +30,11 @@ func (s *server) ListPRs(_ context.Context, req *orchdv1.ListPRsRequest) (*orchd
 	if fi, err := os.Stat(s.prStateFile); err == nil {
 		out.UpdatedAt = fi.ModTime().Unix()
 	}
+	hidden := s.profileItemsHidden(ctx)
 	for _, pr := range list {
+		if hidden(pr.Repo) {
+			continue
+		}
 		out.Prs = append(out.Prs, &orchdv1.PullRequest{
 			Url:            pr.URL,
 			Title:          pr.Title,
@@ -46,9 +50,30 @@ func (s *server) ListPRs(_ context.Context, req *orchdv1.ListPRsRequest) (*orchd
 	return out, nil
 }
 
+// profileItemsHidden returns whether an item of repo (owner/name) is left
+// out for this caller: an agent does not see the items of an owner bound to
+// a space with its own gh profile, which only that job's account can read
+// (SP-074). The operator sees every item.
+func (s *server) profileItemsHidden(ctx context.Context) func(repo string) bool {
+	if _, op := operator(ctx); op || s.ghProfiles == nil {
+		return func(string) bool { return false }
+	}
+	seen := map[string]bool{}
+	return func(repo string) bool {
+		owner, _, _ := strings.Cut(repo, "/")
+		key := strings.ToLower(owner)
+		hide, ok := seen[key]
+		if !ok {
+			hide = s.ghProfiles.ownsProfile(owner)
+			seen[key] = hide
+		}
+		return hide
+	}
+}
+
 // ListGitHubItems serves the watcher's cache of PRs and issues, optionally for
 // one kind or owner. Like ListPRs it never calls gh.
-func (s *server) ListGitHubItems(_ context.Context, req *orchdv1.ListGitHubItemsRequest) (*orchdv1.ListGitHubItemsResponse, error) {
+func (s *server) ListGitHubItems(ctx context.Context, req *orchdv1.ListGitHubItemsRequest) (*orchdv1.ListGitHubItemsResponse, error) {
 	if k := req.GetKind(); k != "" && k != prs.KindPR && k != prs.KindIssue {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "kind must be %q or %q", prs.KindPR, prs.KindIssue)
 	}
@@ -60,7 +85,11 @@ func (s *server) ListGitHubItems(_ context.Context, req *orchdv1.ListGitHubItems
 	if fi, err := os.Stat(s.prStateFile); err == nil {
 		out.UpdatedAt = fi.ModTime().Unix()
 	}
+	hidden := s.profileItemsHidden(ctx)
 	for _, item := range prs.Ordered(state) {
+		if hidden(item.Repo) {
+			continue
+		}
 		kind := item.Kind
 		if kind == "" {
 			kind = prs.KindPR

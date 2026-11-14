@@ -556,6 +556,41 @@
         "id": "D-62",
         "decision": "Merge SP-046 (PR #171) now, as admin without review, with the security-audit gate (DOD-6) not met: RC-215 (high), RC-216 and RC-217 (medium) stay open, together with the decisions in RC-210 and RC-213. SP-046 stays 'blocked' on main until they are settled and the independent verifier passes. With no spaces policy applied nothing changes (INV-10). The coordinator's recommendations, not yet confirmed by the user: RC-215 guard refuses tool calls in checkouts whose settings re-open another space's folders; RC-216 one-time start digest note after a sandbox setting change; RC-217 'auto' also triggers when another space has its own login folder; RC-210 documented limit, solved in SP-074; RC-213 use allowMachLookup com.apple.trustd.agent instead of enableWeakerNetworkIsolation.",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-63",
+        "decision": "Features may be worked in parallel lanes, up to 5 at a time, each lane a separate session on one feature, following the swim lanes the coordinator proposed on 2026-11-14: first wave SP-074, SP-024, SP-030, SP-048, SP-051; SP-045 after SP-074's cli changes; SP-075 after SP-074. Each lane has its own RC-id range and its own progress file; only the coordinator assigns D-ids and schedules changes to orchd.proto and DB migrations. This amends session_procedure steps 2, 3, 5 and 12 and adds step 13.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-65",
+        "decision": "Local folders reach the public space only through an explicit list of path patterns per public space in the applied policy ('public_paths'), never by what is on disk: a .git a session can create no longer counts as a declaration. Three forms only: an exact folder ('~/code/x', the files directly in it), '*' matching one folder name, and '**' matching any depth ('~/code/x/**'); no '!' negation and no other gitignore rules. Patterns must sit inside a public root and are checked at apply; the deepest root still decides first, so a private or isolated root nested inside a '**' pattern keeps its own space. Until SP-076 builds the list, all local content under public roots is quarantined. This replaces the 'or declares that folder public' path of D-50 and the checkout-declaration part of D-64, and settles RC-401 and RC-405 (SP-030). The list is built by new feature SP-076.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-66",
+        "decision": "RC-601 (SP-075): each command log record stores the outbound rules revision it was judged under (a toollog column and a RecordToolEvent field), and a replay uses that revision instead of looking the rules up by time.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-67",
+        "decision": "RC-215 (SP-046): option (b). The tool guard (SP-041) refuses tool calls in a checkout whose own settings (a tracked .claude/settings.json or the user's entries in settings.local.json) re-open a folder orch's sandbox denies.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-68",
+        "decision": "RC-216 (SP-046): option (a). After any change to the sandbox setting, and after any restart while it is off, the next start digest of each session names the setting once.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-69",
+        "decision": "RC-217 (SP-046): option (a). Under 'auto', orch also writes sandbox rules when they would deny another space's own login folder (gh_config_dir or claude_config_dir), not only another isolated space's roots.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-70",
+        "decision": "Review results and merge order, 2026-11-14: the user approved the SP-051.1.a1 snapshots and the SP-072.1.a2 snapshots, and told the coordinator to merge the ready lane PRs (#178, #182, #183, #184, #179, #181) in the order it sees fit, before the remaining hands-on checks. The hands-on checks SP-072.1.a1 (switch each layer from the app, RC-160) and RC-451 (SP-048 refusal notifications) are done by the user after merging; SP-072 stays in_progress until a1 is confirmed.",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -2108,7 +2143,7 @@
           "SP-072"
         ],
         "status": "open",
-        "note": "2026-11-12: PR #169 merged before these checks (D-57). The user's first attempt showed 'unknown method GetEnforcement' because the running Homebrew orchd (started 2026-11-09) predates SP-070; the switch check needs an orchd built from main or a separate test orchd."
+        "note": "2026-11-14: a2 confirmed by the user (snapshots regenerated from main); a1 still to do after merging (D-70)."
       },
       {
         "id": "RC-161",
@@ -2604,7 +2639,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "resolved",
+        "resolution": "Settled by the user on 2026-11-14 as D-67; implemented by the SP-046 follow-up lane."
       },
       {
         "id": "RC-216",
@@ -2617,7 +2653,8 @@
           "SP-046",
           "SP-070"
         ],
-        "status": "open"
+        "status": "resolved",
+        "resolution": "Settled by the user on 2026-11-14 as D-68; implemented by the SP-046 follow-up lane."
       },
       {
         "id": "RC-217",
@@ -2629,7 +2666,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "resolved",
+        "resolution": "Settled by the user on 2026-11-14 as D-69; implemented by the SP-046 follow-up lane."
       },
       {
         "id": "RC-218",
@@ -2653,6 +2691,183 @@
         "affects": [
           "SP-046",
           "SP-042"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-350",
+        "kind": "follow-up",
+        "topic": "Read paths pass no spaces yet; what SP-025 must cover in the rag layer",
+        "detail": "SP-024 gives Search SearchOpts.Spaces, but orchd passes none, so every search still reads every collection (the base and each space's, Quarantine included), as before; Document, Copy, HasSource, ListSources and SourcesWrittenBy read every collection too. SP-025 must give each read path the caller's readable spaces. Notes for it: (1) 'shared' reads the base without the space filter, and the base still holds chunks SP-023 stored with other spaces and quarantine in their payload until SP-027 moves them, so a policy reader must never be given 'shared' (or the base must be filtered); (2) internal/daemon/handoff.go canonicalStored matches synced copies in any space and DeleteSource removes the path URI from every space: scope both to the writer's space; (3) Qdrant errors returned to clients carry collection names, which contain space names: return generic errors and keep detail in orchd's log; (4) the Ingest RPC ignores a Copy error (fail-open) for its sync-writer refusal, so a client in the same space can replace a synced doc when the store cannot be read (pre-existing; cross-space moves are refused in rag).",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-027"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-351",
+        "kind": "decision",
+        "topic": "Caches outside internal/rag that hold content are not keyed by space (INV-11)",
+        "detail": "SP-024 keys every cache in internal/rag by space or collection (the unchanged-write check, store objects and their layouts, the collection list). Elsewhere: orchd's PR detail cache (internal/daemon/reviews.go detailCache) holds PR titles and bodies keyed by URL only, served to whoever may call GetPRDetail; the docs sync's per-file hash cache (docs_files) decides whether a doc is written again and is keyed by URI (RC-124 covers its placement). Decide whether INV-11 requires keying these by space too, or whether SP-025's read enforcement (the caller's readable spaces) is the rule for them.",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-030"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-352",
+        "kind": "follow-up",
+        "topic": "Proposed: fetch keyword hits' vectors lazily for one collection too",
+        "detail": "SP-024.3 meets 1.3x because a search over several collections asks keyword requests for no vectors and fetches the dense vectors only of returned or tied keyword-only hits (same results). A search of one collection keeps the request it always made (INV-10). Measured on the SP-002 corpus, one collection with the lazy pattern is p95 8.3-8.4 ms against 18.0 ms today (default segments; 2.7-2.8 against 12.6 ms with 2 segments), so every search with no policy could be about twice as fast. Like for like, the collection-per-space layout still costs 2.0-2.4x one collection (D-24). Listed under 'Proposed new features' in PR #183.",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-024"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-353",
+        "kind": "decision",
+        "topic": "Collection names can read two ways when names contain \"__\"",
+        "detail": "Space collections are '<base>__<space>'. The policy's name pattern allows '_' (so 'a__b' is a valid space name) and rag.qdrant.collection and backup_collection are not checked for '__'; only a migration target containing '__' is refused. A backup drop therefore also deletes any collection named '<backup>__<lowercase name>' (another tool's, say), and a hand-set base containing '__' could read as another base's space (DropCollection refuses that case for the active and shadow base). Options: forbid '__' in space names (internal/spaces/validate.go) and in the two collection settings, or keep the list of a base's spaces in orch.db instead of parsing names.",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-020",
+          "SP-024"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-354",
+        "kind": "follow-up",
+        "topic": "Space collections: migration re-embeds, and per-collection overhead is unmeasured",
+        "detail": "MigrateHybrid copies space collections the way it copies the base, re-chunking and re-embedding them, though they are hybrid already; a raw copy of points with their vectors (which SP-071's retag needs anyway) would avoid the embedding cost. Each space collection has its own segments and HNSW index; memory and disk per collection with several spaces were not measured (SP-002 measured latency and relabel only). A space collection removed outside orchd stays in orchd's list until restart (reads treat it as empty).",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-024",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-355",
+        "kind": "user-action",
+        "topic": "After SP-024 merges, existing placed content stays in the base until relabelled",
+        "detail": "Chunks stored before SP-024 (including those SP-023 placed in a space) stay in the base collection; new writes go to space collections. Until SP-027's 'orch rag relabel' moves them, they are found only by searches that read every collection (today's default) or 'shared'. A docs file or source file that did not change is not written again (RC-124), so it is not moved by a sync either. Nothing to do while no policy is applied; with one applied, run the relabel once SP-027 lands.",
+        "source": "https://github.com/willesq/orchestrator/pull/183",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-025"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-300",
+        "kind": "follow-up",
+        "topic": "gh_config_dir checks: path race, ACLs and budget key (security audit, low)",
+        "detail": "SP-074 audit of PR #182: github.CheckProfileDir resolves symbolic links to check the directory, but gh is started with the unresolved gh_config_dir, so a link swapped between the check and the run is not caught; macOS ACLs are not checked; the hourly budget is keyed on the gh_config_dir string, so two spellings of one folder would get two budgets (validation only rejects equal expanded paths). Proposed: pass the resolved path as GH_CONFIG_DIR, reject folders with an extended ACL, key the budget on the resolved path.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074",
+          "SP-063"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-301",
+        "kind": "follow-up",
+        "topic": "GitHub budget counts gh calls, not API requests (security audit, low)",
+        "detail": "SP-074.2: a gh api --paginate call counts as one call however many pages it fetches, and counts live in orchd memory, so a restart starts a new hour. Proposed: count pages (or weight paginated calls) and keep the window across restarts if that matters.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-302",
+        "kind": "decision",
+        "topic": "Profile-only orgs: agents can still read the PR cache file and synced docs (security audit, low)",
+        "detail": "SP-074 lets an org that only a space's own gh profile reaches be watched. ListPRs, ListGitHubItems, ListGitHubScopes and ListGitHubRepos now leave such owners out for agents, but the PR cache file (pr_babysitter_state.json) stays readable by every process of the user, and ListDocs, GetDocument and GetDocsSync (task-callable) may return docs synced through a space's profile (SP-063 design). Options: (a) deny the cache file to other spaces` sandboxes and filter the docs RPCs per caller space (once records carry a space, SP-030/INV); (b) accept and document.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074",
+          "SP-063"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-303",
+        "kind": "follow-up",
+        "topic": "Claude config folder is not vetted before claude auth status runs (security audit, low)",
+        "detail": "SP-074.3.a2: orchd runs claude auth status with a space's claude_config_dir without a CheckProfileDir-style check (absolute, under home, owner-only). Only status is read; nothing is written. Proposed: apply the same directory check and report refused folders.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-550",
+        "kind": "follow-up",
+        "topic": "Agents can skip the git hooks with --no-verify",
+        "detail": "SP-045's hooks run for every commit and push in a repository, but git commit --no-verify and git push --no-verify skip them (git -c core.hooksPath=... is already refused by SP-044's check). Proposed: while a checkout has orch's hooks installed, the tool hook's outbound check refuses --no-verify (and -n for commit) on git commit, push and merge in agent sessions, so only the user's own terminal can skip them.",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-045",
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-551",
+        "kind": "decision",
+        "topic": "Low findings accepted in SP-045's git hooks",
+        "detail": "From the SP-045 security audit (2026-11-14), documented in docs/internals/install.md: (1) the hook finds the guard files from its own environment (ORCH_DATA_DIR, HOME), so git run with another home holding no snapshot and no orch.db reads as nothing configured and allows (INV-10); (2) on systems other than macOS and Linux the no-replace rename used to chain and restore hooks is check-then-rename, not atomic; on Linux filesystems without RENAME_NOREPLACE install fails with that error; (3) installing into a core.hooksPath tracked in the work tree (husky, .githooks) changes tracked files and writes the local orch path into them. Proposed if wanted: record the guard directory in the hook at install and refuse when it holds a snapshot the hook's own environment does not find. (4) Found by the verifier: git push -o <option> sends push options the pre-push hook cannot see, so they are not checked; and backups of an install and an uninstall in the same second share a directory (the user hook is still kept as .orch-prev or restored).",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-045"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-552",
+        "kind": "follow-up",
+        "topic": "SP-044's push check trusts no-space remotes' tracking refs for a push to a URL",
+        "detail": "Found by the SP-045 security re-audit (2026-11-14): the tool hook's check (OutboundChecker.excluded, a push to a URL) leaves out commits on the tracking refs of every remote whose push URLs lie in the same spaces as the URL; for a URL in no space (another server, a local path) that is every other no-space remote, so commits on a remote of no space are not read when pushed to another place of no space, and tracking refs record fetch URLs rather than push URLs. SP-045's pre-push hook does not do this (only remotes fetched from the destination's own spaces, or for no space its own URL), and it runs on the real push. Proposed: use the same rule in the tool hook's check.",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-553",
+        "kind": "user-action",
+        "topic": "Install the git hooks in the repositories you want covered",
+        "detail": "SP-045 installs nothing by itself and was never run against a real repository (local_safety). To cover a repository, run `orch guard git-hook --install` in it to preview, then `--install --apply`; for every repository at once, point git's global core.hooksPath at a directory and run `orch guard git-hook --install --apply --hooks-dir <dir>`. `--uninstall --apply` restores the hooks that were there. The hooks run the orch binary that installed them (or orch on PATH).",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-045"
         ],
         "status": "open"
       },
@@ -4607,7 +4822,13 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestProfileOnlyOrgIsWatchedThroughItsProfile (internal/daemon): org acme reachable only via its space profile is offered as a disabled scope, turned on via SetGitHubScope, its PR is found and enriched by the PR watcher and a review is posted, every gh run about acme with GH_CONFIG_DIR=/profiles/acme; TestServiceRoutesProfileOnlyOrgs (internal/github); TestProfileOwnedGitHubDataIsTheOperators (agents do not see profile-owned scopes, repos or PR items; enabling a refused profile's scope fails).",
+            "a2: TestProfileCallsItCannotReadAreRefused (internal/daemon): a 404 as the profile fails with github.ErrNoAccess, runs once and only as the profile; a 0755 profile dir and one outside $HOME are refused before any gh run and named for the operator with the fix; TestCheckProfileDir and TestMarkNoAccess (internal/github).",
+            "a3: TestRepoPickerAndPROutcomesUseTheSpacesProfile (internal/daemon): ListGitHubRepos and the PR-outcome sweep (newAttributor) read acme as its profile, the outcome is good, and the default login is never asked; TestAttributorCountsPRsAsTheirSpacesAccount (internal/evidence).",
+            "go test ./... and go vet ./... pass; make cover: All files >= 80% (ghprofiles.go 97.6%, ghprofiles_routes.go 94.3%, github/accounts.go 91.9%, evidence.go 93.2%); security-audit: one high and two mediums fixed and re-audited clean, lows recorded as RC-300..RC-303.",
+            "Independent verifier (step 8): every acceptance item and DOD-1..DOD-9 pass at 4da29c1 (round 2 after the CI app job flaked on fixed-sleep polling tests, fixed in 4da29c1); CI app, build and test green."
+          ]
         },
         {
           "id": "SP-074.2",
@@ -4621,7 +4842,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestIsolatedAccountBudget (internal/daemon): with github.isolated_account_hourly_budget=3 an isolated profile's docs sync and PR-watch calls return github.ErrQuota after 3 calls (logged once, naming no space), PR-outcome reads wait too, reviews run up to 2x, a private space's profile and the default login are unaffected, and the budget renews after the hour; TestGHBudgetWindow; TestPRWatchDefersASpentAccount and TestDeferredAccountKeepsItsItems (internal/prs): a spent account is not searched and its items stay cached while others refresh.",
+            "Config key github.isolated_account_hourly_budget (default 1000, 0 = no cap) in internal/config/schema.go; make cover passes.",
+            "Independent verifier (step 8): every acceptance item and DOD-1..DOD-9 pass at 4da29c1 (round 2 after the CI app job flaked on fixed-sleep polling tests, fixed in 4da29c1); CI app, build and test green."
+          ]
         },
         {
           "id": "SP-074.3",
@@ -4656,18 +4881,25 @@
               "threshold": "true"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestOneLoginForEverySpace (internal/daemon): with no space naming a gh profile, docs sync, PR watching, reviews, the guard's repo lookups and generated checkout settings (spacesettings.For/ClaudeFragment/LauncherFragment) all run with no GH_CONFIG_DIR and status reports no problem; a space naming gh_config_dir uses it for its orgs; also TestGHProfilesIsolatedSpaceWithoutLoginIsNotSynced (amended for D-59).",
+            "a2: TestSpaceLoginsDetection, TestClaudeLoginCache, TestRunClaudeAuth (internal/daemon): per space, which gh login and Claude config (default or own) and whether each is logged in, in one-login and two-login layouts, from gh auth status --json hosts and claude auth status --json only (no token asked for; email and org not kept; credential env vars stripped).",
+            "a3: TestSpaceLoginLines (internal/status): orch status spaces section shows one line per space with gh and Claude login source (default or own) and state, for one-login and two-login layouts, nothing for a refused caller; TestListSpacesCarriesLogins (internal/daemon): ListSpaces (operator-only) carries logins as metadata, no email, refused to an agent; SpaceLoginsTests oneLogin/twoLogins/refusalAndOlderSources (macos OrchKitTests) for the app Settings > Spaces section (SpacesSection.swift). orchd.proto gained ListSpacesResponse.logins = 4 (SpaceLogin, LoginState) under the coordinator go-ahead (D-63 step 13); make proto regenerated Go and Swift.",
+            "a4: docs/INSTALL.md (GitHub accounts per space) and docs/OPERATIONS.md (spaces) describe the single-login default, adding a per-space gh profile or claude_config_dir, and that one login is not a boundary between jobs.",
+            "go test ./..., go vet ./..., gofmt clean; make cover: All files >= 80% (status/logins.go 100%, daemon/logins.go 97.4%); swift test: 415 tests passed; security audit of the new field: no critical/high/medium, its two lows fixed.",
+            "Independent verifier (step 8): every acceptance item and DOD-1..DOD-9 pass at 4da29c1 (round 2 after the CI app job flaked on fixed-sleep polling tests, fixed in 4da29c1); CI app, build and test green."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "4da29c1",
+      "verified_at": "2026-11-14T22:02:24Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "2da46d2348de350e8f61196826bc0dc17990a6e620ad2419bcfdbe65138a815d",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-074-gh-profile-follow-ups",
+      "pr": "https://github.com/willesq/orchestrator/pull/182"
     },
     {
       "id": "SP-047",
@@ -4766,7 +4998,8 @@
           ],
           "evidence": [
             "a2 (awaiting the user's review): light and dark snapshots rendered at 61d1f9c with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter OrchAppSnapshots` (offscreen, sample data, no orchd): /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/spaces-section-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/spaces-section-dark.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/enforcement-banner-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/enforcement-banner-dark.png (plus the menu bar panel's switches: /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/menu-bar-spaces-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/menu-bar-spaces-dark.png). Not yet reviewed by the user.",
-            "a1 (awaiting the user): not yet observed. Supporting tests at 61d1f9c: EnforcementModelTests.everyLayerCanBeSwitchedToEachOfItsStates (6 layer x state changes plus back to default), switchingOffAsksFirstAndSendsOnlyOnConfirm, tighteningIsSentAtOnceAndTheSameStateIsNotSent, aRefusalStaysWithItsLayer, pollsAtTheIntervalOrJustAfterTheNextTimer; EnforcementSwitchTests.countdown; PlacementValidatorTests.enforcementRoundTrip (GetEnforcement/SetEnforcement over gRPC with for_seconds). SetEnforcement is operator-only, so the check must be run by the user from an app they opened, not from an agent session."
+            "a1 (awaiting the user): not yet observed. Supporting tests at 61d1f9c: EnforcementModelTests.everyLayerCanBeSwitchedToEachOfItsStates (6 layer x state changes plus back to default), switchingOffAsksFirstAndSendsOnlyOnConfirm, tighteningIsSentAtOnceAndTheSameStateIsNotSent, aRefusalStaysWithItsLayer, pollsAtTheIntervalOrJustAfterTheNextTimer; EnforcementSwitchTests.countdown; PlacementValidatorTests.enforcementRoundTrip (GetEnforcement/SetEnforcement over gRPC with for_seconds). SetEnforcement is operator-only, so the check must be run by the user from an app they opened, not from an agent session.",
+            "a2: confirmed by user on 2026-11-14 after reviewing spaces-section and enforcement-banner snapshots, light and dark, regenerated from main at d1f44bb with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter OrchAppSnapshots` (D-70)."
           ]
         },
         {
@@ -4917,7 +5150,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (commit ab1a100): internal/rag TestWritesForASpaceTouchOnlyItsCollection passes: a write placed in acme, made against a recording fake Qdrant that already holds collections for globex, quarantine and the base, sends every write request (collection create, payload indexes, upsert, prune) to c__acme only; the other collections receive no write of any kind and keep every point, and the only request any of them sees is a points/count filtered on the write's own source_uri (the lookup for an older copy, since a source lives in one space). Related: TestWriteMovesASourceOutOfItsOldSpace (a re-placed source is removed from its old space), TestUnplacedAndSharedWritesUseTheBaseCollection (with no policy every write lands in the base and no other collection is asked anything, INV-10), TestClientWriteNeverMovesAnotherSpacesSource and TestClientWriteRefusesABaseCopyOfAnotherSpace (a client write never deletes another space's copy). End to end through orchd's placer: internal/daemon TestWritersStampOriginSpaceAndLabels and TestClientCannotChooseItsSpace now also assert every chunk sits in rag.SpaceCollection('c', space) (placing_test.go placedAs; memqdrant_test.go is per collection).",
+            "a2 (commit ab1a100): internal/rag TestSearchQueriesOnlyTheReadableCollections passes 3 of 3 subtests, one per space kind, under a validated policy (oss public, acme and globex isolated, me private reading notes): reader oss (public) reads [oss], acme (isolated) [acme oss], me (private) [me notes oss], computed with spaces.Resolved.CanRead over every space and quarantine. With every space and the base holding a matching chunk, hybrid and dense searches with SearchOpts.Spaces = that set return exactly those spaces' chunks, and the recording fake shows requests only to those spaces' collections (no listing, no request to globex, quarantine, the base or the unread private space).",
+            "a3 (commit ab1a100): internal/rag TestSearchFiltersOnSpaceInsideEachCollection passes: every search request (dense points/search and keyword points/query, 6 for one hybrid and one dense search of 2 spaces) sent to c__<space> carries the filter space = <space>, and a chunk labelled globex placed inside acme's collection is not returned by either mode. TestSearchSpacesEdges: Shared reads the base without the space filter (pre-spaces chunks carry none), an empty list reads and embeds nothing, unknown names are skipped."
+          ]
         },
         {
           "id": "SP-024.2",
@@ -4938,7 +5175,10 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (commit ab1a100): internal/rag TestMigrateHybridCopiesEverySpaceCollection passes: a dense base with hybrid space collections acme and quarantine; the plan counts 5 sources / 6 chunks across all three; the applied migration copies orchestrator__acme and orchestrator__quarantine to orchestrator-hybrid__acme/__quarantine with space and labels_v kept, leaves the old collections unmodified, commits the base switch, and a write after the switch lands in orchestrator-hybrid__acme. TestMigrateHybridLiveWriteToANewSpace (a write into a space with no collection, made mid-copy, reaches it under the new base), TestMigrateHybridRefusesAFinishedSpaceTarget (a space target with points and no marker, a dense space target, and a target containing '__' are refused). TestReindexKeywordsCoversEverySpaceCollection: plan Total 8 / Stale 8 over c, c__acme, c__quarantine; apply re-indexes all 8 and stamps bm25_v in every collection; a dense space collection is refused. TestDropBackupDropsEverySpaceCollection: the plan reports 3 points and spaces [acme quarantine]; the drop removes backup, backup__acme and backup__quarantine, leaves c__acme, refuses c__acme (an active space collection), and drops the space collections of a backup whose base is gone; TestDropRefusesABaseThatReadsAsASpace refuses dropping 'orchestrator' while 'orchestrator__v2' is active.",
+            "a2 (commit ab1a100): internal/rag TestWriteCacheIsKeyedBySpace passes: the unchanged-write check (ingest_hash) is read only in the write's own space's collection, so the same source and text written for acme is skipped for acme (1 embed) but embedded and stored for globex (2), and again for acme after that (3); TestStoreCachesAreKeyedByCollection: the store object and its cached layout are per collection (acme's hybrid layout is never used for globex's missing collection) and the list of space collections is cached per base (another base's list is never served); TestListingNeverHidesANotedCollection: a listing answered while a write created a collection never hides it. Every cache in internal/rag is listed in docs/internals/memory.md 'Caches keyed by space (INV-11)'; caches outside internal/rag are RC-351."
+          ]
         },
         {
           "id": "SP-024.3",
@@ -4952,18 +5192,22 @@
               "threshold": "<= 1.3x"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (commit ab1a100): internal/rag TestIntegrationSpaceCollectionsSearch (ORCH_QDRANT_BENCH=1, ORCH_QDRANT_BIN_DIR=~/.local/share/orch/bin, qdrant v1.17.1 native on 127.0.0.1:6431 with temporary storage and collections sp-024-*, Apple M3 Max, 2026-11-14), the SP-002 corpus of 40,000 chunks, 200 queries after 20 warm-up, interleaved. Baseline = the SP-002 baseline (Service.Search, hybrid, weighted, TopK 10, one collection filtered to 2 spaces); measured = Service.Search with Spaces [s0 s1] over sp-024-bench__s0..s3. Default segments, 2 quiet runs: baseline p95 18.06 / 18.03 ms, space collections p95 19.46 / 20.19 ms, ratio 1.08x / 1.12x (a third run under load: 32.59 vs 26.20 ms, 0.80x). ORCH_QDRANT_BENCH_SEGMENTS=2, 2 runs: baseline p95 12.60 / 12.65 ms, space collections 5.69 / 5.59 ms, ratio 0.45x / 0.44x. Threshold <= 1.3x met. Top-10 agreement with the baseline 99.7%. How: across collections keyword requests return no vectors and the vectors of keyword-only hits are fetched only for returned or tied hits (results equal to fetching all, TestSearchAcrossCollectionsMatchesOneCollection, TestTiedScoresFetchTheirCosine). Like for like, one collection searched with that same request pattern is p95 8.33-8.41 ms (default) and 2.70-2.83 ms (2 segments), so the layout itself still costs 2.0-2.4x, as SP-002 measured and D-24 accepted; giving single-collection search the cheaper pattern is RC-352.",
+            "DOD (commit d032415): go test ./... exit 0; go test -race ./internal/rag exit 0; go vet ./... exit 0; gofmt -l on changed files empty; make cover All files >= 80% (spacestore.go 96.6%, spacesearch.go 93.5%, search.go 96.7%, service.go 93.1%, provenance.go 95.3%, migrate.go 88.0%, migrate_admin.go 92.5%, reindex.go 86.6%, document.go 90.0%, qdrant.go 93.8%, ranking.go 100%); docs/internals/memory.md and docs/MEMORY.md updated; two security-audit rounds: round 1 found 1 medium (a listing in flight could hide a just-created space collection for a minute) and 5 lows, all fixed; round 2 found no critical/high/medium and 2 lows, both fixed (RC-350 to RC-354 record the rest). CI on PR #183 (run 43640496699): test and build (macOS ORT) passed.",
+            "Verification round 1 (independent verifier at d032415): every acceptance item PASS (a2 3 of 3 kinds; mutation checks: routing to the base fails a1, a2 and the migration test, dropping the space filter fails a3) and DOD-1 to DOD-9 PASS. Its own SP-024.3 runs on a loaded machine: default segments 0.96x and 1.09x, 2 segments 0.59x and 0.50x, top-10 agreement 99.7%; like for like the layout costs 2.42-2.43x (default) and 1.23-1.51x (2 segments), as disclosed (D-24, RC-352). INV-10: pre-existing tests restored from origin/main fail only in 3 policy (placed-write) cases, every no-policy test passes; no-policy reads add a cached GET /collections. INV-11 holds for every cache in internal/rag; caches outside it are RC-351. Lows noted: delete-before-write window on a re-placed source, BM25 scores merged across per-space IDF (intended), nil Spaces reads every collection until SP-025, names with __ (RC-353)."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "d03241591c617829f88dcbde12bd6bf7de642194",
+      "verified_at": "2026-11-14T21:11:02Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "6a08b877987f9cc1a3bcf4ab2dc6baad1afdea4ab59a51e1c0d1455c73e20bf3",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-024-collection-per-space",
+      "pr": "https://github.com/willesq/orchestrator/pull/183"
     },
     {
       "id": "SP-025",
@@ -5643,18 +5887,23 @@
               "threshold": "3 pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestGitHookInstallProperties (internal/install/githook_test.go, temp hooks directory holding a 0750 user commit-msg hook): (1) the dry run prints DRY RUN and 2 changes and writes no file or backup; (2) apply backs the user's hook up (0600 under <backups>/<UTC stamp>/) and (3) chains it as commit-msg.orch-prev with its mode and content, orch's hooks 0755 naming the orch binary; (4) a second install plans 0 changes and its apply writes nothing; (5) uninstall restores the directory exactly (names, modes, content) and a second uninstall plans 0 changes. Also TestGitHookInstallEmptyAndUpdate, TestGitHookInstallRefusals (hook and .orch-prev both present, relative paths, changed between plan and apply), TestGitHookUninstallLeavesOthersAlone, TestGitHookChainsSymlink, TestGitHookScript, TestGitHookInstallReview; CLI: TestGitHookCmdDryRun (no --apply writes nothing; --hooks-dir), TestGitHookCmdErrors. All in temp repositories and directories with ORCH_DATA_DIR and GIT_CONFIG_GLOBAL in temp.",
+            "a2: TestGitHookCommitRefused (internal/cli/guard_githook_cmd_test.go: a real temp repository with orch's hooks installed through `orch guard git-hook --install --apply` over a user commit-msg and pre-push hook, the hooks running this test binary as orch): a commit whose message holds globex's term is refused (rule outbound_term, space globex, the term absent from git's output); a term in a staged file with an innocent message, one a chained hook appends to the message, and commit -a with a tracked change are refused; a commit without a term passes and the user's commit-msg hook runs with .git/COMMIT_EDITMSG. TestGitHookPushRefused: a commit with a term made with --no-verify is refused at push (to the named remote, as a tag, to the URL itself) and the user's pre-push hook does not run; a clean push, a new branch and a deletion pass, and the user's pre-push hook gets git's arguments and ref lines. TestGitHookSwitchAndPolicy: terms layer off allows, nothing configured allows, an unreadable snapshot refuses (outbound_unchecked). TestGitHookRunInProcess. Check unit tests (internal/spaces/githook_test.go): TestGitHookCommitCheck, TestGitHookPushCheck, TestGitHookPushReview, TestGitHookPushNoSpaceRemotes, TestGitHookTagObjects, TestParsePushUpdates, TestGuardFilesReadTerms, TestCheckGitHookTerms.",
+            "2026-11-14 on 29ed33f: go test ./... 4729+ pass, go vet ./... clean, gofmt clean, make cover passes (guard_githook_cmd.go 87.7%, install/githook.go 89.6%, spaces/githook.go 95.4%, outbound_git.go 88.3%). Security audit (security-audit agent, two rounds): 0 critical/high; 5 medium (destination read from config instead of git's URL, tracking refs of other spaces trusted, ref names unchecked, annotated tags pushed by object unchecked, no-space remotes trusted for no-space destinations) and 4 low fixed with the review tests above; the remaining lows are RC-551.",
+            "Independent verifier (fresh subagent, 2026-11-14) on 734d5fb: a1 PASS (5 properties; mutants removing the backup, the restore, the chaining, idempotence and dry run each fail a named test), a2 PASS (3; mutants dropping orch from either hook or skipping the chained hook fail), DOD-1..DOD-9 PASS (CI run 43642899271 test and macOS build green), 0 critical/high/medium."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "734d5fbb47a5c6aafff01077dac73a7a49255ea2",
+      "verified_at": "2026-11-14T21:37:38Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "125ea6a040c8fa44e5b63bcb2304574bcc3c1b7a37da67f40bd0412593545586",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-045-git-hook-terms",
+      "pr": "https://github.com/willesq/orchestrator/pull/184"
     },
     {
       "id": "SP-046",
@@ -5854,7 +6103,7 @@
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": "2026-11-14: D-61 is implemented and every SP-046 acceptance item has evidence at 6baf911 (unit tests, make cover, and the full TestClaudeE2E suite PASS), but DOD-6 is not met. The security audit's HIGH, RC-215 (measured: an allowRead or allowWrite in a checkout's own .claude/settings.json, or the user's own entries in settings.local.json, re-opens orch's sandbox denies for sessions started in the checkout; orch now reports it but cannot prevent it without editing tracked files or users' entries, which SP-046.1.a2 forbids), and two MEDIUMs that follow from D-61's own text, RC-216 (a consistent forged setting is taken at restart and never marks a digest) and RC-217 (auto judges only isolated roots), need user decisions. The independent verifier was not run.",
+      "blocked_reason": "2026-11-14: D-61 is implemented and every SP-046 acceptance item has evidence at 6baf911 (unit tests, make cover, and the full TestClaudeE2E suite PASS), but DOD-6 is not met. The security audit's HIGH, RC-215 (measured: an allowRead or allowWrite in a checkout's own .claude/settings.json, or the user's own entries in settings.local.json, re-opens orch's sandbox denies for sessions started in the checkout; orch now reports it but cannot prevent it without editing tracked files or users' entries, which SP-046.1.a2 forbids), and two MEDIUMs that follow from D-61's own text, RC-216 (a consistent forged setting is taken at restart and never marks a digest) and RC-217 (auto judges only isolated roots), need user decisions. The independent verifier was not run. 2026-11-14: the user settled RC-215/216/217 as D-67, D-68 and D-69; a follow-up lane implements them, then runs the audit and the independent verifier.",
       "attempts": 2,
       "criteria_sha256": "cba1332a2b5973eb9c82362ed430d3a8c28df32d635b00bfea8a90589908f887",
       "branch": "feat/sp-046-per-space-harness-settings",
@@ -6579,6 +6828,80 @@
       "criteria_sha256": "f09b8ebcceabae3c53278bbf89426eec5db6e7a09c656b08af71fa359704171c",
       "branch": null,
       "pr": null
+    },
+    {
+      "id": "SP-076",
+      "phase": "P2",
+      "priority": 32.5,
+      "title": "Explicit public paths (D-65)",
+      "summary": "Each public space in the applied policy lists 'public_paths' patterns (exact folder, '*' one folder name, '**' any depth; no '!'). Local content under a public root reaches public only when a pattern matches; nothing on disk, such as a .git, counts as a declaration. Patterns are checked at apply and shown by 'orch spaces explain'. Editing them in the app belongs to SP-053.",
+      "why": "RC-405: orch cannot tell a checkout the operator declared public from a .git any session can create, so a declaration must live in the operator-applied policy.",
+      "depends_on": [
+        "SP-020",
+        "SP-030"
+      ],
+      "touches": [
+        "internal/spaces/",
+        "internal/daemon/ (placement)",
+        "internal/cli/ (orch spaces explain)"
+      ],
+      "docs_to_update": [
+        "docs/internals/memory.md",
+        "docs/internals/config.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-076.1",
+          "title": "Explicit public paths",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Patterns match exactly as D-65 says: an exact folder matches only the files directly in it; '*' matches one folder name; '**' matches any depth; '!' and any other gitignore syntax are rejected.",
+              "measure": "table test over the three forms and the rejected syntax",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "Apply rejects a public_paths pattern that is outside every root of its public space, malformed, or uses '!'; the last applied policy stays active and the error does not echo outbound terms.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "Under a public root, local content (plain folders, checkouts, session-registered sources) is public only when a public_paths pattern matches it; otherwise it is quarantined. Creating a .git at, above or inside a public root changes no placement. A private or isolated root nested inside a '**' pattern keeps its own space.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "'orch spaces explain <path>' names the public_paths pattern that made a path public, or says none matched.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a5",
+              "type": "doc",
+              "check": "docs/internals/memory.md and docs/internals/config.md describe public_paths and its three forms, and the D-50 text that used to mention declaring a folder public points to it.",
+              "measure": "files changed in the diff",
+              "threshold": "both"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "01ef9bae725c1b6ed0ccbd6b3194d8d30de872c6e7cceb59eb24d0db1046735b",
+      "branch": null,
+      "pr": null
     }
   ],
   "criteria_hash_recipe": "criteria_sha256 = sha256 of json.dumps([{id, title, acceptance} for each checkpoint], sort_keys=True, separators=(',', ':'), ensure_ascii=False) encoded as UTF-8. 'evidence' is excluded so recording evidence does not change the hash.",
@@ -6686,6 +7009,14 @@
     {
       "date": "2026-11-14",
       "change": "D-62: user merged SP-046 (#171) with RC-215/216/217 open; SP-046 stays blocked until they are fixed and verified."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-63: parallel lanes (up to 5) with separate RC-id ranges and per-feature progress files; first wave SP-074, SP-024, SP-030, SP-048, SP-051."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-65 to D-70: explicit public_paths (new feature SP-076), command log records its rules revision, SP-046's RC-215/216/217 settled, SP-051 a1 and SP-072 a2 approved, lane PRs merged before the remaining hands-on checks."
     }
   ],
   "plan_location": {
@@ -6695,8 +7026,8 @@
     "main_checkout": "/Users/williamesquivel/code/willesq/orchestrator",
     "note": "Status on origin/main is authoritative. A feature's status changes on its feature branch and reaches main when its PR merges.",
     "progress_file": {
-      "path": "/Users/williamesquivel/code/willesq/orchestrator/docs/spaces/progress.local.json",
-      "purpose": "Live progress for the user and the next session. The plan's status only changes on main when a PR merges; this file shows what is happening now. It is never committed (listed in .git/info/exclude).",
+      "path": "<main checkout>/docs/spaces/progress.<ID>.local.json",
+      "purpose": "Live progress for the user and the next session. The plan's status only changes on main when a PR merges; this file shows what is happening now. It is never committed (listed in .git/info/exclude). Under D-63 each lane writes its own file named by its feature id; the coordinator keeps progress.local.json (read by the reader) as a summary of all lanes.",
       "schema": {
         "updated_at": "UTC ISO 8601, set on every write",
         "session_id": "the harness session id",
@@ -6723,26 +7054,93 @@
   },
   "session_procedure": [
     "1. Sync. In the main checkout (/Users/williamesquivel/code/willesq/orchestrator) run `git fetch origin`. Read the plan from origin/main: `git show origin/main:docs/spaces/spaces-features.json`. That copy is authoritative for status; local copies may be stale.",
-    "2. Pick exactly one feature: the first feature in ascending 'priority' whose status on origin/main is not 'done' or 'superseded'. Never skip it, never choose another, never work on two at once. Run one session at a time.",
-    "3. Look for existing work on it. First read the live progress file (/Users/williamesquivel/code/willesq/orchestrator/docs/spaces/progress.local.json): if it names a different session_id with status 'in_progress' and updated_at less than 30 minutes ago, another session is working. Stop and tell the user. Then check branches and PRs: the branch is feat/<id in lowercase>-<short-slug> (e.g. feat/sp-020-spaces-config); run `git branch -a --list '*feat/<id>-*'` and `gh pr list --state all --search '<ID> in:title'`.",
+    "2. Pick your feature. Under D-63 up to 5 lanes run in parallel, each a separate session on one feature. A lane session works only on the feature the coordinator assigned it in parallel_lanes.active (or, with no assignment, the first feature in ascending 'priority' whose status on origin/main is not 'done' or 'superseded' and that no active lane holds). Never work on two features in one session, never take a feature another lane holds, and never take one whose depends_on are not all 'done' on origin/main.",
+    "3. Look for existing work on it. First read this feature's live progress file (<main checkout>/docs/spaces/progress.<ID>.local.json, e.g. progress.SP-024.local.json): if it names a different session_id with status 'in_progress' and updated_at less than 30 minutes ago, another session is working. Stop and tell the user. Then check branches and PRs: the branch is feat/<id in lowercase>-<short-slug> (e.g. feat/sp-020-spaces-config); run `git branch -a --list '*feat/<id>-*'` and `gh pr list --state all --search '<ID> in:title'`.",
     "3a. If an open PR exists whose plan copy already shows the feature 'done' with verification, it is waiting for the user to review and merge. Report the PR link and stop. Do not start the next feature.",
     "3b. If a branch or open PR exists but the feature isn't done there, resume it: use its existing worktree under /Users/williamesquivel/code/willesq/orchestrator.worktrees/feat/..., or recreate it with ~/.claude/orchestrator/scripts/git_worktree_create.sh <branch> and answer 'y' to reuse the existing branch.",
     "3c. If the PR was merged but origin/main doesn't show the feature done, or a PR was closed unmerged, stop and ask the user what happened.",
     "3d. If nothing exists, run ~/.claude/orchestrator/scripts/git_worktree_create.sh feat/<id>-<slug> from the main checkout and work only in that worktree.",
     "4. Preconditions. Every depends_on feature must be 'done' on origin/main, and no entry in decisions.open may list this feature in 'blocks'. If either fails, stop and tell the user. (Priority order makes the first case unexpected.)",
-    "5. On the feature branch, set the feature's status to 'in_progress', increment 'attempts', and set 'branch'. Commit (signed). Push, open a draft PR titled 'feat(spaces): <summary> (<ID>)' early, record its URL in the feature's 'pr' field, and register it in ~/.pr-watch.json. Write the live progress file now and after every later step, checkpoint, block or finish (schema in plan_location.progress_file); make sure docs/spaces/progress.local.json is listed in the main checkout's .git/info/exclude.",
+    "5. On the feature branch, set the feature's status to 'in_progress', increment 'attempts', and set 'branch'. Commit (signed). Push, open a draft PR titled 'feat(spaces): <summary> (<ID>)' early, record its URL in the feature's 'pr' field, and register it in ~/.pr-watch.json. Write the live progress file now and after every later step, checkpoint, block or finish (schema in plan_location.progress_file); make sure docs/spaces/progress.*.local.json is listed in the main checkout's .git/info/exclude.",
     "6. Do the checkpoints in order. After each one, record evidence (test names, command output, measured numbers, or 'confirmed by user on <date>' for manual items) in that checkpoint's 'evidence' array and commit. Update the live progress file (checkpoint, checkpoints_done, note, a history entry) at the start and end of each checkpoint.",
     "7. Manual items need the user: ask them to perform or confirm the step and wait. If you can't continue for any reason (missing input, a criterion that is wrong or impossible, 3 failed fix rounds), set status 'blocked' with a specific blocked_reason, commit, push, and stop. Never move past a blocked feature. When you stop or need the user, the live file's status and note must say so.",
     "8. When every checkpoint has evidence meeting its threshold, run every definition_of_done check yourself. Then spawn an independent verifier: a fresh subagent that gets only the diff (origin/main...HEAD), this feature's JSON, the invariants it appears in, and definition_of_done. It re-runs every test, command and metric itself and reports pass or fail for each acceptance item and each DOD check. It does not see your reasoning.",
     "9. If the verifier reports any failure, fix it and verify again, up to 3 rounds; after that, set 'blocked'. If everything passes, set status 'done', passes=true, verified_sha to the commit that was verified, verified_at to the current UTC time (ISO 8601). Commit that change (signed) and push. Leave the PR as a draft; the user marks it ready and merges.",
     "10. Never delete, renumber or reorder features, checkpoints or acceptance items, and never edit acceptance criteria (criteria_sha256 detects it). Only the user may mark a feature 'superseded'. If you discover new work, describe it under 'Proposed new features' in the PR body; it is appended to the plan, with the next free ID, only after the user approves.",
     "11. Finish with a short report: the feature, its PR link, the verification result, what is waiting on the user, and which feature step 2 will pick next once this one is merged. Leave the live progress file with the final status ('done', 'blocked' or 'idle') and a note matching your report.",
-    "12. Record decisions as you go, until the last feature is done. A decision the user makes goes to decisions.confirmed_by_user with the next D-id and the date. Everything else that needs the user later goes to decisions.reconvene with the next RC-id: proposed features or acceptance items (also listed in the PR body per step 10), low or accepted security findings, deferred follow-ups, unverified assumptions, and actions the user must take. Give each a kind (decision, follow-up or user-action), topic, detail, source (PR, issue or session URI), raised date, affects and status 'open'. Reconvene items never block work; an item the user settles moves to confirmed_by_user (or becomes a feature) and its status becomes 'resolved' with a note. Before reporting in step 11, check that your session's items are recorded."
+    "12. Record decisions as you go, until the last feature is done. A decision the user makes goes to decisions.confirmed_by_user with the next D-id and the date; only the coordinator assigns D-ids, so a lane reports the user's decision to the coordinator instead. Everything else that needs the user later goes to decisions.reconvene with the next free RC-id inside your lane's range in parallel_lanes (never outside it): proposed features or acceptance items (also listed in the PR body per step 10), low or accepted security findings, deferred follow-ups, unverified assumptions, and actions the user must take. Give each a kind (decision, follow-up or user-action), topic, detail, source (PR, issue or session URI), raised date, affects and status 'open'. Reconvene items never block work; an item the user settles moves to confirmed_by_user (or becomes a feature) and its status becomes 'resolved' with a note. Before reporting in step 11, check that your session's items are recorded.",
+    "13. Parallel lanes (D-63). A lane edits only its own feature object, its own RC range and its own progress file. When several lane PRs edit spaces-features.json, the later PR rebases on origin/main and keeps both sides; RC entries from different ranges are never renumbered. Only one lane at a time changes internal/rpc/orchdv1/orchd.proto or adds a numbered DB migration; the coordinator schedules them. Each lane uses its own ORCH_CONFIG_DIR, ORCH_DATA_DIR, socket and Qdrant collection prefix named after its feature (e.g. sp-024) and removes them when finished. Manual items and user decisions go through the coordinator, which asks the user and keeps docs/spaces/progress.local.json as the summary of all lanes for the reader."
   ],
   "local_safety": [
     "This Mac runs the orch you are changing. Exercise install changes with a temporary --home only; never write to the real ~/.claude, ~/.codex, ~/.gemini, ~/.config/orch, or any repo's git hooks.",
     "Don't restart or replace the running orchd, and don't run `orch install` for real. For anything that needs a daemon or Qdrant, use a separate ORCH_CONFIG_DIR, ORCH_DATA_DIR, socket and Qdrant collection, and remove them when finished.",
     "To capture harness payloads (SP-001), use project-local hook settings in a scratch repository and ask the user before launching each harness session.",
     "Never read, print or store credentials. Use `gh auth status` only; never `gh auth token` or token files."
-  ]
+  ],
+  "parallel_lanes": {
+    "decision": "D-63",
+    "max_parallel": 5,
+    "id_ranges_note": "Only the coordinator session assigns D-ids. RC-ids: the coordinator uses RC-229 to RC-299; each lane gets a block of 50 when it is assigned. Blocks are never reused.",
+    "coordinator": {
+      "rc_range": "RC-229..RC-299"
+    },
+    "active": [
+      {
+        "feature": "SP-074",
+        "rc_range": "RC-300..RC-349",
+        "note": "done and verified at 4da29c1; PR #182 waits for the user"
+      },
+      {
+        "feature": "SP-024",
+        "rc_range": "RC-350..RC-399",
+        "note": "done and verified; PR #183 waits for the user; SP-025 and SP-027 start when it merges"
+      },
+      {
+        "feature": "SP-030",
+        "rc_range": "RC-400..RC-449",
+        "note": "resumed to implement D-65's safe default (all local content under public roots quarantined); PR #180"
+      },
+      {
+        "feature": "SP-048",
+        "rc_range": "RC-450..RC-499",
+        "note": "done and verified; PR #179 waits for the user"
+      },
+      {
+        "feature": "SP-051",
+        "rc_range": "RC-500..RC-549",
+        "note": "a1 approved (D-70); resumed for the independent verifier; PR #181"
+      },
+      {
+        "feature": "SP-045",
+        "rc_range": "RC-550..RC-599",
+        "note": "done and verified; PR #184 waits for the user"
+      },
+      {
+        "feature": "SP-075",
+        "rc_range": "RC-600..RC-649",
+        "note": "resumed for D-66's non-proto parts (migration slot); proto after #182 merges; PR #185"
+      },
+      {
+        "feature": "SP-046",
+        "rc_range": "RC-650..RC-699",
+        "note": "follow-up lane implementing D-67, D-68 and D-69 on a new branch, then audit and independent verifier"
+      }
+    ],
+    "next_rc_block": "RC-700",
+    "queued": [
+      "SP-025 and SP-027 after #183 merges",
+      "SP-052 and SP-054 after #181 merges",
+      "SP-076 after SP-030 merges"
+    ],
+    "d_ids_reserved": [],
+    "next_d_id": "D-71",
+    "proto_slot": {
+      "holder": "none (SP-074 finished editing at eff7585)",
+      "next": "SP-075, after PR #182 merges"
+    },
+    "migration_slot": {
+      "holder": "SP-075",
+      "granted": "2026-11-14"
+    }
+  }
 }

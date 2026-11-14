@@ -49,7 +49,13 @@ func (s *server) ListGitHubScopes(ctx context.Context, req *orchdv1.ListGitHubSc
 	if ghErr != nil {
 		out.Warning = "Could not reach GitHub: " + ghErr.Error()
 	}
+	_, op := operator(ctx)
 	for _, sc := range scopes {
+		// Reason: an org a space reaches through its own gh profile is
+		// that job's, so only the operator sees it (SP-074).
+		if !op && s.ghProfiles.ownsProfile(sc.Owner) {
+			continue
+		}
 		out.Scopes = append(out.Scopes, scopePB(sc))
 	}
 	return out, nil
@@ -74,9 +80,14 @@ func (s *server) SetGitHubScope(ctx context.Context, req *orchdv1.SetGitHubScope
 		return nil, err
 	}
 	// An org the user has left (or a renamed login) keeps its row but cannot be
-	// turned on; when GitHub is unreachable the stored row is trusted.
+	// turned on; when GitHub is unreachable the stored row is trusted. The
+	// check runs as the login the owner's space names (SP-074).
 	if in.GetEnabled() && !current.Enabled {
-		if id, idErr := svc.Identity(ctx, false); idErr == nil && !id.Member(current.Owner) {
+		member, mErr := svc.Member(ctx, current.Owner)
+		switch {
+		case refusedProfile(mErr):
+			return nil, grpcstatus.Errorf(codes.FailedPrecondition, "%s: %v", current.Owner, mErr)
+		case mErr == nil && !member:
 			return nil, grpcstatus.Errorf(codes.FailedPrecondition, "%s: %v", current.Owner, github.ErrNotMember)
 		}
 	}
@@ -112,6 +123,12 @@ func (s *server) ListGitHubRepos(ctx context.Context, req *orchdv1.ListGitHubRep
 	}
 	if !github.ValidLogin(req.GetOwner()) {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "invalid GitHub login %q", req.GetOwner())
+	}
+	// Reason: listing as a space's own gh profile uses that job's account,
+	// so agents get the answer they get for an org that is not theirs, and
+	// cannot tell the two apart (SP-074).
+	if _, op := operator(ctx); !op && s.ghProfiles.ownsProfile(req.GetOwner()) {
+		return nil, grpcstatus.Errorf(codes.NotFound, "%s: %v", req.GetOwner(), github.ErrNotMember)
 	}
 	repos, err := svc.Repos(ctx, req.GetOwner())
 	if errors.Is(err, github.ErrNotMember) {

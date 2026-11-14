@@ -9,7 +9,7 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches and the directory validator (`Spaces`, `SpacesModel`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches, the directory validator and the spaces' logins (`Spaces`, `SpacesModel`, `SpaceLogins`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
 | `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 | `OrchAppSnapshots` | Renders app views to PNGs in light and dark from sample data, with no orchd; runs only when `ORCH_SNAPSHOT_DIR` is set (see [Snapshots](#snapshots)) |
@@ -92,6 +92,15 @@ and asks.
   and time left. It sits above every Settings section (with **Show Switches**) and at the top of the
   menu bar panel, and the Spaces section in the Settings list gets a warning dot.
 - **Menu bar panel:** the switches in compact form, with **Spaces Settings…** to open the section.
+- **Logins** (SP-074.3, D-59): Settings → Spaces lists each space of the applied policy with the gh
+  login and Claude Code configuration it uses: the default one or its own (with the folder), the
+  state orchd read (logged in, not logged in, refused, unknown), the gh account and where its token
+  is stored (keyring or file), Claude Code's sign-in method, and what to fix. A space with a login
+  that is not working gets a warning mark. `SpaceLoginsModel` (held by `EnforcementModel`) reads
+  `ListSpaces`'s `logins` when the section opens; `ListSpaces` is operator-only, so a refusal shows
+  in its place. Values are status metadata only, never a token, and go through `displaySafe`.
+  `SpacesAPI.spaceLogins` defaults to none, so sources without it show no section. Tests:
+  `SpaceLoginsTests` (one-login and two-login layouts).
 - **Check a folder:** type a path (`~` expands to the home folder) or **Choose…** a folder or
   file, and the app asks `ExplainPlacement`. It shows every root holding it from shallowest to
   deepest with its space and kind (the deepest marked), the git remote with its effect (marked

@@ -27,6 +27,7 @@ type Settings struct {
 	Docs         DocsSettings         `mapstructure:"docs"`
 	PRBabysitter PRBabysitterSettings `mapstructure:"pr_babysitter"`
 	PRReviews    PRReviewsSettings    `mapstructure:"pr_reviews"`
+	GitHub       GitHubSettings       `mapstructure:"github"`
 	Ingest       IngestSettings       `mapstructure:"ingest"`
 	Queue        QueueSettings        `mapstructure:"queue"`
 	Sessions     SessionsSettings     `mapstructure:"sessions"`
@@ -183,6 +184,14 @@ type IngestSettings struct {
 type PRBabysitterSettings struct {
 	Enabled      bool   `mapstructure:"enabled"`
 	PollInterval string `mapstructure:"poll_interval"`
+}
+
+// GitHubSettings bounds orchd's use of GitHub.
+type GitHubSettings struct {
+	// IsolatedAccountHourlyBudget caps the GitHub API calls each isolated
+	// space's own gh account makes an hour (SP-074); past it that account's
+	// docs sync and PR watching wait for the next hour. 0 is no cap.
+	IsolatedAccountHourlyBudget int `mapstructure:"isolated_account_hourly_budget"`
 }
 
 // PRReviewsSettings controls the PR review watch.
@@ -376,6 +385,7 @@ func setDefaults(v *viper.Viper) {
 	// PR babysitter: poll open PRs via gh and cache their state.
 	v.SetDefault("pr_babysitter.enabled", true)
 	v.SetDefault("pr_babysitter.poll_interval", "10m")
+	v.SetDefault("github.isolated_account_hourly_budget", 1000)
 	// PR review watch: how often each watched PR is read from GitHub.
 	v.SetDefault("pr_reviews.poll_interval", "2m")
 	// Session summaries: one small, tool-less model call per finished session.

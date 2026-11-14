@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/willesq/orchestrator/internal/bm25"
+	"github.com/willesq/orchestrator/internal/logs"
 )
 
 // Writers: which part of orchd stored a source. A writer is set by orchd's
@@ -108,20 +109,51 @@ type StoredCopy struct {
 }
 
 // Copy returns the provenance of the source stored under uri; ok is false
-// when nothing is stored there.
+// when nothing is stored there. A source lives in one space, but should it be
+// found in several collections (a move part done), the copy that refuses most
+// is returned: a sync writer's first, then one placed in a space, then the
+// base's. Callers decide from it whether a write may replace the source.
 func (s *Service) Copy(ctx context.Context, uri string) (StoredCopy, bool, error) {
 	if uri == "" {
 		return StoredCopy{}, false, nil
 	}
-	pts, err := s.active().Retrieve(ctx, []string{pointID(uri, 0)}, []string{fieldWriter, fieldTrust, fieldContentHash, fieldSpace, "source_uri"})
-	if err != nil || len(pts) == 0 {
+	stores, err := s.allStores(ctx, s.active(), false)
+	if err != nil {
 		return StoredCopy{}, false, err
 	}
-	p := pts[0].Payload
-	if str(p["source_uri"]) != uri {
-		return StoredCopy{}, false, nil
+	var best StoredCopy
+	found, rank := false, -1
+	for _, ss := range stores {
+		pts, err := ss.st.Retrieve(ctx, []string{pointID(uri, 0)}, []string{fieldWriter, fieldTrust, fieldContentHash, fieldSpace, "source_uri"})
+		if errors.Is(err, errCollectionMissing) && len(stores) > 1 {
+			// A collection not made yet holds nothing; a lone one keeps the
+			// error it gave before spaces.
+			continue
+		}
+		if err != nil {
+			return StoredCopy{}, false, err
+		}
+		if len(pts) == 0 || str(pts[0].Payload["source_uri"]) != uri {
+			continue
+		}
+		p := pts[0].Payload
+		c := StoredCopy{Writer: str(p[fieldWriter]), Trust: str(p[fieldTrust]), ContentHash: str(p[fieldContentHash]), Space: str(p[fieldSpace])}
+		r := 0
+		switch {
+		case c.Writer == WriterDocs || c.Writer == WriterSources:
+			r = 2
+		case c.Space != "":
+			r = 1
+		}
+		if found {
+			log.Printf("rag: %s is stored in more than one collection", logs.Clean(uri))
+		}
+		if r > rank {
+			best, rank = c, r
+		}
+		found = true
 	}
-	return StoredCopy{Writer: str(p[fieldWriter]), Trust: str(p[fieldTrust]), ContentHash: str(p[fieldContentHash]), Space: str(p[fieldSpace])}, true, nil
+	return best, found, nil
 }
 
 // ensureWriterIndex adds the writer payload index until one attempt succeeds.
@@ -183,26 +215,44 @@ func (s *Service) SourcesWrittenBy(ctx context.Context, prefix, writer string) (
 	filter := EqFilter(fieldWriter, writer)
 	seen := map[string]bool{}
 	var out []string
-	var offset any
-	for page := 0; page < maxScrollPages; page++ {
-		pts, next, err := s.active().Scroll(ctx, filter, []string{"source_uri"}, 1000, offset)
-		if err != nil {
-			return nil, err
-		}
-		for _, p := range pts {
-			uri := str(p.Payload["source_uri"])
+	// Space collections are made with the writer index, so only the base
+	// may lack it.
+	stores, err := s.allStores(ctx, s.active(), false)
+	if err != nil {
+		return nil, err
+	}
+	for _, ss := range stores {
+		if err := scrollURIs(ctx, ss.st, filter, func(uri string) {
 			if strings.HasPrefix(uri, prefix) && !seen[uri] {
 				seen[uri] = true
 				out = append(out, uri)
 			}
+		}); err != nil {
+			return nil, fmt.Errorf("sources written by %s: %w", writer, err)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// scrollURIs calls each with the source URI of every chunk in st that
+// matches filter.
+func scrollURIs(ctx context.Context, st *QdrantStore, filter map[string]any, each func(string)) error {
+	var offset any
+	for page := 0; page < maxScrollPages; page++ {
+		pts, next, err := st.Scroll(ctx, filter, []string{"source_uri"}, 1000, offset)
+		if err != nil {
+			return err
+		}
+		for _, p := range pts {
+			each(str(p.Payload["source_uri"]))
 		}
 		if next == nil {
-			sort.Strings(out)
-			return out, nil
+			return nil
 		}
 		offset = next
 	}
-	return nil, fmt.Errorf("sources written by %s: exceeded %d pages", writer, maxScrollPages)
+	return fmt.Errorf("exceeded %d pages", maxScrollPages)
 }
 
 // unchanged reports whether the source already holds exactly this write,
