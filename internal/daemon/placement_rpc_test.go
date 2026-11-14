@@ -129,14 +129,15 @@ func TestExplainPlacementCases(t *testing.T) {
 	}{
 		{"repo in isolated org", "acme/app", "repo", nil, "acme/app (private) -> acme", "remote", "acme", [2]string{}},
 		{"fork owned by job org with public parent", code + "/company1/fork", "path", []string{"oss", "acme"}, "acme/fork (public) -> acme", "root_and_remote_agree", "acme", [2]string{"acme", "acme"}},
-		{"public repo in public org", code + "/lib", "path", []string{"oss"}, "oss-org/lib (public) -> oss", "root_and_remote_agree", "oss", [2]string{"personal", "oss"}},
-		{"private repo in public org", code + "/secret", "path", []string{"oss"}, "oss-org/secret (private) -> oss", "not_verified_public", "quarantine", [2]string{"quarantine", ""}},
-		{"repo transferred between orgs", code + "/moved", "path", []string{"oss"}, "acme/moved (private) -> acme", "remote_stricter", "acme", [2]string{"acme", "acme"}},
+		// Local content under the broad public root is not public (SP-030, D-64).
+		{"public repo in public org", code + "/lib", "path", []string{"oss"}, "oss-org/lib (public) -> oss", "no_public_proof", "quarantine", [2]string{"personal", "oss"}},
+		{"private repo in public org", code + "/secret", "path", []string{"oss"}, "oss-org/secret (private) -> oss", "no_public_proof", "quarantine", [2]string{"quarantine", ""}},
+		{"repo transferred between orgs", code + "/moved", "path", []string{"oss"}, "acme/moved (private) -> acme", "no_public_proof", "quarantine", [2]string{"acme", "acme"}},
 		{"root and remote agree", code + "/company1/app/main.go", "path", []string{"oss", "acme"}, "acme/app (private) -> acme", "root_and_remote_agree", "acme", [2]string{"acme", "acme"}},
 		{"remote stricter than root", code + "/willesq/app", "path", []string{"oss", "personal"}, "acme/app (private) -> acme", "remote_stricter", "acme", [2]string{"acme", "acme"}},
 		{"root stricter than remote", code + "/company1/lib", "path", []string{"oss", "acme"}, "oss-org/lib (public) -> oss", "root_stricter", "acme", [2]string{"acme", "acme"}},
 		{"two isolated spaces", code + "/company1/x", "path", []string{"oss", "acme"}, "globex/x (private) -> globex", "conflict", "quarantine", [2]string{"quarantine", ""}},
-		{"nested: public root", code + "/tools", "path", []string{"oss"}, "", "root", "oss", [2]string{"personal", "oss"}},
+		{"nested: public root", code + "/tools", "path", []string{"oss"}, "", "no_public_proof", "quarantine", [2]string{"personal", "oss"}},
 		{"nested: private root, deeper", code + "/willesq/deep/x", "path", []string{"oss", "personal"}, "", "root", "personal", [2]string{"personal", "personal"}},
 		{"nested: isolated root, deeper", code + "/company1/svc/x", "path", []string{"oss", "acme"}, "", "root", "acme", [2]string{"acme", "acme"}},
 		{"remote only, no root", "willesq/notes", "repo", nil, "willesq/notes (private) -> personal", "remote", "personal", [2]string{}},
@@ -188,11 +189,14 @@ func TestExplainPlacementAgents(t *testing.T) {
 	queued := metadata.NewIncomingContext(operatorCtx, metadata.Pairs(orchdclient.TaskMetadataKey, "task-1"))
 	spawned := callerCtx(callerAuth{pid: 8, spawned: true})
 	for _, ctx := range []context.Context{harness, queued, spawned, context.Background()} {
-		e, err := s.ExplainPlacement(ctx, &orchdv1.ExplainPlacementRequest{Target: code + "/lib"})
+		e, err := s.ExplainPlacement(ctx, &orchdv1.ExplainPlacementRequest{Target: "oss-org/lib"})
 		if err != nil || e.GetSpace() != "oss" || e.GetSessionSpace() != "" {
-			t.Fatalf("public path: %v, %v", e, err)
+			t.Fatalf("public repo: %v, %v", e, err)
 		}
 		for _, target := range []string{
+			// Local content under the broad public root is quarantined
+			// (SP-030, D-64), so agents are refused it too.
+			code + "/lib", code + "/tools",
 			code + "/company1/app", code + "/willesq/x", code + "/secret", code + "/company1/x",
 			"/nonexistent-root/x", "acme/app", "slack:TACME", "https://example.com/",
 			// A planted .git under a public root must not tell an unbound
@@ -288,12 +292,13 @@ func TestRepoLookups(t *testing.T) {
 }
 
 // TestExplainPlacementProbe: the operator sees an unbound public repo under a
-// public root placed in public; an agent is refused it exactly as it is
-// refused a repo of a job's org.
+// broad public root quarantined, as local content the root does not prove
+// public (SP-030, D-64); an agent is refused it exactly as it is refused a
+// repo of a job's org.
 func TestExplainPlacementProbe(t *testing.T) {
 	s, code, _ := placementServer(t)
 	e, err := s.ExplainPlacement(operatorCtx, &orchdv1.ExplainPlacementRequest{Target: code + "/probe-unbound"})
-	if err != nil || e.GetSpace() != "oss" || e.GetRule() != "root" {
+	if err != nil || e.GetSpace() != spaces.Quarantine || e.GetRule() != string(spaces.PlaceNoPublicProof) {
 		t.Fatalf("operator: %v, %v", e, err)
 	}
 }

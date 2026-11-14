@@ -98,6 +98,7 @@ const (
 	PlaceRootStricter      PlaceRule = "root_stricter"
 	PlaceConflict          PlaceRule = "conflict"
 	PlaceNotVerifiedPublic PlaceRule = "not_verified_public"
+	PlaceNoPublicProof     PlaceRule = "no_public_proof"
 	PlaceOrgUnconfirmed    PlaceRule = "org_unconfirmed"
 	PlaceWebPrefix         PlaceRule = "web_prefix"
 	PlaceWriter            PlaceRule = "writer"
@@ -200,8 +201,11 @@ func classify(o Origin, res *Resolved, opt Options) Placement {
 			path = ""
 		}
 		p := placeCheckout(path, o.Remote, res, opt)
-		if o.System == SystemSession {
+		switch o.System {
+		case SystemSession:
 			sessionPlacement(&p, res)
+		case SystemFS:
+			publicProof(&p)
 		}
 		return p
 	case SystemWeb:
@@ -290,6 +294,28 @@ func placeCheckout(path string, remote *Repo, res *Resolved, opt Options) Placem
 		return quarantine(p, PlaceNotVerifiedPublic, "it would be public, but its repo is not verified public")
 	}
 	return placed(p, c.space, rule, describe(rule, c.space))
+}
+
+// publicProof quarantines local content that only a public root would make
+// public (SP-030, D-65). Reason: a public root such as ~/code holds every
+// folder the user, or any job's session, creates, and anything on disk (a
+// .git, a remote, a registered source) can be made by a session, so nothing
+// there proves content public. Local folders reach public only through the
+// applied policy's explicit public_paths list (SP-076, not built yet) or an
+// operator retag; until then all local content whose deepest root is public
+// is quarantined. That includes a checkout whose remote names a stricter
+// space's org: the remote comes from a .git a session can write, so it would
+// let one job place content in another's space. A stricter root nested
+// inside the public one still decides first.
+func publicProof(p *Placement) {
+	if len(p.Roots) == 0 || p.Roots[len(p.Roots)-1].Kind != Public {
+		return
+	}
+	if p.Outcome != Placed && p.Rule != PlaceNotVerifiedPublic {
+		return
+	}
+	*p = quarantine(*p, PlaceNoPublicProof,
+		"it is local content under a public root, which is never proof it is public; the operator can retag it")
 }
 
 // sessionPlacement turns a checkout's placement into a session pin's: a

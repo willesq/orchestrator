@@ -591,6 +591,11 @@
         "id": "D-70",
         "decision": "Review results and merge order, 2026-11-14: the user approved the SP-051.1.a1 snapshots and the SP-072.1.a2 snapshots, and told the coordinator to merge the ready lane PRs (#178, #182, #183, #184, #179, #181) in the order it sees fit, before the remaining hands-on checks. The hands-on checks SP-072.1.a1 (switch each layer from the app, RC-160) and RC-451 (SP-048 refusal notifications) are done by the user after merging; SP-072 stays in_progress until a1 is confirmed.",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-64",
+        "decision": "Public-space write gate (SP-030): local content under a public root does not reach the public space automatically. Public content comes from the GitHub docs sync, bound web URL prefixes, operator retags (SP-071), and, as D-50 already allows, a checkout folder the operator explicitly declares public by binding a public root at that folder or inside it. Local content under a broader public root (such as ~/code) that was not declared that way, including a folder a session registered as a source and a checkout of a public GitHub repo, goes to quarantine; edit hand-offs go to public_root_sessions as before. The user kept D-50's declaration path knowing that a folder they declared public can still be written by any job's session (accepted risk, RC-404) (was RC-400).",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -2930,6 +2935,107 @@
         "affects": [
           "SP-015",
           "SP-073"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-400",
+        "kind": "decision",
+        "topic": "Local files under a public root can be steered into public by any job session (security audit medium)",
+        "detail": "SP-030 makes a public root alone insufficient for checkouts without a verified-public GitHub remote (D-50), but anything local under a public root can still be written by any job session: the guard and the sandbox allow writes to public roots. Sessions may register repo/owner sources (SaveSource is refused to queued tasks only), and owner sources pick up new folders automatically. A session can therefore copy one job's files into a plain folder under ~/code, or into a folder whose fake .git names a public GitHub repo, or into the uncommitted working tree of a real public checkout, and the sources refresh places that content in public. This is not a regression (before SP-030 everything under a public root went to public), but the gate cannot meet 'only verified-public content reaches public' for local files. Options: (a) local files never go to public automatically: sources content under a public root goes to quarantine (or public_root_sessions); public content comes only from the GitHub docs sync, bound web prefixes and operator retags (SP-071). (b) Keep local placement in public and make repo/owner source registration operator-only (also RC-121/RC-122). This narrows the gap but does not close it, because owner sources still walk new folders and agents can still write into public checkouts. (c) Accept it and rely on the SP-046 sandbox denying job sessions writes to public roots. Recommendation: (a). Blocks SP-030 (DOD-6) until decided.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-046",
+          "SP-071"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14: option (a) with D-50's folder declaration kept; see D-64. The remaining risk for folders the operator declared public is accepted and tracked as RC-404."
+      },
+      {
+        "id": "RC-401",
+        "kind": "decision",
+        "topic": "What counts as declaring a folder public (D-50)",
+        "detail": "Implemented under D-64: under a public root, local content is public only in a checkout the operator declared by binding a public root at the checkout's folder or inside it (a .git anywhere above the file, symlinked included, makes it a checkout); a remote GitHub does not report public still keeps it out. Content in no checkout is quarantined.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-071"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14: see D-65. Nothing on disk declares a folder public; local folders reach public only through the applied policy's public_paths list (SP-076). Until then all local content under public roots is quarantined."
+      },
+      {
+        "id": "RC-402",
+        "kind": "follow-up",
+        "topic": "Limits of leaving public on a visibility change",
+        "detail": "(1) When the repo listing fails, every repo keeps its docs as last indexed, public ones included. A listing failure is not treated as unreadable visibility for every repo, because that would delete and re-embed a whole public org after a network blip. (2) Fixed in SP-030: a recorded repo missing from a successful listing, and every recorded repo of an owner whose binding no longer checks out, leave public; an hourly sources sweep covers removed sources and deleted folders. A listing GitHub refuses (the owner is gone or this login lost access) also takes them out. Still kept: when the listing fails for any other reason (network, credentials), public docs stay as last indexed until a listing succeeds, so a blip does not delete and re-embed a whole public org. (3) Leaving public deletes and re-ingests (re-embeds); it is not a move. SP-024 must make DeleteSource remove a source from every collection. (4) Cost: each docs sync reads one stored copy per doc of every listed repo that is not verified public, and each repo/owner source refresh reads one per stored doc. (5) These deletions bypass the prune guard by design, because capping them would keep non-public content readable everywhere. (6) Under D-65 no local content is public, so a public copy of a checkout leaves whatever GitHub answers. When SP-076 lets listed folders be public again, a GitHub outage or a spent lookup budget must not delete their public copies (security audit, round 1).",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-024",
+          "SP-030",
+          "SP-027"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-403",
+        "kind": "follow-up",
+        "topic": "SP-030 security audit lows and design choices",
+        "detail": "(1) orchd's log names a repo or checkout path whose docs left public; tasks can read that log, but the content was public until then. (2) Folder comparison is case-insensitive, matching how roots are matched. (3) An edit hand-off that would be public goes to public_root_sessions, not to the editing session's space, until hand-offs carry the session (SP-029). (4) With an applied policy that no longer verifies, public copies are not moved; readers must treat a stale labels_v as unreadable (INV-08, SP-027). (5) The harness settings of a checkout quarantined by no_public_proof still follow its public root, unless GitHub does not confirm its repo public, as before SP-030. (6) Round 3 audit lows: a public-bound org rebound to a non-public space keeps its verified-public repos' public docs until their HEAD moves, because the leave pass skips repos GitHub reports public; a broken policy moves nothing; the leave passes read one stored copy per doc (a source registered at / sweeps every checkout doc, with repo lookups); an agent can add a .git with a public remote so its own edit hand-off under a public root goes to public_root_sessions instead of quarantine (pre-SP-030 it went to public). (7) Round 4 audit lows: the docs owner check turns any CheckOrg error, a network failure included, into a quarantined owner, so a temporary GitHub error takes a whole public org out of public (fails closed, re-embeds on recovery); the hourly sources sweep places a stored web page by its registered URL, so a page stored public through a redirect before SP-030 whose source was removed stays public; the sweep reads one stored copy per sources doc each hour.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-029",
+          "SP-030"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-404",
+        "kind": "decision",
+        "topic": "accepted risk: sessions can write into a folder the operator declared public",
+        "detail": "Under D-64, a checkout folder the operator declared public (a public root bound at or inside it) is placed in public by the sources refresh. Any job's session can write files there (the guard and the sandbox allow writes to public roots), so it could stage another job's content in a declared folder and have it indexed into public. The user accepted this on 2026-11-14 when keeping D-50's declaration path. Possible later mitigations: SP-046 sandbox rules denying job sessions writes to declared public folders, or making repo/owner source registration operator-only.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-046",
+          "SP-076"
+        ],
+        "status": "open",
+        "note": "Updated 2026-11-14 under D-65: does not apply until SP-076, since nothing can be declared public now. Review again when public_paths lets the operator list folders: a session can write into a listed folder."
+      },
+      {
+        "id": "RC-405",
+        "kind": "decision",
+        "topic": "A declaration of a checkout public cannot be told from a .git a session plants (security audit high)",
+        "detail": "D-64 keeps D-50's declaration: a checkout the operator declared public by binding a public root at its folder or inside it. orch can only see a checkout as a .git on disk when content is placed, and any job's session can create one at any time. A .git planted at a broad public root (git init ~/code) or between it and an enclosing root (~/work/.git with ~ bound and ~/work/code public) makes the broad root look declared, so plain content anywhere under it, including folders a session registers as sources, goes to public. SP-030 already rejects a .git above the broad root and a lone root that holds other bound roots, but no rule based on what is on disk closes every case. Options: (a) make the declaration explicit in the operator-applied policy (e.g. a per-public-space list of declared checkout folders, validated at apply, changing the SP-020 policy schema, CLI and app), and until then no folder counts as declared, so all local content under public roots is quarantined; (b) record at apply time which public roots sit exactly at a checkout and count only those (needs storage with the applied revision); (c) accept that a session can turn a public root into a declared one (widens RC-404 to every public root). Recommendation: (a). Blocks SP-030 (DOD-6) until decided.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-020",
+          "SP-050"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14: see D-65. The on-disk declaration was removed in SP-030; a .git anywhere (at, above or inside a public root) no longer matters, because no local content under a public root is placed public."
+      },
+      {
+        "id": "RC-406",
+        "kind": "follow-up",
+        "topic": "Session pins still follow a stricter remote a session can write",
+        "detail": "Security audit of SP-030 (high H1, fixed for writes): a .git naming another job's org beside files under a public or private root moved sources content into that job's isolated space (remote_stricter). SP-030 now quarantines every write placed by a stricter remote (D-65: nothing on disk places content). Session pins are unchanged (SP-022): a session started in a folder whose .git names another job's org is pinned to, and reads, that job's space. Starting a session there is the user's act, but an agent can plant the .git for a later session. Consider pinning sessions under a public or private root by the root alone, as writes now are. Availability effect of the write fix: a checkout whose remote is in a stricter org but which sits under a public or private root (not its job's root) is now quarantined instead of placed in that org's space; the operator binds the job's root over it or retags it.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-022",
+          "SP-010",
+          "SP-041"
         ],
         "status": "open"
       }
@@ -5722,18 +5828,27 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: internal/daemon TestPrivateRepoInPublicOrgIsQuarantined passes (docs sync oss-org/secret private -> quarantine, oss-org/lib -> oss; sources checkout of oss-org/secret -> quarantine). Verified at b9dd920.",
+            "a2: internal/daemon TestRepoTurnedPrivateLeavesPublicInTheSameSync passes (same HEAD, lib now private: left public before aaa was cloned, cloned first, re-placed in quarantine in the same sync); internal/docs TestRepoTurnedPrivateLeavesPublicFirst (exact delete/clone/write order); internal/sources TestCheckoutNoLongerPublicLeavesFirst (sources do it before walking, skipped checkouts included). Fails with the leave pass removed.",
+            "a3: internal/daemon TestUnreadableVisibilityIsPrivate passes (repo listed without owner node ID leaves public and syncs to quarantine; checkout whose repo GitHub will not show -> quarantine, and its public copy leaves).",
+            "a4: internal/daemon TestSessionWritersNeverTargetPublic 4/4 subtests pass: session and summary of a session pinned to public -> quarantine; hand-off of a file in a public repo under the public root -> personal (public_root_sessions), of a private repo -> quarantine; client note and public-prefix page from a session pinned to public -> quarantine.",
+            "a5 (D-65): internal/daemon TestCheckoutWithoutGitHubRemoteNeedsProofUnderPublicRoot passes: GitLab, no-remote, symlinked .git, plain and public GitHub folders under the public root are quarantined (no_public_proof), with a .git at, above or inside the public root and with a public root bound exactly at each folder; nothing on disk declares a folder public, so content becomes public only by a retag until public_paths (SP-076). internal/spaces TestPublicRootNeedsProofForCheckouts. D-65 regression: TestLocalContentUnderBroadPublicRootNeverPublic (session-registered sources, stricter-remote checkouts, web pages under a bound prefix still public, redirects placed by where they land).",
+            "Validation at b9dd920: go test ./... pass; go vet ./... clean; gofmt clean; make cover All files >= 80% (classify.go 98.8%, placing.go 92.7%, docs/public.go 91.2%, sources/public.go 96.7%); macOS swift tests 412 pass and make app-cover pass; CI build, test and app pass on PR #180 (app passed on rerun of a failed job; the same job also failed on other lanes branches).",
+            "DOD-6: security audit of the final diff (4 rounds): 0 critical, 0 high, 0 medium open; lows in RC-403; RC-406 (session pins follow a stricter remote) recorded for SP-022.",
+            "Independent verifier at b9dd920: a1-a5 PASS, D-65 regression present; DOD-1,2,3,4,5,7,8 PASS; DOD-9 pending at the time, since green; INV-10 and INV-03 PASS; no home paths or session IDs in the diff or commits."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "b9dd920975b4b0fddbaa5c58b47a8ea3f2b1ceb3",
+      "verified_at": "2026-11-14T22:55:06Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "285ce77da8c1a9b5024a92a920ea21f2b54cf013a465814d3808d27d29495726",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-030-public-write-gate",
+      "pr": "https://github.com/willesq/orchestrator/pull/180"
     },
     {
       "id": "SP-031",
