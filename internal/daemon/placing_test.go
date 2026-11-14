@@ -506,16 +506,20 @@ func TestEditedFilePlacedOnlyByItsRemoteIsQuarantined(t *testing.T) {
 		t.Fatalf("refresh = %q, %v", st, err)
 	}
 	e.placedAs(t, sources.CheckoutURI(doc), spaces.Quarantine, rag.OriginFS)
-	// Under a root, a source's stricter remote still places it, as it
-	// places a session started there; an edited file there waits.
-	moved := filepath.Join(e.code, "moved") // oss root, acme remote
-	defaultCheckout(t, moved, "oss-org", "moved")
-	writeFile(t, filepath.Join(moved, "README.md"), "# moved")
+	// Under a root, a stricter remote places neither a source nor an
+	// edited file (SP-030, D-65): it comes from a .git a session can write.
+	// It still places a session started there (SP-022).
+	for _, dir := range []string{filepath.Join(e.code, "moved"), filepath.Join(e.code, "willesq", "moved")} { // public and private roots, acme remote
+		defaultCheckout(t, dir, "oss-org", "moved")
+		writeFile(t, filepath.Join(dir, "README.md"), "# moved")
+	}
 	p := &writePlacer{spaces: e.s.spaces, pins: e.s.pins, repos: e.s.repos}
-	for writer, want := range map[string]string{rag.WriterSources: "acme", rag.WriterFile: spaces.Quarantine} {
-		m := rag.Meta{SourceURI: "x", Writer: writer, Origin: rag.Origin{System: rag.OriginFS, Path: filepath.Join(moved, "README.md")}}
-		if err := p.place(ctx, &m); err != nil || m.Space != want {
-			t.Fatalf("%s write placed in %q, %v; want %s", writer, m.Space, err, want)
+	for _, dir := range []string{filepath.Join(e.code, "moved"), filepath.Join(e.code, "willesq", "moved")} {
+		for _, writer := range []string{rag.WriterSources, rag.WriterFile} {
+			m := rag.Meta{SourceURI: "x", Writer: writer, Origin: rag.Origin{System: rag.OriginFS, Path: filepath.Join(dir, "README.md")}}
+			if err := p.place(ctx, &m); err != nil || m.Space != spaces.Quarantine {
+				t.Fatalf("%s: %s write placed in %q, %v", dir, writer, m.Space, err)
+			}
 		}
 	}
 }

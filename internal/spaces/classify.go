@@ -51,14 +51,9 @@ type Origin struct {
 	SourceURI string
 	// Path is a local folder or file: a checkout, a hand-off's file, or for
 	// a session record the session's first cwd. It must be absolute.
-	Path string
-	// Checkout is the top folder of the git checkout holding Path, "" when
-	// Path is in none. Under a public root a checkout needs proof to be
-	// public (SP-030, D-50): a remote GitHub verifies public, or a public
-	// root the operator bound at or inside the checkout.
-	Checkout string
-	Remote   *Repo
-	URL      string
+	Path   string
+	Remote *Repo
+	URL    string
 	// Tenant is a chat tenant's stable ID, without its provider.
 	Tenant string
 	// WriterSpace is where the pinned session that wrote the content writes,
@@ -210,7 +205,7 @@ func classify(o Origin, res *Resolved, opt Options) Placement {
 		case SystemSession:
 			sessionPlacement(&p, res)
 		case SystemFS:
-			publicProof(&p, o, res)
+			publicProof(&p)
 		}
 		return p
 	case SystemWeb:
@@ -301,77 +296,26 @@ func placeCheckout(path string, remote *Repo, res *Resolved, opt Options) Placem
 	return placed(p, c.space, rule, describe(rule, c.space))
 }
 
-// publicProof quarantines local content that only a broad public root
-// would make public (SP-030, D-50, D-64). Reason: a public root such as
-// ~/code holds every folder the user, or any job's session, creates, so
-// neither the root nor a checkout's remote proves that what sits there on
-// disk is public. Local content reaches public only when the operator
-// declared its checkout public by binding a public root at the checkout's
-// folder or inside it; even then a remote GitHub does not report public
-// keeps it out (not_verified_public). Content in no checkout cannot be
-// declared this way, and a placement a stricter remote decided is kept.
-func publicProof(p *Placement, o Origin, res *Resolved) {
-	if len(p.Roots) == 0 {
+// publicProof quarantines local content that only a public root would make
+// public (SP-030, D-65). Reason: a public root such as ~/code holds every
+// folder the user, or any job's session, creates, and anything on disk (a
+// .git, a remote, a registered source) can be made by a session, so nothing
+// there proves content public. Local folders reach public only through the
+// applied policy's explicit public_paths list (SP-076, not built yet) or an
+// operator retag; until then all local content whose deepest root is public
+// is quarantined. That includes a checkout whose remote names a stricter
+// space's org: the remote comes from a .git a session can write, so it would
+// let one job place content in another's space. A stricter root nested
+// inside the public one still decides first.
+func publicProof(p *Placement) {
+	if len(p.Roots) == 0 || p.Roots[len(p.Roots)-1].Kind != Public {
 		return
 	}
-	deep := p.Roots[len(p.Roots)-1]
-	if deep.Kind != Public {
-		return
-	}
-	// Reason: a repo not verified public under an undeclared public root
-	// is out of public whatever GitHub says, so it is named for that
-	// (no_public_proof), not for the remote a lookup may not have read.
-	if p.Rule != PlaceNotVerifiedPublic {
-		if p.Outcome != Placed {
-			return
-		}
-		if s, _ := res.Space(p.Space); s.Kind != Public {
-			return
-		}
-	}
-	if declared(res, p.Roots, o.Checkout) {
+	if p.Outcome != Placed && p.Rule != PlaceNotVerifiedPublic {
 		return
 	}
 	*p = quarantine(*p, PlaceNoPublicProof,
-		"it is local content under a public root the operator did not declare for it; the operator can retag it or bind its checkout's folder as a public root")
-}
-
-// declared reports whether the operator declared checkout public: the
-// deepest root holding the content is bound at the checkout's folder or
-// inside it, and the checkout does not reach up to a broader root. Reason:
-// a .git can be planted at or above a broad public root (git init ~/code, a
-// dotfiles repo at ~), which would otherwise make the broad root look bound
-// at "its" checkout. So under a broader root the checkout must lie strictly
-// inside it; with no broader root the root must be bound exactly at the
-// checkout's folder and hold no other bound root, as a broad root does.
-func declared(res *Resolved, roots []RootMatch, checkout string) bool {
-	if checkout == "" || len(roots) == 0 {
-		return false
-	}
-	deep := roots[len(roots)-1]
-	if !within(deep.Root, checkout) {
-		return false
-	}
-	if len(roots) == 1 {
-		if !within(checkout, deep.Root) {
-			return false
-		}
-		for _, r := range res.roots {
-			if r.path != deep.Root && within(r.path, deep.Root) {
-				return false
-			}
-		}
-		return true
-	}
-	outer := roots[len(roots)-2].Root
-	return within(checkout, outer) && !within(outer, checkout)
-}
-
-// within reports whether path is dir or lies inside it, compared as roots
-// are matched.
-func within(path, dir string) bool {
-	k, d := strings.ToLower(filepath.Clean(path)), strings.ToLower(filepath.Clean(dir))
-	return k == d || strings.HasPrefix(k, strings.TrimSuffix(d, string(filepath.Separator))+string(filepath.Separator))
+		"it is local content under a public root, which is never proof it is public; the operator can retag it")
 }
 
 // sessionPlacement turns a checkout's placement into a session pin's: a

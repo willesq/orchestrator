@@ -130,9 +130,7 @@ func TestUnreadableVisibilityIsPrivate(t *testing.T) {
 	e.placedAs(t, "repo://oss-org/lib/README.md", spaces.Quarantine, rag.OriginGitHub)
 	e.placedAs(t, "repo://oss-org/new/README.md", spaces.Quarantine, rag.OriginGitHub)
 
-	// A checkout whose repo GitHub will not show this login. (A rate limit
-	// or outage is not placed public either, but moves nothing:
-	// TestLookupErrorsThatSayNothingMoveNothing.)
+	// A checkout whose repo GitHub will not show this login.
 	e.s.repos = newRepoLookups(func(context.Context, ...string) ([]byte, error) { return nil, errors.New("gh: Not Found (HTTP 404)") })
 	lib := filepath.Join(e.code, "lib") // a checkout of oss-org/lib
 	writeFile(t, filepath.Join(lib, "README.md"), "# lib")
@@ -186,20 +184,25 @@ func TestSessionWritersNeverTargetPublic(t *testing.T) {
 
 	t.Run("hand-off", func(t *testing.T) {
 		e := newWritesEnv(t, orgNodes{})
-		lib := filepath.Join(e.code, "lib") // oss-org/lib is public and bound to oss
-		applyOSSRoots(t, &e, lib)           // and the operator declared it public
-		doc := filepath.Join(lib, "NOTES.md")
-		writeFile(t, doc, "# notes")
-		// Its sources-refresh copy would be public; the hand-off is session
-		// content, so it goes to public_root_sessions (personal).
-		m := rag.Meta{Writer: rag.WriterSources, Origin: rag.Origin{System: rag.OriginFS, Path: doc}}
-		if err := e.placer().place(ctx, &m); err != nil || m.Space != "oss" {
-			t.Fatalf("the sources copy placed in %q, %v", m.Space, err)
+		// oss-org/lib is public and bound to oss, under the public root;
+		// oss-org/secret is private.
+		doc, secret := filepath.Join(e.code, "lib", "NOTES.md"), filepath.Join(e.code, "secret", "NOTES.md")
+		for _, f := range []string{doc, secret} {
+			writeFile(t, f, "# notes")
+			// The sources copy is quarantined (D-65); placing it also puts
+			// the repo's visibility in the cache hand-offs read.
+			m := rag.Meta{Writer: rag.WriterSources, Origin: rag.Origin{System: rag.OriginFS, Path: f}}
+			if err := e.placer().place(ctx, &m); err != nil || m.Space != spaces.Quarantine {
+				t.Fatalf("the sources copy placed in %q, %v", m.Space, err)
+			}
+			if err := storeFile(ctx, e.svc, handoff.File{Path: f}, "", nil); err != nil {
+				t.Fatal(err)
+			}
 		}
-		if err := storeFile(ctx, e.svc, handoff.File{Path: doc}, "", nil); err != nil {
-			t.Fatal(err)
-		}
+		// The hand-off is session content under a public root, so it goes
+		// to public_root_sessions (personal); a private repo's stays out.
 		e.placedAs(t, "file://"+doc, "personal", rag.OriginFS)
+		e.placedAs(t, "file://"+secret, spaces.Quarantine, rag.OriginFS)
 	})
 
 	t.Run("client", func(t *testing.T) {
@@ -256,12 +259,12 @@ func applyOSS(t *testing.T, e *writesEnv, roots, prefixes []string) {
 }
 
 // TestCheckoutWithoutGitHubRemoteNeedsProofUnderPublicRoot is SP-030.1.a5
-// (D-50, D-64): under the public root, a checkout whose remote is not on
-// GitHub, or that has none, is quarantined; it becomes public when the
-// operator declares that folder public. Under D-64 a broad public root
-// proves nothing for any local content: a verified public GitHub checkout
-// needs the same declaration, and a plain folder in no checkout cannot be
-// declared (RC-401).
+// (D-50, D-65): under the public root, a checkout whose remote is not on
+// GitHub, or that has none, is quarantined, and so is every other local
+// folder: nothing on disk declares a folder public. A .git at, above or
+// inside the public root, a symlinked .git, a verified public GitHub
+// checkout, and a public root bound exactly at the folder all leave it in
+// quarantine until the policy's public_paths (SP-076) or a retag.
 func TestCheckoutWithoutGitHubRemoteNeedsProofUnderPublicRoot(t *testing.T) {
 	ctx := context.Background()
 	e := newWritesEnv(t, orgNodes{})
@@ -273,20 +276,25 @@ func TestCheckoutWithoutGitHubRemoteNeedsProofUnderPublicRoot(t *testing.T) {
 	local := filepath.Join(e.code, "local") // a checkout with no remote
 	writeFile(t, filepath.Join(local, ".git", "HEAD"), "ref: refs/heads/main\n")
 	writeFile(t, filepath.Join(local, "docs", "README.md"), "# local")
+	symlinked := filepath.Join(e.code, "repo-tool") // its .git is a symbolic link
+	gitdir := filepath.Join(t.TempDir(), "gitdir")
+	writeFile(t, filepath.Join(gitdir, "HEAD"), "ref: refs/heads/main\n")
+	writeFile(t, filepath.Join(symlinked, "README.md"), "# tool")
+	if err := os.Symlink(gitdir, filepath.Join(symlinked, ".git")); err != nil {
+		t.Fatal(err)
+	}
 	plain := filepath.Join(e.code, "notes") // no checkout at all
 	writeFile(t, filepath.Join(plain, "README.md"), "# notes")
 	lib := filepath.Join(e.code, "lib") // oss-org/lib, verified public
 	writeFile(t, filepath.Join(lib, "README.md"), "# lib")
-
-	if st, err := sources.Refresh(ctx, sources.Source{Kind: sources.KindRepo, URI: gitlab}, e.svc, sources.RefreshOpts{}); err != nil || st != "ok" {
-		t.Fatalf("refresh = %q, %v", st, err)
-	}
-	e.placedAs(t, sources.CheckoutURI(filepath.Join(gitlab, "README.md")), spaces.Quarantine, rag.OriginFS)
+	files := []string{filepath.Join(gitlab, "README.md"), filepath.Join(local, "docs", "README.md"),
+		filepath.Join(symlinked, "README.md"), filepath.Join(plain, "README.md"), filepath.Join(lib, "README.md")}
 
 	type where struct {
 		Space string
 		Rule  spaces.PlaceRule
 	}
+	quarantined := where{spaces.Quarantine, spaces.PlaceNoPublicProof}
 	place := func(path string) where {
 		t.Helper()
 		p, err := e.s.ExplainPlacement(operatorCtx, &orchdv1.ExplainPlacementRequest{Target: path})
@@ -299,46 +307,44 @@ func TestCheckoutWithoutGitHubRemoteNeedsProofUnderPublicRoot(t *testing.T) {
 		}
 		return where{p.GetSpace(), spaces.PlaceRule(p.GetRule())}
 	}
-	for path, want := range map[string]where{
-		filepath.Join(gitlab, "README.md"):        {Space: spaces.Quarantine, Rule: spaces.PlaceNoPublicProof},
-		filepath.Join(local, "docs", "README.md"): {Space: spaces.Quarantine, Rule: spaces.PlaceNoPublicProof},
-		filepath.Join(plain, "README.md"):         {Space: spaces.Quarantine, Rule: spaces.PlaceNoPublicProof},
-		filepath.Join(lib, "README.md"):           {Space: spaces.Quarantine, Rule: spaces.PlaceNoPublicProof},
-	} {
-		if got := place(path); got != want {
-			t.Errorf("%s = %+v, want %+v", path, got, want)
+	check := func(when string) {
+		t.Helper()
+		for _, f := range files {
+			if got := place(f); got != quarantined {
+				t.Errorf("%s: %s = %+v, want %+v", when, f, got, quarantined)
+			}
 		}
 	}
-	// The folder's harness settings are still its root's.
-	if space, placed, err := e.s.placeCheckout(ctx, gitlab); err != nil || !placed || space != "oss" {
-		t.Fatalf("checkout settings for %s = %q %v, %v", gitlab, space, placed, err)
+	check("as found")
+	if st, err := sources.Refresh(ctx, sources.Source{Kind: sources.KindRepo, URI: gitlab}, e.svc, sources.RefreshOpts{}); err != nil || st != "ok" {
+		t.Fatalf("refresh = %q, %v", st, err)
 	}
-	// As before SP-030: a verified public repo gets its root's rules, a
-	// repo GitHub does not confirm public the rules of no space.
-	if space, placed, err := e.s.placeCheckout(ctx, lib); err != nil || !placed || space != "oss" {
-		t.Fatalf("checkout settings for %s = %q %v, %v", lib, space, placed, err)
+	e.placedAs(t, sources.CheckoutURI(filepath.Join(gitlab, "README.md")), spaces.Quarantine, rag.OriginFS)
+
+	// A .git at the public root, above it, or inside it (around the plain
+	// folder) declares nothing.
+	for _, dir := range []string{e.code, filepath.Dir(e.code), plain} {
+		writeFile(t, filepath.Join(dir, ".git", "HEAD"), "ref: refs/heads/main\n")
+		check("with a .git at " + dir)
+		if err := os.RemoveAll(filepath.Join(dir, ".git")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Nor does a public root bound exactly at each folder.
+	applyOSSRoots(t, &e, gitlab, filepath.Join(local, "docs"), symlinked, plain, lib)
+	check("with a public root at each folder")
+
+	// The folders' harness settings are still their root's, as before
+	// SP-030; a repo GitHub does not confirm public keeps the rules of a
+	// checkout with no space.
+	for _, dir := range []string{gitlab, lib} {
+		if space, placed, err := e.s.placeCheckout(ctx, dir); err != nil || !placed || space != "oss" {
+			t.Fatalf("checkout settings for %s = %q %v, %v", dir, space, placed, err)
+		}
 	}
 	if _, placed, err := e.s.placeCheckout(ctx, filepath.Join(e.code, "secret")); err != nil || placed {
 		t.Fatalf("checkout settings for a private repo: placed %v, %v", placed, err)
 	}
-
-	// The operator declares the GitLab checkout public, a folder inside the
-	// no-remote checkout, the GitHub checkout and the plain folder.
-	applyOSSRoots(t, &e, gitlab, filepath.Join(local, "docs"), lib, plain)
-	for path, want := range map[string]where{
-		filepath.Join(gitlab, "README.md"):        {Space: "oss", Rule: spaces.PlaceRoot},
-		filepath.Join(local, "docs", "README.md"): {Space: "oss", Rule: spaces.PlaceRoot},
-		filepath.Join(lib, "README.md"):           {Space: "oss", Rule: spaces.PlaceAgree},
-		filepath.Join(plain, "README.md"):         {Space: spaces.Quarantine, Rule: spaces.PlaceNoPublicProof},
-	} {
-		if got := place(path); got != want {
-			t.Errorf("declared %s = %+v, want %+v", path, got, want)
-		}
-	}
-	if st, err := sources.Refresh(ctx, sources.Source{Kind: sources.KindRepo, URI: gitlab}, e.svc, sources.RefreshOpts{}); err != nil || st != "ok" {
-		t.Fatalf("refresh = %q, %v", st, err)
-	}
-	e.placedAs(t, sources.CheckoutURI(filepath.Join(gitlab, "README.md")), "oss", rag.OriginFS)
 }
 
 // TestLeavesPublicNeedsAPublicCopy: only a copy stored in a public space of
@@ -375,94 +381,6 @@ func TestLeavesPublicNeedsAPublicCopy(t *testing.T) {
 	}
 }
 
-// TestUnaskedLookupMovesNothing: a declared checkout whose repo GitHub was
-// not asked about (the lookup budget is spent, or only the cache may
-// answer) is not placed public, but its public copy stays until GitHub
-// answers. Reason: any caller can spend the budget, so it must not delete
-// public content. An undeclared checkout leaves anyway: no answer could
-// make it public.
-func TestUnaskedLookupMovesNothing(t *testing.T) {
-	ctx := context.Background()
-	e := newWritesEnv(t, orgNodes{})
-	gh := &fakeRepos{repos: map[string][3]string{"oss-org/lib": {"oss-org", "lib", "public"}, "oss-org/secret": {"oss-org", "secret", "private"}}}
-	e.s.repos = newRepoLookups(gh.run)
-	lib := filepath.Join(e.code, "lib") // a checkout of oss-org/lib
-	applyOSSRoots(t, &e, lib)
-	e.s.repos.spent, e.s.repos.window = repoLookupsPerMin, e.s.repos.now()
-	undeclared := rag.Meta{Writer: rag.WriterSources, Origin: rag.Origin{System: rag.OriginFS, Path: filepath.Join(e.code, "secret", "README.md")}}
-	if !e.placer().leavesPublic(ctx, "oss", undeclared) {
-		t.Fatal("an undeclared checkout stayed public while the budget was spent")
-	}
-	doc := filepath.Join(lib, "README.md")
-	m := rag.Meta{Writer: rag.WriterSources, Origin: rag.Origin{System: rag.OriginFS, Path: doc}}
-	if e.placer().leavesPublic(ctx, "oss", m) {
-		t.Fatal("a spent budget took a public copy out of public")
-	}
-	if err := e.placer().place(ctx, &m); err != nil || m.Space != spaces.Quarantine {
-		t.Fatalf("placed in %q, %v", m.Space, err)
-	}
-	unasked := false
-	e.s.repos.lookup(withUnaskedNote(withCachedRepoLookups(ctx), &unasked), "oss-org", "lib")
-	if !unasked || gh.calls != 0 {
-		t.Fatalf("a cache-only lookup: unasked %v, calls %d", unasked, gh.calls)
-	}
-	// Once GitHub answers, the copy stays public.
-	e.s.repos.spent = 0
-	if e.placer().leavesPublic(ctx, "oss", m) || gh.calls != 1 {
-		t.Fatalf("a verified public checkout left public (calls %d)", gh.calls)
-	}
-}
-
-// TestSymlinkedGitIsACheckout: a .git the checkout reader does not follow
-// (a symbolic link) still makes a checkout, so under a public root it needs
-// proof like any other.
-func TestSymlinkedGitIsACheckout(t *testing.T) {
-	ctx := context.Background()
-	e := newWritesEnv(t, orgNodes{})
-	gitdir := filepath.Join(t.TempDir(), "gitdir")
-	writeFile(t, filepath.Join(gitdir, "HEAD"), "ref: refs/heads/main\n")
-	dir := filepath.Join(e.code, "repo-tool")
-	writeFile(t, filepath.Join(dir, "README.md"), "# tool")
-	if err := os.Symlink(gitdir, filepath.Join(dir, ".git")); err != nil {
-		t.Fatal(err)
-	}
-	m := rag.Meta{Writer: rag.WriterSources, Origin: rag.Origin{System: rag.OriginFS, Path: filepath.Join(dir, "README.md")}}
-	if err := e.placer().place(ctx, &m); err != nil || m.Space != spaces.Quarantine {
-		t.Fatalf("placed in %q, %v", m.Space, err)
-	}
-	if gitEntryAbove(filepath.Join(dir, "README.md")) != dir || gitEntryAbove("/") != "" {
-		t.Fatal("gitEntryAbove")
-	}
-}
-
-// TestLookupErrorsThatSayNothingMoveNothing: a rate limit or outage is not
-// a reading of a repo's visibility, so its public copy stays; GitHub's
-// not-found answer (a repo this login cannot see) is one, so it leaves.
-func TestLookupErrorsThatSayNothingMoveNothing(t *testing.T) {
-	ctx := context.Background()
-	e := newWritesEnv(t, orgNodes{})
-	applyOSSRoots(t, &e, filepath.Join(e.code, "lib")) // declared, so only GitHub's answer decides
-	doc := filepath.Join(e.code, "lib", "README.md")
-	m := rag.Meta{Writer: rag.WriterSources, Origin: rag.Origin{System: rag.OriginFS, Path: doc}}
-	for _, c := range []struct {
-		err    string
-		leaves bool
-	}{
-		{"gh: API rate limit exceeded (HTTP 403)", false},
-		{"gh: HTTP 502", false},
-		{"gh: Not Found (HTTP 404)", true},
-	} {
-		e.s.repos = newRepoLookups(func(context.Context, ...string) ([]byte, error) { return nil, errors.New(c.err) })
-		if got := e.placer().leavesPublic(ctx, "oss", m); got != c.leaves {
-			t.Errorf("%s: leaves = %v", c.err, got)
-		}
-	}
-	e.s.repos = newRepoLookups(nil)
-	if e.placer().leavesPublic(ctx, "oss", m) {
-		t.Error("no GitHub runner took a copy out of public")
-	}
-}
-
 // TestLocalContentUnderBroadPublicRootNeverPublic is D-64's regression: local
 // content under a public root the operator did not declare for it (a plain
 // folder, a checkout of a verified public repo, and a folder a session
@@ -480,19 +398,28 @@ func TestLocalContentUnderBroadPublicRootNeverPublic(t *testing.T) {
 	// and registers it as a source.
 	staged := filepath.Join(e.code, "staged")
 	writeFile(t, filepath.Join(staged, "SECRET.md"), "# acme internals")
+	// Or stages them beside a .git naming another job's org, to move them
+	// into that job's space.
+	steered := filepath.Join(e.code, "steered")
+	defaultCheckout(t, steered, "oss-org", "moved") // GitHub: acme/moved, private
+	writeFile(t, filepath.Join(steered, "SECRET.md"), "# acme internals")
+	steeredPrivate := filepath.Join(e.code, "willesq", "steered") // under the private root
+	defaultCheckout(t, steeredPrivate, "oss-org", "moved")
+	writeFile(t, filepath.Join(steeredPrivate, "SECRET.md"), "# acme internals")
 	e.s.sourcesReg = sources.NewRegistry(mustDB(t))
 	job := sessionCtx(ctx, sessionPin{SessionID: "s-acme", Space: "acme", Revision: e.rev})
 	reg, err := e.s.SaveSource(job, &orchdv1.SaveSourceRequest{Source: &orchdv1.RegisteredSource{Kind: "repo", Uri: staged, RefreshSecs: 3600}})
 	if err != nil {
 		t.Fatalf("a session registering a source: %v", err)
 	}
-	for _, dir := range []string{plain, lib, reg.GetUri()} {
+	for _, dir := range []string{plain, lib, reg.GetUri(), steered, steeredPrivate} {
 		if st, err := sources.Refresh(ctx, sources.Source{Kind: sources.KindRepo, URI: dir}, e.svc,
 			sources.RefreshOpts{LeavesPublic: e.placer().leavesPublic}); err != nil || st != "ok" {
 			t.Fatalf("%s: refresh = %q, %v", dir, st, err)
 		}
 	}
-	for _, f := range []string{filepath.Join(plain, "README.md"), filepath.Join(lib, "README.md"), filepath.Join(staged, "SECRET.md")} {
+	for _, f := range []string{filepath.Join(plain, "README.md"), filepath.Join(lib, "README.md"), filepath.Join(staged, "SECRET.md"),
+		filepath.Join(steered, "SECRET.md"), filepath.Join(steeredPrivate, "SECRET.md")} {
 		e.placedAs(t, sources.CheckoutURI(f), spaces.Quarantine, rag.OriginFS)
 	}
 	// A .git planted at the broad root, or above it, declares nothing.
@@ -514,4 +441,20 @@ func TestLocalContentUnderBroadPublicRootNeverPublic(t *testing.T) {
 		t.Fatalf("web refresh = %q, %v", st, err)
 	}
 	e.placedAs(t, page.URL+"/guide", "oss", rag.OriginWeb)
+
+	// A registered page under the bound prefix that redirects off it is
+	// placed by where it landed.
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not public")) }))
+	defer elsewhere.Close()
+	redirecting := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, elsewhere.URL+"/x", http.StatusFound)
+	}))
+	defer redirecting.Close()
+	applyOSSPrefix(t, &e, redirecting.URL+"/")
+	if st, err := sources.Refresh(ctx, sources.Source{Kind: sources.KindWeb, URI: redirecting.URL + "/moved"}, e.svc, sources.RefreshOpts{}); err != nil || st != "ok" {
+		t.Fatalf("redirected refresh = %q, %v", st, err)
+	}
+	if o := e.placedAs(t, redirecting.URL+"/moved", spaces.Quarantine, rag.OriginWeb); o["url"] != elsewhere.URL+"/x" {
+		t.Fatalf("redirected page origin = %v", o)
+	}
 }

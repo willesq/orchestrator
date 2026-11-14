@@ -38,16 +38,9 @@ type writePlacer struct {
 
 // place is a rag.PlaceFunc.
 func (w *writePlacer) place(ctx context.Context, m *rag.Meta) error {
-	_, err := w.placeRule(ctx, m)
-	return err
-}
-
-// placeRule places m and returns the rule that decided, "" when no policy
-// was consulted.
-func (w *writePlacer) placeRule(ctx context.Context, m *rag.Meta) (spaces.PlaceRule, error) {
 	if w.spaces == nil {
 		m.Space = spaces.Shared
-		return "", nil
+		return nil
 	}
 	res, rev, err := w.spaces.CurrentRevision()
 	switch {
@@ -55,12 +48,12 @@ func (w *writePlacer) placeRule(ctx context.Context, m *rag.Meta) (spaces.PlaceR
 		// Reason: with no policy that verifies, nothing can be placed, and
 		// unplaceable content is quarantined, never shared (INV-03).
 		m.Space = spaces.Quarantine
-		return "", nil
+		return nil
 	case err != nil:
-		return "", err
+		return err
 	case !res.Configured():
 		m.Space, m.LabelsV = spaces.Shared, rev
-		return "", nil
+		return nil
 	}
 	if m.Writer == rag.WriterFile {
 		// Reason: an agent picks which files are handed off, so placing
@@ -69,7 +62,7 @@ func (w *writePlacer) placeRule(ctx context.Context, m *rag.Meta) (spaces.PlaceR
 	}
 	p, err := w.placement(ctx, res, m.Origin)
 	if err != nil {
-		return "", fmt.Errorf("place %s: %w", m.SourceURI, err)
+		return fmt.Errorf("place %s: %w", m.SourceURI, err)
 	}
 	if remoteSteered(m, p) {
 		// Reason: an agent can write a .git naming any org beside a file it
@@ -79,30 +72,31 @@ func (w *writePlacer) placeRule(ctx context.Context, m *rag.Meta) (spaces.PlaceR
 		// editing session's space).
 		p = quarantined("a local file placed only by its checkout's remote")
 	}
-	if p.Outcome == spaces.Placed && !mayWritePublic(m.Writer) {
-		if s, _ := res.Space(p.Space); s.Kind == spaces.Public {
-			// Reason: the public space is read by every session, so only
-			// the writers that verify content public reach it. Content a
-			// session wrote (an edited file in a public repo) goes where
-			// sessions under a public root write (D-22, SP-030).
-			p = publicRootSessions(res)
-		}
+	if !mayWritePublic(m.Writer) && sessionContentUnderPublicRoot(res, p) {
+		// Reason: the public space is read by every session, so only the
+		// writers that verify content public reach it. Content a session
+		// wrote under a public root (an edited file) goes where sessions
+		// under a public root write (D-22, SP-030).
+		p = publicRootSessions(res)
 	}
 	if p.Outcome == spaces.Conflict {
-		return p.Rule, fmt.Errorf("%s: %w", m.SourceURI, errWriteConflict)
+		return fmt.Errorf("%s: %w", m.SourceURI, errWriteConflict)
 	}
 	m.Space, m.LabelsV = p.Space, rev
-	return p.Rule, nil
+	return nil
 }
 
 // remoteSteered reports whether p placed a local file by its checkout's
 // remote where a .git the writer could have made decides: under no root at
-// all, or, for an edited file, over the root it is under.
+// all, or over the root it is under. Reason (SP-030, D-65): nothing on disk
+// places content, so a session that writes a .git naming another job's org
+// beside files it registers as a source cannot move them into that job's
+// space; they wait in quarantine for the operator.
 func remoteSteered(m *rag.Meta, p spaces.Placement) bool {
 	if m.Origin.System != rag.OriginFS {
 		return false
 	}
-	return p.Rule == spaces.PlaceRemote || (m.Writer == rag.WriterFile && p.Rule == spaces.PlaceRemoteStricter)
+	return p.Rule == spaces.PlaceRemote || p.Rule == spaces.PlaceRemoteStricter
 }
 
 // placement classifies o under res.
@@ -155,10 +149,23 @@ func (w *writePlacer) sessionPlacement(ctx context.Context, res *spaces.Resolved
 
 // mayWritePublic reports whether writer may place content in a public
 // space: only the docs sync and the sources refresh, which place by what
-// GitHub, a bound web prefix or an operator's public root verifies. Session
+// GitHub or a bound web prefix verifies (and, with SP-076, the policy's
+// public_paths). Session
 // records, summaries, hand-offs and client notes never do (SP-030.1.a4).
 func mayWritePublic(writer string) bool {
 	return writer == rag.WriterDocs || writer == rag.WriterSources
+}
+
+// sessionContentUnderPublicRoot reports whether p places content in a
+// public space, or would but for the public-root proof (no_public_proof)
+// with no remote GitHub says is private or unknown. Content of a repo not
+// verified public stays in quarantine.
+func sessionContentUnderPublicRoot(res *spaces.Resolved, p spaces.Placement) bool {
+	if p.Outcome == spaces.Placed {
+		s, _ := res.Space(p.Space)
+		return s.Kind == spaces.Public
+	}
+	return p.Rule == spaces.PlaceNoPublicProof && (p.Remote == nil || p.Remote.Repo.Visibility == spaces.VisibilityPublic)
 }
 
 // publicRootSessions is where session content that would otherwise be
@@ -188,14 +195,7 @@ func (w *writePlacer) leavesPublic(ctx context.Context, stored string, m rag.Met
 	if s, ok := res.Space(stored); !ok || s.Kind != spaces.Public {
 		return false
 	}
-	unasked := false
-	rule, err := w.placeRule(withUnaskedNote(ctx, &unasked), &m)
-	if unasked && rule != spaces.PlaceNoPublicProof {
-		// GitHub was not asked, so nothing was learned: decide next time.
-		// Content no answer could make public (no_public_proof) leaves now.
-		return false
-	}
-	if err != nil {
+	if err := w.place(ctx, &m); err != nil {
 		return true
 	}
 	s, ok := res.Space(m.Space)

@@ -132,7 +132,7 @@ func TestExplainPlacementCases(t *testing.T) {
 		// Local content under the broad public root is not public (SP-030, D-64).
 		{"public repo in public org", code + "/lib", "path", []string{"oss"}, "oss-org/lib (public) -> oss", "no_public_proof", "quarantine", [2]string{"personal", "oss"}},
 		{"private repo in public org", code + "/secret", "path", []string{"oss"}, "oss-org/secret (private) -> oss", "no_public_proof", "quarantine", [2]string{"quarantine", ""}},
-		{"repo transferred between orgs", code + "/moved", "path", []string{"oss"}, "acme/moved (private) -> acme", "remote_stricter", "acme", [2]string{"acme", "acme"}},
+		{"repo transferred between orgs", code + "/moved", "path", []string{"oss"}, "acme/moved (private) -> acme", "no_public_proof", "quarantine", [2]string{"acme", "acme"}},
 		{"root and remote agree", code + "/company1/app/main.go", "path", []string{"oss", "acme"}, "acme/app (private) -> acme", "root_and_remote_agree", "acme", [2]string{"acme", "acme"}},
 		{"remote stricter than root", code + "/willesq/app", "path", []string{"oss", "personal"}, "acme/app (private) -> acme", "remote_stricter", "acme", [2]string{"acme", "acme"}},
 		{"root stricter than remote", code + "/company1/lib", "path", []string{"oss", "acme"}, "oss-org/lib (public) -> oss", "root_stricter", "acme", [2]string{"acme", "acme"}},

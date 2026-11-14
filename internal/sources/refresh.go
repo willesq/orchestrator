@@ -106,9 +106,17 @@ func refreshWeb(ctx context.Context, s Source, ing Ingester, opts RefreshOpts) (
 		text = stripHTML(text)
 	}
 	text, _ = redact.Redact(text)
+	// Reason: a page is placed by the URL its content came from. A
+	// registered URL under a bound prefix can redirect anywhere (an open
+	// redirect, a renamed repo), and the page it lands on must not take the
+	// prefix's space (SP-030).
+	from := s.URI
+	if resp.Request != nil && resp.Request.URL != nil {
+		from = resp.Request.URL.String()
+	}
 	if _, err := ing.IngestText(ctx, text, rag.Meta{
 		SourceURI: s.URI, SourceType: KindWeb, Scope: s.Scope, Tags: s.Tags, Writer: rag.WriterSources,
-		Origin: rag.Origin{System: rag.OriginWeb, URL: s.URI},
+		Origin: rag.Origin{System: rag.OriginWeb, URL: from},
 	}); err != nil {
 		return "error", err
 	}

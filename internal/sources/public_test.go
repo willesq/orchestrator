@@ -106,3 +106,37 @@ func TestLeavePublicSourcesEdges(t *testing.T) {
 		t.Fatalf("a failed listing deleted %q", st.log)
 	}
 }
+
+// TestScanSweepsOrphansOutOfPublic: once an hour a scan checks every doc
+// the sources refresh ever stored, registered or not, so the public copy of
+// a removed source or a deleted folder leaves too. Only checkout files and
+// web pages are judged; anything else is left alone.
+func TestScanSweepsOrphansOutOfPublic(t *testing.T) {
+	orphan, page, other := "checkout:///gone/README.md", "https://docs.example/a", "manual://note"
+	st := &spacedStore{space: map[string]string{orphan: "oss", page: "oss", other: "oss"}}
+	st.stored = map[string]string{orphan: rag.WriterSources, page: rag.WriterSources, other: rag.WriterSources}
+	var asked []rag.Meta
+	sc := NewScheduler(newRegistry(t), st, RefreshOpts{LeavesPublic: func(_ context.Context, _ string, m rag.Meta) bool {
+		asked = append(asked, m)
+		return m.Origin.System == rag.OriginFS
+	}})
+	clock := int64(1000)
+	sc.now = func() int64 { return clock }
+	sc.Scan(context.Background())
+	if !slices.Equal(st.log, []string{"delete " + orphan}) {
+		t.Fatalf("first scan = %q", st.log)
+	}
+	if len(asked) != 2 || asked[0].Origin != (rag.Origin{System: rag.OriginFS, Path: "/gone/README.md"}) || asked[1].Origin != (rag.Origin{System: rag.OriginWeb, URL: page}) {
+		t.Fatalf("asked %+v", asked)
+	}
+	st.log, clock = nil, clock+sweepEvery-1
+	sc.Scan(context.Background())
+	if len(st.log) != 0 {
+		t.Fatalf("a scan within the hour swept again: %q", st.log)
+	}
+	clock++
+	sc.Scan(context.Background())
+	if len(st.log) != 1 {
+		t.Fatalf("a scan an hour later did not sweep: %q", st.log)
+	}
+}

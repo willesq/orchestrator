@@ -14,6 +14,8 @@ type Scheduler struct {
 	ing  Ingester
 	opts RefreshOpts
 	now  func() int64
+	// swept is when Scan last ran sweepPublic.
+	swept int64
 }
 
 // NewScheduler builds a scheduler over a registry and an ingester.
@@ -24,6 +26,10 @@ func NewScheduler(reg *Registry, ing Ingester, opts RefreshOpts) *Scheduler {
 // Scan refreshes every source whose interval has elapsed.
 func (s *Scheduler) Scan(ctx context.Context) {
 	now := s.now()
+	if s.opts.LeavesPublic != nil && (s.swept == 0 || now-s.swept >= sweepEvery) {
+		sweepPublic(ctx, s.ing, s.opts)
+		s.swept = now
+	}
 	due, err := s.reg.Due(ctx, now)
 	if err != nil {
 		return

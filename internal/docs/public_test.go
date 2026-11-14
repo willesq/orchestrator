@@ -153,3 +153,56 @@ func TestLeavePublicEdges(t *testing.T) {
 		t.Fatalf("order = %v", got)
 	}
 }
+
+// TestUnlistedReposLeavePublic: a recorded repo missing from a successful
+// listing, and every recorded repo of an owner whose binding no longer
+// checks out, have their public docs taken out.
+func TestUnlistedReposLeavePublic(t *testing.T) {
+	ctx := context.Background()
+	var log []string
+	st := &placingStore{space: map[string]string{}, log: &log}
+	git := loggingGit{&fakeGit{layout: map[string]map[string]string{"gone": {"README.md": "g"}, "kept": {"README.md": "k"}}}, &log}
+	gh := &fakeGH{repos: []Repo{{Name: "gone", HeadSHA: "g1", OwnerNodeID: "O"}, {Name: "kept", HeadSHA: "k1", OwnerNodeID: "O"}}}
+	reg, _, opts := syncDeps(t, gh, git)
+	opts.GH, opts.LeavesPublic = gh, leavesOSS
+	if res := SyncOwner(ctx, reg, Owner{Owner: "o"}, st, opts); res.Synced != 2 {
+		t.Fatalf("first sync = %+v", res)
+	}
+	gh.repos, log = gh.repos[1:], nil
+	SyncOwner(ctx, reg, Owner{Owner: "o"}, st, opts)
+	if !slices.Equal(log, []string{"delete repo://o/gone/README.md"}) {
+		t.Fatalf("missing repo: %q", log)
+	}
+	log = nil
+	opts.CheckOwner = func(context.Context, string) error { return errors.New("binding suspended") }
+	if res := SyncOwner(ctx, reg, Owner{Owner: "o"}, st, opts); res.Status != "error" {
+		t.Fatalf("suspended = %+v", res)
+	}
+	if !slices.Equal(log, []string{"delete repo://o/kept/README.md"}) {
+		t.Fatalf("suspended binding: %q", log)
+	}
+	if leaveUnlisted(ctx, reg, st, Owner{Owner: "o"}, nil, SyncOpts{}); len(log) != 1 {
+		t.Fatal("no check deleted something")
+	}
+
+	// A listing GitHub refused takes them out; a network failure does not.
+	opts.CheckOwner = nil
+	for _, c := range []struct {
+		err    string
+		leaves bool
+	}{
+		{"error connecting to api.github.com", false},
+		{"gh auth login required", false},
+		{"gh: Could not resolve to a RepositoryOwner with the login of 'o'. (HTTP 404)", true},
+	} {
+		st.space["repo://o/kept/README.md"], log = "oss", nil
+		if err := reg.SetHash(ctx, "repo://o/kept/README.md", "x", 1); err != nil {
+			t.Fatal(err)
+		}
+		opts.GH = fakeGH{err: errors.New(c.err)}
+		SyncOwner(ctx, reg, Owner{Owner: "o"}, st, opts)
+		if got := len(log) == 1; got != c.leaves {
+			t.Errorf("%s: deleted %q", c.err, log)
+		}
+	}
+}

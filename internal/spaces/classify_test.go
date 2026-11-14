@@ -54,7 +54,7 @@ func TestClassifyCases(t *testing.T) {
 		{name: "private repo in public org", o: Origin{System: SystemFS, Path: h + "/secret", Remote: repo("oss-org", "secret", VisibilityPrivate)}, space: Quarantine, rule: PlaceNoPublicProof, roots: []string{"oss"}},
 		{name: "public org repo with unchecked visibility", o: Origin{System: SystemGitHub, Remote: repo("oss-org", "lib", VisibilityUnknown)}, space: Quarantine, rule: PlaceNotVerifiedPublic},
 		{name: "private repo of public org under private root", o: Origin{System: SystemFS, Path: h + "/willesq/secret", Remote: repo("oss-org", "secret", VisibilityPrivate)}, space: "personal", rule: PlaceRootStricter, roots: []string{"oss", "personal"}},
-		{name: "repo transferred from public org to job org", o: Origin{System: SystemFS, Path: h + "/lib", Remote: repo("acme", "lib", VisibilityPrivate)}, space: "acme", rule: PlaceRemoteStricter, roots: []string{"oss"}},
+		{name: "repo transferred from public org to job org", o: Origin{System: SystemFS, Path: h + "/lib", Remote: repo("acme", "lib", VisibilityPrivate)}, space: Quarantine, rule: PlaceNoPublicProof, roots: []string{"oss"}},
 		{name: "repo transferred between job orgs", o: Origin{System: SystemFS, Path: h + "/company1/app", Remote: repo("globex", "app", VisibilityPrivate)}, space: Quarantine, rule: PlaceConflict, roots: []string{"oss", "acme"}},
 		{name: "root and remote agree", o: Origin{System: SystemFS, Path: h + "/company1/app", Remote: repo("acme", "app", VisibilityPrivate)}, space: "acme", rule: PlaceAgree, roots: []string{"oss", "acme"}},
 		{name: "remote stricter than root", o: Origin{System: SystemFS, Path: h + "/willesq/app", Remote: repo("acme", "app", VisibilityPrivate)}, space: "acme", rule: PlaceRemoteStricter, roots: []string{"oss", "personal"}},
@@ -335,16 +335,16 @@ func TestWebPrefixBoundaries(t *testing.T) {
 	}
 }
 
-// TestPublicRootNeedsProofForCheckouts is SP-030.1.a5 (D-50, D-64) in the
-// classifier: under a public root, local content is public only when the
-// operator bound a public root at or inside its checkout, and then not if
-// GitHub says the repo is private. A broad public root alone is not proof,
-// whatever the remote, and content in no checkout cannot be declared.
-// Sessions keep D-22, and stricter roots are unaffected.
+// TestPublicRootNeedsProofForCheckouts is SP-030.1.a5 (D-50, D-65) in the
+// classifier: until public_paths exist (SP-076), no local content under a
+// public root is placed public, whatever the remote and however the roots
+// are nested, even with a public root bound exactly at the folder. A repo
+// GitHub does not report public is named for the root's lack of proof too.
+// Sessions keep D-22, and stricter roots and remotes are unaffected.
 func TestPublicRootNeedsProofForCheckouts(t *testing.T) {
 	p := placementPolicy
 	p.Spaces = slices.Clone(p.Spaces)
-	p.Spaces[0].Roots = []string{"~/code", "~/code/declared", "~/code/mono/docs"}
+	p.Spaces[0].Roots = []string{"~/code", "~/code/declared"}
 	res := resolvePlacement(t, p)
 	const h = "/home/u/code"
 	for _, c := range []struct {
@@ -353,36 +353,21 @@ func TestPublicRootNeedsProofForCheckouts(t *testing.T) {
 		space string
 		rule  PlaceRule
 	}{
-		{"checkout with no remote", Origin{System: SystemFS, Path: h + "/gl/a.md", Checkout: h + "/gl"}, Quarantine, PlaceNoPublicProof},
-		{"declared at the checkout", Origin{System: SystemFS, Path: h + "/declared/a.md", Checkout: h + "/declared"}, "oss", PlaceRoot},
-		{"declared inside the checkout", Origin{System: SystemFS, Path: h + "/mono/docs/a.md", Checkout: h + "/mono"}, "oss", PlaceRoot},
-		{"outside the declared folder", Origin{System: SystemFS, Path: h + "/mono/src/a.md", Checkout: h + "/mono"}, Quarantine, PlaceNoPublicProof},
-		{"verified public on GitHub, undeclared", Origin{System: SystemFS, Path: h + "/x/a.md", Checkout: h + "/x", Remote: repo("stranger", "x", VisibilityPublic)}, Quarantine, PlaceNoPublicProof},
-		{"public org repo, undeclared", Origin{System: SystemFS, Path: h + "/lib/a.md", Checkout: h + "/lib", Remote: repo("oss-org", "lib", VisibilityPublic)}, Quarantine, PlaceNoPublicProof},
-		{"verified public on GitHub, declared", Origin{System: SystemFS, Path: h + "/declared/a.md", Checkout: h + "/declared", Remote: repo("stranger", "d", VisibilityPublic)}, "oss", PlaceRoot},
-		{"private on GitHub, declared", Origin{System: SystemFS, Path: h + "/declared/a.md", Checkout: h + "/declared", Remote: repo("stranger", "d", VisibilityPrivate)}, Quarantine, PlaceNotVerifiedPublic},
-		{"in no checkout", Origin{System: SystemFS, Path: h + "/notes/a.md"}, Quarantine, PlaceNoPublicProof},
-		{"in no checkout, inside a declared root", Origin{System: SystemFS, Path: h + "/declared/plain/a.md"}, Quarantine, PlaceNoPublicProof},
-		// A .git planted at or above the broad root does not declare it.
-		{"checkout at the broad root", Origin{System: SystemFS, Path: h + "/x/a.md", Checkout: h}, Quarantine, PlaceNoPublicProof},
-		{"checkout above the broad root", Origin{System: SystemFS, Path: h + "/x/a.md", Checkout: "/home/u"}, Quarantine, PlaceNoPublicProof},
-		{"checkout above a declared root, at the broad root", Origin{System: SystemFS, Path: h + "/declared/a.md", Checkout: h}, Quarantine, PlaceNoPublicProof},
-		{"stricter remote under a public root", Origin{System: SystemFS, Path: h + "/x/a.md", Checkout: h + "/x", Remote: repo("acme", "x", VisibilityPrivate)}, "acme", PlaceRemoteStricter},
-		{"under a private root", Origin{System: SystemFS, Path: h + "/willesq/a.md", Checkout: h + "/willesq"}, "personal", PlaceRoot},
-		{"session under a public root", Origin{System: SystemSession, Path: h + "/gl", Checkout: h + "/gl"}, "personal", PlacePublicRootSession},
+		{"no remote", Origin{System: SystemFS, Path: h + "/gl/a.md"}, Quarantine, PlaceNoPublicProof},
+		{"verified public on GitHub", Origin{System: SystemFS, Path: h + "/x/a.md", Remote: repo("stranger", "x", VisibilityPublic)}, Quarantine, PlaceNoPublicProof},
+		{"public org repo", Origin{System: SystemFS, Path: h + "/lib/a.md", Remote: repo("oss-org", "lib", VisibilityPublic)}, Quarantine, PlaceNoPublicProof},
+		{"private repo of public org", Origin{System: SystemFS, Path: h + "/s/a.md", Remote: repo("oss-org", "s", VisibilityPrivate)}, Quarantine, PlaceNoPublicProof},
+		{"under a public root bound at its folder", Origin{System: SystemFS, Path: h + "/declared/a.md", Remote: repo("stranger", "d", VisibilityPublic)}, Quarantine, PlaceNoPublicProof},
+		{"under a private root", Origin{System: SystemFS, Path: h + "/willesq/a.md"}, "personal", PlaceRoot},
+		{"stricter remote under a public root", Origin{System: SystemFS, Path: h + "/x/a.md", Remote: repo("acme", "x", VisibilityPrivate)}, Quarantine, PlaceNoPublicProof},
+		{"stricter remote under a private root", Origin{System: SystemFS, Path: h + "/willesq/x/a.md", Remote: repo("acme", "x", VisibilityPrivate)}, "acme", PlaceRemoteStricter},
+		{"session with a stricter remote under a public root", Origin{System: SystemSession, Path: h + "/x", Remote: repo("acme", "x", VisibilityPrivate)}, "acme", PlaceRemoteStricter},
+		{"session under a public root", Origin{System: SystemSession, Path: h + "/gl"}, "personal", PlacePublicRootSession},
+		{"docs sync of a public repo", Origin{System: SystemGitHub, Remote: repo("oss-org", "lib", VisibilityPublic)}, "oss", PlaceRemote},
 	} {
 		got := Classify(c.o, res, Options{Confirmed: allConfirmed})
 		if got.Space != c.space || got.Rule != c.rule {
 			t.Errorf("%s = %s (%s), want %s (%s)", c.name, got.Space, got.Rule, c.space, c.rule)
 		}
-	}
-	if !within("/a/B/c", "/a/b") || within("/a/bc", "/a/b") || !within("/a/b", "/a/b/") {
-		t.Error("within")
-	}
-	// With a single public root, only a checkout bound exactly is declared.
-	one := []RootMatch{{Root: "/p/gl", Space: "oss", Kind: Public}}
-	single := resolvePlacement(t, Policy{Spaces: []Space{{Name: "oss", Kind: Public, Roots: []string{"/p/gl"}}}})
-	if !declared(single, one, "/p/gl") || declared(single, one, "/p") || declared(single, one, "") || declared(single, nil, "/p/gl") {
-		t.Error("declared with one root")
 	}
 }

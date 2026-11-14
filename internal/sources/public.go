@@ -44,10 +44,8 @@ func leavePublic(ctx context.Context, prefix string, ing Ingester, opts RefreshO
 		if err != nil || !found {
 			continue
 		}
-		path := filepath.FromSlash(strings.TrimPrefix(uri, "checkout://"))
-		m := rag.Meta{SourceURI: uri, SourceType: "repo_doc", Writer: rag.WriterSources,
-			Origin: rag.Origin{System: rag.OriginFS, Path: path}}
-		if !opts.LeavesPublic(ctx, cp.Space, m) {
+		m, ok := storedMeta(uri)
+		if !ok || !opts.LeavesPublic(ctx, cp.Space, m) {
 			continue
 		}
 		if _, err := p.DeleteSource(ctx, uri); err != nil {
@@ -56,4 +54,31 @@ func leavePublic(ctx context.Context, prefix string, ing Ingester, opts RefreshO
 		}
 		log.Printf("sources: %s: taken out of the public space", uri)
 	}
+}
+
+// storedMeta is the write the sources refresh would make for uri now: a
+// checkout's file, or a web page placed by its own URL.
+func storedMeta(uri string) (rag.Meta, bool) {
+	switch {
+	case strings.HasPrefix(uri, "checkout://"):
+		return rag.Meta{SourceURI: uri, SourceType: "repo_doc", Writer: rag.WriterSources,
+			Origin: rag.Origin{System: rag.OriginFS, Path: filepath.FromSlash(strings.TrimPrefix(uri, "checkout://"))}}, true
+	case strings.HasPrefix(uri, "https://"), strings.HasPrefix(uri, "http://"):
+		return rag.Meta{SourceURI: uri, SourceType: KindWeb, Writer: rag.WriterSources,
+			Origin: rag.Origin{System: rag.OriginWeb, URL: uri}}, true
+	}
+	return rag.Meta{}, false
+}
+
+// sweepEvery is how often a scan also checks every doc the sources refresh
+// ever stored, registered or not (SP-030).
+const sweepEvery = 3600
+
+// sweepPublic takes out of the public space every doc the sources refresh
+// stored that would not be public if written now, whether or not its
+// source is still registered or its folder still exists. Reason: a removed
+// source, or one whose folder is gone, is never refreshed again, so its
+// public copy would otherwise stay.
+func sweepPublic(ctx context.Context, ing Ingester, opts RefreshOpts) {
+	leavePublic(ctx, "", ing, opts)
 }

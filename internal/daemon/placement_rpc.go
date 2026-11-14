@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -130,14 +129,6 @@ func pathOrigin(ctx context.Context, repos *repoLookups, path string) spaces.Ori
 	if !ok {
 		c, ok = handoff.FindCheckout(path)
 	}
-	if ok {
-		o.Checkout = c.Root
-	} else {
-		// Reason: a .git FindCheckout does not follow (a symbolic link, or
-		// one deeper than it looks) still makes a checkout, which under a
-		// public root needs proof to be public (SP-030).
-		o.Checkout = gitEntryAbove(path)
-	}
 	// An anonymous checkout's .git could borrow any repo's identity.
 	if ok && !c.Anonymous && c.Owner != "" {
 		o.Remote = repos.lookup(ctx, c.Owner, c.Repo)
@@ -191,48 +182,6 @@ func newRepoLookups(gh github.Runner) *repoLookups {
 
 type cachedRepoLookupsKey struct{}
 
-// unaskedLookupsKey carries a *bool set when a lookup under the context was
-// answered without asking GitHub: the cache alone was allowed, or the
-// budget was spent.
-type unaskedLookupsKey struct{}
-
-// withUnaskedNote makes repo lookups under ctx set *unasked when one is
-// answered without asking GitHub. Reason: such an answer is not a reading of
-// the repo's visibility, so it may withhold a placement but must not move
-// stored content (SP-030): otherwise any caller could spend the budget and
-// have every public checkout deleted on the next refresh.
-func withUnaskedNote(ctx context.Context, unasked *bool) context.Context {
-	return context.WithValue(ctx, unaskedLookupsKey{}, unasked)
-}
-
-func noteUnasked(ctx context.Context) {
-	if p, ok := ctx.Value(unaskedLookupsKey{}).(*bool); ok {
-		*p = true
-	}
-}
-
-// repoNotFound reports whether err is GitHub's answer that the repo does not
-// exist for this login, which is how a private repo it cannot see reads.
-func repoNotFound(err error) bool {
-	msg := err.Error()
-	return strings.Contains(msg, "HTTP 404") || strings.Contains(msg, "Not Found")
-}
-
-// gitEntryAbove returns the nearest folder at or above path holding a .git
-// entry of any kind, or "" when there is none.
-func gitEntryAbove(path string) string {
-	for dir := path; ; {
-		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
-	}
-}
-
 // withCachedRepoLookups makes repo lookups under ctx answer from the cache
 // alone, so placing paths a session chose spends none of GitHub's budget.
 func withCachedRepoLookups(ctx context.Context) context.Context {
@@ -242,11 +191,7 @@ func withCachedRepoLookups(ctx context.Context) context.Context {
 func (l *repoLookups) lookup(ctx context.Context, owner, name string) *spaces.Repo {
 	fallback := &spaces.Repo{Owner: owner, Name: name}
 	// Invalid names are refused before they spend the lookup budget.
-	if l == nil || l.gh == nil {
-		noteUnasked(ctx)
-		return fallback
-	}
-	if !github.ValidLogin(owner) || !github.ValidRepo(name) {
+	if l == nil || l.gh == nil || !github.ValidLogin(owner) || !github.ValidRepo(name) {
 		return fallback
 	}
 	key := strings.ToLower(owner + "/" + name)
@@ -259,7 +204,6 @@ func (l *repoLookups) lookup(ctx context.Context, owner, name string) *spaces.Re
 	}
 	if ctx.Value(cachedRepoLookupsKey{}) != nil {
 		l.mu.Unlock()
-		noteUnasked(ctx)
 		return fallback
 	}
 	if now.Sub(l.window) >= time.Minute {
@@ -267,7 +211,6 @@ func (l *repoLookups) lookup(ctx context.Context, owner, name string) *spaces.Re
 	}
 	if l.spent >= repoLookupsPerMin {
 		l.mu.Unlock()
-		noteUnasked(ctx)
 		return fallback
 	}
 	l.spent++
@@ -275,11 +218,6 @@ func (l *repoLookups) lookup(ctx context.Context, owner, name string) *spaces.Re
 
 	info, err := github.LookupRepo(ctx, l.gh, owner, name)
 	if err != nil {
-		if !repoNotFound(err) {
-			// A rate limit, an outage or a network error says nothing about
-			// the repo; only GitHub's not-found answer is one.
-			noteUnasked(ctx)
-		}
 		return fallback
 	}
 	r := spaces.Repo{Owner: info.Owner, Name: info.Name, Visibility: spaces.VisibilityPublic}

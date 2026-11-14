@@ -204,7 +204,7 @@ func TestScanSpaces(t *testing.T) {
 		// Local checkouts under the broad public root are not public
 		// (SP-030, D-64), even of a verified public repo.
 		"lib":           {"oss-org", "public", spaces.Quarantine, "quarantined"},
-		"moved":         {"acme", "private", "acme", "placed"},
+		"moved":         {"acme", "private", spaces.Quarantine, "quarantined"},
 		"probe-unbound": {"stranger", "public", spaces.Quarantine, "quarantined"},
 		// An anonymous checkout under a public root has nothing to prove it
 		// public (SP-030, D-50).

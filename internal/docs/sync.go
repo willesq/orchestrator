@@ -143,20 +143,33 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 		if err := opts.CheckOwner(ctx, o.Owner); err != nil {
 			reason := "not synced: " + err.Error()
 			log.Printf("docs: %s: %s", o.Owner, reason)
+			// Reason: an org whose binding no longer holds proves nothing
+			// public, so its synced docs leave the public space (SP-030).
+			leaveUnlisted(ctx, reg, ing, o, nil, opts)
 			return Result{Status: "error", Reason: reason}
 		}
 	}
 	repos, err := opts.GH.ListRepos(ctx, o.Owner)
 	if err != nil {
 		// Enumeration failed: flag it, and keep every repo's existing chunks.
-		reason := classify(err).describe("listing repos", err)
+		f := classify(err)
+		reason := f.describe("listing repos", err)
 		log.Printf("docs: %s: %s", o.Owner, reason)
+		if f.kind == kindAccess {
+			// Reason: GitHub refused the owner (it is gone, or this login
+			// lost access), so it vouches for no repo and their public docs
+			// leave (SP-030). Any other failure (network, credentials) says
+			// nothing, and leaving would re-embed a whole public org after a
+			// blip.
+			leaveUnlisted(ctx, reg, ing, o, nil, opts)
+		}
 		return Result{Status: "error", Reason: reason}
 	}
 	// Reason: visibility is re-checked on every sync, and a repo that is no
 	// longer public leaves the public space before anything else is
 	// written (SP-030).
 	out := leavePublic(ctx, reg, ing, o, repos, opts)
+	leaveUnlisted(ctx, reg, ing, o, repos, opts)
 	var todo []Repo
 	for _, rp := range repos {
 		if (rp.IsArchived && !opts.IncludeArchived) || (rp.IsFork && !opts.IncludeForks) || !o.Covers(rp.Name) {
@@ -196,6 +209,7 @@ func SyncOwner(ctx context.Context, reg *Registry, o Owner, ing Ingester, opts S
 				// Reason: tasks can read orchd's log, so the line does not
 				// tie an org to its binding (as CheckOrg's own line does not).
 				log.Printf("docs: an owner's sync stopped: its org binding no longer checks out")
+				leaveUnlisted(ctx, reg, ing, o, nil, opts)
 				return res
 			}
 		}

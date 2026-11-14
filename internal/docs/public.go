@@ -68,6 +68,33 @@ func leavePublic(ctx context.Context, reg *Registry, ing Ingester, o Owner, repo
 	return out
 }
 
+// leaveUnlisted runs leavePublic over the repos this owner's syncs recorded
+// that are not in listed (nil: every recorded repo), as repos whose
+// visibility GitHub did not vouch for. Reason: a repo deleted, transferred
+// out or no longer visible to the account, and every repo of an org whose
+// binding no longer holds, would otherwise keep a public copy for good.
+func leaveUnlisted(ctx context.Context, reg *Registry, ing Ingester, o Owner, listed []Repo, opts SyncOpts) {
+	if opts.LeavesPublic == nil {
+		return
+	}
+	known, err := reg.ListRepos(ctx, o.Owner)
+	if err != nil {
+		log.Printf("docs: %s: listing recorded repos to check visibility: %v", o.Owner, err)
+		return
+	}
+	seen := map[string]bool{}
+	for _, rp := range listed {
+		seen[rp.Name] = true
+	}
+	var gone []Repo
+	for _, rs := range known {
+		if !seen[rs.Repo] {
+			gone = append(gone, Repo{Name: rs.Repo})
+		}
+	}
+	leavePublic(ctx, reg, ing, o, gone, opts)
+}
+
 // firstOut orders repos whose docs left the public space first, so they are
 // placed again before any other repo is synced; the rest keep their order.
 func firstOut(todo []Repo, out map[string]bool) []Repo {
