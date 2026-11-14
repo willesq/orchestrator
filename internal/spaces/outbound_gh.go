@@ -133,6 +133,10 @@ func ghOutbound(args []string, dir string, env map[string]string) (*Outbound, bo
 	if len(subs) == 0 {
 		return nil, unknown
 	}
+	if len(subs) > 1 && subs[1] == "new" {
+		// gh's own alias of create (pr, issue, repo, release, gist).
+		subs[1] = "create"
+	}
 	act := &Outbound{Dir: dir, Files: files, GHEnv: ghEnvOf(env)}
 	if r, ok := parseRepo(repo); ok {
 		act.Repo = r
@@ -282,8 +286,10 @@ func ghAPIOutbound(act *Outbound, subs []string, method string, fields bool, inp
 			break
 		}
 	}
-	if strings.Contains(low, "://") {
-		// Reason: evil.example/api.github.com/... is another host.
+	if strings.Contains(low, "://") || dotSegments(low) {
+		// Reason: evil.example/api.github.com/... is another host, and a
+		// dot segment may move the request to another repo than the one
+		// its path starts with.
 		unread = true
 	}
 	if rest, ok := strings.CutPrefix(ep, "repos/"); ok {
@@ -303,6 +309,21 @@ func ghAPIOutbound(act *Outbound, subs []string, method string, fields bool, inp
 		act.Repo, act.NoRepo = "", true
 	}
 	return act, unread
+}
+
+// dotSegments reports whether a lowercase API path holds a "." or ".."
+// segment, or an escaped dot, slash or backslash that could make one.
+func dotSegments(path string) bool {
+	if strings.Contains(path, "%2e") || strings.Contains(path, "%2f") || strings.Contains(path, "%5c") {
+		return true
+	}
+	p, _, _ := strings.Cut(path, "?")
+	for _, seg := range strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if seg == "." || seg == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 func slicesContains(list []string, s string) bool {

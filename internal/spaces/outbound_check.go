@@ -345,9 +345,11 @@ func (c OutboundChecker) sent(ctx context.Context, a Outbound) ([]string, error)
 		}
 		texts = append(texts, string(b))
 	}
-	// Reason: --text shows a binary file's bytes rather than "Binary files
-	// differ", which would hide a term in it.
-	diff := []string{"--no-ext-diff", "--no-textconv", "--no-color", "--unified=0", "--text"}
+	diff := []string{"--no-ext-diff", "--no-textconv", "--no-color", "--unified=0"}
+	if a.Kind == "git tag" || a.Kind == "git notes" {
+		// The tagger or the notes commit's author is sent too.
+		texts = append(texts, c.identity(ctx, a.Dir))
+	}
 	switch {
 	case a.Staged:
 		out, err := c.git(ctx, a.Dir, append([]string{"diff", "--cached"}, diff...)...)
@@ -356,6 +358,11 @@ func (c OutboundChecker) sent(ctx context.Context, a Outbound) ([]string, error)
 			return texts, err
 		}
 		texts = append(texts, c.identity(ctx, a.Dir))
+		bin, err := c.blobTexts(ctx, a.Dir, true, "diff", "--cached", "--numstat", "--no-renames")
+		texts = append(texts, bin...)
+		if err != nil {
+			return texts, err
+		}
 		if a.All {
 			// Reason: tracked changes not staged yet; clean filters, which
 			// a repository can make run anything, are switched off.
@@ -365,6 +372,11 @@ func (c OutboundChecker) sent(ctx context.Context, a Outbound) ([]string, error)
 			}
 			out, err := c.git(ctx, a.Dir, append(append(args, "diff"), diff...)...)
 			texts = append(texts, string(out))
+			if err != nil {
+				return texts, err
+			}
+			bin, err := c.blobTexts(ctx, a.Dir, false, append(args, "diff", "--numstat", "--no-renames")...)
+			texts = append(texts, bin...)
 			if err != nil {
 				return texts, err
 			}

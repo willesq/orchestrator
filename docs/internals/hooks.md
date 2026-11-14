@@ -445,10 +445,13 @@ through and the terms layer is on now; otherwise the row shows the guard's verdi
   and a shell fed a literal here-document, and the commands inside `$(…)`, `<(…)` and
   redirections): `git commit`
   (its message, `-F` and `-t` files, staged changes and the author and committer git would
-  name, or with `-a` the tracked changes too),
-  `git push` (the commits it sends, `git log -p --cc --text <refs> --not --remotes=<remote>` with
-  each commit's author and committer, so binary files and what a merge itself adds are read, and
-  the messages and taggers of annotated tags it pushes, also with `push.followTags`; with no refspec, every branch when the
+  name, or with `-a` the tracked changes too; `git tag -a` and `git notes` also their tagger or
+  author),
+  `git push` (the commits it sends, `git log -p --cc <refs> --not --remotes=<remote>` with each
+  commit's author and committer, so what a merge itself adds is read, plus every commit a tag
+  reaches when tags are pushed, and the messages and taggers of annotated tags it pushes, also
+  with `push.followTags`; a pushed ref or tag that is not a commit once peeled (a tag of a blob or
+  tree) fails closed; with no refspec, every branch when the
   remote's push refspec or `push.default=matching` says so, every ref for a mirror remote; to a
   URL, only remotes whose push URLs lie in the URL's own spaces are left out), `git tag` with a
   message, `git notes` with a file, every `gh`
@@ -458,7 +461,10 @@ through and the terms layer is on now; otherwise the row shows the guard's verdi
   tool input, decoded (so a term after a newline is on a word boundary), every word as the shell
   passes it (so `'fal''con'` and `fal{,}con` are found), literal here-documents and here-strings,
   the files they
-  send and what git says they send. When an earlier command of the same call changes what is
+  send and what git says they send. git's diff shows a binary file only as changed, so each
+  binary file a commit or push sends is read whole (from the commit, the index or the work tree),
+  up to 1 MiB each and 64 per check; larger or further binary files are not read, like other
+  encoded content (D-60). When an earlier command of the same call changes what is
   staged or committed (`git add && git commit && git push`), a commit or push also sends the
   staged and work tree changes and every untracked file, and a push every branch.
 - **Destination.** The repo the command names (`-R`, `GH_REPO`, a PR or issue URL, `gh repo
@@ -496,7 +502,8 @@ through and the terms layer is on now; otherwise the row shows the guard's verdi
   also in a bundle such as `-fB`), release notes from a local tag (`--notes-from-tag`), a
   `gh api` write to a `forks`, `transfer` or `generate` endpoint (each copies to a second
   destination), a URL whose host only ends in `github.com`, a `gh api` URL on another host than
-  `api.github.com` and a `repos/` path it cannot read; a
+  `api.github.com`, a `repos/` path it cannot read and a path with a `.` or `..` segment or an
+  escaped dot, slash or backslash (gh's own `new` alias of `create` is read as `create`); a
   zsh glob qualifier or an `alias` that runs git; a file an earlier command of the call wrote
   (a redirection, `cp`, `sed -i`, `tee`, …) that the action sends, inside its checkout for a commit
   or push, or in git's config; a file that cannot be read or is stdin (other than a literal

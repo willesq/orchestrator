@@ -231,3 +231,81 @@ func gitOut(t *testing.T, dir string, args ...string) string {
 	}
 	return string(out)
 }
+
+// TestOutboundReview6Cases are the sixth security review's reproducers
+// (after D-60, round 3): large binary files no longer fail the check,
+// small ones are read; commits and objects only tags reach; gh's own
+// "new" alias; dot segments in gh api paths.
+func TestOutboundReview6Cases(t *testing.T) {
+	repo := newTestRepo(t, "acme")
+	repo.git("remote", "add", "gx", "https://github.com/globex/app.git")
+	c := termsChecker(t)
+	reset := func() {
+		t.Helper()
+		repo.git("update-ref", "refs/remotes/gx/main", "HEAD")
+		repo.git("update-ref", "refs/remotes/origin/main", "HEAD")
+	}
+	reset()
+	// A 5 MiB binary file: an ordinary commit and push go through.
+	big := make([]byte, 5<<20)
+	for i := range big {
+		big[i] = byte(i*7 + i/3)
+	}
+	writeFile(t, filepath.Join(repo.dir, "img.png"), string(big))
+	repo.git("add", "img.png")
+	wantAllowed(t, c, repo.dir, "git commit -m add-image")
+	repo.git("commit", "-q", "-m", "add-image")
+	wantAllowed(t, c, repo.dir, "git push origin HEAD")
+	reset()
+	// A small binary file is read, staged, in the work tree and pushed.
+	writeFile(t, filepath.Join(repo.dir, "b.dat"), "x\x00 zephyr\n")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, "git add b.dat && git commit -m x")
+	repo.git("add", "b.dat")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, "git commit -m x")
+	repo.git("commit", "-q", "-m", "x")
+	writeFile(t, filepath.Join(repo.dir, "b.dat"), "y\x00 zephyr again\n")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, "git commit -a -m y")
+	repo.git("checkout", "-q", "b.dat")
+	reset()
+	// Commits only a tag reaches, and tags of a blob.
+	repo.git("checkout", "-q", "-b", "side")
+	writeFile(t, filepath.Join(repo.dir, "s.md"), "zephyr\n")
+	repo.git("add", "s.md")
+	repo.git("commit", "-q", "-m", "s")
+	repo.git("tag", "lt")
+	repo.git("checkout", "-q", "main")
+	repo.git("branch", "-q", "-D", "side")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, "git push --tags", "git push origin --tags", "git push origin lt")
+	repo.git("tag", "-d", "lt")
+	writeFile(t, filepath.Join(repo.dir, "blob.txt"), "zephyr\n")
+	sha := strings.TrimSpace(gitOut(t, repo.dir, "hash-object", "-w", "blob.txt"))
+	repo.git("tag", "bt", sha)
+	repo.git("tag", "-a", "-m", "m", "abt", sha)
+	wantRefused(t, c, repo.dir, RuleOutboundUnchecked, "git push --tags", "git push origin bt", "git push origin abt",
+		"git push origin "+sha+":refs/tags/zz")
+	repo.git("tag", "-d", "bt")
+	repo.git("tag", "-d", "abt")
+	// gh's own new alias of create.
+	writeFile(t, filepath.Join(repo.dir, "notes.txt"), "zephyr\n")
+	wantRefused(t, c, repo.dir, RuleOutboundUnchecked, "gh pr new --fill", "gh pr new -f", "gh gist new")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, "gh release new v1 notes.txt -n x")
+	// Dot segments in gh api paths.
+	wantRefused(t, c, repo.dir, RuleOutboundUnchecked,
+		"gh api -X POST repos/acme/app/../../globex/app/issues -f title=x",
+		"gh api -X POST repos/acme/app/%2e%2e/%2E%2E/globex/app/issues -f title=x",
+		"gh api -X POST /repos/acme/app/issues/1/../../../../globex/app/issues -f title=x")
+	wantAllowed(t, c, repo.dir, "gh api -X POST repos/acme/app/issues -f title=falcon")
+	// A tag's tagger is read when it is made.
+	repo.git("config", "user.name", "zephyr")
+	wantRefused(t, c, repo.dir, RuleOutboundTerm, "git tag -a v9 -m x")
+}
+
+func TestBinaryPaths(t *testing.T) {
+	commits, paths, err := binaryPaths("\x01abc\n-\t-\timg.png\n3\t1\ta.md\n\x01def\n-\t-\t\"q\\\"x.bin\"\n")
+	if err != nil || len(paths) != 2 || paths[0] != "img.png" || commits[0] != "abc" || paths[1] != `q"x.bin` || commits[1] != "def" {
+		t.Errorf("%q %q %v", commits, paths, err)
+	}
+	if _, _, err := binaryPaths("-\t-\t\"bad\\q\"\n"); err == nil {
+		t.Error("bad quoting read")
+	}
+}

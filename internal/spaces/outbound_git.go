@@ -92,6 +92,10 @@ func (c OutboundChecker) pushed(ctx context.Context, a Outbound, diff []string) 
 		}
 		args = append(args, ref)
 	}
+	if slicesContains(tags, "*") {
+		// Reason: commits only a tag reaches are pushed with --tags.
+		args = append(args, "--tags")
+	}
 	if len(not) > 0 {
 		args = append(append(args, "--not"), not...)
 	}
@@ -101,6 +105,14 @@ func (c OutboundChecker) pushed(ctx context.Context, a Outbound, diff []string) 
 		return texts, err
 	}
 	if err := c.utf8Commits(ctx, a.Dir, args); err != nil {
+		return texts, err
+	}
+	if err := c.commitsOnly(ctx, a.Dir, refs, tags, a.Pending); err != nil {
+		return texts, err
+	}
+	bin, err := c.blobTexts(ctx, a.Dir, false, c.numstatArgs(args)...)
+	texts = append(texts, bin...)
+	if err != nil {
 		return texts, err
 	}
 	for _, tag := range tags {
@@ -118,6 +130,20 @@ func (c OutboundChecker) pushed(ctx context.Context, a Outbound, diff []string) 
 		}
 	}
 	return texts, nil
+}
+
+// numstatArgs turn the push's log args into a listing of the binary files
+// of each commit it sends.
+func (c OutboundChecker) numstatArgs(logArgs []string) []string {
+	args := []string{"log", "--numstat", "--no-renames", "--format=%x01%H"}
+	for _, a := range logArgs[1:] {
+		if a == "-p" || a == "--cc" || strings.HasPrefix(a, "--format=") || strings.HasPrefix(a, "--unified") ||
+			a == "--no-ext-diff" || a == "--no-textconv" || a == "--no-color" || a == "--no-show-signature" {
+			continue
+		}
+		args = append(args, a)
+	}
+	return args
 }
 
 // utf8Commits fails when a commit the log args list declares an encoding
@@ -272,6 +298,11 @@ func (c OutboundChecker) pending(ctx context.Context, dir string, diff []string)
 	for _, d := range [][]string{{"diff", "--cached"}, {"diff"}} {
 		out, err := c.git(ctx, dir, append(append(append([]string{}, args...), d...), diff...)...)
 		texts = append(texts, string(out))
+		if err != nil {
+			return texts, err
+		}
+		bin, err := c.blobTexts(ctx, dir, len(d) == 2, append(append(append([]string{}, args...), d...), "--numstat", "--no-renames")...)
+		texts = append(texts, bin...)
 		if err != nil {
 			return texts, err
 		}
