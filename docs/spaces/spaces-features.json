@@ -6707,7 +6707,7 @@
       {
         "feature": "SP-030",
         "rc_range": "RC-400..RC-449",
-        "note": "blocked on RC-400 (user decision); PR #180"
+        "note": "RC-400 settled by the user as option (a), D-64; lane resumed to implement it; PR #180"
       },
       {
         "feature": "SP-048",
@@ -6728,6 +6728,14 @@
       "SP-075 after SP-074 (changes orchd.proto and adds a migration)",
       "SP-025 and SP-027 after SP-024",
       "SP-052 and SP-054 after SP-051"
-    ]
+    ],
+    "d_ids_reserved": [
+      {
+        "id": "D-64",
+        "for": "SP-030",
+        "topic": "RC-400 settled with option (a): local content under a public root never reaches public automatically; recorded on the SP-030 branch (PR #180)"
+      }
+    ],
+    "next_d_id": "D-65"
   }
 }
