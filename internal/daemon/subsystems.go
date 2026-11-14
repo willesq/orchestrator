@@ -342,10 +342,7 @@ func prsUnit(s config.Settings, store *sql.DB, gh *github.Service, ghp *ghProfil
 	bb := prs.New(paths.PRStateFile(), paths.EventsDir(), watchFrom(gh, ghp))
 	var attr *evidence.Attributor
 	if store != nil {
-		attr = evidence.NewAttributor(store)
-		if ghp != nil {
-			attr.GH = evidence.GH(ghp.Routed())
-		}
+		attr = newAttributor(store, gh, ghp)
 	}
 	poll := interval(s.PRBabysitter.PollInterval, 10*time.Minute)
 	var last, backoffUntil time.Time
@@ -371,6 +368,28 @@ func prsUnit(s config.Settings, store *sql.DB, gh *github.Service, ghp *ghProfil
 		},
 		Interval: min(prRequestCheck, poll),
 	}
+}
+
+// newAttributor labels routed tasks by their PRs, reading each PR as the gh
+// login of its owner's space.
+func newAttributor(store *sql.DB, gh *github.Service, ghp *ghProfiles) *evidence.Attributor {
+	attr := evidence.NewAttributor(store)
+	if ghp == nil {
+		return attr
+	}
+	attr.GH = evidence.GH(ghp.RoutedBackground())
+	if gh != nil {
+		// A PR counts as the task's when the account of its owner's space
+		// opened it (SP-074).
+		attr.LoginFor = func(ctx context.Context, owner string) (string, error) {
+			_, login, err := ghp.account(ctx, owner, func(ctx context.Context) (string, error) {
+				id, err := gh.Identity(ctx, false)
+				return id.Login, err
+			})
+			return login, err
+		}
+	}
+	return attr
 }
 
 // prSweepDue reports whether the PR babysitter should sweep now: on its first

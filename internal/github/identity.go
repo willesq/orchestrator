@@ -89,8 +89,12 @@ var ErrNotMember = errors.New("not your account or an org you belong to")
 // Service is the scope store plus identity discovery, with discovery cached.
 type Service struct {
 	Store *Store
-	gh    Runner
-	now   func() time.Time
+	// Accounts, when set, routes calls about a space's orgs through the gh
+	// login the space names, and offers the orgs only that login reaches as
+	// scopes (SP-074). nil runs everything as the default login.
+	Accounts AccountRouter
+	gh       Runner
+	now      func() time.Time
 
 	mu       sync.Mutex
 	identity *Identity
@@ -148,6 +152,9 @@ func (s *Service) Scopes(ctx context.Context, refresh bool) (scopes []Scope, ghE
 			return nil, nil, err
 		}
 	}
+	if err := s.syncProfileScopes(ctx); err != nil {
+		return nil, nil, err
+	}
 	scopes, err = s.Store.List(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -155,12 +162,13 @@ func (s *Service) Scopes(ctx context.Context, refresh bool) (scopes []Scope, ghE
 	return scopes, ghErr, nil
 }
 
-// Repos lists the repos the user can see under owner, for the repo picker.
+// Repos lists the repos the user can see under owner, for the repo picker,
+// as the gh login owner's space names (SP-074).
 func (s *Service) Repos(ctx context.Context, owner string) ([]Repo, error) {
 	if !ValidLogin(owner) {
 		return nil, fmt.Errorf("invalid GitHub login %q", owner)
 	}
-	id, err := s.Identity(ctx, false)
+	gh, id, err := s.account(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +181,7 @@ func (s *Service) Repos(ctx context.Context, owner string) ([]Repo, error) {
 	if strings.EqualFold(owner, id.Login) {
 		path = "user/repos?per_page=100&affiliation=owner"
 	}
-	out, err := s.gh(ctx, "api", "--paginate", path, "--jq", ".[] | {name, private, archived}")
+	out, err := gh(ctx, "api", "--paginate", path, "--jq", ".[] | {name, private, archived}")
 	if err != nil {
 		return nil, err
 	}
