@@ -182,9 +182,10 @@
     },
     {
       "id": "INV-16",
-      "rule": "Enforcement switches are operator-only, every change is logged with time and caller, and while any layer is off every session's start digest says so.",
+      "rule": "Enforcement switches are operator-only, every change is logged with time and caller, and while any layer is off every session's start digest says so. Exception (D-61): the sandbox layer's persistent setting ('auto' with nothing to deny, or 'off' by choice) is shown in orch status and the app but does not mark start digests; a timed sandbox switch still does.",
       "verified_by": [
-        "SP-070"
+        "SP-070",
+        "SP-046"
       ]
     }
   ],
@@ -539,6 +540,11 @@
       {
         "id": "D-59",
         "decision": "Revisits D-18. One login works by default: orch uses whichever gh login is already authenticated for every space, and 'orch run' uses the user's normal Claude config. A space may optionally name its own gh profile (gh_config_dir) and Claude config dir; only then does orch switch to them. orch detects and shows which login each space will use (orch status and the app) without reading credentials. Accepted trade-off: with a single login the GitHub account is not a boundary between jobs; the guard, memory spaces and folder deny rules still are. SP-046.1.a1 and SP-046.2.a1 are amended to set GH_CONFIG_DIR/CLAUDE_CONFIG_DIR only when the space names one; SP-074 gains checkpoint SP-074.3 for detection and display.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-61",
+        "decision": "The sandbox layer is a user choice, not only a debugging switch. It gets a persistent setting stored in orch.db with three values: 'auto' (default: orch writes sandbox rules for a checkout only when another isolated space exists whose folders they would deny), 'on' (always, while a policy is applied) and 'off' (off by choice). 'off' or 'auto' with nothing to deny shows once in 'orch status' and the app, but does not mark sessions' start digests as enforcement off; a timed SP-070 switch that turns the sandbox off for debugging still warns as INV-16 says. Only the operator can change the setting, and each change is logged. When the sandbox is on: a space that uses the default gh login may read the default gh config folder inside the sandbox (RC-208 option a), a space that names its own gh profile reads only that profile, and other spaces' profiles stay denied. Multiple GitHub logins are supported as D-59 allows and are tested side by side. RC-211 is accepted: the SP-042 guard is the protection for writes to ~/.claude/settings*. This applies to the sandbox layer only; the other layers keep D-11 and INV-16 unchanged.",
         "date": "2026-11-14"
       }
     ],
@@ -2329,7 +2335,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved 2026-11-14 as D-61 (option a, plus the sandbox setting auto|on|off)."
       },
       {
         "id": "RC-209",
@@ -2355,7 +2362,8 @@
           "SP-046",
           "SP-063"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "2026-11-14: to be measured by SP-046.4.a4 (metadata only, D-61)."
       },
       {
         "id": "RC-211",
@@ -2367,7 +2375,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Accepted 2026-11-14 in D-61: the SP-042 guard is the protection."
       },
       {
         "id": "RC-212",
@@ -5453,15 +5462,50 @@
           "evidence": [
             "a1 (2026-11-12): TestSandboxSwitch (internal/settings/spacesettings) and TestCheckoutSettingsFollowPolicyAndSwitch (internal/daemon) pass: switching the sandbox layer off takes orch's entries out of all 3 files, leaves the user's file meaning-equal to its original and removes the files orch created; switching on restores the same content; the switch change asks for a sync at once; with no policy the entries go too."
           ]
+        },
+        {
+          "id": "SP-046.4",
+          "title": "Sandbox as a choice and logins (D-61)",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "The sandbox setting (auto|on|off, default auto) is stored in orch.db, survives an orchd restart, is shown by 'orch status', and can be changed only by the operator through the CLI (callers descended from a harness or orchd are refused, INV-06); each change is logged with time and caller.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "With 'auto', a checkout gets orch's sandbox rules only when another isolated space exists whose folders they deny; with 'off' none are written and start digests do not report enforcement off; with 'on' they are always written; a timed SP-070 switch to off still marks start digests (INV-16).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "In a real Claude Code session with the sandbox on (TestClaudeE2E), a space using the default gh login runs 'gh auth status' successfully, and the default gh config folder stays unreadable by name through the guard (SP-042).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "With two spaces side by side, one on the default gh login and one naming its own gh profile, each session's 'gh auth status' shows only its own space's login source, and a session cannot use the other space's profile (GH_CONFIG_DIR pointed at it is denied); only account metadata is observed, never a token (RC-210).",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
         }
       ],
-      "status": "blocked",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": "SP-046.1.a5's 'gh auth status' part is not met with the default gh login (D-59): orch install's Read(~/.config/gh/**) credential deny in ~/.claude/settings.json becomes a sandbox read deny once orch turns the sandbox on, so gh cannot read its configuration in any sandboxed agent shell (TestClaudeE2E gh and launcher/gh FAIL, 2026-11-14 at 1c054e0). Needs a user decision (RC-208). Everything else has evidence; the verifier was not run.",
+      "blocked_reason": null,
       "attempts": 1,
-      "criteria_sha256": "7077c603b63e27e3c26c97cd2e2754efa1e1daf3e8ae6c81d911fcf3b1f43778",
+      "criteria_sha256": "cba1332a2b5973eb9c82362ed430d3a8c28df32d635b00bfea8a90589908f887",
       "branch": "feat/sp-046-per-space-harness-settings",
       "pr": "https://github.com/willesq/orchestrator/pull/171"
     },
@@ -6167,6 +6211,10 @@
     {
       "date": "2026-11-14",
       "change": "D-58 (RC-206 option c: shared Claude temp folder in checkout sessions is a documented limit) and D-59 (one gh/Claude login by default, per-space logins optional; revisits D-18). With the user's approval: SP-046.1.a1 and SP-046.2.a1 amended to set GH_CONFIG_DIR/CLAUDE_CONFIG_DIR only when the space names one, SP-074 gains SP-074.3 (login detection and display); both criteria_sha256 recomputed."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-61: sandbox layer setting auto|on|off (default auto, 'off' by choice is quiet), RC-208 option (a), RC-211 accepted, multiple GitHub logins tested side by side. SP-046 gains SP-046.4 with the user's approval (criteria_sha256 recomputed); INV-16 notes the sandbox exception."
     }
   ],
   "plan_location": {
