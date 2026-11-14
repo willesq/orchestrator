@@ -6510,7 +6510,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestOutboundBaselineRuleSwitches (internal/spaces/terms_rules_test.go) passes at 46e3449: the six baseline rules (fail_closed_unreadable, gh_default_repo, plain_variables, command_assignments, git_config_harmless_keys, pending_work_after_staging) keep their stable ids and are on by default; one command per rule is decided with every rule on and with each rule alone off (7 configurations x 6 rows, real git checkouts) and only that rule's row changes verdict (e.g. 'git -C \"$PWD\" commit' allowed on, outbound_unchecked with plain_variables off; 'gh pr create' with a globex remote allowed on, outbound_term with gh_default_repo off).",
+            "a2: TestParseUserRuleRejects, TestOutboundUserRulesNeverLoosen, TestOutboundUserRulesStricter and TestOutboundRulesChanges (internal/spaces/terms_rules_test.go) pass at 46e3449: kinds allow/exempt and values starting with ! are rejected at save time with ErrRuleLoosens; command rules naming git, gh, a shell, a wrapper or a git-* helper, wildcard destinations, empty-matching or invalid patterns are ErrBadRule, and no error quotes the value; 8 added rules x 8 baseline-refused commands stay refused; each kind refuses what the baseline let through (glab with a term, a term to acme/public-sdk, an MCP tool and curl to api.github.com matching fail_closed patterns), names the rule by id only, stops applying when switched off or removed, and never leaves a push's commits unchecked that the baseline checks (security-audit M1 regression).",
+            "a3: TestOutboundRulesStore and TestReplayWithRules (internal/spaces/terms_rules_store_test.go), TestOutboundRulesPersistAndReachHook and TestReplayJudgesWithRecordedRules (internal/daemon/terms_rules_test.go) and TestOutboundRulesReachHook (internal/hook/terms_rules_test.go) pass at 46e3449: rules are stored per change in spaces_terms_rules (migration 0030), read back by a new orchd (restart) and written into the guard snapshot (rules, rules_rev), from which the hook's check applies them end to end through pre-tool-use; rows changed outside orchd do not verify and make the hook refuse shell and MCP calls; a replay judges each event with the rules in force at its recorded time (a fail_closed rule refuses only the event recorded while it was in force, not those before it or after its removal). Interpretation of 'rules recorded for the event's policy revision' as rules in force at the event's time: RC-601."
+          ]
         },
         {
           "id": "SP-075.2",
@@ -6538,14 +6542,16 @@
               "threshold": "true"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (partial): TestOutboundRulesOperatorOnly (internal/daemon/terms_rules_test.go) passes at 46e3449: enable, disable, add and remove are PermissionDenied for claude and codex sessions, a process orchd started, a queued task, an unreadable ancestry and no peer, nothing is stored; the operator's changes are stored with caller 'operator (process 42)' and the clock's time, logged and emitted as 'outbound rule <id>: <action> by <caller>' with no rule value in orchd's log, events, errors or the rule list. The RPCs and 'orch spaces terms rules' CLI commands wait for the orchd.proto slot (PR #182)."
+          ]
         }
       ],
-      "status": "in_progress",
+      "status": "blocked",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": null,
+      "blocked_reason": "2026-11-14: SP-075.1 done; SP-075.2 needs new orchd RPCs (list/change outbound rules) for the CLI and the app, and under D-63 step 13 orchd.proto may change only after PR #182 (SP-074, ListSpacesResponse.logins = 4) merges. The app part also needs a place in the Spaces settings (SpacesSection.swift, owned by SP-074) and model wiring (OrchApp.swift, changed by three open PRs): coordinator to schedule.",
       "attempts": 1,
       "criteria_sha256": "f09b8ebcceabae3c53278bbf89426eec5db6e7a09c656b08af71fa359704171c",
       "branch": "feat/sp-075-configurable-outbound-rules",
