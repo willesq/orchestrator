@@ -74,13 +74,27 @@ type GuardSnapshot struct {
 	// enforces a policy without its self-protection.
 	Protection Protection  `json:"protection"`
 	Guard      GuardSwitch `json:"guard"`
-	WrittenAt  time.Time   `json:"written_at"`
+	// Terms is the outbound terms layer's switch (SP-044, RC-116), which
+	// the hook's terms check reads from here rather than from orch.db.
+	// A snapshot without it holds the layer's default.
+	Terms     GuardSwitch `json:"terms,omitzero"`
+	WrittenAt time.Time   `json:"written_at"`
 }
 
 // Mode is the guard's mode at now, after a timed switch's end.
 func (s GuardSnapshot) Mode(now time.Time) GuardMode {
 	sw := Enforcement{LayerGuard: {Layer: LayerGuard, State: s.Guard.State, Until: s.Guard.Until, Previous: s.Guard.Previous}}
 	return GuardMode(sw.At(now).State(LayerGuard))
+}
+
+// TermsState is the terms layer's state at now, after a timed switch's
+// end; the layer's default when the snapshot carries no switch.
+func (s GuardSnapshot) TermsState(now time.Time) string {
+	if s.Terms.State == "" {
+		return LayerTerms.Default()
+	}
+	sw := Enforcement{LayerTerms: {Layer: LayerTerms, State: s.Terms.State, Until: s.Terms.Until, Previous: s.Terms.Previous}}
+	return sw.At(now).State(LayerTerms)
 }
 
 // GuardPinFile is one session's pin as orchd writes it for the hook.
@@ -291,6 +305,25 @@ type GuardFiles struct {
 type GuardResult struct {
 	GuardDecision
 	Revision int64
+	// Terms is what the outbound terms check needs from the same files.
+	Terms GuardTerms
+}
+
+// GuardTerms is what the hook's outbound terms check (SP-044) takes from
+// the files a guard decision read (RC-116), so the two judge one policy
+// and one set of switches.
+type GuardTerms struct {
+	// Known is set when the policy is known: the snapshot was read and
+	// verified, or nothing was ever applied. When it is not, the check
+	// cannot know the terms and refuses an outbound call.
+	Known bool
+	// State is the terms layer's state; "" when it could not be read,
+	// which counts as on.
+	State string
+	// Policy is the applied policy, nil for none; Home expands the ~ in
+	// its terms files.
+	Policy *Resolved
+	Home   string
 }
 
 // Decide decides in from the files. It never fails: what it cannot read
@@ -317,8 +350,9 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 	if f.OnMode != nil {
 		f.OnMode(mode)
 	}
+	terms := GuardTerms{State: snap.TermsState(now()), Home: snap.Home}
 	if snap.Broken {
-		return fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision)
+		return withTerms(fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision), terms)
 	}
 	var res *Resolved
 	if snap.Policy != nil {
@@ -326,10 +360,11 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 		// is about terms files on disk, which must not undo an apply.
 		r, verr := Validate(*snap.Policy, Env{Home: snap.Home, InGitTree: func(string) bool { return false }})
 		if verr != nil {
-			return fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision)
+			return withTerms(fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision), terms)
 		}
 		res = r
 	}
+	terms.Known, terms.Policy = true, res
 	prot := snap.Protection
 	switch {
 	case !res.Configured():
@@ -341,11 +376,11 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 		// without them was not written by this orchd, and enforcing a
 		// policy without self-protection would let an agent switch the
 		// guard off.
-		return fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision)
+		return withTerms(fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision), terms)
 	}
 	pol, err := NewGuardPolicyProtecting(res, prot)
 	if err != nil {
-		return fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision)
+		return withTerms(fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision), terms)
 	}
 	var pin GuardPin
 	if res.Configured() {
@@ -362,7 +397,13 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 		ev.Targets = Targets(in.Tool, in.Input, in.Cwd)
 	}
 	d := Decide(pol, pin, GuardEnforcement{Guard: mode}, ev)
-	return GuardResult{GuardDecision: d, Revision: snap.Revision}
+	return GuardResult{GuardDecision: d, Revision: snap.Revision, Terms: terms}
+}
+
+// withTerms is r with the terms check's inputs.
+func withTerms(r GuardResult, t GuardTerms) GuardResult {
+	r.Terms = t
+	return r
 }
 
 // unreadable decides when the snapshot cannot be read. Without an orch.db
@@ -376,13 +417,18 @@ func (f GuardFiles) unreadable(ctx context.Context, cause error, now time.Time) 
 	// every install without spaces holds after an upgrade until orchd
 	// rewrites it.
 	if err == nil && !applied && (errors.Is(cause, os.ErrNotExist) || errors.Is(cause, errSnapshotVersion)) {
-		return fixed(GuardBlockOtherJobs, Allow, RuleNoPolicy, 0)
+		// Nothing was ever applied, so no space has terms.
+		return withTerms(fixed(GuardBlockOtherJobs, Allow, RuleNoPolicy, 0), GuardTerms{Known: true})
 	}
 	mode := GuardStrict
+	var terms GuardTerms
 	if sw, serr := ReadEnforcement(ctx, f.DB); serr == nil {
 		mode = GuardMode(sw.At(now).State(LayerGuard))
+		// Reason: as for the guard's switch, so an operator who switched
+		// the terms layer off is not refused while the snapshot is gone.
+		terms.State = sw.At(now).State(LayerTerms)
 	}
-	return fixed(mode, Refuse, RulePolicyUnreadable, 0)
+	return withTerms(fixed(mode, Refuse, RulePolicyUnreadable, 0), terms)
 }
 
 // fixed is the decision of a rule decided outside Decide: would takes

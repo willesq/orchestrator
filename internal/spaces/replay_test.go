@@ -239,3 +239,39 @@ func TestEngineRevisionsForReplay(t *testing.T) {
 		t.Errorf("Resolve = %v, %v", res, err)
 	}
 }
+
+// TestReplayCarriesTermsVerdicts (RC-116): a recorded refusal by the
+// outbound terms check is carried while the replayed guard lets the call
+// through and the terms layer is on; a guard refusal replayed first, or the
+// layer off, gives the guard's verdict. Other recorded verdicts are never
+// carried.
+func TestReplayCarriesTermsVerdicts(t *testing.T) {
+	pol, err := NewGuardPolicy(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev := func(rule GuardRule) ReplayEvent {
+		return ReplayEvent{Guard: GuardEvent{Kind: EventPreToolUse, Tool: "Bash"}, Recorded: RecordedVerdict("refused", string(rule))}
+	}
+	events := []ReplayEvent{ev(RuleOutboundTerm), ev(RuleOutboundUnchecked), ev(RuleOtherJobPath),
+		{Guard: GuardEvent{Kind: EventPreToolUse, Tool: "Bash"}, Recorded: RecordedVerdict("allowed", string(RuleWithinSpace))}}
+	for _, tc := range []struct {
+		terms   string
+		changed int
+		rules   []GuardRule
+	}{
+		{"", 2, []GuardRule{RuleOutboundTerm, RuleOutboundUnchecked, RuleNoPolicy, RuleNoPolicy}},
+		{SwitchOn, 2, []GuardRule{RuleOutboundTerm, RuleOutboundUnchecked, RuleNoPolicy, RuleNoPolicy}},
+		{SwitchOff, 4, []GuardRule{RuleNoPolicy, RuleNoPolicy, RuleNoPolicy, RuleNoPolicy}},
+	} {
+		rep := Replay(events, GuardPin{}, GuardEnforcement{Guard: GuardStrict, Terms: tc.terms}, fixedPolicies(pol))
+		if rep.Changed != tc.changed {
+			t.Errorf("terms %q: changed %d, want %d", tc.terms, rep.Changed, tc.changed)
+		}
+		for i, row := range rep.Rows {
+			if row.Rule != tc.rules[i] {
+				t.Errorf("terms %q row %d: %s %s", tc.terms, i, row.Verdict, row.Rule)
+			}
+		}
+	}
+}

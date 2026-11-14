@@ -159,6 +159,9 @@ type server struct {
 	// guardVerdict is the guard's verdict on a tool event, recorded while
 	// the guard is off or logging; nil until the guard decides (SP-040).
 	guardVerdict guardVerdictFunc
+	// terms caches the spaces' outbound terms, which the command log
+	// keeps out of its records (SP-044).
+	terms termsCache
 	// guard writes the files the enforcing tool guard in orch-hook reads
 	// (SP-041); nil writes none.
 	guard *guardWriter

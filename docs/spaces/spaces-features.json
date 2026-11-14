@@ -3,7 +3,7 @@
   "plan_id": "orch-memory-spaces",
   "title": "orch memory spaces: isolation of memory, sessions and tools across contexts",
   "created": "2026-11-08",
-  "updated": "2026-11-10",
+  "updated": "2026-11-14",
   "repo": "willesq/orchestrator",
   "base_commit": "5796fa6",
   "origin": {
@@ -530,6 +530,11 @@
         "id": "D-57",
         "decision": "Merge SP-072 (PR #169) before its manual acceptance items (SP-072.1.a1 switch check, SP-072.1.a2 snapshot approval) are done; modifications follow after the merge. SP-072 stays in_progress on main until those items have evidence (RC-160). The switch check needs an orchd with SP-070's RPCs: the user's running orchd predates them and answers 'unknown method GetEnforcement'.",
         "date": "2026-11-12"
+      },
+      {
+        "id": "D-60",
+        "decision": "SP-044's outbound terms hook check is best-effort static reading of shell, like D-28; SP-045's git hooks and per-job accounts are the boundary for git. The residual classes in RC-117 (MCP tools, scripts and programs that run git, interpreters, curl, forged tracking refs) stay accepted risk. The baseline is loosened in SP-044: a gh write without -R counts only the repo gh would use (its default repo, else the checkout's base remote), not every remote; plain variables ($PWD, $USER, $HOME) and literal assignments made earlier in the same command are read instead of refused; more harmless 'git -c' keys are allowed. Making the rules configurable (baseline rules switchable by id, user-added stricter rules, CLI and app, stored in orch.db, operator-only) is SP-075.",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -2131,6 +2136,174 @@
         "affects": [
           "SP-072",
           "SP-022"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-116",
+        "kind": "follow-up",
+        "topic": "Combine the outbound terms check with the enforcing guard at rebase",
+        "detail": "SP-044 runs its check in orch-hook pre-tool-use on its own (branched from main before SP-041, PR #172, merged): it prints its own deny and the command log does not record the refusal as a decision. When the two meet: one deny path, the terms refusal recorded in the command log as refused with rule outbound_term or outbound_unchecked, the hook tests' TestMain (SP-041) covering the terms tests, and the terms check reading the terms layer switch from SP-041's snapshot instead of orch.db. SP-042's ProtectedPaths already refuses reads of terms files.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-041",
+          "SP-044"
+        ],
+        "status": "resolved",
+        "note": "2026-11-14: resolved in PR #177 (merge commit c6bccb1, verified at 190d97191df42f39b8706ff883225a12e39e2b1d): one deny path (writeDeny), terms refusals recorded through RecordToolEvent as enforced refusals with rule outbound_term or outbound_unchecked, the hook's terms tests under SP-041's TestMain, the terms layer switch read from the guard snapshot (GuardSnapshot.Terms), and replay carrying recorded terms verdicts (GuardEnforcement.Terms)."
+      },
+      {
+        "id": "RC-117",
+        "kind": "decision",
+        "topic": "What the outbound terms check does not see",
+        "detail": "Accepted for now and documented (docs/internals/hooks.md, Outbound terms): text sent by a script or program that runs git itself (./deploy.sh, make), an interpreter, curl to the GitHub API, or a tool other than a shell (notably GitHub MCP tools), and commits a push would send that a session hid by moving local remote-tracking refs. gh search and gh api GET queries send terms to GitHub without publishing them. Proposed: cover GitHub MCP tools' write calls the same way, and compare with git ls-remote before a push when a remote's tracking ref moved in the same session.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-044",
+          "SP-045"
+        ],
+        "status": "resolved",
+        "note": "2026-11-14: settled by D-60 (best-effort, loosened baseline in SP-044; configurable rules in SP-075)."
+      },
+      {
+        "id": "RC-118",
+        "kind": "decision",
+        "topic": "How strict the outbound terms check is",
+        "detail": "While the terms layer is on, SP-044 fails closed (outbound_unchecked) on any outbound command it cannot read in full: a variable or command substitution in it (except $HOME and $(cat <<'EOF' ...)), a command name built from a variable, loops, eval/xargs, git -c beyond a small allowlist, an earlier command that changes a remote or config, gh fed from a pipe. A gh write without -R counts every remote of the checkout (and GH_REPO) as a destination, so a fork whose upstream is another space's refuses the session's own terms in gh pr create. After git add/commit in the same call a push also checks the work tree, untracked files and every branch. Confirm this strictness, or say which cases should be allowed.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-044"
+        ],
+        "status": "resolved",
+        "note": "2026-11-14: settled by D-60 (best-effort, loosened baseline in SP-044; configurable rules in SP-075)."
+      },
+      {
+        "id": "RC-119",
+        "kind": "follow-up",
+        "topic": "Outbound terms elsewhere than the command log (INV-07)",
+        "detail": "SP-044 keeps terms out of refusals, the command log, orchd's log and status output. Session transcripts, session records and anything indexed into RAG from them, the PR digests and event streams can still hold a term a session typed; INV-07 lists SP-053 for those. The terms cache in orchd notices a changed terms file by size and modification time only.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-12",
+        "affects": [
+          "SP-053",
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-220",
+        "kind": "decision",
+        "topic": "Programs that run git themselves (accepted risk, D-60)",
+        "detail": "Accepted under D-60 and RC-117, recorded by the SP-044 security reviews of 2026-11-14: gh pushing an unpushed head branch itself (its interactive prompt), external git-<name> subcommands on PATH (git town, git-spr) that an alias check finds no alias for, gh's interactive base-repo prompt for a fork under a PTY (Codex exec_command with a tty), and gh api --hostname or -R naming another host. The check does not read what these send; SP-045's git hooks and per-job accounts are the boundary.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-045"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-221",
+        "kind": "decision",
+        "topic": "Encoded content in outbound text (accepted risk, D-60)",
+        "detail": "Accepted under D-60: the outbound terms check matches text as written. A term inside compressed, base64, UTF-16 or otherwise encoded content, a binary file over 1 MiB or past the 64th binary file of one check, or a binary file only a merge commit adds is not found.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-222",
+        "kind": "follow-up",
+        "topic": "Non-github.com hosts in gh repo names",
+        "detail": "Low (SP-044 review round 1): parseRepo drops the host, so gh -R ghe.example.com/acme/x or a PR URL on an Enterprise host is placed by the github.com owner acme, while GH_REPO with a host gives no space. Proposed: treat a repo on another host than github.com as holding no space.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-043"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-223",
+        "kind": "follow-up",
+        "topic": "A terms refusal hides the logging guard's own verdict",
+        "detail": "Low (SP-044 review round 1): with the guard off or logging, a call the terms check refuses is recorded as refused with the terms rule, so the command log loses the would-verdict the guard gave the same call (RC-86). Proposed: record both, e.g. the guard's would-rule in a second field.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-224",
+        "kind": "follow-up",
+        "topic": "Replay of terms verdicts and redacted fields",
+        "detail": "Low (SP-044 review round 1, RC-116): replay cannot run the terms check again (the log never keeps the text, INV-07, and the checkout moves on), so it carries a recorded outbound_term or outbound_unchecked refusal while the replayed guard lets the call through and the terms layer is on. Replay and orchd's logging-mode verdicts are also computed on redacted directories and targets, so a root or repo whose name is a term can replay differently from the live verdict.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-047"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-225",
+        "kind": "follow-up",
+        "topic": "Outbound calls refused when the guard cannot decide",
+        "detail": "Low, fail-closed (SP-044 review round 1): when the guard's decision times out, or its snapshot cannot be read while the guard is off or logging, the terms check cannot know the terms or the layer's switch from the snapshot and refuses every outbound call (outbound_unchecked), even when no space has terms. While the snapshot is unreadable the switch is read from orch.db, so an operator who switched terms off is not refused.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-226",
+        "kind": "follow-up",
+        "topic": "Multi-word literal terms are whitespace-exact",
+        "detail": "Low (SP-044 review round 1): a literal term of two words matches only with the single space written; two spaces, a tab or a newline between the words is not found. Proposed: match any run of blanks between a literal term's words.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-227",
+        "kind": "follow-up",
+        "topic": "Command log keeps terms split by shell quoting",
+        "detail": "Low, INV-07 (SP-044 review round 2): the command log redacts the tool input's decoded JSON text, not the words as the shell passes them, so gh issue create -b fal''con is stored as written. The check itself reads the shell words. Proposed: redact, or withhold the command, when a shell-decoded word holds a term.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044",
+          "SP-053"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-228",
+        "kind": "follow-up",
+        "topic": "Which remote gh picks, unverified cases",
+        "detail": "Low (SP-044 review rounds 1-2): gh only counts remotes on hosts it is signed in to. When gh is signed in to an Enterprise host only, it skips github.com remotes and may pick a later one; the check assumes github.com is known. The check counts gh api's {owner}/{repo} as the marked repo plus the first remotes, since gh api may ignore gh repo set-default (not checked against gh's source). Whether GitHub resolves dot segments in API paths is unverified; such paths fail closed.",
+        "source": "https://github.com/willesq/orchestrator/pull/177",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044"
         ],
         "status": "open"
       }
@@ -4948,7 +5121,12 @@
               "threshold": "2 pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestTermsMatching (internal/spaces/terms_test.go): one terms file with literal terms (one word, two words, with punctuation, non-ASCII, a dotted host) and regex terms (a ticket pattern, an alternation), 26 match/no-match cases, all pass: case-insensitive, word boundaries (not inside falconry, refalcon, falcon_x, Überwaldx), regex anchoring by boundaries (INV-123 and INV-12345 do not match INV-[0-9]{4}), comments and blank lines skipped, CRLF lines. TestTermsRejected: 8 invalid files rejected (invalid regex, invalid character class, empty pattern, a pattern matching empty text, a line over 512 bytes, not UTF-8, over 256 KiB, over 4,096 terms), and no error text names the term; the error names the line. TestTermsRedact (5 cases incl. back-to-back terms and a regex with its own groups), TestRedactJSONAndTargets (reserved group names rejected), TestRedactTargetsEveryField, TestSpaceTerms, TestOutboundMatchStopsWithContext.",
+            "a1 re-run 2026-11-14 after merging main (SP-041/042/047) and D-60: all pass. spaces.ReadApplied and TestReadApplied are gone: the hook reads the policy from the guard snapshot (RC-116).",
+            "a2: TestOutboundStagedTermCaught (internal/spaces/outbound_test.go, a real git repository whose origin is github.com/acme/app): a globex term in a staged file, with an innocent message, is refused for git commit (outbound_term, globex, line 1, destination acme), and so are commit -a with an unstaged tracked change, a term in the message and in a -F file; acme's own term to acme is allowed. TestOutboundPushedTermCaught: a globex term in a local commit not on origin is refused for git push, git push origin main, HEAD:main and -u origin --all; once origin's tracking ref has it the push is allowed; acme's term pushed to a globex URL is refused. Further: TestOutboundDestinations, TestOutboundFailsClosed, TestOutboundActions, TestOutboundNoFilterRun and the security reviews' reproducers TestOutboundReviewCases, TestOutboundReview2Cases, TestOutboundReview3Cases, TestOutboundReview4Cases, TestOutboundReview5Cases, TestOutboundReview6Cases (binary files, merges, replace refs, authors, tag-only commits, tags of blobs).",
+            "a2 D-60 baseline (internal/spaces/outbound_d60_test.go): TestOutboundGHDefaultRepo, TestOutboundPlainVariables, TestOutboundCommandAssignments, TestOutboundGitConfigKeys each hold commands the strict version refused (run against the pre-D-60 code at c6bccb1: every one refused) that are now allowed, beside commands that still reach another space's destination or carry its term and are still refused; TestOutboundBaselineRules pins the six rule ids. RC-116 in the hook (internal/hook/terms_test.go, under SP-041's TestMain): TestOutboundTermsRefusedByHook (guard log, block-other-jobs and off: one deny, recorded as an enforced refuse with rule outbound_term and revision 7), TestOutboundTermsUncheckedRecorded, TestOutboundTermsAfterGuard, TestOutboundTermsSwitchFromSnapshot, TestOutboundTermsUnreadablePolicy, TestOutboundTermsPanicFailsClosed; through orchd: TestGuardSnapshotCarriesTermsSwitch, TestTermsRefusalRecordedAndReplayed (internal/daemon/terms_guard_test.go); replay: TestReplayCarriesTermsVerdicts."
+          ]
         },
         {
           "id": "SP-044.2",
@@ -4962,18 +5140,20 @@
               "threshold": "0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestTermsNeverLeak (internal/daemon/terms_redact_test.go): with two jobs' terms files (literal and regex terms) applied, tool events carrying every fixture term in commands, paths, directories (cwd, old and new cwd), a Write tool's content (after newline and tab escapes, and past the 2 KB command cap), written paths and gh orgs (targets Writes and GHOrgs) and a Codex argv that splits a two-word term across words are stored; the command log records, orchd's log output during the run, the Status RPC output and a refusal reason for each term hold 0 occurrences of any fixture term (commands read [term]). This test failed on the code before review round 1 (5 records held terms). TestTermsWithheldWhenUnreadable: with a terms file gone, command, targets and directories are withheld. Refusal text: TestOutboundTermsRefusedByHook (internal/hook/terms_test.go) prints the PreToolUse deny naming the rule and the term's space, and not the term; TestOutboundReasonNamesNoWord: an alias, gh subcommand or API method the session wrote is not echoed."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "190d97191df42f39b8706ff883225a12e39e2b1d",
+      "verified_at": "2026-11-14T17:53:15Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 2,
       "criteria_sha256": "3025c7e6d0152b605a402bbbfebe2786f6649b26a8a33bd596e2d27c53437060",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-044-outbound-terms",
+      "pr": "https://github.com/willesq/orchestrator/pull/177"
     },
     {
       "id": "SP-045",
@@ -5777,6 +5957,101 @@
       "criteria_sha256": "d5adf4fa1d834d57546d631cb74c57828d452d27bed8e95c581c02ae5071274b",
       "branch": null,
       "pr": null
+    },
+    {
+      "id": "SP-075",
+      "phase": "P3",
+      "priority": 34.5,
+      "title": "Configurable outbound rules",
+      "summary": "orch ships SP-044's outbound check as a baseline of named rules, each with a stable id (e.g. which commands count as outbound, how unreadable commands are treated, how gh destinations are chosen). The operator can switch any baseline rule on or off, add stricter rules of their own (extra commands or destinations to check, extra fail-closed patterns), and the whole terms layer stays switchable through SP-070. Rules are managed from the CLI ('orch spaces terms rules list|enable|disable|add|remove') and the app, stored in orch.db, and changed only by the operator, with every change logged.",
+      "why": "D-60: the user wants a looser default that each person can tighten or relax, without code changes, and wants it clear that the check can be turned off entirely.",
+      "depends_on": [
+        "SP-044",
+        "SP-070"
+      ],
+      "touches": [
+        "internal/spaces/terms.go",
+        "internal/spaces/terms_rules.go",
+        "internal/db/migrations/",
+        "internal/daemon/",
+        "internal/cli/",
+        "internal/rpc/orchdv1/orchd.proto",
+        "macos/Sources/"
+      ],
+      "docs_to_update": [
+        "docs/internals/hooks.md",
+        "docs/internals/config.md",
+        "docs/internals/cli.md",
+        "docs/internals/app.md",
+        "docs/OPERATIONS.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-075.1",
+          "title": "Rules model",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Every baseline rule of SP-044's check has a stable id and default state; switching one off changes only that rule's verdicts (table test per rule, on and off).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "A user-added rule can only make the check stricter (add commands, destinations or fail-closed patterns); a rule that would allow something the baseline refuses is rejected at save time.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "Rules persist in orch.db, survive an orchd restart, reach the hook through orchd's guard snapshot, and replay (SP-047) judges with the rules recorded for the event's policy revision.",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
+        },
+        {
+          "id": "SP-075.2",
+          "title": "Operator control",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Enabling, disabling, adding or removing a rule is operator-only (callers descended from a harness or orchd are refused, INV-06) and each change is logged with time and caller; the CLI commands have tests.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "The app lists baseline and user rules with their state, can switch and add them through the same operator-only RPCs, and shows that the whole terms layer can be turned off through SP-070.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "doc",
+              "check": "Docs state the baseline, how to relax or tighten it, how to switch the terms layer off entirely, and that rule text never appears in logs or refusals (INV-07).",
+              "measure": "documented",
+              "threshold": "true"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "f09b8ebcceabae3c53278bbf89426eec5db6e7a09c656b08af71fa359704171c",
+      "branch": null,
+      "pr": null
     }
   ],
   "criteria_hash_recipe": "criteria_sha256 = sha256 of json.dumps([{id, title, acceptance} for each checkpoint], sort_keys=True, separators=(',', ':'), ensure_ascii=False) encoded as UTF-8. 'evidence' is excluded so recording evidence does not change the hash.",
@@ -5856,6 +6131,18 @@
     {
       "date": "2026-11-12",
       "change": "D-57: user chose to merge SP-072 before its manual checks; SP-072 stays in_progress until RC-160's checks are done."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-60: SP-044 is best-effort with a loosened baseline; added SP-075 'Configurable outbound rules' (priority 34.5) with the user's approval."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "SP-044 resumed under D-60: merged main, RC-116 wiring, loosened baseline with rule ids, three security-review rounds (RC-220 to RC-228)."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "SP-044 verified and done (190d97191df42f39b8706ff883225a12e39e2b1d); RC-116 resolved."
     }
   ],
   "plan_location": {

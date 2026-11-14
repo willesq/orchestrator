@@ -38,7 +38,8 @@ type ReplayRow struct {
 	Event ReplayEvent
 	// Verdict and Rule are the replay's: the verdict of the mode replayed
 	// in, or of the default mode when that mode does not enforce (Decide's
-	// Would), so they compare with what a logging guard records.
+	// Would), so they compare with what a logging guard records; for a
+	// call the terms check refused, its recorded verdict (Replay).
 	Verdict Verdict
 	Rule    GuardRule
 	// Changed is set when the event has a recorded verdict and the replay's
@@ -64,7 +65,9 @@ type ReplayPolicies func(rev int64) (GuardPolicy, error)
 
 // Replay decides every event again under pin, enf and the policy policies
 // gives for it. It calls the live guard's Decide, so a replay judges exactly
-// as the guard does, and changes nothing.
+// as the guard does, and changes nothing. A call the outbound terms check
+// refused keeps that verdict while the guard, replayed, lets it through and
+// enf's terms layer is on, as the hook decides it (RC-116).
 func Replay(events []ReplayEvent, pin GuardPin, enf GuardEnforcement, policies ReplayPolicies) ReplayReport {
 	var rep ReplayReport
 	type cached struct {
@@ -86,6 +89,13 @@ func Replay(events []ReplayEvent, pin GuardPin, enf GuardEnforcement, policies R
 		default:
 			d := Decide(c.pol, pin, enf, ev.Guard)
 			row.Verdict, row.Rule = d.Would, d.Rule
+			if d.Verdict != Refuse && enf.Terms != SwitchOff && carriesTerms(ev.Recorded) {
+				// Reason: the hook checks terms only after the guard let
+				// the call through, against text the log never keeps
+				// (INV-07) and a checkout that has moved on since; the
+				// recorded terms verdict is the one the call got.
+				row.Verdict, row.Rule = Refuse, ev.Recorded.Rule
+			}
 			if ev.Recorded.OK {
 				rep.Compared++
 				row.Changed = row.Verdict != ev.Recorded.Verdict || row.Rule != ev.Recorded.Rule
@@ -103,6 +113,12 @@ func Replay(events []ReplayEvent, pin GuardPin, enf GuardEnforcement, policies R
 		rep.Rows = append(rep.Rows, row)
 	}
 	return rep
+}
+
+// carriesTerms reports whether r is a refusal by the outbound terms check
+// (SP-044), which a replay carries rather than decides (RC-116).
+func carriesTerms(r RecordedDecision) bool {
+	return r.OK && r.Verdict == Refuse && (r.Rule == RuleOutboundTerm || r.Rule == RuleOutboundUnchecked)
 }
 
 // Recorded decision forms. orchd stores a call the guard decided as its
