@@ -558,7 +558,8 @@ the strict version refused that are now allowed, beside commands that still reac
 destination or carry its term and are still refused.
 
 **Limits.** This is static reading of shell, best-effort like target extraction (D-28, D-60):
-SP-045's git hooks (`commit-msg`, `pre-push` on the real content) and per-job GitHub accounts
+SP-045's git hooks (`commit-msg`, `pre-push` on the real content; `orch guard git-hook`, see
+[install.md](install.md#git-hooks-for-outbound-terms)) and per-job GitHub accounts
 (D-18) are the boundary for git. Accepted as risk by D-60 (RC-117): text sent by a script or
 program that runs git itself (`./deploy.sh`, `make`), an interpreter, `curl` to the GitHub API, a
 tool other than a shell (notably GitHub MCP tools), an alias or shell function from the user's

@@ -78,6 +78,15 @@ func (c OutboundChecker) pushed(ctx context.Context, a Outbound, diff []string) 
 			return nil, err
 		}
 	}
+	for _, h := range a.Have {
+		if !objectName.MatchString(h) {
+			return nil, errors.New("a commit the destination holds is not an object name")
+		}
+		not = append(not, h)
+	}
+	for _, r := range a.HaveRemotes {
+		not = append(not, "--remotes="+r)
+	}
 	// Reason: the author's and committer's names and emails are sent with
 	// each commit; --cc shows what a merge itself adds.
 	args := append([]string{"log", "-p", "--cc", "--no-show-signature", "--format=%an <%ae>%n%cn <%ce>%n%B"}, diff...)
