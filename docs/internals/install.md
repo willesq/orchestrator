@@ -550,10 +550,14 @@ orch never handles either token. Showing which login each space will use is SP-0
   checkout's `settings.local.json`, a sandboxed `cat` of a file in it printed the file when the
   checkout's own `.claude/settings.json` (a repository can commit one) or the same
   `settings.local.json` held `sandbox.filesystem.allowRead` of that folder; a `settings.json`
-  `excludedCommands: ["cat"]` did not. orch cannot change a repository's file and keeps the
-  user's own entries, so each sync reports such an entry as a problem in orchd's log
-  (`spacesettings.Loosening`); what to do about it is open (RC-215). The file-tool `Read(//...)`
-  denies still hold.
+  `excludedCommands: ["cat"]` did not. In a session started as `orch run` starts it, whose
+  denies come from `--settings`, the same `settings.json` in the launch folder did not re-open
+  them (`TestClaudeE2E` `loosening`). orch cannot change a repository's file and keeps the
+  user's own entries, so each sync reports such an entry, and any settings file or `.claude` it
+  cannot check (a link, not a regular file, over 4 MiB, not JSON), as a problem in orchd's log,
+  and `orch run` prints it as a warning (`spacesettings.Loosening`, which reads only the
+  checkout's own two files, without following links); what to do about it is open (RC-215). The
+  file-tool `Read(//...)` denies still hold.
 - `auto` judges only isolated roots: with one isolated job and other spaces that are not
   isolated, the job's sessions get no rules, so nothing denies them those spaces'
   `gh_config_dir` or `claude_config_dir` or `.orch/` (RC-217).

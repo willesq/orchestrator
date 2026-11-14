@@ -8,7 +8,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/willesq/orchestrator/internal/settings"
+	"golang.org/x/sys/unix"
+
 	"github.com/willesq/orchestrator/internal/spaces"
 )
 
@@ -19,7 +20,9 @@ import (
 // sandboxed cat read a folder orch's settings.local.json denied). orch
 // cannot change a repository's settings.json and keeps the user's own
 // entries, so it reports such entries rather than letting them pass
-// silently (RC-215).
+// silently (RC-215). Only the checkout's own files are read: the user's
+// ~/.claude settings, managed settings and other --settings files merge the
+// same way but are the user's to trust.
 
 // loosenKeys are the sandbox lists whose entries re-open a deny.
 var loosenKeys = []string{keyAllowRead, keyAllowWrite}
@@ -27,21 +30,33 @@ var loosenKeys = []string{keyAllowRead, keyAllowWrite}
 // Loosening lists the entries of a checkout's .claude/settings.json and
 // settings.local.json that would re-open a folder in deny, each as a
 // sentence naming the file, key and entry. Entries orch wrote (owned) are
-// not counted. A file that is missing, a link, too large or not JSON is
-// skipped: orch neither reads through a link nor guesses at a file it
-// cannot parse.
+// not counted. A file, or a .claude folder, that exists but cannot be
+// checked (a link, not a regular file, too large, not JSON) is named too:
+// Claude Code may still load it, so it must not pass silently.
 func Loosening(checkout string, deny []string, owned Owned) []string {
+	dir, err := claudeDirFD(checkout, false)
+	if err != nil {
+		return []string{fmt.Sprintf("%s: orch cannot check whether its settings re-open denied folders: %v", claudeDir, err)}
+	}
+	if dir < 0 {
+		return nil
+	}
+	defer unix.Close(dir)
 	var out []string
 	for _, name := range []string{"settings.json", localFile} {
-		path := filepath.Join(checkout, claudeDir, name)
-		lists := sandboxLists(path)
+		rel := filepath.Join(claudeDir, name)
+		lists, err := sandboxLists(dir, name)
+		if err != nil {
+			out = append(out, fmt.Sprintf("%s: orch cannot check whether it re-opens denied folders: %v", rel, err))
+			continue
+		}
 		for _, key := range loosenKeys {
 			for _, e := range lists[key] {
 				if name == localFile && slices.Contains(owned.Lists[key], e) {
 					continue
 				}
 				if d, ok := reopens(e, checkout, deny); ok {
-					out = append(out, fmt.Sprintf("%s: %s entry %q re-opens %s, which orch's sandbox rules deny", filepath.Join(claudeDir, name), key, e, d))
+					out = append(out, fmt.Sprintf("%s: %s entry %q re-opens %s, which orch's sandbox rules deny", rel, key, e, d))
 				}
 			}
 		}
@@ -49,22 +64,16 @@ func Loosening(checkout string, deny []string, owned Owned) []string {
 	return out
 }
 
-// sandboxLists reads path's loosening lists; nil when it cannot be read.
-func sandboxLists(path string) map[string][]string {
-	if dir, err := os.Lstat(filepath.Dir(path)); err != nil || !dir.IsDir() {
-		return nil
-	}
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() > int64(settings.MaxFileSize) {
-		return nil
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil
+// sandboxLists reads the loosening lists of file name in the open .claude
+// folder dir; none when the file is missing.
+func sandboxLists(dir int, name string) (map[string][]string, error) {
+	b, ok, err := readNamed(dir, name)
+	if err != nil || !ok {
+		return nil, err
 	}
 	var root map[string]any
-	if json.Unmarshal(b, &root) != nil {
-		return nil
+	if err := json.Unmarshal(b, &root); err != nil {
+		return nil, fmt.Errorf("not a JSON object: %w", err)
 	}
 	out := map[string][]string{}
 	for _, key := range loosenKeys {
@@ -75,7 +84,7 @@ func sandboxLists(path string) map[string][]string {
 			}
 		}
 	}
-	return out
+	return out, nil
 }
 
 // lookup returns the value at a dotted key path in root, nil when absent.

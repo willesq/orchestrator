@@ -72,31 +72,37 @@ func claudeDirFD(checkout string, create bool) (int, error) {
 
 // readAt reads the settings file in the open .claude folder dir. A missing
 // file is nil, false.
-func readAt(dir int) ([]byte, bool, error) {
-	fd, err := unix.Openat(dir, localFile, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+func readAt(dir int) ([]byte, bool, error) { return readNamed(dir, localFile) }
+
+// readNamed reads file name in the open .claude folder dir without following
+// a link or blocking on a special file, and at most settings.MaxFileSize
+// bytes. A missing file is nil, false.
+func readNamed(dir int, name string) ([]byte, bool, error) {
+	rel := claudeDir + "/" + name
+	fd, err := unix.Openat(dir, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
 	switch {
 	case errors.Is(err, unix.ENOENT):
 		return nil, false, nil
 	case errors.Is(err, unix.ELOOP):
-		return nil, false, fmt.Errorf("%s is a link: %w", LocalPath, ErrUnusable)
+		return nil, false, fmt.Errorf("%s is a link: %w", rel, ErrUnusable)
 	case err != nil:
 		return nil, false, err
 	}
-	f := os.NewFile(uintptr(fd), localFile)
+	f := os.NewFile(uintptr(fd), name)
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
 		return nil, false, err
 	}
 	if !info.Mode().IsRegular() {
-		return nil, false, fmt.Errorf("%s is not a regular file: %w", LocalPath, ErrUnusable)
+		return nil, false, fmt.Errorf("%s is not a regular file: %w", rel, ErrUnusable)
 	}
 	b, err := io.ReadAll(io.LimitReader(f, settings.MaxFileSize+1))
 	if err != nil {
 		return nil, false, err
 	}
 	if len(b) > settings.MaxFileSize {
-		return nil, false, fmt.Errorf("%s is larger than %d bytes: %w", LocalPath, settings.MaxFileSize, ErrUnusable)
+		return nil, false, fmt.Errorf("%s is larger than %d bytes: %w", rel, settings.MaxFileSize, ErrUnusable)
 	}
 	return b, true, nil
 }

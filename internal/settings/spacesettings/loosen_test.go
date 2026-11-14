@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/willesq/orchestrator/internal/settings"
 	"github.com/willesq/orchestrator/internal/spaces"
 )
 
@@ -47,23 +48,52 @@ func TestLoosening(t *testing.T) {
 		t.Errorf("/Users:\n%s", joined)
 	}
 
-	// A relative entry is read from the checkout; a linked .claude, a
-	// file that is not JSON or not a regular file are skipped.
+	// A relative entry is read from the checkout. A file or .claude orch
+	// cannot check (not JSON, a link, too large, not a regular file) is
+	// named, never read through or skipped (security re-audit).
 	other := gitRepo(t, filepath.Join(w.code, "a", "lib"))
-	writeFile(t, filepath.Join(other, ".claude", "settings.json"), `{"sandbox":{"filesystem":{"allowRead":["../../b"]}}}`)
+	set := filepath.Join(other, ".claude", "settings.json")
+	writeFile(t, set, `{"sandbox":{"filesystem":{"allowRead":["../../b"]}}}`)
 	if got := Loosening(other, deny, Owned{}); len(got) != 1 {
 		t.Errorf("relative entry: %v", got)
 	}
-	writeFile(t, filepath.Join(other, ".claude", "settings.json"), `not json`)
-	if got := Loosening(other, deny, Owned{}); len(got) != 0 {
-		t.Errorf("not JSON: %v", got)
+	cannot := func(name string, want string) {
+		t.Helper()
+		got := Loosening(other, deny, Owned{})
+		if len(got) != 1 || !strings.Contains(got[0], "orch cannot check") || !strings.Contains(got[0], want) {
+			t.Errorf("%s: %v", name, got)
+		}
 	}
+	writeFile(t, set, `not json`)
+	cannot("not JSON", "not a JSON object")
+	if err := os.Remove(set); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(localOf(co), set); err != nil {
+		t.Fatal(err)
+	}
+	cannot("linked file", "is a link")
+	if err := os.Remove(set); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, set, `{"x":"`+strings.Repeat("a", settings.MaxFileSize)+`"}`)
+	cannot("too large", "larger than")
+	if err := os.Remove(set); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(set, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cannot("a folder", "not a regular file")
 	linked := gitRepo(t, filepath.Join(w.code, "a", "linked"))
 	if err := os.Symlink(filepath.Join(co, ".claude"), filepath.Join(linked, ".claude")); err != nil {
 		t.Fatal(err)
 	}
-	if got := Loosening(linked, deny, Owned{}); len(got) != 0 {
-		t.Errorf("linked .claude read: %v", got)
+	if got := Loosening(linked, deny, Owned{}); len(got) != 1 || !strings.Contains(got[0], "link or not a folder") {
+		t.Errorf("linked .claude: %v", got)
+	}
+	if got := Loosening(filepath.Join(w.code, "a", "gone"), deny, Owned{}); len(got) != 1 {
+		t.Errorf("missing checkout: %v", got)
 	}
 
 	// The sync reports them for a checkout it writes rules for.
