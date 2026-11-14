@@ -5592,7 +5592,7 @@
       "attempts": 1,
       "criteria_sha256": "125ea6a040c8fa44e5b63bcb2304574bcc3c1b7a37da67f40bd0412593545586",
       "branch": "feat/sp-045-git-hook-terms",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/184"
     },
     {
       "id": "SP-046",
