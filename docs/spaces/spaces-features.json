@@ -5553,14 +5553,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "4f938c395fd884456515aa918dc77679f7a6eeab255ddd19b523e7bfad99e52b",
-      "branch": null,
+      "branch": "feat/sp-027-relabel",
       "pr": null
     },
     {
