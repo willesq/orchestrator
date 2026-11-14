@@ -530,6 +530,16 @@
         "id": "D-57",
         "decision": "Merge SP-072 (PR #169) before its manual acceptance items (SP-072.1.a1 switch check, SP-072.1.a2 snapshot approval) are done; modifications follow after the merge. SP-072 stays in_progress on main until those items have evidence (RC-160). The switch check needs an orchd with SP-070's RPCs: the user's running orchd predates them and answers 'unknown method GetEnforcement'.",
         "date": "2026-11-12"
+      },
+      {
+        "id": "D-58",
+        "decision": "RC-206 option (c): Claude Code sessions started inside a checkout share Claude Code's own temp folder (/tmp/claude-<uid>) across spaces, because Claude Code takes its sandbox temp folder only from its startup environment. This is accepted as a documented limit until Claude Code honours a settings value; 'orch run <space>' gives each space its own temp folder. For SP-046.1.a6 the per-checkout side is met by this decision, the launcher side by test.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-59",
+        "decision": "Revisits D-18. One login works by default: orch uses whichever gh login is already authenticated for every space, and 'orch run' uses the user's normal Claude config. A space may optionally name its own gh profile (gh_config_dir) and Claude config dir; only then does orch switch to them. orch detects and shows which login each space will use (orch status and the app) without reading credentials. Accepted trade-off: with a single login the GitHub account is not a boundary between jobs; the guard, memory spaces and folder deny rules still are. SP-046.1.a1 and SP-046.2.a1 are amended to set GH_CONFIG_DIR/CLAUDE_CONFIG_DIR only when the space names one; SP-074 gains checkpoint SP-074.3 for detection and display.",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -2145,7 +2155,7 @@
           "SP-046"
         ],
         "status": "open",
-        "note": "2026-11-12: run with the user's approval without ORCH_E2E_GH_PROFILE and ORCH_E2E_LAYOUT: read, grep, glob, write, bash, edit, launched-tmpdir and protect PASS, tmpdir SKIP (RC-206). Still needed: steps (1) and (2) for a5's gh part and 2.a2."
+        "note": "2026-11-12: run with the user's approval without ORCH_E2E_GH_PROFILE and ORCH_E2E_LAYOUT: read, grep, glob, write, bash, edit, launched-tmpdir and protect PASS, tmpdir SKIP (RC-206). Still needed: steps (1) and (2) for a5's gh part and 2.a2. 2026-11-14: D-59 makes per-space logins optional; the e2e checks run with the default gh login and Claude config."
       },
       {
         "id": "RC-181",
@@ -2281,7 +2291,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "2026-11-14: D-59 makes per-space logins optional; the e2e checks run with the default gh login and Claude config."
       },
       {
         "id": "RC-206",
@@ -2293,7 +2304,8 @@
         "affects": [
           "SP-046"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Resolved 2026-11-14 as D-58 (option c)."
       },
       {
         "id": "RC-207",
@@ -4147,7 +4159,7 @@
       "phase": "P1",
       "priority": 21.5,
       "title": "Per-job GitHub account follow-ups",
-      "summary": "Follow-ups to SP-063 decided on 2026-11-10 (D-54): scopes and PR watching for orgs reachable only through a space's profile; GitHub calls a space's profile cannot read are refused, with stricter gh_config_dir checks; the repo picker and PR-outcome tracker use the space's profile; a GitHub API quota cap per isolated account.",
+      "summary": "Follow-ups to SP-063 decided on 2026-11-10 (D-54): scopes and PR watching for orgs reachable only through a space's profile; GitHub calls a space's profile cannot read are refused, with stricter gh_config_dir checks; the repo picker and PR-outcome tracker use the space's profile; a GitHub API quota cap per isolated account. Since D-59 (2026-11-14): one gh login works by default for every space and a space's own profile is optional; orch detects and shows which login each space uses.",
       "why": "D-54.",
       "depends_on": [
         "SP-063",
@@ -4158,11 +4170,16 @@
         "internal/daemon/ghprofiles.go",
         "internal/reviews/",
         "internal/prs/",
-        "internal/config/schema.go"
+        "internal/config/schema.go",
+        "internal/settings/spacesettings/",
+        "internal/cli/",
+        "macos/Sources/"
       ],
       "docs_to_update": [
         "docs/internals/daemon.md",
-        "docs/OPERATIONS.md"
+        "docs/OPERATIONS.md",
+        "docs/INSTALL.md",
+        "docs/internals/app.md"
       ],
       "checkpoints": [
         {
@@ -4206,6 +4223,41 @@
             }
           ],
           "evidence": []
+        },
+        {
+          "id": "SP-074.3",
+          "title": "Single or multiple logins (D-59)",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "With no space naming a gh profile, docs sync, PR watching, reviews, the guard's GitHub checks and generated checkout settings all use the default gh login, with no extra setup and no GH_CONFIG_DIR set; a space that names gh_config_dir uses that profile and never the default for its orgs.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "orch detects, per space, which gh login and which Claude config it will use (default or the space's own) and whether each is authenticated, using only 'gh auth status'-style metadata; no token, cookie or credential file content is read, logged or stored.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "'orch status' and the app's Spaces section show each space's login source (default or own profile) and its state; a test covers one-login and two-login layouts.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "doc",
+              "check": "docs/INSTALL.md and OPERATIONS.md describe the single-login default, how to add a per-space gh profile or Claude config, and the trade-off that one login is not a boundary between jobs.",
+              "measure": "documented",
+              "threshold": "true"
+            }
+          ],
+          "evidence": []
         }
       ],
       "status": "todo",
@@ -4214,7 +4266,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "64dfe8fa4b93ec62bf243535b8f8d41a15cbbdafbcdcab2c948ff91ed70e4ded",
+      "criteria_sha256": "2da46d2348de350e8f61196826bc0dc17990a6e620ad2419bcfdbe65138a815d",
       "branch": null,
       "pr": null
     },
@@ -5229,7 +5281,7 @@
             {
               "id": "a1",
               "type": "test",
-              "check": "Generated settings for a checkout in space A deny every other isolated root, deny nothing in A, public or opted-in private spaces, and set GH_CONFIG_DIR to A's profile.",
+              "check": "Generated settings for a checkout in space A deny every other isolated root, deny nothing in A, public or opted-in private spaces, and set GH_CONFIG_DIR to A's profile when A names one (D-59); with none, the default gh login is used and GH_CONFIG_DIR is not set.",
               "measure": "test",
               "threshold": "passes"
             },
@@ -5293,7 +5345,7 @@
             {
               "id": "a1",
               "type": "test",
-              "check": "'orch run <space> -- claude' sets CLAUDE_CONFIG_DIR (and GH_CONFIG_DIR) for the child process only, and refuses an unknown space or a space the current folder resolves outside of unless --force is given.",
+              "check": "'orch run <space> -- claude' sets CLAUDE_CONFIG_DIR and GH_CONFIG_DIR for the child process only, each only when the space names one (D-59), and refuses an unknown space or a space the current folder resolves outside of unless --force is given.",
               "measure": "tests",
               "threshold": "3 pass"
             },
@@ -5341,7 +5393,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 1,
-      "criteria_sha256": "0ed90500129ff80453d9ab01f9e541da7d9f62defe2a9d070c09806eae31aa3a",
+      "criteria_sha256": "7077c603b63e27e3c26c97cd2e2754efa1e1daf3e8ae6c81d911fcf3b1f43778",
       "branch": "feat/sp-046-per-space-harness-settings",
       "pr": "https://github.com/willesq/orchestrator/pull/171"
     },
@@ -6043,6 +6095,10 @@
     {
       "date": "2026-11-12",
       "change": "D-57: user chose to merge SP-072 before its manual checks; SP-072 stays in_progress until RC-160's checks are done."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-58 (RC-206 option c: shared Claude temp folder in checkout sessions is a documented limit) and D-59 (one gh/Claude login by default, per-space logins optional; revisits D-18). With the user's approval: SP-046.1.a1 and SP-046.2.a1 amended to set GH_CONFIG_DIR/CLAUDE_CONFIG_DIR only when the space names one, SP-074 gains SP-074.3 (login detection and display); both criteria_sha256 recomputed."
     }
   ],
   "plan_location": {
