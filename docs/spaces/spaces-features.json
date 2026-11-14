@@ -520,6 +520,11 @@
         "id": "D-55",
         "decision": "SP-073, SP-040 and SP-070 are worked in parallel by three independent agent sessions, each in its own worktree and draft PR, overriding session_procedure step 2 (one feature, one session at a time) for these three only; their dependencies are done and their code barely overlaps. To avoid id clashes each reserves a block of reconvene ids: SP-073 RC-66..RC-75, SP-040 RC-76..RC-85, SP-070 RC-86..RC-95. New confirmed_by_user decisions are recorded by the coordinating session. Whichever PR merges later is rebased onto main (plan file, orch.db migration numbers, regenerated proto stubs).",
         "date": "2026-11-11"
+      },
+      {
+        "id": "D-60",
+        "decision": "SP-044's outbound terms hook check is best-effort static reading of shell, like D-28; SP-045's git hooks and per-job accounts are the boundary for git. The residual classes in RC-117 (MCP tools, scripts and programs that run git, interpreters, curl, forged tracking refs) stay accepted risk. The baseline is loosened in SP-044: a gh write without -R counts only the repo gh would use (its default repo, else the checkout's base remote), not every remote; plain variables ($PWD, $USER, $HOME) and literal assignments made earlier in the same command are read instead of refused; more harmless 'git -c' keys are allowed. Making the rules configurable (baseline rules switchable by id, user-added stricter rules, CLI and app, stored in orch.db, operator-only) is SP-075.",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -1657,7 +1662,8 @@
           "SP-044",
           "SP-045"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "2026-11-14: settled by D-60 (best-effort, loosened baseline in SP-044; configurable rules in SP-075)."
       },
       {
         "id": "RC-118",
@@ -1669,7 +1675,8 @@
         "affects": [
           "SP-044"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "2026-11-14: settled by D-60 (best-effort, loosened baseline in SP-044; configurable rules in SP-075)."
       },
       {
         "id": "RC-119",
@@ -4497,6 +4504,101 @@
       "pr": "https://github.com/willesq/orchestrator/pull/177"
     },
     {
+      "id": "SP-075",
+      "phase": "P3",
+      "priority": 34.5,
+      "title": "Configurable outbound rules",
+      "summary": "orch ships SP-044's outbound check as a baseline of named rules, each with a stable id (e.g. which commands count as outbound, how unreadable commands are treated, how gh destinations are chosen). The operator can switch any baseline rule on or off, add stricter rules of their own (extra commands or destinations to check, extra fail-closed patterns), and the whole terms layer stays switchable through SP-070. Rules are managed from the CLI ('orch spaces terms rules list|enable|disable|add|remove') and the app, stored in orch.db, and changed only by the operator, with every change logged.",
+      "why": "D-60: the user wants a looser default that each person can tighten or relax, without code changes, and wants it clear that the check can be turned off entirely.",
+      "depends_on": [
+        "SP-044",
+        "SP-070"
+      ],
+      "touches": [
+        "internal/spaces/terms.go",
+        "internal/spaces/terms_rules.go",
+        "internal/db/migrations/",
+        "internal/daemon/",
+        "internal/cli/",
+        "internal/rpc/orchdv1/orchd.proto",
+        "macos/Sources/"
+      ],
+      "docs_to_update": [
+        "docs/internals/hooks.md",
+        "docs/internals/config.md",
+        "docs/internals/cli.md",
+        "docs/internals/app.md",
+        "docs/OPERATIONS.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-075.1",
+          "title": "Rules model",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Every baseline rule of SP-044's check has a stable id and default state; switching one off changes only that rule's verdicts (table test per rule, on and off).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "A user-added rule can only make the check stricter (add commands, destinations or fail-closed patterns); a rule that would allow something the baseline refuses is rejected at save time.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "Rules persist in orch.db, survive an orchd restart, reach the hook through orchd's guard snapshot, and replay (SP-047) judges with the rules recorded for the event's policy revision.",
+              "measure": "test",
+              "threshold": "passes"
+            }
+          ],
+          "evidence": []
+        },
+        {
+          "id": "SP-075.2",
+          "title": "Operator control",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Enabling, disabling, adding or removing a rule is operator-only (callers descended from a harness or orchd are refused, INV-06) and each change is logged with time and caller; the CLI commands have tests.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "The app lists baseline and user rules with their state, can switch and add them through the same operator-only RPCs, and shows that the whole terms layer can be turned off through SP-070.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "doc",
+              "check": "Docs state the baseline, how to relax or tighten it, how to switch the terms layer off entirely, and that rule text never appears in logs or refusals (INV-07).",
+              "measure": "documented",
+              "threshold": "true"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "f09b8ebcceabae3c53278bbf89426eec5db6e7a09c656b08af71fa359704171c",
+      "branch": null,
+      "pr": null
+    },
+    {
       "id": "SP-045",
       "phase": "P3",
       "priority": 35,
@@ -5364,6 +5466,10 @@
     {
       "date": "2026-11-10",
       "change": "Decision review batch 7 (user actions): RC-17, RC-18, RC-21 and RC-22 resolved; issues #158-#162 filed for the defects found."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-60: SP-044 is best-effort with a loosened baseline; added SP-075 'Configurable outbound rules' (priority 34.5) with the user's approval."
     }
   ],
   "plan_location": {
