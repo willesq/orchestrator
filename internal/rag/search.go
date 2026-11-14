@@ -67,6 +67,11 @@ type SearchOpts struct {
 	PerSource int
 	// Ranking is RankingWeighted or RankingPlain; "" uses the service's.
 	Ranking string
+	// Spaces are the spaces whose collections are searched (SP-024). nil
+	// searches every collection, as before spaces were enforced; SP-025
+	// sets each caller's readable spaces. An empty, non-nil list searches
+	// nothing.
+	Spaces []string
 }
 
 // ErrHybridUnavailable means a search asked explicitly for hybrid mode could
@@ -82,10 +87,17 @@ const (
 )
 
 // Search embeds the query and returns the top matching chunks. In hybrid mode
-// on a hybrid collection, dense and BM25 keyword searches run side by side and
+// on hybrid collections, dense and BM25 keyword searches run side by side and
 // are merged by reciprocal rank fusion: each list contributes 1/(k+rank) for
 // every hit it holds, so a chunk both find rises, and one found only by exact
 // words still places. Otherwise it is a dense search.
+//
+// opts.Spaces chooses the collections read (SP-024): each space's own, with
+// the payload filter on space kept inside each as the second layer. The
+// lists from several collections are merged by score before fusion: cosine
+// means the same in every collection, and each keyword score is ranked by its
+// own space's statistics. With one collection the search is exactly the one
+// collection search it was before spaces.
 //
 // When hybrid mode comes from configuration and cannot run, the search answers
 // by meaning alone and the returned note says why; when the caller asked for
@@ -97,6 +109,14 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	}
 	if len(opts.Tags) > 0 || len(opts.AllTags) > 0 || opts.SourceType != "" {
 		s.ensureSearchIndexes()
+	}
+	targets, err := s.readStores(ctx, opts.Spaces)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(targets) == 0 {
+		// No space is readable: nothing to search, and nothing to embed.
+		return nil, "", nil
 	}
 	vecs, err := s.emb.Embed(ctx, []string{query})
 	if err != nil {
@@ -115,7 +135,6 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	if opts.SourceURI != "" {
 		must["source_uri"] = opts.SourceURI
 	}
-	st := s.active()
 	mode, explicit := opts.Mode, opts.Mode != ""
 	if !explicit {
 		mode = s.SearchMode
@@ -123,10 +142,15 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	idents := queryIdentifiers(query)
 	var note string
 	if mode == ModeHybrid {
-		l, lerr := st.Layout(ctx)
+		var l Layout
+		var lerr error
+		targets, l, lerr = layoutOf(ctx, targets)
+		if len(targets) == 0 {
+			return nil, "", nil
+		}
 		switch {
 		case lerr == nil && l == LayoutHybrid:
-			hits, kerr, err := s.hybridSearch(ctx, st, query, vecs[0], opts, must, idents)
+			hits, kerr, err := s.hybridSearch(ctx, targets, query, vecs[0], opts, must, idents)
 			if err != nil || kerr == nil {
 				return hits, "", err
 			}
@@ -144,7 +168,7 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 			note = "collection layout unknown; answered by meaning only"
 		default:
 			if explicit {
-				return nil, "", fmt.Errorf("%w: collection %q has no keyword index (run orch rag migrate-hybrid)", ErrHybridUnavailable, st.Collection())
+				return nil, "", fmt.Errorf("%w: %s has no keyword index (run orch rag migrate-hybrid)", ErrHybridUnavailable, denseCollection(ctx, s.ActiveCollection(), targets))
 			}
 			note = "collection has no keyword index; answered by meaning only"
 		}
@@ -155,13 +179,15 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	if s.reranks(opts) {
 		n = candidateDepth(opts.TopK)
 	}
-	raw, err := st.Search(ctx, vecs[0], n, must, opts.Tags, opts.AllTags, opts.Range)
+	raw, err := eachStore(ctx, targets, func(t spaceStore) ([]SearchHit, error) {
+		return t.st.Search(ctx, vecs[0], n, t.must(must), opts.Tags, opts.AllTags, opts.Range)
+	})
 	if err != nil {
 		return nil, "", err
 	}
-	cands := make([]candidate, 0, len(raw))
-	for _, r := range raw {
-		cands = append(cands, candidate{hit: r, score: float64(r.Score), cosine: r.Score})
+	cands := make([]candidate, 0, n)
+	for _, r := range mergeByScore(raw, n) {
+		cands = append(cands, candidate{hit: r.SearchHit, score: float64(r.Score), cosine: r.Score})
 	}
 	return s.finish(cands, opts, idents), note, nil
 }
@@ -204,78 +230,111 @@ func (s *Service) finish(cands []candidate, opts SearchOpts, idents []string) []
 	return hits
 }
 
-// hybridSearch fuses dense and keyword results. A keyword failure is returned
-// separately as kerr with the dense results, so the caller decides whether
-// answering by meaning alone is acceptable.
-func (s *Service) hybridSearch(ctx context.Context, st *QdrantStore, query string, vec []float32, opts SearchOpts, must map[string]string, idents []string) (hits []Hit, kerr, err error) {
+// hybridSearch fuses dense and keyword results from every target. A keyword
+// failure is returned separately as kerr with the dense results, so the
+// caller decides whether answering by meaning alone is acceptable.
+func (s *Service) hybridSearch(ctx context.Context, targets []spaceStore, query string, vec []float32, opts SearchOpts, must map[string]string, idents []string) (hits []Hit, kerr, err error) {
 	n := candidateDepth(opts.TopK)
-	var dense, keyword []SearchHit
+	kn := min(n*2, maxCandidates)
+	// Reason: returning every keyword hit's dense vector is most of a
+	// keyword request's cost (SP-002), and each extra collection pays it
+	// again. Across several collections the vectors are fetched afterwards,
+	// only for the keyword-only hits whose cosine is needed (SP-024.3). One
+	// collection keeps the request it always made.
+	lazy := len(targets) > 1 || s.lazyVectors
+	var dense, keyword [][]storeHit
 	var derr error
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		dense, derr = st.Search(ctx, vec, n, must, opts.Tags, opts.AllTags, opts.Range)
+		dense, derr = eachStore(ctx, targets, func(t spaceStore) ([]SearchHit, error) {
+			return t.st.Search(ctx, vec, n, t.must(must), opts.Tags, opts.AllTags, opts.Range)
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		keyword, kerr = st.KeywordSearch(ctx, bm25.Query(query), min(n*2, maxCandidates), must, opts.Tags, opts.AllTags, opts.Range)
+		q := bm25.Query(query)
+		keyword, kerr = eachStore(ctx, targets, func(t spaceStore) ([]SearchHit, error) {
+			return t.st.keywordSearch(ctx, q, kn, t.must(must), opts.Tags, opts.AllTags, opts.Range, !lazy)
+		})
 	}()
 	wg.Wait()
 	if derr != nil {
 		return nil, nil, derr
 	}
-	if kerr != nil {
-		keyword = nil
+	var kw []storeHit
+	if kerr == nil {
+		kw = mergeByScore(keyword, kn)
 	}
 	k := float64(s.RRFK)
 	if k <= 0 {
 		k = 60
 	}
-	kw := s.KeywordWeight
-	if kw <= 0 || math.IsNaN(kw) || math.IsInf(kw, 0) {
-		kw = 0.5
+	weight := s.KeywordWeight
+	if weight <= 0 || math.IsNaN(weight) || math.IsInf(weight, 0) {
+		weight = 0.5
 	}
 	type fused struct {
 		candidate
-		hasCos bool
+		hasCos     bool
+		collection string
 	}
 	byID := map[string]*fused{}
-	var order []string
-	add := func(h SearchHit, rank int, weight float64) *fused {
-		id := h.PointID()
+	var seq []string
+	add := func(h storeHit, rank int, w float64) *fused {
+		id := h.key()
 		f, ok := byID[id]
 		if !ok {
-			f = &fused{candidate: candidate{hit: h}}
+			f = &fused{candidate: candidate{hit: h.SearchHit}, collection: h.collection}
 			byID[id] = f
-			order = append(order, id)
+			seq = append(seq, id)
 		}
-		f.score += weight / (k + float64(rank))
+		f.score += w / (k + float64(rank))
 		return f
 	}
-	for i, h := range dense {
+	for i, h := range mergeByScore(dense, n) {
 		f := add(h, i+1, 1)
 		f.cosine, f.hasCos = h.Score, true
 	}
-	for i, h := range capPerSource(keyword) {
-		f := add(h, i+1, kw)
+	for i, h := range capPerSource(kw) {
+		f := add(h, i+1, weight)
 		f.keyword = h.Score
-		if !f.hasCos {
+		if !f.hasCos && !lazy {
 			f.cosine, f.hasCos = cosineWith(vec, h.Vector[denseName]), true
 		}
 	}
-	cands := make([]candidate, 0, len(order))
-	for _, id := range order {
-		cands = append(cands, byID[id].candidate)
+	cands := make([]candidate, 0, len(seq))
+	lazyCos := false
+	for _, id := range seq {
+		f := byID[id]
+		f.candidate.collection = f.collection
+		if !f.hasCos {
+			f.candidate.needsCos, lazyCos = true, true
+		}
+		cands = append(cands, f.candidate)
 	}
-	return s.finish(cands, opts, idents), kerr, nil
+	if !lazyCos {
+		return s.finish(cands, opts, idents), kerr, nil
+	}
+	hits, ferr := s.finishLazy(ctx, targets, cands, vec, opts, idents)
+	if ferr != nil {
+		// Without the vectors the keyword-only hits have no cosine, so the
+		// search answers by meaning alone, as when keyword search fails.
+		var denseOnly []candidate
+		for _, h := range mergeByScore(dense, n) {
+			denseOnly = append(denseOnly, candidate{hit: h.SearchHit, score: float64(h.Score), cosine: h.Score})
+		}
+		return s.finish(denseOnly, opts, idents), ferr, nil
+	}
+	return hits, kerr, nil
 }
 
 // capPerSource keeps at most perSourceCap hits from each source, in order, so
 // one source repeating a rare term many times cannot fill the keyword list on
 // its own. The keyword list is fetched twice as deep to leave room for others;
 // dense results are not capped, so a search filtered to one source still fills.
-func capPerSource(hits []SearchHit) []SearchHit {
+func capPerSource(hits []storeHit) []storeHit {
 	seen := map[string]int{}
 	out := hits[:0:0]
 	for _, h := range hits {

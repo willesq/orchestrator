@@ -33,7 +33,8 @@ func TestPlacedWritesCarryOriginSpaceAndLabels(t *testing.T) {
 	if len(seen) != 1 || seen[0].Space != "" || seen[0].LabelsV != 0 {
 		t.Fatalf("the placer saw a caller's placement: %+v", seen)
 	}
-	pts := f.collection("c").points
+	// Placed in acme, the write is stored in acme's collection (SP-024).
+	pts := f.collection("c__acme").points
 	if len(pts) == 0 {
 		t.Fatal("nothing stored")
 	}
@@ -94,7 +95,7 @@ func TestPlacementChangeIsNotSkipped(t *testing.T) {
 	if _, err := svc.IngestText(ctx, "the page", m); err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range f.collection("c").points {
+	for _, p := range f.collection("c__acme").points {
 		if labelsV(p.Payload[fieldLabelsV]) != 2 {
 			t.Fatal("a write placed under a new revision was skipped as unchanged")
 		}
