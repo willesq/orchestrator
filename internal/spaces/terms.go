@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -156,7 +157,17 @@ func ReadTerms(space, path string) (TermList, error) {
 
 // Match returns the first term of l found in text.
 func (l TermList) Match(text string) (TermHit, bool) {
+	return l.matchUntil(nil, text)
+}
+
+// matchUntil is Match that stops, finding nothing, once done is closed.
+func (l TermList) matchUntil(done <-chan struct{}, text string) (TermHit, bool) {
 	for _, t := range l.terms {
+		select {
+		case <-done:
+			return TermHit{}, false
+		default:
+		}
 		if t.re.MatchString(text) {
 			return TermHit{Space: l.Space, Line: t.line, Hash: t.hash}, true
 		}
@@ -273,11 +284,24 @@ func redactValue(v any, lists []TermList) any {
 	return v
 }
 
-// RedactTargets replaces terms in every path and repo of t.
+// RedactTargets replaces terms in every string of t. Reason: every
+// string list of the struct is walked, so a list added later (as Writes
+// and GHOrgs were) cannot be missed.
 func RedactTargets(t ToolTargets, lists []TermList) ToolTargets {
-	for _, l := range []*[]string{&t.Paths, &t.CdDest, &t.GitDirs, &t.GHRepos, &t.Prefixes, &t.OpaqueReasons} {
-		for i := range *l {
-			(*l)[i] = RedactTerms((*l)[i], lists)
+	v := reflect.ValueOf(&t).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		f := v.Field(i)
+		switch {
+		case f.Kind() == reflect.String:
+			f.SetString(RedactTerms(f.String(), lists))
+		case f.Kind() == reflect.Slice && f.Type().Elem().Kind() == reflect.String:
+			out := make([]string, f.Len())
+			for j := range out {
+				out[j] = RedactTerms(f.Index(j).String(), lists)
+			}
+			if f.Len() > 0 {
+				f.Set(reflect.ValueOf(out))
+			}
 		}
 	}
 	return t

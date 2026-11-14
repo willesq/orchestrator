@@ -48,8 +48,10 @@ var ghBodyFiles = [][2]string{{"-F", "--body-file"}, {"", "--notes-file"}, {"", 
 // ghOutbound reads a gh command (its arguments after "gh") run in dir with
 // env; nil when it sends nothing out.
 func ghOutbound(args []string, dir string, env map[string]string) (*Outbound, bool) {
-	repo := env["GH_REPO"]
-	unknown := repo == unknownValue
+	repo, set := env["GH_REPO"]
+	// Reason: an empty GH_REPO (cleared or unset in the command) leaves gh
+	// to pick the repo where the hook's own GH_REPO would say otherwise.
+	unknown := repo == unknownValue || set && repo == ""
 	var subs, positional []string
 	var files []string
 	method, fields, input, owner := "", false, "", ""
@@ -130,20 +132,21 @@ func ghOutbound(args []string, dir string, env map[string]string) (*Outbound, bo
 	if len(subs) == 0 {
 		return nil, unknown
 	}
-	act := &Outbound{Dir: dir, Files: files}
+	act := &Outbound{Dir: dir, Files: files, GHEnv: ghEnvOf(env)}
 	if r, ok := parseRepo(repo); ok {
 		act.Repo = r
 	} else if repo != "" && repo != unknownValue {
 		unknown = true
 	}
 	if api {
-		return ghAPIOutbound(act, subs, method, fields, input), unknown
+		a, copies := ghAPIOutbound(act, subs, method, fields, input)
+		return a, unknown || copies
 	}
 	top := subs[0]
 	switch {
 	case !ghKnown[top] || top == "extension" && len(subs) > 1 && subs[1] == "exec":
 		// An alias or extension: what it runs is not in the command.
-		return &Outbound{Kind: "gh " + top, Dir: dir, AllRemotes: true}, true
+		return &Outbound{Kind: "gh " + top, Dir: dir, GHDefault: true, GHEnv: act.GHEnv}, true
 	case ghTopReadOnly[top]:
 		return nil, unknown
 	case len(subs) < 2:
@@ -156,18 +159,20 @@ func ghOutbound(args []string, dir string, env map[string]string) (*Outbound, bo
 		act.Repo, act.Org = "", owner
 	}
 	if crossSource || top == "repo" && subs[1] == "fork" || top == "label" && subs[1] == "clone" ||
+		top == "issue" && subs[1] == "transfer" ||
 		slicesContains(args, "--fill") || slicesContains(args, "--fill-first") || slicesContains(args, "--fill-verbose") {
-		// A fork, a cloned label set, or a PR filled from commits copies
-		// content the check does not read; it is safe only within one
-		// space, which the destination check alone cannot tell.
-		if crossSource || top == "repo" || top == "label" {
-			unknown = true
-		}
+		// A fork, a cloned label set, an issue moved to another repo, or a
+		// PR filled from its commits' messages copies content the check
+		// does not read, or sends it to a second destination.
+		unknown = true
 	}
 	for _, p := range positional {
 		// A PR or issue named by URL, or a repo named as owner/repo.
-		if strings.Contains(strings.ToLower(p), "github.com/") {
-			if r, ok := parseRepo(p[strings.Index(strings.ToLower(p), "github.com/"):]); ok {
+		if i := strings.Index(strings.ToLower(p), "github.com/"); i >= 0 {
+			if i > 0 && !strings.ContainsRune("/.@", rune(p[i-1])) {
+				// Reason: evilgithub.com/... is another host.
+				unknown = true
+			} else if r, ok := parseRepo(p[i:]); ok {
 				act.Repo = r
 			}
 		} else if top == "repo" && strings.Count(p, "/") == 1 && act.Repo == "" {
@@ -200,7 +205,8 @@ func ghOutbound(args []string, dir string, env map[string]string) (*Outbound, bo
 		act.NoRepo = true
 	}
 	if act.Repo == "" && act.Org == "" && !act.NoRepo {
-		act.AllRemotes = true
+		// Baseline rule gh_default_repo (D-60): gh picks the repo.
+		act.GHDefault = true
 	}
 	return act, unknown
 }
@@ -239,15 +245,19 @@ func apiField(args []string, i int) (val string, next int, ok, isField bool) {
 }
 
 // ghAPIOutbound reads gh api: a write is any method but GET, or fields or
-// an input without one.
-func ghAPIOutbound(act *Outbound, subs []string, method string, fields bool, input string) *Outbound {
+// an input without one. copies is set for a write that copies a repo to
+// an owner named in its fields (a fork, a transfer, a repo generated from
+// a template): a second destination the check does not read.
+func ghAPIOutbound(act *Outbound, subs []string, method string, fields bool, input string) (_ *Outbound, copies bool) {
 	if input != "" {
 		act.Files = append(act.Files, input)
 	}
 	write := method != "" && method != "GET" && method != "HEAD" || method == "" && (fields || input != "")
 	if !write || len(subs) < 2 {
-		return nil
+		return nil, false
 	}
+	path, _, _ := strings.Cut(strings.TrimSuffix(strings.ToLower(subs[1]), "/"), "?")
+	copies = strings.HasSuffix(path, "/forks") || strings.HasSuffix(path, "/transfer") || strings.HasSuffix(path, "/generate")
 	act.Kind = "gh api " + method
 	ep := strings.TrimPrefix(subs[1], "/")
 	if i := strings.Index(strings.ToLower(ep), "api.github.com/"); i >= 0 {
@@ -263,7 +273,7 @@ func ghAPIOutbound(act *Outbound, subs []string, method string, fields bool, inp
 		// graphql, user/..., gists: no repo picks the destination.
 		act.Repo, act.NoRepo = "", true
 	}
-	return act
+	return act, copies
 }
 
 func slicesContains(list []string, s string) bool {

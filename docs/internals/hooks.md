@@ -439,7 +439,9 @@ through and the terms layer is on now; otherwise the row shows the guard's verdi
 - **Outbound actions** (`spaces.OutboundActions`, read from the shell command with
   `mvdan.cc/sh`, in any letter case (macOS runs `GIT` as git) and with zsh's `=git`, following
   `cd`/`pushd` (with `~`), `git -C`, `env -C`, Codex's `workdir`, `source /dev/stdin`,
-  `export`ed variables, wrappers such as `env`, `timeout`, `nice`, `sudo` and `rtk`, `bash -c`/`-lc`
+  `export`ed variables, the variables of the [baseline](#outbound-baseline) (`$PWD`, `$USER`,
+  `$HOME` and literal assignments earlier in the command), wrappers such as `env` (with `-u`,
+  `-i` and `-P`), `timeout`, `nice`, `sudo` and `rtk`, `bash -c`/`-lc`
   and a shell fed a literal here-document, and the commands inside `$(…)`, `<(…)` and
   redirections): `git commit`
   (its message, `-F` and `-t` files and staged changes, or with `-a` the tracked changes too),
@@ -460,28 +462,45 @@ through and the terms layer is on now; otherwise the row shows the guard's verdi
 - **Destination.** The repo the command names (`-R`, `GH_REPO`, a PR or issue URL, `gh repo
   create <o>/<r>`, `repos/<o>/<r>`, `orgs/<o>`, a push URL), else for `git` the checkout's push
   remote (the branch's push remote, `remote.pushDefault`, the branch's remote, then `origin`) and
-  for `gh` every remote of the checkout and the hook's `GH_REPO`, since gh picks among them; every
-  push URL of a remote counts. A
+  for `gh` the repo gh itself would use (`gh_default_repo`, D-60): the hook's `GH_REPO`; else,
+  among the checkout's remotes in gh's order (`upstream`, `github`, `origin`, then the rest), the
+  first one `gh repo set-default` marked (`remote.<name>.gh-resolved`: `base`, or the owner/repo
+  it names); else the first remote, since a tool call has no terminal for gh to ask on. gh only
+  counts remotes on hosts it knows, which the check cannot see (ssh aliases, Enterprise logins),
+  so without a mark every remote before the first `github.com` one counts as well, and with
+  `GH_HOST` naming another host, or `GH_CONFIG_DIR` set in the command, every remote does (the
+  command's own `GH_HOST` before the hook's). Every push URL of a git remote counts. A
   term may reach a destination only when every possible destination is its own space. A remote's
   owner is placed by its binding; a gist, a GraphQL call, an owner bound to no space and a host
   that is not GitHub (`github.com`, a subdomain, or a dotless ssh alias naming github) hold none.
 - **Fails closed** while the terms layer is on ([switches](daemon.md#enforcement-switches)), as
-  `outbound_unchecked`: an outbound command with a variable or command substitution in it (other
-  than `$(cat <<'EOF' … EOF)`), a `cd` that cannot be followed, a loop, `eval`, `xargs`, a command
+  `outbound_unchecked` (`fail_closed_unreadable`): an outbound command with a command substitution
+  (other than `$(cat <<'EOF' … EOF)`) or a variable the [baseline](#outbound-baseline) does not
+  read in it, a `cd` that cannot be followed, a loop, `eval`, `xargs`, a command
   whose name is a variable or a program given `git`/`gh` as words (`rebase -x`, `submodule
-  foreach`), a `git-*` helper, an action inside a substitution; `git -c` other than a few harmless
-  keys, any other global git option but a few (`--git-dir`, `--work-tree`, `--config-env`), a
-  `GIT_DIR`-like variable set in the command, or an earlier command of the call that changes a
-  remote or writes config; a git alias the checkout defines, `git send-email`, `subtree`,
+  foreach`), a `git-*` helper, an action inside a substitution; `git -c` other than the harmless
+  keys below, any other global git option but a few (`--git-dir`, `--work-tree`, `--config-env`), a
+  variable set in the command that points git at another repository or config or changes how it
+  reaches a remote (`GIT_DIR`-like, `HOME`, `XDG_CONFIG_HOME`, `GIT_SSH`, `GIT_SSH_COMMAND`,
+  `GIT_PROXY_COMMAND`, `GIT_EXEC_PATH`, or `env -i`), an earlier command of the call that changes a
+  remote or writes config, or that changes gh's repo (`gh repo set-default`); `GH_REPO` set
+  without `export`, emptied or unset (`unset`, `env -u`, `env -i`) before a gh write, or a
+  `GH_HOST` that cannot be read; a git alias the checkout defines, `git send-email`, `subtree`,
   `request-pull` or `push --recurse-submodules`; a gh alias or extension, or a gh write fed from a
-  pipe or redirect; a fork, template, sync source, cloned labels or another owner's `--head`; a
+  pipe or redirect; a fork, template, sync source, cloned labels or another owner's `--head`, an
+  issue transfer, a PR body filled from commits (`--fill`, `--fill-first`, `--fill-verbose`), a
+  `gh api` write to a `forks`, `transfer` or `generate` endpoint (each copies to a second
+  destination), and a URL whose host only ends in `github.com`; a
   zsh glob qualifier or an `alias` that runs git; a file an earlier command of the call wrote
   (a redirection, `cp`, `sed -i`, `tee`, …) that the action sends, inside its checkout for a commit
   or push, or in git's config; a file that cannot be read or is stdin (other than a literal
   here-document); a
   terms
-  file or a policy snapshot that cannot be read; git failing, its output over 16 MiB, or the check
-  taking over 5 s. A command that cannot be parsed is refused too. With the layer off, or no
+  file or a policy snapshot that cannot be read; git failing, a file or git's output over 4 MiB,
+  or the check taking over 2.5 s (matching stops between terms when the time is up). The harness
+  gives `pre-tool-use` 5 s and lets the call run when it kills the hook, so the guard (250 ms), the
+  check, git's 1 s wait for stray children and handing a refusal to orchd (250 ms) stay under it.
+  A command that cannot be parsed is refused too. With the layer off, or no
   spaces or terms, nothing is checked.
 - **git runs safely.** The check's git runs with `core.fsmonitor=false`, no external diff,
   textconv, pager or signature check, every configured clean/smudge/process filter switched off
@@ -490,20 +509,46 @@ through and the terms layer is on now; otherwise the row shows the guard's verdi
 - **Refusal.** The PreToolUse deny names the rule (`outbound_term` or `outbound_unchecked`), the
   action, the destination's space and the term's space, line number and hash (HMAC-SHA256 keyed
   with the terms file's own hash, so a short term cannot be guessed from it), never the term
-  (INV-07). The call is still logged.
+  (INV-07). The action is named by git's and gh's own words only: an alias, a gh subcommand or an
+  API method the session wrote is left out (`spaces.safeKind`), since it may be a term. The call is
+  still logged.
 - **Never logged.** Before orchd builds a command log record it replaces every space's terms
   with `[term]` in the tool input (decoded, so a term after an escape is found, and re-encoded),
-  the targets and the directories, before any field is cut to its cap
+  the command text again once a Codex argv is joined (so a term split across words is found), every
+  string of the targets and the directories, before any field is cut to its cap
   (`internal/daemon/terms_redact.go`, cached until the policy or a terms file changes); while the
   policy or a terms file cannot be read those fields are withheld. `TestTermsNeverLeak` searches
   refusals, the command log, orchd's log and status output for every fixture term and finds none.
 
-**Limits.** This is static reading of shell, best-effort like target extraction (D-28): three
-security-review rounds each found new forms, and the residual risk is open for the user's decision
-(the plan's SP-044 entry). Text sent by other means (a script, alias or shell function from the
-user's profile, or program that runs git itself, an interpreter, `curl` to the API, a tool other
-than a shell) is not checked. SP-045's git hooks check commits and pushes on their real content. A push is judged against the local
-remote-tracking refs, which a session could move.
+#### Outbound baseline
+
+How strictly a command is read is a baseline of named rules (`internal/spaces/outbound_rules.go`,
+`spaces.OutboundBaseline`), each with a stable id so SP-075 can make them switchable and let the
+operator add stricter ones. Until then every rule is on and cannot be changed. D-60 (2026-11-14)
+loosened the first strict version with the four marked *loosens*:
+
+| Rule id | Loosens | What it does |
+|---|---|---|
+| `fail_closed_unreadable` | | An outbound command the check cannot read in full is refused as `outbound_unchecked`. |
+| `gh_default_repo` | yes | A gh write without `-R` goes to the repo gh would use (above), not to every remote of the checkout; before D-60 a fork whose upstream was another space's refused the session's own terms. |
+| `plain_variables` | yes | `$PWD` (the directory the walk is in; unknown after a `cd` it cannot follow), `$USER` (the hook's) and `$HOME`, also as `${NAME}`, are read as the shell expands them. |
+| `command_assignments` | yes | A variable given a literal value (or one built from known variables) earlier in the same command is read where that assignment always runs first: a top-level statement or the left side of `&&`/`\|\|`. It is unknown when assigned in a pipeline, subshell, `$(…)`, background job, the right side of `&&`/`\|\|` or a compound command; after `read`, `eval`, `source`, `unset`, `printf -v`, `declare`/`export` with other options than `-x`, `-r`, `-g`, a prefix assignment (`R=x cmd`), `${R:=…}`, arithmetic or a `for` loop over it; and for the rest of the command once it defines a function, `alias` or `trap`. A shell started with `bash -c` sees only exported values. |
+| `git_config_harmless_keys` | yes | `git -c` is read for keys that change neither where git sends, what it sends, nor what it runs: before D-60 `user.*`, `color.*`, `i18n.*`, `init.*`, `advice.*`, `log.*`, `commit.gpgsign`, `commit.verbose`, `core.quotepath`, `core.editor`, `gpg.format`, `tag.gpgsign`; D-60 added display and housekeeping keys (`core.commentChar`, `core.commentString`, `commit.cleanup`, `commit.status`, `core.abbrev`, `status.*`, `column.*`, `tag.sort`, `branch.sort`, `versionsort.*`, `gc.auto`, `gc.autoDetach`, `maintenance.auto`, `core.precomposeUnicode`, `core.longpaths`, `pull.rebase`, `pull.ff`, `rebase.autoStash`, `merge.conflictStyle`, `rerere.enabled`, `protocol.version`) and `push.autoSetupRemote` (it sets the upstream of a branch pushed to its default remote, which the check already reads). Keys that name a program (`core.pager`, `core.fsmonitor`, `core.hooksPath`, `credential.*`, `gpg.program`, `diff.external`), a destination or refs (`url.*`, `remote.*`, `push.default`, `push.followTags`) or a filter, and `help.autocorrect` (it can run another subcommand than the one written) still fail closed. Sections ending in `.*` match any key in them; the others match exactly. |
+| `pending_work_after_staging` | | After `git add`, `commit` or another command that changes what is staged or committed earlier in the call, a commit or push also sends the work tree, untracked files and, for a push, every branch. |
+
+`TestOutboundGHDefaultRepo`, `TestOutboundPlainVariables`, `TestOutboundCommandAssignments` and
+`TestOutboundGitConfigKeys` (`internal/spaces/outbound_d60_test.go`) hold, per loosening, commands
+the strict version refused that are now allowed, beside commands that still reach another space's
+destination or carry its term and are still refused.
+
+**Limits.** This is static reading of shell, best-effort like target extraction (D-28, D-60):
+SP-045's git hooks (`commit-msg`, `pre-push` on the real content) and per-job GitHub accounts
+(D-18) are the boundary for git. Accepted as risk by D-60 (RC-117): text sent by a script or
+program that runs git itself (`./deploy.sh`, `make`), an interpreter, `curl` to the GitHub API, a
+tool other than a shell (notably GitHub MCP tools), an alias or shell function from the user's
+profile, other static-shell evasions of the same kind, and commits a push sends that a session
+hid by moving local remote-tracking refs (a push is judged against them). `gh search` and `gh api`
+GET queries send terms to GitHub without publishing them.
 
 ## Prompt context
 

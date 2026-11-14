@@ -27,9 +27,12 @@ type Outbound struct {
 	// Repo is the destination repo as "owner/repo" when the command names
 	// it (-R, GH_REPO, a URL, an API endpoint), and Org an org it writes
 	// to. With neither, a git command sends to the checkout's push remote
-	// and a gh command (AllRemotes) to any of the checkout's remotes.
-	Repo, Org  string
-	AllRemotes bool
+	// and a gh command (GHDefault) to the repo gh itself picks.
+	Repo, Org string
+	GHDefault bool
+	// GHEnv holds the variables the command sets that change which repo
+	// gh picks (GH_HOST, GH_CONFIG_DIR), read before the hook's own.
+	GHEnv map[string]string
 	// NoRepo is set when the destination is no repo or org (a gist, a
 	// GraphQL call, the signed-in user): it holds no space.
 	NoRepo bool
@@ -85,7 +88,7 @@ func OutboundRead(tool string, input []byte, cwd, home string) (acts []Outbound,
 	if err != nil {
 		return nil, true, nil
 	}
-	w := &outboundWalker{home: home, env: map[string]string{}}
+	w := &outboundWalker{home: home, user: os.Getenv("USER"), env: map[string]string{}, vars: map[string]string{}}
 	dir := cwd
 	if workdir != "" {
 		// Reason: Codex runs the command in its workdir field.
@@ -204,6 +207,25 @@ func (w *outboundWalker) unwrapEnv(argv []string, dir string, env map[string]str
 			dir = w.join(dir, strings.TrimPrefix(a, "--chdir="))
 		case a == "-S" || strings.HasPrefix(a, "--split-string"):
 			w.unknown = true
+		case a == "-u" || a == "--unset" || a == "-P":
+			// Options with a separate value: a variable to remove, or
+			// where to find the command.
+			if len(argv) < 2 {
+				return nil, dir
+			}
+			if a != "-P" {
+				env[argv[1]] = ""
+			}
+			argv = argv[2:]
+			continue
+		case strings.HasPrefix(a, "--unset="):
+			env[strings.TrimPrefix(a, "--unset=")] = ""
+		case strings.HasPrefix(a, "-u") && len(a) > 2:
+			env[a[2:]] = ""
+		case a == "-i" || a == "-" || a == "--ignore-environment":
+			// The command starts with no environment: no GH_REPO, and no
+			// HOME for git's global config.
+			env["GH_REPO"], env["HOME"] = "", ""
 		case strings.HasPrefix(a, "-"):
 		case strings.Contains(a, "="):
 			k, v, _ := strings.Cut(a, "=")
@@ -222,12 +244,12 @@ const unknownValue = "\x00unknown"
 // staticWord is a word's value when the text it adds is all in the
 // command: literals and quotes, and a $(cat <<'EOF' ...) here-document.
 func staticWord(word *syntax.Word) (string, bool) {
-	return staticWordHome(word, "")
+	return staticWordWith(word, nil)
 }
 
-// staticWordHome is staticWord that also expands $HOME (and ${HOME}) to
-// home when home is known.
-func staticWordHome(word *syntax.Word, home string) (string, bool) {
+// staticWordWith is staticWord that also expands a plain $NAME or ${NAME}
+// lookup knows, told whether it is inside double quotes; nil knows none.
+func staticWordWith(word *syntax.Word, lookup func(name string, quoted bool) (string, bool)) (string, bool) {
 	var b strings.Builder
 	ok := true
 	var walk func(parts []syntax.WordPart, quoted bool)
@@ -249,10 +271,11 @@ func staticWordHome(word *syntax.Word, home string) (string, bool) {
 				}
 				walk(p.Parts, true)
 			case *syntax.ParamExp:
-				if home != "" && p.Param != nil && p.Param.Value == "HOME" && p.Exp == nil && p.Repl == nil &&
-					p.Slice == nil && p.Index == nil && !p.Length && !p.Excl {
-					b.WriteString(home)
-					continue
+				if lookup != nil && plainParam(p) {
+					if v, known := lookup(p.Param.Value, quoted); known {
+						b.WriteString(v)
+						continue
+					}
 				}
 				ok = false
 			case *syntax.CmdSubst:
@@ -270,6 +293,14 @@ func staticWordHome(word *syntax.Word, home string) (string, bool) {
 	}
 	walk(word.Parts, false)
 	return b.String(), ok
+}
+
+// plainParam reports whether p is $NAME or ${NAME} with nothing else.
+func plainParam(p *syntax.ParamExp) bool {
+	return p.Param != nil && p.Flags == nil && !p.Excl && !p.Length && !p.Width && !p.IsSet &&
+		p.Split == syntax.OptUnset && p.GlobSubst == syntax.OptUnset && p.RcExpand == syntax.OptUnset &&
+		p.NestedParam == nil && p.Index == nil && len(p.Modifiers) == 0 && p.Slice == nil &&
+		p.Repl == nil && p.Names == 0 && p.Exp == nil
 }
 
 // unescape removes the backslashes the shell removes from a literal:

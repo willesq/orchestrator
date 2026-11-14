@@ -58,6 +58,13 @@ func writeReq(session, cwd, text string) *orchdv1.RecordToolEventRequest {
 		ToolName: "Write", ToolInput: in, ToolInputSize: int64(len(in)), ToolUseId: "tu"}
 }
 
+// argvReq is a Codex exec_command call running argv.
+func argvReq(session, cwd string, argv []string) *orchdv1.RecordToolEventRequest {
+	in, _ := json.Marshal(map[string]any{"cmd": argv})
+	return &orchdv1.RecordToolEventRequest{Event: "pre-tool-use", SessionId: session, Cwd: cwd,
+		ToolName: "exec_command", ToolInput: in, ToolInputSize: int64(len(in)), ToolUseId: "tu"}
+}
+
 // leaks reports the fixture terms found in text, case-insensitively.
 func leaks(text string) []string {
 	var out []string
@@ -91,6 +98,10 @@ func TestTermsNeverLeak(t *testing.T) {
 			bashReq("sess-a", "/w/acme/"+f.text, "cat /w/acme/"+f.text+"/notes.md && echo "+f.text),
 			{Event: "cwd-changed", SessionId: "sess-a", OldCwd: dirs[0], NewCwd: "/w/" + f.text + "/x", Cwd: "/w/" + f.text},
 			writeReq("sess-a", dirs[0], "a\n"+f.text+" b\t"+f.text+" & "+strings.Repeat("x", 3000)+" "+f.text),
+			// Written paths and orgs are targets too (Writes, GHOrgs).
+			bashReq("sess-a", dirs[0], `echo hi > "/w/acme/`+f.text+`.txt"; gh api "orgs/`+f.text+`"`),
+			// A Codex argv whose words are joined back into the term.
+			argvReq("sess-a", dirs[0], append(append([]string{"grep", "-rn"}, strings.Fields(f.text)...), ".")),
 		} {
 			if _, err := s.RecordToolEvent(ctx, req); err != nil {
 				t.Fatal(err)

@@ -315,7 +315,11 @@ an empty pattern, an invalid regular expression, a pattern that matches empty te
 defines a group named `termb` or `terma`; errors name the line number, never the term. A term is
 named elsewhere only by its space, line number and the first 12 hex digits of its line's
 HMAC-SHA256, keyed with the SHA-256 of the whole file. How the terms are enforced is in
-[hooks.md](hooks.md#outbound-terms).
+[hooks.md](hooks.md#outbound-terms). How strictly commands are read is a fixed baseline of named
+rules ([hooks.md](hooks.md#outbound-baseline), D-60); there is no setting for it yet. SP-075 will
+let the operator switch baseline rules by id and add stricter ones. The whole check is switched
+with the `terms` layer below, which orchd also writes into the guard's snapshot for the hook
+(RC-116).
 
 **Reads** (`Resolved.CanRead`): a space reads itself, every public space and the spaces it lists.
 Lists do not chain, and nothing reads quarantine. With no policy applied, or one with no spaces,

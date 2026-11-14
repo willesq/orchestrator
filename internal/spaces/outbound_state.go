@@ -58,7 +58,7 @@ func (w *outboundWalker) sourced(s *syntax.Stmt, args []string, dir string, stdi
 		}
 		return
 	}
-	w.nested(s, nil, dir, stdin)
+	w.nested(s, nil, dir, stdin, false)
 }
 
 // gitConfigPaths are files whose change changes where git sends or what
@@ -94,7 +94,7 @@ func (w *outboundWalker) redirWrites(s *syntax.Stmt, dir string) {
 	for _, r := range s.Redirs {
 		switch r.Op {
 		case syntax.RdrOut, syntax.AppOut, syntax.RdrAll, syntax.AppAll, syntax.ClbOut, syntax.RdrInOut:
-			v, ok := staticWordHome(r.Word, w.home)
+			v, ok := w.word(r.Word, dir)
 			if !ok || dir == "" && !filepath.IsAbs(v) {
 				w.written = append(w.written, "")
 				continue

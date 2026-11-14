@@ -87,11 +87,17 @@ func TestOutboundReviewCases(t *testing.T) {
 	if r := check(c, "git push gx", repo.dir); !r.Refuse || r.Rule != RuleOutboundTerm {
 		t.Errorf("configured push refspec: %+v", r)
 	}
-	// gh without -R may reach any of the checkout's remotes: here origin
-	// (acme) and gx (globex), so acme's term is refused.
-	if r := check(c, `gh pr create -t x -b "falcon"`, repo.dir); !r.Refuse || r.Dest != "globex" {
-		t.Errorf("gh with two remotes: %+v", r)
+	// gh without -R writes to the repo gh picks (D-60, gh_default_repo):
+	// here origin (acme) before gx (globex), so acme's term may go, and
+	// once gh repo set-default marks gx it is refused.
+	if r := check(c, `gh pr create -t x -b "falcon"`, repo.dir); r.Refuse {
+		t.Errorf("gh with two remotes, origin first: %+v", r)
 	}
+	repo.git("config", "remote.gx.gh-resolved", "base")
+	if r := check(c, `gh pr create -t x -b "falcon"`, repo.dir); !r.Refuse || r.Dest != "globex" {
+		t.Errorf("gh with gx set as default: %+v", r)
+	}
+	repo.git("config", "--unset", "remote.gx.gh-resolved")
 	// So does the hook's own GH_REPO.
 	gh := c
 	gh.Getenv = func(k string) string {

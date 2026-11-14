@@ -34,9 +34,13 @@ func inDir(dir, p string) string {
 
 // gitEnvRedirects are environment variables that point git at another
 // repository, index or configuration than the check would read.
+// HOME and XDG_CONFIG_HOME move the global config (url.*.insteadOf can
+// send a push elsewhere); GIT_SSH*, GIT_PROXY_COMMAND and GIT_EXEC_PATH
+// change what git runs to reach a remote.
 var gitEnvRedirects = []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_NAMESPACE",
 	"GIT_CONFIG", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT",
-	"GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR"}
+	"GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_COMMON_DIR", "HOME", "XDG_CONFIG_HOME",
+	"GIT_SSH", "GIT_SSH_COMMAND", "GIT_PROXY_COMMAND", "GIT_EXEC_PATH"}
 
 // redirectsGit reports whether env sets a variable that redirects git.
 func redirectsGit(env map[string]string) bool {
@@ -54,15 +58,32 @@ var gitSafeGlobal = flagSet("--no-pager", "-P", "--paginate", "-p", "--no-option
 	"--glob-pathspecs", "--noglob-pathspecs", "--icase-pathspecs", "--no-replace-objects", "--no-lazy-fetch",
 	"--no-advice", "--bare")
 
-// gitSafeConfig are -c keys that do not change where git sends or what it
-// runs instead of the command named.
+// gitSafeConfig are -c keys that change neither where git sends, nor what
+// it sends, nor what it runs instead of the command named (baseline rule
+// git_config_harmless_keys); an entry ending in "." is a whole section.
+// Keys whose value names a program (core.pager, core.fsmonitor,
+// credential.*, gpg.program, diff.external), a destination or refs
+// (url.*, remote.*, push.default, push.followTags), a hook directory or a
+// filter are not here, nor help.autocorrect, which can run another
+// subcommand than the one written. core.editor runs a program, but only
+// for a commit without a message, which stays local; the push that
+// sends it is read.
 var gitSafeConfig = []string{"user.", "commit.gpgsign", "commit.verbose", "color.", "i18n.", "init.",
-	"core.quotepath", "core.editor", "advice.", "log.", "gpg.format", "tag.gpgsign"}
+	"core.quotepath", "core.editor", "advice.", "log.", "gpg.format", "tag.gpgsign",
+	// D-60: display, local housekeeping and commit-message cleanup, which
+	// change no destination, no text sent and run nothing.
+	"core.commentchar", "core.commentstring", "commit.cleanup", "commit.status", "core.abbrev",
+	"status.", "column.", "tag.sort", "branch.sort", "versionsort.", "gc.auto", "gc.autodetach",
+	"maintenance.auto", "core.precomposeunicode", "core.longpaths", "pull.rebase", "pull.ff",
+	"rebase.autostash", "merge.conflictstyle", "rerere.enabled", "protocol.version",
+	// D-60: push.autoSetupRemote sets the upstream of a branch pushed to
+	// its default remote, the remote the check already reads.
+	"push.autosetupremote"}
 
 func safeConfig(kv string) bool {
 	k, _, _ := strings.Cut(strings.ToLower(kv), "=")
 	for _, p := range gitSafeConfig {
-		if strings.HasPrefix(k, p) {
+		if strings.HasSuffix(p, ".") && strings.HasPrefix(k, p) || k == p {
 			return true
 		}
 	}

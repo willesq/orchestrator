@@ -19,8 +19,12 @@ import (
 // hash, never the term (INV-07). The check is best-effort static reading
 // of shell (D-60).
 
-// termsTimeout bounds the check, git included.
-const termsTimeout = 5 * time.Second
+// termsTimeout bounds the check, git included. Reason: the harness gives
+// pre-tool-use 5 s (internal/install) and kills it after, which lets the
+// call run; the guard (250 ms), git's wait for stray children (1 s) and
+// handing a refusal to orchd (250 ms) must fit beside it, so a check
+// that runs out refuses the call itself.
+const termsTimeout = 2500 * time.Millisecond
 
 // checkOutbound runs the check; tests replace it.
 var checkOutbound = defaultCheckOutbound

@@ -149,12 +149,18 @@ type testRepo struct {
 
 func newTestRepo(t *testing.T, owner string) testRepo {
 	t.Helper()
+	return newTestRepoAt(t, realTemp(t), owner)
+}
+
+// newTestRepoAt is newTestRepo in directory dir.
+func newTestRepoAt(t *testing.T, dir, owner string) testRepo {
+	t.Helper()
 	if _, err := osexec.LookPath("git"); err != nil {
 		t.Skip("git is not installed")
 	}
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	r := testRepo{t: t, dir: realTemp(t)}
+	r := testRepo{t: t, dir: dir}
 	r.git("init", "-q")
 	r.git("remote", "add", "origin", "https://github.com/"+owner+"/app.git")
 	writeFile(t, filepath.Join(r.dir, "README.md"), "hello\n")

@@ -358,7 +358,10 @@ func (s *server) toolRecord(ev toolEvent, harness string) toollog.Record {
 		if len(input) == 0 && req.GetToolInputSize() > 0 {
 			r.Command = fmt.Sprintf("[tool input of %d bytes was not sent]", req.GetToolInputSize())
 		} else {
-			r.Command = toollog.Command(req.GetToolName(), tv.json(input))
+			// Reason: an argv is joined with spaces, which can put a
+			// term back together from words redacted one by one, so the
+			// joined text is redacted again before it is cleaned and cut.
+			r.Command = toollog.Clean(tv.text(toollog.CommandText(req.GetToolName(), tv.json(input))), toollog.MaxCommand)
 		}
 		r.Targets = targetsJSON(tv.targets(spaces.Targets(req.GetToolName(), input, req.GetCwd())))
 	}

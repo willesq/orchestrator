@@ -16,10 +16,20 @@ type outboundWalker struct {
 	acts    []Outbound
 	unknown bool
 	depth   int
-	home    string
+	// home and user are $HOME and $USER (baseline rule plain_variables).
+	home, user string
 	// env holds variables the script exports or sets, which later
-	// commands see (GH_REPO, GIT_DIR).
+	// commands see (GH_REPO, GIT_DIR); unknownValue for one whose value
+	// or export is not known.
 	env map[string]string
+	// vars holds the shell variables the script set, unknownValue for one
+	// it may have set to anything (outbound_vars.go). uncertain counts
+	// the contexts being walked whose assignments may not run or last
+	// (pipelines, subshells, the right side of && and ||, compound
+	// commands); noVars is set once no variable can be trusted again.
+	vars      map[string]string
+	uncertain int
+	noVars    bool
 	// words are every static word of every command, decoded.
 	words []string
 	// staged is set once a command changed what is staged or committed;
@@ -47,22 +57,36 @@ func (w *outboundWalker) stmt(s *syntax.Stmt, dir string, piped bool) string {
 		w.substs(r, dir)
 	}
 	defer w.redirWrites(s, dir)
+	w.scanVars(s)
+	if s.Background || s.Coprocess {
+		// Reason: a background job runs in a subshell, maybe after what
+		// follows it.
+		w.uncertain++
+		defer func() { w.uncertain-- }()
+	}
 	switch c := s.Cmd.(type) {
 	case *syntax.CallExpr:
 		return w.call(s, c, dir, piped)
 	case *syntax.DeclClause:
 		w.substs(c, dir)
-		w.decl(c)
+		w.decl(c, dir)
 		return dir
 	case *syntax.BinaryCmd:
 		if c.Op == syntax.Pipe || c.Op == syntax.PipeAll {
+			w.uncertain++
 			w.stmt(c.X, dir, piped)
 			w.stmt(c.Y, dir, true)
+			w.uncertain--
 			return dir
 		}
 		next := w.stmt(c.X, dir, piped)
+		// Reason: the right side of && or || may not run.
+		w.uncertain++
+		defer func() { w.uncertain-- }()
 		return w.stmt(c.Y, next, piped)
 	case *syntax.Subshell:
+		w.uncertain++
+		defer func() { w.uncertain-- }()
 		d := dir
 		for _, x := range c.Stmts {
 			d = w.stmt(x, d, piped)
@@ -77,6 +101,8 @@ func (w *outboundWalker) stmt(s *syntax.Stmt, dir string, piped bool) string {
 	default:
 		// Loops, conditionals, functions: walk what they run; a cd inside
 		// may or may not run, so the directory after them is unknown.
+		w.uncertain++
+		defer func() { w.uncertain-- }()
 		before := len(w.acts)
 		syntax.Walk(s, func(n syntax.Node) bool {
 			switch n := n.(type) {
@@ -118,6 +144,8 @@ func movesDir(s *syntax.Stmt) bool {
 // they run sends text out like any command; its output is then used where
 // the walker cannot follow it, so an action found there is unknown.
 func (w *outboundWalker) substs(node syntax.Node, dir string) {
+	w.uncertain++
+	defer func() { w.uncertain-- }()
 	before := len(w.acts)
 	syntax.Walk(node, func(n syntax.Node) bool {
 		var stmts []*syntax.Stmt
@@ -142,24 +170,6 @@ func (w *outboundWalker) substs(node syntax.Node, dir string) {
 	}
 }
 
-// decl reads export and declare -x: the variables they set are seen by
-// later commands.
-func (w *outboundWalker) decl(d *syntax.DeclClause) {
-	for _, a := range d.Args {
-		if a.Name == nil {
-			continue
-		}
-		v := ""
-		if a.Value != nil {
-			var ok bool
-			if v, ok = staticWord(a.Value); !ok {
-				v = unknownValue
-			}
-		}
-		w.env[a.Name.Value] = v
-	}
-}
-
 // call reads one simple command run in dir and returns the directory after
 // it: cd and pushd move it.
 func (w *outboundWalker) call(s *syntax.Stmt, c *syntax.CallExpr, dir string, piped bool) string {
@@ -168,7 +178,7 @@ func (w *outboundWalker) call(s *syntax.Stmt, c *syntax.CallExpr, dir string, pi
 	static := true
 	extglob := false
 	for _, a := range c.Args {
-		v, ok := staticWordHome(a, w.home)
+		v, ok := w.word(a, dir)
 		if !ok {
 			static = false
 		}
@@ -184,38 +194,54 @@ func (w *outboundWalker) call(s *syntax.Stmt, c *syntax.CallExpr, dir string, pi
 		env[k] = v
 	}
 	for _, as := range c.Assigns {
-		v := ""
-		if as.Value != nil {
-			var ok bool
-			if v, ok = staticWord(as.Value); !ok {
-				v = unknownValue
-			}
-		}
+		v := w.assignValue(as, dir)
 		env[as.Name.Value] = v
 		if len(c.Args) == 0 {
-			// NAME=value alone sets a shell variable later commands may
-			// export or pass on.
-			w.env[as.Name.Value] = v
+			// NAME=value alone sets a shell variable, which reaches later
+			// commands' environment only if it is exported.
+			w.setVar(as.Name.Value, v)
+			w.setEnv(as.Name.Value, v, false)
+		} else {
+			// Reason: before a special builtin or a function the
+			// assignment lasts (POSIX), so the variable is unknown after.
+			w.vars[as.Name.Value] = unknownValue
 		}
 	}
 	nameStatic := len(c.Args) > 0
 	if nameStatic {
-		_, nameStatic = staticWordHome(c.Args[0], w.home)
+		_, nameStatic = w.word(c.Args[0], dir)
 	}
 	argv, dir = w.unwrap(argv, dir, env)
 	if len(argv) == 0 {
 		return dir
 	}
+	if !nameStatic || setsVars(strings.ToLower(filepath.Base(argv[0])), argv[1:]) {
+		// Reason: forgotten after the command, which still reads the
+		// values it was given.
+		defer w.forgetVars()
+	}
 	// Reason: macOS names ignore case (GIT runs git), and zsh's =git
 	// runs git found on the path.
 	name := strings.ToLower(filepath.Base(strings.TrimPrefix(argv[0], "=")))
+	if name == "unset" {
+		// Reason: an unset variable leaves the environment, so a GH_REPO
+		// the hook sees no longer picks gh's repo.
+		for _, a := range argv[1:] {
+			if !strings.HasPrefix(a, "-") {
+				w.env[a] = ""
+			}
+		}
+	}
 	switch name {
 	case "cd", "pushd":
+		// cd sets PWD to where it moves.
+		delete(w.vars, "PWD")
 		if len(argv) == 2 && static && dir != "" {
 			return w.join(dir, argv[1])
 		}
 		return ""
 	case "popd":
+		delete(w.vars, "PWD")
 		return ""
 	}
 	in, literal := w.stdin(s)
@@ -235,11 +261,16 @@ func (w *outboundWalker) call(s *syntax.Stmt, c *syntax.CallExpr, dir string, pi
 		if act != nil && stdin {
 			unknown = true
 		}
+		if ghSetsDefault(argv[1:]) {
+			// Reason: it changes the repo later gh commands write to
+			// (gh_default_repo), which the check reads before any runs.
+			w.redirected = true
+		}
 	case strings.HasPrefix(name, "git-"):
 		// A git helper run directly (git-push).
 		unknown = true
 	case shellNames[name]:
-		w.nested(s, argv[1:], dir, stdin)
+		w.nested(s, argv[1:], dir, stdin, true)
 	case name == "source" || name == ".":
 		w.sourced(s, argv[1:], dir, stdin)
 	case name == "alias":
@@ -396,13 +427,15 @@ func (w *outboundWalker) stdin(s *syntax.Stmt) (in, literal bool) {
 	return in, literal && in
 }
 
-// join resolves a cd destination against dir, expanding ~.
+// join resolves a cd destination against dir, expanding ~ as $HOME is
+// known; "" when it is not.
 func (w *outboundWalker) join(dir, p string) string {
-	switch {
-	case p == "~":
-		p = w.home
-	case strings.HasPrefix(p, "~/"):
-		p = filepath.Join(w.home, p[2:])
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		home, ok := w.lookup("HOME", dir)
+		if !ok || home == "" {
+			return ""
+		}
+		p = filepath.Join(home, strings.TrimPrefix(p, "~"))
 	}
 	if p == "" || dir == "" && !filepath.IsAbs(p) {
 		return ""
@@ -446,7 +479,7 @@ func findRunsGit(args []string) bool {
 // nested walks the script a shell runs: its -c script (also in a flag
 // bundle, as in bash -lc) or a literal here-document. A script read from
 // a file or a pipe is not followed; one whose words name git is unknown.
-func (w *outboundWalker) nested(s *syntax.Stmt, args []string, dir string, stdin bool) {
+func (w *outboundWalker) nested(s *syntax.Stmt, args []string, dir string, stdin, child bool) {
 	script, found := "", false
 	for i, a := range args {
 		if strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && strings.Contains(a, "c") {
@@ -485,7 +518,22 @@ func (w *outboundWalker) nested(s *syntax.Stmt, args []string, dir string, stdin
 		w.unknown = true
 		return
 	}
+	// Reason: a script sees only exported variables. What a new shell
+	// (child) sets or exports does not come back; what a sourced script
+	// exports does, and its other variables are forgotten after it.
+	outer, outerEnv := w.vars, w.env
+	w.vars = map[string]string{}
+	for k, v := range w.env {
+		w.vars[k] = v
+	}
+	if child {
+		w.env = map[string]string{}
+		for k, v := range outerEnv {
+			w.env[k] = v
+		}
+	}
 	w.depth++
 	w.script(f, dir)
 	w.depth--
+	w.vars, w.env = outer, outerEnv
 }

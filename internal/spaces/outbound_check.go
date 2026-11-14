@@ -27,8 +27,10 @@ const (
 )
 
 // maxOutboundText bounds what is read of one source of outbound text: a
-// file, a staged diff, the commits of a push.
-const maxOutboundText = 16 << 20
+// file, a staged diff, the commits of a push. Reason: matching every term
+// over it must end well within the hook's time (termsTimeout), so a
+// larger source is refused as unchecked.
+const maxOutboundText = 4 << 20
 
 // OutboundResult is the check's answer for one tool call.
 type OutboundResult struct {
@@ -52,10 +54,10 @@ func (r OutboundResult) Reason() string {
 	switch r.Rule {
 	case RuleOutboundTerm:
 		return fmt.Sprintf("orch outbound terms refused %s (rule %s): it would send a term of %s to %s. Remove it and try again.",
-			r.Kind, r.Rule, r.Hit, dest)
+			safeKind(r.Kind), r.Rule, r.Hit, dest)
 	case RuleOutboundUnchecked:
 		return fmt.Sprintf("orch outbound terms refused %s (rule %s): what it sends to %s could not all be checked for other spaces' terms (a variable, command output or alias, another repository named through git's options or environment, an unreadable file or terms file, or git failing). Write the text out in the command or a file and try again.",
-			r.Kind, r.Rule, dest)
+			safeKind(r.Kind), r.Rule, dest)
 	}
 	return ""
 }
@@ -93,7 +95,7 @@ func (c OutboundChecker) Check(ctx context.Context, tool string, input []byte, c
 		}
 		// A command that may send something out but could not be read.
 		r := OutboundResult{Kind: "a command that may send text out"}
-		if hit, ok := c.match(text, nil); ok {
+		if hit, ok := c.match(ctx, text, nil); ok {
 			r.Refuse, r.Rule, r.Hit = true, RuleOutboundTerm, hit
 		} else if c.applies(nil) {
 			r.Refuse, r.Rule = true, RuleOutboundUnchecked
@@ -128,9 +130,12 @@ func (c OutboundChecker) checkAction(ctx context.Context, a Outbound, text strin
 		r.Refuse, r.Rule = true, rule
 		return r
 	}
-	if hit, ok := c.match(text, dests); ok {
+	if hit, ok := c.match(ctx, text, dests); ok {
 		r.Hit, r.Dest = hit, firstOther(dests, hit.Space)
 		return refuse(RuleOutboundTerm)
+	}
+	if ctx.Err() != nil {
+		return refuse(RuleOutboundUnchecked)
 	}
 	for space := range c.TermErrs {
 		if !allHold(dests, space) {
@@ -152,7 +157,7 @@ func (c OutboundChecker) checkAction(ctx context.Context, a Outbound, text strin
 		if ctx.Err() != nil {
 			return refuse(RuleOutboundUnchecked)
 		}
-		if hit, ok := c.match(t, dests); ok {
+		if hit, ok := c.match(ctx, t, dests); ok {
 			r.Hit, r.Dest = hit, firstOther(dests, hit.Space)
 			return refuse(RuleOutboundTerm)
 		}
@@ -198,12 +203,13 @@ func (c OutboundChecker) applies(dests []string) bool {
 }
 
 // match finds a term of a space not held by every destination in text.
-func (c OutboundChecker) match(text string, dests []string) (TermHit, bool) {
+// It stops, finding nothing, when ctx ends; the caller then fails closed.
+func (c OutboundChecker) match(ctx context.Context, text string, dests []string) (TermHit, bool) {
 	for _, l := range c.Terms {
 		if allHold(dests, l.Space) {
 			continue
 		}
-		if hit, ok := l.Match(text); ok {
+		if hit, ok := l.matchUntil(ctx.Done(), text); ok {
 			return hit, true
 		}
 	}
@@ -212,8 +218,7 @@ func (c OutboundChecker) match(text string, dests []string) (TermHit, bool) {
 
 // destinations are the spaces a's text may reach, and whether they could
 // be told: the repo or org the command names; else, for git, the
-// checkout's push remote; for gh, every remote of the checkout and the
-// hook's GH_REPO, since gh picks among them.
+// checkout's push remote; for gh, the repo gh picks (ghDefaultURLs).
 func (c OutboundChecker) destinations(ctx context.Context, a Outbound) ([]string, bool) {
 	space := func(owner string) string {
 		s, _ := c.Policy.GitHubOrgSpace(owner)
@@ -229,19 +234,10 @@ func (c OutboundChecker) destinations(ctx context.Context, a Outbound) ([]string
 		return []string{space(a.Org)}, true
 	case a.Dir == "":
 		return nil, false
-	case a.AllRemotes:
-		var urls []string
-		if r := c.getenv("GH_REPO"); r != "" {
-			urls = append(urls, "https://github.com/"+r)
-		}
-		out, err := c.git(ctx, a.Dir, "remote", "-v")
-		if err != nil {
+	case a.GHDefault:
+		urls, ok := c.ghDefaultURLs(ctx, a.Dir, a.GHEnv)
+		if !ok {
 			return nil, false
-		}
-		for _, line := range strings.Split(string(out), "\n") {
-			if f := strings.Fields(line); len(f) >= 2 {
-				urls = append(urls, f[1])
-			}
 		}
 		return urlSpaces(urls, space), true
 	}
