@@ -68,10 +68,46 @@ PUT /collections/<name>
  "sparse_vectors": {"bm25": {"modifier": "idf"}}}
 ```
 
-plus keyword payload indexes on `source_uri`, `writer`, `tags` and `source_type`. A collection made
+plus keyword payload indexes on `source_uri`, `writer`, `space`, `tags` and `source_type`. A collection made
 before the last two is asked for them at the first search that filters on them, once per process:
 this changes no stored data, and searches carry on, slower, until Qdrant has built them. A 409 "already exists" (a concurrent first write) is
 treated as success. A legacy collection with one unnamed dense vector is the `dense` layout.
+
+**A collection per space (SP-024, D-10).** The configured collection (`rag.qdrant.collection`)
+is the *base*. Content placed in a space lives in its own collection, `<base>__<space>`
+(`rag.SpaceCollection`), Quarantine included as `<base>__quarantine`; unplaced content and
+`shared` (no policy applied) stay in the base itself, so with no policy orch uses one collection
+exactly as before (INV-10). Space names (`[a-z][a-z0-9_-]{0,31}`) never start with `_`, and a
+migration target containing `__` is refused; a base that itself contains `__` (set by hand) can
+still read as another base's space, so a backup drop refuses a name under which the active
+collection would read as a space. The space collections are found by listing Qdrant's collections
+(`GET /collections`) and keeping the base's; the list is cached for a minute per base, and every
+listing also includes the collections this orchd created (kept until the base is dropped), so a
+listing answered while a write created one never hides it. Physical separation means a
+read that forgets a filter still cannot reach another space, and each space's BM25 IDF comes from
+its own chunks.
+
+- **Writes** go to the collection of the space the write was placed in, and nowhere else: the
+  collection is created there, the points are written there, and the older version's surplus
+  chunks are pruned there. A source lives in one space, so before writing, a write placed in a
+  space deletes the same source URI from every other collection of the base (one count by
+  `source_uri` each, and a delete where it is found); if that fails, nothing is written and the
+  next write tries again. A Shared or unplaced write (no policy, or a policy removed) does the
+  same for space collections, but a failed listing does not fail it, and a store that never had
+  a policy has none to look in, so it makes the requests it always made plus the cached listing.
+  A client's write never moves a source out of another space: the Ingest RPC refuses to replace
+  a source another space holds before it gets here ([Placement of writes](#placement-of-writes)),
+  and should that check fail to read the store, the write itself is refused
+  (`ErrStoredInAnotherSpace`) rather than delete the other space's copy, reading the collections
+  afresh: a copy in another space's collection, or a base chunk whose payload names another
+  space. A client may still replace base content no space claims. So moves are orchd's own
+  writers' (a re-placed doc, a repo whose visibility changed).
+- **Reads of one source** (`Copy`, `Document`, `HasSource`) look in the base and then each space
+  collection (should a source be in several, `Copy` reports the copy that refuses most: a sync
+  writer's, then one placed in a space, then the base's, and logs it), and `ListSources`, `SourcesWrittenBy` and `DeleteSource` cover every collection;
+  a forget lists the collections afresh. A failed listing fails these (and a write to a space),
+  rather than act on part of the store; a collection Qdrant reports missing holds nothing.
+- **Searches** read the collections of `SearchOpts.Spaces` ([Search](#search)).
 
 **Points:** ID = UUIDv5(URL namespace, `<source_uri>#<chunk_index>`), so re-ingesting a source
 overwrites its chunks; afterwards chunks with `chunk_index >= new count` are deleted. Upserts go 256
@@ -265,8 +301,9 @@ no origin, or that the placer leaves without a space, stores nothing.
 - **A placement change is a new write.** The write hash includes the origin, space and
   `labels_v`, so the same text placed elsewhere or under a new revision is stored again rather
   than skipped as unchanged. Writes made without a placer (tools, tests) keep the hash they had.
-- **What is not done yet.** Chunks still go to one collection (a collection per space is SP-024),
-  and no read path filters by `space` or `labels_v` yet (SP-025). Chunks stored before SP-023 have
+- **What is not done yet.** Each space's chunks go to its own collection (SP-024, see
+  [Storage](#storage-qdrant)), but no read path passes the caller's spaces or filters by
+  `labels_v` yet (SP-025): a search without `SearchOpts.Spaces` reads every collection. Chunks stored before SP-023 have
   no placement; `orch rag relabel` (SP-027) places them. A docs file whose content and repo HEAD
   did not change is not stored again, so it keeps its earlier placement until relabelled, except
   that a public copy of a repo no longer public leaves (above). When the repo listing fails
@@ -300,6 +337,16 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
 
 ## Search
 
+0. **Collections.** `SearchOpts.Spaces` names the spaces whose collections are read (SP-024). Each
+   named space is read only from `<base>__<space>`, and, as the second layer, every request to
+   it also filters on payload `space` = that space, so a chunk misfiled in another space's
+   collection is still not returned. `shared` reads the base with no `space` filter: it is the
+   store as it was before spaces, whose older chunks carry no space. A name that is not a space
+   name is skipped; an empty, non-nil list reads nothing and embeds nothing. `nil` reads every
+   collection of the base (the base and each space's), as search did before SP-024; deciding
+   each caller's readable spaces is SP-025. If the listing fails, a `nil` search reads the base
+   alone. Collections not created yet are left out when there are several; hybrid search runs
+   only when every remaining one is hybrid.
 1. TopK 1–100 (0 → 5). Embed the query once. Filters: `scope` and `source_type` (exact), `tags`
    (any), and a time range: `ended_at ≥ since` and `started_at ≤ until` (overlap; undated content
    never matches a range).
@@ -310,7 +357,19 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
    `min(2n, 400)`, returning each hit's dense vector). Keyword hits are capped at 2 per source. A
    query with no BM25 terms (only stopwords or single characters) skips keyword search silently.
 3. **Fuse** by reciprocal rank: each hit's score is `Σ weight/(k + rank)` with k = 60, weight 1 for
-   dense and 0.5 for keyword (`rag.search.keyword_weight`).
+   dense and 0.5 for keyword (`rag.search.keyword_weight`). Across several collections each side
+   runs once per collection, in parallel, and each side's lists are first merged into one by
+   score (cut to `n` and `2n`): cosine means the same in every collection, and each keyword score
+   is ranked by its own space's statistics, as the plan intends. Hits are told apart by
+   collection and point ID, since two spaces may hold the same URI's points for a moment. With
+   one collection nothing is merged, so the search is exactly the one it was before spaces.
+   Across several collections the keyword requests return no vectors (most of their cost,
+   SP-002); after weighting, the dense vectors of keyword-only hits are fetched, one request per
+   collection, only for those whose cosine matters: hits whose weighted score ties another's
+   (the cosine orders ties) and the hits returned (the cosine is their score). Every other
+   candidate's place is fixed by its score alone, so the result equals a search with every
+   vector read (`TestSearchAcrossCollectionsMatchesOneCollection`). If that fetch fails, the
+   search answers by meaning, as when keyword search fails (step 7).
 4. **Weight** (ranking `weighted`, the default; `plain` skips it): multiply each candidate's fused
    score by its source type's weight and by recency, `floor + (1 − floor) · 2^(−age / half-life)`.
    Age is from `ended_at`, else `started_at`, else `ingested_at`; undated content counts as one
@@ -590,7 +649,12 @@ files and says it was truncated.
 ## Migration to the hybrid layout
 
 Qdrant 1.17 cannot add a sparse vector to an existing collection, so `orch rag migrate-hybrid`
-copies into a new one:
+copies into a new one. Space collections are named after the base, so they move with it: each
+`<base>__<space>` is copied to `<target>__<space>` in the same run (re-chunked and re-embedded like
+the base, though space collections are hybrid already), under the one marker, the
+shadow writes reach the same space under the target, and the switch moves them together.
+Rollback switches them back with the base. Each target collection is checked like the base's
+(not dense; points without a marker refuse). The report sums every collection.
 
 1. The target defaults to `<collection>-hybrid`. Refuse unless the active collection is dense and
    the target is new or holds an unfinished migration (a hybrid target with points but no marker
@@ -604,8 +668,14 @@ copies into a new one:
 4. Remove target sources deleted since; refuse to switch if any source exceeded 16 MiB.
 5. Re-copy dirty sources until none remain under the exclusive gate (at most 5 rounds).
 6. Remove the marker, record `collection` and `backup_collection` in config in one write, then
-   switch. Rollback swaps them back; `--drop-backup` deletes the backup recorded in config, never
-   one named by the caller, and refuses the collection in use or with an unfinished marker.
+   switch. Rollback swaps them back; `--drop-backup` deletes the backup recorded in config and every
+   `<backup>__<space>` collection with it (space collections first, so a failed drop can be run
+   again), never one named by the caller, and refuses the collection in use, any space collection
+   of the active base, or one with an unfinished marker. Its point count sums them.
+
+A source written during the copy is tracked per space (`touched` and `dirty` hold the space and
+URI), and a write into a space that had no collection when the copy started reaches that space
+under both bases, so it is not lost at the switch (`TestMigrateHybridLiveWriteToANewSpace`).
 
 Lock order: write gate (shared for writes) → source stripe → state mutex.
 
@@ -614,8 +684,9 @@ Lock order: write gate (shared for writes) → source stripe → state mutex.
 `orch rag reindex-keywords` (RPC `ReindexKeywords`, operator-only, under the migration lock)
 brings keyword vectors up to the current `TokenizerVersion` in place, without re-embedding:
 
-1. Refuse unless the collection is hybrid and no migration shadow is installed. Count all chunks
-   and the stale ones (`must_not bm25_v = TokenizerVersion`, which also matches chunks with no
+1. Refuse unless the base and every space collection are hybrid and no migration shadow is
+   installed. Count all chunks and the stale ones, in every collection of the base, summed in the
+   report (`must_not bm25_v = TokenizerVersion`, which also matches chunks with no
    stamp). Without `--apply`, stop there.
 2. Scroll stale chunks 256 at a time (payload `source_uri` only; the offset is a point id, so the
    shrinking filter does not skip any). Group the page by source; for each, under that source's
@@ -704,9 +775,10 @@ Memory spaces separate what each job's sessions can read ([the spaces plan](../s
 The policy that defines them, the operator-only apply, and drift are described in
 [config.md](config.md#spaces-policy). `spaces.Resolved.CanRead(reader, target)` is the rule read
 paths will use: a space reads itself, every public space and the private spaces it lists, and
-never another isolated space or quarantine. Nothing in memory uses it yet. Every write is
-stamped with its origin, space and `labels_v` ([Placement of writes](#placement-of-writes)), but
-search is not yet filtered by space; later features in the plan add that. Until a policy with spaces is applied, everything is in the one implicit `shared` space
+never another isolated space or quarantine. Every write is stamped with its origin, space and
+`labels_v` ([Placement of writes](#placement-of-writes)) and stored in its space's own collection
+([Storage](#storage-qdrant)); search reads the collections of the spaces it is given. Which spaces
+each caller is given is SP-025; until then searches read every collection. Until a policy with spaces is applied, everything is in the one implicit `shared` space
 and search behaves as it always has.
 
 ## Placement
@@ -827,3 +899,48 @@ collections, keyword requests that don't return vectors, or one request per coll
 Qdrant's server-side fusion. None of these was measured as a full layout.
 
 Relabelling is cheap either way: at most 10.3 s for 40,000 chunks, well under the 120 s threshold.
+
+**As shipped (SP-024.3).** `TestIntegrationSpaceCollectionsSearch`
+(`internal/rag/spacestore_bench_it_test.go`, gated like the above; its own engine on
+127.0.0.1:6431, collections `sp-024-*`) loads the same corpus into one collection and into
+`sp-024-bench__s0..s3`, and times 200 queries (after 20 warm-up) three ways, interleaved: the
+SP-002 baseline (`Service.Search` on the one collection filtered to 2 spaces, as it runs today),
+the shipped search (`Service.Search` with `Spaces: [s0 s1]`), and the one collection searched
+with the shipped search's request pattern (keyword requests without vectors, vectors fetched
+afterwards), which separates the layout's cost from the request's. Qdrant v1.17.1, Apple M3 Max,
+2026-11-14:
+
+| | default segments | 2 segments |
+|---|---|---|
+| SP-002 baseline p50 / p95 | 16.9–17.1 / 18.0–18.1 ms | 12.0 / 12.6–12.7 ms |
+| 2 space collections p50 / p95 | 17.0–18.7 / 19.5–20.2 ms | 4.8–5.0 / 5.6–5.7 ms |
+| p95 ratio to the baseline | 1.08–1.12x | 0.44–0.45x |
+| one collection, same requests, p95 | 8.3–8.4 ms | 2.7–2.8 ms |
+| space collections vs that, p95 | 2.34–2.40x | 2.01–2.07x |
+
+A third default-segment run on a loaded machine measured 0.80x (baseline p95 32.6 ms, spaces
+26.2 ms). The shipped search returns the baseline's top 10 for 99.7% of hits (85.5% with SP-002's
+fusion of final lists): lists are merged by score before fusion.
+
+So against the search users had, reading two space collections is within the plan's 1.3x, but
+only because the multi-collection path asks for fewer vectors; the layout itself still costs
+about 2x what one collection costs with the same requests, as SP-002 found and D-24 accepted.
+A search of one collection keeps the request it always made (INV-10); giving it the same request
+pattern would halve its latency (8.4 against 18.0 ms at p95) and is left as a follow-up.
+
+## Caches keyed by space (INV-11)
+
+Every cache in `internal/rag` that holds content, embeddings or what decides whether content is
+stored is keyed by space:
+
+- **The unchanged-write check** (`ingest_hash` on a source's first and last chunks) is read in the
+  write's own space's collection only, and the hash includes the space, so a write found stored
+  for one space is never skipped for another (`TestWriteCacheIsKeyedBySpace`).
+- **Store objects and their cached layout** are kept per collection name, so one space's known
+  layout is never used for another's (`TestStoreCachesAreKeyedByCollection`).
+- **The list of space collections** is cached per base collection.
+
+There is no query, embedding or result cache in `internal/rag`. Caches elsewhere in orch that hold
+content are not keyed by space yet: the PR detail cache in orchd (keyed by PR URL, whose owner
+decides the space) and the docs sync's per-file hash cache (keyed by URI; RC-124 covers its
+placement). The space a read may see there is SP-025's to enforce.

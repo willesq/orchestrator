@@ -46,39 +46,76 @@ type ReindexReport struct {
 // re-read and updated under the lock live writes take, so a write that lands
 // mid-run is never overwritten with a vector of its old text.
 func (s *Service) ReindexKeywords(ctx context.Context, apply bool) (ReindexReport, error) {
-	st := s.active()
-	rep := ReindexReport{Collection: st.Collection(), Version: bm25.TokenizerVersion}
-	switch l, err := st.Layout(ctx); {
+	base := s.active()
+	rep := ReindexReport{Collection: base.Collection(), Version: bm25.TokenizerVersion}
+	switch l, err := base.Layout(ctx); {
 	case err != nil:
 		return rep, err
 	case l != LayoutHybrid:
-		return rep, fmt.Errorf("collection %q has no keyword index (run orch rag migrate-hybrid first)", st.Collection())
+		return rep, fmt.Errorf("collection %q has no keyword index (run orch rag migrate-hybrid first)", base.Collection())
 	}
 	if _, shadow := s.stores(); shadow != nil {
 		return rep, errors.New("a migration is running; re-index after it finishes")
 	}
-	stale := staleFilter()
-	var err error
-	if rep.Total, err = st.Count(ctx, nil); err != nil {
+	// Every space's collection is re-indexed with the base (SP-024); the
+	// report sums them.
+	all, err := s.allStores(ctx, base, true)
+	if err != nil {
 		return rep, err
 	}
-	if rep.Stale, err = st.Count(ctx, stale); err != nil {
-		return rep, err
+	stale := staleFilter()
+	var todo []*QdrantStore
+	for _, ss := range all {
+		st := ss.st
+		if st != base {
+			switch l, err := st.Layout(ctx); {
+			case err != nil:
+				return rep, err
+			case l == LayoutUnknown:
+				continue
+			case l != LayoutHybrid:
+				return rep, fmt.Errorf("collection %q has no keyword index (run orch rag migrate-hybrid first)", st.Collection())
+			}
+		}
+		total, err := st.Count(ctx, nil)
+		if err != nil {
+			return rep, err
+		}
+		n, err := st.Count(ctx, stale)
+		if err != nil {
+			return rep, err
+		}
+		rep.Total += total
+		rep.Stale += n
+		if n > 0 {
+			todo = append(todo, st)
+		}
 	}
 	if !apply || rep.Stale == 0 {
 		rep.Applied = apply
 		return rep, nil
 	}
 	rep.Applied = true
+	for _, st := range todo {
+		if err := s.reindexStore(ctx, st, &rep); err != nil {
+			return rep, err
+		}
+	}
+	return rep, nil
+}
+
+// reindexStore re-indexes the stale chunks of one collection, adding to rep.
+func (s *Service) reindexStore(ctx context.Context, st *QdrantStore, rep *ReindexReport) error {
+	stale := staleFilter()
 	last := time.Now()
 	var offset any
 	for page := 0; page < maxScrollPages; page++ {
 		if err := ctx.Err(); err != nil {
-			return rep, err
+			return err
 		}
 		pts, next, err := st.Scroll(ctx, stale, []string{"source_uri"}, reindexPage, offset)
 		if err != nil {
-			return rep, err
+			return err
 		}
 		bySource := map[string][]string{}
 		var order []string
@@ -93,7 +130,7 @@ func (s *Service) ReindexKeywords(ctx context.Context, apply bool) (ReindexRepor
 			n, err := s.reindexSource(ctx, st, uri, bySource[uri])
 			rep.Updated += n
 			if err != nil {
-				return rep, fmt.Errorf("%s: %w", uri, err)
+				return fmt.Errorf("%s: %w", uri, err)
 			}
 		}
 		if time.Since(last) >= 10*time.Second {
@@ -104,11 +141,11 @@ func (s *Service) ReindexKeywords(ctx context.Context, apply bool) (ReindexRepor
 			last = time.Now()
 		}
 		if next == nil {
-			return rep, nil
+			return nil
 		}
 		offset = next
 	}
-	return rep, fmt.Errorf("keyword re-index: exceeded %d pages", maxScrollPages)
+	return fmt.Errorf("keyword re-index: exceeded %d pages", maxScrollPages)
 }
 
 // staleFilter matches chunks not stamped with the current tokenizer version.

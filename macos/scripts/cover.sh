@@ -7,7 +7,15 @@ set -euo pipefail
 pkg="$(cd "$(dirname "$0")/.." && pwd)"
 threshold="${1:-80}"
 
-swift test --enable-code-coverage --package-path "$pkg" >/dev/null
+# Reason: the tests' output is long, but a failure must say which test
+# failed, so it is shown only then.
+log="$(mktemp)"
+trap 'rm -f "$log"' EXIT
+if ! swift test --enable-code-coverage --package-path "$pkg" >"$log" 2>&1; then
+  grep -E "recorded an issue|failed|error:|Fatal|crash" "$log" | grep -v " started\.$" | tail -60
+  tail -40 "$log"
+  exit 1
+fi
 profdata="$(dirname "$(swift test --package-path "$pkg" --show-codecov-path)")/default.profdata"
 binary="$pkg/.build/debug/OrchPackageTests.xctest/Contents/MacOS/OrchPackageTests"
 

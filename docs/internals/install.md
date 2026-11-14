@@ -227,6 +227,59 @@ missing.
   `KeepAlive`, logs under `~/Library/Logs/orchestrator/`), skipped when orchd is installed under
   Homebrew's `Cellar`, since `brew services` supervises it.
 
+## Git hooks for outbound terms
+
+`orch guard git-hook (--install|--uninstall) [--apply] [--repo DIR] [--hooks-dir DIR] [--orch BIN]`
+(SP-045, `internal/install/githook.go`, `internal/cli/guard_githook_cmd.go`) puts a `commit-msg`
+and a `pre-push` hook in a repository's hooks directory, which is what
+`git rev-parse --git-path hooks` names (`core.hooksPath` when set, the common git directory's
+`hooks` for a linked worktree), or in `--hooks-dir` (a shared `core.hooksPath`). It never edits
+git config.
+
+- **Preview and apply.** Without `--apply` it prints `DRY RUN`, then `CHANGE` or `UNCHANGED` per
+  hook, and writes nothing. Apply re-reads each hook and refuses one that changed since the plan,
+  backs up any hook it replaces or removes to `<data>/backups/git-hooks/<UTC timestamp>/` (as
+  `orch install` does: 0700 directory, 0600 files), and writes the hook beside its place and
+  renames it over, mode 0755. Re-running changes nothing; a hook of orch's that names another orch
+  binary or lost its execute bit is rewritten in place.
+- **Chaining.** A hook that is not orch's (no `# orch-git-hook:` marker line) moves, as it is (a
+  symlink stays a symlink and its target is never read), to `<name>.orch-prev`, with a rename that
+  fails rather than replace a file that appeared since the plan. orch's hook runs
+  `<name>.orch-prev`, if executable, with the same arguments and, for `pre-push`, the same input:
+  for `commit-msg` first, since such hooks add to the message (a Change-Id, a ticket prefix) and
+  orch then checks the message as it will be committed; for `pre-push` after orch's check passes.
+  When both `<name>` and `<name>.orch-prev` exist and `<name>` is not orch's, install refuses
+  rather than lose one; a `<name>.orch-prev` left without a hook is named in the plan, since it
+  will run again. A hook that is not a regular file or a symlink (a FIFO), or is over 1 MiB, is
+  refused.
+- **Uninstall** removes orch's hooks, moves `<name>.orch-prev` back, and leaves hooks that are not
+  orch's alone, so the directory is as it was before the install.
+- **The hook** is a POSIX `sh` script naming the orch binary that installed it (`--orch` to pick
+  another); if that binary is gone it uses `orch` on `PATH`, and with neither it refuses and says
+  how to remove itself. It runs `orch guard git-hook run commit-msg|pre-push -- <git's args>`.
+- **The check** reads the terms layer's switch and the applied policy from orchd's guard snapshot,
+  as the tool hook does (no orchd connection), and runs SP-044's outbound terms check
+  ([hooks.md](hooks.md#outbound-terms)): `commit-msg` reads the message file and the staged diff
+  (git sets `GIT_INDEX_FILE` for `commit -a` and `commit <paths>`, which the check keeps), with
+  the checkout's push remote as the destination; `pre-push` takes the destination from the URL
+  git passes (after `insteadOf`, `pushurl` and any `git -c` override, which the check's own git
+  does not see) and reads the remote ref names it makes, the tag objects it pushes (by any ref
+  name, tags of tags included) and the commits and tag messages of each ref update, less the
+  objects the remote reports it holds and the tracking refs of remotes whose fetch URLs lie in the
+  destination's spaces (tracking refs record what was fetched, not what a push URL holds; for a
+  destination in no space, only remotes fetched from that same URL).
+  Deletions send nothing. With the terms layer off it allows; with nothing ever
+  applied there are no terms; an unreadable snapshot, a failing git or a check past 20 s refuses.
+  A refusal names the term's space, line and hash, never the term.
+- **Limits.** `git commit --no-verify` and `git push --no-verify` skip the hooks, and anyone who
+  can write the hooks directory or set `core.hooksPath` can remove them; the hooks back up the
+  tool hook for git run outside an agent's reach (scripts, the user's terminal), not against a
+  committer who turns them off. The hook finds the guard files from its own environment
+  (`ORCH_DATA_DIR`, `HOME`), so a git run with another home that holds no snapshot and no
+  `orch.db` reads as nothing configured and allows (INV-10). Only git is covered; `gh` writes
+  and the GitHub API are not. Installing into a `core.hooksPath` tracked in the work tree (husky,
+  `.githooks`) changes tracked files and writes the local orch path into them.
+
 ## Harness sandbox and permission layering
 
 These are the measured facts that per-space harness settings (spaces plan, SP-046) build on.

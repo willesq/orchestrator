@@ -81,6 +81,10 @@ type candidate struct {
 	score   float64 // fused or cosine score, higher is better
 	cosine  float32
 	keyword float32
+	// collection holds the hit; needsCos marks a keyword-only hit whose
+	// vector was not fetched, so its cosine is not known yet.
+	collection string
+	needsCos   bool
 }
 
 // date is when a candidate's content happened, or failing that, when it was
@@ -98,6 +102,13 @@ func (c candidate) date() time.Time {
 // rank orders candidates for the caller: weighted by type and recency unless
 // the profile is plain, then capped per source, then cut to topK.
 func rank(cands []candidate, p RankingParams, profile string, perSource, topK int, now time.Time) []candidate {
+	weigh(cands, p, profile, now)
+	return order(cands, perSource, topK)
+}
+
+// weigh makes each candidate's score sortable and, unless the profile is
+// plain, scales it by its type and recency.
+func weigh(cands []candidate, p RankingParams, profile string, now time.Time) {
 	if profile == "" {
 		profile = p.Profile
 	}
@@ -112,6 +123,11 @@ func rank(cands []candidate, p RankingParams, profile string, perSource, topK in
 			cands[i].score = finiteScore(cands[i].score)
 		}
 	}
+}
+
+// order sorts weighed candidates by score, then cosine, caps them per source
+// and cuts them to topK.
+func order(cands []candidate, perSource, topK int) []candidate {
 	sort.SliceStable(cands, func(i, j int) bool {
 		if cands[i].score != cands[j].score {
 			return cands[i].score > cands[j].score

@@ -62,6 +62,7 @@ orch spaces log verify <session|task:ID>   # check a session's command log was n
 orch spaces enforce                   # every enforcement layer's switch
 orch spaces enforce guard off --for 15m   # switch a layer, optionally for a time (operator only)
 orch spaces sandbox [auto|on|off]     # show or set whether orch writes sandbox rules (operator only)
+orch guard git-hook --install [--apply]   # git hooks that refuse commits and pushes carrying another space's terms
 orch sessions list [--all]   # sessions and their state: active, idle, ended (with --all), unpinned
 orch run <space> -- claude   # start Claude Code with the space's profile, from any folder
 orch run <space> -- codex    # the same for Codex
@@ -81,10 +82,20 @@ org, and `orch spaces diff` names it. Check the org on GitHub. If the change is 
 newest revision again with `--confirm-github-org ORG`. Until you do, any apply is refused. See
 [internals/config.md](internals/config.md#spaces-policy).
 
-Each isolated space syncs its GitHub orgs only as its own account: set the space's
-`gh_config_dir` and run `GH_CONFIG_DIR=<dir> gh auth login` ([INSTALL.md](INSTALL.md#github-accounts-per-space)).
-`orch status` names any space whose profile is missing or not logged in, and warns when one
-profile's account can see another job's org.
+Every space uses your default gh login unless it names its own `gh_config_dir` (D-59). One login
+needs no setup, but then the GitHub account is not a boundary between jobs. For a separate
+account, set the space's `gh_config_dir` to an owner-only directory under your home and run
+`GH_CONFIG_DIR=<dir> gh auth login` ([INSTALL.md](INSTALL.md#github-accounts-per-space)). The
+space's orgs are then synced, watched and reviewed only as that account, and an org only that
+account belongs to can be turned on in the GitHub tab. `orch status` names any space whose profile
+is not logged in or whose directory orch refuses. It also warns when a profile's account can see
+another job's org, or when the default login can see the org of a job that has its own account.
+Each such account has an hourly GitHub API budget (`github.isolated_account_hourly_budget`);
+past it, its docs sync and PR watching wait for the next hour. Likewise `orch run <space> --
+claude` uses your normal Claude Code configuration unless the space names a `claude_config_dir`,
+which needs its own `/login` once. `orch status` (spaces section) and Orch.app's Settings →
+Spaces show, for each space, which gh login and Claude Code configuration it uses and whether each
+is logged in, including where gh keeps the token (keychain or file).
 
 `orch spaces why` shows how the applied policy places a target: every bound root holding it from
 shallowest to deepest, what its GitHub remote contributes, the rule that decided and the result.
@@ -105,6 +116,12 @@ long it sits idle, only cut to its newest 50 MB, and past 500 MB in total the se
 ended first go early, all but their refused calls. `verify` shows how far retention cut a
 session, and orchd's log names every cut. See [internals/daemon.md](internals/daemon.md#command-log).
 
+Each call the guard or the outbound terms check refuses is also appended to
+`~/.local/share/orch/events/spaces.jsonl` (owner-only) as one `refusal` event naming the session,
+its space, the tool and the rule, and for a term its space, terms-file line and hash; never the
+command or the term. The macOS app posts a notification for each one made while it runs. See
+[internals/hooks.md](internals/hooks.md#refusal-events).
+
 Each enforcement layer has a switch for isolating behavior when debugging: `memory` (memory
 filtering), `guard` (`block-other-jobs` by default, `strict`, `log` or `off`), `terms`
 (outbound terms), `sandbox` (generated sandbox rules) and `hooks` (Claude Code's pre-tool-use and
@@ -117,6 +134,14 @@ In Orch.app, Settings → Spaces (and the menu bar panel) has the same switches 
 shows a banner while any layer is off, and checks a folder: every root holding it, what its git
 remote changes, and the space it lands in, as `orch spaces why` reports. See
 [internals/app.md](internals/app.md#spaces).
+
+**Git hooks for outbound terms.** The terms check in the tool hook reads only what an agent's
+command says. `orch guard git-hook --install --apply`, run in a repository (or with `--repo` or
+`--hooks-dir` for a shared `core.hooksPath`), adds `commit-msg` and `pre-push` hooks that run
+the same check on every commit and push there, including your own and those scripts make. A
+hook already there keeps running after orch's check passes; `--uninstall --apply` puts it back.
+Without `--apply` both only show what they would change. `--no-verify` skips the hooks. See
+[internals/install.md](internals/install.md#git-hooks-for-outbound-terms).
 
 **Per-space harness settings.** While a policy is applied and the sandbox setting writes rules
 for a checkout, orchd keeps `.claude/settings.local.json` in every git checkout under a space's

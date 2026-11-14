@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/spaces"
 )
@@ -43,16 +44,57 @@ var decideGuard = func(ctx context.Context, f spaces.GuardFiles, in spaces.Guard
 func guardToolEvent(event string, p Payload, out io.Writer, cf clientFactory) {
 	res := decideWithin(guardTimeout, guardInput(event, p))
 	reason := ""
+	var hit spaces.TermHit
 	if event == "pre-tool-use" && res.Verdict != spaces.Refuse {
 		if t := outboundTerms(p, res.Terms); t.Refuse {
 			res = termsRefusal(res, t)
-			reason = t.Reason()
+			reason, hit = t.Reason(), t.Hit
 		}
 	}
 	if res.Verdict == spaces.Refuse && event == "pre-tool-use" {
 		writeDeny(out, res.Rule, reason)
+		reportRefusal(p, res, hit)
 	}
 	recordToolEvent(event, p, cf, &res)
+}
+
+// appendRefusal writes a refusal event to the operator's stream; tests
+// replace it.
+var appendRefusal = func(e events.Event) error { return events.AppendSpaces(paths.EventsDir(), e) }
+
+// refusalReportTimeout bounds writing a refusal event. Reason: the harness
+// kills a hook that runs past its own timeout and then lets the call run,
+// so a write that stalls must never hold the hook (INV-13).
+var refusalReportTimeout = 100 * time.Millisecond
+
+// reportRefusal puts a refused call on the operator's spaces stream
+// (SP-048), where the app and the operator see it without reading the
+// command log. The event names the session, its space, the tool, the rule
+// and, for a term, the term's space, line and hash; never the call's
+// command, paths or text (INV-07). The hook writes it rather than orchd
+// because only the hook knows the term's line, and a refusal stays
+// visible when orchd is down. It never changes the deny already printed.
+func reportRefusal(p Payload, res spaces.GuardResult, hit spaces.TermHit) {
+	r := events.Refusal{Session: p.SessionID, Space: res.Space, Tool: p.ToolName, Rule: string(res.Rule)}
+	if res.Rule == spaces.RuleOutboundTerm && hit.Line > 0 {
+		r.Term = &events.TermRef{Space: hit.Space, Line: hit.Line, Hash: hit.Hash}
+	}
+	e := events.NewRefusal(r, time.Now())
+	write := appendRefusal
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer func() {
+			// Reason: locating the data directory panics without a
+			// home; the call is refused either way.
+			_ = recover()
+		}()
+		_ = write(e)
+	}()
+	select {
+	case <-done:
+	case <-time.After(refusalReportTimeout):
+	}
 }
 
 // termsRefusal is g refused by the terms check's result t. The terms layer

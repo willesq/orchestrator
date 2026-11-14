@@ -175,6 +175,9 @@ type server struct {
 	// ghProfiles picks the gh login of each space's GitHub calls; nil runs
 	// every call as the default login.
 	ghProfiles *ghProfiles
+	// claudeLogins checks the spaces' Claude Code configurations' logins
+	// (SP-074.3); nil reports them unchecked.
+	claudeLogins *claudeLogins
 	// repos looks up a repo's owner and visibility for placement.
 	repos      *repoLookups
 	sourcesReg *sources.Registry
@@ -610,7 +613,7 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	cfg := newConfigService(store, configStart)
-	ghp := newGHProfiles()
+	ghp := newGHProfiles(s.GitHub.IsolatedAccountHourlyBudget)
 	sp, err := spaces.Open(ctx, store, spacesEnv(ghp))
 	if err != nil {
 		return err
@@ -701,6 +704,7 @@ func Run(ctx context.Context) error {
 	// One GitHub service, so the server and the PR watcher share the identity
 	// cache.
 	ghService := github.NewService(github.NewStore(store), ghp.Routed())
+	ghService.Accounts = ghp
 	reviewWatcher := newReviewWatcher(reviews.NewStore(store), disp, tasks, ctl, ghService, ghp)
 	reviewWatcher.Poll = reviewsPoll(s.PRReviews.PollInterval)
 
@@ -771,6 +775,7 @@ func Run(ctx context.Context) error {
 		pins:         pins,
 		repos:        repos,
 		ghProfiles:   ghp,
+		claudeLogins: newClaudeLogins(),
 		prune:        newPruneGuard(store),
 		sourcesReg:   sources.NewRegistry(store),
 		documents:    svc,

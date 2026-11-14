@@ -331,6 +331,34 @@ way around the guard; the OS sandbox is the boundary (RC-102). The guard is best
 extraction (D-28); the OS sandbox (SP-046) and per-job GitHub accounts (SP-063) are the hard
 boundary.
 
+### Refusal events
+
+Each call pre-tool-use refuses (guard or terms check, after the deny is printed) also appends one
+event to the operator's `spaces` stream, `<data>/events/spaces.jsonl` (spaces SP-048,
+`internal/events/refusal.go`, `reportRefusal` in `internal/hook/guard.go`):
+
+`{"kind":"refusal","source":"guard","summary":"refused a Bash call (rule outbound_term) in space acme, session <id>; a term of space globex, terms file line 3 (hash <hash>)","timestamp":"…","refusal":{"session":"<id>","space":"acme","tool":"Bash","rule":"outbound_term","term":{"space":"globex","line":3,"hash":"<hash>"}}}`
+
+- **Fields:** the session the harness named, the space of its pin (empty when the guard refused
+  before reading one: `pin_missing`, `policy_unreadable`, `guard_timeout`), the tool name, the
+  rule, and for `outbound_term` only the term's space, terms-file line and hash. Never the
+  command, paths, repos, file content or the term (INV-07). Each field must have its expected
+  shape (`events.NewRefusal`) or it is replaced with `unknown` or left out, so no free text
+  reaches the stream.
+- **Who writes it:** the hook, not orchd, because only the hook knows the term's line (the
+  `RecordToolEvent` request has no field for it) and so a refusal stays visible while orchd is
+  down. The session ID is the harness's, the one the guard read the pin for; orchd's command
+  log stays the authoritative record, attributed by the caller orchd resolves.
+- **Never in the way:** the write runs under a 100 ms deadline, and a write that fails, stalls or
+  panics is ignored; the deny already printed stands. Every writer of the `spaces` stream (orch-hook
+  and orchd, `events.AppendSpaces`) opens it non-blocking without following links, refuses
+  anything but a regular file (a FIFO planted there), and keeps it 0600. Every event stream is opened
+  that way (`events.Append`), so a stream file that is itself a symlink is no longer written.
+- **Readers:** the operator and the app's refusal notifications ([app.md](app.md#needs-you)).
+  Sessions never read the `spaces` stream: their digests and updates read their own stream,
+  `queue`, `pr-babysitter` and `routing` only, and a session whose ID is the name of a shared
+  stream (`spaces`, `queue`, ...) gets no stream of its own.
+
 ### Live GitHub guard
 
 With one `gh` login an agent could read another employer's org directly, bypassing memory, so
@@ -558,7 +586,8 @@ the strict version refused that are now allowed, beside commands that still reac
 destination or carry its term and are still refused.
 
 **Limits.** This is static reading of shell, best-effort like target extraction (D-28, D-60):
-SP-045's git hooks (`commit-msg`, `pre-push` on the real content) and per-job GitHub accounts
+SP-045's git hooks (`commit-msg`, `pre-push` on the real content; `orch guard git-hook`, see
+[install.md](install.md#git-hooks-for-outbound-terms)) and per-job GitHub accounts
 (D-18) are the boundary for git. Accepted as risk by D-60 (RC-117): text sent by a script or
 program that runs git itself (`./deploy.sh`, `make`), an interpreter, `curl` to the GitHub API, a
 tool other than a shell (notably GitHub MCP tools), an alias or shell function from the user's

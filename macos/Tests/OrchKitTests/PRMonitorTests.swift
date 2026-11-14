@@ -84,7 +84,7 @@ private func list(_ prs: PullRequest...) -> PRList { PRList(prs: prs, updatedAt:
         let monitor = PRMonitor(api: api, interval: .milliseconds(20))
         monitor.start()
         monitor.start()
-        try await Task.sleep(for: .milliseconds(150))
+        try await eventually { api.calls >= 2 }
         monitor.stop()
         let polled = api.calls
         #expect(polled >= 2)
