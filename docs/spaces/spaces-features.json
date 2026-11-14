@@ -5953,7 +5953,7 @@
       "attempts": 1,
       "criteria_sha256": "d333c497108cf22c6737d76f183dc518194e710e1181debafe67e5bf07ca670b",
       "branch": "feat/sp-051-spaces-pane-overview",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/181"
     },
     {
       "id": "SP-052",
