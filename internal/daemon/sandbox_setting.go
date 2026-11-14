@@ -169,7 +169,7 @@ func sandboxDetail(ch spacesettings.Choice, configured, active bool) string {
 	case ch.Setting == spaces.SandboxOn:
 		return "on: every space's sessions get orch's sandbox rules"
 	case active:
-		return "auto: sandbox rules for the sessions another isolated space's folders are denied to"
+		return "auto: sandbox rules for the sessions another isolated space's folders or a login folder not their own are denied to"
 	}
-	return "auto: no other isolated space's folders to deny, so no sandbox rules are written"
+	return "auto: no other isolated space's folders or login folders to deny, so no sandbox rules are written"
 }

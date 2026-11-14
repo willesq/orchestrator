@@ -240,3 +240,82 @@ func TestDefaultGHDir(t *testing.T) {
 		t.Errorf("login fragment without a profile: %+v", f)
 	}
 }
+
+// TestAutoDeniesOtherLogins (D-69, RC-217): under auto, a session also gets
+// orch's sandbox rules when they keep it out of another space's own login
+// folder, a gh_config_dir or claude_config_dir, whatever that space's
+// kind, or out of the default gh login's folder (a space naming its own
+// gh profile); a space's own login folder alone does not count, and a job
+// alone on the default login among spaces naming none still gets none.
+func TestAutoDeniesOtherLogins(t *testing.T) {
+	w := newWorld(t)
+	validate := func(p spaces.Policy) *spaces.Resolved {
+		t.Helper()
+		res, err := spaces.Validate(p, spaces.Env{Home: w.home, InGitTree: func(string) bool { return false }})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	job := spaces.Space{Name: "joba", Kind: spaces.Isolated, Roots: []string{"~/code/a"}}
+	tests := []struct {
+		name  string
+		other spaces.Space
+		want  bool
+		deny  string
+	}{
+		{"public naming a gh profile", spaces.Space{Name: "oss", Kind: spaces.Public, Roots: []string{"~/code"}, GHConfigDir: "~/gh/oss"}, true, "~/gh/oss"},
+		{"private naming a Claude Code folder", spaces.Space{Name: "personal", Kind: spaces.Private, Roots: []string{"~/code/me"}, ClaudeConfigDir: "~/claude/me"}, true, "~/claude/me"},
+		{"public naming none", spaces.Space{Name: "oss", Kind: spaces.Public, Roots: []string{"~/code"}}, false, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := validate(spaces.Policy{Spaces: []spaces.Space{tt.other, job}})
+			r := For(res, "joba", w.layout)
+			if r.OtherJobs {
+				t.Fatalf("no other isolated space, yet OtherJobs: %+v", r)
+			}
+			if r.OtherLogins != tt.want || ChoiceAuto.Sandboxes(r) != tt.want {
+				t.Errorf("OtherLogins = %v, auto sandboxes = %v, want %v", r.OtherLogins, ChoiceAuto.Sandboxes(r), tt.want)
+			}
+			if tt.deny != "" {
+				d := filepath.Join(w.home, strings.TrimPrefix(tt.deny, "~/"))
+				if !slices.Contains(r.Deny, d) {
+					t.Errorf("deny %v lacks %s", r.Deny, d)
+				}
+				co := filepath.Join(w.code, "a", "app")
+				if f := ChoiceAuto.CheckoutFor(r, co); !slices.Contains(f.Lists[keyDenyRead], d) {
+					t.Errorf("auto's checkout fragment does not deny %s: %+v", d, f.Lists)
+				}
+				if !ChoiceAuto.AnySandboxed(res, w.layout) {
+					t.Error("AnySandboxed is false")
+				}
+			}
+			// The space naming the login folder is not kept out of its own.
+			if o := For(res, tt.other.Name, w.layout); o.OtherLogins {
+				t.Errorf("%s: its own login folder counted: %+v", tt.other.Name, o)
+			}
+			// A checkout of no space is denied every space's login folder.
+			if u := ForUnplaced(res, filepath.Join(w.code, "a", "x"), w.layout); u.OtherLogins != tt.want || ChoiceAuto.Sandboxes(u) != tt.want {
+				t.Errorf("unplaced: OtherLogins = %v, want %v", u.OtherLogins, tt.want)
+			}
+		})
+	}
+	// The default gh login counts too: a job naming its own gh profile is
+	// denied the default login's folder, so auto sandboxes it even alone;
+	// a job on the default login alone is not; a checkout of no space is
+	// denied the default folder whenever there is one.
+	l := w.layout
+	l.GHDefault = filepath.Join(w.home, "gh", "default")
+	own := validate(spaces.Policy{Spaces: []spaces.Space{{Name: "joba", Kind: spaces.Isolated, Roots: []string{"~/code/a"}, GHConfigDir: "~/gh/a"}}})
+	if r := For(own, "joba", l); !r.OtherLogins || !ChoiceAuto.Sandboxes(r) || !slices.Contains(r.Deny, l.GHDefault) {
+		t.Errorf("own gh profile alone: %+v", r)
+	}
+	plain := validate(spaces.Policy{Spaces: []spaces.Space{job}})
+	if r := For(plain, "joba", l); r.OtherLogins || ChoiceAuto.Sandboxes(r) {
+		t.Errorf("default login alone: %+v", r)
+	}
+	if u := ForUnplaced(plain, filepath.Join(w.code, "a", "x"), l); !u.OtherLogins || !ChoiceAuto.Sandboxes(u) {
+		t.Errorf("unplaced with a default gh folder: %+v", u)
+	}
+}

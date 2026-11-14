@@ -625,8 +625,9 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
   consistently while orchd is stopped, which the next start takes. Either way the switch shows in
   every digest and in `orch status`. Self-protection paths (SP-042) are the guard's answer to
   both. A `"disableAllHooks": true` in a project's Claude Code settings turns off every hook,
-  the digest included, without any switch; the hooks check reads only the user's
-  `~/.claude/settings.json`. When orchd does not answer, the digest's fallback reads only the
+  the digest included, without any switch, except in a checkout holding orch's sandbox rules,
+  whose `settings.local.json` sets it back to false (D-67, [install.md](install.md#per-space-harness-settings));
+  the hooks check reads only the user's `~/.claude/settings.json`. When orchd does not answer, the digest's fallback reads only the
   switches in `orch.db`, not whether the tool hooks are still in `settings.json`.
 - **The sandbox switch** (SP-046): orchd's checkout sync reads it at every sync, and a change
   asks for a sync at once. Off takes orch's entries out of every per-checkout settings file and
@@ -662,11 +663,18 @@ they keep it out of another isolated space's root.
   sessions are sandboxed now (`active`) and what that means (`detail`). `orch status` prints one
   `sandbox` line; `off` is a warning there, a problem with `orch.db`'s copy an error.
 - **Not a switch** (INV-16 as amended by D-61): `off`, or `auto` with nothing to deny, does not
-  mark any session's start digest. The `sandbox` switch still does whenever it is off, timed or
-  not, and while it is off no rules are written whatever the setting says.
+  mark any session's start digest as enforcement off. The `sandbox` switch still does whenever it
+  is off, timed or not, and while it is off no rules are written whatever the setting says.
+- **Named once** (D-68): a session's next start digest names the setting once (`[info] orchd: the
+  sandbox setting is <mode> (set <time>): <detail>`) after each change to it, and, while it is
+  `off`, after each orchd start. The hook remembers per session the mode, `set_at` and orchd's
+  start (from `Ping`'s uptime, within 5 s) it last named, so later digests of that session stay
+  quiet until one of them changes; a session's first digest names a setting that was ever set
+  (or is off), and the default never set is not named. With orchd down the hook reads the setting
+  from `orch.db` read-only (`spaces.ReadSandboxSetting`) and says so.
 - **Limits:** as for the switches, a process running as the user can write a matching row and
-  log entry while orchd is stopped, which the next start takes; for the setting nothing then
-  warns in a digest, only `orch status` and the app show it (RC-216). Sandboxed shells cannot
+  log entry while orchd is stopped, which the next start takes; it is then named in the next
+  start digest of each session (D-68, RC-216), and `orch status` and the app show it. Sandboxed shells cannot
   write `orch.db` (it is outside every space's writable folders) and the guard refuses tool calls
   that name it.
 
