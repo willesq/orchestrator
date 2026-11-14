@@ -23,6 +23,15 @@ extension DaemonClient: SpacesAPI {
         return Self.placement(try await orchd.explainPlacement(request))
     }
 
+    public func spaceLogins() async throws -> [SpaceLogin] {
+        let r = try await orchd.listSpaces(Orchd_V1_ListSpacesRequest())
+        return r.logins.map { SpaceLogin(space: $0.space, gh: Self.loginState($0.gh), claude: Self.loginState($0.claude)) }
+    }
+
+    static func loginState(_ s: Orchd_V1_LoginState) -> LoginState {
+        LoginState(own: s.own, dir: s.dir, state: s.state, account: s.account, storage: s.storage, detail: s.detail)
+    }
+
     static func enforcementSwitch(_ s: Orchd_V1_EnforcementSwitch) -> EnforcementSwitch {
         EnforcementSwitch(
             layer: s.layer, title: s.title, state: s.state, defaultState: s.defaultState, states: s.states,

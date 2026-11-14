@@ -197,15 +197,16 @@ private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: T
         api.failScopes = true
         let model = GitHubModel(api: api, interval: .milliseconds(20))
         model.start()
-        try await Task.sleep(for: .milliseconds(70))
+        try await eventually { model.scopesError != nil }
         #expect(model.scopes.isEmpty && model.scopesError != nil)
         api.failScopes = false
-        try await Task.sleep(for: .milliseconds(80))
+        try await eventually { model.scopes.count == 2 && model.scopesError == nil }
         model.stop()
         #expect(model.scopes.count == 2 && model.identity?.login == "willesq" && model.scopesError == nil)
         let loads = api.refreshes.count
+        let items = api.itemLoads
         model.start()
-        try await Task.sleep(for: .milliseconds(80))
+        try await eventually { api.itemLoads >= items + 2 }
         model.stop()
         #expect(api.refreshes.count == loads + 1, "once loaded, polling reloads only items")
     }
@@ -320,7 +321,7 @@ private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: T
         let model = GitHubModel(api: api, interval: .milliseconds(20))
         model.start()
         model.start()
-        try await Task.sleep(for: .milliseconds(150))
+        try await eventually { api.itemLoads >= 3 }
         model.stop()
         let loads = api.itemLoads
         #expect(loads >= 3)

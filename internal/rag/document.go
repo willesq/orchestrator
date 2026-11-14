@@ -21,16 +21,23 @@ type Document struct {
 	Oversize bool
 }
 
-// Document rebuilds a source from the active collection's chunks: ordered by
-// chunk index, without their section context lines, with the overlap between
-// neighbouring chunks trimmed.
+// Document rebuilds a source from its chunks: ordered by chunk index,
+// without their section context lines, with the overlap between neighbouring
+// chunks trimmed. It is read from the first collection holding it, the base
+// first and then each space's.
 func (s *Service) Document(ctx context.Context, uri string) (Document, error) {
-	sr, err := s.readSource(ctx, s.active(), uri)
+	stores, err := s.allStores(ctx, s.active(), false)
 	if err != nil {
 		return Document{}, err
 	}
-	if sr.chunks == 0 {
-		return Document{}, ErrSourceNotFound
+	for _, ss := range stores {
+		sr, err := s.readSource(ctx, ss.st, uri)
+		if err != nil {
+			return Document{}, err
+		}
+		if sr.chunks > 0 {
+			return Document{Meta: sr.meta, Text: sr.text, Chunks: sr.chunks, Malformed: sr.malformed, Oversize: sr.oversize}, nil
+		}
 	}
-	return Document{Meta: sr.meta, Text: sr.text, Chunks: sr.chunks, Malformed: sr.malformed, Oversize: sr.oversize}, nil
+	return Document{}, ErrSourceNotFound
 }

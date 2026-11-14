@@ -202,7 +202,9 @@ are written to `orch.db` by the CLI, so for those the CLI check is the only one.
 Every sweep, up to 20 completed tasks (≤ 30 days old, rechecked every 6 h, ≤ 50 `gh` calls) have
 their PRs checked with `gh pr view --json state,createdAt,author,commits`. A PR counts only if its
 author matches your `gh` login (case-insensitive) and it was created after the task was
-dispatched. Merged as left → `good`; merged after further commits (other than `Merge …` commits)
+dispatched. With spaces, both the read and the login it is matched against are those of the gh
+account the PR owner's space uses (SP-074): a space's own profile, or the default login. A
+profile orch cannot use leaves the task unchecked; the default login is never asked instead. Merged as left → `good`; merged after further commits (other than `Merge …` commits)
 → `rework`; closed → `bad`; any still open → undecided. A task takes its worst PR's outcome; a task
 with more than 10 PR URLs stays undecided.
 
@@ -303,7 +305,10 @@ Codex runs have no such transcript, and show as unavailable.
   default.
 - **Discovery:** it runs through `gh` (`gh api user`, `user/orgs`, `user/teams`) and is cached for
   10 minutes. It adds rows only for accounts that have none, so the user's choices survive
-  rediscovery.
+  rediscovery. With spaces (SP-074), each org a space binds that the space's own usable gh profile
+  is (a user scope) or belongs to (an org scope) is added too, disabled; turning it on checks
+  membership as that profile, and its repo picker lists repos as that profile
+  (`github.AccountRouter`, implemented by orchd's `ghProfiles`).
 - **Each scope has:**
   - an `items` mode: `involving` (authored, assigned, mentioned, or review requested of the user or
     their team) or `all` (every open PR and issue);
@@ -355,12 +360,20 @@ The `pr-babysitter` unit watches the user's enabled GitHub scopes for open PRs a
 - Hits outside the enabled scopes, or excluded by a scope's repo picks, are dropped. So the tray and
   `orch prs` cover only what the user opted in to.
 - Only `https://github.com/` item URLs are kept, and scope logins are checked again when read.
-- With spaces applied, the searches above run once as the default login and once as each logged-in
-  space gh profile (SP-063, [config.md](config.md#spaces-policy)). An owner's items are kept only
-  from the account its space routes it to, and are enriched as that account. An owner bound to an
-  isolated space without a working profile is dropped. Everything searches and repo batches go
-  only to the owner's account, and the limits of 5 apply per account. As before, a hit counts only
-  for a scope the user enabled.
+- With spaces applied, the searches above run once as the default login and once as each usable
+  space gh profile (SP-063, SP-074, [config.md](config.md#spaces-policy)). An owner's items are
+  kept only from the account its space routes it to, and are enriched as that account. A space
+  naming no profile routes to the default login (D-59). An owner whose space names a profile orch
+  cannot use (not logged in, or a refused directory) is dropped. Everything searches and repo
+  batches go only to the owner's account, and the limits of 5 apply per account. As before, a hit
+  counts only for a scope the user enabled. An org only a profile's account belongs to is offered
+  as a scope (disabled) once its space binds it.
+- An isolated space's own account whose hourly budget is spent
+  (`github.isolated_account_hourly_budget`, SP-074.2) is deferred: it is not searched, and its
+  owners' items are kept from the last sweep with their last CI and review state. A search that
+  runs out of budget mid-sweep defers its account the same way. The log line names no account.
+- Agents reading the cache through `ListPRs` or `ListGitHubItems` do not get the items of an owner
+  bound to a space with its own gh profile; the operator gets every item.
 
 **Each item records:**
 - its kind (`pr` or `issue`), number, author and update time;

@@ -64,6 +64,10 @@ func (e writesEnv) placedAs(t *testing.T, uri, space, system string) map[string]
 	if len(pts) == 0 {
 		t.Fatalf("%s: nothing stored (have %v)", uri, e.q.uris())
 	}
+	// Every chunk sits in its space's own collection (SP-024).
+	if in := e.q.storedIn(rag.SpaceCollection("c", space), uri); len(in) != len(pts) {
+		t.Fatalf("%s: %d of %d chunks in %s's collection", uri, len(in), len(pts), space)
+	}
 	var origin map[string]any
 	for _, p := range pts {
 		if p["space"] != space {
