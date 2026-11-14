@@ -103,6 +103,7 @@ does not leave its services down until someone notices. When orchd cannot run at
 | `docs.include_archived`, `include_forks` | `false` | repo filters |
 | `pr_babysitter.enabled` | `true` | PR cache refresh |
 | `pr_babysitter.poll_interval` | `10m` | sweep cadence |
+| `github.isolated_account_hourly_budget` | `1000` | GitHub API calls an hour for each isolated space's own gh account; past it its docs sync and PR watching wait (0: no cap; SP-074.2) |
 | `pr_reviews.poll_interval` | `2m` | how often each PR watched for review is read; at least the unit's 15 s tick |
 | `sessions.summarize.enabled` | `true` | model-written session summaries |
 | `sessions.summarize.model` | `haiku` | model for summaries |
@@ -241,13 +242,36 @@ logged out. orch never reads files inside a profile directory and never runs
 
 Which login a call runs as:
 
-- An org bound to a space with a profile: that profile, when it is logged in.
-- An org bound to an isolated space with no profile, or with a profile that is not logged in: no
-  call at all. Its docs are not synced, its PRs and issues are dropped from the PR watcher, and its
-  review posts, PR lookups and identity checks are refused. The reason the docs list and orchd's
-  log carry names no space; the operator sees which in `orch status`.
-- An org bound to a public or private space without a profile, an org no space binds, and a call
-  about no org (`gh api user`): the default login, as before spaces.
+- An org bound to a space with a profile: that profile, when it is usable. Usable means
+  `github.CheckProfileDir` accepts the directory (an absolute path that resolves, after symbolic
+  links, to an existing directory under the user's home, owned by the user, with no group or other
+  permission bits) and `gh auth status` reports a working login (SP-074).
+- An org bound to a space whose profile is not usable: no call at all. Its docs are not synced,
+  its PRs and issues are dropped from the PR watcher, and its review posts, PR lookups, repo
+  listing and identity checks are refused (`errGHProfileDir`, `errGHProfileLogin`). The reason the
+  docs list and orchd's log carry names no space; the operator sees which in `orch status`.
+- An org bound to a space without a profile (an isolated one included, D-59), an org no space
+  binds, and a call about no org (`gh api user`): the default login, as before spaces. With one
+  login the GitHub account is not a boundary between jobs (D-59).
+
+A call a profile makes that GitHub answers with 404, 403, "Could not resolve to a …" or "Resource
+not accessible" fails with `github.ErrNoAccess`, keeping gh's words; a rate limit is not marked.
+`CheckProfileDir` also requires every folder between the home and the profile to be the user's
+and not writable by others. Nothing retries it as another
+login (SP-074.1.a2).
+
+**Hourly budget** (SP-074.2, `ghBudget`). Every call orchd makes as an isolated space's own
+profile counts toward `github.isolated_account_hourly_budget` (default 1000; 0 is no cap), in a
+window that starts at the first call and lasts an hour. Once it is spent, that account's docs sync
+(`docsClients` and each listing call), PR-watch calls and PR-outcome reads
+(`RoutedBackground`) fail with `github.ErrQuota` until the window ends. The docs sync reports the
+owner as not synced and keeps its chunks, and the PR watcher defers the account, keeping its
+items. Other routed calls (reviews, lookups, landing) still run and are counted, up to twice the
+budget (`hardCapFactor`), so nothing spends the account's whole rate limit. The check and the
+count are one step under a lock. A `gh api --paginate` counts as one call whatever its pages. A
+private or public space's profile and the default login are not budgeted. The first
+refusal in each window is logged once, naming no space or directory. Counts live in memory and
+start again when orchd restarts.
 
 The call sites:
 
@@ -268,23 +292,33 @@ The call sites:
   It also sets `GIT_CONFIG_GLOBAL=/dev/null` and `GIT_CONFIG_NOSYSTEM=1`, and drops `GIT_ASKPASS`,
   `SSH_ASKPASS` and `GIT_CONFIG_*`, so no `insteadOf` rule, helper or askpass program can substitute
   another account.
-- **The PR watcher** searches once as the default login and once as each logged-in profile. Each
+- **The PR watcher** searches once as the default login and once as each usable profile. Each
   owner's items are kept only from the account its space routes it to, and are enriched as that
-  account ([tasks.md](tasks.md#pr-babysitter)). Profile accounts and their orgs are not added as
-  GitHub scopes, because tasks can list scopes. As with the default login, a profile's items are
-  kept only for a scope the user enabled, because tasks in any space can read the PR cache. So an
-  org that only the profile's account belongs to has no scope, and is not watched yet.
+  account ([tasks.md](tasks.md#pr-babysitter)). As with the default login, a profile's items are
+  kept only for a scope the user enabled, because tasks in any space can read the PR cache.
+  `ListPRs` and `ListGitHubItems` leave out, for agents, the items of an owner bound to a space
+  with its own profile (SP-074); the cache file itself is still readable by the user's processes.
+- **GitHub scopes and the repo picker** (SP-074, `github.Service.Accounts`, `ghProfiles.Account`
+  and `ScopeOwners`). Each org a space binds that its usable profile's account is or belongs to is
+  added as a disabled scope, so an org only that account reaches can be turned on. Turning it on
+  checks membership as that account, and is refused while that profile is refused.
+  `ListGitHubRepos` lists its repos as that account. Both RPCs are open to agents, so an owner
+  bound to a space with its own profile is left out of an agent's scope list, and an agent's repo
+  listing for it answers `NotFound`, as for an org that is not the user's.
+- **PR outcomes** (`newAttributor`) read each PR, and match its author, as the account of the PR
+  owner's space (`evidence.Attributor.LoginFor`).
 
 `Status` adds the problems to the spaces line. The operator (a caller that `refuseNonOperator`
 would admit) sees each one with the space it concerns:
 
-- an isolated space that binds orgs but has no profile;
+- a profile directory orch refuses, with why (not under the home, not owner-only, missing);
 - a profile that is not logged in, with the exact `GH_CONFIG_DIR=<dir> gh auth login` to run;
 - a profile whose account can see an org bound to a different isolated space (it is that org's
   login or a member of it), since account separation is then not effective;
 - two isolated spaces whose profiles are logged in to the same account;
-- the default login seeing an isolated space's org, or being the same account as an isolated
-  space's profile. This is checked once any isolated space binds orgs.
+- the default login seeing the org of an isolated space that names its own profile, or being the
+  same account as an isolated space's profile. This is checked once such a space binds orgs. An
+  isolated space naming no profile uses the default login by design (D-59) and is not reported.
 
 Membership comes from `gh api user/orgs`. Access as an outside collaborator is not detected, and a
 token without `read:org` lists only public memberships.

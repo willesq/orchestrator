@@ -22,19 +22,37 @@ of the daemon.
 
 ## GitHub accounts per space
 
-When you use [spaces](OPERATIONS.md#spaces), give each job (isolated space) its own GitHub
-account. Pick a directory outside every git repository, name it as the space's `gh_config_dir`,
-and log in to it yourself:
+One gh login is enough. With [spaces](OPERATIONS.md#spaces), every space uses whichever gh login
+you already have (`gh auth login`) and your normal Claude Code configuration, with nothing to set
+up (D-59). The trade-off: with one login the GitHub account is not a boundary between jobs. A
+session working for one job can reach any repo that login can. The tool guard, memory spaces and
+the folder denies still keep the jobs apart.
+
+To make the account a boundary too, give a job (isolated space) its own GitHub account. Make a
+directory under your home, outside every git repository, that only you can open, name it as the
+space's `gh_config_dir`, and log in to it yourself:
 
 ```sh
+mkdir -m 700 ~/.config/gh-acme
 GH_CONFIG_DIR=~/.config/gh-acme gh auth login
 ```
 
 orchd then runs every gh call about that space's orgs as that account: docs sync, PR monitoring,
-reviews and org identity checks. Until the profile is logged in, the space's orgs are not synced,
-and `orch status` names the space and the command to run. orch checks a profile only with
-`gh auth status`; it never reads the profile's files or its token. See
-[internals/config.md](internals/config.md#spaces-policy).
+the GitHub tab's scopes and repo picker, reviews, PR outcomes and org identity checks. It never
+falls back to the default login for them. A call that account cannot read is refused with that
+reason, not retried as another login. orchd also refuses the directory if it is not an absolute
+path under your home, owned by you and closed to other users (`chmod 700`). Until the profile is
+logged in and usable, the space's orgs are not synced, and `orch status` names the space and
+what to fix. orch checks a profile only with `gh auth status`; it never reads the profile's files
+or its token. See [internals/config.md](internals/config.md#spaces-policy).
+
+A space can also name its own `claude_config_dir`, a Claude Code folder with its own login, used
+by `orch run <space> -- claude` ([internals/install.md](internals/install.md#per-space-harness-settings)).
+
+Each isolated space's own account may make at most `github.isolated_account_hourly_budget` GitHub
+API calls an hour (1000 by default; 0 is no cap). Past it, that account's docs sync and PR
+watching wait for the next hour and its watched items stay as they were; reviews still run, and
+other accounts are not affected.
 
 ## What `orch install` does
 

@@ -81,10 +81,18 @@ org, and `orch spaces diff` names it. Check the org on GitHub. If the change is 
 newest revision again with `--confirm-github-org ORG`. Until you do, any apply is refused. See
 [internals/config.md](internals/config.md#spaces-policy).
 
-Each isolated space syncs its GitHub orgs only as its own account: set the space's
-`gh_config_dir` and run `GH_CONFIG_DIR=<dir> gh auth login` ([INSTALL.md](INSTALL.md#github-accounts-per-space)).
-`orch status` names any space whose profile is missing or not logged in, and warns when one
-profile's account can see another job's org.
+Every space uses your default gh login unless it names its own `gh_config_dir` (D-59). One login
+needs no setup, but then the GitHub account is not a boundary between jobs. For a separate
+account, set the space's `gh_config_dir` to an owner-only directory under your home and run
+`GH_CONFIG_DIR=<dir> gh auth login` ([INSTALL.md](INSTALL.md#github-accounts-per-space)). The
+space's orgs are then synced, watched and reviewed only as that account, and an org only that
+account belongs to can be turned on in the GitHub tab. `orch status` names any space whose profile
+is not logged in or whose directory orch refuses. It also warns when a profile's account can see
+another job's org, or when the default login can see the org of a job that has its own account.
+Each such account has an hourly GitHub API budget (`github.isolated_account_hourly_budget`);
+past it, its docs sync and PR watching wait for the next hour. Likewise `orch run <space> --
+claude` uses your normal Claude Code configuration unless the space names a `claude_config_dir`,
+which needs its own `/login` once.
 
 `orch spaces why` shows how the applied policy places a target: every bound root holding it from
 shallowest to deepest, what its GitHub remote contributes, the rule that decided and the result.
