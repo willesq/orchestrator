@@ -5427,7 +5427,7 @@
       "attempts": 1,
       "criteria_sha256": "285ce77da8c1a9b5024a92a920ea21f2b54cf013a465814d3808d27d29495726",
       "branch": "feat/sp-030-public-write-gate",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/180"
     },
     {
       "id": "SP-031",
