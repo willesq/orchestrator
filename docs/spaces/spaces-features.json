@@ -5945,14 +5945,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "d333c497108cf22c6737d76f183dc518194e710e1181debafe67e5bf07ca670b",
-      "branch": null,
+      "branch": "feat/sp-051-spaces-pane-overview",
       "pr": null
     },
     {
