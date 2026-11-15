@@ -1,0 +1,13 @@
+{
+  "id": "RC-1052",
+  "kind": "follow-up",
+  "topic": "A draft the app saves from an agent's draft is recorded as the operator's",
+  "detail": "From SP-054's security review (accepted as Low). 'Drop invalid lines' saves the rest of a draft as a new revision through SetSpacesDraft, which orchd records as the operator's (Orch.app is the operator, D-71), so the agent's authorship drops out of the record and accept_agent_draft is no longer asked for it. The app therefore requires 'I reviewed this draft' before it drops lines from an agent's draft. Server-side fix: SetSpacesDraft takes the revision it derives from and keeps its by-agent flag, so orchd still requires accept_agent_draft (orchd.proto change).",
+  "source": "https://github.com/willesq/orchestrator/pull/194",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-054",
+    "SP-020"
+  ],
+  "status": "open"
+}
