@@ -70,12 +70,12 @@ func TestSpacesOffInstallIsPreSpaces(t *testing.T) {
 				t.Fatal(err)
 			}
 			pre := root.Hooks["PreToolUse"]
-			if len(pre) != 1 || !strings.Contains(mustJSON(t, pre), "/usr/local/bin/safety-check") {
-				t.Fatalf("PreToolUse = %s, want only the third-party entry", mustJSON(t, pre))
+			if len(pre) != 1 || !strings.Contains(spacesHooksJSON(t, pre), "/usr/local/bin/safety-check") {
+				t.Fatalf("PreToolUse = %s, want only the third-party entry", spacesHooksJSON(t, pre))
 			}
 			// Codex has no CwdChanged; orch never wrote one there.
 			if _, ok := root.Hooks["CwdChanged"]; ok && name == "claude-code" {
-				t.Fatalf("CwdChanged kept: %s", mustJSON(t, root.Hooks["CwdChanged"]))
+				t.Fatalf("CwdChanged kept: %s", spacesHooksJSON(t, root.Hooks["CwdChanged"]))
 			}
 			if !strings.Contains(summary, "removed orch's PreToolUse") {
 				t.Errorf("summary does not say what was removed:\n%s", summary)
@@ -142,7 +142,7 @@ func TestSpacesOffInstallAppliesToATempHome(t *testing.T) {
 	}
 }
 
-func mustJSON(t *testing.T, v any) string {
+func spacesHooksJSON(t *testing.T, v any) string {
 	t.Helper()
 	b, err := json.Marshal(v)
 	if err != nil {
