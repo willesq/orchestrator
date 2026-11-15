@@ -6361,14 +6361,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "71a615214415759a2f0b2418e12a1cd758edf2fb0102aea3fd81406bd5d03374",
-      "branch": null,
+      "branch": "feat/sp-029-derived-content",
       "pr": null
     },
     {
