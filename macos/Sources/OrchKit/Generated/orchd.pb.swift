@@ -1118,6 +1118,73 @@ public nonisolated struct Orchd_V1_ReindexKeywordsResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Orchd_V1_RelabelRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var apply: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// RelabelTransition counts stale chunks by the space they were in
+/// ("unplaced" for none) and the space they were placed in.
+public nonisolated struct Orchd_V1_RelabelTransition: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var from: String = String()
+
+  public var to: String = String()
+
+  public var chunks: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// RelabelResponse holds counts and space names only: never a source, its
+/// text or a collection.
+public nonisolated struct Orchd_V1_RelabelResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// the applied policy revision chunks were brought up to
+  public var revision: Int64 = 0
+
+  /// chunks in every collection
+  public var total: Int64 = 0
+
+  /// chunks not labelled by revision, before this run
+  public var stale: Int64 = 0
+
+  /// chunks stamped or moved (or, without apply, that would be)
+  public var changed: Int64 = 0
+
+  /// of those, chunks that changed collection
+  public var moved: Int64 = 0
+
+  /// stale chunks left stale, to be retried by the next run
+  public var failed: Int64 = 0
+
+  public var transitions: [Orchd_V1_RelabelTransition] = []
+
+  public var applied: Bool = false
+
+  /// why an applied run stopped early; what it did is still reported
+  public var error: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Orchd_V1_ListPRsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -7272,6 +7339,146 @@ nonisolated extension Orchd_V1_ReindexKeywordsResponse: SwiftProtobuf.Message, S
     if lhs.total != rhs.total {return false}
     if lhs.stale != rhs.stale {return false}
     if lhs.updated != rhs.updated {return false}
+    if lhs.applied != rhs.applied {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RelabelRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RelabelRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}apply\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.apply) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.apply != false {
+      try visitor.visitSingularBoolField(value: self.apply, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RelabelRequest, rhs: Orchd_V1_RelabelRequest) -> Bool {
+    if lhs.apply != rhs.apply {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RelabelTransition: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RelabelTransition"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}from\0\u{1}to\0\u{1}chunks\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.from) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.to) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.chunks) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.from.isEmpty {
+      try visitor.visitSingularStringField(value: self.from, fieldNumber: 1)
+    }
+    if !self.to.isEmpty {
+      try visitor.visitSingularStringField(value: self.to, fieldNumber: 2)
+    }
+    if self.chunks != 0 {
+      try visitor.visitSingularInt64Field(value: self.chunks, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RelabelTransition, rhs: Orchd_V1_RelabelTransition) -> Bool {
+    if lhs.from != rhs.from {return false}
+    if lhs.to != rhs.to {return false}
+    if lhs.chunks != rhs.chunks {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RelabelResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RelabelResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}revision\0\u{1}total\0\u{1}stale\0\u{1}changed\0\u{1}moved\0\u{1}failed\0\u{1}transitions\0\u{1}applied\0\u{1}error\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt64Field(value: &self.revision) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.total) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.stale) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.changed) }()
+      case 5: try { try decoder.decodeSingularInt64Field(value: &self.moved) }()
+      case 6: try { try decoder.decodeSingularInt64Field(value: &self.failed) }()
+      case 7: try { try decoder.decodeRepeatedMessageField(value: &self.transitions) }()
+      case 8: try { try decoder.decodeSingularBoolField(value: &self.applied) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.revision != 0 {
+      try visitor.visitSingularInt64Field(value: self.revision, fieldNumber: 1)
+    }
+    if self.total != 0 {
+      try visitor.visitSingularInt64Field(value: self.total, fieldNumber: 2)
+    }
+    if self.stale != 0 {
+      try visitor.visitSingularInt64Field(value: self.stale, fieldNumber: 3)
+    }
+    if self.changed != 0 {
+      try visitor.visitSingularInt64Field(value: self.changed, fieldNumber: 4)
+    }
+    if self.moved != 0 {
+      try visitor.visitSingularInt64Field(value: self.moved, fieldNumber: 5)
+    }
+    if self.failed != 0 {
+      try visitor.visitSingularInt64Field(value: self.failed, fieldNumber: 6)
+    }
+    if !self.transitions.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.transitions, fieldNumber: 7)
+    }
+    if self.applied != false {
+      try visitor.visitSingularBoolField(value: self.applied, fieldNumber: 8)
+    }
+    if !self.error.isEmpty {
+      try visitor.visitSingularStringField(value: self.error, fieldNumber: 9)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RelabelResponse, rhs: Orchd_V1_RelabelResponse) -> Bool {
+    if lhs.revision != rhs.revision {return false}
+    if lhs.total != rhs.total {return false}
+    if lhs.stale != rhs.stale {return false}
+    if lhs.changed != rhs.changed {return false}
+    if lhs.moved != rhs.moved {return false}
+    if lhs.failed != rhs.failed {return false}
+    if lhs.transitions != rhs.transitions {return false}
     if lhs.applied != rhs.applied {return false}
     if lhs.error != rhs.error {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

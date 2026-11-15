@@ -596,6 +596,21 @@
         "id": "D-64",
         "decision": "Public-space write gate (SP-030): local content under a public root does not reach the public space automatically. Public content comes from the GitHub docs sync, bound web URL prefixes, operator retags (SP-071), and, as D-50 already allows, a checkout folder the operator explicitly declares public by binding a public root at that folder or inside it. Local content under a broader public root (such as ~/code) that was not declared that way, including a folder a session registered as a source and a checkout of a public GitHub repo, goes to quarantine; edit hand-offs go to public_root_sessions as before. The user kept D-50's declaration path knowing that a folder they declared public can still be written by any job's session (accepted risk, RC-404) (was RC-400).",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-71",
+        "decision": "Operator identity for memory reads and operator-only RPCs (settles RC-705 and RC-707, raised by SP-025): a real terminal no longer counts as the operator. Under a policy, only Orch.app counts as the operator until the unlock from SP-077 exists; terminal CLI reads are limited to public content. Operator-only RPCs (SP-020, SP-050, SP-070 and the rest) require the same evidence. Later, 'orch spaces unlock --for <duration>' asks the operator to confirm in Orch.app and then grants operator scope to the requesting terminal for that time (SP-077). RC-706: Orch.app is recognized by its code signature, not its path.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-72",
+        "decision": "The repository has been public since 2026-11-14. Private strings already pushed (this Mac's home path, temporary-folder paths with session ids) are replaced with placeholders such as '<main checkout>' and '<scratch>' in new commits, on main's plan file and on open branches; git history is not rewritten.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-73",
+        "decision": "Sessions can write files into folders listed in a public space's public_paths, or create new folders that a '*' or '**' pattern matches, and the sources refresh indexes that content into public. The user accepts this as an extension of RC-404's accepted risk (SP-076). Later, SP-046's per-checkout sandbox rules will also deny job sessions writes to listed folders (RC-805) (was RC-801).",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -705,7 +720,7 @@
         "kind": "decision",
         "topic": "Where the command log is stored",
         "detail": "SP-014 does not say where the command log lives; orch.db is mode 0644. Decide the store and its file mode before SP-014.",
-        "source": "session://46e55792-1605-40ed-8c85-d3caec057e00 (SP-001 session)",
+        "source": "a local session (SP-001 session)",
         "raised": "2026-11-08",
         "affects": [
           "SP-014"
@@ -796,7 +811,7 @@
         "kind": "follow-up",
         "topic": "Unverified assumptions to check before memory enforcement",
         "detail": "Qdrant match.except on array fields, and the GetDocument and session-recall handlers' read paths, were assumed in the design but not checked.",
-        "source": "session://e38cc90a-ebe1-43d0-9bba-bfef289d8c8f (design session)",
+        "source": "a local session (design session)",
         "raised": "2026-11-08",
         "affects": [
           "SP-025",
@@ -821,7 +836,7 @@
         "kind": "user-action",
         "topic": "Rotate ORCA_AGENT_HOOK_TOKEN",
         "detail": "The token was printed into a session transcript on 2026-11-08 (SP-001 session). Rotate it; the transcript is also indexed in RAG.",
-        "source": "session://46e55792-1605-40ed-8c85-d3caec057e00",
+        "source": "a local session",
         "raised": "2026-11-08",
         "affects": [],
         "status": "resolved",
@@ -878,7 +893,7 @@
         "kind": "user-action",
         "topic": "Observability research leftovers",
         "detail": "Decide whether to save the three drafted RAG entries; verify four reported defects (subagent-stop hook reads the wrong field names, pr-babysitter events have empty timestamps, queue events have an empty task ID, token detail is discarded); try Codex [otel] export live.",
-        "source": "session://bdd8786f-58da-4777-8a71-4185518d555a",
+        "source": "a local session",
         "raised": "2026-11-08",
         "affects": [],
         "status": "resolved",
@@ -889,7 +904,7 @@
         "kind": "follow-up",
         "topic": "Real orch.db is at schema 25 ahead of installed orch 0.44.0",
         "detail": "On 2026-11-08 an SP-011 test opened ~/.local/share/orch/orch.db without a temp ORCH_DATA_DIR and migrated it from 22 to 25 (spaces_revisions, spaces_applied, spaces_org_bindings, session_pins, all empty after cleanup per D-27). Unverified: that orchd 0.44.0 restarts cleanly when the database is ahead of its own migrations. Check at the next restart, or ignore once a release with the spaces migrations is installed.",
-        "source": "session://3c609f46-c69f-4e98-8d61-3c25d42bee45 and https://github.com/willesq/orchestrator/pull/149",
+        "source": "a local session and https://github.com/willesq/orchestrator/pull/149",
         "raised": "2026-11-08",
         "affects": [],
         "status": "open"
@@ -899,7 +914,7 @@
         "kind": "follow-up",
         "topic": "Guard tests against the real data directory",
         "detail": "internal/daemon tests that call db.Open() without setting ORCH_DATA_DIR use the developer's real orch.db (how RC-23 happened). Proposal: a TestMain in packages that open orch.db sets a temporary ORCH_DATA_DIR, or db.Open refuses the default path under go test.",
-        "source": "session://3c609f46-c69f-4e98-8d61-3c25d42bee45 and https://github.com/willesq/orchestrator/pull/149",
+        "source": "a local session and https://github.com/willesq/orchestrator/pull/149",
         "raised": "2026-11-08",
         "affects": [],
         "status": "open"
@@ -909,7 +924,7 @@
         "kind": "decision",
         "topic": "Which space a queued task reads and writes",
         "detail": "SP-011 resolves a task's process to its live run (task ID, directory, session) from the process tree; a reported orch-task-id only marks a caller as a task. No feature decides a task's space (the dispatching session's pin, the placement of its cwd, or a space named at dispatch), and a task whose run orchd is not tracking (a verification run, a run in another worker) has no record and so resolves to no space. Decide before SP-025 enforces reads.",
-        "source": "session://3c609f46-c69f-4e98-8d61-3c25d42bee45 and https://github.com/willesq/orchestrator/pull/149",
+        "source": "a local session and https://github.com/willesq/orchestrator/pull/149",
         "raised": "2026-11-08",
         "affects": [
           "SP-011",
@@ -2372,7 +2387,7 @@
         "id": "RC-180",
         "kind": "user-action",
         "topic": "Run the Claude Code checks for SP-046 (a5, a7, a6's Claude side, 2.a2)",
-        "detail": "Needs real Claude Code sessions (haiku, about 15 short headless runs) using your Claude login read-only; they add transcripts under ~/.claude/projects for temp folders. Steps: (1) optional for a5's gh part: mkdir -p <dir> && GH_CONFIG_DIR=<dir> gh auth login (a job or test account). (2) optional for 2.a2: pick a folder L, run CLAUDE_CONFIG_DIR=L/joba/claude claude and /login once, then exit. (3) cd /Users/williamesquivel/code/willesq/orchestrator.worktrees/feat/sp-046-per-space-harness-settings && ORCH_CLAUDE_E2E=1 [ORCH_E2E_GH_PROFILE=<dir>] [ORCH_E2E_LAYOUT=L] go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1. The 'protect' probe also checks whether Claude Code's Edit deny on the settings files holds against a link or other-case path (security audit P-1; high if it fails).",
+        "detail": "Needs real Claude Code sessions (haiku, about 15 short headless runs) using your Claude login read-only; they add transcripts under ~/.claude/projects for temp folders. Steps: (1) optional for a5's gh part: mkdir -p <dir> && GH_CONFIG_DIR=<dir> gh auth login (a job or test account). (2) optional for 2.a2: pick a folder L, run CLAUDE_CONFIG_DIR=L/joba/claude claude and /login once, then exit. (3) cd <main checkout>.worktrees/feat/sp-046-per-space-harness-settings && ORCH_CLAUDE_E2E=1 [ORCH_E2E_GH_PROFILE=<dir>] [ORCH_E2E_LAYOUT=L] go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1. The 'protect' probe also checks whether Claude Code's Edit deny on the settings files holds against a link or other-case path (security audit P-1; high if it fails).",
         "source": "https://github.com/willesq/orchestrator/pull/171",
         "raised": "2026-11-12",
         "affects": [
@@ -3008,7 +3023,7 @@
           "SP-076"
         ],
         "status": "open",
-        "note": "Updated 2026-11-14 under D-65: does not apply until SP-076, since nothing can be declared public now. Review again when public_paths lets the operator list folders: a session can write into a listed folder."
+        "note": "Updated 2026-11-14 under D-65: does not apply until SP-076, since nothing can be declared public now. Review again when public_paths lets the operator list folders: a session can write into a listed folder. Updated 2026-11-14 under D-73: public_paths (SP-076) now lets the operator list folders, so a session can write into a listed folder, or create a folder a '*' or '**' pattern matches, and have it indexed into public; the user accepted this as an extension of this risk. Sandbox mitigation tracked in RC-805."
       },
       {
         "id": "RC-405",
@@ -3128,6 +3143,152 @@
         "status": "open"
       },
       {
+        "id": "RC-750",
+        "kind": "follow-up",
+        "topic": "INV-08 inside a collection needs reads to filter on labels_v",
+        "detail": "A relabel moves every stale chunk to its space's collection, so content stored in the base or in another space's collection is not read by a search of the spaces it belongs to. But after the operator applies a new revision, a chunk that stays in its own space's collection is stale and still readable there until the relabel stamps it: no read path filters on labels_v. SP-025 should add labels_v = applied revision to the second layer (spaceStore.must) for named spaces, or orchd should relabel right after each apply.",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-027"
+        ],
+        "status": "open",
+        "note": "Covered by SP-025 (in progress): the SP-025 lane was asked to filter reads on labels_v (2026-11-14)."
+      },
+      {
+        "id": "RC-751",
+        "kind": "decision",
+        "topic": "Session content stored before SP-023 whose transcript is gone is quarantined",
+        "detail": "The relabel places a session record or transcript stored without an origin by the session's pin only when the record names a transcript that is that session's own, where its harness keeps it (the check live writes get, against planted hand-off entries). Claude Code deletes old transcripts, so older sessions' records and transcripts go to quarantine. Option: trust the pin alone for writer=session chunks stored before SP-023 (the writer field is orchd's own, but pre-SP-023 hand-offs did not check transcript locations). Recommendation: keep quarantine; the operator retags what is wanted (SP-071).",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-023",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-752",
+        "kind": "follow-up",
+        "topic": "A relabelled source is embedded again at its next write",
+        "detail": "The write hash includes the space and labels_v, and the relabel cannot recompute it (a source's original text and write options are not stored), so the next write of a relabelled source is stored again rather than skipped as unchanged: one embedding per source after each relabel, and every revision applied makes every chunk stale. Option: store a placement-free write hash, or skip rewrites whose content hash matches and restamp them instead.",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-753",
+        "kind": "follow-up",
+        "topic": "Relabel of docs stored without an origin is paced by GitHub's lookup budget",
+        "detail": "Docs chunks stored before SP-023 carry no visibility, so the relabel asks GitHub about each repo through the shared repo lookups (30 per minute, shared with live placement; a dry run spends them too). A repo it cannot ask about stays stale and is counted as left stale; the operator runs the relabel again. Option: pace or batch relabel lookups separately, or use the docs sync's repo listing.",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-030"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-754",
+        "kind": "user-action",
+        "topic": "Run the relabel on the real store once 'orch rag relabel' lands",
+        "detail": "Agents never run it against the user's store. After the RPC and command land and a policy is applied: run 'orch rag relabel --dry-run', review the per-transition counts, then run it for real (repeat while it reports chunks left stale). Content stored before writers were recorded (2026-10-28), client notes, sessions whose transcripts are gone and conflicts go to quarantine, to be retagged (SP-071). Supersedes the action in RC-355.",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-025",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-755",
+        "kind": "follow-up",
+        "topic": "SP-027 security audit lows and accepted limits",
+        "detail": "From two security-audit rounds on the relabel (all medium findings fixed): (1) orchd's local log line for a source the placer could not place includes the placer's error, which can name its source URI (orchd's log already names paths elsewhere); (2) the stale-source list per collection is held in memory, one entry per source, and a source is moved whole: fine at 40,000 chunks, unbounded in principle; (3) a hand-off chunk stored without an origin is placed by the path it was edited at; a process that can write there could swap a link for a file before the relabel (documented in docs/internals/memory.md); (4) the report names spaces, so the planned Relabel RPC must be operator-only; (5) chunks with a stored origin reuse the visibility recorded at write time.",
+        "source": "https://github.com/willesq/orchestrator/pull/187",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-500",
+        "kind": "follow-up",
+        "topic": "Screen-share-safe mode does not cover the menu bar panel",
+        "detail": "SP-051's screen-share-safe mode (D-21) hides every pane but Spaces in the main window, disables the command palette and stops notifications, but the menu bar panel (TrayMenu.swift, outside SP-051's files) still lists every space's PRs and needs-you items when opened. Proposed: while SpacesOverviewModel.shareSafe is set, the panel shows only the enforcement banner and a 'Sharing only <space>' line, or filters PRs by owner using ListSpaces' github_orgs.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-055"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-501",
+        "kind": "follow-up",
+        "topic": "Counts the Overview cannot show yet",
+        "detail": "The Spaces pane shows no chunk counts per space (needs a collection per space, SP-024), counts quarantine as live sessions pinned to quarantine plus unconfirmed GitHub orgs rather than quarantined chunks (SP-028), and never shows relabel progress (SP-027): no RPC reports them. SpacesOverviewModel takes a relabel source and SpacesBadge already orders relabel last. Adding them needs fields in ListSpaces or SpacesStatus, an orchd.proto change for the coordinator to schedule.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-024",
+          "SP-027",
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-502",
+        "kind": "decision",
+        "topic": "How the app tells a conflict from other quarantine",
+        "detail": "SessionInfo has no placement outcome: a session in a conflict and one under no root are both pinned to 'quarantine'. The app asks ExplainPlacement about each live quarantined session's first folder (at most 20 per refresh) and counts 'conflict' answers as conflicts. That reflects the policy applied now, not the one at pin time. Options: (a) keep this; (b) add the pin's placement outcome to SessionInfo (orchd.proto change). Recommendation: (b) when the next proto change is scheduled.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-017"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-503",
+        "kind": "decision",
+        "topic": "What screen-share-safe mode hides beyond the Spaces pane",
+        "detail": "SP-051.1 a3 is tested on the Spaces pane's view models (SpacesOverviewModel and SpacesOverview hold only the chosen space; other spaces' data is dropped before it is stored). For the rest of the app, the window shows only the Spaces pane, the palette is off and notifications are not posted, but the other panes' models (PRs, tasks, docs, memory) keep loading every space's data in memory, undrawn. Options: (a) accept this reading; (b) also pause or clear those models while sharing. Recommendation: (a).",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-504",
+        "kind": "decision",
+        "topic": "'Not set up' dot on the Spaces row",
+        "detail": "As the design says, with no spaces policy applied the Spaces sidebar row shows a grey dot labelled 'Not set up'. Every install that does not use spaces sees it permanently. Options: (a) keep it; (b) show nothing until a draft exists. Recommendation: (a) until the setup wizard (SP-052) ships, then revisit.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-052"
+        ],
+        "status": "open"
+      },
+      {
         "id": "RC-800",
         "kind": "follow-up",
         "topic": "orch spaces explain is an alias of why; the matched pattern travels in the reason text",
@@ -3153,7 +3314,8 @@
           "SP-046",
           "SP-030"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14 with option (a): see D-73. Accepted as RC-404's accepted risk extended; the sandbox follow-up is RC-805."
       },
       {
         "id": "RC-802",
@@ -3192,6 +3354,19 @@
           "SP-076",
           "SP-020",
           "SP-022"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-805",
+        "kind": "follow-up",
+        "topic": "Sandbox rules should deny job sessions writes to public_paths folders",
+        "detail": "D-73 accepts that sessions can write into folders public_paths lists (or create folders a '*' or '**' pattern matches) and have them indexed into public. The planned mitigation: SP-046's per-checkout sandbox rules deny writes to every folder a public_paths pattern matches, and to the folders a '*' or '**' pattern could create, for the sessions of job (isolated) spaces. Patterns with wildcards need a rule form the sandbox can express (e.g. denying the pattern's literal prefix, or each existing matching folder refreshed on apply).",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046",
+          "SP-076"
         ],
         "status": "open"
       }
@@ -5259,7 +5434,7 @@
             }
           ],
           "evidence": [
-            "a2 (awaiting the user's review): light and dark snapshots rendered at 61d1f9c with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter OrchAppSnapshots` (offscreen, sample data, no orchd): /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/spaces-section-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/spaces-section-dark.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/enforcement-banner-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/enforcement-banner-dark.png (plus the menu bar panel's switches: /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/menu-bar-spaces-light.png, /private/tmp/claude-501/-Users-williamesquivel-code-willesq-orchestrator/477a4948-b24a-4e67-85e6-d3b6fd439156/scratchpad/laneD/shots/menu-bar-spaces-dark.png). Not yet reviewed by the user.",
+            "a2 (awaiting the user's review): light and dark snapshots rendered at 61d1f9c with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter OrchAppSnapshots` (offscreen, sample data, no orchd): <scratch>/laneD/shots/spaces-section-light.png, <scratch>/laneD/shots/spaces-section-dark.png, <scratch>/laneD/shots/enforcement-banner-light.png, <scratch>/laneD/shots/enforcement-banner-dark.png (plus the menu bar panel's switches: <scratch>/laneD/shots/menu-bar-spaces-light.png, <scratch>/laneD/shots/menu-bar-spaces-dark.png). Not yet reviewed by the user.",
             "a1 (awaiting the user): not yet observed. Supporting tests at 61d1f9c: EnforcementModelTests.everyLayerCanBeSwitchedToEachOfItsStates (6 layer x state changes plus back to default), switchingOffAsksFirstAndSendsOnlyOnConfirm, tighteningIsSentAtOnceAndTheSameStateIsNotSent, aRefusalStaysWithItsLayer, pollsAtTheIntervalOrJustAfterTheNextTimer; EnforcementSwitchTests.countdown; PlacementValidatorTests.enforcementRoundTrip (GetEnforcement/SetEnforcement over gRPC with for_seconds). SetEnforcement is operator-only, so the check must be run by the user from an app they opened, not from an agent session.",
             "a2: confirmed by user on 2026-11-14 after reviewing spaces-section and enforcement-banner snapshots, light and dark, regenerated from main at d1f44bb with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter OrchAppSnapshots` (D-70)."
           ]
@@ -5692,7 +5867,13 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestRelabelMakesStaleChunksReadableInTheirSpace (internal/rag): chunks stored unplaced or SP-023-placed in the base, and a chunk a revision change put in another space, are not found by a search of the space they belong to before the relabel and are found there after, each in its own space's collection with its vector unchanged. TestRelabelPlacesStoredContent (internal/daemon): orchd's relabel placer over the example policy, 17 stored sources (stored origin; docs, sources, hand-off and session URIs with no origin; client notes; no writer; links; unpinned sessions; a conflict) land in the expected space or quarantine (INV-03). Partial for INV-08: a stale chunk left in its own space's collection by a revision change stays readable there until reads filter on labels_v (RC-750).",
+            "a2: TestRelabelSecondRunChangesNothing: the second run reports Changed=0 and Stale=0 and sends no write request. TestIntegrationRelabel40k: the second run on real Qdrant 1.17.1 reports Changed=0.",
+            "a3: TestRelabelResumesAfterInterruption (a run stopped between copy and delete; a run cancelled part-way): count before = count after the resumed run, no source in two collections, a third run changes 0. TestRelabelChangedPlacementAfterInterruption: a source copied by a stopped run and then placed elsewhere, with a failed clean-up in between, ends in the second space only.",
+            "a4: TestRAGRelabelDryRunPrintsOnlyCountsAndSpaceNames (internal/cli): 'orch rag relabel --dry-run' sends Relabel with apply=false and its output contains only the report's fixed words, counts and space names. TestRelabelDryRunOutputHasOnlyCountsAndSpaceNames (internal/rag): a dry run sends no write request and rag.WriteRelabelReport names no source URI, chunk text or collection. TestRelabelRPC (internal/daemon): the RPC answers the operator with counts and space names only and refuses sessions and queued tasks.",
+            "Independent verifier (2 rounds, at 85bb60e): a1-a4 and DOD-1 to DOD-9 pass, with CI green (test, build, app). INV-03 holds; INV-08 is partial until reads filter on labels_v (RC-750, covered by SP-025)."
+          ]
         },
         {
           "id": "SP-027.2",
@@ -5706,18 +5887,21 @@
               "threshold": "<= 5 min"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestIntegrationRelabel40k (ORCH_QDRANT_BENCH=1, its own Qdrant 1.17.1 on 127.0.0.1:6471, temporary storage, collections sp-027-*): the SP-002 corpus of 40,000 chunks (384 dimensions) stored unplaced in one base collection, every chunk placed and moved with its vectors to one of four space collections: 35.7 s, and 36.0 s after the security-audit fixes. Threshold <= 5 min met.",
+            "Independent verifier: TestIntegrationRelabel40k rerun on its own engine, 40,000 chunks moved in 33.5 s."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "85bb60e",
+      "verified_at": "2026-11-15T00:57:05Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "4f938c395fd884456515aa918dc77679f7a6eeab255ddd19b523e7bfad99e52b",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-027-relabel",
+      "pr": "https://github.com/willesq/orchestrator/pull/187"
     },
     {
       "id": "SP-071",
@@ -6534,18 +6718,25 @@
               "threshold": "0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: confirmed by user on 2026-11-14 after reviewing the six spaces-pane snapshots (default, companion, share-safe; light and dark) (D-70). light and dark snapshots of the Spaces pane rendered at fd21259 with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter SpacesPaneSnapshots` (offscreen, sample data, no orchd) at the default pane width (790 pt, the detail column of the 980 pt window) and at the 320 pt companion width: <scratch>/sp051-shots/spaces-pane-default-light.png, <scratch>/sp051-shots/spaces-pane-default-dark.png, <scratch>/sp051-shots/spaces-pane-companion-light.png, <scratch>/sp051-shots/spaces-pane-companion-dark.png; plus screen-share-safe mode: <scratch>/sp051-shots/spaces-pane-share-safe-light.png, <scratch>/sp051-shots/spaces-pane-share-safe-dark.png. At 320 pt the AdaptiveSplit stacks spaces and sessions behind a Spaces/Sessions picker and the header wraps; nothing was seen clipped in the agent's own look.",
+            "a2: SpacesBadgeTests.badgeFollowsConflictsQuarantineDriftRelabel passes at fd21259: SpacesBadge.pick over all 16 combinations of conflicts, quarantine, drift and relabel picks the first present in that order (plus finished/empty relabel = none, 'Not set up' with no policy, a draft outranking it). SpacesBadgeTests.overviewBadgeFromData builds the badge from orchd-shaped data (sessions pinned to quarantine split by ExplainPlacement's conflict answer, unconfirmed GitHub orgs, drift, relabel) and gets the same order. The sidebar row maps it with SpacesBadge.sidebarStatus (MainWindow).",
+            "a3: SpacesOverviewTests.screenShareSafeModeHoldsNothingOfAnotherSpace passes at fd21259: a fixture of four spaces (acme, globex, personal, opensrc) with sessions, a conflict, quarantine, an unconfirmed org, drift, relabel progress and per-space counts, each name, path, org and count of a space other than acme distinct; in Advanced mode the model shows them all (checked), then after shareOnly(\"acme\") a dump of everything the model exposes (overview, space choices, badge and its label, lastError, shareSafe) contains 0 of 33 needles (other spaces' names, orgs, folders, session IDs, PIDs and counts), acme's own card and two sessions remain, and a reload in safe mode asks ExplainPlacement nothing. Related: screenShareSafeSurvivesARelaunchAndAFailedRead (mode kept across relaunch; a failed read leaves only acme and shows a fixed message), screenShareSafeFiltersOnOrchdNames (filtering uses orchd's names, not display-safe ones). The pane shows no PR titles; app-wide, safe mode shows only the Spaces pane in the window and companion column, turns off the palette and notifications (allowsNotifications); the menu bar panel is not covered (RC-500) and other panes' models keep data undrawn (RC-503).",
+            "DOD at fd21259 (self-check, before the independent verifier): swift test --package-path macos: 428 tests in 87 suites pass; make app-cover exit 0 (SpacesOverview.swift 98.75%, SpacesOverviewModel.swift 99.21%, DaemonClient+SpacesOverview.swift 100%); no Go files changed (gofmt n/a); go vet ./... exit 0; go test ./...: all packages pass except one run of internal/agentrun TestRunMeasuresFailedRuns (timing: 196 ms vs a 200 ms timeout; package untouched, passes 3 of 3 on rerun); git diff --check clean; security-audit subagent: 0 critical/high, 1 medium fixed (notifications posted while sharing; now suppressed via SpacesOverviewModel.allowsNotifications), 3 lows fixed (generic error while sharing, filtering on raw space names, session state through displaySafe); docs/internals/app.md updated.",
+            "DOD-9 (self-check): gh pr checks 181: app pass (8m48s) at b2972ab. The run at 8113355 failed in swift test under make app-cover; the likely cause, SpacesOverviewTests.pollsUntilStopped waiting a fixed 120 ms for two polls, now waits for the polls (passes 3 of 3 locally and in CI). No Go files changed, so only the app workflow runs.",
+            "Independent verifier (fresh subagent given only the diff origin/main...b2972ab, this feature's criteria, INV-02, INV-07 and definition_of_done) at b2972ab: a1 PASS (user-confirmed, D-70), a2 PASS, a3 PASS (0 of 34 other-space needles), DOD-1..DOD-9 PASS: swift test 428 tests pass (Spaces suites 5 more runs pass), make app-cover exit 0 (all 47 OrchKit files >= 80%), go test ./... exit 0 (55 packages), go vet exit 0, git diff --check clean, 5 signed Conventional Commits with no co-author lines, draft PR #181 in ~/.pr-watch.json, app.yml run 43639267665 success at b2972ab; INV-02 and INV-07 PASS. One low gap noted: the menu bar panel during a share (RC-500)."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "b2972abf56697e9a002bfaea39c74fd9069bcc42",
+      "verified_at": "2026-11-14T22:19:26Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "d333c497108cf22c6737d76f183dc518194e710e1181debafe67e5bf07ca670b",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-051-spaces-pane-overview",
+      "pr": "https://github.com/willesq/orchestrator/pull/181"
     },
     {
       "id": "SP-052",
@@ -7196,6 +7387,81 @@
       "criteria_sha256": "01ef9bae725c1b6ed0ccbd6b3194d8d30de872c6e7cceb59eb24d0db1046735b",
       "branch": "feat/sp-076-public-paths",
       "pr": "https://github.com/willesq/orchestrator/pull/189"
+    },
+    {
+      "id": "SP-077",
+      "phase": "P2",
+      "priority": 26.5,
+      "title": "Operator unlock confirmed in Orch.app (D-71)",
+      "summary": "Under a policy only Orch.app counts as the operator (D-71). 'orch spaces unlock --for <duration>' asks the operator to confirm in Orch.app and then grants operator scope to the requesting terminal for a bounded time. Orch.app is recognized by its code signature.",
+      "why": "RC-705: an agent can open its own pseudo-terminal and look like the operator at a terminal; RC-706: Orch.app was recognized by path; RC-707: operator-only RPCs ignored the evidence.",
+      "depends_on": [
+        "SP-025",
+        "SP-072"
+      ],
+      "touches": [
+        "internal/daemon/ (callers, operator evidence)",
+        "internal/cli/ (orch spaces unlock/lock)",
+        "internal/rpc/orchdv1/orchd.proto",
+        "macos/Sources"
+      ],
+      "docs_to_update": [
+        "docs/internals/daemon.md",
+        "docs/OPERATIONS.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-077.1",
+          "title": "Unlock confirmed in Orch.app",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "'orch spaces unlock --for <duration>' creates a pending request that grants nothing until it is confirmed in Orch.app; once confirmed, operator scope applies only to the requesting process and its descendants until the duration ends (at most 60 minutes) or 'orch spaces lock' ends it.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "An unlock request from a caller descended from a harness or from orchd is refused, and so is a confirmation that does not come from Orch.app.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "Orch.app counts as the operator only when its code signature matches the expected signing identity; an ad-hoc-signed copy or a binary at the same path with another signature is refused (RC-706).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "manual",
+              "check": "Orch.app shows each pending unlock with the requesting command and duration, confirm and deny work, and an active unlock shows its countdown.",
+              "measure": "observed",
+              "threshold": "true"
+            },
+            {
+              "id": "a5",
+              "type": "doc",
+              "check": "docs/internals/daemon.md and docs/OPERATIONS.md describe operator identity under D-71 and the unlock.",
+              "measure": "files changed in the diff",
+              "threshold": "both"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "f8afd77c35f69708b328a563d6ffe56f236a5b995bab7cf38f88735dbc4a4985",
+      "branch": null,
+      "pr": null
     }
   ],
   "criteria_hash_recipe": "criteria_sha256 = sha256 of json.dumps([{id, title, acceptance} for each checkpoint], sort_keys=True, separators=(',', ':'), ensure_ascii=False) encoded as UTF-8. 'evidence' is excluded so recording evidence does not change the hash.",
@@ -7311,13 +7577,21 @@
     {
       "date": "2026-11-14",
       "change": "D-65 to D-70: explicit public_paths (new feature SP-076), command log records its rules revision, SP-046's RC-215/216/217 settled, SP-051 a1 and SP-072 a2 approved, lane PRs merged before the remaining hands-on checks."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "D-71: only Orch.app is the operator under a policy, unlock to come (new feature SP-077); D-72: private strings already pushed are replaced with placeholders."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "SP-051 done: Spaces pane Overview, badge (conflicts > quarantine > drift > relabel), Basic/Advanced and screen-share-safe mode; a1 confirmed by the user (D-70); verified at b2972ab. RC-500 to RC-504 added."
     }
   ],
   "plan_location": {
     "repo_path": "docs/spaces/spaces-features.json",
     "reader": "docs/spaces/index.html",
     "authoritative_copy": "origin/main:docs/spaces/spaces-features.json",
-    "main_checkout": "/Users/williamesquivel/code/willesq/orchestrator",
+    "main_checkout": "<main checkout>",
     "note": "Status on origin/main is authoritative. A feature's status changes on its feature branch and reaches main when its PR merges.",
     "progress_file": {
       "path": "<main checkout>/docs/spaces/progress.<ID>.local.json",
@@ -7347,11 +7621,11 @@
     "superseded": "retired by an explicit user decision; kept for history, never deleted"
   },
   "session_procedure": [
-    "1. Sync. In the main checkout (/Users/williamesquivel/code/willesq/orchestrator) run `git fetch origin`. Read the plan from origin/main: `git show origin/main:docs/spaces/spaces-features.json`. That copy is authoritative for status; local copies may be stale.",
+    "1. Sync. In the main checkout (<main checkout>) run `git fetch origin`. Read the plan from origin/main: `git show origin/main:docs/spaces/spaces-features.json`. That copy is authoritative for status; local copies may be stale.",
     "2. Pick your feature. Under D-63 up to 5 lanes run in parallel, each a separate session on one feature. A lane session works only on the feature the coordinator assigned it in parallel_lanes.active (or, with no assignment, the first feature in ascending 'priority' whose status on origin/main is not 'done' or 'superseded' and that no active lane holds). Never work on two features in one session, never take a feature another lane holds, and never take one whose depends_on are not all 'done' on origin/main.",
     "3. Look for existing work on it. First read this feature's live progress file (<main checkout>/docs/spaces/progress.<ID>.local.json, e.g. progress.SP-024.local.json): if it names a different session_id with status 'in_progress' and updated_at less than 30 minutes ago, another session is working. Stop and tell the user. Then check branches and PRs: the branch is feat/<id in lowercase>-<short-slug> (e.g. feat/sp-020-spaces-config); run `git branch -a --list '*feat/<id>-*'` and `gh pr list --state all --search '<ID> in:title'`.",
     "3a. If an open PR exists whose plan copy already shows the feature 'done' with verification, it is waiting for the user to review and merge. Report the PR link and stop. Do not start the next feature.",
-    "3b. If a branch or open PR exists but the feature isn't done there, resume it: use its existing worktree under /Users/williamesquivel/code/willesq/orchestrator.worktrees/feat/..., or recreate it with ~/.claude/orchestrator/scripts/git_worktree_create.sh <branch> and answer 'y' to reuse the existing branch.",
+    "3b. If a branch or open PR exists but the feature isn't done there, resume it: use its existing worktree under <main checkout>.worktrees/feat/..., or recreate it with ~/.claude/orchestrator/scripts/git_worktree_create.sh <branch> and answer 'y' to reuse the existing branch.",
     "3c. If the PR was merged but origin/main doesn't show the feature done, or a PR was closed unmerged, stop and ask the user what happened.",
     "3d. If nothing exists, run ~/.claude/orchestrator/scripts/git_worktree_create.sh feat/<id>-<slug> from the main checkout and work only in that worktree.",
     "4. Preconditions. Every depends_on feature must be 'done' on origin/main, and no entry in decisions.open may list this feature in 'blocks'. If either fails, stop and tell the user. (Priority order makes the first case unexpected.)",
@@ -7362,7 +7636,7 @@
     "9. If the verifier reports any failure, fix it and verify again, up to 3 rounds; after that, set 'blocked'. If everything passes, set status 'done', passes=true, verified_sha to the commit that was verified, verified_at to the current UTC time (ISO 8601). Commit that change (signed) and push. Leave the PR as a draft; the user marks it ready and merges.",
     "10. Never delete, renumber or reorder features, checkpoints or acceptance items, and never edit acceptance criteria (criteria_sha256 detects it). Only the user may mark a feature 'superseded'. If you discover new work, describe it under 'Proposed new features' in the PR body; it is appended to the plan, with the next free ID, only after the user approves.",
     "11. Finish with a short report: the feature, its PR link, the verification result, what is waiting on the user, and which feature step 2 will pick next once this one is merged. Leave the live progress file with the final status ('done', 'blocked' or 'idle') and a note matching your report.",
-    "12. Record decisions as you go, until the last feature is done. A decision the user makes goes to decisions.confirmed_by_user with the next D-id and the date; only the coordinator assigns D-ids, so a lane reports the user's decision to the coordinator instead. Everything else that needs the user later goes to decisions.reconvene with the next free RC-id inside your lane's range in parallel_lanes (never outside it): proposed features or acceptance items (also listed in the PR body per step 10), low or accepted security findings, deferred follow-ups, unverified assumptions, and actions the user must take. Give each a kind (decision, follow-up or user-action), topic, detail, source (PR, issue or session URI), raised date, affects and status 'open'. Reconvene items never block work; an item the user settles moves to confirmed_by_user (or becomes a feature) and its status becomes 'resolved' with a note. Before reporting in step 11, check that your session's items are recorded.",
+    "12. Record decisions as you go, until the last feature is done. A decision the user makes goes to decisions.confirmed_by_user with the next D-id and the date; only the coordinator assigns D-ids, so a lane reports the user's decision to the coordinator instead. Everything else that needs the user later goes to decisions.reconvene with the next free RC-id inside your lane's range in parallel_lanes (never outside it): proposed features or acceptance items (also listed in the PR body per step 10), low or accepted security findings, deferred follow-ups, unverified assumptions, and actions the user must take. Give each a kind (decision, follow-up or user-action), topic, detail, source (a PR or issue URL; the repository is public, so never a session id, a local path or an agent name — write 'a local session' instead, D-72), raised date, affects and status 'open'. Reconvene items never block work; an item the user settles moves to confirmed_by_user (or becomes a feature) and its status becomes 'resolved' with a note. Before reporting in step 11, check that your session's items are recorded.",
     "13. Parallel lanes (D-63). A lane edits only its own feature object, its own RC range and its own progress file. When several lane PRs edit spaces-features.json, the later PR rebases on origin/main and keeps both sides; RC entries from different ranges are never renumbered. Only one lane at a time changes internal/rpc/orchdv1/orchd.proto or adds a numbered DB migration; the coordinator schedules them. Each lane uses its own ORCH_CONFIG_DIR, ORCH_DATA_DIR, socket and Qdrant collection prefix named after its feature (e.g. sp-024) and removes them when finished. Manual items and user decisions go through the coordinator, which asks the user and keeps docs/spaces/progress.local.json as the summary of all lanes for the reader."
   ],
   "local_safety": [
@@ -7380,61 +7654,46 @@
     },
     "active": [
       {
-        "feature": "SP-074",
-        "rc_range": "RC-300..RC-349",
-        "note": "done and verified at 4da29c1; PR #182 waits for the user"
+        "feature": "SP-025",
+        "rc_range": "RC-700..RC-749",
+        "note": "PR #188; RC-705/706/707 settled by D-71; resumed to make Orch.app the only operator under a policy"
       },
       {
-        "feature": "SP-024",
-        "rc_range": "RC-350..RC-399",
-        "note": "done and verified; PR #183 waits for the user; SP-025 and SP-027 start when it merges"
-      },
-      {
-        "feature": "SP-030",
-        "rc_range": "RC-400..RC-449",
-        "note": "resumed to implement D-65's safe default (all local content under public roots quarantined); PR #180"
-      },
-      {
-        "feature": "SP-048",
-        "rc_range": "RC-450..RC-499",
-        "note": "done and verified; PR #179 waits for the user"
+        "feature": "SP-076",
+        "rc_range": "RC-800..RC-849",
+        "note": "PR #189; waiting on the user's RC-801 decision"
       },
       {
         "feature": "SP-051",
         "rc_range": "RC-500..RC-549",
-        "note": "a1 approved (D-70); resumed for the independent verifier; PR #181"
-      },
-      {
-        "feature": "SP-045",
-        "rc_range": "RC-550..RC-599",
-        "note": "done and verified; PR #184 waits for the user"
-      },
-      {
-        "feature": "SP-075",
-        "rc_range": "RC-600..RC-649",
-        "note": "resumed for D-66's non-proto parts (migration slot); proto after #182 merges; PR #185"
-      },
-      {
-        "feature": "SP-046",
-        "rc_range": "RC-650..RC-699",
-        "note": "follow-up lane implementing D-67, D-68 and D-69 on a new branch, then audit and independent verifier"
+        "note": "done; PR #181 gets placeholder commits (D-72) before merging"
       }
     ],
-    "next_rc_block": "RC-700",
+    "next_rc_block": "RC-850",
     "queued": [
-      "SP-025 and SP-027 after #183 merges",
-      "SP-052 and SP-054 after #181 merges",
-      "SP-076 after SP-030 merges"
+      "SP-026, SP-029, SP-064 after SP-025",
+      "SP-077 after SP-025",
+      "SP-071, SP-028, SP-031 (SP-027 is done)",
+      "SP-052, SP-054 after #181"
     ],
     "d_ids_reserved": [],
-    "next_d_id": "D-71",
+    "next_d_id": "D-73",
     "proto_slot": {
-      "holder": "none (SP-074 finished editing at eff7585)",
-      "next": "SP-075, after PR #182 merges"
+      "holder": "none",
+      "next": "SP-025 if D-71 needs it, then SP-077"
     },
     "migration_slot": {
-      "holder": "SP-075",
-      "granted": "2026-11-14"
-    }
+      "holder": "none"
+    },
+    "completed": [
+      "SP-024 (#183)",
+      "SP-030 (#180)",
+      "SP-045 (#184)",
+      "SP-046 follow-ups (#186)",
+      "SP-048 (#179)",
+      "SP-074 (#182)",
+      "SP-075 (#185)",
+      "SP-027 (#187)"
+    ]
   }
 }

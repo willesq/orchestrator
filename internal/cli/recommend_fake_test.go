@@ -55,6 +55,15 @@ func (f *fakeClient) ReindexKeywords(_ context.Context, req *orchdv1.ReindexKeyw
 	return fakeReindex(req)
 }
 
+// fakeRelabel answers Relabel for every fakeClient.
+var fakeRelabel = func(*orchdv1.RelabelRequest) (*orchdv1.RelabelResponse, error) {
+	return &orchdv1.RelabelResponse{}, nil
+}
+
+func (f *fakeClient) Relabel(_ context.Context, req *orchdv1.RelabelRequest, _ ...grpc.CallOption) (*orchdv1.RelabelResponse, error) {
+	return fakeRelabel(req)
+}
+
 func (f *fakeClient) ListPRs(context.Context, *orchdv1.ListPRsRequest, ...grpc.CallOption) (*orchdv1.ListPRsResponse, error) {
 	return &orchdv1.ListPRsResponse{}, nil
 }

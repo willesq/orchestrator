@@ -38,6 +38,7 @@ const (
 	Orchd_MigrateHybrid_FullMethodName            = "/orchd.v1.Orchd/MigrateHybrid"
 	Orchd_DropBackup_FullMethodName               = "/orchd.v1.Orchd/DropBackup"
 	Orchd_ReindexKeywords_FullMethodName          = "/orchd.v1.Orchd/ReindexKeywords"
+	Orchd_Relabel_FullMethodName                  = "/orchd.v1.Orchd/Relabel"
 	Orchd_BackfillSessions_FullMethodName         = "/orchd.v1.Orchd/BackfillSessions"
 	Orchd_ListPRs_FullMethodName                  = "/orchd.v1.Orchd/ListPRs"
 	Orchd_GetGitHubIdentity_FullMethodName        = "/orchd.v1.Orchd/GetGitHubIdentity"
@@ -159,6 +160,11 @@ type OrchdClient interface {
 	// tokenizer made, from each chunk's stored text; counts unless apply.
 	// Resumable: chunks already re-indexed are skipped.
 	ReindexKeywords(ctx context.Context, in *ReindexKeywordsRequest, opts ...grpc.CallOption) (*ReindexKeywordsResponse, error)
+	// Relabel (SP-027) places every chunk whose labels_v is not the applied
+	// spaces policy revision again and stamps it, or moves it with its vectors
+	// to its space's collection; counts unless apply. Resumable. Operator only:
+	// the report names spaces.
+	Relabel(ctx context.Context, in *RelabelRequest, opts ...grpc.CallOption) (*RelabelResponse, error)
 	// BackfillSessions stores sessions again from their transcripts on disk.
 	BackfillSessions(ctx context.Context, in *BackfillSessionsRequest, opts ...grpc.CallOption) (*BackfillSessionsResponse, error)
 	// ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
@@ -581,6 +587,16 @@ func (c *orchdClient) ReindexKeywords(ctx context.Context, in *ReindexKeywordsRe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReindexKeywordsResponse)
 	err := c.cc.Invoke(ctx, Orchd_ReindexKeywords_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) Relabel(ctx context.Context, in *RelabelRequest, opts ...grpc.CallOption) (*RelabelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RelabelResponse)
+	err := c.cc.Invoke(ctx, Orchd_Relabel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1264,6 +1280,11 @@ type OrchdServer interface {
 	// tokenizer made, from each chunk's stored text; counts unless apply.
 	// Resumable: chunks already re-indexed are skipped.
 	ReindexKeywords(context.Context, *ReindexKeywordsRequest) (*ReindexKeywordsResponse, error)
+	// Relabel (SP-027) places every chunk whose labels_v is not the applied
+	// spaces policy revision again and stamps it, or moves it with its vectors
+	// to its space's collection; counts unless apply. Resumable. Operator only:
+	// the report names spaces.
+	Relabel(context.Context, *RelabelRequest) (*RelabelResponse, error)
 	// BackfillSessions stores sessions again from their transcripts on disk.
 	BackfillSessions(context.Context, *BackfillSessionsRequest) (*BackfillSessionsResponse, error)
 	// ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
@@ -1549,6 +1570,9 @@ func (UnimplementedOrchdServer) DropBackup(context.Context, *DropBackupRequest) 
 }
 func (UnimplementedOrchdServer) ReindexKeywords(context.Context, *ReindexKeywordsRequest) (*ReindexKeywordsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReindexKeywords not implemented")
+}
+func (UnimplementedOrchdServer) Relabel(context.Context, *RelabelRequest) (*RelabelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Relabel not implemented")
 }
 func (UnimplementedOrchdServer) BackfillSessions(context.Context, *BackfillSessionsRequest) (*BackfillSessionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BackfillSessions not implemented")
@@ -2088,6 +2112,24 @@ func _Orchd_ReindexKeywords_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).ReindexKeywords(ctx, req.(*ReindexKeywordsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_Relabel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RelabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).Relabel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_Relabel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).Relabel(ctx, req.(*RelabelRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3286,6 +3328,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReindexKeywords",
 			Handler:    _Orchd_ReindexKeywords_Handler,
+		},
+		{
+			MethodName: "Relabel",
+			Handler:    _Orchd_Relabel_Handler,
 		},
 		{
 			MethodName: "BackfillSessions",

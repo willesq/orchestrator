@@ -21,7 +21,7 @@ import (
 
 func newRAGCmd(cf clientFactory) *cobra.Command {
 	cmd := &cobra.Command{Use: "rag", Short: "Inspect and prune the RAG store's contents"}
-	cmd.AddCommand(newRAGSourcesCmd(cf), newRAGShowCmd(cf), newRAGForgetCmd(cf), newRAGEvalCmd(cf), newRAGMigrateCmd(cf), newRAGBackfillCmd(cf), newRAGDedupeCmd(cf), newRAGReindexCmd(cf), newRAGWhyCmd(cf))
+	cmd.AddCommand(newRAGSourcesCmd(cf), newRAGShowCmd(cf), newRAGForgetCmd(cf), newRAGEvalCmd(cf), newRAGMigrateCmd(cf), newRAGBackfillCmd(cf), newRAGDedupeCmd(cf), newRAGReindexCmd(cf), newRAGRelabelCmd(cf), newRAGWhyCmd(cf))
 	return cmd
 }
 
