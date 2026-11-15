@@ -1,0 +1,13 @@
+{
+  "id": "RC-1551",
+  "kind": "follow-up",
+  "topic": "Task-callable RPCs are no longer listed in one place",
+  "detail": "From the SP-081 security review (low): letting queued tasks call an RPC (taskRPC) is a security decision that now sits beside each handler instead of in one reviewed list. Proposed: review diffs for 'taskRPC(', or add a test that lists the task-callable RPCs so widening shows as a change to that one test (a shared line again, but one that rarely changes).",
+  "source": "https://github.com/willesq/orchestrator/pull/207",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-081",
+    "SP-025"
+  ],
+  "status": "open"
+}

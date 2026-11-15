@@ -574,7 +574,7 @@ only the operator may call it: queued tasks (D-19) and interactive sessions are 
 [memory.md](memory.md#chat-feeds).
 
 Every RPC has an entry in `readSpaceDecisions` (`internal/daemon/readspaces_registry.go`,
-SP-025.2): `filtered` (the four above and `SearchDirectMessages`), `operator` (refused to every caller but the operator),
+SP-025.2; registered beside its handler, see [Adding an RPC](#adding-an-rpc)): `filtered` (the four above and `SearchDirectMessages`), `operator` (refused to every caller but the operator),
 `own` (the caller's own data or public content), `records` (orch records other than memory,
 [kept by space](#records-by-space)) or `none`. A test fails for an RPC with no entry, as for one
 missing from `taskCallable` and `operatorActions`.
@@ -1193,6 +1193,35 @@ open to queued tasks (`taskCallable`).
 Dispatch inserts the ledger row before creating the workflow (a row without a workflow is
 diagnosable; the reverse is invisible), redacts the body, assigns `task-<uuid>`, and snapshots git
 HEADs of the task's repository for later verification.
+
+### Adding an RPC
+
+No shared registration line changes when an RPC is added (SP-081), so features built in parallel
+edit their own files:
+
+- **Caller class and space decision:** just above the handler, in the handler's file under
+  `internal/daemon/`, `var _ = registerRPCs(taskRPC(method, decision))` or
+  `operatorRPC(method, action, decision)` (`rpc_registry.go`). The registrations fill
+  `taskCallable` and `operatorActions` (`callers.go`) and `readSpaceDecisions`
+  (`readspaces_registry.go`), which are declared empty; Go fills them before any initializer that
+  uses them, so every entry is in place before orchd serves. A second claim on an RPC, an operator
+  RPC without an action or a registration without a method panics at start.
+  `TestEveryRPCIsClassified` and `TestEveryRPCHasASpaceDecision` check the filled maps against the
+  served RPCs, so an RPC registered nowhere still fails them, and
+  `TestEachRPCRegistersBesideItsHandler` fails for an RPC registered twice, in another file than
+  its handler, or listed in one of the maps' literals.
+- **Test fakes:** the `fakeClient` in `internal/cli`, `internal/hook` and `internal/mcpserver`
+  embeds a nil `orchdv1.OrchdClient`, so an RPC the fake does not stub needs no edit there; a test
+  that calls one panics. A test that needs an answer stubs the method in a
+  `<feature>_fake_test.go` file.
+- **Still shared:** the RPC itself in `orchd.proto` and its generated code (keep both sides of a
+  conflict and run `make proto`), the handler's dependencies in `server` and `Run` in
+  `daemon.go`, and a supervised unit in `subsystems.go`.
+
+`scripts/check-registration-merge.sh [REF]` clones the committed tree, adds a fixture RPC
+registration and app model on each of two branches, merges them and builds the result; it fails
+on a conflict or an edit to an existing file, and checks that the served-RPC tests reject the
+fixtures' RPCs, which are not in `orchd.proto` (`SWIFT=1` also builds the app).
 
 ## Supervised subsystems
 

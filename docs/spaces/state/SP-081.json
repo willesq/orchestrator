@@ -1,14 +1,19 @@
 {
   "id": "SP-081",
-  "status": "todo",
-  "passes": false,
-  "verified_sha": null,
-  "verified_at": null,
+  "status": "done",
+  "passes": true,
+  "verified_sha": "0fb9e33af2c507501ff79b86b72c2c704dbbb80e",
+  "verified_at": "2026-11-15T15:21:52Z",
   "blocked_reason": null,
-  "attempts": 0,
-  "branch": null,
-  "pr": null,
+  "attempts": 1,
+  "branch": "feat/sp-081-split-registration",
+  "pr": "https://github.com/willesq/orchestrator/pull/207",
   "evidence": {
-    "SP-081.1": []
+    "SP-081.1": [
+      "a1: at 0fb9e33 each of orchd's 91 RPCs registers its caller class and space decision with one registerRPCs(taskRPC|operatorRPC) line above its handler, in the handler's file; taskCallable, operatorActions and readSpaceDecisions are declared empty. TestEachRPCRegistersBesideItsHandler (internal/daemon/rpc_registry_test.go) parses the package and fails for an RPC registered twice, away from its handler's file, or listed in one of the three map literals (checked by mutation: a moved, a deleted and a re-listed entry each fail it). A dump of the three maps is byte-identical before and after the move at each catch-up merge (25 task-callable, 66 operator-only, 91 decisions at a8cb28a). TestRegistrationFillsEveryTable, TestRegistrationRefusesConflicts and TestRegisterRPCsFillsOrchdsMaps cover registerRPCs, which panics on a second claim, an operator RPC without an action or a missing method.",
+      "a2: scripts/check-registration-merge.sh clones the committed tree, adds on each of two branches a fixture RPC registration (with a test that it registered) and an Orch.app model (an OrchKit API protocol with DaemonClient's conformance, an AppClient accessor, UnreachableDaemon's conformance and an AppModel property kept in FeatureStore), merges them and fails on a conflict or an edit to an existing file. With SWIFT=1 at 0fb9e33 it reports 'merged without conflict (8 files added)', go vet passes, TestFixtureAlphaRegistered and TestFixtureBetaRegistered pass, the served-RPC checks reject both fixtures' unserved RPCs, and the app builds. The test fakes in internal/cli, hook and mcpserver embed a nil orchdv1.OrchdClient, so a new RPC needs no fake edit.",
+      "a3: TestUnregisteredRPCFailsTheSpaceCheck: with RetagSource's registration left out of a copy of the filled maps, missingDecisions (the check TestEveryRPCHasASpaceDecision runs) names RetagSource and nothing else, and orchd's own maps miss nothing. The independent verifier removed RetagSource's registration and TestEveryRPCHasASpaceDecision failed ('/orchd.v1.Orchd/RetagSource has no entry in readSpaceDecisions'); TestRegistryCatchesAMissingRPC still passes.",
+      "a4: docs/internals/daemon.md 'Adding an RPC' (registration beside the handler, what panics, the tests that check it, the embedded fake client, what stays shared, the merge check) and docs/internals/app.md 'Adding a feature' (AppClient accessor, UnreachableDaemon conformance, FeatureStore model, per-feature fake orchd services); docs/internals/settings.md updated for the moved operator-only entries."
+    ]
   }
 }

@@ -41,6 +41,10 @@ var maxSummaryDirs = 500
 var errToolLogRefused = grpcstatus.Error(codes.PermissionDenied,
 	"a session can read only its own command log; the operator reads any: run the command in a terminal outside any agent session")
 
+// ListToolEvents gives a task only its own task's command log.
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListToolEvents_FullMethodName,
+	spaceDecision{spaceOwn, "the caller's own command log; the operator's is everyone's (INV-12)"}))
+
 // ListToolEvents returns a page of one owner's chain, if the caller may
 // read it (INV-12).
 func (s *server) ListToolEvents(ctx context.Context, req *orchdv1.ListToolEventsRequest) (*orchdv1.ListToolEventsResponse, error) {
@@ -193,6 +197,10 @@ func toolEventProto(r toollog.Record) *orchdv1.ToolEvent {
 		ClaimedSession: r.ClaimedSession,
 	}
 }
+
+// Reason: the summary names every space and its activity.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SummarizeToolLog_FullMethodName, "summarize the command log",
+	spaceDecision{spaceOperator, "every space's activity"}))
 
 // SummarizeToolLog sums the command log per space over a window. It names
 // every space and so is the operator's alone.

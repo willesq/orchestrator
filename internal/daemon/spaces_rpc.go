@@ -16,6 +16,12 @@ import (
 	"github.com/willesq/orchestrator/internal/spaces"
 )
 
+// Reason: the policy names every space's orgs and roots, which a task in
+// one job must not learn about another; ApplySpaces is also refused to
+// interactive harness sessions (refuseNonOperator).
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SetSpacesDraft_FullMethodName, "change the spaces policy",
+	spaceDecision{spaceNone, "saves a draft and its problems"}))
+
 func (s *server) SetSpacesDraft(ctx context.Context, req *orchdv1.SetSpacesDraftRequest) (*orchdv1.SpacesDraft, error) {
 	if s.spaces == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "spaces are unavailable")
@@ -34,6 +40,9 @@ func (s *server) SetSpacesDraft(ctx context.Context, req *orchdv1.SetSpacesDraft
 	log.Printf("orchd: spaces draft revision %d saved by %s", r.Number, callerLabel(ctx))
 	return &orchdv1.SpacesDraft{Revision: r.Number, Sha256: r.SHA256, Problems: problemsProto(problems)}, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_DiffSpaces_FullMethodName, "read the spaces policy",
+	spaceDecision{spaceOperator, "the whole spaces policy"}))
 
 func (s *server) DiffSpaces(ctx context.Context, _ *orchdv1.DiffSpacesRequest) (*orchdv1.SpacesDiff, error) {
 	if err := refuseNonOperator(ctx, orchdv1.Orchd_DiffSpaces_FullMethodName, "read the spaces policy"); err != nil {
@@ -59,6 +68,9 @@ func (s *server) DiffSpaces(ctx context.Context, _ *orchdv1.DiffSpacesRequest) (
 	}
 	return out, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ApplySpaces_FullMethodName, "apply the spaces policy",
+	spaceDecision{spaceOperator, "applies the policy"}))
 
 func (s *server) ApplySpaces(ctx context.Context, req *orchdv1.ApplySpacesRequest) (*orchdv1.ApplySpacesResponse, error) {
 	if err := refuseNonOperator(ctx, orchdv1.Orchd_ApplySpaces_FullMethodName, "apply the spaces policy"); err != nil {

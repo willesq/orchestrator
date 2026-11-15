@@ -37,6 +37,9 @@ func docOwnerPB(o docs.Owner) *orchdv1.DocOwner {
 	}
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ListDocsOwners_FullMethodName, "read docs owners (use ListDocs)",
+	spaceDecision{spaceRecords, "docs owners and their repo choices, by their owner's space (SP-026, RC-700)"}))
+
 func (s *server) ListDocsOwners(ctx context.Context, _ *orchdv1.ListDocsOwnersRequest) (*orchdv1.ListDocsOwnersResponse, error) {
 	if s.docsReg == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "docs registry unavailable")
@@ -66,6 +69,9 @@ func (s *server) ListDocsOwners(ctx context.Context, _ *orchdv1.ListDocsOwnersRe
 	}
 	return out, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ListDocsOwnerRepos_FullMethodName, "ask orchd to list repos on GitHub",
+	spaceDecision{spaceRecords, "an owner's repos on GitHub; another space's owner is NotFound (SP-026, RC-700)"}))
 
 func (s *server) ListDocsOwnerRepos(ctx context.Context, req *orchdv1.ListDocsOwnerReposRequest) (*orchdv1.ListDocsOwnerReposResponse, error) {
 	if s.docsGH == nil {
@@ -100,6 +106,9 @@ func (s *server) ListDocsOwnerRepos(ctx context.Context, req *orchdv1.ListDocsOw
 	}
 	return out, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SaveDocsOwner_FullMethodName, "change which docs are synced",
+	spaceDecision{spaceNone, "saves a docs owner, only from its org's space (SP-026)"}))
 
 func (s *server) SaveDocsOwner(ctx context.Context, req *orchdv1.SaveDocsOwnerRequest) (*orchdv1.DocOwner, error) {
 	if s.docsReg == nil {
@@ -147,6 +156,9 @@ func (s *server) saveDocsOwner(ctx context.Context, owner string, choice docs.Ch
 	return s.docsReg.SetChoice(ctx, owner, choice)
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_RemoveDocsOwner_FullMethodName, "change which docs are synced",
+	spaceDecision{spaceNone, "removes a docs owner, only from its org's space; a purge is Orch.app's under a policy (SP-026, D-77)"}))
+
 func (s *server) RemoveDocsOwner(ctx context.Context, req *orchdv1.RemoveDocsOwnerRequest) (*orchdv1.PurgeDocsResponse, error) {
 	if s.docsReg == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "docs registry unavailable")
@@ -192,6 +204,9 @@ func (s *server) RemoveDocsOwner(ctx context.Context, req *orchdv1.RemoveDocsOwn
 
 var errPurgeUnconfirmed = grpcstatus.Error(codes.FailedPrecondition,
 	"refusing to delete indexed docs without confirm=true: this is permanent and cannot be undone")
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_PurgeDocs_FullMethodName, "delete from the RAG store",
+	spaceDecision{spaceNone, "deletes synced docs; under a policy Orch.app's alone (D-77)"}))
 
 func (s *server) PurgeDocs(ctx context.Context, req *orchdv1.PurgeDocsRequest) (*orchdv1.PurgeDocsResponse, error) {
 	if s.docsReg == nil {

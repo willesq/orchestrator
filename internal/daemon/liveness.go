@@ -257,6 +257,11 @@ func (s *server) runSessionSweeps(ctx context.Context, every time.Duration) {
 	}
 }
 
+// Reason: a task has no session row, and the list names other sessions'
+// spaces and directories (ListSessions also answers a task with none).
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ListSessions_FullMethodName, "list sessions",
+	spaceDecision{spaceOwn, "a session's own row; the operator's are every session's"}))
+
 // ListSessions lists the sessions the caller may see. The operator sees
 // every pin and every running harness process with no pin; a session's
 // caller sees only its own row; anyone else sees none. Queued tasks are

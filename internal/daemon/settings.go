@@ -60,6 +60,9 @@ func settingsUnit(svc *settings.Service) supervisor.Unit {
 	}
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListSettings_FullMethodName,
+	spaceDecision{spaceRecords, "managed harness settings (RC-1250)"}))
+
 func (s *server) ListSettings(ctx context.Context, req *orchdv1.ListSettingsRequest) (*orchdv1.ListSettingsResponse, error) {
 	if s.settings == nil {
 		return nil, settingsUnavailable
@@ -91,6 +94,11 @@ func (s *server) ListSettings(ctx context.Context, req *orchdv1.ListSettingsRequ
 	return out, nil
 }
 
+// Reason: a hook is a command Claude Code runs and a permission rule
+// widens what agents may do, so changing either is the operator's call.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SetSettingEnabled_FullMethodName, "change Claude Code, cc-safety-net or instruction, subagent and skill settings",
+	spaceDecision{spaceNone, "changes a harness setting"}))
+
 func (s *server) SetSettingEnabled(ctx context.Context, req *orchdv1.SetSettingEnabledRequest) (*orchdv1.SettingItem, error) {
 	if s.settings == nil {
 		return nil, settingsUnavailable
@@ -105,6 +113,9 @@ func (s *server) SetSettingEnabled(ctx context.Context, req *orchdv1.SetSettingE
 	return settingItemPB(s.settings.Registry().Get(r.Provider), r), nil
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_AddSetting_FullMethodName, "change Claude Code, cc-safety-net or instruction, subagent and skill settings",
+	spaceDecision{spaceNone, "adds a harness setting"}))
+
 func (s *server) AddSetting(ctx context.Context, req *orchdv1.AddSettingRequest) (*orchdv1.SettingItem, error) {
 	if s.settings == nil {
 		return nil, settingsUnavailable
@@ -115,6 +126,9 @@ func (s *server) AddSetting(ctx context.Context, req *orchdv1.AddSettingRequest)
 	}
 	return settingItemPB(s.settings.Registry().Get(r.Provider), r), nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_RemoveSetting_FullMethodName, "change Claude Code, cc-safety-net or instruction, subagent and skill settings",
+	spaceDecision{spaceNone, "removes a harness setting"}))
 
 func (s *server) RemoveSetting(ctx context.Context, req *orchdv1.RemoveSettingRequest) (*orchdv1.RemoveSettingResponse, error) {
 	if s.settings == nil {

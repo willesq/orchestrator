@@ -50,6 +50,11 @@ func newLandingService(store *landing.Store, tasks taskReader, gh *github.Servic
 	return svc
 }
 
+// Reason: landing is the user's gate on what an agent proposed, so an
+// agent must not reach it; a transcript may quote other tasks' secrets.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_GetTaskActivity_FullMethodName, "read other sessions' activity",
+	spaceDecision{spaceRecords, "a task's transcript; another space's task has none (SP-026)"}))
+
 func (s *server) GetTaskActivity(ctx context.Context, req *orchdv1.GetTaskActivityRequest) (*orchdv1.TaskActivity, error) {
 	if req.GetId() == "" {
 		return nil, grpcstatus.Error(codes.InvalidArgument, "task id required")
@@ -95,6 +100,9 @@ func (s *server) landingService() (*landing.Service, error) {
 	return s.landing, nil
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_GetPRLanding_FullMethodName, "read PR landings",
+	spaceDecision{spaceRecords, "a PR landing, by its task's and PR's spaces (SP-026)"}))
+
 func (s *server) GetPRLanding(ctx context.Context, req *orchdv1.PRLandingRequest) (*orchdv1.PRLanding, error) {
 	svc, err := s.landingService()
 	if err != nil {
@@ -120,6 +128,9 @@ func (s *server) seesLanding(ctx context.Context, scope readScope, id, url strin
 	return (url == "" || scope.seesGitHubURL(url)) && s.seesTask(ctx, scope, id)
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ListPRLandings_FullMethodName, "read PR landings",
+	spaceDecision{spaceRecords, "PR landings, by their tasks' and PRs' spaces (SP-026)"}))
+
 func (s *server) ListPRLandings(ctx context.Context, _ *orchdv1.ListPRLandingsRequest) (*orchdv1.ListPRLandingsResponse, error) {
 	svc, err := s.landingService()
 	if err != nil {
@@ -140,6 +151,9 @@ func (s *server) ListPRLandings(ctx context.Context, _ *orchdv1.ListPRLandingsRe
 	return out, nil
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_LandPR_FullMethodName, "push proposed commits",
+	spaceDecision{spaceNone, "pushes proposed commits"}))
+
 func (s *server) LandPR(ctx context.Context, req *orchdv1.LandPRRequest) (*orchdv1.PRLanding, error) {
 	svc, err := s.landingService()
 	if err != nil {
@@ -148,6 +162,9 @@ func (s *server) LandPR(ctx context.Context, req *orchdv1.LandPRRequest) (*orchd
 	return landingResult(svc.Land(ctx, req.GetTaskId(), req.GetSha()))
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_UndoPRLanding_FullMethodName, "push proposed commits",
+	spaceDecision{spaceNone, "undoes a landing"}))
+
 func (s *server) UndoPRLanding(ctx context.Context, req *orchdv1.PRLandingRequest) (*orchdv1.PRLanding, error) {
 	svc, err := s.landingService()
 	if err != nil {
@@ -155,6 +172,9 @@ func (s *server) UndoPRLanding(ctx context.Context, req *orchdv1.PRLandingReques
 	}
 	return landingResult(svc.Undo(ctx, req.GetTaskId()))
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_DiscardPRLanding_FullMethodName, "decide PR landings",
+	spaceDecision{spaceNone, "discards a landing"}))
 
 func (s *server) DiscardPRLanding(ctx context.Context, req *orchdv1.DiscardPRLandingRequest) (*orchdv1.PRLanding, error) {
 	svc, err := s.landingService()

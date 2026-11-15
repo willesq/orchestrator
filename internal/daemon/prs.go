@@ -13,6 +13,9 @@ import (
 	"github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListPRs_FullMethodName,
+	spaceDecision{spaceRecords, "cached PRs, by their repo owner's space (SP-026)"}))
+
 // ListPRs serves the PR babysitter's cache. It reads the file the babysitter
 // writes and never calls gh, so it is cheap enough to poll.
 func (s *server) ListPRs(ctx context.Context, req *orchdv1.ListPRsRequest) (*orchdv1.ListPRsResponse, error) {
@@ -72,6 +75,9 @@ func (s *server) profileItemsHidden(ctx context.Context) func(repo string) bool 
 		return hide
 	}
 }
+
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListGitHubItems_FullMethodName,
+	spaceDecision{spaceRecords, "cached GitHub items, by their repo owner's space (SP-026)"}))
 
 // ListGitHubItems serves the watcher's cache of PRs and issues, optionally for
 // one kind or owner. Like ListPRs it never calls gh.

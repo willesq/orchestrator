@@ -12,6 +12,12 @@ import (
 	"github.com/willesq/orchestrator/internal/spaces"
 )
 
+// Reason (SP-050): like DiffSpaces, these name every job's orgs, roots
+// and checkouts; both are also refused to interactive harness sessions
+// (refuseNonOperator).
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ListSpaces_FullMethodName, "list the spaces",
+	spaceDecision{spaceOperator, "every space's orgs, roots and checkouts"}))
+
 // ListSpaces lists the applied policy's spaces for the Spaces pane (SP-050).
 // When the applied policy cannot be read the reply carries the status, whose
 // error says why, and no spaces.
@@ -68,6 +74,9 @@ func (s *server) ListSpaces(ctx context.Context, _ *orchdv1.ListSpacesRequest) (
 func loginPB(l loginState) *orchdv1.LoginState {
 	return &orchdv1.LoginState{Own: l.Own, Dir: l.Dir, State: l.State, Account: l.Account, Storage: l.Storage, Detail: l.Detail}
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ScanSpaces_FullMethodName, "scan folders for spaces",
+	spaceDecision{spaceOperator, "folders found on disk"}))
 
 // ScanSpaces walks the folders the operator chose and reports what it finds
 // (SP-050). See spaceScanner for what it reads; it writes nothing.

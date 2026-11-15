@@ -16,6 +16,10 @@ import (
 )
 
 type fakeClient struct {
+	// OrchdClient is nil: it only supplies the RPCs this fake does not
+	// stub, so a new RPC needs no edit here or in a <feature>_fake_test.go
+	// file until a test calls it, when the call panics (SP-081).
+	orchdv1.OrchdClient
 	listSources  *orchdv1.ListSourcesResponse
 	deleteSource *orchdv1.DeleteSourceResponse
 	listTasks    *orchdv1.ListTasksResponse

@@ -1,0 +1,12 @@
+{
+  "id": "RC-1553",
+  "kind": "follow-up",
+  "topic": "Remaining shared points after SP-081",
+  "detail": "Still shared after SP-081: orchd.proto and its generated code (keep both sides, make proto), handler dependencies in server and Run (daemon.go) and units in subsystems.go, AppModel.start() for a feature that runs from launch, views, and the filtered-read count in TestEveryRPCHasASpaceDecision. scripts/check-registration-merge.sh is not run in CI. Proposed: decide whether to split daemon wiring further and whether to run the merge check in CI.",
+  "source": "https://github.com/willesq/orchestrator/pull/207",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-081"
+  ],
+  "status": "open"
+}

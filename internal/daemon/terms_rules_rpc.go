@@ -17,11 +17,21 @@ import (
 // rulesHistoryLimit is how many changes ListOutboundRules returns.
 const rulesHistoryLimit = 50
 
+// Reason: rules are listed by id and kind only, never a value
+// (INV-07); the history and who changed them go to the operator only.
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListOutboundRules_FullMethodName,
+	spaceDecision{spaceOwn, "rule summaries without values; the operator also sees who set them"}))
+
 // ListOutboundRules lists the rules without any value (INV-07). Open to
 // every caller; who changed them, and the history, only to the operator.
 func (s *server) ListOutboundRules(ctx context.Context, _ *orchdv1.ListOutboundRulesRequest) (*orchdv1.OutboundRules, error) {
 	return s.outboundRulesProto(ctx), nil
 }
+
+// Reason (SP-075): the rules decide what the outbound terms check
+// refuses; also refused to interactive harness sessions.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ChangeOutboundRule_FullMethodName, "change the outbound rules",
+	spaceDecision{spaceOperator, "changes an outbound rule"}))
 
 // ChangeOutboundRule makes one change, as the operator only (INV-06).
 func (s *server) ChangeOutboundRule(ctx context.Context, req *orchdv1.ChangeOutboundRuleRequest) (*orchdv1.ChangeOutboundRuleResponse, error) {

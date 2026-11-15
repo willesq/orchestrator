@@ -14,6 +14,25 @@ lives in [`macos/`](../../macos/), a Swift package.
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 | `OrchAppSnapshots` | Renders app views to PNGs in light and dark from sample data, with no orchd; runs only when `ORCH_SNAPSHOT_DIR` is set (see [Snapshots](#snapshots)) |
 
+### Adding a feature
+
+`AppModel` (`OrchApp.swift`) holds the models of the features that predate SP-081. A feature
+added since then changes none of its lines, so features built in parallel add files:
+
+- **API:** a protocol and `extension DaemonClient: <Feature>API` in OrchKit
+  (`DaemonClient+<Feature>.swift`). In the app, the feature's own file adds an accessor on
+  `AppClient` (`AppClient.swift`: the live client or `UnreachableDaemon`, the stand-in used when
+  the transport cannot be built) that returns either case as `any <Feature>API`, and
+  `extension UnreachableDaemon: <Feature>API`, whose methods `throw failure`. The compiler checks
+  that both conform. `AppClient.core` is the composition the older models share; it gains no new
+  protocol.
+- **Model:** an `extension AppModel` property that returns
+  `features.get { <Feature>Model(api: client.<feature>) }`. `FeatureStore` (OrchKit) builds it on
+  first use and keeps that one instance; a build may ask for other features but not for itself.
+  A feature that must run from launch asks for itself once in `AppModel.start()`.
+- **Fake orchd:** the feature's tests serve its RPCs from their own `RegistrableRPCService`
+  through `withFakeOrchd(services:)` instead of adding to `FakeOrchdService`.
+
 ## Connection
 
 - **Socket path:** the same as `internal/paths`: `ORCH_SOCKET`, else `ORCH_DATA_DIR/orchd.sock`,

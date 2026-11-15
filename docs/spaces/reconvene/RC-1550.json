@@ -1,0 +1,12 @@
+{
+  "id": "RC-1550",
+  "kind": "follow-up",
+  "topic": "Seal the RPC registry once orchd serves",
+  "detail": "From the SP-081 security review (low): registerRPCs writes taskCallable, operatorActions and readSpaceDecisions without a lock; it is safe only because every call is a package-level initializer. Proposed: a flag set when orchd starts serving that makes a later registration panic.",
+  "source": "https://github.com/willesq/orchestrator/pull/207",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-081"
+  ],
+  "status": "open"
+}
