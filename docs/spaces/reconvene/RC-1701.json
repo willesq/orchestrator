@@ -1,0 +1,14 @@
+{
+  "id": "RC-1701",
+  "kind": "follow-up",
+  "topic": "Run the Teams connector from orchd",
+  "detail": "SP-062 adds the connector (teams.Connector, teams.AzRest, teams.OpenState) but, like SP-060 (RC-1451), nothing runs it. Proposed new feature, best done once for Slack and Teams after SP-061 and SP-062 land: an orchd unit that runs each connector on a schedule with feeds.AllowlistFrom(settings.Feeds.Chat); settings for the Teams profile directory (az login) and where the connector keeps its state file (orchd's data dir); a check that the profile directory is the user's alone (github.CheckProfileDir generalized, since its error names a gh profile); and the profile's status (teams.AzRest.Status: tenant and account, never a token) in orch status and Orch.app. Credentials stay with az in the profile directory. From the PR security review (lows): run a profile's syncs one at a time (the state file has no lock), give each az call its own deadline, and require an absolute az path and profile directory when wiring it up rather than az from orchd's PATH.",
+  "source": "https://github.com/willesq/orchestrator/pull/211",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-062",
+    "SP-061",
+    "SP-060"
+  ],
+  "status": "open"
+}

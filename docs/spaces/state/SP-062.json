@@ -7,7 +7,7 @@
   "blocked_reason": null,
   "attempts": 1,
   "branch": "feat/sp-062-teams-connector",
-  "pr": null,
+  "pr": "https://github.com/willesq/orchestrator/pull/211",
   "evidence": {
     "SP-062.1": []
   }
