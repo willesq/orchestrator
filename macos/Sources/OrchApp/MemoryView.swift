@@ -5,12 +5,15 @@ struct MemoryView: View {
     let search: SearchModel
     let sources: SourcesModel
 
+    /// The direct-message search (SP-083), from the window's environment.
+    @Environment(DirectMessageSearchModel.self) private var directMessages: DirectMessageSearchModel?
+
     @State private var tab = Tab.search
 
     enum Tab: String, CaseIterable {
         // "Indexed": every source held in memory, not the registered
         // sources the Sources tab manages.
-        case search = "Search", sources = "Indexed"
+        case search = "Search", sources = "Indexed", directMessages = "Direct messages"
     }
 
     var body: some View {
@@ -18,6 +21,8 @@ struct MemoryView: View {
             switch tab {
             case .search: SearchPane(model: search, sources: sources)
             case .sources: SourcesPane(model: sources)
+            case .directMessages:
+                if let directMessages { DirectMessageSearchView(model: directMessages) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -25,7 +30,7 @@ struct MemoryView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Picker("View", selection: $tab) {
-                    ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    ForEach(tabs, id: \.self) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -33,6 +38,11 @@ struct MemoryView: View {
             }
         }
     }
+}
+
+extension MemoryView {
+    /// The tabs offered: Direct messages only where its model is provided.
+    var tabs: [Tab] { directMessages == nil ? Tab.allCases.filter { $0 != .directMessages } : Tab.allCases }
 }
 
 private struct SearchPane: View {

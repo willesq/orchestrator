@@ -39,6 +39,12 @@ type Hit struct {
 	// Trust is the tier its writer gave it (TrustRepo, ...); empty for content
 	// stored before writers were recorded, which readers treat as unverified.
 	Trust string
+	// Space is the stored payload's space, as the placer set it; empty for
+	// content stored without one.
+	Space string
+	// Tenant is a chat chunk's tenant from its stored origin,
+	// "<system>:<tenant>" (Origin.TenantKey); empty for anything else.
+	Tenant string
 }
 
 // Search modes.
@@ -390,6 +396,8 @@ func toHit(r SearchHit, cosine, keyword float32, idents []string) Hit {
 		IngestedAt: unixTime(r.Payload[fieldIngestedAt]),
 		Heading:    str(r.Payload["heading"]),
 		Trust:      str(r.Payload[fieldTrust]),
+		Space:      str(r.Payload[fieldSpace]),
+		Tenant:     originFrom(r.Payload[fieldOrigin]).TenantKey(),
 	}
 }
 

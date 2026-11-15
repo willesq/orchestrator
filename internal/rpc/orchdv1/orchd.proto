@@ -397,6 +397,15 @@ message SearchHit {
   // the trust tier orchd's writer gave it: repo, web, session, file or
   // client; empty for content stored before writers were recorded
   string trust = 13;
+  // space is the space orchd's placer stored the chunk in (SP-083); empty
+  // with no spaces policy applied or with spaces off. Every hit is one the
+  // caller may read, so its space is always one the caller reads.
+  string space = 14;
+  // tenant is a chat chunk's tenant, "<system>:<tenant>" (e.g.
+  // slack:T0123) as its stored origin has it (a policy matches it without
+  // case); empty for anything else. Both fields are stored data: a client
+  // putting them in an agent's prompt must quote them like other fields.
+  string tenant = 15;
 }
 
 message ListSourcesRequest {
