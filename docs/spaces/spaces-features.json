@@ -3138,7 +3138,8 @@
           "SP-025",
           "SP-027"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "Covered by SP-025 (in progress): the SP-025 lane was asked to filter reads on labels_v (2026-11-14)."
       },
       {
         "id": "RC-751",
@@ -5707,7 +5708,7 @@
             "a1: TestRelabelMakesStaleChunksReadableInTheirSpace (internal/rag): chunks stored unplaced or SP-023-placed in the base, and a chunk a revision change put in another space, are not found by a search of the space they belong to before the relabel and are found there after, each in its own space's collection with its vector unchanged. TestRelabelPlacesStoredContent (internal/daemon): orchd's relabel placer over the example policy, 17 stored sources (stored origin; docs, sources, hand-off and session URIs with no origin; client notes; no writer; links; unpinned sessions; a conflict) land in the expected space or quarantine (INV-03). Partial for INV-08: a stale chunk left in its own space's collection by a revision change stays readable there until reads filter on labels_v (RC-750).",
             "a2: TestRelabelSecondRunChangesNothing: the second run reports Changed=0 and Stale=0 and sends no write request. TestIntegrationRelabel40k: the second run on real Qdrant 1.17.1 reports Changed=0.",
             "a3: TestRelabelResumesAfterInterruption (a run stopped between copy and delete; a run cancelled part-way): count before = count after the resumed run, no source in two collections, a third run changes 0. TestRelabelChangedPlacementAfterInterruption: a source copied by a stopped run and then placed elsewhere, with a failed clean-up in between, ends in the second space only.",
-            "a4: TestRelabelDryRunOutputHasOnlyCountsAndSpaceNames: a dry run sends no write request, and rag.WriteRelabelReport's output contains only fixed words, counts and space names (no source URI, chunk text or collection name). The 'orch rag relabel --dry-run' command that prints it waits for the Relabel RPC (proto slot); the item is complete when the CLI test runs through it."
+            "a4: TestRAGRelabelDryRunPrintsOnlyCountsAndSpaceNames (internal/cli): 'orch rag relabel --dry-run' sends Relabel with apply=false and its output contains only the report's fixed words, counts and space names. TestRelabelDryRunOutputHasOnlyCountsAndSpaceNames (internal/rag): a dry run sends no write request and rag.WriteRelabelReport names no source URI, chunk text or collection. TestRelabelRPC (internal/daemon): the RPC answers the operator with counts and space names only and refuses sessions and queued tasks."
           ]
         },
         {
@@ -5727,11 +5728,11 @@
           ]
         }
       ],
-      "status": "blocked",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": "Waiting for the orchd.proto slot (D-63). 'orch rag relabel [--dry-run]' needs a Relabel RPC (request: apply; response: revision, totals, changed, moved, left stale and per-transition counts), operator-only like ReindexKeywords, then the CLI command, its test for SP-027.1.a4 and docs/internals/cli.md. The rag engine (rag.Service.Relabel) and orchd's relabel placer (server.relabel) are done and tested.",
+      "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "4f938c395fd884456515aa918dc77679f7a6eeab255ddd19b523e7bfad99e52b",
       "branch": "feat/sp-027-relabel",
