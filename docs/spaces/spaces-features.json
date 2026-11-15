@@ -3709,6 +3709,44 @@
         ],
         "status": "resolved",
         "resolution": "Settled as D-76; built by SP-079."
+      },
+      {
+        "id": "RC-1400",
+        "kind": "follow-up",
+        "topic": "Relabel progress has no percentage",
+        "detail": "Relabel answers only when the run ends, so the pane's control, the needs-you strip and the sidebar badge show the chunks being relabelled and a spinner, not how far the run has got. A progress-reporting RPC (a streaming Relabel or a status read) would let them show a percentage; it needs an orchd.proto change.",
+        "source": "https://github.com/willesq/orchestrator/pull/202",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-079",
+          "SP-027"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1401",
+        "kind": "follow-up",
+        "topic": "Cost of the pane's stale count is unmeasured",
+        "detail": "The Spaces pane counts stale chunks with Relabel without apply each time it shows and after each apply. That count places every stale source again, which can ask GitHub for a repo's visibility, and holds orchd's migration lock while it runs. Its time on a large store has not been measured; if it is slow, count less often or add a cheap stale-count read.",
+        "source": "https://github.com/willesq/orchestrator/pull/202",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-079"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1402",
+        "kind": "decision",
+        "topic": "A running relabel shows twice in the Spaces pane",
+        "detail": "While a relabel runs, the needs-you strip (SP-051's relabel progress) and the Relabel now control both say so. Keep both (the strip matches the badge and other needs-you items), or drop the relabel line from the strip while the control shows. To settle at the a3 snapshot review.",
+        "source": "https://github.com/willesq/orchestrator/pull/202",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-079",
+          "SP-051"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -7946,7 +7984,11 @@
               "threshold": "reviewed by the user"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: SpacesRelabelModelTests.relabelNowRunsWhileChunksAreStaleAndShowsProgressUntilNoneRemain passes at dd9328c: a count (Relabel without apply) finding 120 stale chunks at rev 7 makes the control visible with Relabel Now enabled and applies nothing; pressing it sends one Relabel with apply (DaemonClient.relabel, as Orch.app, the operator under D-71) and, while the run is held, the model is running(120), Relabel Now is gone, a second press and a count do nothing, and SpacesOverviewModel (fed by the model's progress) shows the needs-you item 'Relabelling stored content: 120 chunks' and the sidebar badge .relabel; when the run returns the model counts again, finds 0 stale, shows what the run updated and moved, and the badge clears. SpacesRelabelClientTests.daemonClientCallsRelabel checks the RPC mapping through the fake orchd (apply true and false, every count, transitions dropped). SpacesRelabelModelTests.noSecondRunBeforeTheRecountAnswers: no second run can start before the follow-up count answers. progressWithoutAShareNamesTheChunks: with nothing known done the strip and badge name the chunks, not '0%'. make app-cover passes (SpacesRelabel.swift 100%, DaemonClient+SpacesRelabel.swift 100%, SpacesOverview.swift 98.77%).",
+            "a2: at dd9328c, SpacesRelabelModelTests.nothingStaleHidesTheControl: with 0 stale the control is absent and pressing does nothing (no apply). refusedRelabelShowsWhyWithoutRetrying: a PermissionDenied refusal shows orchd's message, the model counts again (still stale, button enabled for the user) and after 100 ms exactly one apply was sent. failedRunShowsWhyWithoutRetrying: a run that stops early shows its error, one that leaves chunks stale says how many (singular and plural), one apply per press, and a clean run clears the reason. failedCountShowsWhy (a refused count shows why with Check Again and does not repeat), cancelledCountIsNotAFailure (leaving the pane mid-count shows no error), runWhoseRecountFailsStillReports, failureTextIsDisplaySafe; SpacesRelabelClientTests.refusalReachesTheModel (orchd's refusal text through the fake orchd).",
+            "a3: snapshots rendered at dd9328c (control layout) with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter SpacesRelabelSnapshots` (offscreen, sample data, no orchd), with stale chunks, during a relabel and after it, at 790 pt and the 320 pt companion width, light and dark: spaces-relabel-{stale,running,done}-{default,companion}-{light,dark}.png, saved in <scratch> and in the main checkout's git-excluded review-shots/SP-079/. Waiting for the user's review; not confirmed."
+          ]
         }
       ],
       "status": "in_progress",
