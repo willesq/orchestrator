@@ -788,8 +788,9 @@ Every search the prompt hook, session recall and `orch rag why` make goes throug
 which reads only the spaces the caller may read: a session's pin's space, every public space and
 the private spaces it lists (SP-025, [daemon.md](daemon.md#reading-memory-by-space)). orchd decides
 them from the calling process, never from the hook's `cwd` or the `--cwd` flag, which only choose
-the project tags searched first. `orch rag why` run at a terminal is the operator and sees every
-space, so it can show more than the session's own prompt hook would.
+the project tags searched first. While a spaces policy is applied, `orch rag why` run at a terminal
+is not the operator (only Orch.app is, D-71), so it reads public memory only; with no policy it
+sees everything, as before.
 
 Per-session state `sessions/<id>.hook.json` (`{"injected": [...], "seen": {stream: count}}`) holds
 injected-hit keys (first 12 bytes of SHA-256 of `uri\0text`, newest 500) and event cursors. It is

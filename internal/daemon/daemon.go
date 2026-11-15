@@ -644,7 +644,7 @@ func Run(ctx context.Context) error {
 	// Reason: from here a failure is most often a setting (a model folder, a
 	// port, a storage path), and settings can only be changed through orchd.
 	// Exiting would leave nothing to fix them with, so orchd serves them alone.
-	recovery := func(err error) error { return serveRecovery(ctx, cfg, err) }
+	recovery := func(err error) error { return serveRecovery(ctx, cfg, err, policyApplied(sp)) }
 
 	// Resolve the qdrant API key once (persisted, generated on first run) so the
 	// engine and the client share it independent of any ambient env var.
@@ -767,7 +767,7 @@ func Run(ctx context.Context) error {
 		tlog.policy = logPolicy(s.Sessions.CommandLog)
 		tlog.taskStatus = tasks.Status
 	}
-	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf})
+	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf, needsEvidence: policyApplied(sp)})
 	srv = &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks, ctl: ctl, live: live, home: userHome(), hub: hub,
 		stopping:      runCtx.Done(),

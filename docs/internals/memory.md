@@ -227,7 +227,7 @@ no origin, or that the placer leaves without a space, stores nothing.
 
 - **Clients cannot choose a space.** No RPC field reaches `Origin` or `Space`: tags, scope and type
   that name a space change nothing. A client note goes to the space of the caller's pin as orchd
-  resolved it from the caller's process (SP-011). A queued task, the operator at a terminal and an
+  resolved it from the caller's process (SP-011). A queued task with no space recorded, the operator and an
   unidentified caller have no space here, so their notes are quarantined until the operator retags
   them, and so is a note from a session pinned to no space, to a public one or to one the policy
   no longer has. A page a client stores is placed by its writer, never by the bound prefix its URL

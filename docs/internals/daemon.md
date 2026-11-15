@@ -291,18 +291,41 @@ space](#reading-memory-by-space)). Since SP-041 the connection's peer PID is che
 kernel token (see [queued callers](#queued-callers)), so a peer that hands its socket to a child
 and exits cannot be resolved to whatever process reuses its PID; it gets no space.
 
-For an operator result orchd also records at accept whether it has evidence of the user (D-39;
-`internal/daemon/operator_evidence.go`): **terminal** when the caller has a controlling terminal,
-runs in that terminal's foreground process group, that group's leader is no harness, and the
-caller's parents reach the leader (or the shell that started it, for a pipeline) without passing
-launchd; **app**
-when the caller's executable is `Orch.app/Contents/MacOS/Orch` in `/Applications` or
-`~/Applications`. A shell gives each command the user types its own foreground group, while a
-harness's tool commands, and anything they leave behind without a new session, stay in the
-harness's group, whose leader is the harness. A double fork that calls `setsid`, `launchctl
-submit`, `open` and `osascript` leave no controlling terminal; a background job is not in the
-foreground group. A leader orchd cannot read shows nothing. The terminal is read with sysctl on
-macOS and from `/proc/<pid>/stat` on Linux (`procstat.ReadTerminal`).
+### Operator evidence
+
+Under a spaces policy a process tree is no evidence of the user: a process an agent detaches from
+its session has no harness above it, and it can give itself a terminal of its own (a
+pseudo-terminal from `script`, Python's `pty` or `tmux new -d`). So while a policy with spaces is
+applied, or the applied one does not verify, only **Orch.app** is the operator (D-71, settling
+RC-705 to RC-707; `internal/daemon/operator_evidence.go`). An operator result without that
+evidence reads public memory only and gets a queued task's limits: the resolver interceptor
+refuses it every RPC in `operatorActions` before the handler runs (`refuseUnproven`), and
+`refuseNonOperator` refuses it too (applying or diffing the policy, the enforcement and sandbox
+switches, outbound rules, relabel, the command log, settings, ingest, dispatch and the rest).
+Interactive sessions keep what they could call before. With no policy applied, the process tree
+alone is the operator, as before spaces (INV-10). A terminal unlock confirmed in Orch.app is
+SP-077; until then, under a policy, the CLI's operator commands are refused and Orch.app is the
+way to run them.
+
+orchd recognizes Orch.app by its code signature (RC-706; `appsig_darwin.go`, macOS with cgo).
+The check runs the first time a call on a connection needs evidence, while a policy is applied,
+and its answer is kept for the connection. Other builds recognize no app, so under a policy no
+caller is the operator there; the policy can then be changed only by editing `orch.db` with orchd
+stopped. Through the socket's audit token, so a reused PID cannot pass,
+the caller's running code must meet the requirement `identifier "com.willesq.orch"`, carry the
+hardened runtime flag (which keeps `DYLD_*` libraries and debuggers out), and run from the
+installed bundle: `/Applications/Orch.app` or `~/Applications/Orch.app`, whichever one exists
+(with both present neither counts, since one may be planted). That bundle on disk must meet the
+same requirement, and its code directory hash must equal the running code's, so a signed copy
+elsewhere, a program named `Orch`, and an app whose bundle changed after it started all fail.
+`build-app.sh` signs ad-hoc builds with the hardened runtime too; an Orch.app built before that
+change is not recognized until it is reinstalled (`make app-install`). When an Orch.app is refused
+(installed twice, built without the hardened runtime, changed on disk after it started), orchd's
+log says why, once per connection. Accepted risk: an ad-hoc
+signature names no signer, so a process that can write the install folder can put its own
+bundle with that identifier there, which is replacing the app the user opens.
+
+The recovery server (settings only) resolves no caller and keeps the process-tree rule.
 
 ### Reading memory by space
 
@@ -315,19 +338,19 @@ and so every client built on them (`rag_search`, `rag_list_sources`, auto-RAG, s
 - **The applied revision does not verify:** nothing.
 - **Memory filtering switched off** (SP-070): every collection, and the response is logged as
   `<RPC> for <caller>: not enforced (memory filtering is switched off)`.
-- **The operator with evidence** (terminal or Orch.app): every collection, quarantine and the
+- **Orch.app** ([operator evidence](#operator-evidence)): every collection, quarantine and the
   base's unplaced chunks included, as before spaces.
 - **A session:** its pin's space, every public space and the private spaces it lists
   (`spaces.Resolved.CanRead`; D-16). A pin is taken only by a harness in its own session's tree
   or, for a new session, a harness started from a shell (an orphaned harness gets none), so a
   session started through the guard reads no more than its original session (D-38).
 - **A queued task:** what the space recorded when it was dispatched reads (D-46). `Dispatch`
-  records the dispatching session's pin, or for the operator with evidence the placement of the
+  records the dispatching session's pin, or for Orch.app (or, with no policy, the operator) the placement of the
   task's directory as a session there would get it (quarantine for a scratch directory); any
   other dispatcher, orchd's own review tasks and tasks dispatched before SP-025 record none. The
   space travels in the task's durable workflow input (`AgentTaskInput.Space`) to the live run
   the resolver finds, and a task's client writes are placed in it too.
-- **Anyone else** (an unpinned harness, an unidentified process, the operator without evidence,
+- **Anyone else** (an unpinned harness, an unidentified process, the operator when it is not Orch.app,
   a task orchd does not track, a pin whose space the policy does not name): public spaces only.
 
 Request fields (tags, `source_uri`, scope, a URI prefix, `cwd`) only narrow within those spaces.
@@ -344,14 +367,6 @@ SP-025.2): `filtered` (the four above), `operator` (refused to every caller but 
 `own` (the caller's own data or public content), `records` (orch records other than memory:
 SP-026's, or RC-700's for the registries, settings and logs it lists) or `none`. A test fails for
 an RPC with no entry, as for one missing from `taskCallable` and `operatorActions`.
-
-Limits (open security findings, RC-705 to RC-707): the terminal evidence is a terminal, not the
-user. An agent can open a pseudo-terminal of its own (`script`, Python's `pty`, `expect`, `tmux
-new -d`) and run the CLI as its foreground leader, which passes; so does one that takes the
-user's terminal's foreground group (`tcsetpgrp`) or types into Terminal through `osascript`. The
-app check is by path, so a copy planted at an accepted path, or the real app started with an
-injected library (ad-hoc builds lack the hardened runtime), passes. Operator-only RPCs
-(`refuseNonOperator`) do not ask for this evidence at all.
 
 A filtered read sees only chunks labelled under the applied revision (INV-08;
 [memory.md](memory.md#spaces)), so after a new apply sessions and tasks read nothing placed

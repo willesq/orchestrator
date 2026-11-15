@@ -282,9 +282,10 @@ type callerAuth struct {
 	// conn caches what this connection resolves to (caller_session.go); nil
 	// resolves on every call.
 	conn *connCaller
-	// operatorBy is the evidence that a caller in no harness is the user
-	// (operatorTerminal or operatorApp), "" when there is none (D-39).
-	operatorBy string
+	// app checks, once and only when a policy needs it, whether the caller
+	// is Orch.app by its code signature (D-71); nil for a caller in a
+	// harness or started by orchd, which never is.
+	app *appCheck
 }
 
 func (callerAuth) AuthType() string { return "orchd-peer" }
@@ -309,11 +310,9 @@ type peerCredentials struct {
 	// reads the socket's kernel token, or skips the check when peerPID is
 	// set.
 	samePeer func(c net.Conn, pid int) error
-	// terminal reads a process's controlling terminal; nil reads none, so no
-	// caller has a terminal's evidence of being the operator (D-39).
-	terminal func(pid int) (procstat.Terminal, error)
-	// home is the user's home folder, where Orch.app may be installed.
-	home string
+	// app recognizes Orch.app by its code signature (D-71); nil
+	// recognizes nothing.
+	app *appVerifier
 }
 
 func (p peerCredentials) ServerHandshake(c net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -360,8 +359,10 @@ func (p peerCredentials) walk(c net.Conn) callerAuth {
 		}
 	}
 	if harness == "" {
-		if !spawned && err == nil && herr == nil {
-			a.operatorBy = p.operatorEvidence(pid)
+		if !spawned && err == nil && herr == nil && p.app != nil {
+			// Reason: a full signature check costs a read of the bundle, so
+			// it runs only when a policy asks for evidence (caller_session.go).
+			a.app = &appCheck{v: p.app, c: c, pid: pid}
 		}
 		return a
 	}
@@ -518,6 +519,12 @@ func operator(ctx context.Context) (who string, ok bool) {
 	case a.harness != "":
 		return fmt.Sprintf("process %d, inside a %s session", a.pid, a.harness), false
 	}
+	// Reason (D-71): under a spaces policy a process tree is no evidence of
+	// the user, since an agent can detach a process from its session; only
+	// Orch.app, recognized by its code signature, is the operator.
+	if c, ok := ctx.Value(resolvedKey{}).(resolvedCaller); ok && c.evidenceNeeded && c.operatorBy == "" {
+		return fmt.Sprintf("process %d, which is not Orch.app, while a spaces policy is applied", a.pid), false
+	}
 	return "", true
 }
 
@@ -535,7 +542,7 @@ func refuseNonOperator(ctx context.Context, method, action string) error {
 	}
 	log.Printf("orchd: refused %s from %s", method, who)
 	return grpcstatus.Errorf(codes.PermissionDenied,
-		"only the operator can %s: use Orch.app, or run the command in a terminal outside any agent session (caller: %s)", action, who)
+		"only the operator can %s: use Orch.app (while a spaces policy is applied, only Orch.app is the operator), or with no policy a terminal outside any agent session (caller: %s)", action, who)
 }
 
 func (peerCredentials) ClientHandshake(context.Context, string, net.Conn) (net.Conn, credentials.AuthInfo, error) {

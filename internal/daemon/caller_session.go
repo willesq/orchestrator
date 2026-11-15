@@ -5,10 +5,13 @@ import (
 	"errors"
 	"log"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	grpcstatus "google.golang.org/grpc/status"
 
 	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/orchdclient"
@@ -51,8 +54,12 @@ type resolvedCaller struct {
 	harness     string
 	harnessProc procstat.Identity
 	// operatorBy is the evidence that a callerOperator caller is the user
-	// (operator_evidence.go), "" when there is none (D-39).
+	// (operator_evidence.go), "" when there is none (D-71).
 	operatorBy string
+	// evidenceNeeded reports that a spaces policy was applied when the call
+	// was resolved, so a callerOperator caller without operatorBy is not
+	// the operator (D-71).
+	evidenceNeeded bool
 }
 
 // connCaller caches what a connection resolves to. Only results that cannot
@@ -76,6 +83,9 @@ type callerResolver struct {
 	// taskOf returns the queued task whose agent CLI is process proc; nil
 	// when no tasks run here.
 	taskOf func(proc procstat.Identity) (agentrun.LiveRun, bool)
+	// needsEvidence reports whether a spaces policy is applied (or does not
+	// verify), so the operator must be Orch.app (D-71); nil never needs it.
+	needsEvidence func() bool
 }
 
 type resolvedKey struct{}
@@ -112,7 +122,11 @@ func (r *callerResolver) resolve(ctx context.Context) resolvedCaller {
 	case a.harnessErr != nil:
 		return none("the caller's ancestry could not be read")
 	case a.harness == "":
-		return resolvedCaller{kind: callerOperator, operatorBy: a.operatorBy}
+		c := resolvedCaller{kind: callerOperator, evidenceNeeded: r.needEvidence()}
+		if c.evidenceNeeded && a.app.isApp() {
+			c.operatorBy = operatorApp
+		}
+		return c
 	}
 	if r == nil || r.pins == nil {
 		return none("session pins are unavailable")
@@ -228,14 +242,43 @@ func (c *connCaller) keepTask(run agentrun.LiveRun) *agentrun.LiveRun {
 }
 
 // unary attaches the resolved caller to each unary call's context.
-func (r *callerResolver) unary(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	return handler(context.WithValue(ctx, resolvedKey{}, r.resolve(ctx)), req)
+func (r *callerResolver) unary(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	c := r.resolve(ctx)
+	if err := refuseUnproven(c, info.FullMethod); err != nil {
+		return nil, err
+	}
+	return handler(context.WithValue(ctx, resolvedKey{}, c), req)
 }
 
 // stream attaches the resolved caller to each stream's context.
-func (r *callerResolver) stream(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (r *callerResolver) stream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	ctx := ss.Context()
-	return handler(srv, resolvedStream{ServerStream: ss, ctx: context.WithValue(ctx, resolvedKey{}, r.resolve(ctx))})
+	c := r.resolve(ctx)
+	if err := refuseUnproven(c, info.FullMethod); err != nil {
+		return err
+	}
+	return handler(srv, resolvedStream{ServerStream: ss, ctx: context.WithValue(ctx, resolvedKey{}, c)})
+}
+
+// refuseUnproven refuses method to a caller that only its process tree
+// shows to be the operator, while a policy is applied (D-71): such a caller
+// (a terminal, or a process an agent detached) gets a queued task's limits,
+// so every RPC in operatorActions is refused to it, not only those that
+// check refuseNonOperator. Orch.app, sessions and, with no policy, the
+// operator are not affected.
+func refuseUnproven(c resolvedCaller, method string) error {
+	if c.kind != callerOperator || !c.evidenceNeeded || c.operatorBy != "" || taskCallable[method] {
+		return nil
+	}
+	action, ok := operatorActions[method]
+	if !ok {
+		action = "call " + method
+	}
+	if unprovenLogs.allow(time.Now()) {
+		log.Printf("orchd: refused %s from a caller that is not Orch.app while a spaces policy is applied", rpcName(method))
+	}
+	return grpcstatus.Errorf(codes.PermissionDenied,
+		"only Orch.app can %s while a spaces policy is applied (D-71); a terminal is not the operator then", action)
 }
 
 // resolvedStream is a server stream carrying the resolved caller.
@@ -245,3 +288,12 @@ type resolvedStream struct {
 }
 
 func (s resolvedStream) Context() context.Context { return s.ctx }
+
+// needEvidence reports whether the operator must show Orch.app's evidence
+// now. A nil resolver needs none.
+func (r *callerResolver) needEvidence() bool {
+	return r != nil && r.needsEvidence != nil && r.needsEvidence()
+}
+
+// unprovenLogs limits refuseUnproven's log line.
+var unprovenLogs = &logLimit{every: time.Second}

@@ -7,7 +7,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
@@ -21,52 +23,28 @@ import (
 	"github.com/willesq/orchestrator/internal/workflows"
 )
 
-// operatorTree is a fake process table for D-39. launchd is 1.
+// operatorTree is a fake process table for D-71. launchd is 1.
 //
-//	Terminal 30 → zsh 31 → orch 32           a command the user typed
-//	              zsh 31 → orch 33           a job the user sent to the background
-//	claude 400 (in zsh 31's tty, group 400) → orch 41, reparented to launchd
-//	wrapper 80 (leads the tty's group, runs claude 81) → orch 82, reparented
-//	orch 40 under launchd, no terminal        a double fork that called setsid
-//	osascript 61 under launchd → orch 60      started by osascript
-//	launchctl's job 70 under launchd          launchctl submit / open
-//	Orch.app 50 under launchd                 the app
-//	a copy of Orch.app 51 in a temp folder
+//	Terminal 30 → zsh 31 → orch 32     a command the user typed
+//	script 35 under launchd → orch 37  a pty an agent opened (RC-705)
+//	orch 40 under launchd              a double fork that called setsid
+//	Orch 50 under launchd              Orch.app, or a program posing as it
 type operatorTree struct {
 	parents map[int]int
 	progs   map[int]procstat.Program
-	ttys    map[int]procstat.Terminal
 }
 
 func newOperatorTree() operatorTree {
 	return operatorTree{
-		parents: map[int]int{30: 1, 31: 30, 32: 31, 33: 31, 400: 31, 41: 1, 40: 1, 61: 1, 60: 61, 70: 1, 50: 1, 51: 1, 80: 31, 81: 80, 82: 1, 34: 31, 35: 1, 36: 35, 37: 36},
+		parents: map[int]int{30: 1, 31: 30, 32: 31, 35: 1, 37: 35, 40: 1, 50: 1},
 		progs: map[int]procstat.Program{
-			30: {Name: "Terminal"}, 31: {Name: "zsh"}, 32: {Name: "orch"}, 33: {Name: "orch"},
-			400: {Name: "claude"}, 41: {Name: "orch"}, 40: {Name: "orch"}, 61: {Name: "osascript"},
-			60: {Name: "orch"}, 70: {Name: "orch"}, 80: {Name: "caffeinate"}, 81: {Name: "claude"}, 82: {Name: "orch"},
-			34: {Name: "orch"}, 35: {Name: "script"}, 36: {Name: "zsh"}, 37: {Name: "orch"},
-			50: {Name: "Orch", Path: "/Applications/Orch.app/Contents/MacOS/Orch"},
-			51: {Name: "Orch", Path: "/tmp/x/Orch.app/Contents/MacOS/Orch"},
-		},
-		ttys: map[int]procstat.Terminal{
-			32:  {Controlling: true, Group: 32, Foreground: 32},
-			33:  {Controlling: true, Group: 33, Foreground: 32},
-			41:  {Controlling: true, Group: 400, Foreground: 400},
-			40:  {Group: 40},
-			60:  {Group: 61},
-			70:  {Group: 70},
-			50:  {Group: 50},
-			51:  {Group: 51},
-			400: {Controlling: true, Group: 400, Foreground: 400},
-			82:  {Controlling: true, Group: 80, Foreground: 80},
-			34:  {Controlling: true, Group: 32, Foreground: 32},
-			37:  {Controlling: true, Group: 37, Foreground: 37},
+			30: {Name: "Terminal"}, 31: {Name: "zsh"}, 32: {Name: "orch"}, 35: {Name: "script"}, 37: {Name: "orch"},
+			40: {Name: "orch"}, 50: {Name: "Orch", Path: "/Applications/Orch.app/Contents/MacOS/Orch"},
 		},
 	}
 }
 
-func (tr operatorTree) creds(pid int) peerCredentials {
+func (tr operatorTree) creds(pid int, app *appVerifier) peerCredentials {
 	return peerCredentials{
 		self: 1000,
 		parent: func(p int) (int, error) {
@@ -81,55 +59,93 @@ func (tr operatorTree) creds(pid int) peerCredentials {
 			}
 			return procstat.Program{}, errors.New("no such process")
 		},
-		terminal: func(p int) (procstat.Terminal, error) {
-			if t, ok := tr.ttys[p]; ok {
-				return t, nil
-			}
-			return procstat.Terminal{}, errors.New("no such process")
-		},
 		peerPID: func(net.Conn) (int, error) { return pid, nil },
-		home:    "/home/u",
+		app:     app,
 	}
 }
 
-// TestOperatorReadsNeedEvidence is SP-025.1.a7 (D-39): a caller with no
-// harness above it reads every space only when it is a command the user
-// runs at a terminal or Orch.app; a process that left its session (a
-// double fork, launchctl or open, osascript, a background job) reads
-// public memory only.
-func TestOperatorReadsNeedEvidence(t *testing.T) {
+// signedConn is a connection whose peer's code signature the fake verifier
+// reports.
+type signedConn struct {
+	net.Conn
+	sig codeSignature
+	err error
+}
+
+var genuineCDHash = []byte{1, 2, 3, 4}
+
+// fakeVerifier recognizes signatures from signedConn, with the installed
+// bundle at /Applications/Orch.app signed with genuineCDHash.
+func fakeVerifier(installed ...string) *appVerifier {
+	if len(installed) == 0 {
+		installed = []string{"/Applications/Orch.app"}
+	}
+	return &appVerifier{
+		running: func(c net.Conn, req string) (codeSignature, error) {
+			sc := c.(signedConn)
+			if req != appRequirement {
+				return codeSignature{}, errors.New("wrong requirement")
+			}
+			return sc.sig, sc.err
+		},
+		static: func(path, req string) (codeSignature, error) {
+			if path != "/Applications/Orch.app" || req != appRequirement {
+				return codeSignature{}, errors.New("not signed")
+			}
+			return codeSignature{Path: path, Flags: codeRuntime, CDHash: genuineCDHash}, nil
+		},
+		exists: func(p string) bool { return slices.Contains(installed, p) },
+		dirs:   []string{"/Applications", "/home/u/Applications"},
+	}
+}
+
+func appSig(path string, flags uint32, cdhash []byte) signedConn {
+	return signedConn{sig: codeSignature{Path: path, Flags: flags, CDHash: cdhash}}
+}
+
+// TestOnlyOrchAppIsTheOperator is SP-025.1.a7 under D-71: with a policy
+// applied, a caller with no harness above it reads every space only when
+// it is Orch.app, recognized by its code signature (RC-706). A command typed
+// at a terminal, a process with a pty of its own (RC-705), a detached
+// process, a copy of the app elsewhere, the app without the hardened runtime
+// or running other code than its bundle's, and an app installed in both
+// folders read public memory only.
+func TestOnlyOrchAppIsTheOperator(t *testing.T) {
 	e := newReadEnv(t)
 	tr := newOperatorTree()
-	r := &callerResolver{pins: e.s.pins}
+	r := &callerResolver{pins: e.s.pins, needsEvidence: policyApplied(e.s.spaces)}
+	genuine := appSig("/Applications/Orch.app", codeRuntime|0x2, genuineCDHash)
 	for _, tt := range []struct {
 		name     string
 		pid      int
-		evidence string
+		conn     net.Conn
+		verifier *appVerifier
+		app      bool
 	}{
-		{"typed at a terminal", 32, operatorTerminal},
-		{"Orch.app", 50, operatorApp},
-		{"background job", 33, ""},
-		{"left a harness's process group", 41, ""},
-		{"double fork with setsid", 40, ""},
-		{"started by osascript", 60, ""},
-		{"launchctl or open", 70, ""},
-		{"a copy of Orch.app elsewhere", 51, ""},
-		{"left a wrapper's foreground group", 82, ""},
-		{"a pipeline's later command", 34, operatorTerminal},
-		// Known gap (RC-705): a terminal an agent opens itself, with
-		// script(1) left under launchd, is still evidence.
-		{"a pty an agent opened (RC-705)", 37, operatorTerminal},
+		{"Orch.app", 50, genuine, fakeVerifier(), true},
+		{"Orch.app by its executable", 50, appSig("/Applications/Orch.app/Contents/MacOS/Orch", codeRuntime, genuineCDHash), fakeVerifier(), true},
+		{"typed at a terminal", 32, signedConn{err: errors.New("not signed")}, fakeVerifier(), false},
+		{"a pty of its own (RC-705)", 37, signedConn{err: errors.New("not signed")}, fakeVerifier(), false},
+		{"double fork with setsid", 40, nil, fakeVerifier(), false},
+		{"a signed copy elsewhere", 50, appSig("/tmp/x/Orch.app", codeRuntime, genuineCDHash), fakeVerifier(), false},
+		{"without the hardened runtime", 50, appSig("/Applications/Orch.app", 0x2, genuineCDHash), fakeVerifier(), false},
+		{"other code than its bundle's", 50, appSig("/Applications/Orch.app", codeRuntime, []byte{9}), fakeVerifier(), false},
+		{"no code hash", 50, appSig("/Applications/Orch.app", codeRuntime, nil), fakeVerifier(), false},
+		{"installed in both folders", 50, genuine, fakeVerifier("/Applications/Orch.app", "/home/u/Applications/Orch.app"), false},
+		{"not installed", 50, genuine, fakeVerifier("/nowhere"), false},
+		{"a build that cannot check signatures", 50, genuine, nil, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			c := r.resolve(callerCtx(tr.creds(tt.pid).identify(nil)))
-			if c.kind != callerOperator || c.operatorBy != tt.evidence {
-				t.Fatalf("resolved %+v, want the operator with evidence %q", c, tt.evidence)
+			peerCtx := callerCtx(tr.creds(tt.pid, tt.verifier).identify(tt.conn))
+			c := r.resolve(peerCtx)
+			if c.kind != callerOperator || (c.operatorBy == operatorApp) != tt.app || !c.evidenceNeeded {
+				t.Fatalf("resolved %+v, want the operator (app %v) needing evidence", c, tt.app)
 			}
 			got := e.readAll(t, as(c), memoText("globex", 3), memoURI("globex", 3))
-			if tt.evidence != "" {
+			if tt.app {
 				for _, want := range []string{memoURI("globex", 3), memoURI("acme", 3), memoURI("quarantine", 3), memoURI("legacy", 3)} {
 					if !slices.Contains(got, want) {
-						t.Errorf("the operator does not read every collection: lacks %s", want)
+						t.Errorf("Orch.app does not read every collection: lacks %s", want)
 					}
 				}
 				return
@@ -139,32 +155,78 @@ func TestOperatorReadsNeedEvidence(t *testing.T) {
 			}
 		})
 	}
-	// Reading a terminal fails: no evidence.
-	cr := tr.creds(32)
-	cr.terminal = func(int) (procstat.Terminal, error) { return procstat.Terminal{}, errors.New("gone") }
-	if a := cr.identify(nil); a.operatorBy != "" {
-		t.Fatalf("evidence %q from an unreadable terminal", a.operatorBy)
+	// The static bundle that fails its own check, or lacks the runtime, is
+	// not the app either.
+	v := fakeVerifier()
+	v.static = func(string, string) (codeSignature, error) { return codeSignature{}, errors.New("modified") }
+	if v.isApp(genuine) {
+		t.Fatal("an app whose bundle fails its check is Orch.app")
 	}
-	cr.terminal = nil
-	if a := cr.identify(nil); a.operatorBy != "" {
-		t.Fatalf("evidence %q without a terminal reader", a.operatorBy)
+	v.static = func(p, _ string) (codeSignature, error) { return codeSignature{Path: p, CDHash: genuineCDHash}, nil }
+	if v.isApp(genuine) {
+		t.Fatal("an app whose bundle lacks the hardened runtime is Orch.app")
 	}
-	// A foreground group whose leader cannot be read, or with no program
-	// reader at all, shows nothing either.
-	tr.ttys[32] = procstat.Terminal{Controlling: true, Group: 99, Foreground: 99}
-	if a := tr.creds(32).identify(nil); a.operatorBy != "" {
-		t.Fatalf("evidence %q with an unreadable group leader", a.operatorBy)
+	if fakeVerifier().isApp(nil) {
+		t.Fatal("no connection is Orch.app")
 	}
-	cr = tr.creds(32)
-	cr.program = nil
-	if ev := cr.operatorEvidence(32); ev != "" {
-		t.Fatalf("evidence %q without a program reader", ev)
+	if nv := newAppVerifier("/home/u"); nv != nil && !slices.Equal(nv.dirs, []string{"/Applications", "/home/u/Applications"}) {
+		t.Fatalf("install folders %v", nv.dirs)
 	}
-	// Orch.app in the user's own Applications folder counts too.
-	if !(peerCredentials{home: "/home/u"}).isApp("/home/u/Applications/Orch.app/Contents/MacOS/Orch") ||
-		(peerCredentials{}).isApp("/home/u/Applications/Orch.app/Contents/MacOS/Orch") ||
-		(peerCredentials{}).isApp("Orch.app/Contents/MacOS/Orch") {
-		t.Fatal("isApp")
+	if nv := newAppVerifier(""); nv != nil && !slices.Equal(nv.dirs, []string{"/Applications"}) {
+		t.Fatalf("install folders without a home %v", nv.dirs)
+	}
+}
+
+// TestOperatorOnlyRPCsNeedOrchApp is RC-707 under D-71: while a policy is
+// applied, operator-only RPCs are refused to any caller but Orch.app, so
+// a detached process cannot switch memory filtering off, read or apply the
+// policy; with no policy the process tree alone is the operator, as before
+// (INV-10).
+func TestOperatorOnlyRPCsNeedOrchApp(t *testing.T) {
+	e := newReadEnv(t)
+	tr := newOperatorTree()
+	r := &callerResolver{pins: e.s.pins, needsEvidence: policyApplied(e.s.spaces)}
+	resolved := func(pid int, c net.Conn) context.Context {
+		ctx := callerCtx(tr.creds(pid, fakeVerifier()).identify(c))
+		return context.WithValue(ctx, resolvedKey{}, r.resolve(ctx))
+	}
+	calls := map[string]func(context.Context) error{
+		"SetEnforcement": func(ctx context.Context) error {
+			_, err := e.s.SetEnforcement(ctx, &orchdv1.SetEnforcementRequest{Layer: "memory", State: spaces.SwitchOff})
+			return err
+		},
+		"DiffSpaces": func(ctx context.Context) error {
+			_, err := e.s.DiffSpaces(ctx, &orchdv1.DiffSpacesRequest{})
+			return err
+		},
+		"ApplySpaces": func(ctx context.Context) error {
+			_, err := e.s.ApplySpaces(ctx, &orchdv1.ApplySpacesRequest{ReviewedRevision: 1 << 40})
+			return err
+		},
+	}
+	for name, call := range calls {
+		for _, pid := range []int{32, 37, 40} {
+			err := call(resolved(pid, signedConn{err: errors.New("not signed")}))
+			if grpcstatus.Code(err) != codes.PermissionDenied || !strings.Contains(err.Error(), "not Orch.app") {
+				t.Errorf("%s from process %d = %v, want refused", name, pid, err)
+			}
+		}
+		if err := call(resolved(50, appSig("/Applications/Orch.app", codeRuntime, genuineCDHash))); grpcstatus.Code(err) == codes.PermissionDenied {
+			t.Errorf("%s from Orch.app refused: %v", name, err)
+		}
+	}
+	if sw := switchesOf(t, e.s, operatorCtx)["memory"]; sw.GetState() != spaces.SwitchOff {
+		t.Fatalf("Orch.app could not switch memory filtering off: %v", sw)
+	}
+	// With no policy, a terminal is the operator, as before spaces.
+	r.needsEvidence = policyApplied(nil)
+	for name, call := range calls {
+		if err := call(resolved(32, nil)); grpcstatus.Code(err) == codes.PermissionDenied {
+			t.Errorf("with no policy %s from a terminal = %v", name, err)
+		}
+	}
+	if (&callerResolver{}).needEvidence() || (*callerResolver)(nil).needEvidence() {
+		t.Fatal("a resolver without a policy check needs evidence")
 	}
 }
 
@@ -184,7 +246,7 @@ func TestTasksReadTheirDispatchersSpaces(t *testing.T) {
 	e := newReadEnv(t)
 	var recorded string
 	e.s.disp = spaceDispatcher{got: &recorded}
-	terminal := as(resolvedCaller{kind: callerOperator, operatorBy: operatorTerminal})
+	terminal := as(resolvedCaller{kind: callerOperator, operatorBy: operatorApp})
 	for _, tt := range []struct {
 		name string
 		ctx  context.Context
@@ -346,7 +408,7 @@ func TestReaderLabel(t *testing.T) {
 		{kind: callerSession, pin: sessionPin{SessionID: "s 1"}}: "session s?1",
 		{kind: callerTask}: "an untracked queued task",
 		{kind: callerTask, task: agentrun.LiveRun{TaskID: "task-9"}}: "task task-9",
-		{kind: callerOperator}:                          "the operator (no terminal or Orch.app)",
+		{kind: callerOperator}:                          "the operator (not Orch.app)",
 		{kind: callerOperator, operatorBy: operatorApp}: "the operator",
 		{kind: callerNone}:                              "an unidentified caller",
 	} {
@@ -426,7 +488,7 @@ func TestStaleLabelsAreUnreadable(t *testing.T) {
 		if contains(got, "stale") || contains(got, "repo://acme/old") {
 			t.Errorf("acme read a chunk labelled %s: %q", name, got)
 		}
-		op := e.readAll(t, as(resolvedCaller{kind: callerOperator, operatorBy: operatorTerminal}), "acme stale note "+name, "note://acme/stale-"+name)
+		op := e.readAll(t, as(resolvedCaller{kind: callerOperator, operatorBy: operatorApp}), "acme stale note "+name, "note://acme/stale-"+name)
 		if !contains(op, "note://acme/stale-"+name) {
 			t.Errorf("the operator does not see the chunk labelled %s", name)
 		}
@@ -436,5 +498,113 @@ func TestStaleLabelsAreUnreadable(t *testing.T) {
 		"source_type": "manual", "chunk_index": 0.0, "space": "acme", "labels_v": e.labels})
 	if got := e.readAll(t, inSpace("acme"), "acme stale note earlier", "note://acme/stale-earlier"); !slices.Contains(got, "note://acme/stale-earlier") {
 		t.Error("a relabelled chunk is still unreadable")
+	}
+}
+
+// TestUnprovenOperatorGetsTaskLimits is RC-707 under D-71 at the
+// interceptor: while a policy is applied, a caller only its process tree
+// shows to be the operator (a terminal, a pty of its own, a detached
+// process) is refused every RPC queued tasks are refused, before the
+// handler runs; Orch.app and sessions are not, and with no policy nothing
+// changes.
+func TestUnprovenOperatorGetsTaskLimits(t *testing.T) {
+	e := newReadEnv(t)
+	tr := newOperatorTree()
+	r := &callerResolver{pins: e.s.pins, needsEvidence: policyApplied(e.s.spaces)}
+	ran := 0
+	handler := func(context.Context, any) (any, error) { ran++; return nil, nil }
+	call := func(pid int, c net.Conn, method string) error {
+		ctx := callerCtx(tr.creds(pid, fakeVerifier()).identify(c))
+		_, err := r.unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: method}, handler)
+		return err
+	}
+	stream := func(pid int, c net.Conn, method string) error {
+		ctx := callerCtx(tr.creds(pid, fakeVerifier()).identify(c))
+		return r.stream(nil, fakeStream{ctx: ctx}, &grpc.StreamServerInfo{FullMethod: method},
+			func(any, grpc.ServerStream) error { ran++; return nil })
+	}
+	terminal, app := signedConn{err: errors.New("not signed")}, appSig("/Applications/Orch.app", codeRuntime, genuineCDHash)
+	for _, m := range []string{orchdv1.Orchd_SetConfig_FullMethodName, orchdv1.Orchd_Ingest_FullMethodName,
+		orchdv1.Orchd_SetSettingEnabled_FullMethodName, orchdv1.Orchd_Restart_FullMethodName, orchdv1.Orchd_Relabel_FullMethodName} {
+		for _, pid := range []int{32, 37, 40} {
+			if err := call(pid, terminal, m); grpcstatus.Code(err) != codes.PermissionDenied || !strings.Contains(err.Error(), "only Orch.app") {
+				t.Errorf("%s from process %d = %v", m, pid, err)
+			}
+		}
+		if err := call(50, app, m); err != nil {
+			t.Errorf("%s from Orch.app = %v", m, err)
+		}
+	}
+	if err := stream(32, terminal, orchdv1.Orchd_WatchTasks_FullMethodName); grpcstatus.Code(err) != codes.PermissionDenied {
+		t.Errorf("WatchTasks from a terminal = %v", err)
+	}
+	if err := call(32, terminal, orchdv1.Orchd_Search_FullMethodName); err != nil {
+		t.Errorf("Search, which tasks may call, from a terminal = %v", err)
+	}
+	if err := call(32, terminal, "/orchd.v1.Orchd/Unlisted"); grpcstatus.Code(err) != codes.PermissionDenied {
+		t.Errorf("an unlisted RPC from a terminal = %v", err)
+	}
+	ctx := context.WithValue(callerCtx(callerAuth{pid: 900, harness: "claude"}), resolvedKey{}, resolvedCaller{})
+	if _, err := r.unary(ctx, nil, &grpc.UnaryServerInfo{FullMethod: orchdv1.Orchd_Ingest_FullMethodName}, handler); err != nil {
+		t.Errorf("Ingest from a session = %v", err)
+	}
+	r.needsEvidence = policyApplied(nil)
+	before := ran
+	if err := call(32, terminal, orchdv1.Orchd_SetConfig_FullMethodName); err != nil || ran != before+1 {
+		t.Errorf("with no policy SetConfig from a terminal = %v", err)
+	}
+	if err := stream(32, terminal, orchdv1.Orchd_WatchTasks_FullMethodName); err != nil {
+		t.Errorf("with no policy WatchTasks from a terminal = %v", err)
+	}
+}
+
+// TestRefusedOrchAppIsLogged: an Orch.app that is refused says why in
+// orchd's log, once per connection, so a locked-out operator can find out.
+func TestRefusedOrchAppIsLogged(t *testing.T) {
+	logs := captureReadLog(t)
+	for _, tt := range []struct {
+		v    *appVerifier
+		conn net.Conn
+		why  string
+	}{
+		{fakeVerifier("/Applications/Orch.app", "/home/u/Applications/Orch.app"), appSig("/Applications/Orch.app", codeRuntime, genuineCDHash), "not installed in exactly one"},
+		{fakeVerifier(), appSig("/Applications/Orch.app", 0, genuineCDHash), "without the hardened runtime"},
+		{fakeVerifier(), appSig("/tmp/x/Orch.app", codeRuntime, genuineCDHash), "runs from /tmp/x/Orch.app"},
+		{fakeVerifier(), appSig("/Applications/Orch.app", codeRuntime, []byte{9}), "the bundle changed"},
+	} {
+		appLogs.last = time.Time{}
+		a := &appCheck{v: tt.v, c: tt.conn, pid: 50}
+		if a.isApp() || a.isApp() {
+			t.Fatalf("%s: recognized", tt.why)
+		}
+		if n := strings.Count(logs.String(), tt.why); n != 1 {
+			t.Errorf("%q logged %d times:\n%s", tt.why, n, logs.String())
+		}
+	}
+	v := fakeVerifier()
+	v.static = func(p, _ string) (codeSignature, error) { return codeSignature{Path: p, CDHash: genuineCDHash}, nil }
+	if ok, why := v.check(appSig("/Applications/Orch.app", codeRuntime, genuineCDHash)); ok || !strings.Contains(why, "installed bundle was signed without") {
+		t.Errorf("bundle without the runtime: %v %q", ok, why)
+	}
+	if ok, why := fakeVerifier().check(signedConn{err: errors.New("not signed")}); ok || why != "" {
+		t.Errorf("a program that is no Orch.app gets a reason: %q", why)
+	}
+	if (*appCheck)(nil).isApp() {
+		t.Fatal("no check is Orch.app")
+	}
+	// The line is rate-limited and quoted: a flood of refused copies, or a
+	// path with a newline, cannot fill or forge orchd's log.
+	appLogs.last = time.Time{}
+	before := strings.Count(logs.String(), "\n")
+	for range 20 {
+		(&appCheck{v: fakeVerifier(), c: appSig("/tmp/x\nforged line/Orch.app", codeRuntime, genuineCDHash), pid: 51}).isApp()
+	}
+	if got := strings.Count(logs.String(), "\n") - before; got != 1 || strings.Contains(logs.String(), "\nforged line") {
+		t.Fatalf("%d lines logged for 20 refused copies:\n%s", got, logs.String())
+	}
+	l := &logLimit{every: time.Minute}
+	now := time.Now()
+	if !l.allow(now) || l.allow(now.Add(time.Second)) || !l.allow(now.Add(2*time.Minute)) {
+		t.Fatal("logLimit")
 	}
 }

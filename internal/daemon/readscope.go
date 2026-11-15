@@ -81,7 +81,8 @@ func (s *server) readScope(ctx context.Context, method string) readScope {
 
 // readableBy lists the spaces caller c reads under res.
 //
-//   - The operator, shown to be the user (D-39), reads every space.
+//   - The operator shown to be Orch.app by its code signature (D-71)
+//     reads every space.
 //   - A session reads what its pin's space reads (D-16): itself, every
 //     public space, and the private spaces it lists. A pin is only ever
 //     taken by a harness in its own session's tree (SP-041 refuses starting
@@ -128,7 +129,7 @@ func readerLabel(c resolvedCaller) string {
 		return "task " + printableID(c.task.TaskID)
 	case callerOperator:
 		if c.operatorBy == "" {
-			return "the operator (no terminal or Orch.app)"
+			return "the operator (not Orch.app)"
 		}
 		return "the operator"
 	}
