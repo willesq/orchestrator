@@ -145,6 +145,20 @@ public nonisolated struct Orchd_V1_SearchResponse: Sendable {
   /// empty when the search ran as asked.
   public var fallback: String = String()
 
+  /// What the caller's spaces let it search (SP-031), as orchd decided them
+  /// from the caller alone. caller_space is the space of the caller's session
+  /// or queued task; empty for any other caller.
+  public var callerSpace: String = String()
+
+  /// collections are the collections searched: every one when scoped is
+  /// false, otherwise only the readable spaces' own.
+  public var collections: [String] = []
+
+  /// scoped: the search read only the caller's readable spaces. False with
+  /// no spaces policy, for the operator (Orch.app), or while memory
+  /// filtering is switched off.
+  public var scoped: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -676,6 +690,17 @@ public nonisolated struct Orchd_V1_SpacesStatus: @unchecked Sendable {
   /// Clears the value of `quarantine`. Subsequent reads from it will return its default value.
   public mutating func clearQuarantine() {_uniqueStorage()._quarantine = nil}
 
+  /// counts (SP-031) is what the spaces hold, as the caller may see it;
+  /// unset with no policy configured.
+  public var counts: Orchd_V1_SpacesCounts {
+    get {_storage._counts ?? Orchd_V1_SpacesCounts()}
+    set {_uniqueStorage()._counts = newValue}
+  }
+  /// Returns true if `counts` has been explicitly set.
+  public var hasCounts: Bool {_storage._counts != nil}
+  /// Clears the value of `counts`. Subsequent reads from it will return its default value.
+  public mutating func clearCounts() {_uniqueStorage()._counts = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -693,6 +718,68 @@ public nonisolated struct Orchd_V1_QuarantineCounts: Sendable {
   public var sources: Int32 = 0
 
   public var chunks: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// SpacesCounts is how much content the spaces hold and how far a relabel has
+/// got (SP-031). The operator (Orch.app) sees every space; any other caller
+/// sees only the spaces it reads (its own and public ones), and the relabel
+/// totals cover only those.
+public nonisolated struct Orchd_V1_SpacesCounts: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// by name
+  public var spaces: [Orchd_V1_SpaceCount] = []
+
+  /// every_space is set when spaces lists every space of the policy.
+  public var everySpace: Bool = false
+
+  /// Chunks counted and how many of them the applied revision has not yet
+  /// labelled ('orch rag relabel' brings them up to it). For the operator
+  /// they cover every collection: unplaced content and quarantine too.
+  public var chunks: Int32 = 0
+
+  public var stale: Int32 = 0
+
+  /// conflicts are live sessions whose first folder two isolated spaces
+  /// claim under the applied policy, so they have no space. Counted for the
+  /// operator only (conflicts_counted).
+  public var conflicts: Int32 = 0
+
+  public var conflictsCounted: Bool = false
+
+  /// unix seconds the counts were taken
+  public var countedAt: Int64 = 0
+
+  /// error says why the store could not be counted; the other fields are
+  /// then empty.
+  public var error: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// SpaceCount is one space's collection.
+public nonisolated struct Orchd_V1_SpaceCount: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var space: String = String()
+
+  /// public | private | isolated
+  public var kind: String = String()
+
+  public var chunks: Int32 = 0
+
+  /// not yet labelled by the applied revision
+  public var stale: Int32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -5507,7 +5594,7 @@ nonisolated extension Orchd_V1_SearchRequest: SwiftProtobuf.Message, SwiftProtob
 
 nonisolated extension Orchd_V1_SearchResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}hits\0\u{1}fallback\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}hits\0\u{1}fallback\0\u{3}caller_space\0\u{1}collections\0\u{1}scoped\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5517,6 +5604,9 @@ nonisolated extension Orchd_V1_SearchResponse: SwiftProtobuf.Message, SwiftProto
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.hits) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.fallback) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.callerSpace) }()
+      case 4: try { try decoder.decodeRepeatedStringField(value: &self.collections) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.scoped) }()
       default: break
       }
     }
@@ -5529,12 +5619,24 @@ nonisolated extension Orchd_V1_SearchResponse: SwiftProtobuf.Message, SwiftProto
     if !self.fallback.isEmpty {
       try visitor.visitSingularStringField(value: self.fallback, fieldNumber: 2)
     }
+    if !self.callerSpace.isEmpty {
+      try visitor.visitSingularStringField(value: self.callerSpace, fieldNumber: 3)
+    }
+    if !self.collections.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.collections, fieldNumber: 4)
+    }
+    if self.scoped != false {
+      try visitor.visitSingularBoolField(value: self.scoped, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Orchd_V1_SearchResponse, rhs: Orchd_V1_SearchResponse) -> Bool {
     if lhs.hits != rhs.hits {return false}
     if lhs.fallback != rhs.fallback {return false}
+    if lhs.callerSpace != rhs.callerSpace {return false}
+    if lhs.collections != rhs.collections {return false}
+    if lhs.scoped != rhs.scoped {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -6405,7 +6507,7 @@ nonisolated extension Orchd_V1_StatusResponse: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SpacesStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}configured\0\u{3}applied_revision\0\u{3}draft_revision\0\u{1}drift\0\u{1}error\0\u{1}relaxed\0\u{3}enforcement_error\0\u{1}sandbox\0\u{1}quarantine\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}configured\0\u{3}applied_revision\0\u{3}draft_revision\0\u{1}drift\0\u{1}error\0\u{1}relaxed\0\u{3}enforcement_error\0\u{1}sandbox\0\u{1}quarantine\0\u{1}counts\0")
 
   fileprivate class _StorageClass {
     var _configured: Bool = false
@@ -6417,6 +6519,7 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
     var _enforcementError: String = String()
     var _sandbox: Orchd_V1_SandboxSetting? = nil
     var _quarantine: Orchd_V1_QuarantineCounts? = nil
+    var _counts: Orchd_V1_SpacesCounts? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -6436,6 +6539,7 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
       _enforcementError = source._enforcementError
       _sandbox = source._sandbox
       _quarantine = source._quarantine
+      _counts = source._counts
     }
   }
 
@@ -6463,6 +6567,7 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
         case 7: try { try decoder.decodeSingularStringField(value: &_storage._enforcementError) }()
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._sandbox) }()
         case 9: try { try decoder.decodeSingularMessageField(value: &_storage._quarantine) }()
+        case 10: try { try decoder.decodeSingularMessageField(value: &_storage._counts) }()
         default: break
         }
       }
@@ -6502,6 +6607,9 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
       try { if let v = _storage._quarantine {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
       } }()
+      try { if let v = _storage._counts {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -6520,6 +6628,7 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
         if _storage._enforcementError != rhs_storage._enforcementError {return false}
         if _storage._sandbox != rhs_storage._sandbox {return false}
         if _storage._quarantine != rhs_storage._quarantine {return false}
+        if _storage._counts != rhs_storage._counts {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -6559,6 +6668,116 @@ nonisolated extension Orchd_V1_QuarantineCounts: SwiftProtobuf.Message, SwiftPro
   public static func ==(lhs: Orchd_V1_QuarantineCounts, rhs: Orchd_V1_QuarantineCounts) -> Bool {
     if lhs.sources != rhs.sources {return false}
     if lhs.chunks != rhs.chunks {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SpacesCounts: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SpacesCounts"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}spaces\0\u{3}every_space\0\u{1}chunks\0\u{1}stale\0\u{1}conflicts\0\u{3}conflicts_counted\0\u{3}counted_at\0\u{1}error\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.spaces) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.everySpace) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.chunks) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.stale) }()
+      case 5: try { try decoder.decodeSingularInt32Field(value: &self.conflicts) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.conflictsCounted) }()
+      case 7: try { try decoder.decodeSingularInt64Field(value: &self.countedAt) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.error) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.spaces.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.spaces, fieldNumber: 1)
+    }
+    if self.everySpace != false {
+      try visitor.visitSingularBoolField(value: self.everySpace, fieldNumber: 2)
+    }
+    if self.chunks != 0 {
+      try visitor.visitSingularInt32Field(value: self.chunks, fieldNumber: 3)
+    }
+    if self.stale != 0 {
+      try visitor.visitSingularInt32Field(value: self.stale, fieldNumber: 4)
+    }
+    if self.conflicts != 0 {
+      try visitor.visitSingularInt32Field(value: self.conflicts, fieldNumber: 5)
+    }
+    if self.conflictsCounted != false {
+      try visitor.visitSingularBoolField(value: self.conflictsCounted, fieldNumber: 6)
+    }
+    if self.countedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.countedAt, fieldNumber: 7)
+    }
+    if !self.error.isEmpty {
+      try visitor.visitSingularStringField(value: self.error, fieldNumber: 8)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SpacesCounts, rhs: Orchd_V1_SpacesCounts) -> Bool {
+    if lhs.spaces != rhs.spaces {return false}
+    if lhs.everySpace != rhs.everySpace {return false}
+    if lhs.chunks != rhs.chunks {return false}
+    if lhs.stale != rhs.stale {return false}
+    if lhs.conflicts != rhs.conflicts {return false}
+    if lhs.conflictsCounted != rhs.conflictsCounted {return false}
+    if lhs.countedAt != rhs.countedAt {return false}
+    if lhs.error != rhs.error {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SpaceCount: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SpaceCount"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}space\0\u{1}kind\0\u{1}chunks\0\u{1}stale\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.space) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.chunks) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.stale) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.space.isEmpty {
+      try visitor.visitSingularStringField(value: self.space, fieldNumber: 1)
+    }
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 2)
+    }
+    if self.chunks != 0 {
+      try visitor.visitSingularInt32Field(value: self.chunks, fieldNumber: 3)
+    }
+    if self.stale != 0 {
+      try visitor.visitSingularInt32Field(value: self.stale, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SpaceCount, rhs: Orchd_V1_SpaceCount) -> Bool {
+    if lhs.space != rhs.space {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.chunks != rhs.chunks {return false}
+    if lhs.stale != rhs.stale {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -3711,6 +3711,56 @@
         "resolution": "Settled as D-76; built by SP-079."
       },
       {
+        "id": "RC-1100",
+        "kind": "decision",
+        "topic": "Quarantine counts in orch status are shown to every caller",
+        "detail": "SP-031.1.a1 says agent callers see counts only for their own space and public ones. SP-031 narrows its own counts (chunks per space, relabel totals, conflicts) that way, but SP-028's quarantine totals (SpacesStatus.quarantine: sources and chunks, never a source) stay open to every caller, as SP-028 designed and tested (TestStatusCountsQuarantine). SP-031 reads a1's counts as per-space counts, which a quarantine total is not. Options: (a) keep: a quarantine total names no space; (b) send quarantine totals to Orch.app only, as SP-031 does for conflicts. Recommendation: (a), unless the user wants status to say nothing about content a session cannot read.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-031",
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1101",
+        "kind": "follow-up",
+        "topic": "Orch.app can show SP-031's counts (rest of RC-501)",
+        "detail": "Status now carries SpacesStatus.counts: chunks and not-yet-relabelled chunks per space, relabel totals and live sessions in a conflict, all of them for Orch.app. With SP-028's quarantine counts this supplies every count RC-501 lists. The Spaces pane does not read them yet (SpacesOverviewModel's relabel source, chunk counts, and conflicts from ExplainPlacement per quarantined session, RC-502). That is a macOS change for a later lane.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-051",
+          "SP-031"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1102",
+        "kind": "follow-up",
+        "topic": "SP-031 security review lows accepted",
+        "detail": "(1) The counts are taken under the cache's lock, so a slow count (up to the 3 s limit, plus any file or git read on a hung mount that does not honor it) holds up other Status calls; any caller can trigger it at most once per 30 s. A single-flight refresh that serves the last counts would remove the wait. (2) Conflicts are counted by placing each live quarantined session's first folder again under the policy applied now, not the one at pin time (as RC-502 describes for the app); recording the outcome on the pin needs a migration. Fixed in the PR: the count is detached from the caller's cancellation, a partial conflict count is a failure, and an unscoped search under a policy (memory filtering off) names collections to Orch.app only.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-031"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1103",
+        "kind": "follow-up",
+        "topic": "rag_search does not show the search boundary",
+        "detail": "SearchResponse now says the caller's space, whether the search was scoped and the collections read; orch rag why prints them. The MCP rag_search tool and auto-RAG ignore them. Adding a one-line footer to rag_search would show agents the boundary too; not required by SP-031.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-031"
+        ],
+        "status": "open"
+      },
+      {
         "id": "RC-1300",
         "kind": "follow-up",
         "topic": "A fresh Codex task's session gets no pin",
@@ -6671,18 +6721,20 @@
               "threshold": "pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: Six fields in orch status: TestSpacesSectionShowsCounts (internal/status) renders, for the operator, the spaces, each space's chunks (and not-yet-relabelled chunks), quarantine (SP-028's counts), conflicts, drift ('none' when none) and relabel progress; for a session only the spaces orchd counted for it, and conflicts marked as the operator's. TestSpacesSectionCountEdges (internal/status): no counts, a failed count, an empty store, a control character in a space name. Narrowing in orchd: TestStatusCountsOnlyWhatTheCallerReads (internal/daemon) over the SP-025 read fixture: Orch.app gets every space, totals over every collection (unplaced and quarantine included, 12 stale) and 1 conflict (a live quarantined session whose folder acme's root and globex's remote both claim; an ended one and a scratch folder are not counted); a session in acme gets acme, oss and personal; in globex, globex and oss; in quarantine, a task from globex, the operator when not Orch.app and an unidentified caller get only their readable spaces, totals over those, and no conflicts. TestStatusCountsAreCached, TestStatusCountsNeedAPolicy, TestConflictCountFailureIsNotAnAnswer (internal/daemon); TestCountSpacesCountsEachCollection, TestCountSpacesStoreFailure (internal/rag). rag why: TestSearchReportsWhatWasSearched, TestSearchWithoutCollections, TestSearchUnscopedHidesCollections (internal/daemon), TestSearchCollectionsNamesWhatSearchReads (internal/rag), TestExplainRecordsWhatWasSearched (internal/hook), TestRAGWhyShowsTheSearchBoundary (internal/cli). Result: all pass; go test ./... and go vet ./... exit 0; make cover: all files >= 80% (internal/daemon/spacecounts.go 90.7%, searchscope.go 100%, internal/rag/spacecounts.go 86.4%, internal/status/spacecounts.go 100%)."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "e1813d3b6fd0dc40f52d79b2cb0ff7b815d79258",
+      "verified_at": "2026-11-15T05:42:19Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f334012d02c2c9c118e211015950a80e0234c453ca65ed1894ac756872e8c3be",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-031-status-visibility",
+      "pr": "https://github.com/willesq/orchestrator/pull/197"
     },
     {
       "id": "SP-044",
