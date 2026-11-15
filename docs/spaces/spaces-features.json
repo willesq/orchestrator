@@ -5708,7 +5708,8 @@
             "a1: TestRelabelMakesStaleChunksReadableInTheirSpace (internal/rag): chunks stored unplaced or SP-023-placed in the base, and a chunk a revision change put in another space, are not found by a search of the space they belong to before the relabel and are found there after, each in its own space's collection with its vector unchanged. TestRelabelPlacesStoredContent (internal/daemon): orchd's relabel placer over the example policy, 17 stored sources (stored origin; docs, sources, hand-off and session URIs with no origin; client notes; no writer; links; unpinned sessions; a conflict) land in the expected space or quarantine (INV-03). Partial for INV-08: a stale chunk left in its own space's collection by a revision change stays readable there until reads filter on labels_v (RC-750).",
             "a2: TestRelabelSecondRunChangesNothing: the second run reports Changed=0 and Stale=0 and sends no write request. TestIntegrationRelabel40k: the second run on real Qdrant 1.17.1 reports Changed=0.",
             "a3: TestRelabelResumesAfterInterruption (a run stopped between copy and delete; a run cancelled part-way): count before = count after the resumed run, no source in two collections, a third run changes 0. TestRelabelChangedPlacementAfterInterruption: a source copied by a stopped run and then placed elsewhere, with a failed clean-up in between, ends in the second space only.",
-            "a4: TestRAGRelabelDryRunPrintsOnlyCountsAndSpaceNames (internal/cli): 'orch rag relabel --dry-run' sends Relabel with apply=false and its output contains only the report's fixed words, counts and space names. TestRelabelDryRunOutputHasOnlyCountsAndSpaceNames (internal/rag): a dry run sends no write request and rag.WriteRelabelReport names no source URI, chunk text or collection. TestRelabelRPC (internal/daemon): the RPC answers the operator with counts and space names only and refuses sessions and queued tasks."
+            "a4: TestRAGRelabelDryRunPrintsOnlyCountsAndSpaceNames (internal/cli): 'orch rag relabel --dry-run' sends Relabel with apply=false and its output contains only the report's fixed words, counts and space names. TestRelabelDryRunOutputHasOnlyCountsAndSpaceNames (internal/rag): a dry run sends no write request and rag.WriteRelabelReport names no source URI, chunk text or collection. TestRelabelRPC (internal/daemon): the RPC answers the operator with counts and space names only and refuses sessions and queued tasks.",
+            "Independent verifier (2 rounds, at 85bb60e): a1-a4 and DOD-1 to DOD-9 pass, with CI green (test, build, app). INV-03 holds; INV-08 is partial until reads filter on labels_v (RC-750, covered by SP-025)."
           ]
         },
         {
@@ -5724,14 +5725,15 @@
             }
           ],
           "evidence": [
-            "a1: TestIntegrationRelabel40k (ORCH_QDRANT_BENCH=1, its own Qdrant 1.17.1 on 127.0.0.1:6471, temporary storage, collections sp-027-*): the SP-002 corpus of 40,000 chunks (384 dimensions) stored unplaced in one base collection, every chunk placed and moved with its vectors to one of four space collections: 35.7 s, and 36.0 s after the security-audit fixes. Threshold <= 5 min met."
+            "a1: TestIntegrationRelabel40k (ORCH_QDRANT_BENCH=1, its own Qdrant 1.17.1 on 127.0.0.1:6471, temporary storage, collections sp-027-*): the SP-002 corpus of 40,000 chunks (384 dimensions) stored unplaced in one base collection, every chunk placed and moved with its vectors to one of four space collections: 35.7 s, and 36.0 s after the security-audit fixes. Threshold <= 5 min met.",
+            "Independent verifier: TestIntegrationRelabel40k rerun on its own engine, 40,000 chunks moved in 33.5 s."
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "85bb60e",
+      "verified_at": "2026-11-15T00:57:05Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "4f938c395fd884456515aa918dc77679f7a6eeab255ddd19b523e7bfad99e52b",
