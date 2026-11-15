@@ -1,0 +1,12 @@
+{
+  "id": "RC-1902",
+  "kind": "user-action",
+  "topic": "Update and close issue #130 (memory partitions), which memory spaces now cover",
+  "detail": "SP-065's summary asks for issue https://github.com/willesq/orchestrator/issues/130 to be updated or closed. The issue has not been updated yet. Proposed comment, then close as completed: 'Memory spaces cover this request: each job's memory, sessions, tasks and PRs live in their own space, orchd filters every read by the caller's space, a pre-tool guard keeps sessions out of other jobs' folders and repos, and outbound terms per space refuse commits, pushes and GitHub writes that carry them elsewhere. Spaces are off by default; see docs/SPACES.md for setup and its limits (files on disk, hostile local processes, model providers, paraphrase).'",
+  "source": "https://github.com/willesq/orchestrator/pull/217",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-065"
+  ],
+  "status": "open"
+}

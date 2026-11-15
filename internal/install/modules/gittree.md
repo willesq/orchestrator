@@ -18,8 +18,8 @@ description: "Start every branch with the gittree worktree script."
   - Default branch (`main`/`master`) is auto-detected and fetched.
   - If the branch already exists locally or on the remote, `gittree` prompts
     `Use existing branch ... [y/N]`. For greenfield work, answer `N` and pick another name.
-  - Example: `cd ~/code/Unstructured-IO/infra && gittree feat/my-feature` →
-    `~/code/Unstructured-IO/infra.worktrees/feat/my-feature` off `origin/main`.
+  - Example: `cd ~/code/acme/infra && gittree feat/my-feature` →
+    `~/code/acme/infra.worktrees/feat/my-feature` off `origin/main`.
   - **Never substitute `git worktree add` or `git checkout -b`** even when directness tempts
     you — this alias is used consistently so worktrees land in a predictable location and the
     default branch always resolves correctly.

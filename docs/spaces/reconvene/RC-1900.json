@@ -1,0 +1,14 @@
+{
+  "id": "RC-1900",
+  "kind": "follow-up",
+  "topic": "An unlocked terminal can still search chat direct messages under a policy (D-81 gap)",
+  "detail": "D-81 says terminals, even unlocked, do not search DMs; under a policy only Orch.app does. The code lets an unlocked terminal through: SearchDirectMessages (internal/daemon/chat_search.go) calls refuseNonOperator, which accepts operatorBy == operatorUnlock (internal/daemon/callers.go operator()), and the RPC is not in unlockWeakens (internal/daemon/unlock_scope.go), so `orch spaces unlock -- orch search --direct-messages` searches DMs. No test covers it. Proposed fix: refuse SearchDirectMessages to an unlocked caller (add it to the unlock refusals with its own message, not D-78's 'weaken protection' wording), add a test beside TestUnlockCannotWeakenProtection, check TestSpacesPaneParityAccess still passes, update the `--direct-messages` flag help (internal/cli/commands.go) and the sentences in docs/SPACES.md, docs/internals/daemon.md and docs/internals/memory.md that describe the gap. Impact is limited today because nothing runs the chat connectors (RC-1650), so no DMs are stored.",
+  "source": "https://github.com/willesq/orchestrator/pull/217",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-060",
+    "SP-077",
+    "SP-083"
+  ],
+  "status": "open"
+}

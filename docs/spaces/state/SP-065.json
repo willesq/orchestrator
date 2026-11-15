@@ -1,14 +1,19 @@
 {
   "id": "SP-065",
-  "status": "todo",
-  "passes": false,
-  "verified_sha": null,
-  "verified_at": null,
+  "status": "done",
+  "passes": true,
+  "verified_sha": "05867936b526fa11b6247fe32f12508322082f93",
+  "verified_at": "2026-11-15T22:30:21Z",
   "blocked_reason": null,
-  "attempts": 0,
-  "branch": null,
-  "pr": null,
+  "attempts": 1,
+  "branch": "feat/sp-065-docs-consolidation",
+  "pr": "https://github.com/willesq/orchestrator/pull/217",
   "evidence": {
-    "SP-065.1": []
+    "SP-065.1": [
+      "a1: reference check of every relative link and #anchor in tracked Markdown and HTML under docs/, README.md, AGENTS.md and internal/install/: 0 broken (lane checker, and the independent verifier's own checker over 90 files, 454 references, 146 anchors); git diff --check origin/main...HEAD: 0 whitespace errors.",
+      "a2: docs/SPACES.md 'Limits' names files on disk, hostile local processes, model providers and paraphrase (plus chat permissions and uncovered harnesses); 'Harness coverage' is a per-harness table for Claude Code, Codex and Gemini CLI, and orch status prints a '<harness> tool hooks' line per harness while spaces are on (internal/status/status.go). Hands-on review waived by user on 2026-11-15 (D-82); the independent verifier checked the section and 12 claims against the code.",
+      "Summary items: user guide docs/SPACES.md; RAG_SENSITIVITY_PLAN.md marked superseded; issue #130 recorded for the user as RC-1902 with a proposed comment; docs/internals, OPERATIONS, INSTALL, MEMORY, README and ARCHITECTURE checked against main; two code gaps recorded (RC-1900, RC-1901).",
+      "DOD: go test ./... and go vet ./... exit 0; gofmt clean on the two changed test files (string edits only, make cover unaffected); all six docs_to_update files changed; security review 0 critical/high/medium (lows fixed); signed Conventional commits; CI test and build green on #217; independent verifier passed a1, a2 and DOD-1..9 at 0586793."
+    ]
   }
 }

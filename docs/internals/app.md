@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches, the directory validator and the spaces' logins (`Spaces`, `SpacesModel`, `SpaceLogins`), the Spaces pane's Overview and badge (`SpacesOverview`, `SpacesOverviewModel`), its advanced editors (`SpacesEditor`, `SpacesEditorModel`, `SpacesPolicyEdit`, `SpacesAccess`, `SpacesRootsTree`, `SpacesRules`, `SpacesCoverage`), command palette matching (`CommandPalette`) and its Spaces entries (`SpacesPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`, `SpacesView`, `SpacesEditorView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches, the directory validator and the spaces' logins (`Spaces`, `SpacesModel`, `SpaceLogins`), the Spaces pane's Overview and badge (`SpacesOverview`, `SpacesOverviewModel`), its advanced editors (`SpacesEditor`, `SpacesEditorModel`, `SpacesPolicyEdit`, `SpacesAccess`, `SpacesRootsTree`, `SpacesRules`, `SpacesCoverage`), command palette matching (`CommandPalette`) and its Spaces entries (`SpacesPalette`), direct-message search (`DirectMessages`), the operator unlocks (`Unlocks`), the outbound rules (`OutboundRules`), the per-feature model store (`FeatureStore`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`, `SpacesView`, `SpacesEditorView`, `DirectMessageSearchView`), the connection (`AppClient`, `UnreachableDaemon`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 | `OrchAppSnapshots` | Renders app views to PNGs in light and dark from sample data, with no orchd; runs only when `ORCH_SNAPSHOT_DIR` is set (see [Snapshots](#snapshots)) |
 
@@ -110,9 +110,10 @@ and asks.
   ("reverts to block-other-jobs in 14:59"). Each layer's menu lists its states, each with a
   duration: until changed, 15 minutes, 1 hour, 4 hours or 24 hours (`for_seconds`). A state that
   stops the layer enforcing (off, or the guard's log) is confirmed first, naming how long it lasts;
-  a stricter one is sent at once. `SetEnforcement` is operator-only, so the app works when the user
-  opened it; orchd's refusal (for example, a copy started from an agent's terminal) shows under the
-  layer, as do the notes it returns.
+  a stricter one is sent at once. `SetEnforcement` is operator-only, and under a policy orchd
+  recognizes the installed app by its code signature (D-71); orchd's refusal (for example, a copy
+  started from an agent's terminal, or a build orchd does not recognize as Orch.app) shows under
+  the layer, as do the notes it returns.
 - **Kept current:** `EnforcementModel` reads `GetEnforcement` every 10 s for the whole app, just
   after a timed switch's expiry when that comes sooner, after every switch, and when Settings →
   Spaces or the menu bar panel opens. A switch made with `orch spaces enforce` shows within 10 s.
@@ -406,7 +407,8 @@ types); setup applies only its own draft, so it never sets `accept_agent_draft` 
   `~/Developer`, …; **Add Folder…** and **Scan Again** change them). The scan writes nothing. The
   only write before Apply is the draft revision Review saves, which enforces nothing.
 - **Scan:** checkouts found (and how many have no GitHub remote), each gh login's orgs, and the
-  visibility per owner. Chat has no connector yet.
+  visibility per owner. Chat workspaces are not scanned: the Slack and Teams connectors exist, but
+  nothing runs them yet (RC-1650).
 - **Spaces:** one group per GitHub owner with a believed remote, with a plain-language kind:
   **Job: keep separate** (isolated), **Personal** (private), **Open** (public) or **Leave out**.
   The proposal: an owner already bound in the applied policy keeps its space and is locked (change
@@ -420,8 +422,8 @@ types); setup applies only its own draft, so it never sets `accept_agent_draft` 
   or an Open owner's private repo (which must stay in quarantine); a Job's root also never holds
   a Personal or left-out owner's checkouts, only public forks and checkouts without a GitHub
   remote. A truncated scan proposes no roots. Open spaces get no root (D-65):
-  local folders reach public only through an explicit `public_paths` list (SP-076, not on main
-  yet), so setup never writes one. Roots are then checked against each other and the applied ones
+  local folders reach public only through an explicit `public_paths` list (SP-076), which setup
+  never writes; the advanced editor's Edit page sets it ([Edit](#spaces-pane-edit-sp-053)). Roots are then checked against each other and the applied ones
   with the stricter-only rule (INV-14), shallow first; a root that breaks it is shown as "Not
   bound" with the reason. The tree shows every root, applied ones marked.
 - **gh profiles:** each new Job gets `gh_config_dir` `~/.config/gh-<space>`, editable. Its login
@@ -641,7 +643,9 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
 - **Memory → Direct messages (SP-083, D-81):** the operator's search of chat, direct messages
   included, through `SearchDirectMessages` with source type `chat`, the only read that returns
   DMs. orchd allows it only for the operator, which under a policy is Orch.app alone (D-71); with
-  spaces off (#209) the app is still the operator and the view works the same.
+  spaces off (#209) the app is still the operator and the view works the same. Terminals and
+  agent sessions are meant not to search DMs (D-81). Until the chat connectors are scheduled
+  (RC-1650), nothing stores chat, so the view finds only what was ingested by hand.
   (`DirectMessages`, `DaemonClient+DirectMessages` in OrchKit; `DirectMessagesFeature`,
   `DirectMessageSearchView` in the app, wired as described in [Adding a feature](#adding-a-feature)
   and handed to the window through the SwiftUI environment.)

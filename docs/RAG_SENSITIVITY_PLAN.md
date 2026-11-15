@@ -1,7 +1,8 @@
 # Spec: RAG sensitivity tagging + subagent context isolation
 
-**Status:** draft, awaiting review. Nothing here is built.
-**Author:** william + Claude (interactive)
+**Status:** superseded by memory spaces ([SPACES.md](SPACES.md); built by the spaces plan in
+[spaces/](spaces/spaces-features.json)). Nothing here was built as written. Kept for context only.
+**Author:** the maintainer, with a coding agent
 **Date:** 2026-05-12
 **Related:** the retired Python implementation's `SPEC.md` §3.3 (Chunk), §3.4 (Source types), §5.2 (RAG MCP), §8.2 (UserPromptSubmit hook)
 
@@ -14,11 +15,18 @@
 > Re-verify every implementation detail before building. Moved into the repository on
 > 2026-10-06.
 
+> **Superseded.** Memory spaces replaced this design. Where this spec wanted a
+> `sensitivity="secret"` level, orch instead keeps each job's content in its own space, and treats
+> direct messages as a content kind that is stored and searchable only on request: never added to
+> prompts, never given to tasks (D-19), and searchable only by the operator (D-81). Slack and Teams connectors exist (`internal/feeds`), but orchd does not run them yet
+> (RC-1650). See [SPACES.md](SPACES.md#chat-feeds-and-direct-messages) and
+> [internals/memory.md](internals/memory.md#chat-feeds).
+
 ---
 
 ## 1. Problem
 
-william wants to ingest Slack DMs and selected private Slack channels into the orchestrator's RAG store as a personal historical reference layer — to recall what he discussed with whom, weeks or months later. The existing `comms_thread` source type supports the data shape, but the orchestrator's recall surface today has no sensitivity dimension: anything ingested is fair game for `mcp__rag__rag_search` and for the `UserPromptSubmit` hook's auto-injection block.
+The user wants to ingest Slack DMs and selected private Slack channels into the orchestrator's RAG store as a personal historical reference layer — to recall what they discussed with whom, weeks or months later. The existing `comms_thread` source type supports the data shape, but the orchestrator's recall surface today has no sensitivity dimension: anything ingested is fair game for `mcp__rag__rag_search` and for the `UserPromptSubmit` hook's auto-injection block.
 
 Two distinct risks make a naive ingest unacceptable:
 
@@ -40,7 +48,7 @@ The fix needs to be a *boundary*, not a *recommendation* — relying on prompt-l
 
 - Multi-tenant access control. This is a single-user machine; sensitivity is a self-protection mechanism, not authorization.
 - Encryption at rest. Qdrant payloads are already on a local-only machine; on-disk encryption is the OS's job (FileVault).
-- A "less than normal" sensitivity for content william is fine sharing externally. Two levels (`normal`, `secret`) is enough; add more later only if needed.
+- A "less than normal" sensitivity for content the user is fine sharing externally. Two levels (`normal`, `secret`) is enough; add more later only if needed.
 - Retroactive classification of existing records. Existing chunks stay `sensitivity="normal"` (implicit); only new ingests carry the tag explicitly.
 
 ## 4. Design
@@ -125,7 +133,7 @@ CLI (`orch search ...`): add `--secret` and `--only-secret` flags for filter mod
 New daemon: `daemons/slack_personal_sync.py` (or similar — match existing daemon naming).
 
 **Scope:**
-- DMs: all 1:1 and small-group DMs william is a participant in.
+- DMs: all 1:1 and small-group DMs the user is a participant in.
 - Private channels: explicit allowlist in `~/.claude/orchestrator/config.yaml` under a new `slack.personal_sync.private_channels` key. Defaults to empty — opt-in per channel.
 - Excludes: public channels (those use the existing `comms_thread` ingest paths if they're ever wired up; they're not in scope here and they aren't sensitive).
 
@@ -168,8 +176,8 @@ Total: ~3 days end-to-end, with Phase 1 + 2 unblocking actual Slack ingestion.
 - **MCP server caching.** If the RAG MCP server caches results across calls, the sensitivity filter must be part of the cache key. Audit `mcp_servers/rag` before Phase 1 lands.
 - **Slack thread updates.** A DM thread that grows over time gets re-ingested with the same URI. Confirm the dedupe path (content_hash mismatch → upsert) cleanly overwrites the prior version rather than appending. Existing behavior should already handle this; verify in Phase 3.
 - **Specialist explicitly asks for DM context.** If a research agent's task brief says "use the DM with X for context," the agent will be unable to retrieve it. This is intentional — the boundary is the point — but the parent session should be aware and include the relevant DM excerpts in the task body directly rather than expecting the specialist to fetch them. Document this in the `orch-dispatch` skill.
-- **`auto_memory` and `gap_fill` interaction.** Should the auto-memory ingestor ever tag records as `secret`? Probably no — memories are usage patterns and feedback, not content. Decided: auto-memory always `normal`. If william wants to record a sensitive preference, it can be ingested manually with `--secret`.
-- **Backup / portability.** If william clones the orchestrator state to another machine, secret content rides along. Acceptable — same trust boundary as the laptop itself. Worth a note in `SPEC.md` under operator guidance.
+- **`auto_memory` and `gap_fill` interaction.** Should the auto-memory ingestor ever tag records as `secret`? Probably no — memories are usage patterns and feedback, not content. Decided: auto-memory always `normal`. If the user wants to record a sensitive preference, it can be ingested manually with `--secret`.
+- **Backup / portability.** If the user clones the orchestrator state to another machine, secret content rides along. Acceptable — same trust boundary as the laptop itself. Worth a note in `SPEC.md` under operator guidance.
 
 ## 7. Out of scope (future work)
 
@@ -179,7 +187,7 @@ Total: ~3 days end-to-end, with Phase 1 + 2 unblocking actual Slack ingestion.
 
 ## 8. Review checklist
 
-Before implementation begins, confirm with william:
+Before implementation begins, confirm with the user:
 
 - [ ] Two sensitivity levels (`normal`, `secret`) is the right shape — no third tier needed.
 - [ ] Subagent boundary is **hard** (no opt-in for specialists), not soft (configurable).

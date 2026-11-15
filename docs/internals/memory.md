@@ -77,7 +77,8 @@ treated as success. A legacy collection with one unnamed dense vector is the `de
 is the *base*. Content placed in a space lives in its own collection, `<base>__<space>`
 (`rag.SpaceCollection`), Quarantine included as `<base>__quarantine`; unplaced content and
 `shared` (no policy applied) stay in the base itself, so with no policy orch uses one collection
-exactly as before (INV-10). Space names (`[a-z][a-z0-9_-]{0,31}`) never start with `_`, and a
+exactly as before (INV-10). While memory spaces are switched off, every space collection is merged
+back into the base ([Store moves](#store-moves-of-the-spaces-switch)). Space names (`[a-z][a-z0-9_-]{0,31}`) never start with `_`, and a
 migration target containing `__` is refused; a base that itself contains `__` (set by hand) can
 still read as another base's space, so a backup drop refuses a name under which the active
 collection would read as a space. The space collections are found by listing Qdrant's collections
@@ -617,7 +618,7 @@ can be off, and can cover every repo, only some, or all but some (`docs_owners.e
 migration `0021`). Names match case-insensitively. Opting out stops the sync and keeps what is indexed: the repo's
 row is marked `excluded`, which clears any failure it showed, so it stays in the catalog and search. Deleting those
 docs is a separate, confirmed step (`PurgeDocs`), refused for a repo still synced, since the next sync would only
-restore it. Opting a repo back in forgets its HEAD, so the next sync walks it and its status follows that sync;
+restore it. Under a spaces policy only Orch.app may purge docs, even from an unlocked terminal (D-77). Opting a repo back in forgets its HEAD, so the next sync walks it and its status follows that sync;
 files whose hash is unchanged are not embedded again. Widening or resuming makes the owner due. Changes are refused
 while a sync runs, because the sync would overwrite them from what it read at its start.
 
@@ -812,12 +813,14 @@ through the link is placed by the link's folder. It needs write access at that p
 may call (refused to queued tasks and harness sessions, since the report names spaces). A run
 that stops part-way still reports what it did, with a generic error. Under a policy the operator is Orch.app
 (D-71), whose Spaces pane counts stale chunks and runs it with **Relabel Now** (SP-079, D-76; see
-[app.md](app.md#spaces-pane-overview-sp-051)); orchd never starts one on its own.
+[app.md](app.md#spaces-pane-overview-sp-051)); a terminal unlocked from Orch.app (SP-077, D-78)
+may run it too. orchd never starts one on its own, and refuses it while memory spaces are off
+([daemon.md](daemon.md#spaces-switch)).
 
-**Not done yet.** Reads do not filter on `labels_v` yet (SP-025): a
-stale chunk left in its own space's collection by a revision change is readable there until
-relabelled; one stored in the base or another space's collection is not read by a search of the
-spaces it belongs to. A relabelled source's write hash still names its old placement, so its next
+**Until it runs.** Reads by a filtered reader match `labels_v` to the applied revision (SP-025,
+INV-08; see [Spaces](#spaces)), so a stale chunk is unreadable to sessions and tasks until the
+relabel moves it; one stored in the base or another space's collection is not read by a search
+of the spaces it belongs to either. A relabelled source's write hash still names its old placement, so its next
 write is stored again (embedded once) rather than skipped as unchanged.
 
 **Cost.** On the SP-002 corpus (40,000 chunks of 384 dimensions stored unplaced in one base
@@ -881,7 +884,8 @@ Quarantine is the space of content orchd could not place (INV-03), stored in its
   source. They are cached for 30 s, with a 2 s limit on counting, and refreshed after a purge.
 
 Both RPCs are operator-only: refused to queued tasks and, through `refuseNonOperator`, to harness
-sessions and processes orchd started. Chunks a relabel has not yet moved into the quarantine
+sessions and processes orchd started. Under a policy the operator is Orch.app or a terminal it
+unlocked (D-71, D-78). `PurgeQuarantine` is refused while memory spaces are off. Chunks a relabel has not yet moved into the quarantine
 collection are not counted until it does.
 
 ## Retag
@@ -916,7 +920,9 @@ A rag-level `Check` hook runs under the source's lock after the holders are coun
 anything changes; orchd uses it for the checks below, so they and the move see the same store.
 
 **In orchd** (`internal/daemon/retag.go`). `RetagSource` (`orch spaces retag`) is operator-only
-(`refuseNonOperator`, and on the operator-only list for queued tasks). It needs an applied policy
+(`refuseNonOperator`, and registered operator-only with `registerRPCs` in its handler's file,
+`internal/daemon/rpc_registry.go`; under a policy Orch.app or a terminal it unlocked, D-78). It is
+refused while memory spaces are off. It needs an applied policy
 that verifies, a space of that policy or `quarantine`, and the migration lock (shared with
 migrations, keyword re-indexes and relabels). Under the source's lock it refuses, changing nothing:
 
@@ -1016,7 +1022,10 @@ filters, once each; a comparison over fewer than 10 cases is never called signif
 
 ## Spaces
 
-Memory spaces separate what each job's sessions can read ([the spaces plan](../spaces/spaces-features.json)).
+Memory spaces separate what each job's sessions can read ([user guide](../SPACES.md),
+[the spaces plan](../spaces/spaces-features.json)). They are off by default: until the operator
+switches `spaces.enabled` on ([daemon.md](daemon.md#spaces-switch)), the store is one collection
+and every read covers it, as before spaces ([Store moves](#store-moves-of-the-spaces-switch)).
 The policy that defines them, the operator-only apply, and drift are described in
 [config.md](config.md#spaces-policy). `spaces.Resolved.CanRead(reader, target)` is the rule read
 paths will use: a space reads itself, every public space and the private spaces it lists, and
@@ -1133,7 +1142,8 @@ may call it on the same terms.
 `internal/feeds` is the chat connector framework (SP-060, D-07). The Slack connector is
 `internal/feeds/slack` (SP-061, [below](#slack-connector)); the Teams connector is
 `internal/feeds/teams` (SP-062, [below](#teams-connector)). Nothing runs a connector on a schedule
-yet, so no chat content is stored until orchd does.
+yet (RC-1650, RC-1701): the connectors and their tests exist, but orchd starts neither, has no
+setting naming a connector's profile directory, and stores no chat content today.
 
 - **Facts only.** A `feeds.Connector` reports each conversation (a thread, a container's messages
   outside threads, or a meeting's chat) as a `feeds.Record`: system (`slack` or `teams`), tenant,
@@ -1164,10 +1174,13 @@ yet, so no chat content is stored until orchd does.
   `chat_kind`. Every read (`Search`, `ListSources`, `GetDocument`, auto-RAG and `orch rag why`,
   for the operator too) filters out `chat_kind` `dm` and `group_dm` (`spaceStore.must`, a
   `must_not` condition), so DMs are never recalled into a prompt and never reach a queued task
-  (D-19). The one read that keeps them is `SearchDirectMessages`, behind
-  `orch search --direct-messages`: the operator's explicit search (`refuseNonOperator`: Orch.app
-  while a policy is applied, and with none a terminal outside any agent session). Queued tasks
-  and agents in interactive sessions are refused it, so text recalled from a chat cannot get an
+  (D-19). The one read that keeps them is `SearchDirectMessages`: the operator's explicit search
+  (`refuseNonOperator`), used by Orch.app's Memory → Direct messages view (SP-083) and by
+  `orch search --direct-messages`. While a policy is applied (or kept while spaces are off) only
+  Orch.app is meant to search DMs (D-81); orchd checks only for operator evidence, so a terminal
+  unlocked from Orch.app (SP-077) is not refused yet. With no policy, a terminal outside any
+  agent session is the operator and may search them. Queued tasks and agents in interactive
+  sessions are always refused it, so text recalled from a chat cannot get an
   agent to pull DMs into its context. With no policy, or with memory filtering switched off,
   chat content is in the shared store like everything else, but DMs are still left out of every
   read but this one; with no policy the operator is known only by its process tree, so a process
@@ -1182,11 +1195,13 @@ yet, so no chat content is stored until orchd does.
   passes the connector process that directory's path. The token stays inside the connector
   process and its profile (the Slack and Teams connectors implement this).
 - **Not yet.** Retention per space and kind, running connectors on a schedule, and the
-  settings naming each connector's profile directory and state file are not implemented.
+  settings naming each connector's profile directory and state file are not implemented
+  (RC-1650, RC-1701).
 
 ### Teams connector
 
 `teams.Connector` (SP-062) reads Microsoft Teams through Microsoft Graph v1.0 for `feeds.Sync`.
+Nothing in orchd runs it yet ([Chat feeds](#chat-feeds)); it is exercised only by its tests.
 
 - **What it reads.** The signed-in user's chats (`GET /me/chats`: `oneOnOne` is `dm`, `group`
   is `group_dm`, `meeting` is `meeting`; other chat types are not read) and the channels of the
@@ -1250,7 +1265,8 @@ yet, so no chat content is stored until orchd does.
 
 ### Slack connector
 
-`internal/feeds/slack` (SP-061) reads one Slack workspace for `feeds.Sync`.
+`internal/feeds/slack` (SP-061) reads one Slack workspace for `feeds.Sync`. Nothing in orchd
+starts the connector process yet ([Chat feeds](#chat-feeds)); it is exercised only by its tests.
 
 - **Order and scope.** A run reads only what the allowlist names for the workspace
   (`feeds.Allowlist.For("slack:<team>")`): the user's DMs and group DMs when DMs are on for it,

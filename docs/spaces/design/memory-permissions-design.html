@@ -146,6 +146,7 @@ footer { color: var(--muted); font-size: 0.88rem; border-top: 1px solid var(--li
   <span class="eyebrow">orch · memory permissions · design · 8 Nov 2026, updated 9 Nov 2026</span>
   <h1>Who may read what: a permission model for orch's memory</h1>
   <div class="callout warn">
+    <p><b>Status (2026-11-15):</b> Background design, written before the build. Every feature of the spaces plan is built except SP-064 (the optional OpenAPPA label source, deferred under D-75), and spaces ship <b>off by default</b> behind a master switch. For how spaces work today read <a href="../../SPACES.md">docs/SPACES.md</a> and <a href="../../internals/README.md">docs/internals/</a>; for decisions and status, the plan in <code>docs/spaces/spaces-features.json</code> (rendered at <a href="../index.html">docs/spaces/index.html</a>). Where this page disagrees with them, they win.</p>
     <p>Updated 2026-11-09 to match the plan. The authoritative plan is <code>docs/spaces/spaces-features.json</code> (rendered at <a href="../index.html">docs/spaces/index.html</a>); where they disagree, the plan wins.</p>
   </div>
   <p class="lede">A design for keeping two employers' work, open-source work, personal work, and future chat feeds (Slack, Teams) apart inside one orch memory store. It started from <a href="https://github.com/willesq/orchestrator/issues/130">#130</a> (memory partitions) and folds in the unbuilt <code>docs/RAG_SENSITIVITY_PLAN.md</code>. The first draft proposed compartments and sensitivity levels. The plan settled on <b>spaces</b>: one space per chunk, one Qdrant collection per space. This page describes that model and keeps the rejected options as a record of why.</p>
@@ -234,7 +235,7 @@ footer { color: var(--muted); font-size: 0.88rem; border-top: 1px solid var(--li
         <dt>Set by</dt><dd>orchd and connectors only, never clients</dd>
         <dt>Changes</dt><dd>never (except corrections during migration)</dd>
         <dt>Security role</dt><dd>the input the classifier reads</dd>
-        <dt>Examples</dt><dd><code>origin.system=slack</code>, <code>origin.tenant=T0123</code>, <code>origin.path=/Users/…/code/acme/api</code></dd>
+        <dt>Examples</dt><dd><code>origin.system=slack</code>, <code>origin.tenant=T0123</code>, <code>origin.path=~/code/acme/api</code></dd>
       </dl>
     </div>
     <div class="kind labels">
@@ -566,7 +567,7 @@ orch spaces why &lt;target&gt;           <span class="c"># where a path, URL, ow
 
 <section aria-labelledby="plan">
   <h2 id="plan">Rollout</h2>
-  <p>The plan's phases (<code>spaces-features.json</code> → <code>phases</code>). Done as of 2026-11-09: SP-001–004, SP-010–014, SP-020–022 and SP-063.</p>
+  <p>The plan's phases (<code>spaces-features.json</code> → <code>phases</code>), as planned on 2026-11-09. As of 2026-11-15 every phase is done except SP-064, deferred (D-75).</p>
   <ol class="order">
     <li><div><b>P0 Verify assumptions.</b> Hook payload fixtures (SP-001), Qdrant cost of a collection per space (SP-002), process identity (SP-003), harness sandbox layering (SP-004). <em>Done.</em></div></li>
     <li><div><b>P1 Spaces, pins and an enforcing guard.</b> Spaces policy, validation, apply and drift (SP-020), GitHub org identity (SP-021), placement classifier and <code>orch spaces why</code> (SP-022), session pins (SP-010, SP-011), tool hooks, target extraction and command log (SP-012–014) are done. Liveness, retention, log reading, the guard, switches, self-protection, live GitHub guard, replay and minimal app controls (SP-015–017, SP-040–043, SP-047, SP-070, SP-072) remain.</div></li>

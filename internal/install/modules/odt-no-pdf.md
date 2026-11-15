@@ -8,7 +8,7 @@ description: "Leave editable documents for the user to convert after review."
 ### 📄 Never convert ODT to PDF without explicit permission
 
 **NEVER convert an `.odt` (or any editable source document) to PDF unless the user explicitly
-asks in that message.** Applies to resumes (`~/Documents/William Esquivel Resume 2026.odt`,
+asks in that message.** Applies to resumes (`~/Documents/*Resume*.odt`,
 `~/Documents/resumes/*.odt`), cover letters, and any ODT-authored document.
 
 - Do **not** run `soffice` / `libreoffice` `--convert-to pdf`, `unoconv`, `docx2pdf`, or any

@@ -125,8 +125,8 @@ func TestPRWatchSkips(t *testing.T) {
 }
 
 func TestPRURLFromResponse(t *testing.T) {
-	stderr, _ := json.Marshal(map[string]string{"stdout": "", "stderr": "a pull request for branch \"x\" into branch \"main\" already exists:\nhttps://github.com/Unstructured-IO/infra/pull/5885"})
-	if got := prURLFromResponse(stderr); got != "https://github.com/Unstructured-IO/infra/pull/5885" {
+	stderr, _ := json.Marshal(map[string]string{"stdout": "", "stderr": "a pull request for branch \"x\" into branch \"main\" already exists:\nhttps://github.com/acme/infra/pull/5885"})
+	if got := prURLFromResponse(stderr); got != "https://github.com/acme/infra/pull/5885" {
 		t.Errorf("stderr: %q", got)
 	}
 	str, _ := json.Marshal("see https://github.com/a/b/pull/1 then https://github.com/a/b/pull/2")

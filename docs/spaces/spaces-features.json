@@ -4420,22 +4420,9 @@
     "coordinator": {
       "rc_range": "RC-229..RC-299"
     },
-    "active": [
-      {
-        "feature": "SP-081",
-        "rc_range": "RC-1550..RC-1599",
-        "note": "split shared registration points (D-80)"
-      },
-      {
-        "feature": "SP-082",
-        "rc_range": "RC-1600..RC-1649",
-        "note": "fix recurring flaky tests (D-80)"
-      }
-    ],
-    "next_rc_block": "RC-1650",
-    "queued": [
-      "SP-053 after SP-071 and SP-072 (a1 needs the user)"
-    ],
+    "active": [],
+    "next_rc_block": "RC-1950",
+    "queued": [],
     "d_ids_reserved": [],
     "next_d_id": "D-83",
     "proto_slot": {
@@ -4468,7 +4455,19 @@
       "SP-077 (#198, check waived under D-82)",
       "SP-052 (#193, check waived under D-82)",
       "SP-060 (#203)",
-      "SP-080 (#205)"
-    ]
+      "SP-080 (#205)",
+      "SP-082 (#206)",
+      "SP-081 (#207)",
+      "SP-062 (#211)",
+      "SP-061 (#213)",
+      "SP-053 (#214)",
+      "SP-083 (#215)",
+      "SP-055 (#216)",
+      "SP-065 (#217)",
+      "infrastructure: orch uninstall and one-command install (#208)",
+      "infrastructure: spaces opt-in, off by default (#209)",
+      "infrastructure: uninstall finds past installs (#210)"
+    ],
+    "note": "All features are done except SP-064, deferred under D-75. No lane is active."
   }
 }
