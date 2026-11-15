@@ -7035,11 +7035,11 @@
           ]
         }
       ],
-      "status": "blocked",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
-      "blocked_reason": "2026-11-14: SP-075.1 done; SP-075.2 needs new orchd RPCs (list/change outbound rules) for the CLI and the app, and under D-63 step 13 orchd.proto may change only after PR #182 (SP-074, ListSpacesResponse.logins = 4) merges. The app part also needs a place in the Spaces settings (SpacesSection.swift, owned by SP-074) and model wiring (OrchApp.swift, changed by three open PRs): coordinator to schedule.",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "cfe6e98",
+      "verified_at": "2026-11-15T00:06:19Z",
+      "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "f09b8ebcceabae3c53278bbf89426eec5db6e7a09c656b08af71fa359704171c",
       "branch": "feat/sp-075-configurable-outbound-rules",

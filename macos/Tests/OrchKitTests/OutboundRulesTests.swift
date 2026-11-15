@@ -195,4 +195,3 @@ private final class FakeRules: SpacesAPI, @unchecked Sendable {
         }
     }
 }
-
