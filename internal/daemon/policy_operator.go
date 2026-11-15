@@ -34,6 +34,8 @@ var policyOperatorOnly = map[string]string{
 	orchdv1.Orchd_LandPR_FullMethodName:            "push proposed commits",
 	orchdv1.Orchd_UndoPRLanding_FullMethodName:     "push proposed commits",
 	orchdv1.Orchd_DiscardPRLanding_FullMethodName:  "decide PR landings",
+	// D-77: purging deletes every space's synced docs.
+	orchdv1.Orchd_PurgeDocs_FullMethodName: "purge synced docs",
 }
 
 // settingsUnderPolicy returns what method would do when it is the

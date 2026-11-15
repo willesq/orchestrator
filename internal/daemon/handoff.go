@@ -256,8 +256,10 @@ func storeFile(ctx context.Context, ing summaryIngester, f handoff.File, home st
 	if synced, err := canonicalStored(ctx, ing, canonical, uri, resolved, rag.ContentHash(text)); synced || err != nil {
 		return err
 	}
+	// The hash goes with the write so a file under no root is placed by the
+	// session that wrote this text (SP-029); it is what IngestText computes.
 	_, err = ing.IngestText(ctx, text, rag.Meta{SourceURI: uri, SourceType: sourceType, Writer: rag.WriterFile,
-		Origin: rag.Origin{System: rag.OriginFS, Path: resolved}})
+		ContentHash: rag.ContentHash(text), Origin: rag.Origin{System: rag.OriginFS, Path: resolved}})
 	return err
 }
 

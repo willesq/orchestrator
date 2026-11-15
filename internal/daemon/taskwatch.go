@@ -162,6 +162,7 @@ func (s *server) sendTaskSnapshot(ctx context.Context, stream orchdv1.Orchd_Watc
 	if err != nil {
 		return err
 	}
+	list = s.tasksFor(ctx, s.watchScope(ctx), list)
 	return stream.Send(&orchdv1.TaskEvent{Kind: "snapshot", Tasks: s.tasksPB(ctx, list)})
 }
 
@@ -178,6 +179,7 @@ func (s *server) sendTaskChanges(ctx context.Context, stream orchdv1.Orchd_Watch
 			list = append(list, t)
 		}
 	}
+	list = s.tasksFor(ctx, s.watchScope(ctx), list)
 	if len(list) == 0 {
 		return nil
 	}
@@ -196,6 +198,7 @@ func (s *server) sendTaskTick(ctx context.Context, stream orchdv1.Orchd_WatchTas
 		}
 		list = append(list, got...)
 	}
+	list = s.tasksFor(ctx, s.watchScope(ctx), list)
 	// Reason: a tick only refreshes liveness, so it carries the ID, status
 	// and run of each task and none of its text; with many tasks the full
 	// rows could pass the client's message size limit every 15 s.
@@ -204,6 +207,13 @@ func (s *server) sendTaskTick(ctx context.Context, stream orchdv1.Orchd_WatchTas
 		tasks = append(tasks, &orchdv1.Task{Id: t.ID, Status: t.Status, UpdatedAt: t.UpdatedAt, Run: s.taskRun(ctx, t)})
 	}
 	return stream.Send(&orchdv1.TaskEvent{Kind: "tick", Tasks: tasks})
+}
+
+// watchScope is the scope a WatchTasks stream sends tasks under, decided
+// for each message so a policy applied while the stream is open applies to
+// what it sends next (SP-026).
+func (s *server) watchScope(ctx context.Context) readScope {
+	return s.recordScope(ctx, orchdv1.Orchd_WatchTasks_FullMethodName)
 }
 
 // tasksPB renders tasks for the wire, each unsettled one with its liveness.
