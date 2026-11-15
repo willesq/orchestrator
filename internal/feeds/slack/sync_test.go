@@ -58,6 +58,11 @@ func TestSlackFirstSync(t *testing.T) {
 	if len(e.api.called("", "COTHER")) != 0 {
 		t.Error("a channel off the allowlist was read")
 	}
+	for _, c := range e.api.called("conversations.history", "") {
+		if want := formatTS(testNow.Add(-DefaultHistory)); c.params["oldest"] != want {
+			t.Errorf("first sync of %s read from %q, want the default history %q", c.params["channel"], c.params["oldest"], want)
+		}
+	}
 	st, err := e.state.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -85,9 +90,11 @@ func TestSlackIncrementalSync(t *testing.T) {
 	if text := e.ing.byURI[uri("CPRIV", "2026-11-15")]; !strings.Contains(text, "who has the changelog?") || !strings.Contains(text, "changelog is in the wiki") {
 		t.Errorf("the day record is not whole:\n%s", text)
 	}
+	// The lookback reaches back further than the watermark's day here, so
+	// each conversation is read from the lookback, not its whole history.
 	for _, c := range e.api.called("conversations.history", "") {
-		if c.params["oldest"] == "" {
-			t.Errorf("history of %s read from the start on an incremental run", c.params["channel"])
+		if want := formatTS(testNow.Add(-DefaultLookback)); c.params["oldest"] != want {
+			t.Errorf("history of %s read from %q on an incremental run, want %q", c.params["channel"], c.params["oldest"], want)
 		}
 	}
 	if len(e.api.called("conversations.replies", "")) != 0 {
@@ -101,6 +108,20 @@ func TestSlackIncrementalSync(t *testing.T) {
 	e.sync(t)
 	if got := e.since(n); len(got) != 0 {
 		t.Errorf("a run with nothing new stored %v", got)
+	}
+	// Dedupe by content hash: with the watermark set back, the days and
+	// thread read again are unchanged and not sent.
+	st3, _ := e.state.Load()
+	cs := st3.Channels["CPRIV"]
+	cs.Latest, cs.Threads = "", nil
+	st3.Channels["CPRIV"] = cs
+	if err := e.state.Save(st3); err != nil {
+		t.Fatal(err)
+	}
+	n = len(e.ing.writes)
+	e.sync(t)
+	if got := e.since(n); len(got) != 0 {
+		t.Errorf("unchanged records were sent again: %v", got)
 	}
 }
 

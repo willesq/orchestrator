@@ -167,3 +167,25 @@ func chmod(t *testing.T, path string, mode os.FileMode) {
 		t.Fatal(err)
 	}
 }
+
+// TestServeScrubsToken: the connector process itself takes the token out
+// of record text, before anything leaves it (feeds.Sync's redaction is a
+// second layer).
+func TestServeScrubsToken(t *testing.T) {
+	e := newSyncEnv(t)
+	e.api.post("CPUB", 46, "UBOB", "token: "+testToken, "")
+	req := Request{Op: OpFetch, Profile: e.conn.Profile, Tenant: "T1", Containers: []string{"CPUB"}}
+	n := 0
+	err := testFetcher(e.api).Serve(context.Background(), req, func(l Line) error {
+		if l.Record != nil {
+			n++
+			if strings.Contains(l.Record.Text, testToken) || !strings.Contains(l.Record.Text, "token: [REDACTED]") {
+				t.Errorf("record text:\n%s", l.Record.Text)
+			}
+		}
+		return nil
+	})
+	if err != nil || n != 1 {
+		t.Fatalf("Serve = %d records, %v", n, err)
+	}
+}

@@ -351,7 +351,7 @@ func (f *fetcher) record(c conversation, thread string, msgs []message) feeds.Re
 	if k.IsDirectMessage() && f.self != "" {
 		parts[f.self] = true
 	}
-	if c.User != "" {
+	if feeds.ValidID(c.User) {
 		parts[c.User] = true
 	}
 	var b strings.Builder
@@ -407,7 +407,7 @@ func author(m message) string {
 func header(c conversation, k feeds.ContainerKind, thread string, first time.Time) string {
 	where := "Slack " + strings.ReplaceAll(string(k), "_", " ")
 	if c.Name != "" && !k.IsDirectMessage() {
-		where += " #" + strings.ToValidUTF8(c.Name, "")
+		where += " #" + strings.Join(strings.Fields(strings.ToValidUTF8(c.Name, "")), "-")
 	}
 	where += " (" + c.ID + ")"
 	if _, isTS := parseTS(thread); isTS {
