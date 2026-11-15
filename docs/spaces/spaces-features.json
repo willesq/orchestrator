@@ -6273,10 +6273,10 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "62c681e9c123313032cc8857a1297740221685de",
+      "verified_at": "2026-11-15T06:09:50Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "a5da712089124df4e4493329f043ceaecffb3bbd075e5295d27a80fa098ec58f",
