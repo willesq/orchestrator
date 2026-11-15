@@ -210,12 +210,18 @@ type server struct {
 	prune *prunecap.Guard
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_Ping_FullMethodName,
+	spaceDecision{spaceNone, "orchd's version"}))
+
 func (s *server) Ping(_ context.Context, _ *orchdv1.PingRequest) (*orchdv1.PingResponse, error) {
 	return &orchdv1.PingResponse{
 		Version:       version.Version,
 		UptimeSeconds: int64(time.Since(s.start).Seconds()),
 	}, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_Ingest_FullMethodName, "write to the RAG store",
+	spaceDecision{spaceNone, "a write, placed by orchd (SP-023); a copy in a space the caller does not read gets one refusal (SP-026, RC-701)"}))
 
 func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchdv1.IngestResponse, error) {
 	origin := clientOrigin(ctx, req.GetSourceUri())
@@ -275,6 +281,9 @@ func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchd
 
 // maxSearchTopK bounds how many hits one search may ask for.
 const maxSearchTopK = 100
+
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_Search_FullMethodName,
+	spaceDecision{spaceFiltered, "memory search, read only from the caller's readable spaces' collections"}))
 
 func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchdv1.SearchResponse, error) {
 	if m := req.GetMode(); m != "" && m != rag.ModeHybrid && m != rag.ModeDense {
@@ -347,6 +356,9 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 	return out, nil
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListSources_FullMethodName,
+	spaceDecision{spaceFiltered, "memory inventory, listed only from the caller's readable spaces"}))
+
 func (s *server) ListSources(ctx context.Context, req *orchdv1.ListSourcesRequest) (*orchdv1.ListSourcesResponse, error) {
 	tr, err := timeRange(req.GetSince(), req.GetUntil())
 	if err != nil {
@@ -410,6 +422,9 @@ func toUnix(t time.Time) int64 {
 	return t.Unix()
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_DeleteSource_FullMethodName, "delete from the RAG store",
+	spaceDecision{spaceNone, "a delete; under a policy a session deletes only from its own space and is told only that count (D-77)"}))
+
 // DeleteSource permanently removes a source's chunks.
 //
 // This is the only unrecoverable operation orchd exposes, so it is gated and
@@ -440,6 +455,9 @@ func (s *server) DeleteSource(ctx context.Context, req *orchdv1.DeleteSourceRequ
 	return &orchdv1.DeleteSourceResponse{Deleted: count32(n)}, nil
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListTasks_FullMethodName,
+	spaceDecision{spaceRecords, "the task ledger, by the space each task recorded at dispatch (SP-026)"}))
+
 func (s *server) ListTasks(ctx context.Context, req *orchdv1.ListTasksRequest) (*orchdv1.ListTasksResponse, error) {
 	if s.tasks == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "task ledger unavailable")
@@ -457,6 +475,9 @@ func (s *server) ListTasks(ctx context.Context, req *orchdv1.ListTasksRequest) (
 	list = s.tasksFor(ctx, s.recordScope(ctx, orchdv1.Orchd_ListTasks_FullMethodName), list)
 	return &orchdv1.ListTasksResponse{Tasks: s.tasksPB(ctx, list)}, nil
 }
+
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_GetTask_FullMethodName,
+	spaceDecision{spaceRecords, "one task's record and result; another space's task is not found (SP-026)"}))
 
 func (s *server) GetTask(ctx context.Context, req *orchdv1.GetTaskRequest) (*orchdv1.GetTaskResponse, error) {
 	if s.tasks == nil {
@@ -511,6 +532,9 @@ func taskRoutePB(t queue.Task) *orchdv1.Route {
 // queue_read of it.
 const maxTaskBody = 64 << 10
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_Dispatch_FullMethodName, "dispatch further tasks",
+	spaceDecision{spaceNone, "queues a task"}))
+
 func (s *server) Dispatch(ctx context.Context, req *orchdv1.DispatchRequest) (*orchdv1.DispatchResponse, error) {
 	agent := orDefault(req.GetAgent(), "dev")
 	// Validated here as well as in the runner so a bad request fails at dispatch,
@@ -542,6 +566,9 @@ func (s *server) Dispatch(ctx context.Context, req *orchdv1.DispatchRequest) (*o
 	return &orchdv1.DispatchResponse{InstanceId: id, WorkerEnabled: s.workerEnabled, Route: routePB}, nil
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_Status_FullMethodName,
+	spaceDecision{spaceNone, "orchd's subsystems"}))
+
 // Status reports orchd's own liveness plus one entry per supervised subsystem.
 func (s *server) Status(ctx context.Context, _ *orchdv1.StatusRequest) (*orchdv1.StatusResponse, error) {
 	resp := &orchdv1.StatusResponse{
@@ -566,6 +593,9 @@ func (s *server) Status(ctx context.Context, _ *orchdv1.StatusRequest) (*orchdv1
 	}
 	return resp, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_Restart_FullMethodName, "restart orchd subsystems",
+	spaceDecision{spaceNone, "restarts subsystems"}))
 
 // Restart bounces one supervised subsystem in place, or every subsystem when no
 // name is given. The orchd process itself is never restarted here — that is the

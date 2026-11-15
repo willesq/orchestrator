@@ -109,6 +109,12 @@ func (e *enforcement) setSandbox(ctx context.Context, mode spaces.SandboxMode, b
 	return true, nil
 }
 
+// Reason (D-61): the setting decides whether orch writes the sandbox
+// rules; it is also refused to interactive harness sessions
+// (refuseNonOperator).
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SetSandboxSetting_FullMethodName, "change the sandbox setting",
+	spaceDecision{spaceOperator, "changes the sandbox setting"}))
+
 func (s *server) SetSandboxSetting(ctx context.Context, req *orchdv1.SetSandboxSettingRequest) (*orchdv1.SetSandboxSettingResponse, error) {
 	if err := refuseNonOperator(ctx, orchdv1.Orchd_SetSandboxSetting_FullMethodName, "change the sandbox setting"); err != nil {
 		return nil, err

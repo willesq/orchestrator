@@ -26,6 +26,9 @@ type hybridMigrator interface {
 // to switch the active collection.
 var migrating sync.Mutex
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_MigrateHybrid_FullMethodName, "migrate the RAG store",
+	spaceDecision{spaceNone, "a migration report of counts"}))
+
 func (s *server) MigrateHybrid(ctx context.Context, req *orchdv1.MigrateHybridRequest) (*orchdv1.MigrateHybridResponse, error) {
 	if s.migrator == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "migration is unavailable")
@@ -48,6 +51,9 @@ func (s *server) MigrateHybrid(ctx context.Context, req *orchdv1.MigrateHybridRe
 	}
 	return resp, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ReindexKeywords_FullMethodName, "migrate the RAG store",
+	spaceDecision{spaceNone, "a reindex report of counts"}))
 
 // ReindexKeywords brings the keyword vectors up to the current tokenizer. It
 // shares the migration lock: a re-index never races a migration's copy.
@@ -81,6 +87,9 @@ var recordSwitch rag.Commit = func(from, to string) error {
 		"rag.qdrant.backup_collection": from,
 	}, "orchd:migrate")
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_DropBackup_FullMethodName, "migrate the RAG store",
+	spaceDecision{spaceNone, "a migration report of counts"}))
 
 // DropBackup deletes the backup collection recorded in config, then forgets
 // it. The name never comes from the caller, so this cannot delete arbitrary

@@ -26,10 +26,8 @@ func servedMethods() map[string]bool {
 // the filtered and operator-only kinds agree with the guards.
 func TestEveryRPCHasASpaceDecision(t *testing.T) {
 	served := servedMethods()
-	for name := range served {
-		if _, ok := readSpaceDecisions[name]; !ok {
-			t.Errorf("%s has no entry in readSpaceDecisions: decide how the content it returns is kept within the caller's spaces", name)
-		}
+	for _, name := range missingDecisions(served, readSpaceDecisions) {
+		t.Errorf("%s has no entry in readSpaceDecisions: decide how the content it returns is kept within the caller's spaces", name)
 	}
 	kinds := map[string]bool{spaceFiltered: true, spaceOperator: true, spaceOwn: true, spaceRecords: true, spaceNone: true}
 	filtered := 0
@@ -51,19 +49,24 @@ func TestEveryRPCHasASpaceDecision(t *testing.T) {
 	}
 }
 
+// missingDecisions lists the served RPCs with no space decision.
+func missingDecisions(served map[string]bool, decisions map[string]spaceDecision) []string {
+	var out []string
+	for name := range served {
+		if _, ok := decisions[name]; !ok {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
 // TestRegistryCatchesAMissingRPC: the check above fails for an RPC added
 // without a decision.
 func TestRegistryCatchesAMissingRPC(t *testing.T) {
 	const added = "/orchd.v1.Orchd/NewContentRPC"
 	served := servedMethods()
 	served[added] = true
-	missing := 0
-	for name := range served {
-		if _, ok := readSpaceDecisions[name]; !ok {
-			missing++
-		}
-	}
-	if missing != 1 {
-		t.Fatalf("%d RPCs without a decision, want the one added", missing)
+	if missing := missingDecisions(served, readSpaceDecisions); len(missing) != 1 || missing[0] != added {
+		t.Fatalf("RPCs without a decision = %v, want the one added", missing)
 	}
 }

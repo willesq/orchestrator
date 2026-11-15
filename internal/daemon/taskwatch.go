@@ -78,6 +78,9 @@ var (
 	watchTick  = 15 * time.Second
 )
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_WatchTasks_FullMethodName, "watch tasks (use ListTasks or GetTask)",
+	spaceDecision{spaceRecords, "task changes, by each task's space (SP-026)"}))
+
 // WatchTasks streams a snapshot of the newest tasks, then each task whose
 // ledger row or live run changes, and a periodic tick of the pending and
 // in-progress tasks.

@@ -179,7 +179,7 @@ which would silently turn everything back on.
 | `AddSetting` | operator only | validation → `InvalidArgument`; already listed → `AlreadyExists` |
 | `RemoveSetting` | operator only | orch item or unremovable kind → `FailedPrecondition` |
 
-The three changes are in `operatorActions` in `internal/daemon/callers.go`: adding a hook means
+The three changes are operator-only (`operatorRPC` beside each handler in `internal/daemon/settings.go`): adding a hook means
 choosing a command Claude Code will run, and a permission rule widens what agents may do, so a
 queued task is refused (`PermissionDenied`) however it reaches the socket.
 

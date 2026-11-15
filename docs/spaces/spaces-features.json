@@ -8397,14 +8397,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "3326031cb1102775723a0b3fb534f93776837a141cc2f1bbe6382b6a3e2ec570",
-      "branch": null,
+      "branch": "feat/sp-081-split-registration",
       "pr": null
     },
     {

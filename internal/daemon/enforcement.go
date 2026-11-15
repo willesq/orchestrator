@@ -407,10 +407,21 @@ func (s *server) switches(ctx context.Context) ([]*orchdv1.EnforcementSwitch, st
 	return out, problem
 }
 
+// Reason: every session's start digest names a switched-off layer,
+// queued tasks' included (INV-16).
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_GetEnforcement_FullMethodName,
+	spaceDecision{spaceOwn, "the switches' states, which every start digest names (INV-16)"}))
+
 func (s *server) GetEnforcement(ctx context.Context, _ *orchdv1.GetEnforcementRequest) (*orchdv1.EnforcementState, error) {
 	sw, problem := s.switches(ctx)
 	return &orchdv1.EnforcementState{Switches: sw, Error: problem, SandboxSetting: s.sandboxProto(ctx)}, nil
 }
+
+// Reason: a switch turns off a layer that keeps one job's sessions out
+// of another's; SetEnforcement is also refused to interactive harness
+// sessions (refuseNonOperator).
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SetEnforcement_FullMethodName, "switch enforcement",
+	spaceDecision{spaceOperator, "switches a layer"}))
 
 func (s *server) SetEnforcement(ctx context.Context, req *orchdv1.SetEnforcementRequest) (*orchdv1.SetEnforcementResponse, error) {
 	if err := refuseNonOperator(ctx, orchdv1.Orchd_SetEnforcement_FullMethodName, "switch enforcement"); err != nil {

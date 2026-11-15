@@ -38,6 +38,11 @@ func (s *server) quarantine() (quarantineHolder, error) {
 	return q, nil
 }
 
+// Reason (SP-028): quarantine is readable by no session, and a purge
+// deletes content; both are also refused to interactive harness sessions.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ListQuarantine_FullMethodName, "list quarantine",
+	spaceDecision{spaceOperator, "names every quarantined source, which no session may read"}))
+
 // ListQuarantine is the RPC: operator only, since quarantine is readable by
 // no session (INV-03) and the list names its sources.
 func (s *server) ListQuarantine(ctx context.Context, _ *orchdv1.ListQuarantineRequest) (*orchdv1.ListQuarantineResponse, error) {
@@ -63,6 +68,9 @@ func (s *server) ListQuarantine(ctx context.Context, _ *orchdv1.ListQuarantineRe
 	}
 	return resp, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_PurgeQuarantine_FullMethodName, "purge quarantine",
+	spaceDecision{spaceOperator, "deletes quarantined sources; its answer counts them"}))
 
 // PurgeQuarantine is the RPC: operator only. It counts unless confirm is set;
 // the gate is here, not only in the CLI, so every caller opts in

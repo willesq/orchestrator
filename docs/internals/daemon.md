@@ -499,7 +499,7 @@ store failure answers `Unavailable` without the store's error (which names colle
 spaces), and the detail goes to orchd's log; others get the error as before.
 
 Every RPC has an entry in `readSpaceDecisions` (`internal/daemon/readspaces_registry.go`,
-SP-025.2): `filtered` (the four above), `operator` (refused to every caller but the operator),
+SP-025.2; registered beside its handler, see [Adding an RPC](#adding-an-rpc)): `filtered` (the four above), `operator` (refused to every caller but the operator),
 `own` (the caller's own data or public content), `records` (orch records other than memory,
 [kept by space](#records-by-space)) or `none`. A test fails for an RPC with no entry, as for one
 missing from `taskCallable` and `operatorActions`.
@@ -1120,28 +1120,32 @@ HEADs of the task's repository for later verification.
 
 ### Adding an RPC
 
-A new RPC changes no shared registration line (SP-081), so features built in parallel add files:
+No shared registration line changes when an RPC is added (SP-081), so features built in parallel
+edit their own files:
 
-- **Caller class and space decision:** in the feature's own file under `internal/daemon/`,
-  `var _ = registerRPCs(taskRPC(method, decision))` or `operatorRPC(method, action, decision)`
-  (`rpc_registry.go`). Go fills the maps before any initializer that uses them, so the entries are
-  in `taskCallable` or `operatorActions` and in `readSpaceDecisions` before orchd serves. A second
-  claim on an RPC (from another feature or the shared maps), an operator RPC without an action or
-  a registration without a method panics at start. The shared maps in `callers.go` and
-  `readspaces_registry.go` keep the RPCs that predate SP-081. `TestEveryRPCIsClassified` and
-  `TestEveryRPCHasASpaceDecision` check the merged maps, so an RPC with no registration still
-  fails them.
+- **Caller class and space decision:** just above the handler, in the handler's file under
+  `internal/daemon/`, `var _ = registerRPCs(taskRPC(method, decision))` or
+  `operatorRPC(method, action, decision)` (`rpc_registry.go`). The registrations fill
+  `taskCallable` and `operatorActions` (`callers.go`) and `readSpaceDecisions`
+  (`readspaces_registry.go`), which are declared empty; Go fills them before any initializer that
+  uses them, so every entry is in place before orchd serves. A second claim on an RPC, an operator
+  RPC without an action or a registration without a method panics at start.
+  `TestEveryRPCIsClassified` and `TestEveryRPCHasASpaceDecision` check the filled maps against the
+  served RPCs, so an RPC registered nowhere still fails them, and
+  `TestEachRPCRegistersBesideItsHandler` fails for an RPC registered twice, in another file than
+  its handler, or listed in one of the maps' literals.
 - **Test fakes:** the `fakeClient` in `internal/cli`, `internal/hook` and `internal/mcpserver`
   embeds a nil `orchdv1.OrchdClient`, so an RPC the fake does not stub needs no edit there; a test
   that calls one panics. A test that needs an answer stubs the method in a
   `<feature>_fake_test.go` file.
 - **Still shared:** the RPC itself in `orchd.proto` and its generated code (keep both sides of a
-  conflict and run `make proto`), the handler's wiring in `server` and `Run` in `daemon.go`, and
-  a supervised unit in `subsystems.go`.
+  conflict and run `make proto`), the handler's dependencies in `server` and `Run` in
+  `daemon.go`, and a supervised unit in `subsystems.go`.
 
-`scripts/check-registration-merge.sh [REF]` clones the committed tree, adds a fixture RPC and app
-model on each of two branches, merges them and builds the result; it fails on a conflict or an
-edit to a shared file (`SWIFT=1` also builds the app).
+`scripts/check-registration-merge.sh [REF]` clones the committed tree, adds a fixture RPC
+registration and app model on each of two branches, merges them and builds the result; it fails
+on a conflict or an edit to an existing file, and checks that the served-RPC tests reject the
+fixtures' RPCs, which are not in `orchd.proto` (`SWIFT=1` also builds the app).
 
 ## Supervised subsystems
 

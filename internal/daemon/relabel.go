@@ -165,6 +165,11 @@ func storedOrigin(ctx context.Context, repos *repoLookups, m rag.Meta) rag.Origi
 	return rag.Origin{}
 }
 
+// Reason (SP-027): a relabel moves every space's content and its report
+// names spaces; it is also refused to interactive harness sessions.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_Relabel_FullMethodName, "relabel the RAG store",
+	spaceDecision{spaceOperator, "relabels the RAG store; its report counts chunks per space"}))
+
 // Relabel is the RPC: operator only, since the report names spaces and the
 // run moves every space's content. A run that fails part-way still reports
 // what it did.

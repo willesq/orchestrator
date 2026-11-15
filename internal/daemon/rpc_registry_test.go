@@ -1,6 +1,12 @@
 package daemon
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"maps"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -34,7 +40,7 @@ func TestRegistrationFillsEveryTable(t *testing.T) {
 }
 
 // TestRegistrationRefusesConflicts: a second claim on an RPC, from the same
-// call, another feature or the shared maps, is refused and adds nothing, as
+// call or another file's, is refused and adds nothing, as
 // is a registration with no method or an operator RPC with no action.
 func TestRegistrationRefusesConflicts(t *testing.T) {
 	d := spaceDecision{spaceNone, "a write"}
@@ -73,7 +79,7 @@ func TestRegistrationRefusesConflicts(t *testing.T) {
 
 // TestRegisterRPCsFillsOrchdsMaps: registerRPCs writes the maps the guards
 // and TestEveryRPCHasASpaceDecision read, and panics, changing nothing, on
-// an RPC the shared maps already class.
+// an RPC another file already registered.
 func TestRegisterRPCsFillsOrchdsMaps(t *testing.T) {
 	const added = "/orchd.v1.Orchd/RegistryTestRPC"
 	t.Cleanup(func() {
@@ -98,31 +104,116 @@ func TestRegisterRPCsFillsOrchdsMaps(t *testing.T) {
 }
 
 // TestRegisteredRPCMissingFromServiceFails: an RPC registered from a feature
-// file but not served (renamed or removed from orchd.proto) fails the same
-// checks as one missing from the shared maps.
+// file but not served (renamed or removed from orchd.proto) is caught by
+// the served-RPC checks.
 func TestRegisteredRPCMissingFromServiceFails(t *testing.T) {
-	served := servedMethods()
-	tables := rpcTables{taskCallable: map[string]bool{}, operatorActions: map[string]string{}, spaces: map[string]spaceDecision{}}
-	for name, ok := range taskCallable {
-		tables.taskCallable[name] = ok
-	}
-	for name, a := range operatorActions {
-		tables.operatorActions[name] = a
-	}
-	for name, d := range readSpaceDecisions {
-		tables.spaces[name] = d
-	}
+	tables := copyOfOrchdTables()
 	const gone = "/orchd.v1.Orchd/NoLongerServed"
 	if err := tables.add(operatorRPC(gone, "do something", spaceDecision{spaceNone, "a write"})); err != nil {
 		t.Fatal(err)
 	}
-	unserved := 0
+	served := servedMethods()
+	var unserved []string
 	for name := range tables.spaces {
 		if !served[name] {
-			unserved++
+			unserved = append(unserved, name)
 		}
 	}
-	if unserved != 1 {
-		t.Fatalf("%d decisions name an RPC Orchd does not serve, want the one registered", unserved)
+	if len(unserved) != 1 || unserved[0] != gone {
+		t.Fatalf("decisions naming an RPC Orchd does not serve = %v, want the one registered", unserved)
 	}
+}
+
+// TestUnregisteredRPCFailsTheSpaceCheck is SP-081.1.a3: with one served
+// RPC's registration left out, the check TestEveryRPCHasASpaceDecision runs
+// names that RPC and no other.
+func TestUnregisteredRPCFailsTheSpaceCheck(t *testing.T) {
+	tables := copyOfOrchdTables()
+	left := orchdv1.Orchd_RetagSource_FullMethodName
+	delete(tables.spaces, left)
+	if missing := missingDecisions(servedMethods(), tables.spaces); len(missing) != 1 || missing[0] != left {
+		t.Fatalf("RPCs without a decision = %v, want %s", missing, left)
+	}
+	if missing := missingDecisions(servedMethods(), readSpaceDecisions); len(missing) != 0 {
+		t.Fatalf("orchd's own registry misses %v", missing)
+	}
+}
+
+// copyOfOrchdTables copies the maps the registrations filled.
+func copyOfOrchdTables() rpcTables {
+	t := emptyTables()
+	maps.Copy(t.taskCallable, taskCallable)
+	maps.Copy(t.operatorActions, operatorActions)
+	maps.Copy(t.spaces, readSpaceDecisions)
+	return t
+}
+
+// TestEachRPCRegistersBesideItsHandler is SP-081.1.a1: every RPC Orchd
+// serves is registered exactly once, from the file that holds its handler,
+// and the maps the registrations fill are declared empty, so no shared map
+// literal lists RPCs.
+func TestEachRPCRegistersBesideItsHandler(t *testing.T) {
+	fset := token.NewFileSet()
+	pkgs, err := parser.ParseDir(fset, ".", func(fi fs.FileInfo) bool { return !strings.HasSuffix(fi.Name(), "_test.go") }, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registeredIn := map[string][]string{}
+	handlerIn := map[string]string{}
+	for _, f := range pkgs["daemon"].Files {
+		file := filepath.Base(fset.Position(f.Pos()).Filename)
+		for _, decl := range f.Decls {
+			switch d := decl.(type) {
+			case *ast.FuncDecl:
+				if d.Recv != nil && len(d.Recv.List) == 1 {
+					if star, ok := d.Recv.List[0].Type.(*ast.StarExpr); ok {
+						if id, ok := star.X.(*ast.Ident); ok && id.Name == "server" {
+							handlerIn[d.Name.Name] = file
+						}
+					}
+				}
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					vs, ok := spec.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+					for i, v := range vs.Values {
+						if lit, ok := v.(*ast.CompositeLit); ok && len(lit.Elts) > 0 {
+							switch vs.Names[i].Name {
+							case "taskCallable", "operatorActions", "readSpaceDecisions":
+								t.Errorf("%s lists RPCs in %s; register them beside their handlers", vs.Names[i].Name, file)
+							}
+						}
+						ast.Inspect(v, func(n ast.Node) bool {
+							sel, ok := n.(*ast.SelectorExpr)
+							if ok && strings.HasPrefix(sel.Sel.Name, "Orchd_") && strings.HasSuffix(sel.Sel.Name, "_FullMethodName") {
+								if call, ok := v.(*ast.CallExpr); ok && isIdent(call.Fun, "registerRPCs") {
+									name := strings.TrimSuffix(strings.TrimPrefix(sel.Sel.Name, "Orchd_"), "_FullMethodName")
+									registeredIn[name] = append(registeredIn[name], file)
+								}
+							}
+							return true
+						})
+					}
+				}
+			}
+		}
+	}
+	for full := range servedMethods() {
+		name := full[strings.LastIndex(full, "/")+1:]
+		files := registeredIn[name]
+		switch {
+		case len(files) != 1:
+			t.Errorf("%s is registered in %v, want once", name, files)
+		case files[0] != handlerIn[name]:
+			t.Errorf("%s is registered in %s, but its handler is in %s", name, files[0], handlerIn[name])
+		}
+	}
+}
+
+// isIdent reports whether e is the identifier name.
+func isIdent(e ast.Expr, name string) bool {
+	id, ok := e.(*ast.Ident)
+	return ok && id.Name == name
 }

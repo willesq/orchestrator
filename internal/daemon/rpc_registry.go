@@ -2,23 +2,22 @@ package daemon
 
 import "fmt"
 
-// A new RPC registers its caller class and its space decision from its
-// feature's own file, so features built in parallel add files instead of
-// lines to the shared maps in callers.go and readspaces_registry.go
-// (SP-081):
+// Each RPC registers its caller class and its space decision from the file
+// of its handler, just above the handler, so features built in parallel add
+// lines to their own files instead of to one shared map literal (SP-081):
 //
-//	// rpcs_chat.go
-//	var _ = registerRPCs(
-//		operatorRPC(orchdv1.Orchd_SearchDirectMessages_FullMethodName,
-//			"search direct messages",
-//			spaceDecision{spaceFiltered, "memory search with chat DMs kept in"}),
-//	)
+//	// chat_search.go
+//	var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SearchDirectMessages_FullMethodName, "search direct messages",
+//		spaceDecision{spaceFiltered, "memory search with chat DMs kept in"}))
 //
-// Go initializes the maps before any package-level variable whose
-// initializer refers to them, so every registration lands before orchd
-// serves or a test runs. TestEveryRPCIsClassified and
-// TestEveryRPCHasASpaceDecision check the merged maps, so an RPC registered
-// nowhere still fails them.
+//	func (s *server) SearchDirectMessages(...)
+//
+// Go initializes the maps in callers.go and readspaces_registry.go before
+// any package-level variable whose initializer refers to them, so every
+// registration lands before orchd serves or a test runs.
+// TestEveryRPCIsClassified and TestEveryRPCHasASpaceDecision check the
+// filled maps against the RPCs Orchd serves, so an RPC registered nowhere
+// still fails them.
 
 // rpcRegistration is one RPC's caller class and space decision.
 type rpcRegistration struct {
@@ -49,10 +48,9 @@ type rpcTables struct {
 }
 
 // add records regs. It refuses a registration without a method, an
-// operator RPC without an action, and an RPC already classed or decided
-// anywhere, so two features (or a feature and the shared maps) cannot both
-// claim one RPC and leave which entry wins to initialization order. Nothing
-// is added when it fails.
+// operator RPC without an action, and an RPC already classed or decided,
+// so two files cannot both claim one RPC and leave which entry wins to
+// initialization order. Nothing is added when it fails.
 func (t rpcTables) add(regs ...rpcRegistration) error {
 	seen := map[string]bool{}
 	for _, r := range regs {

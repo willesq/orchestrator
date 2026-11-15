@@ -71,6 +71,12 @@ func (t *toolEventIntake) setSink(sink func(toolEvent)) {
 	t.mu.Unlock()
 }
 
+// Reason: a queued task's tool calls belong in the command log like any
+// session's; the event is attributed to the task orchd resolved, never to
+// the session it names.
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_RecordToolEvent_FullMethodName,
+	spaceDecision{spaceNone, "records a tool event"}))
+
 // RecordToolEvent takes one tool hook event. Any caller may send one: the
 // event is attributed to the caller resolved from the connection, so a
 // request cannot claim another session's events.

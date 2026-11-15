@@ -143,6 +143,9 @@ var safePath = regexp.MustCompile(`^/[A-Za-z0-9 ._/+@:,=~-]*$`)
 // a single quote is closed, escaped and reopened.
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_RetryTask_FullMethodName, "retry tasks",
+	spaceDecision{spaceNone, "retries a task of the caller's own space (SP-026, RC-708)"}))
+
 func (s *server) RetryTask(ctx context.Context, req *orchdv1.RetryTaskRequest) (*orchdv1.RetryTaskResponse, error) {
 	if s.ctl == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "task control unavailable")
@@ -158,6 +161,9 @@ func (s *server) RetryTask(ctx context.Context, req *orchdv1.RetryTaskRequest) (
 	}
 	return &orchdv1.RetryTaskResponse{RunId: id}, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_CancelTask_FullMethodName, "cancel tasks",
+	spaceDecision{spaceNone, "cancels a task of the caller's own space (SP-026)"}))
 
 func (s *server) CancelTask(ctx context.Context, req *orchdv1.CancelTaskRequest) (*orchdv1.CancelTaskResponse, error) {
 	if s.ctl == nil {

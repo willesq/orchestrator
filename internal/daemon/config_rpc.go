@@ -40,13 +40,24 @@ func newConfigService(db *sql.DB, start map[string]string) *configService {
 	return &configService{db: db, start: start, legacyFile: paths.LegacyConfigFile()}
 }
 
+// Reason: config sets what tasks may run and how many, so a task must not
+// be able to widen its own limits or permissions.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_GetConfig_FullMethodName, "read orch's configuration",
+	spaceDecision{spaceRecords, "orch's settings (RC-1250)"}))
+
 func (s *server) GetConfig(ctx context.Context, _ *orchdv1.GetConfigRequest) (*orchdv1.ConfigState, error) {
 	return s.config.state(ctx)
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SetConfig_FullMethodName, "change orch's configuration",
+	spaceDecision{spaceNone, "changes a setting"}))
+
 func (s *server) SetConfig(ctx context.Context, req *orchdv1.SetConfigRequest) (*orchdv1.ConfigState, error) {
 	return s.config.set(ctx, req)
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_RemoveLegacyConfig_FullMethodName, "change orch's configuration",
+	spaceDecision{spaceNone, "removes config.yaml"}))
 
 func (s *server) RemoveLegacyConfig(ctx context.Context, _ *orchdv1.RemoveLegacyConfigRequest) (*orchdv1.ConfigState, error) {
 	return s.config.removeLegacy(ctx)
