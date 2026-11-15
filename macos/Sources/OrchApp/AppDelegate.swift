@@ -60,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 enforcement: model.enforcement, placement: model.placement, spaces: model.spaces,
                 loginItem: model.loginItem, navigator: model.navigator,
                 window: model.windowControl
-            )
+            ).environment(model.relabel)
             let hosting = NSHostingController(rootView: root)
             // The window keeps the size the user gives it. By default the
             // hosting controller resizes the window to each pane's ideal size,
