@@ -1,0 +1,12 @@
+{
+  "id": "RC-1700",
+  "kind": "user-action",
+  "topic": "Check the Teams connector against a live Teams tenant",
+  "detail": "SP-062 was built and tested only against a fake Graph API (no lane may contact Microsoft Graph or handle a real token). Unverified assumptions a hands-on check should confirm with a Teams account the user owns: (1) whether an az login (AZURE_CONFIG_DIR=<dir> az login, Azure CLI's own app) can get the delegated Graph scopes the connector needs (Chat.Read, ChannelMessage.Read.All, Team.ReadBasic.All, Channel.ReadBasic.All); many tenants require admin consent, and if az cannot get them the transport needs another client the user logs in themselves (for example an app registration of their own); (2) GET /me/chats/{id}/messages with $filter=lastModifiedDateTime gt <t> and $orderby=lastModifiedDateTime desc returns every message changed since t; (3) GET /teams/{id}/channels/{id}/messages?$expand=replies returns every root message with its replies, and replies@odata.nextLink when some are left out; (4) /me/joinedTeams reports a team's visibility (otherwise every channel is stored as private_channel). Steps: log a profile in, put one meeting chat and one channel on feeds.chat.containers, run a sync once orchd can run connectors (RC-1701), and compare the stored threads with Teams.",
+  "source": "https://github.com/willesq/orchestrator/pull/211",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-062"
+  ],
+  "status": "open"
+}
