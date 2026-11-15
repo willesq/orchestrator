@@ -73,8 +73,8 @@ func moveTranscriptRoots(t *testing.T) string {
 	return claude
 }
 
-// pinAt records a pin of session id in space, as PinSession would.
-func pinAt(t *testing.T, s *server, id, space string, pid int) {
+// pinSessionAt records a pin of session id in space, as PinSession would.
+func pinSessionAt(t *testing.T, s *server, id, space string, pid int) {
 	t.Helper()
 	p := sessionPin{SessionID: id, Harness: "claude", Process: procstat.Identity{PID: pid, Started: claudeStart},
 		FirstCwd: "/", Space: space, Revision: 1, PinnedAt: time.Now().UTC()}
@@ -90,8 +90,8 @@ func pinAt(t *testing.T, s *server, id, space string, pid int) {
 func TestSummaryHasItsSessionsSpace(t *testing.T) {
 	e := newReadEnv(t)
 	claude := moveTranscriptRoots(t)
-	pinAt(t, e.s, "sess-a", "acme", 501)
-	pinAt(t, e.s, "sess-g", "globex", 502)
+	pinSessionAt(t, e.s, "sess-a", "acme", 501)
+	pinSessionAt(t, e.s, "sess-g", "globex", 502)
 	jobs := []summaryJob{
 		{SessionID: "sess-a", TranscriptPath: harnessTranscript(t, claude, "sess-a", "acme-only-marker")},
 		{SessionID: "sess-g", TranscriptPath: harnessTranscript(t, claude, "sess-g", "globex-only-marker")},
@@ -296,7 +296,7 @@ func TestTaskRunsPinnedToItsDispatchersSpace(t *testing.T) {
 func TestTaskPinReplacesASquatter(t *testing.T) {
 	e := newDerivedTaskEnv(t)
 	sid := agentrun.SessionID("task-2")
-	pinAt(t, e.s, sid, "globex", 700)
+	pinSessionAt(t, e.s, sid, "globex", 700)
 	e.runs["task-2"] = agentrun.LiveRun{TaskID: "task-2", SessionID: sid, Dir: e.code + "/acme/repo", Space: "acme",
 		PID: 601, ProcStarted: claudeStart}
 	e.pinner.changed("task-2")
@@ -443,7 +443,7 @@ func TestTaskSessionIDsArePinnedByOrchdOnly(t *testing.T) {
 	}
 
 	// Replay ignores a pin under a task's ID that orchd did not take for it.
-	pinAt(t, e.s, agentrun.SessionID("task-other"), "globex", 650)
+	pinSessionAt(t, e.s, agentrun.SessionID("task-other"), "globex", 650)
 	if rp, err := e.s.replayPin(context.Background(), toollog.Owner{Kind: toollog.OwnerTask, ID: "task-other"}); err != nil || rp.Found {
 		t.Fatalf("replay trusted a pin orchd did not take: %+v, %v", rp, err)
 	}
