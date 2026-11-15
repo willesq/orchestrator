@@ -57,6 +57,14 @@ API calls an hour (1000 by default; 0 is no cap). Past it, that account's docs s
 watching wait for the next hour and its watched items stay as they were; reviews still run, and
 other accounts are not affected.
 
+## Memory spaces
+
+Memory spaces (policy-driven isolation of memory, tool calls and outbound text between jobs) are
+off on a new install. Until you turn them on, orch works as it did before spaces, and install adds
+no tool hooks. To turn them on, use Orch.app (Settings → Spaces) or run `orch spaces on`, then
+`orch install --apply`. An upgrade from a release where you had applied a spaces policy keeps
+spaces on. See [OPERATIONS.md](OPERATIONS.md#spaces).
+
 ## What `orch install` does
 
 One `orch install` sets everything up. It prints one plan of every change and writes nothing
@@ -78,7 +86,9 @@ repairs whatever drifted and otherwise changes nothing.
   testing; launchd and Homebrew are then left alone, and backups go under that home.
 
 - **Hooks** run `orch-hook <event>` on session start and end, prompt submit, tool use,
-  compaction and subagent stop. For Claude Code and Gemini each has a timeout of 5 to 15 s, so a
+  compaction and subagent stop. The tool hooks spaces need (Claude Code's `PreToolUse` and
+  `CwdChanged`, Codex's `PreToolUse`) are added only while memory spaces are on, and removed
+  while they are off. For Claude Code and Gemini each has a timeout of 5 to 15 s, so a
   stalled daemon cannot hold up a session. Codex hooks must be trusted in Codex before they run.
 - **MCP servers** `rag` and `queue` are registered, and for Claude Code their tools are allowed
   (`mcp__rag__*`, `mcp__queue__*`) user-wide, so hooks and background agents can use them

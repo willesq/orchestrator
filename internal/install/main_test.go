@@ -20,5 +20,8 @@ func TestMain(m *testing.M) {
 	// No test reads the developer's own orch.db for toggles.
 	loadToggles = func() (settings.Toggles, error) { return settings.Toggles{}, nil }
 	loadSwitches = func() (spaces.Enforcement, error) { return spaces.DefaultEnforcement(), nil }
+	// Reason: most tests exercise an install with memory spaces on; the
+	// ones with spaces off (spaces_off_test.go) set it themselves.
+	loadSpacesEnabled = func() (bool, error) { return true, nil }
 	os.Exit(m.Run())
 }

@@ -85,7 +85,8 @@ func codexHooksEdit(bins Bins, home string) Edit {
 					return nil, "", fmt.Errorf("parse codex hooks.json: %w", err)
 				}
 			}
-			summary := applyHooksWithEvents(root, bins.OrchHook, codexEvents, nil, nil)
+			events, note := applyToolHookSwitch(root, codexEvents, "codex")
+			summary := joinSummary(applyHooksWithEvents(root, bins.OrchHook, events, nil, nil), note)
 			out, err := marshalJSON(root)
 			if err != nil {
 				return nil, "", err

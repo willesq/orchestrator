@@ -78,6 +78,13 @@ struct MainWindow: View {
     /// all spaces' PRs, tasks and memory.
     private var shareSafe: String? { spaces.shareSafe }
 
+    /// Whether memory spaces are switched off: the sidebar then has no
+    /// Spaces pane, as before spaces.
+    private var spacesOff: Bool { monitor.health.status?.spacesOff ?? false }
+
+    /// The panes the sidebar lists.
+    private var panes: [Pane] { spacesOff ? Pane.allCases.filter { $0 != .spaces } : Pane.allCases }
+
     var body: some View {
         Group {
             if shareSafe != nil && compact {
@@ -132,7 +139,7 @@ struct MainWindow: View {
 
     private var splitView: some View {
         NavigationSplitView {
-            List(shareSafe == nil ? Pane.allCases : [.spaces],
+            List(shareSafe == nil ? panes : [.spaces],
                  selection: Binding(get: { shareSafe == nil ? pane : .spaces }, set: { pane = $0 ?? .dashboard })) { item in
                 SidebarRow(pane: item, status: sidebarStatus(item), selected: item == pane).tag(item)
             }
@@ -145,7 +152,7 @@ struct MainWindow: View {
                     .padding(.vertical, 8)
             }
         } detail: {
-            switch shareSafe == nil ? pane : .spaces {
+            switch shareSafe != nil ? .spaces : (spacesOff && pane == .spaces ? .dashboard : pane) {
             case .dashboard:
                 DashboardView(monitor: monitor, prMonitor: prMonitor, restart: restart, docs: docs, safetyNet: safetyNet,
                               tasks: tasks, reviews: prs.reviews, sources: registeredSources,
@@ -239,7 +246,7 @@ struct MainWindow: View {
             commands.append(PaletteCommand(id: "settings:\(section.rawValue)", section: "Go to", title: "Settings: \(section.title)",
                                            symbol: section.symbol) { navigator.showSettings(section) })
         }
-        for item in Pane.allCases {
+        for item in panes {
             var subtitle: String?
             var tone = Tone.neutral
             switch sidebarStatus(item) {
@@ -311,7 +318,7 @@ struct MainWindow: View {
             let n = prMonitor.needsYou.count
             return n > 0 ? .count(n, .accent, "\(n) need you") : .none
         case .spaces:
-            return spaces.badge.sidebarStatus
+            return spacesOff ? .none : spaces.badge.sidebarStatus
         case .settings:
             return SettingsView.status(config: config, safetyNet: safetyNet, claude: claude)
         default:

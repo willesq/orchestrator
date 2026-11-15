@@ -119,6 +119,76 @@ registry there, not over the socket) and the Qdrant API key file. The harness sa
 or Claude Code's permission rules) is the boundary for those. A PID can also be reused between
 connect and accept; audit tokens (`LOCAL_PEERTOKEN`) or pidfds would close that.
 
+### Spaces switch
+
+Memory spaces are opt-in. The switch is the setting `spaces.enabled`, which is off by default
+([config.md](config.md#spaces-switch)). While it is off, orch works as it did before spaces
+(`internal/daemon/spaces_switch.go`, `spaces_off_gate.go`):
+
+- **The engine reports no policy.** `spaces.Engine.SetOff` makes `Current` and
+  `CurrentRevision` report none to every reader. Placement, reads, task pins and the guard
+  snapshot therefore take the same path as with no policy (INV-10):
+  - writes are stored unplaced (`labels_v` 0);
+  - every caller reads every collection;
+  - the operator is the process tree alone;
+  - the snapshot carries `spaces_off` and no policy.
+- **Apply is refused** with `spaces.ErrSpacesOff`. The applied revision and every record (revisions, retags, pins, the command log, switches, rules) stay in `orch.db` and `toollog.db`, inert.
+- **An interceptor gates the spaces RPCs:**
+  - it refuses `ApplySpaces`, `SetEnforcement`, `SetSandboxSetting`, `ChangeOutboundRule`,
+    `Relabel`, `PurgeQuarantine` and `RetagSource` with `FailedPrecondition`;
+  - it answers `RecordToolEvent`, `PinSession` and `EndSession`, which hooks from an earlier
+    install still send, without recording anything;
+  - read-only spaces RPCs still answer from the kept records.
+- **Checkout settings are taken out.** The checkout settings sync removes orch's entries, as it
+  does with no policy.
+
+**Changing it.** The switch changes only through `SetConfig`, and these rules apply:
+
+- `spaces.enabled` must be the only key in the request, and the change must be confirmed.
+- The caller must be the operator (`refuseNonOperator`). While a policy is applied, that is
+  Orch.app alone.
+- orchd applies the change at once and logs it with the caller. A recovery-mode orchd, which
+  serves only settings, refuses it.
+
+**Turning it off.** Enforcement stops immediately. orchd rewrites the guard snapshot, nudges
+the checkout settings sync, and starts a **merge**: `rag.Service.MergeSpaces` moves every chunk of
+every space collection, quarantine included, into the base collection, then drops the emptied
+collections. Quarantined content becomes readable again, as it was before spaces.
+
+**Turning it on.** orchd writes `<data>/migrations/spaces-split.json` *before* it stores the
+value, then starts a **split**: `SplitSpaces` moves every base chunk whose stored `space` is
+neither empty nor `shared` to that space's collection. Until the split ends:
+
+- the engine stays off;
+- `SpacesStatus.state` is `turning_on`;
+- reads work as they did while off.
+
+Reason: with enforcement on, a Shared read of the base would reach other spaces' chunks that are
+still waiting to move. When the split ends, orchd removes the marker, turns the engine on,
+rewrites the snapshot, and runs the normal relabel (`relabelAfterSplit`). The relabel places
+content written while spaces were off, which is stale (`labels_v` 0); a chunk whose `labels_v`
+is current keeps its space.
+
+**Running the moves.**
+
+- **No re-embedding.** Both moves copy payloads and vectors as they are. Every chunk keeps
+  `space`, `labels_v` and `origin`.
+- **Resumable without a ledger.** Each source is copied, counted, then deleted under the source
+  lock, so a stopped run repeats over the same point IDs. A newer write already at the
+  destination (later `ingested_at`, another `ingest_hash`) is kept.
+- **One at a time.** A move holds the migration lock, so it never runs alongside a hybrid
+  migration, a keyword re-index or a relabel. A move that fails runs again after a minute.
+- **At startup.** orchd merges while off (one collection listing when there is nothing to do)
+  and splits while the marker exists. A switch made while a move runs cancels that move first.
+- **During a move.** A search returns one copy of each point (`onePerPoint`), since a source being
+  moved is briefly in two collections.
+- **Progress.** `SpacesStatus.store_move` carries the move's progress, and `orch status` shows it.
+
+**Upgrade.** A store with no stored `spaces.enabled` reads as on exactly when it has ever applied
+a policy, so an upgrade never changes what is enforced. orchd stores that value at startup
+(`spacesSwitchAtStart`, logged as `orchd:keep-on`). The operator's "off" is stored as a row
+([config.md](config.md#spaces-switch)), so it is kept. A store orchd cannot read keeps spaces on.
+
 ### Session pins
 
 Each interactive session is pinned once, at SessionStart (SP-010, INV-05). The pin is a row in
@@ -1188,7 +1258,8 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `<data>/landings/<task>.git` | a proposal's commit, in a bare repository with no hooks; pruned after 30 days |
 | `<data>/orch.db` | SQLite: tasks, sources, docs, models, routing, managed settings |
 | `<data>/toollog.db` | SQLite, mode 0600: the [command log](#command-log); never indexed; trimmed by retention |
-| `<data>/guard/` (0700) | the [enforcing guard](hooks.md#enforcing-guard)'s inputs, 0600: `policy.json` (applied policy, guard switch) and `pins/<session>.json` |
+| `<data>/guard/` (0700) | the [enforcing guard](hooks.md#enforcing-guard)'s inputs, 0600: `policy.json` (applied policy, guard switch, `spaces_off`) and `pins/<session>.json` |
+| `<data>/migrations/spaces-split.json` (0600) | the split the [spaces switch](#spaces-switch) owes after being turned on; removed when the split ends |
 | `<data>/workflows.db` | durable workflow state |
 | `<data>/qdrant/`, `bin/qdrant`, `qdrant-api-key` (0600) | vector store, engine binary, API key |
 | `<data>/models/minilm/` | embedding model |

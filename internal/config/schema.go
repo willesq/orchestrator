@@ -14,6 +14,9 @@ const (
 	keyWorkerEnabled = "queue.worker.enabled"
 	keyMaxConcurrent = "queue.worker.max_concurrent"
 	keyMaxActive     = "queue.max_active"
+	// KeySpacesEnabled is the memory spaces master switch. Only the operator
+	// changes it, alone and confirmed; orchd applies it at once.
+	KeySpacesEnabled = "spaces.enabled"
 )
 
 // FieldType says how a setting's value is shaped, validated and edited.
@@ -57,6 +60,11 @@ type Field struct {
 	// Hidden settings keep working but are not offered to clients:
 	// queue.worker.enabled is folded into max_concurrent's 0.
 	Hidden bool
+	// KeepDefault settings keep their row even at the default value, and
+	// cannot be reset, so a missing row means it was never chosen (or was
+	// removed outside orch) rather than "the default": spaces.enabled reads
+	// a missing row as on wherever a policy was applied.
+	KeepDefault bool
 }
 
 // The sections, in the order clients show them.
@@ -74,6 +82,7 @@ const (
 	SectionSearch    = "Search"
 	SectionEmbedding = "Embedding"
 	SectionStore     = "Vector store"
+	SectionSpaces    = "Spaces"
 )
 
 // Fields lists every setting in config.yaml.
@@ -191,6 +200,10 @@ func buildFields() []Field {
 		{Key: "sessions.summarize.model", Section: SectionSummaries, Label: "Model", Type: TypeString},
 		{Key: "sessions.summarize.timeout", Section: SectionSummaries, Label: "Timeout", Type: TypeDuration},
 
+		// Spaces.
+		{Key: KeySpacesEnabled, Section: SectionSpaces, Label: "Memory spaces", Type: TypeBool, Sensitive: true, Live: true,
+			KeepDefault: true, Help: SpacesSwitchHelp},
+
 		// Command log retention.
 		{Key: "sessions.command_log.retention", Section: SectionLog, Label: "Keep ended sessions", Type: TypeEnum, Sensitive: true,
 			Options: []string{"3d", "7d", "30d"},
@@ -239,6 +252,15 @@ func buildFields() []Field {
 		ranged(Field{Key: "rag.qdrant.grpc_port", Section: SectionStore, Label: "gRPC port", Type: TypeInt, Sensitive: true}, 1, 65535),
 	}
 }
+
+// SpacesSwitchHelp says what the spaces switch does, for every client's
+// confirmation. Reason: turning spaces off makes quarantined content
+// readable again, which the operator must know before confirming.
+const SpacesSwitchHelp = "Isolate memory, tool calls and outbound text by space under a policy you apply. " +
+	"Off, orch works as it did before spaces: no tool hooks, command log, session pins or enforcement, and one memory store. " +
+	"Turning it off keeps your policy and records but stops enforcing them, moves every space's memory back into one store, " +
+	"and makes quarantined content readable again. Turning it on moves memory back into its spaces first, then enforces. " +
+	"Only the operator can change it."
 
 // FieldFor returns the field for an exact key.
 func FieldFor(key string) (Field, bool) {

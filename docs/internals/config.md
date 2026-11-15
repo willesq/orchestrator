@@ -138,6 +138,34 @@ does not leave its services down until someone notices. When orchd cannot run at
 | `routing.evaluate.enabled`, `interval` | `true`, `168h` | evaluator subsystem |
 | `routing.auto_apply` | `false` | evaluator only proposes |
 
+## Spaces switch
+
+`spaces.enabled` (bool, default `false`, section "Spaces") turns memory spaces on. While it is
+off, orch works as it did before spaces:
+
+- no tool hooks, command log, session pins or enforcement;
+- one memory store.
+
+A policy and its records are kept for when spaces are turned on again.
+
+The field is Sensitive and Live. orchd applies a change at once
+([daemon.md](daemon.md#spaces-switch)), and only for the operator, confirmed, with the key on
+its own. Clients set it through `SetConfig`: Settings → Spaces in Orch.app, or
+`orch spaces on` and `orch spaces off --confirm`. The field's help (`config.SpacesSwitchHelp`) is
+the confirmation text, and it says that turning spaces off makes quarantined content readable
+again.
+
+**Stored even when off.** Unlike other settings, `spaces.enabled` keeps its row at the default
+(`Field.KeepDefault`), and `orch config reset` refuses it. A store without the row reads as on
+exactly when it has ever applied a spaces policy (`config.SpacesEnabledIn`). That covers an
+upgrade from before the switch and a row removed outside orch, such as a hand edit or
+`orch config reset --all`. Reason, fail closed: only the operator's stored "off" turns an applied
+policy off. At startup, orchd stores the value it derived, so the app and `orch status` show what
+it enforces.
+
+Processes that cannot ask orchd read the switch with `config.SpacesEnabled`, read-only: orch-hook
+(only when the guard snapshot cannot be read), install and the CLI.
+
 ## Spaces policy
 
 The spaces policy ([the spaces plan](../spaces/spaces-features.json), D-25) is not a setting in

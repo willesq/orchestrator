@@ -117,6 +117,7 @@ func (s *server) spacesStatus(ctx context.Context) *orchdv1.SpacesStatus {
 		EnforcementError: enfErr,
 		Sandbox:          s.sandboxProto(ctx),
 	}
+	out.State, out.StoreMove = s.spacesSwitch.state()
 	if st.Configured {
 		out.Quarantine = s.quarantineStatus(ctx)
 		out.Counts = s.spacesCounts(ctx)

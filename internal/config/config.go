@@ -33,6 +33,7 @@ type Settings struct {
 	Sessions     SessionsSettings     `mapstructure:"sessions"`
 	Routing      RoutingSettings      `mapstructure:"routing"`
 	Feeds        FeedsSettings        `mapstructure:"feeds"`
+	Spaces       SpacesSettings       `mapstructure:"spaces"`
 }
 
 // FeedsSettings controls the chat feeds (SP-060).
@@ -249,6 +250,14 @@ type AutoRAGSettings struct {
 	Gate string `mapstructure:"gate"`
 }
 
+// SpacesSettings is the memory spaces master switch (spaces.enabled).
+type SpacesSettings struct {
+	// Enabled turns memory spaces on. Off (the default), orch behaves as it
+	// did before spaces: no tool hooks, no command log, no session pins, no
+	// enforcement and one memory store. A policy and its records are kept.
+	Enabled bool `mapstructure:"enabled"`
+}
+
 // SessionsSettings controls what orchd does with finished sessions.
 type SessionsSettings struct {
 	Summarize  SessionSummarySettings `mapstructure:"summarize"`
@@ -410,6 +419,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("sessions.summarize.enabled", true)
 	v.SetDefault("sessions.summarize.model", "haiku")
 	v.SetDefault("sessions.summarize.timeout", "2m")
+	// Memory spaces are opt-in: off, orch behaves as before spaces. A store
+	// that applied a policy before the switch existed reads as on
+	// (SpacesEnabledIn), so its enforcement does not change on upgrade.
+	v.SetDefault(KeySpacesEnabled, false)
 	// Command log retention (spaces SP-015).
 	v.SetDefault("sessions.command_log.retention", "7d")
 	v.SetDefault("sessions.command_log.max_total_mb", 500)
@@ -506,3 +519,65 @@ func Get(v *viper.Viper, key string) any { return v.Get(key) }
 
 // List returns all resolved settings as a nested map.
 func List(v *viper.Viper) map[string]any { return v.AllSettings() }
+
+// SpacesEnabled reads the memory spaces switch from orch.db, read-only, for
+// processes that cannot ask orchd (orch-hook, install, the CLI). With no
+// store yet it is off, the default.
+func SpacesEnabled() (bool, error) {
+	if _, err := os.Stat(paths.DBFile()); errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	conn, err := db.OpenReader()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = conn.Close() }()
+	on, _, err := SpacesEnabledIn(context.Background(), conn)
+	return on, err
+}
+
+// SpacesEnabledIn is the memory spaces switch as orch.db holds it: the
+// stored value, which is kept even when off (KeepDefault). With no row it is
+// on exactly when the store ever applied a spaces policy, and stored is
+// false. Reason, fail closed: an install that applied a policy before the
+// switch existed keeps enforcing it on upgrade, and a row removed outside
+// orch (a hand edit, 'config reset --all') never turns an applied policy
+// off; only the operator's explicit "off" does.
+func SpacesEnabledIn(ctx context.Context, q querier) (on, stored bool, err error) {
+	f, _ := FieldFor(KeySpacesEnabled)
+	raw, found, err := firstString(ctx, q, `SELECT value FROM config_values WHERE key = ?`, KeySpacesEnabled)
+	switch {
+	case err != nil:
+		return false, false, err
+	case found:
+		v, err := ParseJSON(f, raw)
+		if err != nil {
+			return false, false, err
+		}
+		on, _ := v.(bool)
+		return on, true, nil
+	}
+	_, applied, err := firstString(ctx, q, `SELECT revision FROM spaces_applied LIMIT 1`)
+	return applied, false, err
+}
+
+// firstString returns the first column of the query's first row; found is
+// false when there is none, or the table does not exist (an older store).
+func firstString(ctx context.Context, q querier, query string, args ...any) (string, bool, error) {
+	rows, err := q.QueryContext(ctx, query, args...)
+	if err != nil {
+		if strings.Contains(err.Error(), "no such table") {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		return "", false, rows.Err()
+	}
+	var v any
+	if err := rows.Scan(&v); err != nil {
+		return "", false, err
+	}
+	return fmt.Sprint(v), true, rows.Err()
+}

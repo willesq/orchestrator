@@ -194,7 +194,8 @@ func applyClaudeHooks(root map[string]any, orchHookBin string, t settings.Toggle
 		}
 		return t.Disabled(ProviderClaudeCode, KindHook, HookIdentity(event, slug))
 	}
-	return applyHooksWithEvents(root, orchHookBin, eventSlugs, claudeHookFields, skip)
+	events, note := applyToolHookSwitch(root, eventSlugs, ProviderClaudeCode)
+	return joinSummary(applyHooksWithEvents(root, orchHookBin, events, claudeHookFields, skip), note)
 }
 
 // applyHooksWithEvents registers orch-hook for every event, dropping prior
