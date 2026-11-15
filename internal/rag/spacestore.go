@@ -63,6 +63,9 @@ func spaceOf(base, name string) (string, bool) {
 type spaceStore struct {
 	st    *QdrantStore
 	space string
+	// labelsV, when set, keeps only chunks labelled under that policy
+	// revision (withLabels).
+	labelsV int64
 }
 
 // derive returns the store for space's collection under base. Stores are
@@ -236,6 +239,16 @@ func (s *Service) readStores(ctx context.Context, names []string) ([]spaceStore,
 		out = append(out, spaceStore{st: s.derive(base, sp), space: filter})
 	}
 	return out, nil
+}
+
+// listStores is readStores for an inventory or a document read: nil reads
+// every collection, the base first, failing when they cannot be listed
+// rather than reading the base alone.
+func (s *Service) listStores(ctx context.Context, names []string) ([]spaceStore, error) {
+	if names == nil {
+		return s.allStores(ctx, s.active(), false)
+	}
+	return s.readStores(ctx, names)
 }
 
 type collectionsResponse struct {

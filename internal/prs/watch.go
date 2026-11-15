@@ -29,6 +29,10 @@ type Watch struct {
 	// sweep before its items are cached (D-52); an owner it refuses has none
 	// of its items kept.
 	CheckOwner func(ctx context.Context, owner string) error
+	// Space, when set, names the space an owner's items belong to under
+	// the applied policy; each cached item and its events carry it
+	// (SP-026).
+	Space func(owner string) string
 }
 
 // Account is a gh login the babysitter searches as.
@@ -178,9 +182,16 @@ func (b *Babysitter) poll(ctx context.Context) ([]PR, error) {
 	dropped := 0
 	for _, url := range order {
 		item := byURL[url]
-		if owner, _, _ := strings.Cut(item.Repo, "/"); refused(owner) {
+		owner, _, _ := strings.Cut(item.Repo, "/")
+		if refused(owner) {
 			dropped++
 			continue
+		}
+		// Reason: every item is stamped again, so one kept from an earlier
+		// sweep carries its owner's current space.
+		item.Space = ""
+		if w.Space != nil {
+			item.Space = w.Space(owner)
 		}
 		sortReasons(item.Reasons)
 		// CI and review state only matter where the PR can need the user.

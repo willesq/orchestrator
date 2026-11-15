@@ -62,6 +62,18 @@ service Orchd {
   // to its space's collection; counts unless apply. Resumable. Operator only:
   // the report names spaces.
   rpc Relabel(RelabelRequest) returns (RelabelResponse);
+  // ListQuarantine (SP-028) lists the sources held in quarantine, the space
+  // of content that could not be placed, with their chunk counts. Operator
+  // only: no session may read quarantine.
+  rpc ListQuarantine(ListQuarantineRequest) returns (ListQuarantineResponse);
+  // PurgeQuarantine (SP-028) deletes quarantined sources, the named ones or
+  // all of them (all). It only counts unless confirm is set; orchd checks confirm,
+  // so every caller opts in deliberately. Operator only.
+  rpc PurgeQuarantine(PurgeQuarantineRequest) returns (PurgeQuarantineResponse);
+  // RetagSource (SP-071) moves one source to the space the operator names,
+  // with its vectors (nothing is re-embedded), and records a sticky
+  // override that later writes of it honor. Resumable. Operator only.
+  rpc RetagSource(RetagSourceRequest) returns (RetagSourceResponse);
   // BackfillSessions stores sessions again from their transcripts on disk.
   rpc BackfillSessions(BackfillSessionsRequest) returns (BackfillSessionsResponse);
   // ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
@@ -332,6 +344,17 @@ message SearchResponse {
   // fallback says why a configured hybrid search answered by meaning only;
   // empty when the search ran as asked.
   string fallback = 2;
+  // What the caller's spaces let it search (SP-031), as orchd decided them
+  // from the caller alone. caller_space is the space of the caller's session
+  // or queued task; empty for any other caller.
+  string caller_space = 3;
+  // collections are the collections searched: every one when scoped is
+  // false, otherwise only the readable spaces' own.
+  repeated string collections = 4;
+  // scoped: the search read only the caller's readable spaces. False with
+  // no spaces policy, for the operator (Orch.app), or while memory
+  // filtering is switched off.
+  bool scoped = 5;
 }
 
 message SearchHit {
@@ -495,6 +518,51 @@ message SpacesStatus {
   string enforcement_error = 7;
   // The sandbox setting (D-61); unset when spaces are unavailable.
   SandboxSetting sandbox = 8;
+  // What quarantine holds (SP-028); unset when spaces are unavailable or
+  // the store could not be counted.
+  QuarantineCounts quarantine = 9;
+  // counts (SP-031) is what the spaces hold, as the caller may see it;
+  // unset with no policy configured.
+  SpacesCounts counts = 10;
+}
+
+// QuarantineCounts is how much content quarantine holds. It never names a
+// source.
+message QuarantineCounts {
+  int32 sources = 1;
+  int32 chunks = 2;
+}
+
+// SpacesCounts is how much content the spaces hold and how far a relabel has
+// got (SP-031). The operator (Orch.app) sees every space; any other caller
+// sees only the spaces it reads (its own and public ones), and the relabel
+// totals cover only those.
+message SpacesCounts {
+  repeated SpaceCount spaces = 1; // by name
+  // every_space is set when spaces lists every space of the policy.
+  bool every_space = 2;
+  // Chunks counted and how many of them the applied revision has not yet
+  // labelled ('orch rag relabel' brings them up to it). For the operator
+  // they cover every collection: unplaced content and quarantine too.
+  int32 chunks = 3;
+  int32 stale = 4;
+  // conflicts are live sessions whose first folder two isolated spaces
+  // claim under the applied policy, so they have no space. Counted for the
+  // operator only (conflicts_counted).
+  int32 conflicts = 5;
+  bool conflicts_counted = 6;
+  int64 counted_at = 7; // unix seconds the counts were taken
+  // error says why the store could not be counted; the other fields are
+  // then empty.
+  string error = 8;
+}
+
+// SpaceCount is one space's collection.
+message SpaceCount {
+  string space = 1;
+  string kind = 2;   // public | private | isolated
+  int32 chunks = 3;
+  int32 stale = 4;   // not yet labelled by the applied revision
 }
 
 // MigrationProgress is how far a running hybrid migration has got.
@@ -677,6 +745,58 @@ message RelabelResponse {
   repeated RelabelTransition transitions = 7;
   bool applied = 8;
   string error = 9;   // why an applied run stopped early; what it did is still reported
+}
+
+message ListQuarantineRequest {}
+
+// QuarantineSource is one source held in quarantine.
+message QuarantineSource {
+  string source_uri = 1;
+  string source_type = 2;
+  int32 chunks = 3;
+  int64 ingested_at = 4; // unix seconds of its latest store; 0 = unknown
+}
+
+message ListQuarantineResponse {
+  repeated QuarantineSource sources = 1; // by source_uri
+  int32 total_sources = 2;
+  int32 total_chunks = 3;
+}
+
+message PurgeQuarantineRequest {
+  // source_uris names the quarantined sources to delete. A named source
+  // that is not in quarantine is refused, never deleted elsewhere.
+  repeated string source_uris = 1;
+  // confirm must be set to delete; without it the purge only counts.
+  bool confirm = 2;
+  // all purges every quarantined source. It must be set when source_uris is
+  // empty and is refused with it, so an empty list sent by mistake never
+  // purges everything.
+  bool all = 3;
+}
+
+message PurgeQuarantineResponse {
+  int32 sources = 1; // sources deleted, or that would be without confirm
+  int32 chunks = 2;  // their chunks
+  bool purged = 3;   // false for a dry run
+}
+
+message RetagSourceRequest {
+  string source_uri = 1;
+  string space = 2;        // a space of the applied policy, or "quarantine"
+  // Required to move a source into a public space, out of an isolated one,
+  // or out of quarantine into a space; without it such a retag is refused
+  // and nothing changes.
+  bool confirm = 3;
+  // When set, the retag is refused unless the source is stored in this
+  // space now (checked under the source's lock, with the move).
+  string expect_from = 4;
+}
+// RetagSourceResponse names spaces and counts only.
+message RetagSourceResponse {
+  repeated string from = 1; // spaces that held the source ("unplaced" for none)
+  int64 chunks = 2;         // the source's chunks in the target space after the retag
+  bool moved = 3;           // false when it was only stamped where it was
 }
 
 message ListPRsRequest {

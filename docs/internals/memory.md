@@ -221,13 +221,13 @@ no origin, or that the placer leaves without a space, stores nothing.
 | docs sync | `github`: owner, repo, visibility (`private`/`public`; unknown when GitHub listed no owner node ID) and the owner's node ID, from the `gh api graphql` repo listing (`isPrivate`, `owner{id}`) | the owner's binding; public only when GitHub said the repo is public |
 | sources refresh | `fs` with the file's path (repo and owner sources); `web` with the URL the page was fetched from, after redirects | the deepest root; a checkout's remote can only keep it out, never place it (D-65), and nothing under a public root is public; the bound web prefix of the URL the content came from |
 | session hand-off, summaries | `session` with its first directory, from its record, and the session ID when the transcript is that session's, where its harness keeps it | the session's pin only; quarantine with no pin or no tied session |
-| edit hand-off | `fs` with the resolved file path | the deepest root and the checkout's remote; never the remote alone; never public (goes to `public_root_sessions` instead) |
+| edit hand-off | `fs` with the resolved file path | the deepest root and the checkout's remote; never the remote alone; never public (goes to `public_root_sessions` instead); under no root, the space of the session whose `Write` put that exact text there (SP-029) |
 | Ingest RPC | `client` with the caller kind (`session`, `task`, `operator`, `none`), the space the caller's pin writes to, and the URL when the URI is one | the caller's pinned space; quarantine for any other caller |
 | migration copy (`rag`) | carried over from the stored chunk | not placed again: `origin`, `space` and `labels_v` are copied as stored |
 
 - **Clients cannot choose a space.** No RPC field reaches `Origin` or `Space`: tags, scope and type
   that name a space change nothing. A client note goes to the space of the caller's pin as orchd
-  resolved it from the caller's process (SP-011). A queued task, the operator at a terminal and an
+  resolved it from the caller's process (SP-011). A queued task with no space recorded, the operator and an
   unidentified caller have no space here, so their notes are quarantined until the operator retags
   them, and so is a note from a session pinned to no space, to a public one or to one the policy
   no longer has. A page a client stores is placed by its writer, never by the bound prefix its URL
@@ -244,6 +244,33 @@ no origin, or that the placer leaves without a space, stores nothing.
   space's transcript into its own space nor push a file it named after another session into that
   session's space, short of writing into the harness's own transcript folders, which the OS
   sandbox can deny (SP-046). Recording the transcript path at the pin would close that too.
+- **Derived content carries the space of what it came from (SP-029, INV-09).** The summarizer gets
+  one session's transcript per call and its summary is stored as that session's record, so it is
+  placed by that session's pin like the transcript (`TestSummaryHasItsSessionsSpace`). A queued
+  task's agent session is pinned by orchd to the space its dispatch recorded (D-46,
+  [task pins](daemon.md#task-pins)), so its transcript, record and summary go there, whatever
+  directory it ran in, and the `queue` event of its completion records that space
+  (`TestTaskRunsPinnedToItsDispatchersSpace`).
+- **Files a session writes outside every root keep its space (SP-029).** When orchd builds a
+  command-log record of a `Write` tool call from a pinned session or a tracked queued task, and no
+  root holds the path written (`spaces.Targets` `writes`, symlinks resolved), it records the path
+  (lower case), the writer's space and the hash of the redacted text the call writes in `orch.db`'s
+  `session_files` (migration 0032). A call the guard refused records nothing, nor does a caller
+  with no space, a public one or quarantine, nor an untrusted pin. An edit hand-off of a file no
+  root holds is then placed in the space whose writer wrote exactly the text being stored (the
+  hand-off passes its text's hash), in quarantine when writers of more than one space wrote that
+  text or the recorded space is no longer a private or isolated space of the applied policy, and
+  as before (quarantine) when none did. An operator's retag still wins. Reason for the hash: a
+  tool event is a claim any caller can send for any path before anything is written, so naming a
+  path never moves another space's file; only the writer of the very text can place it. Rows
+  expire after 30 days and at most 100,000 are kept (newest first), pruned with the session
+  sweep; an evicted row only sends its file to quarantine. A relabel places such a file again from
+  its stored text's hash, so within those 30 days it stays where it is; after them a relabel
+  quarantines it. Limits: only a `Write` call carries
+  the whole text, so a file changed since by an `Edit`, a shell command or a program, or written
+  that way, stays in quarantine; registered folders (the sources refresh) and a client's `Ingest`
+  of the text are not placed by this record; with the command log off nothing is recorded
+  (`TestFileWrittenOutsideRootsKeepsItsSpace`, `TestSessionFilesExpire`).
 - **A local file is not placed by its remote.** A remote that would place a file in a stricter
   space than its root (`remote_stricter`) quarantines it for every writer (SP-030, D-65): a session
   can write a `.git` naming another job's org beside files it registers as a source. Sessions are
@@ -304,10 +331,11 @@ no origin, or that the placer leaves without a space, stores nothing.
   `labels_v`, so the same text placed elsewhere or under a new revision is stored again rather
   than skipped as unchanged. Writes made without a placer (tools, tests) keep the hash they had.
 - **What is not done yet.** Each space's chunks go to its own collection (SP-024, see
-  [Storage](#storage-qdrant)), but no read path passes the caller's spaces or filters by
-  `labels_v` yet (SP-025): a search without `SearchOpts.Spaces` reads every collection. Chunks stored before SP-023 have
-  no placement, and chunks stored before SP-024 sit in the base collection whatever their space;
-  a [relabel](#relabel) (SP-027) places and moves them. A docs file whose content and repo HEAD
+  [Storage](#storage-qdrant)), and orchd's read paths pass the caller's spaces and the applied
+  revision (SP-025, see [Spaces](#spaces)), so a chunk labelled under another revision is
+  unreadable to a filtered reader until a [relabel](#relabel) (SP-027) relabels it (INV-08).
+  Chunks stored before SP-023 have no placement, and chunks stored before SP-024 sit in the base
+  collection whatever their space; a relabel places and moves them. A docs file whose content and repo HEAD
   did not change is not stored again, so it keeps its earlier placement until relabelled, except
   that a public copy of a repo no longer public leaves (above). When the repo listing fails
   other than by GitHub refusing the owner, every repo keeps its docs as last indexed, public ones
@@ -346,8 +374,8 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
    collection is still not returned. `shared` reads the base with no `space` filter: it is the
    store as it was before spaces, whose older chunks carry no space. A name that is not a space
    name is skipped; an empty, non-nil list reads nothing and embeds nothing. `nil` reads every
-   collection of the base (the base and each space's), as search did before SP-024; deciding
-   each caller's readable spaces is SP-025. If the listing fails, a `nil` search reads the base
+   collection of the base (the base and each space's), as search did before SP-024; orchd
+   decides each caller's readable spaces (SP-025, [Spaces](#spaces)). If the listing fails, a `nil` search reads the base
    alone. Collections not created yet are left out when there are several; hybrid search runs
    only when every remaining one is hybrid.
 1. TopK 1–100 (0 → 5). Embed the query once. Filters: `scope` and `source_type` (exact), `tags`
@@ -793,6 +821,103 @@ write is stored again (embedded once) rather than skipped as unchanged.
 collection, every chunk moved to one of four space collections, Qdrant 1.17.1 on this Mac), a
 relabel took 35.7 s (`TestIntegrationRelabel40k`, `ORCH_QDRANT_BENCH=1`).
 
+## Quarantine
+
+Quarantine is the space of content orchd could not place (INV-03), stored in its own collection
+(`<base>__quarantine`, D-10). No session reads it. SP-028 gives the operator a way out:
+
+- **List.** `ListQuarantine` scrolls the quarantine collection and returns each source with its
+  chunk count, type and latest store, sorted by URI, plus the totals. One answer names at most
+  5,000 sources so it stays under gRPC's message size; the totals count every source.
+- **Assign** is a retag: the CLI checks that the source is in quarantine, then calls
+  `RetagSource` (see [Retag](#retag)) with `expect_from` set to quarantine and the operator's
+  `--confirm`, which leaving quarantine always needs. The retag moves the chunks without
+  re-embedding them and records the sticky override; assign does not move data itself.
+- **Purge.** `PurgeQuarantine` takes named sources or `all` (one of the two; an empty list never
+  means everything). Without `confirm` it only counts. It deletes from the quarantine collection
+  and, during a hybrid migration, from the shadow's, under each source's write lock. A named source
+  that quarantine does not hold refuses the whole purge before anything is deleted, with the same
+  answer whether the source is in another space or nowhere.
+- **Counts.** `Status` carries the source and chunk counts when a policy is configured, never a
+  source. They are cached for 30 s, with a 2 s limit on counting, and refreshed after a purge.
+
+Both RPCs are operator-only: refused to queued tasks and, through `refuseNonOperator`, to harness
+sessions and processes orchd started. Chunks a relabel has not yet moved into the quarantine
+collection are not counted until it does.
+
+## Retag
+
+A retag (SP-071, D-14, INV-15) moves one source to the space the operator names:
+`rag.Service.Retag` in `internal/rag/retag.go`. It reuses the relabel's move, so nothing is
+re-embedded and the source's chunk count is unchanged.
+
+1. Refuse with no source URI, no applied revision, or a name that cannot be a space (the space
+   name pattern, which keeps it out of the collection path). orchd checks the name against the
+   applied policy.
+2. Under the source's write lock, refuse while a migration shadow is installed (checked under
+   the lock, so a migration cannot start mid-retag and miss the move), then count the source in
+   the base and every space collection.
+3. Several collections holding it must hold the same write (the ingest hash of chunk 0), as a
+   retag or relabel stopped between its copy and its delete leaves it; copies of different writes
+   are refused, since the store cannot say which is current.
+4. If only the target collection holds it, stamp its `space` and `labels_v`. Otherwise read its
+   points with their vectors from another holder, upsert them into the target (created hybrid when
+   missing) with the new `space` and the applied `labels_v`, prune surplus chunks of an older,
+   longer copy there, check the target holds at least as many chunks, and only then delete the
+   source from every other collection.
+
+The report gives the spaces that held it (`unplaced` for the base), the chunks in the target and
+whether they moved; a failed store request returns a generic error, with the detail in orchd's
+log, as a relabel does. **Resumable:** point IDs are kept, so a retag stopped between its copy and
+its delete leaves the same write in both collections, and running it again copies over the same
+points and deletes the old copy. **Cost:** a 2,000-chunk source moved in 2.6 s on Qdrant 1.17.1
+(`TestIntegrationRetag2000`, `ORCH_QDRANT_BENCH=1`).
+
+A rag-level `Check` hook runs under the source's lock after the holders are counted and before
+anything changes; orchd uses it for the checks below, so they and the move see the same store.
+
+**In orchd** (`internal/daemon/retag.go`). `RetagSource` (`orch spaces retag`) is operator-only
+(`refuseNonOperator`, and on the operator-only list for queued tasks). It needs an applied policy
+that verifies, a space of that policy or `quarantine`, and the migration lock (shared with
+migrations, keyword re-indexes and relabels). Under the source's lock it refuses, changing nothing:
+
+- without `confirm`, a move into a public space, out of an isolated space, or out of quarantine or
+  the unplaced base into a space (content of unknown origin may be another job's);
+- with `expect_from`, a source not stored in that space now (any other holder but the target
+  refuses too), so a caller such as `orch quarantine assign` gets an atomic answer;
+- a policy revision applied since the request was read.
+
+It then records the retag in orch.db (`spaces_retags`, migration 0031) as `moving`, with whether
+it was confirmed, before anything moves (a store that cannot record it refuses the retag), moves
+the source, and marks it `done`. A retag left `moving` (orchd exited mid-move) is run again 30 s
+after the next start, under the migration lock and the current policy: a space the policy no
+longer has sends the source to quarantine, and a move that now needs a confirmation it was not
+given stays pending, with a log line, until the operator runs it again. A source no longer stored
+closes it. A source not stored at all is `NotFound`.
+
+A write placed before a retag of its source finished (it was being embedded meanwhile) is refused
+under the source's lock (`rag.ErrRetaggedMidWrite`) instead of moving the source back; written
+again, it is placed with the retag.
+
+**The sticky override.** `writePlacer.place` reads the source's retag (`withRetag`) and applies it
+with `spaces.ApplyOverride` (a space the policy no longer has quarantines), as follows. An
+unreadable retag refuses the write rather than placing it without it.
+
+| Writer | Honors the retag |
+|---|---|
+| docs sync, sources refresh | always: they place by what GitHub, a checkout or a bound prefix says |
+| session records and summaries, edited-file hand-offs | only when placed without it (not quarantined): a session ID or a path any process can name must not borrow the retag's space. An edited file under a root that is retagged does follow it, so sessions that edit it write there |
+| client notes (`Ingest`) | only from the operator or a session whose space is the target (RC-850, option (a)); other writers are placed by their own space and `mayReplace` refuses them |
+| relabel | for a source stored in the retag's space; otherwise by its writer, as above |
+
+The public gate still applies after the override: only the docs sync and the sources refresh write
+into a public space, so another writer's write of a source retagged to public goes to
+`public_root_sessions` (D-64).
+
+**Not done yet.** Orch.app has no retag control; a retag row outlives its source's deletion; a retag cannot be cleared (retag the source to
+where you want it instead). Like a relabelled source, a retagged source's write hash still names
+its old placement, so its next write is embedded once (RC-752).
+
 ## Duplicate clean-up
 
 `orch rag dedupe` (dry-run unless `--apply`; deletes through `DeleteSource` with `confirm`) lists a
@@ -858,9 +983,22 @@ The policy that defines them, the operator-only apply, and drift are described i
 paths will use: a space reads itself, every public space and the private spaces it lists, and
 never another isolated space or quarantine. Every write is stamped with its origin, space and
 `labels_v` ([Placement of writes](#placement-of-writes)) and stored in its space's own collection
-([Storage](#storage-qdrant)); search reads the collections of the spaces it is given. Which spaces
-each caller is given is SP-025; until then searches read every collection. Until a policy with spaces is applied, everything is in the one implicit `shared` space
-and search behaves as it always has.
+([Storage](#storage-qdrant)); search reads the collections of the spaces it is given.
+
+orchd gives every memory read the caller's readable spaces (SP-025; who reads what is in
+[daemon.md](daemon.md#reading-memory-by-space)): `Search` sets `SearchOpts.Spaces`,
+`ListSources` sets `ListSourcesOpts.Spaces`, and `GetDocument` reads with
+`Service.DocumentIn(uri, spaces, labelsV)`. Each takes the spaces as search does: `nil` reads
+every collection, an empty list nothing, and a named space only its own collection, filtered on
+payload `space` as the second layer. For a filtered reader orchd also passes the applied
+revision (`SearchOpts.LabelsV`, `ListSourcesOpts.LabelsV`), and each named space's requests
+then match `labels_v` equal to it as a number (INV-08): a chunk labelled under an earlier or
+later revision, or with no `labels_v`, is not read until it is relabelled. Applying a new
+revision therefore hides every space's content from sessions and tasks until the relabel runs;
+the operator and unfiltered reads still see it. A policy reader is never given `shared`, so the base's unplaced
+chunks (stored before SP-024, RC-355) are not read until SP-027 relabels them. Until a policy
+with spaces is applied, everything is in the one implicit `shared` space and search behaves as it
+always has.
 
 ## Placement
 

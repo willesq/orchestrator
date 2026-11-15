@@ -50,9 +50,14 @@ func newLandingService(store *landing.Store, tasks taskReader, gh *github.Servic
 	return svc
 }
 
-func (s *server) GetTaskActivity(_ context.Context, req *orchdv1.GetTaskActivityRequest) (*orchdv1.TaskActivity, error) {
+func (s *server) GetTaskActivity(ctx context.Context, req *orchdv1.GetTaskActivityRequest) (*orchdv1.TaskActivity, error) {
 	if req.GetId() == "" {
 		return nil, grpcstatus.Error(codes.InvalidArgument, "task id required")
+	}
+	// Reason: another space's task reads as one with no transcript
+	// (SP-026), as a task that never ran does.
+	if !s.seesTask(ctx, s.recordScope(ctx, orchdv1.Orchd_GetTaskActivity_FullMethodName), req.GetId()) {
+		return &orchdv1.TaskActivity{}, nil
 	}
 	activity, err := agentrun.ReadActivity(s.home, req.GetId(), activityLimit)
 	if err != nil {
@@ -95,7 +100,24 @@ func (s *server) GetPRLanding(ctx context.Context, req *orchdv1.PRLandingRequest
 	if err != nil {
 		return nil, err
 	}
-	return landingResult(svc.Get(ctx, req.GetTaskId()))
+	// Reason: another space's landing reads as a task that does not exist
+	// (SP-026); the task is checked first, so its repo is not fetched.
+	scope := s.recordScope(ctx, orchdv1.Orchd_GetPRLanding_FullMethodName)
+	if !s.seesTask(ctx, scope, req.GetTaskId()) {
+		return landingResult(landing.Landing{}, landing.ErrNotFound)
+	}
+	l, err := svc.Get(ctx, req.GetTaskId())
+	if err == nil && !s.seesLanding(ctx, scope, l.TaskID, l.URL) {
+		return landingResult(landing.Landing{}, landing.ErrNotFound)
+	}
+	return landingResult(l, err)
+}
+
+// seesLanding reports whether scope reads the landing of task id's PR at
+// url: the task must be in its spaces, and so must the PR's owner when
+// the task named a PR.
+func (s *server) seesLanding(ctx context.Context, scope readScope, id, url string) bool {
+	return (url == "" || scope.seesGitHubURL(url)) && s.seesTask(ctx, scope, id)
 }
 
 func (s *server) ListPRLandings(ctx context.Context, _ *orchdv1.ListPRLandingsRequest) (*orchdv1.ListPRLandingsResponse, error) {
@@ -108,7 +130,11 @@ func (s *server) ListPRLandings(ctx context.Context, _ *orchdv1.ListPRLandingsRe
 		return nil, grpcstatus.Error(codes.Internal, err.Error())
 	}
 	out := &orchdv1.ListPRLandingsResponse{}
+	scope := s.recordScope(ctx, orchdv1.Orchd_ListPRLandings_FullMethodName)
 	for _, r := range records {
+		if !s.seesLanding(ctx, scope, r.TaskID, r.URL) {
+			continue
+		}
 		out.Decisions = append(out.Decisions, &orchdv1.PRLandingDecision{TaskId: r.TaskID, Url: r.URL, State: r.State})
 	}
 	return out, nil

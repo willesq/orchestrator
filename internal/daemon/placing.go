@@ -34,6 +34,12 @@ type writePlacer struct {
 	pins *pinRegistry
 	// repos answers a checkout's repo owner and visibility.
 	repos *repoLookups
+	// relabel is set for a relabel's placer: every stored source follows
+	// its retag, whoever wrote it (withRetag).
+	relabel bool
+	// files records the files sessions wrote outside every root (SP-029);
+	// nil places such files by the classifier alone.
+	files *sessionFiles
 }
 
 // place is a rag.PlaceFunc.
@@ -70,6 +76,21 @@ func (w *writePlacer) placeMeta(ctx context.Context, m *rag.Meta) (spaces.Placem
 	p, err := w.placement(ctx, res, m.Origin)
 	if err != nil {
 		return spaces.Placement{}, fmt.Errorf("place %s: %w", m.SourceURI, err)
+	}
+	if m.Writer == rag.WriterFile && m.Origin.System == rag.OriginFS && m.Origin.Path != "" && !res.UnderRoot(m.Origin.Path) {
+		// Reason (SP-029, INV-09): no root places an edited file outside
+		// every root, so the space of the session that wrote this very
+		// text does; an operator's retag still wins (withRetag, below).
+		wp, ok, err := w.writtenPlacement(ctx, res, m)
+		if err != nil {
+			return spaces.Placement{}, fmt.Errorf("place %s: %w", m.SourceURI, err)
+		}
+		if ok {
+			p = wp
+		}
+	}
+	if p, err = w.withRetag(ctx, res, m, p); err != nil {
+		return spaces.Placement{}, err
 	}
 	if remoteSteered(m, p) {
 		// Reason: an agent can write a .git naming any org beside a file it
@@ -145,6 +166,8 @@ func (w *writePlacer) sessionPlacement(ctx context.Context, res *spaces.Resolved
 		return spaces.Placement{}, err
 	case !ok:
 		return quarantined("the session has no pin"), nil
+	case !trustedPin(pin):
+		return quarantined("a pin under a queued task's session ID that orchd did not take for the task"), nil
 	}
 	// Reason: a pin made under another policy can name a space this one
 	// lacks, or none; sessions never write to public.
@@ -226,11 +249,15 @@ func quarantined(reason string) spaces.Placement {
 }
 
 // writerSpace is the space a client write's caller writes to: its session's
-// pin. Tasks, the operator and unidentified callers have none here, so their
-// notes are quarantined until the operator retags them (SP-023.1.a3).
+// pin, or a queued task's space recorded at dispatch (D-46). The operator and
+// unidentified callers have none here, so their notes are quarantined until
+// the operator retags them (SP-023.1.a3).
 func writerSpace(c resolvedCaller) string {
-	if c.kind == callerSession {
+	switch {
+	case c.kind == callerSession:
 		return c.pin.Space
+	case c.kind == callerTask && c.task.TaskID != "":
+		return c.task.Space
 	}
 	return ""
 }
@@ -252,12 +279,14 @@ func clientOrigin(ctx context.Context, uri string) rag.Origin {
 var errReplaceRefused = grpcstatus.Error(codes.FailedPrecondition,
 	"this source_uri cannot be written by this caller; store the note under another source_uri")
 
-// mayReplace reports whether a client write with origin o may replace a
-// source stored in space stored. Reason: a write replaces and prunes every
-// chunk under its URI, so without this a caller could overwrite or erase
-// another space's source by naming it (SP-023).
-func (s *server) mayReplace(ctx context.Context, o rag.Origin, stored string) error {
-	m := rag.Meta{Origin: o}
+// mayReplace reports whether a client write of uri with origin o may
+// replace a source stored in space stored. Reason: a write replaces and
+// prunes every chunk under its URI, so without this a caller could
+// overwrite or erase another space's source by naming it (SP-023).
+func (s *server) mayReplace(ctx context.Context, uri string, o rag.Origin, stored string) error {
+	// The URI and writer are the write's own, so a retag of the source
+	// counts as it will for the write (withRetag).
+	m := rag.Meta{SourceURI: uri, Writer: rag.WriterClient, Origin: o}
 	if err := (&writePlacer{spaces: s.spaces, pins: s.pins, repos: s.repos}).place(ctx, &m); err != nil {
 		log.Printf("orchd: Ingest: placing a replacement: %v", err)
 		return errReplaceRefused

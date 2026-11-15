@@ -124,6 +124,10 @@ type Service struct {
 	searchIndexed atomic.Bool
 
 	fallbackLog rateLog
+	// retagMu guards retagGens, how many retags each source has had (in
+	// this process), so a write placed before a retag is not stored after it.
+	retagMu   sync.Mutex
+	retagGens map[string]uint64
 	// progress is set while a migration copies sources.
 	progress atomic.Pointer[MigrationProgress]
 	// chunkTokens and overlap size chunks in model tokens.
@@ -279,6 +283,7 @@ func (s *Service) split(text string) []chunk {
 // placed elsewhere before) is deleted first; if that fails nothing is
 // written, and the next write tries again.
 func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, error) {
+	gen := s.retagGeneration(m.SourceURI)
 	if err := s.place(ctx, &m); err != nil {
 		return 0, err
 	}
@@ -295,6 +300,12 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 		return 0, err
 	}
 	defer s.lockSource(m.SourceURI)()
+	if s.retagGeneration(m.SourceURI) != gen {
+		// Reason: it was placed before a retag of the source finished, so
+		// storing it would move the source back where the retag took it
+		// from (SP-071).
+		return 0, ErrRetaggedMidWrite
+	}
 	if err := s.removeElsewhere(ctx, m); err != nil {
 		return 0, err
 	}
@@ -492,6 +503,11 @@ type ListSourcesOpts struct {
 	Limit      int
 	// Range keeps only sources with content dated within it.
 	Range TimeRange
+	// Spaces are the spaces listed, as SearchOpts.Spaces: nil lists every
+	// collection, an empty, non-nil list lists nothing (SP-025).
+	Spaces []string
+	// LabelsV is as SearchOpts.LabelsV.
+	LabelsV int64
 }
 
 // ListSources enumerates distinct sources in the store with their chunk counts.
@@ -510,19 +526,20 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 	if opts.SourceType != "" {
 		must["source_type"] = opts.SourceType
 	}
-	filter := buildFilter(must, nil, nil, opts.Range)
 	fields := []string{"source_uri", "source_type", "scope", "tags", fieldStartedAt, fieldEndedAt, fieldIngestedAt, fieldWriter}
 
 	agg := map[string]*SourceSummary{}
 	total := 0
-	// Every space's collection is listed: which of them a caller may see is
-	// SP-025's decision, not this inventory's.
-	stores, err := s.allStores(ctx, s.active(), false)
+	// The caller's spaces (SP-025) choose the collections, each filtered on
+	// its space as the second layer, as a search is.
+	stores, err := s.listStores(ctx, opts.Spaces)
 	if err != nil {
 		return nil, 0, 0, err
 	}
+	stores = withLabels(stores, opts.LabelsV)
 	for _, ss := range stores {
 		st := ss.st
+		filter := buildFilter(ss.must(must), nil, nil, opts.Range)
 		var offset any
 		// A server that returns a non-advancing cursor would otherwise spin forever:
 		// the per-request timeout bounds each call but not the loop.

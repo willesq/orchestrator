@@ -29,8 +29,19 @@ func (s *server) GetGitHubIdentity(ctx context.Context, req *orchdv1.GetGitHubId
 	if err != nil {
 		return nil, grpcstatus.Errorf(codes.Unavailable, "GitHub: %v", err)
 	}
-	out := &orchdv1.GitHubIdentity{Login: id.Login, Orgs: id.Orgs}
+	out := &orchdv1.GitHubIdentity{Login: id.Login}
+	// Reason: the orgs and teams name every job's org; an agent sees those
+	// of its spaces (SP-026, RC-700).
+	scope := s.recordScope(ctx, orchdv1.Orchd_GetGitHubIdentity_FullMethodName)
+	for _, org := range id.Orgs {
+		if scope.seesOwner(org) {
+			out.Orgs = append(out.Orgs, org)
+		}
+	}
 	for _, t := range id.Teams {
+		if !scope.seesOwner(t.Org) {
+			continue
+		}
 		out.Teams = append(out.Teams, &orchdv1.GitHubTeam{Org: t.Org, Slug: t.Slug, Name: t.Name})
 	}
 	return out, nil
@@ -50,10 +61,12 @@ func (s *server) ListGitHubScopes(ctx context.Context, req *orchdv1.ListGitHubSc
 		out.Warning = "Could not reach GitHub: " + ghErr.Error()
 	}
 	_, op := operator(ctx)
+	scope := s.recordScope(ctx, orchdv1.Orchd_ListGitHubScopes_FullMethodName)
 	for _, sc := range scopes {
 		// Reason: an org a space reaches through its own gh profile is
-		// that job's, so only the operator sees it (SP-074).
-		if !op && s.ghProfiles.ownsProfile(sc.Owner) {
+		// that job's, so only the operator sees it (SP-074); under a
+		// policy an agent sees only its spaces' owners (SP-026).
+		if !op && s.ghProfiles.ownsProfile(sc.Owner) || !scope.seesOwner(sc.Owner) {
 			continue
 		}
 		out.Scopes = append(out.Scopes, scopePB(sc))
@@ -69,6 +82,11 @@ func (s *server) SetGitHubScope(ctx context.Context, req *orchdv1.SetGitHubScope
 	in := req.GetScope()
 	if in == nil {
 		return nil, grpcstatus.Error(codes.InvalidArgument, "scope is required")
+	}
+	// Reason: an owner's monitoring is its space's to change (SP-026); to
+	// anyone else it reads as an owner that is not the user's.
+	if !changesRepo(ctx, s.recordScope(ctx, orchdv1.Orchd_SetGitHubScope_FullMethodName), in.GetOwner()+"/") {
+		return nil, grpcstatus.Errorf(codes.NotFound, "%q is not your account or an org you belong to", in.GetOwner())
 	}
 	// Only discovered scopes (the user's account, their orgs) can be changed,
 	// and their kind stays what discovery found.
@@ -127,7 +145,9 @@ func (s *server) ListGitHubRepos(ctx context.Context, req *orchdv1.ListGitHubRep
 	// Reason: listing as a space's own gh profile uses that job's account,
 	// so agents get the answer they get for an org that is not theirs, and
 	// cannot tell the two apart (SP-074).
-	if _, op := operator(ctx); !op && s.ghProfiles.ownsProfile(req.GetOwner()) {
+	_, op := operator(ctx)
+	hidden := !op && s.ghProfiles.ownsProfile(req.GetOwner())
+	if hidden || !s.recordScope(ctx, orchdv1.Orchd_ListGitHubRepos_FullMethodName).seesOwner(req.GetOwner()) {
 		return nil, grpcstatus.Errorf(codes.NotFound, "%s: %v", req.GetOwner(), github.ErrNotMember)
 	}
 	repos, err := svc.Repos(ctx, req.GetOwner())
@@ -177,6 +197,7 @@ func watchFrom(svc *github.Service, ghp *ghProfiles) prs.WatchSource {
 		w := prs.Watch{Login: id.Login, Scopes: scopes, Accounts: accounts, Route: route}
 		if ghp != nil {
 			w.CheckOwner = docsOwnerCheck(ghp.spaces)
+			w.Space = func(owner string) string { return watchedOwnerSpace(ghp, owner) }
 		}
 		return w, nil
 	}

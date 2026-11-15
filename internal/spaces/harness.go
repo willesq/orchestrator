@@ -61,3 +61,9 @@ func RootHolds(root, path string) bool {
 	k, p := strings.ToLower(root), strings.ToLower(path)
 	return p == k || strings.HasPrefix(p, strings.TrimSuffix(k, "/")+"/")
 }
+
+// UnderRoot reports whether any bound folder root holds path, as placement
+// matches roots. False without a policy.
+func (r *Resolved) UnderRoot(path string) bool {
+	return r.Configured() && len(matchRoots(path, r)) > 0
+}

@@ -65,6 +65,7 @@ orch spaces sandbox [auto|on|off]     # show or set whether orch writes sandbox 
 orch spaces terms rules               # the outbound terms check's rules and their state
 orch spaces terms rules disable plain_variables   # relax a baseline rule (operator only)
 orch spaces terms rules add fail_closed < rule.txt   # add a stricter rule; the value is read from input (operator only)
+orch spaces retag <source_uri> <space> [--confirm]   # move a source's content to another space and keep it there (operator only)
 orch guard git-hook --install [--apply]   # git hooks that refuse commits and pushes carrying another space's terms
 orch sessions list [--all]   # sessions and their state: active, idle, ended (with --all), unpinned
 orch run <space> -- claude   # start Claude Code with the space's profile, from any folder
@@ -73,7 +74,11 @@ orch run <space> -- codex    # the same for Codex
 
 The spaces policy lives in `orch.db` as numbered revisions. Diff and apply are yours alone: orchd
 refuses them inside Claude Code or Codex sessions and inside queued tasks, so run them in your own
-terminal (or use Orch.app). Apply takes only the newest draft, the one you reviewed, and only when
+terminal (or use Orch.app). Once a policy is applied, only Orch.app is the operator: a terminal
+is not (D-71), so these operator commands, `orch rag relabel`, `orch config set` and the other
+operator-only commands are refused from a terminal, and `orch search` there reads public memory
+only. Use Orch.app for them; it is recognized by its code signature, so reinstall it
+(`make app-install`) if it was built before ad-hoc builds got the hardened runtime. Apply takes only the newest draft, the one you reviewed, and only when
 it validates. An agent session may save a draft. The diff says when it did and shows every value
 it changes, and applying it needs `--accept-agent-draft`. A saved draft, or an edit to `orch.db`, changes nothing that is enforced; `orch status`
 shows it in its `spaces` section as drift.

@@ -50,6 +50,9 @@ type Task struct {
 	Model string
 	// Effort is the reasoning effort, for providers that take one (Codex).
 	Effort string
+	// Space is the space whose memory the task reads, recorded at dispatch
+	// (D-46); "" records none.
+	Space string
 }
 
 // Statuses a finished run records in the task ledger.
@@ -150,6 +153,15 @@ func SessionID(taskID string) string {
 	return uuid.NewSHA1(sessionNamespace, []byte(taskID)).String()
 }
 
+// IsTaskSessionID reports whether id has the shape SessionID gives: a
+// name-based (version 5) UUID. Claude Code and Codex name their own
+// sessions with random or time-based UUIDs, so only a task's session, or
+// an ID made to look like one, has it.
+func IsTaskSessionID(id string) bool {
+	u, err := uuid.Parse(id)
+	return err == nil && u.Version() == 5 && u.String() == id
+}
+
 // Runner runs tasks through the Claude Code CLI.
 type Runner struct {
 	Bin string // absolute path to the claude binary
@@ -241,7 +253,7 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 		sid = r.codexThread(t.ID)
 	}
 	entry := r.live.track(LiveRun{TaskID: t.ID, Provider: t.Provider, Model: t.Model, SessionID: sid,
-		Dir: dir, Started: time.Now()}, cancelRun)
+		Dir: dir, Space: t.Space, Started: time.Now()}, cancelRun)
 	if entry == nil {
 		return failed("task %s already has a session running in this worker; not starting a second", t.ID), nil
 	}
