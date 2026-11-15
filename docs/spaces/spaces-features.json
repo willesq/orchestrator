@@ -6484,14 +6484,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f334012d02c2c9c118e211015950a80e0234c453ca65ed1894ac756872e8c3be",
-      "branch": null,
+      "branch": "feat/sp-031-status-visibility",
       "pr": null
     },
     {
