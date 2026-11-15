@@ -220,10 +220,14 @@ func mustPolicy(t *testing.T, s *server) spaces.Policy {
 // placed as the file under ~/.claude, and a URI that climbs out of it gets
 // no origin.
 func TestStoredOriginClaudeConfig(t *testing.T) {
-	home, err := os.UserHomeDir()
+	// A temporary home: the test must not depend on the developer's own
+	// ~/.claude.
+	home, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
-		t.Skip("no home")
+		t.Fatal(err)
 	}
+	t.Setenv("HOME", home)
+	writeFile(t, filepath.Join(home, ".claude", "CLAUDE.md"), "# config")
 	o := storedOrigin(context.Background(), nil, rag.Meta{SourceURI: "claude://CLAUDE.md", Writer: rag.WriterFile})
 	if o.System != rag.OriginFS || o.Path != filepath.Join(home, ".claude", "CLAUDE.md") {
 		t.Fatalf("origin = %+v", o)
