@@ -62,7 +62,8 @@ private final class FakeGitHub: GitHubAPI, @unchecked Sendable {
     var afterSweep: GitHubItemList?
     private(set) var sweepRequests = 0
     private(set) var itemLoadsAtSweep = 0
-    var setDelay: Duration = .zero
+    /// When set, a save waits here until the test opens it.
+    var setGate: Gate?
     private(set) var sets: [GitHubScope] = []
     private(set) var repoLoads: [String] = []
     private(set) var itemLoads = 0
@@ -80,7 +81,7 @@ private final class FakeGitHub: GitHubAPI, @unchecked Sendable {
 
     func setGitHubScope(_ scope: GitHubScope) async throws -> GitHubScope {
         sets.append(scope)
-        try? await Task.sleep(for: setDelay)
+        await setGate?.wait()
         if failSet { throw Boom() }
         return scope
     }
@@ -200,7 +201,10 @@ private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: T
         try await eventually { model.scopesError != nil }
         #expect(model.scopes.isEmpty && model.scopesError != nil)
         api.failScopes = false
-        try await eventually { model.scopes.count == 2 && model.scopesError == nil }
+        // Reason: the loaded refresh goes on to load items; stopped before it
+        // ends, it is still running when start() refreshes, which then skips
+        // (refreshDoesNotOverlap) and leaves one refresh uncounted (SP-082).
+        try await eventually { model.scopes.count == 2 && model.scopesError == nil && !model.isRefreshing }
         model.stop()
         #expect(model.scopes.count == 2 && model.identity?.login == "willesq" && model.scopesError == nil)
         let loads = api.refreshes.count
@@ -258,13 +262,16 @@ private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: T
 
     @Test func aSecondChangeWhileSavingIsIgnored() async {
         let api = FakeGitHub()
-        api.setDelay = .milliseconds(200)
+        let gate = Gate()
+        defer { gate.open() }
+        api.setGate = gate
         let model = GitHubModel(api: api)
         await model.refresh()
         let first = Task { await model.setEnabled("WippData", true) }
-        try? await Task.sleep(for: .milliseconds(50))
+        try? await eventually { model.saving.contains("WippData") }
         #expect(model.saving.contains("WippData"))
         _ = await model.setItems("WippData", .all)
+        gate.open()
         _ = await first.value
         #expect(api.sets.count == 1)
     }
@@ -385,26 +392,32 @@ private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: T
 
     @Test func aReloadDuringASaveKeepsTheLocalChange() async {
         let api = FakeGitHubForRobustness()
-        api.setDelay = .milliseconds(200)
+        let gate = Gate()
+        defer { gate.open() }
+        api.setGate = gate
         let model = GitHubModel(api: api)
         await model.refresh()
         let save = Task { await model.setEnabled("WippData", true) }
-        try? await Task.sleep(for: .milliseconds(50))
+        try? await eventually { model.saving.contains("WippData") }
         // The server still has the old value; the reload must not show it.
         await model.refresh()
         #expect(model.saving.contains("WippData"))
+        gate.open()
         _ = await save.value
         #expect(model.scopes[1].enabled)
     }
 
     @Test func refreshDoesNotOverlap() async {
         let api = FakeGitHubForRobustness()
-        api.scopesDelay = .milliseconds(150)
+        let gate = Gate()
+        defer { gate.open() }
+        api.scopesGate = gate
         let model = GitHubModel(api: api)
         let first = Task { await model.refresh() }
-        try? await Task.sleep(for: .milliseconds(40))
+        try? await eventually { model.isRefreshing }
         #expect(model.isRefreshing)
         await model.refresh()
+        gate.open()
         await first.value
         #expect(api.scopeLoads == 1 && !model.isRefreshing)
     }
@@ -412,14 +425,15 @@ private func item(_ n: Int, pr: Bool = true, attention: Attention? = nil, ago: T
 
 private final class FakeGitHubForRobustness: GitHubAPI, @unchecked Sendable {
     var failItems = false, failRepos = false, failSet = false
-    var setDelay: Duration = .zero, scopesDelay: Duration = .zero
+    /// When set, a save or a scopes load waits here until the test opens it.
+    var setGate: Gate?, scopesGate: Gate?
     private(set) var scopeLoads = 0
 
     func gitHubIdentity(refresh: Bool) async throws -> GitHubIdentity { GitHubIdentity(login: "willesq") }
 
     func gitHubScopes(refresh: Bool) async throws -> GitHubScopeList {
         scopeLoads += 1
-        try? await Task.sleep(for: scopesDelay)
+        await scopesGate?.wait()
         return GitHubScopeList(scopes: [
             GitHubScope(owner: "willesq", isUser: true, enabled: true),
             GitHubScope(owner: "WippData", isUser: false),
@@ -427,7 +441,7 @@ private final class FakeGitHubForRobustness: GitHubAPI, @unchecked Sendable {
     }
 
     func setGitHubScope(_ scope: GitHubScope) async throws -> GitHubScope {
-        try? await Task.sleep(for: setDelay)
+        await setGate?.wait()
         if failSet { throw RobustnessBoom() }
         return scope
     }
