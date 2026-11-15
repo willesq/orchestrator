@@ -142,8 +142,25 @@ orgs). All four are operator-only in orchd, so the pane works in an app the user
   most 20 asked per refresh; the rest count as quarantine); otherwise it is quarantine, as is every
   applied GitHub org whose new content goes to quarantine until confirmed. Drift is a saved draft
   not applied, an applied revision changed outside orchd, or a policy orchd cannot read. Relabel
-  progress has no RPC yet (SP-027), so it never shows today. Refusals are the guard's refused
-  calls over 7 days.
+  progress shows while a relabel started from the pane runs (see **Relabel now** below); Relabel
+  answers only when it ends, so it names the chunks being relabelled rather than a percentage.
+  Refusals are the guard's refused calls over 7 days.
+- **Relabel now (SP-079, D-76):** under a policy, content stored before an apply is labelled for an
+  older revision and sessions cannot read it until it is relabelled; orchd never relabels on its
+  own after an apply, and a terminal is not the operator (D-71). `SpacesRelabelControl` (driven by
+  `SpacesRelabelModel`, given to the window through the SwiftUI environment) counts stale chunks with
+  `Relabel` without `apply` when the pane shows and whenever the applied revision changes, and shows
+  "N stored chunks are labelled for an older policy" with **Relabel Now** only while some are. The
+  button calls `Relabel` with `apply` as Orch.app, the operator; while it runs the control shows a
+  spinner and the chunk count, and the Overview's needs-you strip and the sidebar badge show the
+  run (the model's `progress` feeds `SpacesOverviewModel`'s relabel progress). Leaving the pane does
+  not stop it. When it ends the model counts again: with nothing stale the control says what the run
+  updated and moved; otherwise it shows the chunks still stale with the button. A refused call,
+  a run that stopped early (`error`) or left chunks stale (`failed`) shows why, and nothing is
+  tried again until the user presses the button; a failed count shows why with **Check Again**.
+  With nothing stale and no run this session, the control is absent. It is hidden in
+  screen-share-safe mode, since the counts cover every space; it shows counts only, never the
+  run's per-space transitions.
 - **Space cards:** kind ("Isolated · job", "Private · personal", "Public · readable everywhere"),
   GitHub orgs and folders, and live sessions, tool calls, directory moves (with moves into another
   space) and refusals over 7 days. Advanced adds web prefixes, chat tenants, the gh profile folder,
@@ -173,7 +190,11 @@ orgs). All four are operator-only in orchd, so the pane works in an app the user
   checks the cards, sessions and needs-you strip in both modes, and that in screen-share-safe mode
   nothing the model holds names, paths or counts of another space
   (`screenShareSafeModeHoldsNothingOfAnotherSpace`). `SpacesPaneSnapshots` renders the pane at both
-  widths in light and dark (see [Snapshots](#snapshots)).
+  widths in light and dark (see [Snapshots](#snapshots)). `SpacesRelabelModelTests` checks the
+  control's states, the run's progress in the Overview and badge, and that a refused or failed run
+  is not retried; `SpacesRelabelClientTests` checks the RPC through the fake orchd;
+  `SpacesRelabelSnapshots` renders the control with stale chunks, during a run and after it
+  (`spaces-relabel-{stale,running,done}-{default,companion}-{light,dark}.png`).
 
 ## Launching
 
@@ -666,8 +687,8 @@ rebuild.
   to `OrchKit` (generated code excluded).
 - <a id="snapshots"></a>**Snapshots:** `ORCH_SNAPSHOT_DIR=<folder> swift test --package-path macos
   --filter OrchAppSnapshots` renders the Spaces section, the "enforcement off" banner, the menu
-  bar panel's switches and the Spaces pane (at 790 pt and the 320 pt companion width, and in
-  screen-share-safe mode) in light and dark from sample data, writing one PNG each. It draws offscreen
+  bar panel's switches and the Spaces pane (at 790 pt and the 320 pt companion width, in
+  screen-share-safe mode, and with its Relabel now control before, during and after a run) in light and dark from sample data, writing one PNG each. It draws offscreen
   (`cacheDisplay`), so no window appears, the installed app and orchd are not involved, and no
   Screen Recording permission is needed. Without `ORCH_SNAPSHOT_DIR` the suite is skipped.
 - **CI:** `app.yml` runs on pull requests to `main` that touch `macos/**`, `orchd.proto` or the

@@ -9,6 +9,8 @@ struct SpacesView: View {
     let model: SpacesOverviewModel
     let enforcement: EnforcementModel
     let navigator: Navigator
+    /// "Relabel now" (SP-079); absent where none is given.
+    @Environment(SpacesRelabelModel.self) private var relabel: SpacesRelabelModel?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,6 +41,7 @@ struct SpacesView: View {
                             EnforcementBanner(model: enforcement,
                                               show: overview.shareSafe == nil ? { navigator.showSettings(.spaces) } : nil)
                             NeedsYouStrip(items: overview.needsYou, problems: overview.problems)
+                            if let relabel, overview.shareSafe == nil { SpacesRelabelControl(model: relabel) }
                             SpaceCards(cards: overview.cards, shareSafe: overview.shareSafe)
                             if overview.shareSafe == nil {
                                 Button("Where would this go?") { navigator.showSettings(.spaces) }
@@ -47,6 +50,10 @@ struct SpacesView: View {
                         }
                         .padding(Metrics.pagePadding)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    // Counts stale chunks when the pane shows and after each apply.
+                    .task(id: overview.shareSafe == nil ? overview.appliedRevision : -1) {
+                        if overview.shareSafe == nil { await relabel?.check() }
                     }
                 } secondary: {
                     SessionList(sessions: overview.sessions, detail: model.detail, shareSafe: overview.shareSafe)

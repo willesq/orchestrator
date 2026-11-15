@@ -782,7 +782,9 @@ through the link is placed by the link's folder. It needs write access at that p
 
 **Running it.** `orch rag relabel [--dry-run]` calls the `Relabel` RPC, which only the operator
 may call (refused to queued tasks and harness sessions, since the report names spaces). A run
-that stops part-way still reports what it did, with a generic error.
+that stops part-way still reports what it did, with a generic error. Under a policy the operator is Orch.app
+(D-71), whose Spaces pane counts stale chunks and runs it with **Relabel Now** (SP-079, D-76; see
+[app.md](app.md#spaces-pane-overview-sp-051)); orchd never starts one on its own.
 
 **Not done yet.** Reads do not filter on `labels_v` yet (SP-025): a
 stale chunk left in its own space's collection by a revision change is readable there until
