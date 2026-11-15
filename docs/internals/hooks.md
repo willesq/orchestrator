@@ -283,9 +283,11 @@ calls `Decide`. What it cannot read becomes a rule, refused in the enforcing mod
   policy only when `orch.db` has never applied one (or does not exist);
   otherwise the guard's switch is read from `orch.db` read-only and the call refused unless it
   is `off` or `log`, and as `strict` when `orch.db` cannot be read.
-- `pin_missing`: no readable pin file for the payload's `session_id` (from `Decide`). Queued
-  tasks have no session pin, so while spaces are configured and the guard enforces, their calls
-  are refused (RC-100).
+- `pin_missing`: no readable pin file for the payload's `session_id` (from `Decide`). A queued
+  task's agent session gets its pin file from orchd when its process starts, in the space the
+  dispatch recorded (SP-029, [daemon.md](daemon.md#task-pins)), so its calls are judged in that
+  space. A fresh Codex task's thread is known only when it ends, so it has none, and while spaces
+  are configured and the guard enforces its calls are refused (RC-100).
 - `guard_timeout`: the decision did not finish within 250 ms, or panicked. The mode, once the
   snapshot has given it, decides whether that refuses; before that it refuses.
 - `settings_reopen` (D-67, RC-215): a `pre-tool-use` call `Decide` lets through, while spaces

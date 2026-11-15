@@ -244,6 +244,13 @@ no origin, or that the placer leaves without a space, stores nothing.
   space's transcript into its own space nor push a file it named after another session into that
   session's space, short of writing into the harness's own transcript folders, which the OS
   sandbox can deny (SP-046). Recording the transcript path at the pin would close that too.
+- **Derived content carries the space of what it came from (SP-029, INV-09).** The summarizer gets
+  one session's transcript per call and its summary is stored as that session's record, so it is
+  placed by that session's pin like the transcript (`TestSummaryHasItsSessionsSpace`). A queued
+  task's agent session is pinned by orchd to the space its dispatch recorded (D-46,
+  [task pins](daemon.md#task-pins)), so its transcript, record and summary go there, whatever
+  directory it ran in, and the `queue` event of its completion records that space
+  (`TestTaskRunsPinnedToItsDispatchersSpace`).
 - **A local file is not placed by its remote.** A remote that would place a file in a stricter
   space than its root (`remote_stricter`) quarantines it for every writer (SP-030, D-65): a session
   can write a `.git` naming another job's org beside files it registers as a source. Sessions are

@@ -11,7 +11,8 @@ Packages: `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `pr
 2. **Workflow** (go-workflows on SQLite `workflows.db`): `AgentTask` runs `StartActivity` (status
    `in_progress`) then `RunActivity` with one attempt (a failed run may already have pushed, so it
    is never retried), saves the outcome to the ledger, and appends a `queue` event naming the task
-   and status, never its result. Inputs (including the route) are fixed at dispatch, so a resumed
+   and status, never its result. The event's `space` is the space the dispatch recorded (D-46),
+   empty with none (SP-029). Inputs (including the route) are fixed at dispatch, so a resumed
    task keeps its model.
    - **Interrupted runs:** go-workflows records any error an activity returns, even one from a
      stopping worker, as that activity's failure. So `AgentTask` recognizes the runner's
@@ -113,6 +114,10 @@ claude -p --output-format json --permission-mode <mode>
 - **Prompt** on stdin: the task body with instructions that the run is headless, the final message
   is the result, and a blocked run starts with `BLOCKED:`. Resuming sends a continue prompt.
 - **Directory:** the dispatch cwd, or a private scratch directory `<data>/tasks/<id>`.
+- **Pin:** once the process starts, orchd pins the session ID to the space the dispatch recorded,
+  under an applied spaces policy ([task pins](daemon.md#task-pins)). The task's records are
+  placed there and the tool guard judges its calls there, so a task dispatched from one space
+  into another space's folder is refused that folder's files rather than storing them.
 - **Environment:** orchd's, minus the vector-store key, with `ORCH_TASK_ID` set and `PATH` =
   the CLI's directory, Homebrew, `~/.local/bin`, `~/go/bin`, then orchd's `PATH`.
 - **Process:** its own process group; timeout `queue.worker.timeout` (60 min); on cancel SIGTERM the

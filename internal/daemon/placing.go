@@ -151,6 +151,8 @@ func (w *writePlacer) sessionPlacement(ctx context.Context, res *spaces.Resolved
 		return spaces.Placement{}, err
 	case !ok:
 		return quarantined("the session has no pin"), nil
+	case !trustedPin(pin):
+		return quarantined("a pin under a queued task's session ID that orchd did not take for the task"), nil
 	}
 	// Reason: a pin made under another policy can name a space this one
 	// lacks, or none; sessions never write to public.

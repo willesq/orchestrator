@@ -727,12 +727,14 @@ func Run(ctx context.Context) error {
 
 	docsSched := newDocsScheduler(s, store, svc, sp, ghp, placer)
 	settingsSvc := settingsFor(store)
+	guardFiles := defaultGuardWriter()
 	sup := supervisor.New(runCtx)
 	for _, u := range subsystems(deps{
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
 		summaries: summaries, github: ghService, ghProfiles: ghp, system: system, docs: docsSched,
 		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub, reviews: reviewWatcher, spaces: sp, placer: placer,
+		taskPins: &taskPinner{pins: pins, run: live.run, spaces: sp, guard: guardFiles},
 	}) {
 		if err := sup.Add(u); err != nil {
 			return recovery(err)
@@ -802,7 +804,7 @@ func Run(ctx context.Context) error {
 		toolLog:      tlog,
 		enforcement:  newEnforcement(ctx, store, settingsSvc),
 		termsRules:   newTermsRules(ctx, store),
-		guard:        defaultGuardWriter(),
+		guard:        guardFiles,
 	}
 	srv.startGuardFiles(runCtx)
 	if tlog != nil {
