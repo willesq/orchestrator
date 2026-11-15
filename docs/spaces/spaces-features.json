@@ -6811,14 +6811,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "8898813f34128e91855054965a6bfac28a0a729888e1ecaf4b3aa6ca95fed588",
-      "branch": null,
+      "branch": "feat/sp-054-activity-review",
       "pr": null
     },
     {
