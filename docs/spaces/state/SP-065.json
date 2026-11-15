@@ -7,7 +7,7 @@
   "blocked_reason": null,
   "attempts": 1,
   "branch": "feat/sp-065-docs-consolidation",
-  "pr": null,
+  "pr": "https://github.com/willesq/orchestrator/pull/217",
   "evidence": {
     "SP-065.1": []
   }
