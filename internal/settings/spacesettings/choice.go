@@ -21,7 +21,7 @@ var (
 // Sandboxes reports whether a session with rules r gets orch's sandbox
 // rules: never while the switch is off or the setting is off, always with
 // on, and with auto only when they keep it out of another isolated
-// space's root (D-61).
+// space's root (D-61) or another space's own login folder (D-69).
 func (c Choice) Sandboxes(r Rules) bool {
 	if c.SwitchedOff {
 		return false
@@ -32,7 +32,7 @@ func (c Choice) Sandboxes(r Rules) bool {
 	case spaces.SandboxOff:
 		return false
 	}
-	return r.OtherJobs
+	return r.OtherJobs || r.OtherLogins
 }
 
 // CheckoutFor is the fragment a checkout with rules r gets: its full rules

@@ -3,6 +3,7 @@ package spacesettings
 import (
 	"context"
 	"os"
+	"os/user"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -95,6 +96,47 @@ func TestLoosening(t *testing.T) {
 	if got := Loosening(filepath.Join(w.code, "a", "gone"), deny, Owned{}); len(got) != 1 {
 		t.Errorf("missing checkout: %v", got)
 	}
+
+	// Entries that turn the hooks off or move their data folder are named;
+	// orch's own pinned values in settings.local.json are not (D-67).
+	hooked := gitRepo(t, filepath.Join(w.code, "a", "hooked"))
+	writeFile(t, filepath.Join(hooked, ".claude", "settings.json"), `{"disableAllHooks":true,"env":{"ORCH_SOCKET":"/x","PATH":"/bin"}}`)
+	writeFile(t, localOf(hooked), `{"disableAllHooks":false,"env":{"ORCH_DATA_DIR":"/mine","ORCH_CONFIG_DIR":"/user"}}`)
+	got = Loosening(hooked, deny, Owned{Scalars: map[string]Prior{"env.ORCH_DATA_DIR": {Set: []byte(`"/mine"`)}, keyNoHooks: {}}})
+	joined = strings.Join(got, "\n")
+	for _, want := range []string{".claude/settings.json: disableAllHooks true", ".claude/settings.json: env.ORCH_SOCKET", ".claude/settings.local.json: env.ORCH_CONFIG_DIR"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("lacks %q:\n%s", want, joined)
+		}
+	}
+	if len(got) != 3 {
+		t.Errorf("hook entries: %v", got)
+	}
+	// orch's pin counts only while it holds the value orch wrote.
+	got = Loosening(hooked, deny, Owned{Scalars: map[string]Prior{"env.ORCH_DATA_DIR": {Set: []byte(`"/orchs"`)}, keyNoHooks: {}}})
+	if !strings.Contains(strings.Join(got, "\n"), ".claude/settings.local.json: env.ORCH_DATA_DIR") {
+		t.Errorf("a changed pin was not named: %v", got)
+	}
+
+	writeFile(t, filepath.Join(hooked, ".claude", "settings.json"), `{"env":{"ORCH_SOCKET":5}}`)
+	if got := Loosening(hooked, deny, Owned{Scalars: map[string]Prior{"env.ORCH_DATA_DIR": {Set: []byte(`"/mine"`)}}}); !strings.Contains(strings.Join(got, "\n"), "settings.json: env.ORCH_SOCKET") {
+		t.Errorf("a number value was not named: %v", got)
+	}
+
+	// "~" is read with the account's home too, not only $HOME, which a
+	// settings env could change for the hook.
+	tilde := gitRepo(t, filepath.Join(w.code, "a", "tilde"))
+	writeFile(t, filepath.Join(tilde, ".claude", "settings.json"), `{"sandbox":{"filesystem":{"allowRead":["~/gh/b"]}}}`)
+	t.Setenv("HOME", filepath.Join(w.home, "elsewhere"))
+	if got := Loosening(tilde, []string{filepath.Join(w.home, "elsewhere", "gh", "b")}, Owned{}); len(got) != 1 {
+		t.Errorf("~ with $HOME: %v", got)
+	}
+	if u, err := user.Current(); err == nil {
+		if got := Loosening(tilde, []string{filepath.Join(u.HomeDir, "gh", "b")}, Owned{}); len(got) != 1 {
+			t.Errorf("~ with the account's home: %v", got)
+		}
+	}
+	t.Setenv("HOME", w.home)
 
 	// The sync reports them for a checkout it writes rules for.
 	res, err := spaces.Validate(spaces.Policy{Spaces: []spaces.Space{

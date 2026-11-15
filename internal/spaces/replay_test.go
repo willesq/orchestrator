@@ -275,3 +275,37 @@ func TestReplayCarriesTermsVerdicts(t *testing.T) {
 		}
 	}
 }
+
+// TestReplayCarriesSettingsReopen (D-67): a recorded refusal, or logged
+// would-refuse, by the check of a checkout's own settings is carried, as
+// the replay cannot read those files as they were; a guard refusal
+// replayed first keeps the guard's rule.
+func TestReplayCarriesSettingsReopen(t *testing.T) {
+	pol, err := NewGuardPolicy(nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := []ReplayEvent{
+		{Guard: GuardEvent{Kind: EventPreToolUse, Tool: "Bash"}, Recorded: RecordedVerdict("refused", string(RuleSettingsReopen))},
+		{Guard: GuardEvent{Kind: EventPreToolUse, Tool: "Bash"}, Recorded: RecordedVerdict("logged", "would refuse ("+string(RuleSettingsReopen)+")")},
+		{Guard: GuardEvent{Kind: EventPreToolUse, Tool: "Bash"}, Recorded: RecordedVerdict("allowed", string(RuleWithinSpace))},
+	}
+	rep := Replay(events, GuardPin{}, GuardEnforcement{Guard: GuardBlockOtherJobs}, fixedPolicies(pol))
+	want := []GuardRule{RuleSettingsReopen, RuleSettingsReopen, RuleNoPolicy}
+	for i, row := range rep.Rows {
+		if row.Rule != want[i] || (i < 2 && row.Verdict != Refuse) {
+			t.Errorf("row %d: %s %s, want %s", i, row.Verdict, row.Rule, want[i])
+		}
+	}
+	if rep.Changed != 1 {
+		t.Errorf("changed %d, want 1", rep.Changed)
+	}
+	// SettingsReopened refuses in an enforcing mode only and keeps the
+	// terms inputs.
+	for mode, enforced := range map[GuardMode]bool{GuardStrict: true, GuardBlockOtherJobs: true, GuardLog: false, GuardOff: false} {
+		r := SettingsReopened(GuardResult{GuardDecision: GuardDecision{Mode: mode, Verdict: Allow, Would: Allow, Rule: RuleWithinSpace}, Revision: 3, Terms: GuardTerms{Known: true}})
+		if r.Would != Refuse || r.Rule != RuleSettingsReopen || r.Enforced != enforced || (r.Verdict == Refuse) != enforced || r.Revision != 3 || !r.Terms.Known {
+			t.Errorf("%s: %+v", mode, r)
+		}
+	}
+}

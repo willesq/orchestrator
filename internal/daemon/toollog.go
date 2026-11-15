@@ -370,6 +370,10 @@ func (s *server) toolRecord(ev toolEvent, harness string) toollog.Record {
 			r.PolicyRev = rev
 		}
 	}
+	// The outbound rules revision the call was judged under (D-66):
+	// orchd's when the event arrived. Rules that do not verify keep their
+	// revision, so a replay finds them broken.
+	r.RulesRev = ev.rulesRev
 	applyHookDecision(&r, req)
 	s.markGuardState(&r)
 	tv.withhold(&r)

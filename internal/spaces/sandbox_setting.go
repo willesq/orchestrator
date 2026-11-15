@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -14,12 +16,15 @@ import (
 // SP-070 switch, which stays for debugging:
 //
 //   - auto (the default): rules only for a session that another isolated
-//     space's folders would be denied to;
+//     space's folders, or another space's own login folder (D-69), would
+//     be denied to;
 //   - on: rules for every session while a policy is applied;
 //   - off: no rules, by choice.
 //
-// Unlike a switch, the setting never marks start digests (INV-16 as amended
-// by D-61); orch status and the app show it. It is stored in orch.db beside
+// Unlike a switch, the setting does not mark start digests as enforcement
+// off (INV-16 as amended by D-61); orch status and the app show it. A
+// session's next start digest names it once after each change, and after
+// each orchd start while it is off (D-68). It is stored in orch.db beside
 // the switches, under its own key, in the same row-plus-change-log form, so
 // every change is logged with its time and caller and an edit to one table
 // alone is found.
@@ -141,4 +146,27 @@ func SandboxSettingHistory(ctx context.Context, q querier, limit int) ([]SwitchC
 		return nil, fmt.Errorf("read the sandbox setting's log: %w", err)
 	}
 	return scanChanges(rows)
+}
+
+// ReadSandboxSetting reads the setting from the orch.db at dbPath
+// read-only and without migrating it, for the hooks when orchd does not
+// answer (D-68). A missing store, or one that predates the setting, holds
+// the default.
+func ReadSandboxSetting(ctx context.Context, dbPath string) (SandboxSetting, string, error) {
+	if _, err := os.Stat(dbPath); errors.Is(err, os.ErrNotExist) {
+		return DefaultSandboxSetting(), "", nil
+	}
+	// Reason: built as a URL, as ReadEnforcement does, so the path cannot
+	// turn into connection options.
+	dsn := (&url.URL{Scheme: "file", Path: dbPath, RawQuery: "mode=ro&_pragma=busy_timeout(5000)"}).String()
+	conn, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return DefaultSandboxSetting(), "", fmt.Errorf("open %s: %w", dbPath, err)
+	}
+	defer conn.Close()
+	s, problem, err := LoadSandboxSetting(ctx, conn)
+	if err != nil && strings.Contains(err.Error(), "no such table") {
+		return DefaultSandboxSetting(), "", nil
+	}
+	return s, problem, err
 }

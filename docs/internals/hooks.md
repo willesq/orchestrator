@@ -18,7 +18,7 @@ they name a file.
 
 | Event | Does |
 |---|---|
-| `session-start` | Asks orchd to pin the session (`PinSession`, 2 s; skipped in queued tasks), sending the session ID, `cwd` and `parent_session_id` for every source: orchd keeps an existing pin, so resume, clear and compact change nothing ([daemon.md](daemon.md#session-pins)). Then prints `## Orchestrator digest`: the last 5 events of this session's stream and of `pr-babysitter`, `routing`, `queue`, plus a count of pending-ingest items. After compaction (`source=compact`) it first prints the [resume brief](#resume-brief). Marks the session and `queue` streams seen, so the next prompt's updates skip them. Before the events, the digest names each [enforcement layer](daemon.md#enforcement-switches) the operator switched off (or the guard set to `log`), with since when and when a timed switch reverts, plus a tool-hooks layer that does not enforce though its switch is on and any drift orchd reports. The [sandbox setting](daemon.md#sandbox-setting) (D-61) is not a switch and is never named there. It asks orchd (`GetEnforcement`, 0.5 s); when orchd does not answer it reads `orch.db`'s switches read-only and marks the lines "read from orch.db", and says when it cannot read them either. Queued tasks get it too. |
+| `session-start` | Asks orchd to pin the session (`PinSession`, 2 s; skipped in queued tasks), sending the session ID, `cwd` and `parent_session_id` for every source: orchd keeps an existing pin, so resume, clear and compact change nothing ([daemon.md](daemon.md#session-pins)). Then prints `## Orchestrator digest`: the last 5 events of this session's stream and of `pr-babysitter`, `routing`, `queue`, plus a count of pending-ingest items. After compaction (`source=compact`) it first prints the [resume brief](#resume-brief). Marks the session and `queue` streams seen, so the next prompt's updates skip them. Before the events, the digest names each [enforcement layer](daemon.md#enforcement-switches) the operator switched off (or the guard set to `log`), with since when and when a timed switch reverts, plus a tool-hooks layer that does not enforce though its switch is on and any drift orchd reports. The [sandbox setting](daemon.md#sandbox-setting) (D-61) is not a switch and is never named among them; after them the digest names the setting once per session as an `[info]` line after each change to it, and after each orchd start while it is off (D-68, orchd's start from `Ping`). It asks orchd (`GetEnforcement`, 0.5 s); when orchd does not answer it reads `orch.db`'s switches read-only and marks the lines "read from orch.db", and says when it cannot read them either. Queued tasks get it too. |
 | `user-prompt-submit` | Prints the [updates block](#updates-block) (not inside queued tasks), then [prompt context](#prompt-context). |
 | `stop` | Parses the transcript (redacted) and writes `sessions/<id>.yaml`. No orchd call. |
 | `pre-compact` | Writes `sessions/<id>.checkpoint.yaml` with the last request and reply. |
@@ -288,6 +288,20 @@ calls `Decide`. What it cannot read becomes a rule, refused in the enforcing mod
   are refused (RC-100).
 - `guard_timeout`: the decision did not finish within 250 ms, or panicked. The mode, once the
   snapshot has given it, decides whether that refuses; before that it refuses.
+- `settings_reopen` (D-67, RC-215): a `pre-tool-use` call `Decide` lets through, while spaces
+  are configured, runs where a checkout holds orch's sandbox denies (the folders orchd's
+  `.orch/checkouts.json` records for it) and a `.claude/settings.json` or `settings.local.json`
+  between the call's `cwd`, or the session's `CLAUDE_PROJECT_DIR`, and that checkout has a
+  `sandbox.filesystem.allowRead` or `allowWrite` entry orch did not write that re-opens one of
+  them, a `disableAllHooks: true`, an `env` entry for `ORCH_DATA_DIR`, `ORCH_CONFIG_DIR` or
+  `ORCH_SOCKET` orch did not write, or a settings file orch cannot check; or that record exists
+  but cannot be read
+  (`spacesettings.Reopened`). Reason: such an entry re-opens orch's sandbox for every sandboxed
+  command of a session started there, and orch may not remove it
+  ([install.md](install.md#per-space-harness-settings)). The reason shown names the rule and
+  what to remove, never the path; orchd's log and `orch run` name the entry. A replay carries a
+  recorded `settings_reopen` verdict, as it does the outbound terms' (the files are not in the
+  log).
 
 With no spaces configured the call is allowed without reading a pin (INV-10). A `cwd-changed`
 event is never refused; its would-be verdict is logged. It is judged as running in `old_cwd` and
@@ -295,7 +309,8 @@ moving to `new_cwd`, as a replay of the command log builds it, so a replay (SP-0
 verdict the hook recorded. The guard's mode is not stored per record: an enforced decision is
 `refused`/`allowed` with a bare rule id, one not enforced `would <verdict> (<rule>)`. The decision, the would-be verdict when
 not enforced, the rule and the policy revision go to orchd in `RecordToolEvent`
-(`guard_verdict`, `guard_rule`, `guard_enforced`, `guard_policy_rev`); orchd stores them as the
+(`guard_verdict`, `guard_rule`, `guard_enforced`, `guard_policy_rev`, and `guard_rules_rev`, the
+[outbound rules](#outbound-rules) revision of the snapshot, D-66); orchd stores them as the
 record's decision (`refused`, `allowed`) or as `would refuse (<rule>)` (RC-86), and keeps queue
 room for refusals ([command log](daemon.md#command-log), D-37).
 
@@ -325,7 +340,9 @@ it is a regular file of at most 2 MiB.
 and from the shell writes `Targets` sees ([self-protection](#self-protection)). A pin file is looked up by the payload's `session_id`, which
 the harness sets. The hook finds its files through `ORCH_DATA_DIR`, `XDG_DATA_HOME` and `HOME`,
 which a session can change for a harness it starts inside itself; such a nested harness could
-point its hook at an empty directory and run unguarded. Accepted (2026-11-12): the same nested
+point its hook at an empty directory and run unguarded. A project's settings `env` reaches the
+hooks too; in a checkout holding orch's sandbox rules orch's `settings.local.json` pins
+`ORCH_DATA_DIR`, which wins (D-67). Accepted (2026-11-12): the same nested
 harness can drop every hook already (`CLAUDE_CONFIG_DIR`, `--settings`), so this adds no new
 way around the guard; the OS sandbox is the boundary (RC-102). The guard is best-effort target
 extraction (D-28); the OS sandbox (SP-046) and per-job GitHub accounts (SP-063) are the hard
@@ -567,9 +584,10 @@ through and the terms layer is on now; otherwise the row shows the guard's verdi
 #### Outbound baseline
 
 How strictly a command is read is a baseline of named rules (`internal/spaces/outbound_rules.go`,
-`spaces.OutboundBaseline`), each with a stable id so SP-075 can make them switchable and let the
-operator add stricter ones. Until then every rule is on and cannot be changed. D-60 (2026-11-14)
-loosened the first strict version with the four marked *loosens*:
+`spaces.OutboundBaseline`), each with a stable id. Every rule is on by default; the operator may
+switch any of them off, which relaxes the check, and add stricter rules of their own
+([outbound rules](#outbound-rules)). D-60 (2026-11-14) loosened the first strict version with the
+four marked *loosens*; switching one of those off restores the strict reading:
 
 | Rule id | Loosens | What it does |
 |---|---|---|
@@ -584,6 +602,63 @@ loosened the first strict version with the four marked *loosens*:
 `TestOutboundGitConfigKeys` (`internal/spaces/outbound_d60_test.go`) hold, per loosening, commands
 the strict version refused that are now allowed, beside commands that still reach another space's
 destination or carry its term and are still refused.
+
+Switched off (SP-075), a rule reads as follows; `TestOutboundBaselineRuleSwitches`
+(`internal/spaces/terms_rules_test.go`) decides one command per rule with every rule on and with
+each rule alone off, and finds that only that rule's command changes:
+
+| Rule id | Off |
+|---|---|
+| `fail_closed_unreadable` | What the check cannot read (a variable, an unfollowed `cd`, an alias, a destination it cannot tell, a file it cannot read, git failing) is let through; what it can read is still checked, and a term found still refuses. A check that runs out of time, and a terms file that cannot be read, still refuse. |
+| `gh_default_repo` | A gh write without `-R` counts every remote of the checkout, as before D-60. |
+| `plain_variables` | `$PWD`, `$USER` and `$HOME` are unknown, so an outbound command using them fails closed. |
+| `command_assignments` | Every variable the command sets is unknown. |
+| `git_config_harmless_keys` | Every `git -c` fails closed. |
+| `pending_work_after_staging` | After `git add` in the same call, a commit or push sends only what it would send alone. |
+
+#### Outbound rules
+
+The operator's configuration of the check (SP-075, D-60; `internal/spaces/terms_rules.go`,
+stored by [orchd](daemon.md#outbound-rules)): the baseline rules switched off, and rules the
+operator added. An added rule can only make the check stricter; it is one of:
+
+| Kind | Value | Effect |
+|---|---|---|
+| `command` | a program's name, without a path (`glab`) | The command's words are checked as text sent to a destination that holds no space, so every space's terms are refused in them; what cannot be read in them fails closed. Files it sends are not read. |
+| `destination` | a GitHub `owner` or `owner/repo` | The destination holds no space for the check, so no space's terms may reach it, its own owner's included (a public repo of a job's org). |
+| `fail_closed` | a literal or `re:<regex>`, matched like a term (case-insensitive, on word boundaries) | A tool call whose tool name, input text or command words it matches is refused as `outbound_unchecked`, whatever the tool (a GitHub MCP tool, `curl` to the GitHub API). |
+
+A rule that would let through something the baseline refuses is rejected when it is added
+(`spaces.ParseUserRule`, `ErrRuleLoosens`): a kind such as `allow` or `exempt`, a value starting
+with `!`. So is a value its kind cannot take (`ErrBadRule`): a `command` rule naming `git`, `gh`,
+a `git-*` helper, a shell, a wrapper (`env`, `sudo`, …) or another command the walk reads in its
+own way, which the rule could never apply to or would replace; a pattern that matches empty text,
+is not a valid regular expression or starts with `#`; a value over 512 bytes or over one line; or
+more than 256 added rules. `TestOutboundUserRulesNeverLoosen` checks that no added rule lets any
+of a corpus of refused calls through. Rules apply only while some space has terms, as the rest of
+the check; a rule switched off or removed stops applying at once. Added rules are named
+`user-<n>`, numbered in order and never reused.
+
+**Never shown.** A rule's value may name what the operator keeps private, so like a term (INV-07)
+it never appears in orchd's log, events, errors, refusals, `orch` output, the app or indexed
+content: everything names a rule by its id, and errors about a value never quote it. The value
+lives only in `orch.db` and the guard snapshot; the guard refuses any tool call that reads the
+snapshot ([self-protection](#self-protection)), while `orch.db` stays readable as SP-042 decided
+(RC-603). The session's own command is logged as before
+(only terms are redacted from it): a pattern that must stay out of the command log belongs in a
+terms file too.
+
+**In the hook.** orchd puts the rules in the guard snapshot (`rules`, `rules_rev`); the hook
+reads them with the policy and the switches, so the guard and the check judge one set of files.
+With no rules changed the snapshot carries none: the baseline. Rules orchd could not read
+(`rules_broken`), or that do not validate, leave the check unable to vouch for any call they may
+have covered: while some space has terms, every shell command and every MCP tool (`mcp__*`) is
+refused as `outbound_unchecked` (`the operator's outbound rules cannot be read`); local file tools
+send nothing out and go. A refusal by an added rule names it: `the operator's outbound rule user-3
+refuses it`. Before reading the terms files the hook asks `spaces.OutboundCandidate` whether the
+call has anything to check; with an on `fail_closed` rule, every call does, and a call whose text
+is over 4 MiB is refused then, since its patterns could not all be matched in time (a check that
+runs out of time refuses too).
 
 **Limits.** This is static reading of shell, best-effort like target extraction (D-28, D-60):
 SP-045's git hooks (`commit-msg`, `pre-push` on the real content; `orch guard git-hook`, see

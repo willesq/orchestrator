@@ -35,6 +35,8 @@ struct SpacesSettingsView: View {
                 Text("Only you can switch a layer, here or with `orch spaces enforce`. Every change is logged with its time, and while a layer is off every session's start digest says so. A timed switch reverts by itself.")
                     .textStyle(.caption)
             }
+            OutboundRulesSection(model: enforcement.outboundRules,
+                                 termsLayerOff: enforcement.state?.switches.first { $0.layer == "terms" }?.relaxed)
             SpaceLoginsSection(model: enforcement.logins)
             Section {
                 PlacementCheck(validator: validator)
@@ -49,6 +51,7 @@ struct SpacesSettingsView: View {
         .enforcementConfirmation(enforcement)
         .task { await enforcement.load() }
         .task { await enforcement.logins.load() }
+        .task { await enforcement.outboundRules.load() }
     }
 }
 

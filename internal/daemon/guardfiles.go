@@ -36,6 +36,17 @@ type guardWriter struct {
 	mu    sync.Mutex
 	sw    spaces.Switch
 	terms spaces.Switch
+	// rules are the operator's outbound rules (SP-075) as last given;
+	// rulesBroken is set while orch.db's could not be read.
+	rules       spaces.StoredRules
+	rulesBroken bool
+}
+
+// takeRules keeps the outbound rules for the snapshot.
+func (g *guardWriter) takeRules(r spaces.StoredRules, broken bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.rules, g.rulesBroken = r, broken
 }
 
 func newGuardWriter(dir, home, configDir, dataDir, binDir string) *guardWriter {
@@ -121,8 +132,13 @@ func (s *server) writeGuardSnapshot() {
 	}
 	snap := spaces.GuardSnapshot{
 		Home: g.home, WrittenAt: time.Now().UTC(),
-		Guard: spaces.GuardSwitch{State: g.sw.State, Until: g.sw.Until, Previous: g.sw.Previous},
-		Terms: spaces.GuardSwitch{State: g.terms.State, Until: g.terms.Until, Previous: g.terms.Previous},
+		Guard:    spaces.GuardSwitch{State: g.sw.State, Until: g.sw.Until, Previous: g.sw.Previous},
+		Terms:    spaces.GuardSwitch{State: g.terms.State, Until: g.terms.Until, Previous: g.terms.Previous},
+		RulesRev: g.rules.Rev, RulesBroken: g.rulesBroken,
+	}
+	if g.rules.Rev > 0 && !g.rulesBroken {
+		r := g.rules.Rules
+		snap.Rules = &r
 	}
 	res, rev, err := s.spaces.CurrentRevision()
 	switch {
@@ -215,6 +231,12 @@ func (s *server) startGuardFiles(ctx context.Context) {
 		s.guard.take(e.cur)
 		e.onChange = s.setSwitches
 		e.mu.Unlock()
+	}
+	if t := s.termsRules; t != nil {
+		t.mu.Lock()
+		s.guard.takeRules(t.cur, t.problem != "")
+		t.onChange = s.setTermsRules
+		t.mu.Unlock()
 	}
 	s.writeGuardSnapshot()
 	go func() {

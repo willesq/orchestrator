@@ -37,8 +37,16 @@ const (
 	keyPermDeny = "permissions.deny"
 	// keyAllProjectMCP turns off starting every project MCP server.
 	keyAllProjectMCP = "enableAllProjectMcpServers"
-	envGHConfigDir   = "GH_CONFIG_DIR"
-	envTmpDir        = "TMPDIR"
+	// keyNoHooks off keeps the hooks running. Measured with Claude Code
+	// 2.1.309 (D-67 re-audit): a project settings.json with it true turns
+	// off every hook, orch's tool guard included, and a
+	// settings.local.json with it false turns them back on.
+	keyNoHooks = "disableAllHooks"
+	// envOrchData pins where orch-hook finds the guard's files, for the
+	// same reason: a project settings.json's env reaches the hooks.
+	envOrchData    = "ORCH_DATA_DIR"
+	envGHConfigDir = "GH_CONFIG_DIR"
+	envTmpDir      = "TMPDIR"
 	// envClaudeTmpDir is where Claude Code keeps its temporary files and
 	// makes the TMPDIR of sandboxed commands (ClaudeSandboxTmp). Measured
 	// (RC-184): only the environment Claude Code starts with sets it; in a
@@ -71,7 +79,10 @@ func ClaudeFragment(r Rules) Fragment {
 		// Reason for the MCP key: a project's .mcp.json, which the
 		// session's file tools can write, would otherwise start servers
 		// outside the sandbox when the user enabled every project server.
-		Scalars: map[string]any{keySandboxOn: true, keyUnsandboxed: false, keyAllProjectMCP: false},
+		// Reason for the hooks key: the tool guard refuses calls the
+		// sandbox alone would not stop (D-67), and a project file could
+		// otherwise turn it off.
+		Scalars: map[string]any{keySandboxOn: true, keyUnsandboxed: false, keyAllProjectMCP: false, keyNoHooks: false},
 		Lists:   map[string][]string{},
 	}
 	if len(r.Deny) > 0 {
@@ -108,6 +119,9 @@ func ClaudeFragment(r Rules) Fragment {
 	}
 	for k, v := range r.Env() {
 		f.Scalars["env."+k] = v
+	}
+	if r.DataDir != "" {
+		f.Scalars["env."+envOrchData] = r.DataDir
 	}
 	return f
 }

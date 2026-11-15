@@ -36,6 +36,10 @@ type Layout struct {
 	// using the default login may read it inside the sandbox; every other
 	// session is denied it (D-61).
 	GHDefault string
+	// DataDir is orch's data directory ("" for none): the settings pin the
+	// hooks' ORCH_DATA_DIR to it, so a project file cannot point the tool
+	// guard at an empty folder (D-67).
+	DataDir string
 }
 
 // claudeTmpMax is the longest temp folder Claude Code takes as given.
@@ -52,7 +56,7 @@ const claudeTmpMax = 44
 func DefaultLayout() Layout {
 	return Layout{
 		Dir: filepath.Join(paths.DataDir(), "spaces"), Tmp: fmt.Sprintf("/tmp/orch-%d", os.Getuid()),
-		GHDefault: DefaultGHDir(),
+		GHDefault: DefaultGHDir(), DataDir: paths.DataDir(),
 	}
 }
 
@@ -129,6 +133,10 @@ func ClaudeSandboxTmp(dir string) string {
 // letter, so no space's folder is named like it.
 func (l Layout) OrchDir() string { return filepath.Join(l.Dir, ".orch") }
 
+// StateFile is orchd's record of the checkout files (Syncer.StateFile),
+// which the tool guard reads too (Reopened).
+func (l Layout) StateFile() string { return filepath.Join(l.OrchDir(), "checkouts.json") }
+
 // Rules is what a session in one space gets.
 type Rules struct {
 	// Space is the space the rules are for; "" for a checkout that has no
@@ -154,8 +162,18 @@ type Rules struct {
 	AllowRead []string
 	// OtherJobs reports that Deny holds another isolated space's root: the
 	// rules keep this session out of another job's folders. The sandbox
-	// setting's auto writes rules only then (D-61).
+	// setting's auto writes rules then (D-61).
 	OtherJobs bool
+	// DataDir is orch's data directory, which the settings pin for the
+	// hooks; "" for none.
+	DataDir string
+	// OtherLogins reports that Deny holds another space's own login
+	// folder, its gh_config_dir or claude_config_dir, whatever that
+	// space's kind, or the default gh login's folder, which a space
+	// naming its own gh profile and a checkout of no space are denied.
+	// auto writes rules then too (D-69), so a job alone among spaces that
+	// are not isolated is still kept out of their logins.
+	OtherLogins bool
 }
 
 // For returns the rules of a session in space. It denies every isolated
@@ -164,7 +182,7 @@ type Rules struct {
 // a private space space reads: those are left to memory filtering and the
 // tool guard, as in block-other-jobs mode (D-12).
 func For(res *spaces.Resolved, space string, l Layout) Rules {
-	r := Rules{Space: space, TmpDir: l.TmpDir(space), GHConfigDir: res.GHConfigDir(space), ClaudeConfigDir: res.ClaudeConfigDir(space)}
+	r := Rules{Space: space, TmpDir: l.TmpDir(space), GHConfigDir: res.GHConfigDir(space), ClaudeConfigDir: res.ClaudeConfigDir(space), DataDir: l.DataDir}
 	deny := []string{l.OrchDir()}
 	for _, root := range res.BoundRoots() {
 		if root.Kind == spaces.Isolated && root.Space != space {
@@ -175,6 +193,7 @@ func For(res *spaces.Resolved, space string, l Layout) Rules {
 	for _, n := range res.Names() {
 		if n != space {
 			deny = append(deny, otherSpace(res, n, l)...)
+			r.OtherLogins = r.OtherLogins || hasLogin(res, n)
 		}
 	}
 	// A space reads only its own gh login: the default one when it names
@@ -185,6 +204,10 @@ func For(res *spaces.Resolved, space string, l Layout) Rules {
 		allow = append(allow, r.GHConfigDir)
 		if l.GHDefault != "" && !samePlace(l.GHDefault, r.GHConfigDir) {
 			deny = append(deny, l.GHDefault)
+			// Reason: the default login is the one the other spaces use;
+			// keeping this space to its own profile is the point of
+			// naming one (D-61), so auto writes the rules for it too.
+			r.OtherLogins = true
 		}
 	case l.GHDefault != "":
 		allow = append(allow, l.GHDefault)
@@ -246,13 +269,19 @@ func otherSpace(res *spaces.Resolved, n string, l Layout) []string {
 	return out
 }
 
+// hasLogin reports whether space n names its own gh profile or Claude Code
+// folder, which otherSpace denies to every other space.
+func hasLogin(res *spaces.Resolved, n string) bool {
+	return res.GHConfigDir(n) != "" || res.ClaudeConfigDir(n) != ""
+}
+
 // ForUnplaced returns the rules of a checkout at path that has no space: its
 // root and its remote name different jobs, or it is quarantined. It denies
 // every isolated root that does not hold path, every space's directory, gh
 // profile and Claude Code folder, the default gh login's folder and orchd's
 // own folder, and sets no gh profile or TMPDIR.
 func ForUnplaced(res *spaces.Resolved, path string, l Layout) Rules {
-	var r Rules
+	r := Rules{DataDir: l.DataDir}
 	deny := []string{l.OrchDir()}
 	for _, root := range res.BoundRoots() {
 		if root.Kind == spaces.Isolated && !spaces.RootHolds(root.Root, path) {
@@ -262,9 +291,11 @@ func ForUnplaced(res *spaces.Resolved, path string, l Layout) Rules {
 	}
 	for _, n := range res.Names() {
 		deny = append(deny, otherSpace(res, n, l)...)
+		r.OtherLogins = r.OtherLogins || hasLogin(res, n)
 	}
 	if l.GHDefault != "" {
 		deny = append(deny, l.GHDefault)
+		r.OtherLogins = true
 	}
 	r.Deny = withReal(deny)
 	return r

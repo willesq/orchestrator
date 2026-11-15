@@ -39,7 +39,7 @@ func newCheckoutSettings() *checkoutSettings {
 			// Reason: in the folder every space's rules deny, since the
 			// record names every space's checkouts and the backups hold
 			// users' own settings.
-			StateFile: filepath.Join(l.OrchDir(), "checkouts.json"),
+			StateFile: l.StateFile(),
 			BackupDir: filepath.Join(l.OrchDir(), "backups"),
 		},
 		kick: make(chan struct{}, 1),
