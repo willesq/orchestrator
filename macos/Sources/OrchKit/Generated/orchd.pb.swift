@@ -5411,6 +5411,74 @@ public nonisolated struct Orchd_V1_ChangeOutboundRuleResponse: Sendable {
   fileprivate var _current: Orchd_V1_OutboundRules? = nil
 }
 
+public nonisolated struct Orchd_V1_GetSpaceTermsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// SpaceTerms is one space's outbound terms file, described without a term.
+public nonisolated struct Orchd_V1_SpaceTerms: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var space: String = String()
+
+  /// the path as the policy writes it; "" for none
+  public var termsFile: String = String()
+
+  /// the file is there
+  public var exists: Bool = false
+
+  /// terms it holds, as the outbound check reads it
+  public var count: Int32 = 0
+
+  /// The first 12 hex digits of an HMAC-SHA256 of the file, keyed with a
+  /// secret kept in orchd's data folder, so a short term cannot be found
+  /// from it by trying words; it changes whenever the file changes.
+  public var fingerprint: String = String()
+
+  /// Why the file cannot be read or parsed; it names a line, never a term.
+  public var problem: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SpaceTermsList: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// the applied policy's spaces, by name
+  public var spaces: [Orchd_V1_SpaceTerms] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_SetSpaceTermsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var space: String = String()
+
+  /// the whole file; never echoed, logged or returned
+  public var terms: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 /// SearchDirectMessagesRequest is a search that keeps chat direct messages in
 /// (SP-060).
 public nonisolated struct Orchd_V1_SearchDirectMessagesRequest: Sendable {
@@ -16279,6 +16347,145 @@ nonisolated extension Orchd_V1_ChangeOutboundRuleResponse: SwiftProtobuf.Message
     if lhs.changed != rhs.changed {return false}
     if lhs.revision != rhs.revision {return false}
     if lhs._current != rhs._current {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_GetSpaceTermsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetSpaceTermsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_GetSpaceTermsRequest, rhs: Orchd_V1_GetSpaceTermsRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SpaceTerms: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SpaceTerms"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}space\0\u{3}terms_file\0\u{1}exists\0\u{1}count\0\u{1}fingerprint\0\u{1}problem\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.space) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.termsFile) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.exists) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.count) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.fingerprint) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.problem) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.space.isEmpty {
+      try visitor.visitSingularStringField(value: self.space, fieldNumber: 1)
+    }
+    if !self.termsFile.isEmpty {
+      try visitor.visitSingularStringField(value: self.termsFile, fieldNumber: 2)
+    }
+    if self.exists != false {
+      try visitor.visitSingularBoolField(value: self.exists, fieldNumber: 3)
+    }
+    if self.count != 0 {
+      try visitor.visitSingularInt32Field(value: self.count, fieldNumber: 4)
+    }
+    if !self.fingerprint.isEmpty {
+      try visitor.visitSingularStringField(value: self.fingerprint, fieldNumber: 5)
+    }
+    if !self.problem.isEmpty {
+      try visitor.visitSingularStringField(value: self.problem, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SpaceTerms, rhs: Orchd_V1_SpaceTerms) -> Bool {
+    if lhs.space != rhs.space {return false}
+    if lhs.termsFile != rhs.termsFile {return false}
+    if lhs.exists != rhs.exists {return false}
+    if lhs.count != rhs.count {return false}
+    if lhs.fingerprint != rhs.fingerprint {return false}
+    if lhs.problem != rhs.problem {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SpaceTermsList: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SpaceTermsList"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}spaces\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.spaces) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.spaces.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.spaces, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SpaceTermsList, rhs: Orchd_V1_SpaceTermsList) -> Bool {
+    if lhs.spaces != rhs.spaces {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_SetSpaceTermsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetSpaceTermsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}space\0\u{1}terms\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.space) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.terms) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.space.isEmpty {
+      try visitor.visitSingularStringField(value: self.space, fieldNumber: 1)
+    }
+    if !self.terms.isEmpty {
+      try visitor.visitSingularStringField(value: self.terms, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_SetSpaceTermsRequest, rhs: Orchd_V1_SetSpaceTermsRequest) -> Bool {
+    if lhs.space != rhs.space {return false}
+    if lhs.terms != rhs.terms {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

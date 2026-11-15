@@ -9,8 +9,8 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches, the directory validator and the spaces' logins (`Spaces`, `SpacesModel`, `SpaceLogins`), the Spaces pane's Overview and badge (`SpacesOverview`, `SpacesOverviewModel`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
-| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`, `SpacesView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches, the directory validator and the spaces' logins (`Spaces`, `SpacesModel`, `SpaceLogins`), the Spaces pane's Overview and badge (`SpacesOverview`, `SpacesOverviewModel`), its advanced editors (`SpacesEditor`, `SpacesEditorModel`, `SpacesPolicyEdit`, `SpacesAccess`, `SpacesRootsTree`, `SpacesRules`, `SpacesCoverage`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`, `SpacesView`, `SpacesEditorView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 | `OrchAppSnapshots` | Renders app views to PNGs in light and dark from sample data, with no orchd; runs only when `ORCH_SNAPSHOT_DIR` is set (see [Snapshots](#snapshots)) |
 
@@ -297,6 +297,71 @@ bindings.
   acceptance), `SpacesReviewClientTests` (the four RPCs over a fake orchd) and
   `SpacesActivityTests`. `SpacesActivityReviewSnapshots` renders both pages, plus the review after
   dropping, at both widths in light and dark.
+
+### Spaces pane: Edit (SP-053)
+
+The pane's switch gains **Edit**: the advanced editors (`SpacesEditorView`, `SpacesEditorPages`,
+`SpacesEditorModel`), hidden like Activity and Review in screen-share-safe mode. The model comes
+from `AppModel.spacesEditor` (`features.get`, `SpacesEditor+App.swift`) through the SwiftUI
+environment, on its own `SpacesEditorAPI` (`DaemonClient+SpacesEditor.swift`).
+
+- **What is edited:** the newest draft from `DiffSpaces`, else the applied revision, as a JSON
+  document (`SpacesPolicyEdit`), so fields this app does not know survive. **Save Draft** sends it
+  with `SetSpacesDraft`; nothing is enforced until **Review & Apply…** opens the Review page, which
+  applies it with Touch ID and orchd's operator check (D-71/D-78). A reload keeps unsaved edits;
+  **Revert** drops them. The header names the revision edited (and an agent's draft) and orchd's
+  problems with the last save.
+- **Off state:** while memory spaces are off (`Status`' `spaces.state`) the page says nothing here
+  is enforced and that a draft takes effect once spaces are on and applied, with **Open Spaces
+  Settings** for the switch only the operator can use; while they turn on it says the store is
+  being split. Relaxed enforcement shows the usual banner. The sidebar still hides the pane while
+  spaces are off (see [Spaces](#spaces)), so the notice shows when the state changes under an open
+  page.
+- **Spaces:** each space's name, kind, GitHub owners, roots, public paths (public spaces, D-65),
+  web prefixes, chat tenants, gh profile, Claude Code folder and terms file path, with its chunk
+  and stale counts from `Status`' `spaces.counts` (RC-1101), and a form to add a space; removing
+  or renaming one updates the other spaces' reads and `public_root_sessions`. Above them, the
+  **roots tree** (`RootsTree`): every root nested by folder with its space and kind, and each root
+  orchd would refuse marked with why, mirroring `checkRoots` (bound twice, less strict than a root
+  above it, inside another job's root, not a full path). A marked root blocks **Save Draft**.
+- **Terms, write-only (INV-07):** each space shows its terms file as `GetSpaceTerms` describes it:
+  term count and a keyed fingerprint, or the line orchd cannot parse. **Replace Terms…** opens a
+  sheet whose text lives only in that sheet's state; it is sent with `SetSpaceTerms`, cleared, and
+  never shown again. Only an applied space's applied `terms_file` can be written, so a new path is
+  saved and applied first.
+- **Access:** the reads matrix (`ReadsMatrix`). A space reads itself and every public space; a
+  public reader, and any read of an isolated space, is locked (orchd's `public_reads`,
+  `isolated_reads_isolated` and `private_reads_isolated`); a private space may read another; a job
+  (isolated) may read a private space after a confirmation that names what it shares. A locked read
+  the document lists anyway is marked, can only be switched off, and blocks saving. Below it, where
+  each kind of content goes and who reads it (`ContentKindRule`): orchd's fixed classifier rules,
+  as the policy has no per-kind settings.
+- **Rules:** **Where would this go?** (`PlacementTester`) takes a path (`~` expands), a web
+  address, owner/repo or slack:/teams: tenant and shows `ExplainPlacement`'s answer for the applied
+  policy. The generated rules (`GeneratedRule`) list each binding as a rule, roots deepest first,
+  with how many of the sources `ListSources` returns (up to 2,000) its URI names (`file://` under
+  a root, `repo://<owner>/`, a web prefix, `slack://`/`teams://`); public paths decide per file and
+  show no count.
+- **Coverage:** per harness (`HarnessCoverage`), what its hooks give spaces (Claude Code: pins,
+  the tool guard and directory moves; Codex: no moves; Gemini CLI: none, D-20) with the live pinned
+  sessions, running unpinned processes, tool calls and refusals from `ListSessions`, the tool-hooks
+  layer's problem, and the enforcement switches (`EnforcementRow`, confirmed as in Settings). Which
+  hook events are installed per harness is still only in `orch status`.
+- **Sources:** quarantine (`ListQuarantine`) first, then `ListSources`, filterable, each with
+  **Retag** to an applied space or quarantine. Every retag is confirmed with what it does (into a
+  public space, out of quarantine, possibly out of a job's space) and sent with `confirm` and, for
+  a quarantined source, `expect_from`; orchd's refusal shows in the header.
+- **Tests:** `SpacesAccessTests` (every matrix cell against orchd's rules; locked cells cannot be
+  enabled, SP-053.1.a1), `SpacesTermsTests` (no model property holds a fixture term after sending
+  them, SP-053.1.a2), `PlacementTesterTests` (the tester equals `ExplainPlacement` for every case of
+  `placement-explanations.json` and `placement-tester.json`, SP-053.1.a3), `SpacesRootsTreeTests`
+  (each refused nesting is marked and nothing is saved, SP-053.1.a4), `SpacesPolicyEditTests`,
+  `SpacesRulesTests`, `SpacesCoverageTests`, `SpacesEditorModelTests` and
+  `SpacesEditorClientTests`. `TestAppTesterFixtureMatchesExplainPlacement` in `internal/daemon`
+  keeps `placement-tester.json` (web pages, repos and chat tenants) equal to orchd's answers.
+  `SpacesEditorSnapshots` renders each editor, a refused nesting and the off state at both widths
+  in light and dark (`spaces-edit-*.png`), after sending terms, and checks the model drawn holds
+  none.
 
 ### Spaces pane: basic setup (SP-052)
 

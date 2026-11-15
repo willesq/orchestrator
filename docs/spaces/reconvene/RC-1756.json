@@ -1,0 +1,12 @@
+{
+  "id": "RC-1756",
+  "kind": "follow-up",
+  "topic": "The terms sheet's text field keeps macOS text services on",
+  "detail": "SP-053's Replace Terms sheet is a SwiftUI TextEditor with autocorrection off, but macOS spell checking and text services (look-up, writing tools) still see what is typed. Terms never reach the model, a log or orchd's answers (INV-07), but a field that hands them to no system service would need an NSTextView wrapper with continuous spell checking and text services off. Low; raised by the SP-053 security review.",
+  "source": "https://github.com/willesq/orchestrator/pull/214",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-053"
+  ],
+  "status": "open"
+}

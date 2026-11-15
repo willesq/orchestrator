@@ -249,6 +249,15 @@ service Orchd {
   // stricter. Every change is logged with its time and caller (never a
   // value) and emits an event on the "spaces" stream.
   rpc ChangeOutboundRule(ChangeOutboundRuleRequest) returns (ChangeOutboundRuleResponse);
+  // GetSpaceTerms describes each applied space's outbound terms file by its
+  // term count and a keyed fingerprint, never a term (spaces SP-053,
+  // INV-07). Operator-only.
+  rpc GetSpaceTerms(GetSpaceTermsRequest) returns (SpaceTermsList);
+  // SetSpaceTerms replaces one applied space's terms file with the terms
+  // sent, after they parse as a terms file. The terms are never echoed,
+  // logged or returned. Operator-only, and Orch.app's alone even under an
+  // unlock (D-78): replacing terms can drop some.
+  rpc SetSpaceTerms(SetSpaceTermsRequest) returns (SpaceTerms);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -2165,6 +2174,29 @@ message ChangeOutboundRuleResponse {
   bool changed = 2;     // false when nothing changed
   int64 revision = 3;   // the rules revision after the change
   OutboundRules current = 4;
+}
+
+message GetSpaceTermsRequest {}
+
+// SpaceTerms is one space's outbound terms file, described without a term.
+message SpaceTerms {
+  string space = 1;
+  string terms_file = 2;  // the path as the policy writes it; "" for none
+  bool exists = 3;        // the file is there
+  int32 count = 4;        // terms it holds, as the outbound check reads it
+  // The first 12 hex digits of an HMAC-SHA256 of the file, keyed with a
+  // secret kept in orchd's data folder, so a short term cannot be found
+  // from it by trying words; it changes whenever the file changes.
+  string fingerprint = 5;
+  // Why the file cannot be read or parsed; it names a line, never a term.
+  string problem = 6;
+}
+message SpaceTermsList {
+  repeated SpaceTerms spaces = 1; // the applied policy's spaces, by name
+}
+message SetSpaceTermsRequest {
+  string space = 1;
+  string terms = 2;  // the whole file; never echoed, logged or returned
 }
 
 // SearchDirectMessagesRequest is a search that keeps chat direct messages in

@@ -89,6 +89,8 @@ const (
 	Orchd_SetSandboxSetting_FullMethodName        = "/orchd.v1.Orchd/SetSandboxSetting"
 	Orchd_ListOutboundRules_FullMethodName        = "/orchd.v1.Orchd/ListOutboundRules"
 	Orchd_ChangeOutboundRule_FullMethodName       = "/orchd.v1.Orchd/ChangeOutboundRule"
+	Orchd_GetSpaceTerms_FullMethodName            = "/orchd.v1.Orchd/GetSpaceTerms"
+	Orchd_SetSpaceTerms_FullMethodName            = "/orchd.v1.Orchd/SetSpaceTerms"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName               = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName             = "/orchd.v1.Orchd/RemoveSource"
@@ -361,6 +363,15 @@ type OrchdClient interface {
 	// stricter. Every change is logged with its time and caller (never a
 	// value) and emits an event on the "spaces" stream.
 	ChangeOutboundRule(ctx context.Context, in *ChangeOutboundRuleRequest, opts ...grpc.CallOption) (*ChangeOutboundRuleResponse, error)
+	// GetSpaceTerms describes each applied space's outbound terms file by its
+	// term count and a keyed fingerprint, never a term (spaces SP-053,
+	// INV-07). Operator-only.
+	GetSpaceTerms(ctx context.Context, in *GetSpaceTermsRequest, opts ...grpc.CallOption) (*SpaceTermsList, error)
+	// SetSpaceTerms replaces one applied space's terms file with the terms
+	// sent, after they parse as a terms file. The terms are never echoed,
+	// logged or returned. Operator-only, and Orch.app's alone even under an
+	// unlock (D-78): replacing terms can drop some.
+	SetSpaceTerms(ctx context.Context, in *SetSpaceTermsRequest, opts ...grpc.CallOption) (*SpaceTerms, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -1146,6 +1157,26 @@ func (c *orchdClient) ChangeOutboundRule(ctx context.Context, in *ChangeOutbound
 	return out, nil
 }
 
+func (c *orchdClient) GetSpaceTerms(ctx context.Context, in *GetSpaceTermsRequest, opts ...grpc.CallOption) (*SpaceTermsList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SpaceTermsList)
+	err := c.cc.Invoke(ctx, Orchd_GetSpaceTerms_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) SetSpaceTerms(ctx context.Context, in *SetSpaceTermsRequest, opts ...grpc.CallOption) (*SpaceTerms, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SpaceTerms)
+	err := c.cc.Invoke(ctx, Orchd_SetSpaceTerms_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -1605,6 +1636,15 @@ type OrchdServer interface {
 	// stricter. Every change is logged with its time and caller (never a
 	// value) and emits an event on the "spaces" stream.
 	ChangeOutboundRule(context.Context, *ChangeOutboundRuleRequest) (*ChangeOutboundRuleResponse, error)
+	// GetSpaceTerms describes each applied space's outbound terms file by its
+	// term count and a keyed fingerprint, never a term (spaces SP-053,
+	// INV-07). Operator-only.
+	GetSpaceTerms(context.Context, *GetSpaceTermsRequest) (*SpaceTermsList, error)
+	// SetSpaceTerms replaces one applied space's terms file with the terms
+	// sent, after they parse as a terms file. The terms are never echoed,
+	// logged or returned. Operator-only, and Orch.app's alone even under an
+	// unlock (D-78): replacing terms can drop some.
+	SetSpaceTerms(context.Context, *SetSpaceTermsRequest) (*SpaceTerms, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -1890,6 +1930,12 @@ func (UnimplementedOrchdServer) ListOutboundRules(context.Context, *ListOutbound
 }
 func (UnimplementedOrchdServer) ChangeOutboundRule(context.Context, *ChangeOutboundRuleRequest) (*ChangeOutboundRuleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangeOutboundRule not implemented")
+}
+func (UnimplementedOrchdServer) GetSpaceTerms(context.Context, *GetSpaceTermsRequest) (*SpaceTermsList, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSpaceTerms not implemented")
+}
+func (UnimplementedOrchdServer) SetSpaceTerms(context.Context, *SetSpaceTermsRequest) (*SpaceTerms, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetSpaceTerms not implemented")
 }
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
@@ -3228,6 +3274,42 @@ func _Orchd_ChangeOutboundRule_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_GetSpaceTerms_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSpaceTermsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).GetSpaceTerms(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_GetSpaceTerms_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).GetSpaceTerms(ctx, req.(*GetSpaceTermsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_SetSpaceTerms_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSpaceTermsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SetSpaceTerms(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SetSpaceTerms_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SetSpaceTerms(ctx, req.(*SetSpaceTermsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -3888,6 +3970,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ChangeOutboundRule",
 			Handler:    _Orchd_ChangeOutboundRule_Handler,
+		},
+		{
+			MethodName: "GetSpaceTerms",
+			Handler:    _Orchd_GetSpaceTerms_Handler,
+		},
+		{
+			MethodName: "SetSpaceTerms",
+			Handler:    _Orchd_SetSpaceTerms_Handler,
 		},
 		{
 			MethodName: "ListRegisteredSources",

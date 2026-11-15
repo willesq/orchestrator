@@ -1,0 +1,12 @@
+{
+  "id": "RC-1751",
+  "kind": "follow-up",
+  "topic": "Coverage cannot show which hook events each harness has installed",
+  "detail": "The Coverage editor shows what each harness's hooks give spaces (from docs/internals/hooks.md), the live pinned and unpinned processes from ListSessions, and the tool-hooks layer's problem. Whether PreToolUse and CwdChanged are actually wired in ~/.claude/settings.json and ~/.codex/hooks.json is computed only by install.ToolHooks for 'orch status'. A small operator-only RPC returning that per harness would let the app mark a harness whose hooks are missing.",
+  "source": "https://github.com/willesq/orchestrator/pull/214",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-053"
+  ],
+  "status": "open"
+}

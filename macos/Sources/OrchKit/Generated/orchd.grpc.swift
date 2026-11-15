@@ -930,6 +930,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "GetSpaceTerms" metadata.
+        public enum GetSpaceTerms: Sendable {
+            /// Request type for "GetSpaceTerms".
+            public typealias Input = Orchd_V1_GetSpaceTermsRequest
+            /// Response type for "GetSpaceTerms".
+            public typealias Output = Orchd_V1_SpaceTermsList
+            /// Descriptor for "GetSpaceTerms".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "GetSpaceTerms",
+                type: .unary
+            )
+        }
+        /// Namespace for "SetSpaceTerms" metadata.
+        public enum SetSpaceTerms: Sendable {
+            /// Request type for "SetSpaceTerms".
+            public typealias Input = Orchd_V1_SetSpaceTermsRequest
+            /// Response type for "SetSpaceTerms".
+            public typealias Output = Orchd_V1_SpaceTerms
+            /// Descriptor for "SetSpaceTerms".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SetSpaceTerms",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -1275,6 +1301,8 @@ public enum Orchd_V1_Orchd: Sendable {
             SetSandboxSetting.descriptor,
             ListOutboundRules.descriptor,
             ChangeOutboundRule.descriptor,
+            GetSpaceTerms.descriptor,
+            SetSpaceTerms.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -3030,6 +3058,57 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ChangeOutboundRuleResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ChangeOutboundRuleResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetSpaceTerms" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetSpaceTerms describes each applied space's outbound terms file by its
+        /// > term count and a keyed fingerprint, never a term (spaces SP-053,
+        /// > INV-07). Operator-only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetSpaceTermsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetSpaceTermsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SpaceTermsList` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getSpaceTerms<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetSpaceTermsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetSpaceTermsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SpaceTermsList>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpaceTermsList>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SetSpaceTerms" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetSpaceTerms replaces one applied space's terms file with the terms
+        /// > sent, after they parse as a terms file. The terms are never echoed,
+        /// > logged or returned. Operator-only, and Orch.app's alone even under an
+        /// > unlock (D-78): replacing terms can drop some.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetSpaceTermsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetSpaceTermsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SpaceTerms` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func setSpaceTerms<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetSpaceTermsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetSpaceTermsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SpaceTerms>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpaceTerms>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListRegisteredSources" method.
@@ -6041,6 +6120,79 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "GetSpaceTerms" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetSpaceTerms describes each applied space's outbound terms file by its
+        /// > term count and a keyed fingerprint, never a term (spaces SP-053,
+        /// > INV-07). Operator-only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_GetSpaceTermsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_GetSpaceTermsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SpaceTermsList` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getSpaceTerms<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_GetSpaceTermsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_GetSpaceTermsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SpaceTermsList>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpaceTermsList>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.GetSpaceTerms.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SetSpaceTerms" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SetSpaceTerms replaces one applied space's terms file with the terms
+        /// > sent, after they parse as a terms file. The terms are never echoed,
+        /// > logged or returned. Operator-only, and Orch.app's alone even under an
+        /// > unlock (D-78): replacing terms can drop some.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SetSpaceTermsRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SetSpaceTermsRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SpaceTerms` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func setSpaceTerms<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SetSpaceTermsRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SetSpaceTermsRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SpaceTerms>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpaceTerms>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SetSpaceTerms.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -8909,6 +9061,69 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ChangeOutboundRuleRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ChangeOutboundRuleResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetSpaceTerms" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetSpaceTerms describes each applied space's outbound terms file by its
+    /// > term count and a keyed fingerprint, never a term (spaces SP-053,
+    /// > INV-07). Operator-only.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_GetSpaceTermsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getSpaceTerms<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_GetSpaceTermsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpaceTermsList>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getSpaceTerms(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_GetSpaceTermsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SpaceTermsList>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetSpaceTerms" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetSpaceTerms replaces one applied space's terms file with the terms
+    /// > sent, after they parse as a terms file. The terms are never echoed,
+    /// > logged or returned. Operator-only, and Orch.app's alone even under an
+    /// > unlock (D-78): replacing terms can drop some.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SetSpaceTermsRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setSpaceTerms<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SetSpaceTermsRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpaceTerms>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.setSpaceTerms(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetSpaceTermsRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SpaceTerms>(),
             options: options,
             onResponse: handleResponse
         )
@@ -11955,6 +12170,77 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.changeOutboundRule(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetSpaceTerms" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetSpaceTerms describes each applied space's outbound terms file by its
+    /// > term count and a keyed fingerprint, never a term (spaces SP-053,
+    /// > INV-07). Operator-only.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getSpaceTerms<Result>(
+        _ message: Orchd_V1_GetSpaceTermsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpaceTermsList>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_GetSpaceTermsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getSpaceTerms(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SetSpaceTerms" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SetSpaceTerms replaces one applied space's terms file with the terms
+    /// > sent, after they parse as a terms file. The terms are never echoed,
+    /// > logged or returned. Operator-only, and Orch.app's alone even under an
+    /// > unlock (D-78): replacing terms can drop some.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func setSpaceTerms<Result>(
+        _ message: Orchd_V1_SetSpaceTermsRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SpaceTerms>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SetSpaceTermsRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.setSpaceTerms(
             request: request,
             options: options,
             onResponse: handleResponse

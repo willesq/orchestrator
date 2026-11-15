@@ -1,0 +1,12 @@
+{
+  "id": "RC-1755",
+  "kind": "follow-up",
+  "topic": "Generated-rule match counts are URI matches, not placements",
+  "detail": "The Rules editor counts, per binding, the sources among the first 2,000 ListSources returns whose URI the rule names (file:// under a root, repo://<owner>/, a web prefix, slack:// or teams://). That is not where orchd placed them: a deeper root, a stricter remote or a retag can decide otherwise, and public_paths show no count. Exact per-rule counts would need orchd to report the rule each stored source was placed by.",
+  "source": "https://github.com/willesq/orchestrator/pull/214",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-053"
+  ],
+  "status": "open"
+}

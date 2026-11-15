@@ -1,0 +1,140 @@
+[
+  {
+    "path": "https://docs.oss.dev/guide/start",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "the page is under a web prefix bound to oss",
+      "rule": "web_prefix",
+      "space": "oss",
+      "targetKind": "url"
+    }
+  },
+  {
+    "path": "https://example.com/page",
+    "explanation": {
+      "outcome": "quarantined",
+      "reason": "the page is under no bound web prefix and no session ingested it",
+      "rule": "unmatched",
+      "space": "quarantine",
+      "targetKind": "url"
+    }
+  },
+  {
+    "path": "acme/app",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "no root holds it; its remote's owner is bound to acme",
+      "remote": {
+        "effect": "owner bound to acme (isolated)",
+        "kind": "isolated",
+        "owner": "acme",
+        "repo": "app",
+        "space": "acme",
+        "visibility": "private"
+      },
+      "rule": "remote",
+      "space": "acme",
+      "targetKind": "repo"
+    }
+  },
+  {
+    "path": "oss-org/lib",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "no root holds it; its remote's owner is bound to oss",
+      "remote": {
+        "effect": "owner bound to oss (public)",
+        "kind": "public",
+        "owner": "oss-org",
+        "repo": "lib",
+        "space": "oss",
+        "visibility": "public"
+      },
+      "rule": "remote",
+      "space": "oss",
+      "targetKind": "repo"
+    }
+  },
+  {
+    "path": "oss-org/moved",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "no root holds it; its remote's owner is bound to acme",
+      "remote": {
+        "effect": "owner bound to acme (isolated)",
+        "kind": "isolated",
+        "owner": "acme",
+        "repo": "moved",
+        "space": "acme",
+        "visibility": "private"
+      },
+      "rule": "remote",
+      "space": "acme",
+      "targetKind": "repo"
+    }
+  },
+  {
+    "path": "stranger/pub",
+    "explanation": {
+      "outcome": "quarantined",
+      "reason": "no root holds it and its remote's owner is bound to no space",
+      "remote": {
+        "effect": "owner bound to no space",
+        "owner": "stranger",
+        "repo": "pub",
+        "visibility": "public"
+      },
+      "rule": "unmatched",
+      "space": "quarantine",
+      "targetKind": "repo"
+    }
+  },
+  {
+    "path": "willesq/notes",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "no root holds it; its remote's owner is bound to personal",
+      "remote": {
+        "effect": "owner bound to personal (private)",
+        "kind": "private",
+        "owner": "willesq",
+        "repo": "notes",
+        "space": "personal",
+        "visibility": "private"
+      },
+      "rule": "remote",
+      "space": "personal",
+      "targetKind": "repo"
+    }
+  },
+  {
+    "path": "slack:TACME",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "slack tenant bound to acme",
+      "rule": "chat_tenant",
+      "space": "acme",
+      "targetKind": "chat"
+    }
+  },
+  {
+    "path": "teams:globex-tenant",
+    "explanation": {
+      "outcome": "placed",
+      "reason": "teams tenant bound to globex",
+      "rule": "chat_tenant",
+      "space": "globex",
+      "targetKind": "chat"
+    }
+  },
+  {
+    "path": "slack:TUNKNOWN",
+    "explanation": {
+      "outcome": "quarantined",
+      "reason": "the slack tenant is bound to no space",
+      "rule": "unmatched",
+      "space": "quarantine",
+      "targetKind": "chat"
+    }
+  }
+]

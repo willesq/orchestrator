@@ -1,0 +1,14 @@
+{
+  "id": "RC-1750",
+  "kind": "follow-up",
+  "topic": "PlacementExplanation and SpaceInfo still lack public_paths fields (rest of RC-800)",
+  "detail": "SP-053's editor reads each space's public_paths from DiffSpaces' policy document, so it needs no SpaceInfo field, and its tester shows the matched public_paths pattern only inside ExplainPlacement's reason text. Adding public_path to PlacementExplanation and public_paths to SpaceInfo needs field numbers on existing messages, which a lane may not take without the coordinator's block. When one is given, add the fields and show the pattern as its own line in the tester and the Settings validator.",
+  "source": "https://github.com/willesq/orchestrator/pull/214",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-053",
+    "SP-076",
+    "SP-022"
+  ],
+  "status": "open"
+}
