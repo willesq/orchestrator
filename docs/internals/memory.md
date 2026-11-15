@@ -793,6 +793,39 @@ write is stored again (embedded once) rather than skipped as unchanged.
 collection, every chunk moved to one of four space collections, Qdrant 1.17.1 on this Mac), a
 relabel took 35.7 s (`TestIntegrationRelabel40k`, `ORCH_QDRANT_BENCH=1`).
 
+## Retag
+
+A retag (SP-071, D-14, INV-15) moves one source to the space the operator names:
+`rag.Service.Retag` in `internal/rag/retag.go`. It reuses the relabel's move, so nothing is
+re-embedded and the source's chunk count is unchanged.
+
+1. Refuse with no source URI, no applied revision, or a name that cannot be a space (the space
+   name pattern, which keeps it out of the collection path). orchd checks the name against the
+   applied policy.
+2. Under the source's write lock, refuse while a migration shadow is installed (checked under
+   the lock, so a migration cannot start mid-retag and miss the move), then count the source in
+   the base and every space collection.
+3. Several collections holding it must hold the same write (the ingest hash of chunk 0), as a
+   retag or relabel stopped between its copy and its delete leaves it; copies of different writes
+   are refused, since the store cannot say which is current.
+4. If only the target collection holds it, stamp its `space` and `labels_v`. Otherwise read its
+   points with their vectors from another holder, upsert them into the target (created hybrid when
+   missing) with the new `space` and the applied `labels_v`, prune surplus chunks of an older,
+   longer copy there, check the target holds at least as many chunks, and only then delete the
+   source from every other collection.
+
+The report gives the spaces that held it (`unplaced` for the base), the chunks in the target and
+whether they moved; a failed store request returns a generic error, with the detail in orchd's
+log, as a relabel does. **Resumable:** point IDs are kept, so a retag stopped between its copy and
+its delete leaves the same write in both collections, and running it again copies over the same
+points and deletes the old copy. **Cost:** a 2,000-chunk source moved in 2.6 s on Qdrant 1.17.1
+(`TestIntegrationRetag2000`, `ORCH_QDRANT_BENCH=1`).
+
+**Not done yet.** The operator-only `RetagSource` RPC, `orch spaces retag`, the confirmation for
+moves into public or out of an isolated space, and the sticky override that later writes honor
+(`spaces.Options.Override`) are not wired yet. Like a relabelled source, a retagged source's write
+hash still names its old placement, so its next write is embedded once (RC-752).
+
 ## Duplicate clean-up
 
 `orch rag dedupe` (dry-run unless `--apply`; deletes through `DeleteSource` with `confirm`) lists a

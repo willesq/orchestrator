@@ -3369,6 +3369,19 @@
           "SP-076"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-850",
+        "kind": "decision",
+        "topic": "A sticky retag lets any writer of that URI write into the retag target",
+        "detail": "SP-071.2.a1 asks that a later client re-ingest of a retagged source_uri lands in the retagged space, and spaces.Classify lets an override win over every rule. A session pinned to another job's space could then write its own text under that URI into the target space (or into public), which is a cross-space write. Options: (a) honor the override for orchd's own writers (docs sync, sources refresh) and for client writes from the operator or from a session whose space is the target, and refuse other client writes of that URI; (b) honor it for every writer as written. Recommendation: (a); the lane implements (a) unless the user picks (b).",
+        "source": "https://github.com/willesq/orchestrator/pull/191",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-071",
+          "SP-023"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -5959,7 +5972,12 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestRetagMovesEveryChunk (internal/rag): rag.Service.Retag moves a 3-chunk source from acme's collection to globex's; globex holds 3 of its chunks, acme 0, the store's total is unchanged, and every moved chunk keeps its point ID and vector and is labelled with the new space and the applied revision. The move reuses SP-027's copyInto (copy with vectors, count, then delete). The RPC and command that call it wait for the proto slot (see SP-071.2).",
+            "a2: TestRetagEmbedsNothing: a counting embedder records 0 calls across retags into a collection that does not exist yet, back, and into shared. TestIntegrationRetag2000 also asserts 0 embed calls on a real engine.",
+            "a3: TestRetagSearchFollowsTheSource/new_space_finds_it and /old_space_does_not: after the retag a search scoped to globex finds the source and a search scoped to acme does not (2 pass).",
+            "a4: TestRetagResumesAfterInterruption: a delete in the old collection fails after the copy, leaving the source in both; the error names no space or collection; a second retag ends with one copy in globex, 0 in acme, the total unchanged and no embedding. TestRetagEdgeCases covers refusals (no URI, no policy, bad or traversal space names, not stored, during a migration), a retag in place (stamp only), two old copies of one write ending as one, copies of different writes refused with nothing changed, a chunk with no vector kept, and a failed copy keeping the old copy. Security audit: the migration check now runs under the source lock; copies of different writes are refused rather than guessed (both fixed)."
+          ]
         },
         {
           "id": "SP-071.2",
@@ -5987,7 +6005,9 @@
               "threshold": "<= 20 s"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a3: TestIntegrationRetag2000 (ORCH_QDRANT_BENCH=1, its own Qdrant 1.17.1 on 127.0.0.1:6481, temporary storage, collections sp-071-*): a 2,000-chunk source (384 dimensions, hybrid) moved from one space collection to another with its vectors in 2.63 s, and 2.74 s after the security-audit fixes; 0 embed calls. Threshold <= 20 s met."
+          ]
         }
       ],
       "status": "in_progress",
@@ -5998,7 +6018,7 @@
       "attempts": 1,
       "criteria_sha256": "29cdb8a3de681a76e509c5f246f6f5bf4dc36223c5feab836393e4dd133f5c8e",
       "branch": "feat/sp-071-retag",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/191"
     },
     {
       "id": "SP-028",
