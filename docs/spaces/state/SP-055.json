@@ -1,14 +1,21 @@
 {
   "id": "SP-055",
-  "status": "in_progress",
-  "passes": false,
-  "verified_sha": null,
-  "verified_at": null,
+  "status": "done",
+  "passes": true,
+  "verified_sha": "63f7a6338a2ec009666f1239d20da1d3a3f50c25",
+  "verified_at": "2026-11-15T21:55:46Z",
   "blocked_reason": null,
   "attempts": 1,
   "branch": "feat/sp-055-palette-cli-parity",
   "pr": "https://github.com/willesq/orchestrator/pull/216",
   "evidence": {
-    "SP-055.1": []
+    "SP-055.1": [
+      "a1: internal/cli/testdata/spaces_pane_parity.json maps all 25 Spaces pane actions (every method of the OrchKit Spaces*API protocols the Spaces pane and Settings > Spaces call) to CLI commands, RPCs and access; 25/25 mapped (100%).",
+      "a1: TestSpacesPaneParity (internal/cli) reads the protocols from the Swift sources and fails when a method has no entry, an entry names no method, or a command or flag does not exist; TestSpacesPaneParityCatches shows each failure is reported; the independent verifier removed the scanSpaces entry and the test failed ('Spaces pane action scanSpaces (SpacesSetupAPI) has no CLI entry').",
+      "a1: TestSpacesPaneParityAccess (internal/daemon) checks the access column against orchd's D-78 rules (orch-app exactly for the RPCs an unlocked terminal is refused).",
+      "New CLI equivalents: orch spaces list, scan, terms list|set, log retention (TestSpacesList, TestSpacesScan, TestSpacesTermsFiles, TestSpacesLogRetention).",
+      "Palette and companion (summary items): SpacesPaletteTests (5 tests); visual check waived by user (D-82), snapshots palette-spaces-{light,dark} and companion-{badge,spaces-off}-{light,dark} rendered by SpacesPaletteSnapshots, kept locally and not committed.",
+      "DOD: go test ./..., go vet ./..., make cover (All files >= 80%), gofmt clean, make app-cover (SpacesPalette.swift 100%), security audit 0 critical/high/medium (2 low fixed); independent verifier passed a1 and DOD-1..8 at 63f7a63."
+    ]
   }
 }
