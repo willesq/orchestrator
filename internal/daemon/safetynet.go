@@ -124,12 +124,18 @@ func (m *safetyNetManager) run(ctx context.Context, rulesOnly bool) error {
 	return plan.ApplyContext(ctx, m, m.backupDir)
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_GetSafetyNet_FullMethodName,
+	spaceDecision{spaceNone, "cc-safety-net's install state"}))
+
 func (s *server) GetSafetyNet(context.Context, *orchdv1.GetSafetyNetRequest) (*orchdv1.SafetyNetState, error) {
 	if s.safetyNet == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "safety-net management unavailable")
 	}
 	return safetyNetState(safetynet.Detect(s.safetyNet.loc), s.safetyNet.snapshot()), nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_InstallSafetyNet_FullMethodName, "install or upgrade cc-safety-net",
+	spaceDecision{spaceNone, "installs cc-safety-net"}))
 
 func (s *server) InstallSafetyNet(ctx context.Context, req *orchdv1.InstallSafetyNetRequest) (*orchdv1.SafetyNetState, error) {
 	m := s.safetyNet

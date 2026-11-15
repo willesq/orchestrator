@@ -511,16 +511,36 @@ func TestRunRecordsMetrics(t *testing.T) {
 	}
 }
 
+// TestRunMeasuresFailedRuns: a timed-out run records how long its CLI ran.
+// The runner times the CLI from just before it starts, while the timeout
+// counts from earlier in Run, so the recorded time is the timeout less
+// Run's setup. A fixed 200 ms floor failed on 199 (SP-082); the floor here
+// takes off the setup the test saw: the CLI started before its PID was
+// reported, and it was killed no earlier than Timeout after Run was called.
 func TestRunMeasuresFailedRuns(t *testing.T) {
 	f := newFixture(t)
 	f.runner.Timeout = 200 * time.Millisecond
 	t.Setenv("FAKE_SLEEP", "30")
+	var pidSeen time.Time
+	f.runner.OnLive = func(id string) {
+		if l, ok := f.runner.Live(id); ok && l.PID > 0 && pidSeen.IsZero() {
+			pidSeen = time.Now()
+		}
+	}
+	called := time.Now()
 	got, err := f.runner.Run(context.Background(), Task{ID: "t", Agent: "dev", Body: "b", Cwd: t.TempDir()})
+	wall := time.Since(called)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != StatusFailed || got.DurationMS < 200 {
-		t.Errorf("a timed-out run must still record how long it took: %+v", got)
+	if pidSeen.IsZero() {
+		t.Fatal("the CLI's PID was never reported")
+	}
+	// Milliseconds truncates, as the runner's measure does.
+	floor := (called.Add(f.runner.Timeout).Sub(pidSeen)).Milliseconds()
+	if got.Status != StatusFailed || got.DurationMS < floor || got.DurationMS > wall.Milliseconds() {
+		t.Errorf("a timed-out run must still record how long it took: got %d ms, want %d..%d ms: %+v",
+			got.DurationMS, floor, wall.Milliseconds(), got)
 	}
 }
 

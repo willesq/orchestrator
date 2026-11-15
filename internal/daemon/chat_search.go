@@ -10,6 +10,13 @@ import (
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
+// Reason (SP-060, D-19): chat direct messages never reach a queued
+// task; the handler also refuses interactive harness sessions
+// (refuseNonOperator). SP-060: the only read that keeps chat direct
+// messages in.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SearchDirectMessages_FullMethodName, "search direct messages",
+	spaceDecision{spaceFiltered, "memory search with chat DMs kept in, read only from the caller's readable spaces' collections"}))
+
 // SearchDirectMessages is Search with chat direct messages kept in (SP-060):
 // the explicit search through which the user finds DMs. Every other read,
 // auto-RAG's Search included, leaves them out. It is the operator's alone

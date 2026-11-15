@@ -70,6 +70,9 @@ func newSystemProbe(ring *logs.Ring) *systemProbe {
 	}
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_TailLogs_FullMethodName,
+	spaceDecision{spaceRecords, "orchd's log lines name source URIs, so under a policy only the operator reads them (SP-026, RC-700)"}))
+
 func (s *server) TailLogs(ctx context.Context, req *orchdv1.TailLogsRequest) (*orchdv1.TailLogsResponse, error) {
 	if s.system == nil || s.system.logs == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "orchd is not keeping logs")
@@ -104,6 +107,9 @@ func (s *server) TailLogs(ctx context.Context, req *orchdv1.TailLogsRequest) (*o
 	}
 	return resp, nil
 }
+
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_GetSystemMetrics_FullMethodName,
+	spaceDecision{spaceNone, "orchd's resource use"}))
 
 func (s *server) GetSystemMetrics(ctx context.Context, _ *orchdv1.GetSystemMetricsRequest) (*orchdv1.SystemMetrics, error) {
 	if s.system == nil {

@@ -428,6 +428,12 @@ func (r *pinRegistry) harnessCaller(ctx context.Context) (harnessCaller, error) 
 	return harnessCaller{name: a.harness, proc: a.harnessProc, outer: a.outerHarnesses, orphan: a.harnessOrphan}, nil
 }
 
+// Reason: a queued task's identity comes from its task record, so a pin
+// would only give it a second, self-reported one. Interactive sessions'
+// hooks still pin (PinSession checks the harness process itself).
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_PinSession_FullMethodName, "pin a session",
+	spaceDecision{spaceOwn, "the caller's own pin"}))
+
 func (s *server) PinSession(ctx context.Context, req *orchdv1.PinSessionRequest) (*orchdv1.SessionPin, error) {
 	if s.pins == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "session pins are unavailable")
@@ -456,6 +462,9 @@ func (s *server) PinSession(ctx context.Context, req *orchdv1.PinSessionRequest)
 	s.writeGuardPin(p)
 	return p.proto(), nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_EndSession_FullMethodName, "end a session's pin",
+	spaceDecision{spaceOwn, "ends the caller's own pin"}))
 
 func (s *server) EndSession(ctx context.Context, req *orchdv1.EndSessionRequest) (*orchdv1.EndSessionResponse, error) {
 	if s.pins == nil {

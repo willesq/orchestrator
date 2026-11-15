@@ -8,5 +8,6 @@
   "affects": [
     "SP-077"
   ],
-  "status": "open"
+  "status": "resolved",
+  "note": "2026-11-15: SP-077.1.a4 waived by the user (D-82); covered by the automated tests and snapshots in the feature's evidence."
 }

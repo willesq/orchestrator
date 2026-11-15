@@ -64,6 +64,9 @@ var (
 	commitRe   = regexp.MustCompile(`^[0-9a-f]{40}$`)
 )
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListDocs_FullMethodName,
+	spaceDecision{spaceFiltered, "synced docs in the caller's readable spaces, with only their owners and repos"}))
+
 func (s *server) ListDocs(ctx context.Context, _ *orchdv1.ListDocsRequest) (*orchdv1.ListDocsResponse, error) {
 	if s.docsReg == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "docs registry unavailable")
@@ -150,6 +153,9 @@ func (s *server) ListDocs(ctx context.Context, _ *orchdv1.ListDocsRequest) (*orc
 	return out, nil
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_GetDocument_FullMethodName,
+	spaceDecision{spaceFiltered, "one stored source, read only from the caller's readable spaces; NotFound otherwise"}))
+
 func (s *server) GetDocument(ctx context.Context, req *orchdv1.GetDocumentRequest) (*orchdv1.Document, error) {
 	if s.documents == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "document store unavailable")
@@ -208,6 +214,9 @@ func (s *server) webURLFor(ctx context.Context, uri, sourceType string) string {
 	return gitHubFileURL(owner, repo, sha, path)
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListRegisteredSources_FullMethodName,
+	spaceDecision{spaceRecords, "registered sources record no space, so under a policy only the operator lists them (SP-026, RC-700)"}))
+
 func (s *server) ListRegisteredSources(ctx context.Context, _ *orchdv1.ListRegisteredSourcesRequest) (*orchdv1.ListRegisteredSourcesResponse, error) {
 	if s.sourcesReg == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "sources registry unavailable")
@@ -228,6 +237,9 @@ func (s *server) ListRegisteredSources(ctx context.Context, _ *orchdv1.ListRegis
 	}
 	return out, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SaveSource_FullMethodName, "change registered sources",
+	spaceDecision{spaceNone, "registers a source"}))
 
 func (s *server) SaveSource(ctx context.Context, req *orchdv1.SaveSourceRequest) (*orchdv1.RegisteredSource, error) {
 	if s.sourcesReg == nil {
@@ -264,6 +276,9 @@ func (s *server) SaveSource(ctx context.Context, req *orchdv1.SaveSourceRequest)
 	}
 	return registeredSource(saved), nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_RemoveSource_FullMethodName, "change registered sources",
+	spaceDecision{spaceNone, "removes a source"}))
 
 func (s *server) RemoveSource(ctx context.Context, req *orchdv1.RemoveSourceRequest) (*orchdv1.RemoveSourceResponse, error) {
 	if s.sourcesReg == nil {
@@ -302,6 +317,9 @@ func (s *server) RemoveSource(ctx context.Context, req *orchdv1.RemoveSourceRequ
 	log.Printf("orchd: source %s removed", src.ID)
 	return out, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_RefreshSource_FullMethodName, "refresh registered sources",
+	spaceDecision{spaceNone, "refreshes a source"}))
 
 func (s *server) RefreshSource(ctx context.Context, req *orchdv1.RefreshSourceRequest) (*orchdv1.RefreshSourceResponse, error) {
 	if s.sourcesReg == nil {

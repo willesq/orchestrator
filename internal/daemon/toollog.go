@@ -455,6 +455,9 @@ func (s *server) endChain(o toollog.Owner) {
 	}()
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_VerifyToolLog_FullMethodName, "read the command log",
+	spaceDecision{spaceOperator, "the command log's chains"}))
+
 // VerifyToolLog recomputes one owner's chain. Only the operator may verify
 // a chain; a session reads its own events through ListToolEvents (INV-12).
 func (s *server) VerifyToolLog(ctx context.Context, req *orchdv1.VerifyToolLogRequest) (*orchdv1.VerifyToolLogResponse, error) {

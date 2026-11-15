@@ -15,6 +15,9 @@ import (
 	"github.com/willesq/orchestrator/internal/session"
 )
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_BackfillSessions_FullMethodName, "write to the RAG store",
+	spaceDecision{spaceNone, "a write"}))
+
 // BackfillSessions stores sessions again from their transcripts on disk. It is
 // an RPC so that orchd itself refuses a queued task (see callers.go): it can
 // replace what every later session retrieves, and a client's check of

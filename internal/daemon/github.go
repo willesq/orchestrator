@@ -20,6 +20,9 @@ func (s *server) githubService() (*github.Service, error) {
 	return s.github, nil
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_GetGitHubIdentity_FullMethodName,
+	spaceDecision{spaceRecords, "the GitHub login, with only the orgs and teams of the caller's spaces (SP-026, RC-700)"}))
+
 func (s *server) GetGitHubIdentity(ctx context.Context, req *orchdv1.GetGitHubIdentityRequest) (*orchdv1.GitHubIdentity, error) {
 	svc, err := s.githubService()
 	if err != nil {
@@ -47,6 +50,9 @@ func (s *server) GetGitHubIdentity(ctx context.Context, req *orchdv1.GetGitHubId
 	return out, nil
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListGitHubScopes_FullMethodName,
+	spaceDecision{spaceRecords, "monitored GitHub scopes, by their owner's space (SP-026, RC-700)"}))
+
 func (s *server) ListGitHubScopes(ctx context.Context, req *orchdv1.ListGitHubScopesRequest) (*orchdv1.ListGitHubScopesResponse, error) {
 	svc, err := s.githubService()
 	if err != nil {
@@ -73,6 +79,9 @@ func (s *server) ListGitHubScopes(ctx context.Context, req *orchdv1.ListGitHubSc
 	}
 	return out, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SetGitHubScope_FullMethodName, "change GitHub monitoring",
+	spaceDecision{spaceNone, "changes GitHub monitoring, only from the owner's space (SP-026)"}))
 
 func (s *server) SetGitHubScope(ctx context.Context, req *orchdv1.SetGitHubScopeRequest) (*orchdv1.SetGitHubScopeResponse, error) {
 	svc, err := s.githubService()
@@ -125,6 +134,12 @@ func (s *server) SetGitHubScope(ctx context.Context, req *orchdv1.SetGitHubScope
 	return &orchdv1.SetGitHubScopeResponse{Scope: scopePB(stored)}, nil
 }
 
+// Reason: every sweep spends the user's GitHub rate limit, and a task can
+// read the cache instead. Tasks' gh pr mutations still request sweeps
+// through the hook, within the same one-a-minute limit.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_RequestGitHubSweep_FullMethodName, "ask orchd to search GitHub",
+	spaceDecision{spaceNone, "asks for a sweep"}))
+
 // RequestGitHubSweep leaves the watcher a request; prSweepDue decides when it
 // runs, so repeated calls add up to at most one sweep a minute.
 func (s *server) RequestGitHubSweep(context.Context, *orchdv1.RequestGitHubSweepRequest) (*orchdv1.RequestGitHubSweepResponse, error) {
@@ -133,6 +148,9 @@ func (s *server) RequestGitHubSweep(context.Context, *orchdv1.RequestGitHubSweep
 	}
 	return &orchdv1.RequestGitHubSweepResponse{}, nil
 }
+
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ListGitHubRepos_FullMethodName,
+	spaceDecision{spaceRecords, "repos GitHub lists; another space's owner is NotFound (SP-026, RC-700)"}))
 
 func (s *server) ListGitHubRepos(ctx context.Context, req *orchdv1.ListGitHubReposRequest) (*orchdv1.ListGitHubReposResponse, error) {
 	svc, err := s.githubService()

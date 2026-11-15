@@ -180,6 +180,9 @@ var errNoClaude = grpcstatus.Error(codes.FailedPrecondition, "no Claude Code CLI
 // sessionIDShape is what a harness session ID looks like; it names files.
 var sessionIDShape = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SummarizeSession_FullMethodName, "write to the RAG store",
+	spaceDecision{spaceNone, "a write"}))
+
 // SummarizeSession queues a finished session for its summary and returns at
 // once. The transcript path must name an existing .jsonl file, so the RPC cannot
 // be used to feed arbitrary files to the model and into the store.

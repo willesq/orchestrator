@@ -29,6 +29,10 @@ const maxPlacementTarget = 4096
 var errPlacementHidden = grpcstatus.Error(codes.PermissionDenied,
 	"agents can explain only targets placed in a public space; run 'orch spaces why' in your own terminal for any other")
 
+// ExplainPlacement answers agents only about public placements.
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_ExplainPlacement_FullMethodName,
+	spaceDecision{spaceOwn, "answers agents only about public placements"}))
+
 func (s *server) ExplainPlacement(ctx context.Context, req *orchdv1.ExplainPlacementRequest) (*orchdv1.PlacementExplanation, error) {
 	if s.spaces == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "spaces are unavailable")
