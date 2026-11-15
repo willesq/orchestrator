@@ -6063,7 +6063,7 @@
       "attempts": 1,
       "criteria_sha256": "a5da712089124df4e4493329f043ceaecffb3bbd075e5295d27a80fa098ec58f",
       "branch": "feat/sp-026-non-memory-bleed",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/200"
     },
     {
       "id": "SP-027",
