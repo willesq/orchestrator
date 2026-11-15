@@ -87,13 +87,18 @@ orch spaces draft < policy.json       # save a draft revision; changes nothing
 orch spaces diff [--full]             # what the newest draft changes, and its problems
 orch spaces apply --revision N        # enforce draft N
 orch spaces apply --revision N --confirm-github-org ORG   # also accept ORG's changed GitHub identity
+orch spaces list                      # the applied spaces: bindings, reads, terms file, logins (operator only)
+orch spaces scan ~/code [--offline]   # checkouts and gh orgs found, and where each is placed (operator only)
 orch spaces why <path|url|owner/repo|slack:ID|teams:ID>   # which space its content goes to, and why (alias: explain)
 orch spaces log [<session>|task:ID]   # a session's command log, in order
 orch spaces log summary [--since 168h]   # per space: tool calls, directory moves, moves into another space
+orch spaces log retention [3d|7d|30d]   # show or set how long ended sessions' logs are kept
 orch spaces log verify <session|task:ID>   # check a session's command log was not changed
 orch spaces enforce                   # every enforcement layer's switch
 orch spaces enforce guard off --for 15m   # switch a layer, optionally for a time (operator only)
 orch spaces sandbox [auto|on|off]     # show or set whether orch writes sandbox rules (operator only)
+orch spaces terms list                # each space's terms file: count and fingerprint, never a term
+orch spaces terms set <space> < terms.txt   # replace a space's terms (Orch.app only under a policy)
 orch spaces terms rules               # the outbound terms check's rules and their state
 orch spaces terms rules disable plain_variables   # relax a baseline rule (operator only)
 orch spaces terms rules add fail_closed < rule.txt   # add a stricter rule; the value is read from input (operator only)

@@ -9,7 +9,7 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches, the directory validator and the spaces' logins (`Spaces`, `SpacesModel`, `SpaceLogins`), the Spaces pane's Overview and badge (`SpacesOverview`, `SpacesOverviewModel`), its advanced editors (`SpacesEditor`, `SpacesEditorModel`, `SpacesPolicyEdit`, `SpacesAccess`, `SpacesRootsTree`, `SpacesRules`, `SpacesCoverage`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches, the directory validator and the spaces' logins (`Spaces`, `SpacesModel`, `SpaceLogins`), the Spaces pane's Overview and badge (`SpacesOverview`, `SpacesOverviewModel`), its advanced editors (`SpacesEditor`, `SpacesEditorModel`, `SpacesPolicyEdit`, `SpacesAccess`, `SpacesRootsTree`, `SpacesRules`, `SpacesCoverage`), command palette matching (`CommandPalette`) and its Spaces entries (`SpacesPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
 | `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`, `SpacesView`, `SpacesEditorView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 | `OrchAppSnapshots` | Renders app views to PNGs in light and dark from sample data, with no orchd; runs only when `ORCH_SNAPSHOT_DIR` is set (see [Snapshots](#snapshots)) |
@@ -363,6 +363,33 @@ environment, on its own `SpacesEditorAPI` (`DaemonClient+SpacesEditor.swift`).
   in light and dark (`spaces-edit-*.png`), after sending terms, and checks the model drawn holds
   none.
 
+### Spaces: palette, companion and CLI parity (SP-055)
+
+- **⌘K entries** (`SpacesPalette` in OrchKit, `PaletteCommand.spaces` in `SpacesPaletteCommands`):
+  a Spaces section with *Where would this go?…* (the Edit page's Rules editor and its tester;
+  Settings › Spaces where the editor is absent), *Review space changes* (the Review page) and
+  *Space: <name>* for each space (the Overview, scrolled to its card). Each only navigates: it sets
+  `Navigator.spacesRequest` and shows the Spaces pane, which moves to the place and clears the
+  request (`SpacesView.follow`). There are none while spaces are off, and the palette does not open
+  in screen-share-safe mode; `SpacesView` also ignores a request while sharing.
+- **Companion strip:** lists the panes the sidebar does (`MainWindow.panes`), each with its sidebar
+  badge, so the Spaces icon carries the Spaces badge (conflicts, quarantine, drift, relabel) and
+  VoiceOver reads it as the icon's value. The strip drops Spaces while spaces are off.
+- **CLI parity:** `internal/cli/testdata/spaces_pane_parity.json` maps each pane action, meaning each
+  method of an OrchKit `Spaces…API` protocol (every orchd call the Spaces pane and Settings › Spaces
+  make), to its CLI commands, the RPCs it calls and who may call it (`anyone`, `operator`, or
+  `orch-app`: under a policy only Orch.app, even in an unlocked terminal, D-78). The CLI can draft and
+  read; under a policy applying a draft, replacing a space's terms, changing the outbound rules,
+  loosening a switch and setting the command log's retention need Orch.app. Controls that only change
+  what the pane shows (pages, Basic/Advanced, screen-share-safe mode) are not orchd actions and have
+  no entry. `TestSpacesPaneParity` reads the protocols from the Swift sources and fails when a method
+  has no entry, an entry names no method, or a command or flag does not exist;
+  `TestSpacesPaneParityAccess` (`internal/daemon`) fails when an entry's access disagrees with
+  orchd's D-78 list. Commands added for parity: `orch spaces list`, `orch spaces scan`,
+  `orch spaces terms list|set` and `orch spaces log retention` ([cli.md](cli.md)).
+- **Tests:** `SpacesPaletteTests`; `SpacesPaletteSnapshots` renders the palette's Spaces section and
+  the companion strip with the badge and with spaces off, in light and dark.
+
 ### Spaces pane: basic setup (SP-052)
 
 **Set Up Spaces…** (the empty pane) or **Run Setup…** (the header, once a policy is applied)
@@ -485,20 +512,22 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
 - **Command palette (⌘K):** one keyboard surface over the whole app, from any pane. It lists, most
   pressing first, the PRs that need you, actions (New task…, which opens the dispatch sheet on the
   Tasks pane; Dock as companion or Expand; Keep Orch on top; Refresh everything; Show PRs that need action; each appearance), every pane with its
-  sidebar status, the other cached PRs, and the 30 most recent tasks. Typing filters by fuzzy match
+  sidebar status, the Spaces entries, the other cached PRs, and the 30 most recent tasks. Typing filters by fuzzy match
   (`PaletteMatcher`: characters in order, word starts and unbroken runs score higher), and results
   stay grouped under their section. ↑↓ move, ↩ runs, Esc or ⌘K closes, and clicking outside
   dismisses it. It runs in its own floating panel (`PalettePanel`) so the pane behind cannot keep
   the keyboard. It only navigates and opens what the panes already offer: a PR opens in the PRs
   pane, never the browser, and nothing it runs dispatches, cancels or deletes without the pane's
-  own confirmation.
+  own confirmation. Its Spaces section (SP-055, [Palette, companion and CLI parity](#spaces-palette-companion-and-cli-parity-sp-055))
+  goes to the Spaces pane only.
 - **Companion mode (⌘⇧D):** the window is built to sit beside the terminal the agents run in.
   Narrower than 600pt (`CompanionLayout.compactWidth`), whether the user dragged it there or a
   window manager tiled it (they resize through Accessibility, which ignores the minimum size, so
   the sidebar layout used to clip), it shows one column instead of the sidebar and a pane:
   orchd's health, the PRs that need you (a click opens the PR in the PRs pane), the agents at work
   with Cancel (confirmed first) plus the three most recent finished tasks, and a strip of every
-  pane with its sidebar badge. A click on a PR, task or pane widens the window and shows it. The
+  pane the sidebar lists with its sidebar badge (the Spaces badge included; no Spaces while spaces
+  are off). A click on a PR, task or pane widens the window and shows it. The
   window goes down to 320×420. ⌘⇧D, the toolbar's Companion button, the column's dock button or
   the palette docks it: a full-height 380pt column at its screen's right edge, kept above other
   windows and on every Space. ⌘⇧D again (or Expand) restores the frame it had before docking; a

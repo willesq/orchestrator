@@ -92,7 +92,7 @@ struct MainWindow: View {
                            review: spacesReview)
             } else if compact {
                 CompanionView(monitor: monitor, prMonitor: prMonitor, tasks: tasks, window: window,
-                              status: sidebarStatus, open: { show($0) },
+                              panes: panes, status: sidebarStatus, open: { show($0) },
                               openPR: { url in
                                   navigator.showPR(url, in: prs)
                                   window.expand()
@@ -257,6 +257,10 @@ struct MainWindow: View {
             }
             commands.append(PaletteCommand(id: "pane:\(item.rawValue)", section: "Go to", title: item.title,
                                            subtitle: subtitle, symbol: item.symbol, tone: tone) { pane = item })
+        }
+        commands += PaletteCommand.spaces(spaces, spacesOff: spacesOff) { target in
+            navigator.spacesRequest = target
+            show(.spaces)
         }
         let waiting = Set(needsYou.map(\.url))
         for pr in prMonitor.list?.prs ?? [] where !waiting.contains(pr.url) {

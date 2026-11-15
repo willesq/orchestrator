@@ -42,7 +42,7 @@ run while one is reading is refused.`,
 	}
 	cmd.Flags().Int64Var(&after, "after", 0, "show records after this sequence number")
 	cmd.Flags().IntVar(&limit, "limit", 0, "show at most this many records (0 for all)")
-	cmd.AddCommand(newSpacesLogVerifyCmd(cf), newSpacesLogSummaryCmd(cf))
+	cmd.AddCommand(newSpacesLogVerifyCmd(cf), newSpacesLogSummaryCmd(cf), newSpacesLogRetentionCmd(cf))
 	return cmd
 }
 
