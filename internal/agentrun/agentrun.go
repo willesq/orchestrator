@@ -50,6 +50,9 @@ type Task struct {
 	Model string
 	// Effort is the reasoning effort, for providers that take one (Codex).
 	Effort string
+	// Space is the space whose memory the task reads, recorded at dispatch
+	// (D-46); "" records none.
+	Space string
 }
 
 // Statuses a finished run records in the task ledger.
@@ -241,7 +244,7 @@ func (r *Runner) Run(ctx context.Context, t Task) (Outcome, error) {
 		sid = r.codexThread(t.ID)
 	}
 	entry := r.live.track(LiveRun{TaskID: t.ID, Provider: t.Provider, Model: t.Model, SessionID: sid,
-		Dir: dir, Started: time.Now()}, cancelRun)
+		Dir: dir, Space: t.Space, Started: time.Now()}, cancelRun)
 	if entry == nil {
 		return failed("task %s already has a session running in this worker; not starting a second", t.ID), nil
 	}

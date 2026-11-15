@@ -257,6 +257,21 @@ func taskInput(id, agent, body, cwd string, heads map[string]string, rt workflow
 	return workflows.AgentTaskInput{ID: id, Agent: agent, Body: body, Cwd: cwd, Heads: heads, Route: rt}
 }
 
+type readSpaceKey struct{}
+
+// WithReadSpace records on ctx the space whose memory a task dispatched with
+// it reads (D-46). orchd's Dispatch RPC sets it from the caller; a dispatch
+// without it records none.
+func WithReadSpace(ctx context.Context, space string) context.Context {
+	return context.WithValue(ctx, readSpaceKey{}, space)
+}
+
+// ReadSpaceOf is the space WithReadSpace recorded on ctx, "" for none.
+func ReadSpaceOf(ctx context.Context) string {
+	s, _ := ctx.Value(readSpaceKey{}).(string)
+	return s
+}
+
 // ErrQueueFull rejects a dispatch while too many tasks are pending or running.
 var ErrQueueFull = errors.New("queue full")
 
@@ -302,6 +317,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, agent, body, cwd string, rt w
 		heads = d.Snapshot(ctx, cwd)
 	}
 	in := taskInput(id, agent, body, cwd, heads, rt)
+	in.Space = ReadSpaceOf(ctx)
 	// Record before enqueuing: a row with no workflow is a visible, diagnosable
 	// state, whereas a workflow with no row is invisible to every reader.
 	if d.store != nil {

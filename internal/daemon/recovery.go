@@ -53,7 +53,8 @@ func newGRPCServer(res *callerResolver) *grpc.Server {
 		unary, stream = append(unary, res.unary), append(stream, res.stream)
 	}
 	return grpc.NewServer(
-		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent, program: procstat.ReadProgram, started: procstat.StartTime}),
+		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent, program: procstat.ReadProgram, started: procstat.StartTime,
+			terminal: procstat.ReadTerminal, home: userHome()}),
 		// Reason: gRPC keeps each reply until its client reads it, so a
 		// client that sends calls and never reads would make orchd hold
 		// every reply. orch's clients use a few streams per connection.

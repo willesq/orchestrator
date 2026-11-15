@@ -273,6 +273,9 @@ type callerAuth struct {
 	// conn caches what this connection resolves to (caller_session.go); nil
 	// resolves on every call.
 	conn *connCaller
+	// operatorBy is the evidence that a caller in no harness is the user
+	// (operatorTerminal or operatorApp), "" when there is none (D-39).
+	operatorBy string
 }
 
 func (callerAuth) AuthType() string { return "orchd-peer" }
@@ -297,6 +300,11 @@ type peerCredentials struct {
 	// reads the socket's kernel token, or skips the check when peerPID is
 	// set.
 	samePeer func(c net.Conn, pid int) error
+	// terminal reads a process's controlling terminal; nil reads none, so no
+	// caller has a terminal's evidence of being the operator (D-39).
+	terminal func(pid int) (procstat.Terminal, error)
+	// home is the user's home folder, where Orch.app may be installed.
+	home string
 }
 
 func (p peerCredentials) ServerHandshake(c net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -343,6 +351,9 @@ func (p peerCredentials) walk(c net.Conn) callerAuth {
 		}
 	}
 	if harness == "" {
+		if !spawned && err == nil && herr == nil {
+			a.operatorBy = p.operatorEvidence(pid)
+		}
 		return a
 	}
 	// Reason: read at accept, while the caller still runs under the

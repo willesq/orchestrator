@@ -19,9 +19,9 @@ import (
 // queued task, an interactive session by its pin, or no session. Resolution
 // uses only what orchd read from the kernel when it accepted the connection,
 // never a request field such as cwd, so an agent that runs
-// `cd elsewhere && orch search` still resolves to its own session. Nothing
-// grants access by the result yet (RC-01); see docs/internals/daemon.md
-// "Caller sessions".
+// `cd elsewhere && orch search` still resolves to its own session. The result
+// decides which spaces the caller's memory reads see (readscope.go, SP-025);
+// see docs/internals/daemon.md "Caller sessions".
 
 // callerKind says who an RPC's caller is.
 type callerKind string
@@ -50,6 +50,9 @@ type resolvedCaller struct {
 	// its events in that process's chain (D-36); empty otherwise.
 	harness     string
 	harnessProc procstat.Identity
+	// operatorBy is the evidence that a callerOperator caller is the user
+	// (operator_evidence.go), "" when there is none (D-39).
+	operatorBy string
 }
 
 // connCaller caches what a connection resolves to. Only results that cannot
@@ -109,7 +112,7 @@ func (r *callerResolver) resolve(ctx context.Context) resolvedCaller {
 	case a.harnessErr != nil:
 		return none("the caller's ancestry could not be read")
 	case a.harness == "":
-		return resolvedCaller{kind: callerOperator}
+		return resolvedCaller{kind: callerOperator, operatorBy: a.operatorBy}
 	}
 	if r == nil || r.pins == nil {
 		return none("session pins are unavailable")

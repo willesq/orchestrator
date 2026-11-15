@@ -492,6 +492,11 @@ type ListSourcesOpts struct {
 	Limit      int
 	// Range keeps only sources with content dated within it.
 	Range TimeRange
+	// Spaces are the spaces listed, as SearchOpts.Spaces: nil lists every
+	// collection, an empty, non-nil list lists nothing (SP-025).
+	Spaces []string
+	// LabelsV is as SearchOpts.LabelsV.
+	LabelsV int64
 }
 
 // ListSources enumerates distinct sources in the store with their chunk counts.
@@ -510,19 +515,20 @@ func (s *Service) ListSources(ctx context.Context, opts ListSourcesOpts) ([]Sour
 	if opts.SourceType != "" {
 		must["source_type"] = opts.SourceType
 	}
-	filter := buildFilter(must, nil, nil, opts.Range)
 	fields := []string{"source_uri", "source_type", "scope", "tags", fieldStartedAt, fieldEndedAt, fieldIngestedAt, fieldWriter}
 
 	agg := map[string]*SourceSummary{}
 	total := 0
-	// Every space's collection is listed: which of them a caller may see is
-	// SP-025's decision, not this inventory's.
-	stores, err := s.allStores(ctx, s.active(), false)
+	// The caller's spaces (SP-025) choose the collections, each filtered on
+	// its space as the second layer, as a search is.
+	stores, err := s.listStores(ctx, opts.Spaces)
 	if err != nil {
 		return nil, 0, 0, err
 	}
+	stores = withLabels(stores, opts.LabelsV)
 	for _, ss := range stores {
 		st := ss.st
+		filter := buildFilter(ss.must(must), nil, nil, opts.Range)
 		var offset any
 		// A server that returns a non-advancing cursor would otherwise spin forever:
 		// the per-request timeout bounds each call but not the loop.

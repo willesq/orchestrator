@@ -142,11 +142,15 @@ func quarantined(reason string) spaces.Placement {
 }
 
 // writerSpace is the space a client write's caller writes to: its session's
-// pin. Tasks, the operator and unidentified callers have none here, so their
-// notes are quarantined until the operator retags them (SP-023.1.a3).
+// pin, or a queued task's space recorded at dispatch (D-46). The operator and
+// unidentified callers have none here, so their notes are quarantined until
+// the operator retags them (SP-023.1.a3).
 func writerSpace(c resolvedCaller) string {
-	if c.kind == callerSession {
+	switch {
+	case c.kind == callerSession:
 		return c.pin.Space
+	case c.kind == callerTask && c.task.TaskID != "":
+		return c.task.Space
 	}
 	return ""
 }

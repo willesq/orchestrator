@@ -27,6 +27,11 @@ type AgentTaskInput struct {
 	// Route is the model the task was routed to at dispatch. It is fixed then,
 	// so a task resumed after a restart keeps running on the same model.
 	Route Route
+	// Space is the space whose memory the task reads (D-46): the dispatching
+	// session's, or the placement of the operator's working directory. ""
+	// records none, so under a spaces policy the task reads public memory
+	// only. Kept in the durable input so a resumed task keeps it.
+	Space string `json:",omitempty"`
 }
 
 // Route names the model a task runs on. Empty fields leave the choice to the

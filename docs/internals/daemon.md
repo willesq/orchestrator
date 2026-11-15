@@ -188,11 +188,12 @@ subshell that exits leaves a shell that stays alive under launchd, and that shel
 process named `claude` there (`( cd /other && sh -c 'exec -a claude …; true' & )`). Opening a
 `.command` file in Terminal, `osascript` or `launchctl submit` do the same, and on Linux so does
 an orphan adopted by a subreaper rather than init. Ancestry alone cannot tell these from a real
-session (tmux's server also runs under launchd). Pins grant nothing yet; nothing that reads
-memory by a pin's space (SP-011, SP-025) may rely on them until the pre-tool guard stops a
-session from starting such a process. The enforcing guard (SP-041) refuses such a launch only
-when its command names another job's folder; one in a folder of no space, or hidden in an opaque
-command under `block-other-jobs`, still runs (RC-101). Any process in a session can
+session (tmux's server also runs under launchd). Memory reads by a pin's space (SP-025) rely on
+the pre-tool guard to stop a session from starting such a process (D-38). The enforcing guard
+(SP-041) refuses such a launch only when its command names another job's folder; one in a folder
+of no space, or hidden in an opaque command under `block-other-jobs`, still runs (RC-101), and a
+pin it takes then reads its own folder's space (see [reading memory by
+space](#reading-memory-by-space)). Any process in a session can
 end that session's pin early; retention (SP-015) still keeps a live process's log, and a
 resume in the same process clears the end. The detached fake harness above can also resume a
 dead or ended session of any space whose directory it starts in, and then write that session's
@@ -285,14 +286,77 @@ p99 about 0.05 ms, so the walk dominates, and a cached call costs about 0.1 µs.
 runner testing other packages in parallel measured p99 6.5 ms, so the test holds the 5 ms bound
 only on macOS. The recovery server resolves nothing, so every call there is `none`.
 
-Nothing grants access by the result yet. Memory reads by a session's space (SP-025) wait until
-the pre-tool guard (SP-041) closes two gaps: the detached-harness case described under
-[session pins](#session-pins), and a process that leaves the session's tree before orchd accepts
-its connection (a double fork, `launchctl submit`, `open`, `osascript`; see
-[queued callers](#queued-callers)), which has no harness above it and so resolves to the
-operator, the widest result. Since SP-041 the connection's peer PID is checked against its
+The result decides what the caller's memory reads see ([reading memory by
+space](#reading-memory-by-space)). Since SP-041 the connection's peer PID is checked against its
 kernel token (see [queued callers](#queued-callers)), so a peer that hands its socket to a child
 and exits cannot be resolved to whatever process reuses its PID; it gets no space.
+
+For an operator result orchd also records at accept whether it has evidence of the user (D-39;
+`internal/daemon/operator_evidence.go`): **terminal** when the caller has a controlling terminal,
+runs in that terminal's foreground process group, that group's leader is no harness, and the
+caller's parents reach the leader (or the shell that started it, for a pipeline) without passing
+launchd; **app**
+when the caller's executable is `Orch.app/Contents/MacOS/Orch` in `/Applications` or
+`~/Applications`. A shell gives each command the user types its own foreground group, while a
+harness's tool commands, and anything they leave behind without a new session, stay in the
+harness's group, whose leader is the harness. A double fork that calls `setsid`, `launchctl
+submit`, `open` and `osascript` leave no controlling terminal; a background job is not in the
+foreground group. A leader orchd cannot read shows nothing. The terminal is read with sysctl on
+macOS and from `/proc/<pid>/stat` on Linux (`procstat.ReadTerminal`).
+
+### Reading memory by space
+
+Every memory read path applies the caller's readable spaces inside orchd (SP-025, INV-01,
+INV-02; `internal/daemon/readscope.go`): `Search`, `ListSources`, `GetDocument` and `ListDocs`,
+and so every client built on them (`rag_search`, `rag_list_sources`, auto-RAG, session recall and
+`orch rag why`, whose `--cwd` only picks project tags). `readScope` decides, per call:
+
+- **No policy with spaces** (none applied, or no engine): every collection, as before (INV-10).
+- **The applied revision does not verify:** nothing.
+- **Memory filtering switched off** (SP-070): every collection, and the response is logged as
+  `<RPC> for <caller>: not enforced (memory filtering is switched off)`.
+- **The operator with evidence** (terminal or Orch.app): every collection, quarantine and the
+  base's unplaced chunks included, as before spaces.
+- **A session:** its pin's space, every public space and the private spaces it lists
+  (`spaces.Resolved.CanRead`; D-16). A pin is taken only by a harness in its own session's tree
+  or, for a new session, a harness started from a shell (an orphaned harness gets none), so a
+  session started through the guard reads no more than its original session (D-38).
+- **A queued task:** what the space recorded when it was dispatched reads (D-46). `Dispatch`
+  records the dispatching session's pin, or for the operator with evidence the placement of the
+  task's directory as a session there would get it (quarantine for a scratch directory); any
+  other dispatcher, orchd's own review tasks and tasks dispatched before SP-025 record none. The
+  space travels in the task's durable workflow input (`AgentTaskInput.Space`) to the live run
+  the resolver finds, and a task's client writes are placed in it too.
+- **Anyone else** (an unpinned harness, an unidentified process, the operator without evidence,
+  a task orchd does not track, a pin whose space the policy does not name): public spaces only.
+
+Request fields (tags, `source_uri`, scope, a URI prefix, `cwd`) only narrow within those spaces.
+`GetDocument` answers `NotFound` for a source held only in a space the caller cannot read, as for
+one that does not exist. `ListDocs` lists the stored docs of the caller's spaces, the owners and
+repos those docs are in, and owners whose GitHub org is bound to a readable space with all their
+repos; an owner listed for only some of its repos loses its own error, and the sync progress is
+returned only for an owner that is listed. For a filtered reader a
+store failure answers `Unavailable` without the store's error (which names collections, and so
+spaces), and the detail goes to orchd's log; others get the error as before.
+
+Every RPC has an entry in `readSpaceDecisions` (`internal/daemon/readspaces_registry.go`,
+SP-025.2): `filtered` (the four above), `operator` (refused to every caller but the operator),
+`own` (the caller's own data or public content), `records` (orch records other than memory:
+SP-026's, or RC-700's for the registries, settings and logs it lists) or `none`. A test fails for
+an RPC with no entry, as for one missing from `taskCallable` and `operatorActions`.
+
+Limits (open security findings, RC-705 to RC-707): the terminal evidence is a terminal, not the
+user. An agent can open a pseudo-terminal of its own (`script`, Python's `pty`, `expect`, `tmux
+new -d`) and run the CLI as its foreground leader, which passes; so does one that takes the
+user's terminal's foreground group (`tcsetpgrp`) or types into Terminal through `osascript`. The
+app check is by path, so a copy planted at an accepted path, or the real app started with an
+injected library (ad-hoc builds lack the hardened runtime), passes. Operator-only RPCs
+(`refuseNonOperator`) do not ask for this evidence at all.
+
+A filtered read sees only chunks labelled under the applied revision (INV-08;
+[memory.md](memory.md#spaces)), so after a new apply sessions and tasks read nothing placed
+earlier until `orch rag relabel` (SP-027) runs. Chunks stored before SP-024 stay in the base,
+which only the operator and unfiltered reads see (RC-355).
 
 ### Command log
 
@@ -635,7 +699,10 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
 - **The guard switch** sets the enforcing guard's mode: orchd writes it into the
   guard's snapshot after every change and timed revert, so the next tool call of every running
   session uses it ([hooks.md](hooks.md#enforcing-guard), SP-041).
-- **Not yet:** memory filtering and terms read `enforcement.state` when SP-025 and SP-044 land.
+- **The memory switch** (SP-025): every memory read reads it; while it is off and a policy is
+  applied, reads are not filtered and each is logged as not enforced
+  ([reading memory by space](#reading-memory-by-space)).
+- **Not yet:** terms read `enforcement.state` when SP-044 lands.
 
 ### Sandbox setting
 
