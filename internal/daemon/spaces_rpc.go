@@ -117,6 +117,9 @@ func (s *server) spacesStatus(ctx context.Context) *orchdv1.SpacesStatus {
 		EnforcementError: enfErr,
 		Sandbox:          s.sandboxProto(ctx),
 	}
+	if st.Configured {
+		out.Quarantine = s.quarantineStatus(ctx)
+	}
 	if probs := s.ghProfiles.problems(ctx); len(probs) > 0 {
 		// Reason: Status is open to every caller and the problems name
 		// spaces and orgs, so only the operator sees them.
