@@ -3603,6 +3603,71 @@
           "SP-026"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-1300",
+        "kind": "follow-up",
+        "topic": "A fresh Codex task's session gets no pin",
+        "detail": "SP-029 pins a queued task's agent session to its dispatch space when the agent process starts. A Claude Code task's session ID is known in advance (agentrun.SessionID) and a resumed Codex run's thread is stored, but a fresh Codex run learns its thread ID only when it ends, so it gets no pin: its transcript, record and summary are quarantined under a policy, and while the guard enforces its tool calls are refused as pin_missing (RC-100 stays open for it). Proposed: have the Codex runner report the thread ID as soon as thread.started arrives (update LiveRun.SessionID and call OnLive), so orchd can pin it like a Claude task.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1301",
+        "kind": "follow-up",
+        "topic": "SP-029 security review lows and accepted limits",
+        "detail": "From two security-audit rounds on PR #196 (mediums fixed: PinSession now refuses a new pin under a task's session ID while spaces are configured, an untrusted pin under such an ID places nothing and gets no guard file, the guard pin file is written under the pin registry's lock and removed when it cannot be written). Remaining: (1) a resumed Codex task replaces any pin under its stored thread ID; thread IDs come from the codex CLI's own event stream, so this is accepted. (2) The hook's guard reads the pin file named by the payload's session_id without checking the process, so a nested harness an agent starts with --session-id or --resume of another session's ID (a task's ID is derivable from its task ID) borrows that pin file for guard decisions; orchd's memory enforcement resolves by process and is unaffected, and the OS sandbox still applies. This predates SP-029 for interactive session IDs. (3) Resuming by hand the session of a task that ran before spaces were configured is refused, since that task never got a pin.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1302",
+        "kind": "decision",
+        "topic": "Taint of a session that read across spaces",
+        "detail": "SP-029's summary says the operator's explicit cross-space reads taint that session, but no acceptance item covers it and today no session reads across spaces except while memory filtering is switched off (SP-070, SP-025.1.a4); only Orch.app reads every space, and it has no session records. Proposed: when a session receives results from a space it may not read (filtering off), mark its pin tainted so its later records, summaries and client notes go to quarantine for the operator to retag. Needs a decision and probably a pin column (migration).",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029",
+          "SP-070",
+          "SP-025"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1303",
+        "kind": "follow-up",
+        "topic": "Task ledger and queue events filtered by space (left to SP-026)",
+        "detail": "RC-704 asked SP-029 to add a task's dispatch space to the ledger. SP-026 (events, digest, ListTasks, GetTask carry a space set at creation and are filtered) owns the ledger and the readers, so SP-029 only sets the space at creation where it derives content: the queue completion event now carries 'space' (and 'task_id'), and a task's session pin carries the dispatch space. The ledger column (a migration), filtering the queue stream for sessions, and what orchd's own PR-review tasks read remain for SP-026.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026",
+          "SP-029"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1304",
+        "kind": "follow-up",
+        "topic": "TestRunMeasuresFailedRuns is flaky under load",
+        "detail": "internal/agentrun TestRunMeasuresFailedRuns expects a run that timed out after 200 ms to record DurationMS >= 200; under heavy load on the developer machine it records 199 (seen on origin/main without SP-029's changes too). It passes alone and in CI. Proposed: compare against the timeout minus a tolerance, or measure the duration from before the timeout's context is created.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -6358,18 +6423,21 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestSummaryHasItsSessionsSpace (internal/daemon/derived_test.go): sessions pinned in acme and globex (isolated) are queued together and drained by the session-summarizer unit; the summarizer is called twice, each call holding the messages of one session only (no call holds the other session's marker text), and each summary is stored as session://<id>/record with that session's origin and placed by writePlacer in that session's space (acme, globex). A summary asked for by another session (Foreign) is placed in quarantine.",
+            "a2: TestTaskRunsPinnedToItsDispatchersSpace (internal/daemon/derived_test.go): a task dispatched from a session in acme with its directory in globex's folder records acme (D-46); once its agent process starts orchd pins its session (agentrun.SessionID) to acme and writes the guard pin file with acme; the guard refuses a Read in globex's folder (not as pin_missing) and allows one in acme's; ReplaySpaces judges the task's command-log events under the acme pin; the task's Search/GetDocument/ListSources/ListDocs/auto-RAG reads return acme's chunk and nothing from globex; its queue completion event carries space acme; its session transcript and record are placed in acme. Supporting: TestTaskPinReplacesASquatter, TestTaskPinEdges (no space or a dropped space -> quarantine; fresh Codex run and unstarted process -> no pin; no policy -> no pin, INV-10), TestTaskPinFailures (broken policy -> quarantine), TestTaskSessionIDsArePinnedByOrchdOnly (security review: PinSession refuses a new pin under a task's session ID under a policy; an untrusted pin under such an ID is quarantined and gets no guard file)."
+          ]
         }
       ],
-      "status": "in_progress",
+      "status": "blocked",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": null,
+      "blocked_reason": "SP-029.1.a3 (files a session writes outside any root keep its space) needs a numbered orch.db migration for the written-files record; waiting for the coordinator to schedule the migration slot and number. a1 and a2 are implemented with evidence.",
       "attempts": 1,
       "criteria_sha256": "71a615214415759a2f0b2418e12a1cd758edf2fb0102aea3fd81406bd5d03374",
       "branch": "feat/sp-029-derived-content",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/196"
     },
     {
       "id": "SP-030",
