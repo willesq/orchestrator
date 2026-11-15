@@ -90,11 +90,20 @@ func WriteTerms(space, path, home string, data []byte, key []byte) (TermsInfo, e
 	if err := checkTermsFolders(space, dir, home); err != nil {
 		return TermsInfo{}, err
 	}
+	before, err := os.Lstat(dir)
+	if err != nil {
+		return TermsInfo{}, fmt.Errorf("the folder of space %q's terms file cannot be checked", space)
+	}
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return TermsInfo{}, fmt.Errorf("the folder of space %q's terms file cannot be opened", space)
 	}
 	defer root.Close()
+	// Reason: OpenRoot follows a link, so the folder opened must be the
+	// one checked, not one swapped in between.
+	if opened, err := root.Stat("."); err != nil || !os.SameFile(before, opened) {
+		return TermsInfo{}, fmt.Errorf("the folder of space %q's terms file changed while it was checked", space)
+	}
 	if fi, err := root.Lstat(base); err == nil && !fi.Mode().IsRegular() {
 		return TermsInfo{}, fmt.Errorf("the terms file of space %q is not a regular file", space)
 	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
