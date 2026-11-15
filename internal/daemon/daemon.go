@@ -99,6 +99,8 @@ type server struct {
 	disp  dispatcher
 	sup   supervisorAPI
 	tasks taskReader
+	// spaceCounts caches what the spaces hold for Status (SP-031).
+	spaceCounts spaceCountCache
 	// workerEnabled reports whether queued tasks will run, so a caller can say
 	// plainly when a dispatch will sit pending instead.
 	workerEnabled bool
@@ -328,6 +330,7 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 			Trust:        h.Trust,
 		})
 	}
+	s.describeSearch(ctx, scope, out)
 	return out, nil
 }
 
