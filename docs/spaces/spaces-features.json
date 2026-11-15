@@ -3216,6 +3216,72 @@
           "SP-027"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-500",
+        "kind": "follow-up",
+        "topic": "Screen-share-safe mode does not cover the menu bar panel",
+        "detail": "SP-051's screen-share-safe mode (D-21) hides every pane but Spaces in the main window, disables the command palette and stops notifications, but the menu bar panel (TrayMenu.swift, outside SP-051's files) still lists every space's PRs and needs-you items when opened. Proposed: while SpacesOverviewModel.shareSafe is set, the panel shows only the enforcement banner and a 'Sharing only <space>' line, or filters PRs by owner using ListSpaces' github_orgs.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-055"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-501",
+        "kind": "follow-up",
+        "topic": "Counts the Overview cannot show yet",
+        "detail": "The Spaces pane shows no chunk counts per space (needs a collection per space, SP-024), counts quarantine as live sessions pinned to quarantine plus unconfirmed GitHub orgs rather than quarantined chunks (SP-028), and never shows relabel progress (SP-027): no RPC reports them. SpacesOverviewModel takes a relabel source and SpacesBadge already orders relabel last. Adding them needs fields in ListSpaces or SpacesStatus, an orchd.proto change for the coordinator to schedule.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-024",
+          "SP-027",
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-502",
+        "kind": "decision",
+        "topic": "How the app tells a conflict from other quarantine",
+        "detail": "SessionInfo has no placement outcome: a session in a conflict and one under no root are both pinned to 'quarantine'. The app asks ExplainPlacement about each live quarantined session's first folder (at most 20 per refresh) and counts 'conflict' answers as conflicts. That reflects the policy applied now, not the one at pin time. Options: (a) keep this; (b) add the pin's placement outcome to SessionInfo (orchd.proto change). Recommendation: (b) when the next proto change is scheduled.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-017"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-503",
+        "kind": "decision",
+        "topic": "What screen-share-safe mode hides beyond the Spaces pane",
+        "detail": "SP-051.1 a3 is tested on the Spaces pane's view models (SpacesOverviewModel and SpacesOverview hold only the chosen space; other spaces' data is dropped before it is stored). For the rest of the app, the window shows only the Spaces pane, the palette is off and notifications are not posted, but the other panes' models (PRs, tasks, docs, memory) keep loading every space's data in memory, undrawn. Options: (a) accept this reading; (b) also pause or clear those models while sharing. Recommendation: (a).",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-504",
+        "kind": "decision",
+        "topic": "'Not set up' dot on the Spaces row",
+        "detail": "As the design says, with no spaces policy applied the Spaces sidebar row shows a grey dot labelled 'Not set up'. Every install that does not use spaces sees it permanently. Options: (a) keep it; (b) show nothing until a draft exists. Recommendation: (a) until the setup wizard (SP-052) ships, then revisit.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-052"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -6565,18 +6631,25 @@
               "threshold": "0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: confirmed by user on 2026-11-14 after reviewing the six spaces-pane snapshots (default, companion, share-safe; light and dark) (D-70). light and dark snapshots of the Spaces pane rendered at fd21259 with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter SpacesPaneSnapshots` (offscreen, sample data, no orchd) at the default pane width (790 pt, the detail column of the 980 pt window) and at the 320 pt companion width: <scratch>/sp051-shots/spaces-pane-default-light.png, <scratch>/sp051-shots/spaces-pane-default-dark.png, <scratch>/sp051-shots/spaces-pane-companion-light.png, <scratch>/sp051-shots/spaces-pane-companion-dark.png; plus screen-share-safe mode: <scratch>/sp051-shots/spaces-pane-share-safe-light.png, <scratch>/sp051-shots/spaces-pane-share-safe-dark.png. At 320 pt the AdaptiveSplit stacks spaces and sessions behind a Spaces/Sessions picker and the header wraps; nothing was seen clipped in the agent's own look.",
+            "a2: SpacesBadgeTests.badgeFollowsConflictsQuarantineDriftRelabel passes at fd21259: SpacesBadge.pick over all 16 combinations of conflicts, quarantine, drift and relabel picks the first present in that order (plus finished/empty relabel = none, 'Not set up' with no policy, a draft outranking it). SpacesBadgeTests.overviewBadgeFromData builds the badge from orchd-shaped data (sessions pinned to quarantine split by ExplainPlacement's conflict answer, unconfirmed GitHub orgs, drift, relabel) and gets the same order. The sidebar row maps it with SpacesBadge.sidebarStatus (MainWindow).",
+            "a3: SpacesOverviewTests.screenShareSafeModeHoldsNothingOfAnotherSpace passes at fd21259: a fixture of four spaces (acme, globex, personal, opensrc) with sessions, a conflict, quarantine, an unconfirmed org, drift, relabel progress and per-space counts, each name, path, org and count of a space other than acme distinct; in Advanced mode the model shows them all (checked), then after shareOnly(\"acme\") a dump of everything the model exposes (overview, space choices, badge and its label, lastError, shareSafe) contains 0 of 33 needles (other spaces' names, orgs, folders, session IDs, PIDs and counts), acme's own card and two sessions remain, and a reload in safe mode asks ExplainPlacement nothing. Related: screenShareSafeSurvivesARelaunchAndAFailedRead (mode kept across relaunch; a failed read leaves only acme and shows a fixed message), screenShareSafeFiltersOnOrchdNames (filtering uses orchd's names, not display-safe ones). The pane shows no PR titles; app-wide, safe mode shows only the Spaces pane in the window and companion column, turns off the palette and notifications (allowsNotifications); the menu bar panel is not covered (RC-500) and other panes' models keep data undrawn (RC-503).",
+            "DOD at fd21259 (self-check, before the independent verifier): swift test --package-path macos: 428 tests in 87 suites pass; make app-cover exit 0 (SpacesOverview.swift 98.75%, SpacesOverviewModel.swift 99.21%, DaemonClient+SpacesOverview.swift 100%); no Go files changed (gofmt n/a); go vet ./... exit 0; go test ./...: all packages pass except one run of internal/agentrun TestRunMeasuresFailedRuns (timing: 196 ms vs a 200 ms timeout; package untouched, passes 3 of 3 on rerun); git diff --check clean; security-audit subagent: 0 critical/high, 1 medium fixed (notifications posted while sharing; now suppressed via SpacesOverviewModel.allowsNotifications), 3 lows fixed (generic error while sharing, filtering on raw space names, session state through displaySafe); docs/internals/app.md updated.",
+            "DOD-9 (self-check): gh pr checks 181: app pass (8m48s) at b2972ab. The run at 8113355 failed in swift test under make app-cover; the likely cause, SpacesOverviewTests.pollsUntilStopped waiting a fixed 120 ms for two polls, now waits for the polls (passes 3 of 3 locally and in CI). No Go files changed, so only the app workflow runs.",
+            "Independent verifier (fresh subagent given only the diff origin/main...b2972ab, this feature's criteria, INV-02, INV-07 and definition_of_done) at b2972ab: a1 PASS (user-confirmed, D-70), a2 PASS, a3 PASS (0 of 34 other-space needles), DOD-1..DOD-9 PASS: swift test 428 tests pass (Spaces suites 5 more runs pass), make app-cover exit 0 (all 47 OrchKit files >= 80%), go test ./... exit 0 (55 packages), go vet exit 0, git diff --check clean, 5 signed Conventional Commits with no co-author lines, draft PR #181 in ~/.pr-watch.json, app.yml run 43639267665 success at b2972ab; INV-02 and INV-07 PASS. One low gap noted: the menu bar panel during a share (RC-500)."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "b2972abf56697e9a002bfaea39c74fd9069bcc42",
+      "verified_at": "2026-11-14T22:19:26Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "d333c497108cf22c6737d76f183dc518194e710e1181debafe67e5bf07ca670b",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-051-spaces-pane-overview",
+      "pr": "https://github.com/willesq/orchestrator/pull/181"
     },
     {
       "id": "SP-052",
@@ -7411,6 +7484,10 @@
     {
       "date": "2026-11-14",
       "change": "D-71: only Orch.app is the operator under a policy, unlock to come (new feature SP-077); D-72: private strings already pushed are replaced with placeholders."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "SP-051 done: Spaces pane Overview, badge (conflicts > quarantine > drift > relabel), Basic/Advanced and screen-share-safe mode; a1 confirmed by the user (D-70); verified at b2972ab. RC-500 to RC-504 added."
     }
   ],
   "plan_location": {
