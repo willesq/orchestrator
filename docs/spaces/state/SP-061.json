@@ -1,9 +1,9 @@
 {
   "id": "SP-061",
-  "status": "in_progress",
-  "passes": false,
-  "verified_sha": null,
-  "verified_at": null,
+  "status": "done",
+  "passes": true,
+  "verified_sha": "716bd0448a4a2f7278f8a7e949d0ed2f02e676e5",
+  "verified_at": "2026-11-15T20:15:15Z",
   "blocked_reason": null,
   "attempts": 1,
   "branch": "feat/sp-061-slack-connector",
@@ -12,7 +12,8 @@
     "SP-061.1": [
       "a1 (4 tests, internal/feeds/slack/sync_test.go, against a fake Slack Web API in fake_test.go: auth.test, conversations.list/.info/.history/.replies, cursor paging two per page, invalid_auth for any other token): TestSlackFirstSync (DM and group DM first, then the private channel's day record and thread record, then the public channel; joins and replies kept out of the day record; nothing off the allowlist called; watermarks saved), TestSlackIncrementalSync (second run reads history from the watermark's day, never from the start, re-sends only the day that gained a message, whole; an unchanged thread is not fetched; a run with nothing new stores nothing), TestSlackThreadGrowth (a new reply re-sends the whole thread under the same URI, replacing it; no new URI; thread watermark advances), TestSlackAllowlistRemoval (a channel taken off the allowlist is never called again, its new messages not stored and its watermark dropped; DMs off means no conversations.list; an empty allowlist starts no connector process). Supporting: TestSlackConnectorSpacesOnAndOff (internal/daemon: spaces on, the slack:TACME binding places records in acme and an unbound workspace in quarantine; spaces off, everything in the one shared store), TestSyncStopsBeforeWatermark, TestConnectorRefusesForeignRecords, TestFetchEdgeCases, TestAuditHardening, TestRecordLimits, TestClientErrors, TestAllowlistFor.",
       "a2 (0 occurrences): TestSlackTokenNeverLeaks (internal/feeds/slack/token_test.go) runs the real process boundary (the test binary as the connector process, as orchd runs itself with 'slack-connector') with a made-up token: a chat message quoting the token, a token Slack refuses, and a profile logged in to another workspace; strings.Count of each token (and each without its prefix) in the captured log, every error, all stored content, the state file and the status is 0. orchd never reads the profile: the token is read only in the connector process, sent only in the Authorization header, scrubbed from record text, and no error repeats it or the token file. Supporting: TestReadTokenRefusals (open token file or profile, not a token, too large, missing, symlink, relative path; no refusal repeats content), TestProcessBoundary.",
-      "Validation: go test ./... exit 0 (one run saw TestSweepWhileWriting in internal/toollog fail under load, outside this diff; it passes on re-run, and port-exhaustion failures in an earlier run did not recur); go vet ./... exit 0; make cover: All files >= 80% (feeds/slack api.go 92.1%, connector.go 92.9%, fetch.go 91.9%, process.go 90.6%, feeds/tenant.go 100%); gofmt -l empty; go test -race ./internal/feeds/... pass. Security audit of the diff: two mediums (unbounded child output and record size; token file check/read race) and five lows fixed, then re-audited with no critical/high/medium open; one further low (an over-long record could stop a run) fixed; remaining lows in RC-1653, wiring notes in RC-1650."
+      "Validation: go test ./... exit 0 (one run saw TestSweepWhileWriting in internal/toollog fail under load, outside this diff; it passes on re-run, and port-exhaustion failures in an earlier run did not recur); go vet ./... exit 0; make cover: All files >= 80% (feeds/slack api.go 92.1%, connector.go 92.9%, fetch.go 91.9%, process.go 90.6%, feeds/tenant.go 100%); gofmt -l empty; go test -race ./internal/feeds/... pass. Security audit of the diff: two mediums (unbounded child output and record size; token file check/read race) and five lows fixed, then re-audited with no critical/high/medium open; one further low (an over-long record could stop a run) fixed; remaining lows in RC-1653, wiring notes in RC-1650.",
+      "Independent verification (a fresh agent given only the diff, this feature, INV-02/03/07/10 and the definition of done) at 2d332c4 and again for the delta at 716bd04: a1 (4 of 4) and a2 (0 occurrences) PASS; DOD-1 to DOD-8 PASS; mutation checks (watermark, thread re-fetch, URI keying, allowlist removal, noise filter, error and content scrub, read windows, hash-only dedupe) each fail a named test. DOD-9: CI test and build green on PR #213 at 716bd04. Verifier lows added to RC-1653."
     ]
   }
 }
