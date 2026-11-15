@@ -348,7 +348,15 @@ func (s *server) search(ctx context.Context, req *orchdv1.SearchRequest, method 
 		return nil, scope.storeError("Search", err)
 	}
 	out := &orchdv1.SearchResponse{Hits: make([]*orchdv1.SearchHit, 0, len(hits)), Fallback: fallback}
+	// Reason (SP-083): with no policy, or spaces off, every chunk is
+	// stamped shared and spaces mean nothing to the reader, so no space is
+	// named; under a policy each hit's stored space is one the caller reads.
+	placed := s.spacesConfigured()
 	for _, h := range hits {
+		space := h.Space
+		if !placed {
+			space = ""
+		}
 		out.Hits = append(out.Hits, &orchdv1.SearchHit{
 			Text:         h.Text,
 			SourceUri:    h.SourceURI,
@@ -363,6 +371,8 @@ func (s *server) search(ctx context.Context, req *orchdv1.SearchRequest, method 
 			IngestedAt:   toUnix(h.IngestedAt),
 			Heading:      h.Heading,
 			Trust:        h.Trust,
+			Space:        space,
+			Tenant:       h.Tenant,
 		})
 	}
 	s.describeSearch(ctx, scope, out)

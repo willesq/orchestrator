@@ -202,6 +202,17 @@ public nonisolated struct Orchd_V1_SearchHit: Sendable {
   /// client; empty for content stored before writers were recorded
   public var trust: String = String()
 
+  /// space is the space orchd's placer stored the chunk in (SP-083); empty
+  /// with no spaces policy applied or with spaces off. Every hit is one the
+  /// caller may read, so its space is always one the caller reads.
+  public var space: String = String()
+
+  /// tenant is a chat chunk's tenant, "<system>:<tenant>" (e.g.
+  /// slack:T0123) as its stored origin has it (a policy matches it without
+  /// case); empty for anything else. Both fields are stored data: a client
+  /// putting them in an agent's prompt must quote them like other fields.
+  public var tenant: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -5994,7 +6005,7 @@ nonisolated extension Orchd_V1_SearchResponse: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Orchd_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchHit"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{3}source_uri\0\u{3}source_type\0\u{1}score\0\u{1}scope\0\u{1}tags\0\u{3}keyword_score\0\u{1}exact\0\u{3}started_at\0\u{3}ended_at\0\u{3}ingested_at\0\u{1}heading\0\u{1}trust\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{3}source_uri\0\u{3}source_type\0\u{1}score\0\u{1}scope\0\u{1}tags\0\u{3}keyword_score\0\u{1}exact\0\u{3}started_at\0\u{3}ended_at\0\u{3}ingested_at\0\u{1}heading\0\u{1}trust\0\u{1}space\0\u{1}tenant\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -6015,6 +6026,8 @@ nonisolated extension Orchd_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._
       case 11: try { try decoder.decodeSingularInt64Field(value: &self.ingestedAt) }()
       case 12: try { try decoder.decodeSingularStringField(value: &self.heading) }()
       case 13: try { try decoder.decodeSingularStringField(value: &self.trust) }()
+      case 14: try { try decoder.decodeSingularStringField(value: &self.space) }()
+      case 15: try { try decoder.decodeSingularStringField(value: &self.tenant) }()
       default: break
       }
     }
@@ -6060,6 +6073,12 @@ nonisolated extension Orchd_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._
     if !self.trust.isEmpty {
       try visitor.visitSingularStringField(value: self.trust, fieldNumber: 13)
     }
+    if !self.space.isEmpty {
+      try visitor.visitSingularStringField(value: self.space, fieldNumber: 14)
+    }
+    if !self.tenant.isEmpty {
+      try visitor.visitSingularStringField(value: self.tenant, fieldNumber: 15)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -6077,6 +6096,8 @@ nonisolated extension Orchd_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._
     if lhs.ingestedAt != rhs.ingestedAt {return false}
     if lhs.heading != rhs.heading {return false}
     if lhs.trust != rhs.trust {return false}
+    if lhs.space != rhs.space {return false}
+    if lhs.tenant != rhs.tenant {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

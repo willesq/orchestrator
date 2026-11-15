@@ -1,0 +1,12 @@
+{
+  "id": "RC-1800",
+  "kind": "follow-up",
+  "topic": "Search hits' new space and tenant fields: low security-review notes",
+  "detail": "SP-083 adds SearchHit.space and SearchHit.tenant, filled from the stored payload. The security review of the diff found no critical, high or medium issue. Two low notes are accepted: (1) the tenant is shown in the case it was stored (slack:TACME), while the spaces classifier matches a binding without case, so the chip may differ in case from the policy's binding; display only. (2) No client puts the new fields into an agent's prompt today (MCP rag_search, auto-RAG, CLI ignore them); if one ever does, it must quote them like the other stored fields (noted on the proto fields).",
+  "source": "https://github.com/willesq/orchestrator/pull/215",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-083"
+  ],
+  "status": "open"
+}

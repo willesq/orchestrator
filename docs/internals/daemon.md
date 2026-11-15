@@ -573,6 +573,13 @@ included (SP-060). Only `SearchDirectMessages` (`orch search --direct-messages`)
 only the operator may call it: queued tasks (D-19) and interactive sessions are refused; see
 [memory.md](memory.md#chat-feeds).
 
+Each search hit names the space its chunk is stored in (`SearchHit.space`, from the payload's
+`space`, SP-083), and a chat hit its tenant (`SearchHit.tenant`,
+`<system>:<tenant>` from the stored origin). Both are what was stored, not where the content would
+be placed now. A hit is returned only when the caller reads its space (INV-01), so the space named
+is always one the caller reads. With no policy applied, or with spaces off, `space` is empty,
+though chunks are stamped `shared`.
+
 Every RPC has an entry in `readSpaceDecisions` (`internal/daemon/readspaces_registry.go`,
 SP-025.2; registered beside its handler, see [Adding an RPC](#adding-an-rpc)): `filtered` (the four above and `SearchDirectMessages`), `operator` (refused to every caller but the operator),
 `own` (the caller's own data or public content), `records` (orch records other than memory,
@@ -1110,7 +1117,7 @@ Times are Unix seconds with 0 meaning unknown or open.
 |---|---|---|
 | `Ping` | → version, uptime | — |
 | `Ingest` | text, source_uri, source_type, scope, tags, started_at, ended_at, timeline → chunks | type defaults to `manual`; always written as `client`, whatever type or URI is declared; refused (`FailedPrecondition`) for a source the docs or sources sync stored, matched on the exact URI, so it is advisory (see [memory.md](memory.md#provenance)) |
-| `Search` | query, top_k, scope, source_type, tags (any), mode, since, until, per_source, ranking → hits (with heading and the writer-assigned trust), fallback | top_k 0–100; mode `hybrid`/`dense`/empty; ranking `weighted`/`plain`/empty; per_source at most 100 (0 = `rag.search.per_source`, negative = no cap); since ≤ until, neither negative; explicit hybrid that cannot run → `FailedPrecondition` |
+| `Search` | query, top_k, scope, source_type, tags (any), mode, since, until, per_source, ranking → hits (with heading, the writer-assigned trust, the stored space and a chat hit's tenant), fallback | top_k 0–100; mode `hybrid`/`dense`/empty; ranking `weighted`/`plain`/empty; per_source at most 100 (0 = `rag.search.per_source`, negative = no cap); since ≤ until, neither negative; explicit hybrid that cannot run → `FailedPrecondition` |
 | `ListSources` | source_type, scope, uri_prefix, limit, since, until → sources, totals | same range rules; limit 0 = all |
 | `DeleteSource` | source_uri, confirm → deleted | `confirm` required server-side (`FailedPrecondition`), so no client can skip it; logged before and after |
 | `RetagSource` | source_uri, space, confirm, expect_from → from, chunks, moved | operator-only (refused to callers descended from a harness or orchd); moves one source with its vectors to the space and records a sticky override ([memory.md](memory.md#retag)); no URI, a URI over 4 KiB or a space the applied policy lacks → `InvalidArgument`; no policy, an unconfirmed move into public, out of an isolated space or out of quarantine, a source not in `expect_from`, or a migration, re-index or relabel running → `FailedPrecondition`; not stored → `NotFound`; answers name spaces and counts only |

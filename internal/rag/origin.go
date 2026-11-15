@@ -103,6 +103,16 @@ func originFrom(v any) Origin {
 	}
 }
 
+// TenantKey is o's chat tenant, "<system>:<tenant>", in the case it was
+// stored (a policy binding matches it without case); empty when o names no
+// tenant.
+func (o Origin) TenantKey() string {
+	if o.System == "" || o.Tenant == "" {
+		return ""
+	}
+	return o.System + ":" + o.Tenant
+}
+
 // labelsV reads a stored labels_v: JSON numbers decode as float64.
 func labelsV(v any) int64 {
 	switch n := v.(type) {
