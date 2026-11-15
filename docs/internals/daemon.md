@@ -391,10 +391,32 @@ SP-025.2): `filtered` (the four above), `operator` (refused to every caller but 
 SP-026's, or RC-700's for the registries, settings and logs it lists) or `none`. A test fails for
 an RPC with no entry, as for one missing from `taskCallable` and `operatorActions`.
 
+`Search` also says what it searched (SP-031; `internal/daemon/searchscope.go`), for `orch rag
+why`: `caller_space` (the session's pin or the queued task's recorded space; empty for anyone
+else), `scoped` (false when every collection was read) and `collections`, the collections read.
+A filtered reader's collections are only its readable spaces' own; an unscoped search under a
+policy (memory filtering switched off) lists them only for Orch.app, since every collection's
+name holds a space's.
+
 A filtered read sees only chunks labelled under the applied revision (INV-08;
 [memory.md](memory.md#spaces)), so after a new apply sessions and tasks read nothing placed
 earlier until `orch rag relabel` (SP-027) runs. Chunks stored before SP-024 stay in the base,
 which only the operator and unfiltered reads see (RC-355).
+
+### Spaces counts
+
+`Status` carries `SpacesStatus.counts` (SP-031; `internal/daemon/spacecounts.go`) while a policy
+with spaces is applied: each collection's chunks and how many are not labelled by the applied
+revision (`rag.CountSpaces`, two exact Qdrant counts per collection), and the live sessions
+pinned to quarantine whose first folder places as a conflict under the applied policy (at most
+50 are placed again; a pin does not record why it went to quarantine, RC-502). The counts are
+taken at most once per 30 s per revision, with a 3 s limit, and a failed count is not retried
+until that time ends (a count that runs out of time, conflicts included, is a failure, never a
+partial answer); the caller then gets a fixed error, the detail going to orchd's log
+(RC-350). Each caller gets them narrowed by `readableBy`: Orch.app every policy space, the
+totals over every collection (unplaced content and quarantine included) and the conflicts;
+anyone else only the spaces it reads, totals over those, and no conflicts. Quarantine's own
+counts are SP-028's `SpacesStatus.quarantine`.
 
 ### Command log
 

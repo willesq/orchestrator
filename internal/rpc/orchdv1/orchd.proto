@@ -344,6 +344,17 @@ message SearchResponse {
   // fallback says why a configured hybrid search answered by meaning only;
   // empty when the search ran as asked.
   string fallback = 2;
+  // What the caller's spaces let it search (SP-031), as orchd decided them
+  // from the caller alone. caller_space is the space of the caller's session
+  // or queued task; empty for any other caller.
+  string caller_space = 3;
+  // collections are the collections searched: every one when scoped is
+  // false, otherwise only the readable spaces' own.
+  repeated string collections = 4;
+  // scoped: the search read only the caller's readable spaces. False with
+  // no spaces policy, for the operator (Orch.app), or while memory
+  // filtering is switched off.
+  bool scoped = 5;
 }
 
 message SearchHit {
@@ -510,6 +521,9 @@ message SpacesStatus {
   // What quarantine holds (SP-028); unset when spaces are unavailable or
   // the store could not be counted.
   QuarantineCounts quarantine = 9;
+  // counts (SP-031) is what the spaces hold, as the caller may see it;
+  // unset with no policy configured.
+  SpacesCounts counts = 10;
 }
 
 // QuarantineCounts is how much content quarantine holds. It never names a
@@ -517,6 +531,38 @@ message SpacesStatus {
 message QuarantineCounts {
   int32 sources = 1;
   int32 chunks = 2;
+}
+
+// SpacesCounts is how much content the spaces hold and how far a relabel has
+// got (SP-031). The operator (Orch.app) sees every space; any other caller
+// sees only the spaces it reads (its own and public ones), and the relabel
+// totals cover only those.
+message SpacesCounts {
+  repeated SpaceCount spaces = 1; // by name
+  // every_space is set when spaces lists every space of the policy.
+  bool every_space = 2;
+  // Chunks counted and how many of them the applied revision has not yet
+  // labelled ('orch rag relabel' brings them up to it). For the operator
+  // they cover every collection: unplaced content and quarantine too.
+  int32 chunks = 3;
+  int32 stale = 4;
+  // conflicts are live sessions whose first folder two isolated spaces
+  // claim under the applied policy, so they have no space. Counted for the
+  // operator only (conflicts_counted).
+  int32 conflicts = 5;
+  bool conflicts_counted = 6;
+  int64 counted_at = 7; // unix seconds the counts were taken
+  // error says why the store could not be counted; the other fields are
+  // then empty.
+  string error = 8;
+}
+
+// SpaceCount is one space's collection.
+message SpaceCount {
+  string space = 1;
+  string kind = 2;   // public | private | isolated
+  int32 chunks = 3;
+  int32 stale = 4;   // not yet labelled by the applied revision
 }
 
 // MigrationProgress is how far a running hybrid migration has got.

@@ -411,6 +411,10 @@ func spacesSection(resp *orchdv1.StatusResponse, err error) (sec Section, ok boo
 		}
 		sec.Lines = append(sec.Lines, l)
 	}
+	if len(sp.GetDrift()) == 0 && sp.GetCounts() != nil {
+		// Reason: SP-031 lists drift with the counts even when there is none.
+		sec.Lines = append(sec.Lines, Line{Name: "drift", Value: "none", Level: LevelOK})
+	}
 	for _, sw := range sp.GetRelaxed() {
 		sec.Lines = append(sec.Lines, relaxedLine(sw))
 	}
@@ -420,6 +424,7 @@ func spacesSection(resp *orchdv1.StatusResponse, err error) (sec Section, ok boo
 	if l, ok := quarantineLine(sp); ok {
 		sec.Lines = append(sec.Lines, l)
 	}
+	sec.Lines = append(sec.Lines, countLines(sp)...)
 	if e := sp.GetEnforcementError(); e != "" {
 		sec.Lines = append(sec.Lines, Line{Name: "enforcement", Value: "switches in orch.db not taken", Level: LevelBad, Detail: printable(e)})
 	}
