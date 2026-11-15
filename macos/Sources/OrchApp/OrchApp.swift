@@ -62,12 +62,13 @@ final class AppModel {
     let spaces: SpacesOverviewModel
     /// Operator unlocks waiting for the user or in force (SP-077).
     let unlocks: UnlocksModel
+    let relabel: SpacesRelabelModel
     /// Keeps the sidebar's badges current between visits to their tabs.
     private(set) var badges: PeriodicRefresh?
 
     init() {
         let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & PRReviewAPI & PRLandingAPI & SystemAPI & CatalogAPI
-            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesOverviewAPI & UnlocksAPI
+            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesOverviewAPI & UnlocksAPI & SpacesRelabelAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -99,7 +100,12 @@ final class AppModel {
         config = ConfigModel(api: api, restartDaemon: { [control] in try await control.perform(.restart) })
         enforcement = EnforcementModel(api: api)
         placement = PlacementValidator(api: api)
-        spaces = SpacesOverviewModel(api: api)
+        // The Overview and the sidebar badge show a relabel the pane started (SP-079).
+        let relabel = SpacesRelabelModel(api: api)
+        let spaces = SpacesOverviewModel(api: api, relabel: { await relabel.progress })
+        relabel.onChange = { await spaces.load() }
+        self.relabel = relabel
+        self.spaces = spaces
         unlocks = UnlocksModel(api: api, confirmer: DeviceOwnerConfirmer())
         docsOwners = DocsOwnersModel(api: api, knownOwners: { [api] in try await api.gitHubScopes(refresh: false).scopes.map(\.owner) })
     }
@@ -288,6 +294,10 @@ extension UnreachableDaemon: SpacesOverviewAPI {
     func listSessions(includeEnded: Bool) async throws -> [PinnedSession] { throw failure }
     func toolLogSummary() async throws -> [SpaceActivity] { throw failure }
     func unconfirmedGitHubOrgs() async throws -> [String] { throw failure }
+}
+
+extension UnreachableDaemon: SpacesRelabelAPI {
+    func relabel(apply: Bool) async throws -> RelabelRun { throw failure }
 }
 
 extension UnreachableDaemon: PRLandingAPI {
