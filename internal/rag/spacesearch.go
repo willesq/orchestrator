@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -14,17 +15,37 @@ import (
 // vectors of keyword-only hits are fetched only where the result needs them.
 
 // must adds the second layer, the filter on the collection's own space, to a
-// search's exact-match conditions.
+// search's exact-match conditions, and for a read by policy the filter on
+// the policy's revision (INV-08).
 func (t spaceStore) must(must map[string]string) map[string]string {
 	if t.space == "" {
 		return must
 	}
-	out := make(map[string]string, len(must)+1)
+	out := make(map[string]string, len(must)+2)
 	for k, v := range must {
 		out[k] = v
 	}
 	out[fieldSpace] = t.space
+	if t.labelsV > 0 {
+		out[fieldLabelsV] = strconv.FormatInt(t.labelsV, 10)
+	}
 	return out
+}
+
+// withLabels has every named space's store in stores read only chunks
+// labelled under revision v (INV-08: a chunk labelled under another
+// revision is unreadable until it is relabelled). 0 keeps every chunk, as
+// does a store read whole (the base, or every collection).
+func withLabels(stores []spaceStore, v int64) []spaceStore {
+	if v <= 0 {
+		return stores
+	}
+	for i := range stores {
+		if stores[i].space != "" {
+			stores[i].labelsV = v
+		}
+	}
+	return stores
 }
 
 // layoutOf is the layout a search of targets can use: hybrid only when every

@@ -568,7 +568,7 @@ func (t taskRunner) task(ctx context.Context, in workflows.AgentTaskInput) agent
 // agentTask converts a durable task input for the runner. Only providers the
 // worker runs carry their model through; any other route runs unrouted.
 func agentTask(in workflows.AgentTaskInput) agentrun.Task {
-	t := agentrun.Task{ID: in.ID, Agent: in.Agent, Body: in.Body, Cwd: in.Cwd, Heads: in.Heads}
+	t := agentrun.Task{ID: in.ID, Agent: in.Agent, Body: in.Body, Cwd: in.Cwd, Heads: in.Heads, Space: in.Space}
 	switch in.Route.Provider {
 	case models.ProviderClaude:
 		t.Model = in.Route.Model

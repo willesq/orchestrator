@@ -227,7 +227,7 @@ no origin, or that the placer leaves without a space, stores nothing.
 
 - **Clients cannot choose a space.** No RPC field reaches `Origin` or `Space`: tags, scope and type
   that name a space change nothing. A client note goes to the space of the caller's pin as orchd
-  resolved it from the caller's process (SP-011). A queued task, the operator at a terminal and an
+  resolved it from the caller's process (SP-011). A queued task with no space recorded, the operator and an
   unidentified caller have no space here, so their notes are quarantined until the operator retags
   them, and so is a note from a session pinned to no space, to a public one or to one the policy
   no longer has. A page a client stores is placed by its writer, never by the bound prefix its URL
@@ -304,10 +304,11 @@ no origin, or that the placer leaves without a space, stores nothing.
   `labels_v`, so the same text placed elsewhere or under a new revision is stored again rather
   than skipped as unchanged. Writes made without a placer (tools, tests) keep the hash they had.
 - **What is not done yet.** Each space's chunks go to its own collection (SP-024, see
-  [Storage](#storage-qdrant)), but no read path passes the caller's spaces or filters by
-  `labels_v` yet (SP-025): a search without `SearchOpts.Spaces` reads every collection. Chunks stored before SP-023 have
-  no placement, and chunks stored before SP-024 sit in the base collection whatever their space;
-  a [relabel](#relabel) (SP-027) places and moves them. A docs file whose content and repo HEAD
+  [Storage](#storage-qdrant)), and orchd's read paths pass the caller's spaces and the applied
+  revision (SP-025, see [Spaces](#spaces)), so a chunk labelled under another revision is
+  unreadable to a filtered reader until a [relabel](#relabel) (SP-027) relabels it (INV-08).
+  Chunks stored before SP-023 have no placement, and chunks stored before SP-024 sit in the base
+  collection whatever their space; a relabel places and moves them. A docs file whose content and repo HEAD
   did not change is not stored again, so it keeps its earlier placement until relabelled, except
   that a public copy of a repo no longer public leaves (above). When the repo listing fails
   other than by GitHub refusing the owner, every repo keeps its docs as last indexed, public ones
@@ -346,8 +347,8 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
    collection is still not returned. `shared` reads the base with no `space` filter: it is the
    store as it was before spaces, whose older chunks carry no space. A name that is not a space
    name is skipped; an empty, non-nil list reads nothing and embeds nothing. `nil` reads every
-   collection of the base (the base and each space's), as search did before SP-024; deciding
-   each caller's readable spaces is SP-025. If the listing fails, a `nil` search reads the base
+   collection of the base (the base and each space's), as search did before SP-024; orchd
+   decides each caller's readable spaces (SP-025, [Spaces](#spaces)). If the listing fails, a `nil` search reads the base
    alone. Collections not created yet are left out when there are several; hybrid search runs
    only when every remaining one is hybrid.
 1. TopK 1–100 (0 → 5). Embed the query once. Filters: `scope` and `source_type` (exact), `tags`
@@ -931,9 +932,22 @@ The policy that defines them, the operator-only apply, and drift are described i
 paths will use: a space reads itself, every public space and the private spaces it lists, and
 never another isolated space or quarantine. Every write is stamped with its origin, space and
 `labels_v` ([Placement of writes](#placement-of-writes)) and stored in its space's own collection
-([Storage](#storage-qdrant)); search reads the collections of the spaces it is given. Which spaces
-each caller is given is SP-025; until then searches read every collection. Until a policy with spaces is applied, everything is in the one implicit `shared` space
-and search behaves as it always has.
+([Storage](#storage-qdrant)); search reads the collections of the spaces it is given.
+
+orchd gives every memory read the caller's readable spaces (SP-025; who reads what is in
+[daemon.md](daemon.md#reading-memory-by-space)): `Search` sets `SearchOpts.Spaces`,
+`ListSources` sets `ListSourcesOpts.Spaces`, and `GetDocument` reads with
+`Service.DocumentIn(uri, spaces, labelsV)`. Each takes the spaces as search does: `nil` reads
+every collection, an empty list nothing, and a named space only its own collection, filtered on
+payload `space` as the second layer. For a filtered reader orchd also passes the applied
+revision (`SearchOpts.LabelsV`, `ListSourcesOpts.LabelsV`), and each named space's requests
+then match `labels_v` equal to it as a number (INV-08): a chunk labelled under an earlier or
+later revision, or with no `labels_v`, is not read until it is relabelled. Applying a new
+revision therefore hides every space's content from sessions and tasks until the relabel runs;
+the operator and unfiltered reads still see it. A policy reader is never given `shared`, so the base's unplaced
+chunks (stored before SP-024, RC-355) are not read until SP-027 relabels them. Until a policy
+with spaces is applied, everything is in the one implicit `shared` space and search behaves as it
+always has.
 
 ## Placement
 

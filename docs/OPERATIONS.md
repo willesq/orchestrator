@@ -74,7 +74,11 @@ orch run <space> -- codex    # the same for Codex
 
 The spaces policy lives in `orch.db` as numbered revisions. Diff and apply are yours alone: orchd
 refuses them inside Claude Code or Codex sessions and inside queued tasks, so run them in your own
-terminal (or use Orch.app). Apply takes only the newest draft, the one you reviewed, and only when
+terminal (or use Orch.app). Once a policy is applied, only Orch.app is the operator: a terminal
+is not (D-71), so these operator commands, `orch rag relabel`, `orch config set` and the other
+operator-only commands are refused from a terminal, and `orch search` there reads public memory
+only. Use Orch.app for them; it is recognized by its code signature, so reinstall it
+(`make app-install`) if it was built before ad-hoc builds got the hardened runtime. Apply takes only the newest draft, the one you reviewed, and only when
 it validates. An agent session may save a draft. The diff says when it did and shows every value
 it changes, and applying it needs `--accept-agent-draft`. A saved draft, or an edit to `orch.db`, changes nothing that is enforced; `orch status`
 shows it in its `spaces` section as drift.

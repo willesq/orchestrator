@@ -176,7 +176,10 @@ switches them back, `--drop-backup` deletes the backup's space collections with 
 
 Content stored before memory spaces, before each space had its own collection, or under an older
 spaces policy revision is not read by the spaces it belongs to until it is relabelled. After you
-apply a policy (and after each later revision), run, in a terminal outside any agent session:
+apply a policy (and after each later revision), relabel it from Orch.app. While a policy is
+applied only Orch.app is the operator (D-71), so the same commands from a terminal are refused
+until a terminal can be unlocked from the app (planned); with no policy they run in a terminal
+outside any agent session:
 
 ```sh
 orch rag relabel --dry-run   # counts per space it would move or stamp; changes nothing
