@@ -496,7 +496,16 @@ type SearchHit struct {
 	Heading    string `protobuf:"bytes,12,opt,name=heading,proto3" json:"heading,omitempty"` // the markdown section the chunk came from, if any
 	// the trust tier orchd's writer gave it: repo, web, session, file or
 	// client; empty for content stored before writers were recorded
-	Trust         string `protobuf:"bytes,13,opt,name=trust,proto3" json:"trust,omitempty"`
+	Trust string `protobuf:"bytes,13,opt,name=trust,proto3" json:"trust,omitempty"`
+	// space is the space orchd's placer stored the chunk in (SP-083); empty
+	// with no spaces policy applied or with spaces off. Every hit is one the
+	// caller may read, so its space is always one the caller reads.
+	Space string `protobuf:"bytes,14,opt,name=space,proto3" json:"space,omitempty"`
+	// tenant is a chat chunk's tenant, "<system>:<tenant>" (e.g.
+	// slack:T0123) as its stored origin has it (a policy matches it without
+	// case); empty for anything else. Both fields are stored data: a client
+	// putting them in an agent's prompt must quote them like other fields.
+	Tenant        string `protobuf:"bytes,15,opt,name=tenant,proto3" json:"tenant,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -618,6 +627,20 @@ func (x *SearchHit) GetHeading() string {
 func (x *SearchHit) GetTrust() string {
 	if x != nil {
 		return x.Trust
+	}
+	return ""
+}
+
+func (x *SearchHit) GetSpace() string {
+	if x != nil {
+		return x.Space
+	}
+	return ""
+}
+
+func (x *SearchHit) GetTenant() string {
+	if x != nil {
+		return x.Tenant
 	}
 	return ""
 }
@@ -16333,7 +16356,7 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\bfallback\x18\x02 \x01(\tR\bfallback\x12!\n" +
 	"\fcaller_space\x18\x03 \x01(\tR\vcallerSpace\x12 \n" +
 	"\vcollections\x18\x04 \x03(\tR\vcollections\x12\x16\n" +
-	"\x06scoped\x18\x05 \x01(\bR\x06scoped\"\xe5\x02\n" +
+	"\x06scoped\x18\x05 \x01(\bR\x06scoped\"\x93\x03\n" +
 	"\tSearchHit\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x1d\n" +
 	"\n" +
@@ -16352,7 +16375,9 @@ const file_internal_rpc_orchdv1_orchd_proto_rawDesc = "" +
 	"\vingested_at\x18\v \x01(\x03R\n" +
 	"ingestedAt\x12\x18\n" +
 	"\aheading\x18\f \x01(\tR\aheading\x12\x14\n" +
-	"\x05trust\x18\r \x01(\tR\x05trust\"\xac\x01\n" +
+	"\x05trust\x18\r \x01(\tR\x05trust\x12\x14\n" +
+	"\x05space\x18\x0e \x01(\tR\x05space\x12\x16\n" +
+	"\x06tenant\x18\x0f \x01(\tR\x06tenant\"\xac\x01\n" +
 	"\x12ListSourcesRequest\x12\x1f\n" +
 	"\vsource_type\x18\x01 \x01(\tR\n" +
 	"sourceType\x12\x14\n" +

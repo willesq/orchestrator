@@ -18,7 +18,7 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
     private let client: GRPCClient<HTTP2ClientTransport.Posix>
     let orchd: Orchd_V1_Orchd.Client<HTTP2ClientTransport.Posix>
     private let callTimeout: Duration
-    private let searchTimeout: Duration
+    let searchTimeout: Duration
 
     /// `searchTimeout` is longer because the first search after a restart
     /// loads the embedding model.

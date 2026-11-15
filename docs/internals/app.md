@@ -531,7 +531,7 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
     (`RemoveSource`, with `purge` and `confirm` only after that choice).
   - **Open:** a web source's page, only for plain `http`/`https` URLs.
   - **Search:** within the selected source, using the filter orchd returns for it.
-- **Memory:** a Search/Indexed switch in the toolbar.
+- **Memory:** a Search/Indexed/Direct messages switch in the toolbar.
 - **Memory → Search:** the `Search` RPC with labelled menus: **Match** (as configured, words and
   meaning, meaning only), **Type** (the source types seen in the store) and **Show** (5 to 100
   results). Each hit shows a short source name, its type chip, date and score, the full address,
@@ -544,6 +544,28 @@ would show nothing without help, and on a crowded menu bar its icon can sit behi
     the embedding model.
 - **Memory → Indexed:** `ListSources`, every source in memory, up to 200 at a time with totals,
   filtered by type.
+- **Memory → Direct messages (SP-083, D-81):** the operator's search of chat, direct messages
+  included, through `SearchDirectMessages` with source type `chat`, the only read that returns
+  DMs. orchd allows it only for the operator, which under a policy is Orch.app alone (D-71); with
+  spaces off (#209) the app is still the operator and the view works the same.
+  (`DirectMessages`, `DaemonClient+DirectMessages` in OrchKit; `DirectMessagesFeature`,
+  `DirectMessageSearchView` in the app, wired as described in [Adding a feature](#adding-a-feature)
+  and handed to the window through the SwiftUI environment.)
+  - **Results:** each hit shows its tenant (`slack:T…`, `teams:…`) and space as chips, its date,
+    score, address and text. Both come from the stored chunk (`SearchHit.tenant`, `SearchHit.space`),
+    not from where the tenant would be placed now; content stored with spaces off or before a
+    policy shows **No space**. Chat text is written by other people, so every field is made
+    display-safe and shown verbatim, never as Markdown.
+  - **Refused or failed:** the view says why in place of results. `PermissionDenied` (or
+    `Unauthenticated`) reads "orchd refused the search" with who may search DMs and orchd's own
+    message; a bad request or an unavailable hybrid search shows orchd's message; an older orchd
+    without the RPC asks for an update; anything else names the failure and points at
+    `orch status`. orchd's message is made display-safe.
+  - **Screen-share-safe mode:** no direct message shows. While the Spaces pane's mode is on the
+    view runs no search, shows "Hidden while screen-share-safe mode is on", and drops any results
+    it held, so they do not reappear when sharing ends. A search that answers after sharing began
+    keeps nothing. (The window shows only the Spaces pane while sharing, so this is a second
+    guard.)
 - **Tasks:** follows `WatchTasks` while the tab is shown, so rows change the moment a task's status
   or liveness changes; no polling.
   - **Stream:** up to 100 tasks, filtered by status. Changing the filter restarts it. Each stream
