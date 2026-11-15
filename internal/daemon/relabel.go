@@ -56,7 +56,7 @@ func (s *server) relabel(ctx context.Context, apply bool) (rag.RelabelReport, er
 		return rag.RelabelReport{}, errors.New("a hybrid migration, backup drop, keyword re-index or relabel is already running")
 	}
 	defer migrating.Unlock()
-	p := relabelPlacer{w: &writePlacer{spaces: s.spaces, pins: s.pins, repos: s.repos}, rev: rev}
+	p := relabelPlacer{w: &writePlacer{spaces: s.spaces, pins: s.pins, repos: s.repos, relabel: true}, rev: rev}
 	return rl.Relabel(ctx, rag.RelabelOpts{Rev: rev, Place: p.place, Apply: apply})
 }
 

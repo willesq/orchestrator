@@ -187,3 +187,20 @@ Nothing is re-embedded. Content that cannot be placed (notes stored before write
 client notes with no session space, sessions whose transcript is gone, conflicts) goes to
 quarantine, never to public or another space; retag what you want. Chunks reported as left stale
 (for example, GitHub could not be asked about a repo) are retried by the next run.
+
+## Retagging a source
+
+To move one source to another space (for example a note left in quarantine), run, in a terminal
+outside any agent session:
+
+```sh
+orch spaces retag <source_uri> <space>             # a space of the applied policy, or quarantine
+orch spaces retag <source_uri> oss --confirm       # into public, out of an isolated space or out of quarantine
+```
+
+Its chunks move with their vectors (nothing is re-embedded) and the source stays in that space:
+later docs syncs, sources refreshes and your own re-ingests of it go there. A session's note
+under that source_uri goes there only if the session's space is the one you chose; otherwise
+the write is refused. Session records and hand-offs that orch cannot tie to a pinned session or
+a bound folder stay in quarantine. An interrupted retag can be run again, and orchd also finishes it when it
+next starts.

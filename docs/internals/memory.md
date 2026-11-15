@@ -821,10 +821,51 @@ its delete leaves the same write in both collections, and running it again copie
 points and deletes the old copy. **Cost:** a 2,000-chunk source moved in 2.6 s on Qdrant 1.17.1
 (`TestIntegrationRetag2000`, `ORCH_QDRANT_BENCH=1`).
 
-**Not done yet.** The operator-only `RetagSource` RPC, `orch spaces retag`, the confirmation for
-moves into public or out of an isolated space, and the sticky override that later writes honor
-(`spaces.Options.Override`) are not wired yet. Like a relabelled source, a retagged source's write
-hash still names its old placement, so its next write is embedded once (RC-752).
+A rag-level `Check` hook runs under the source's lock after the holders are counted and before
+anything changes; orchd uses it for the checks below, so they and the move see the same store.
+
+**In orchd** (`internal/daemon/retag.go`). `RetagSource` (`orch spaces retag`) is operator-only
+(`refuseNonOperator`, and on the operator-only list for queued tasks). It needs an applied policy
+that verifies, a space of that policy or `quarantine`, and the migration lock (shared with
+migrations, keyword re-indexes and relabels). Under the source's lock it refuses, changing nothing:
+
+- without `confirm`, a move into a public space, out of an isolated space, or out of quarantine or
+  the unplaced base into a space (content of unknown origin may be another job's);
+- with `expect_from`, a source not stored in that space now (any other holder but the target
+  refuses too), so a caller such as `orch quarantine assign` gets an atomic answer.
+
+- a policy revision applied since the request was read.
+
+It then records the retag in orch.db (`spaces_retags`, migration 0031) as `moving`, with whether
+it was confirmed, before anything moves (a store that cannot record it refuses the retag), moves
+the source, and marks it `done`. A retag left `moving` (orchd exited mid-move) is run again 30 s
+after the next start, under the migration lock and the current policy: a space the policy no
+longer has sends the source to quarantine, and a move that now needs a confirmation it was not
+given stays pending, with a log line, until the operator runs it again. A source no longer stored
+closes it. A source not stored at all is `NotFound`.
+
+A write placed before a retag of its source finished (it was being embedded meanwhile) is refused
+under the source's lock (`rag.ErrRetaggedMidWrite`) instead of moving the source back; written
+again, it is placed with the retag.
+
+**The sticky override.** `writePlacer.place` reads the source's retag (`withRetag`) and applies it
+with `spaces.ApplyOverride` (a space the policy no longer has quarantines), as follows. An
+unreadable retag refuses the write rather than placing it without it.
+
+| Writer | Honors the retag |
+|---|---|
+| docs sync, sources refresh | always: they place by what GitHub, a checkout or a bound prefix says |
+| session records and summaries, edited-file hand-offs | only when placed without it (not quarantined): a session ID or a path any process can name must not borrow the retag's space. An edited file under a root that is retagged does follow it, so sessions that edit it write there |
+| client notes (`Ingest`) | only from the operator or a session whose space is the target (RC-850, option (a)); other writers are placed by their own space and `mayReplace` refuses them |
+| relabel | for a source stored in the retag's space; otherwise by its writer, as above |
+
+The public gate still applies after the override: only the docs sync and the sources refresh write
+into a public space, so another writer's write of a source retagged to public goes to
+`public_root_sessions` (D-64).
+
+**Not done yet.** Orch.app has no retag control; a retag row outlives its source's deletion; a retag cannot be cleared (retag the source to
+where you want it instead). Like a relabelled source, a retagged source's write hash still names
+its old placement, so its next write is embedded once (RC-752).
 
 ## Duplicate clean-up
 

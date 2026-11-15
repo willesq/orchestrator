@@ -40,6 +40,12 @@ type RetagOpts struct {
 	// Rev is the applied policy revision, stamped as the chunks' labels_v,
 	// so a later relabel sees them as current.
 	Rev int64
+	// Check, when set, is called under the source's lock with the spaces
+	// that hold the source (as RetagReport.From names them), before
+	// anything is changed; an error refuses the retag and is returned as it
+	// is. orchd checks what the operator confirmed and records the retag
+	// there, so the check and the move see the same store.
+	Check func(from []string) error
 }
 
 // RetagReport says what a retag found and did. It names spaces and counts.
@@ -104,6 +110,14 @@ func (s *Service) Retag(ctx context.Context, opts RetagOpts) (RetagReport, error
 			return rep, err
 		}
 	}
+	if opts.Check != nil {
+		if err := opts.Check(slices.Clone(rep.From)); err != nil {
+			return rep, err
+		}
+	}
+	// Bumped before the lock is released, so a write placed before this
+	// retag is refused rather than stored (IngestText).
+	defer s.bumpRetag(opts.SourceURI)
 	labels := map[string]any{fieldSpace: opts.Space, fieldLabelsV: opts.Rev}
 	from := retagSource(holders, target)
 	if from == nil {
@@ -181,6 +195,27 @@ func sameWrite(ctx context.Context, holders []*QdrantStore, uri string) error {
 		want = hash
 	}
 	return nil
+}
+
+// ErrRetaggedMidWrite refuses a write placed before a retag of its source
+// finished; writing it again places it where the retag put the source.
+var ErrRetaggedMidWrite = errors.New("the source was retagged while this write was being prepared; write it again")
+
+// retagGeneration is how many retags uri has had in this process.
+func (s *Service) retagGeneration(uri string) uint64 {
+	s.retagMu.Lock()
+	defer s.retagMu.Unlock()
+	return s.retagGens[uri]
+}
+
+// bumpRetag counts a retag of uri.
+func (s *Service) bumpRetag(uri string) {
+	s.retagMu.Lock()
+	defer s.retagMu.Unlock()
+	if s.retagGens == nil {
+		s.retagGens = map[string]uint64{}
+	}
+	s.retagGens[uri]++
 }
 
 // retagSource picks the collection a retag copies from: the one other than

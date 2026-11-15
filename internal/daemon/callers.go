@@ -151,6 +151,10 @@ var operatorActions = map[string]string{
 	// Reason (SP-027): a relabel moves every space's content and its report
 	// names spaces; it is also refused to interactive harness sessions.
 	orchdv1.Orchd_Relabel_FullMethodName: "relabel the RAG store",
+	// Reason (SP-071): a retag moves a source between spaces and its answer
+	// says which spaces hold it; it is also refused to interactive harness
+	// sessions.
+	orchdv1.Orchd_RetagSource_FullMethodName: "retag a source",
 	// Reason: a queued task's identity comes from its task record, so a pin
 	// would only give it a second, self-reported one. Interactive sessions'
 	// hooks still pin (PinSession checks the harness process itself).

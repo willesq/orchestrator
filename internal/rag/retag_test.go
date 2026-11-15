@@ -314,3 +314,50 @@ func TestWriteRetagReport(t *testing.T) {
 		t.Fatalf("report = %q", got)
 	}
 }
+
+// TestRetagCheckSeesTheHoldersFirst: the caller's check gets the spaces
+// holding the source before anything changes, and its refusal changes
+// nothing.
+func TestRetagCheckSeesTheHoldersFirst(t *testing.T) {
+	svc, f, _ := retagService(t)
+	refused := errors.New("refused")
+	var saw []string
+	_, err := svc.Retag(context.Background(), RetagOpts{SourceURI: "manual://plan", Space: "globex", Rev: 2,
+		Check: func(from []string) error { saw = from; return refused }})
+	if !errors.Is(err, refused) || !slices.Equal(saw, []string{"acme"}) {
+		t.Fatalf("check saw %v and the retag returned %v", saw, err)
+	}
+	if sourcesIn(f)["c__globex"]["manual://plan"] != 0 || sourcesIn(f)["c__acme"]["manual://plan"] == 0 {
+		t.Fatal("a refused check changed the store")
+	}
+	if _, err := svc.Retag(context.Background(), RetagOpts{SourceURI: "manual://plan", Space: "globex", Rev: 2,
+		Check: func([]string) error { return nil }}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestWritePlacedBeforeARetagIsRefused: a write placed before a retag of
+// its source finished (it was embedding meanwhile) is refused rather than
+// stored, so it cannot move the source back; written again, it is placed
+// anew.
+func TestWritePlacedBeforeARetagIsRefused(t *testing.T) {
+	svc, f, _ := retagService(t)
+	hook := &hookEmbedder{trigger: "edited"}
+	svc.emb = hook
+	hook.onEmbed = func() {
+		if _, err := svc.Retag(context.Background(), RetagOpts{SourceURI: "manual://plan", Space: "globex", Rev: 2}); err != nil {
+			t.Errorf("retag mid-write: %v", err)
+		}
+	}
+	m := Meta{SourceURI: "manual://plan", SourceType: "note", Tags: []string{"acme"}, Origin: Origin{System: OriginClient}}
+	if _, err := svc.IngestText(context.Background(), "the plan, edited", m); !errors.Is(err, ErrRetaggedMidWrite) {
+		t.Fatalf("a write placed before the retag returned %v", err)
+	}
+	got := sourcesIn(f)
+	if got["c__acme"]["manual://plan"] != 0 || got["c__globex"]["manual://plan"] == 0 {
+		t.Fatalf("after the refused write the collections hold %v", got)
+	}
+	if _, err := svc.IngestText(context.Background(), "the plan, edited again", m); err != nil {
+		t.Fatalf("the write again: %v", err)
+	}
+}

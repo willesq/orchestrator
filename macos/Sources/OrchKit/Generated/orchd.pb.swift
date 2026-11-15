@@ -1185,6 +1185,50 @@ public nonisolated struct Orchd_V1_RelabelResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Orchd_V1_RetagSourceRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sourceUri: String = String()
+
+  /// a space of the applied policy, or "quarantine"
+  public var space: String = String()
+
+  /// Required to move a source into a public space, out of an isolated one,
+  /// or out of quarantine into a space; without it such a retag is refused
+  /// and nothing changes.
+  public var confirm: Bool = false
+
+  /// When set, the retag is refused unless the source is stored in this
+  /// space now (checked under the source's lock, with the move).
+  public var expectFrom: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// RetagSourceResponse names spaces and counts only.
+public nonisolated struct Orchd_V1_RetagSourceResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// spaces that held the source ("unplaced" for none)
+  public var from: [String] = []
+
+  /// the source's chunks in the target space after the retag
+  public var chunks: Int64 = 0
+
+  /// false when it was only stamped where it was
+  public var moved: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Orchd_V1_ListPRsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -7481,6 +7525,91 @@ nonisolated extension Orchd_V1_RelabelResponse: SwiftProtobuf.Message, SwiftProt
     if lhs.transitions != rhs.transitions {return false}
     if lhs.applied != rhs.applied {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RetagSourceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RetagSourceRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_uri\0\u{1}space\0\u{1}confirm\0\u{3}expect_from\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sourceUri) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.space) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.confirm) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.expectFrom) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sourceUri.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceUri, fieldNumber: 1)
+    }
+    if !self.space.isEmpty {
+      try visitor.visitSingularStringField(value: self.space, fieldNumber: 2)
+    }
+    if self.confirm != false {
+      try visitor.visitSingularBoolField(value: self.confirm, fieldNumber: 3)
+    }
+    if !self.expectFrom.isEmpty {
+      try visitor.visitSingularStringField(value: self.expectFrom, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RetagSourceRequest, rhs: Orchd_V1_RetagSourceRequest) -> Bool {
+    if lhs.sourceUri != rhs.sourceUri {return false}
+    if lhs.space != rhs.space {return false}
+    if lhs.confirm != rhs.confirm {return false}
+    if lhs.expectFrom != rhs.expectFrom {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_RetagSourceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RetagSourceResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}from\0\u{1}chunks\0\u{1}moved\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedStringField(value: &self.from) }()
+      case 2: try { try decoder.decodeSingularInt64Field(value: &self.chunks) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.moved) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.from.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.from, fieldNumber: 1)
+    }
+    if self.chunks != 0 {
+      try visitor.visitSingularInt64Field(value: self.chunks, fieldNumber: 2)
+    }
+    if self.moved != false {
+      try visitor.visitSingularBoolField(value: self.moved, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_RetagSourceResponse, rhs: Orchd_V1_RetagSourceResponse) -> Bool {
+    if lhs.from != rhs.from {return false}
+    if lhs.chunks != rhs.chunks {return false}
+    if lhs.moved != rhs.moved {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
