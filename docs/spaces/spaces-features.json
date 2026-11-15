@@ -616,6 +616,21 @@
         "id": "D-74",
         "decision": "RC-710: SP-025 merges with RC-710 accepted until a follow-up feature refuses, under a spaces policy, the task-refused settings RPCs (SetConfig with Sensitive keys, the harness and cc-safety-net settings, Restart, PR landing) to every caller except Orch.app, keeping Ingest, Dispatch and the task RPCs sessions use. The follow-up touches SP-070 and SP-050 and is added to the plan by the coordinator as SP-078.",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-75",
+        "decision": "SP-064 (optional OpenAPPA label source) is deferred: build it only once OpenAPPA has a stable wire format (1.0 or authenticated /hook callers). Chunk labels stay shaped as space x trust so the option stays open. This counts as the explicit deferral P5's exit criteria allow.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-76",
+        "decision": "RC-229: under a policy, relabelling is run from a 'Relabel now' button in Orch.app's Spaces pane, which shows its progress; orchd does not relabel automatically after an apply. Built as SP-079.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-77",
+        "decision": "RC-1200: under a spaces policy, DeleteSource is limited to sources in the calling session's own space (Orch.app may delete any), and PurgeDocs is Orch.app-only. Built by SP-026.",
+        "date": "2026-11-15"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -3653,7 +3668,8 @@
           "SP-078",
           "SP-025"
         ],
-        "status": "open"
+        "status": "resolved",
+        "resolution": "Settled as D-77; built by SP-026."
       },
       {
         "id": "RC-1201",
@@ -3678,6 +3694,21 @@
           "SP-078"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-229",
+        "kind": "decision",
+        "topic": "Under a policy nobody can run a relabel",
+        "detail": "After #188 (D-71), 'orch rag relabel' is refused from a terminal under a policy and Orch.app showed relabel progress without a way to start one, so content stored before an apply stayed hidden until SP-077.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-027",
+          "SP-077"
+        ],
+        "status": "resolved",
+        "resolution": "Settled as D-76; built by SP-079."
       }
     ]
   },
@@ -7472,14 +7503,16 @@
               "threshold": "yes or deferred"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "Deferred by user on 2026-11-15 (D-75): OpenAPPA's wire format could not be confirmed stable; revisit at OpenAPPA 1.0 or when /hook callers are authenticated."
+          ]
         }
       ],
-      "status": "todo",
+      "status": "blocked",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": null,
+      "blocked_reason": "Deferred by the user on 2026-11-15 (D-75) until OpenAPPA has a stable wire format.",
       "attempts": 0,
       "criteria_sha256": "76e46f65ccb892bb47cd64a8a241bcc9d35a9fdc312f8dc97e2a638652055d15",
       "branch": null,
@@ -7867,6 +7900,64 @@
       "criteria_sha256": "901473b12fe5cd0035785d2271433e5396c60ed79717edc54f187b4072c72bdc",
       "branch": "feat/sp-078-settings-operator-only",
       "pr": "https://github.com/willesq/orchestrator/pull/199"
+    },
+    {
+      "id": "SP-079",
+      "phase": "P4",
+      "priority": 39.5,
+      "title": "Relabel now button in Orch.app (D-76)",
+      "summary": "A 'Relabel now' control in the Spaces pane runs orchd's Relabel RPC as the operator and shows its progress, so content stored before a policy apply can be made readable without a terminal.",
+      "why": "RC-229: under a policy the terminal cannot relabel (D-71) and the app had no control to start one.",
+      "depends_on": [
+        "SP-027",
+        "SP-051",
+        "SP-025"
+      ],
+      "touches": [
+        "macos/Sources (new Swift files, minimal SpacesView wiring)"
+      ],
+      "docs_to_update": [
+        "docs/internals/app.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-079.1",
+          "title": "Relabel now",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "The Spaces pane shows a 'Relabel now' control whenever chunks are stale (labels_v not the applied revision); it calls orchd's Relabel RPC as the operator and shows progress until no stale chunks remain.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "The control is absent or disabled with nothing stale, and a refused or failed relabel shows why without retrying on its own.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "manual",
+              "check": "Light and dark snapshots of the pane with stale chunks, during a relabel, and after it.",
+              "measure": "snapshots",
+              "threshold": "reviewed by the user"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "c8e57b33d517a6ceaa90763c200296bda10486c6197b9f1877423620bb93b07f",
+      "branch": null,
+      "pr": null
     }
   ],
   "criteria_hash_recipe": "criteria_sha256 = sha256 of json.dumps([{id, title, acceptance} for each checkpoint], sort_keys=True, separators=(',', ':'), ensure_ascii=False) encoded as UTF-8. 'evidence' is excluded so recording evidence does not change the hash.",
@@ -7994,6 +8085,10 @@
     {
       "date": "2026-11-14",
       "change": "SP-078 added for RC-710 (D-74, recorded on #188): settings RPCs become operator-only under a policy."
+    },
+    {
+      "date": "2026-11-15",
+      "change": "D-75 defers SP-064; D-76 adds SP-079 (Relabel now in Orch.app) for RC-229; D-77 scopes DeleteSource and makes PurgeDocs operator-only (SP-026)."
     }
   ],
   "plan_location": {
@@ -8100,7 +8195,7 @@
         "topic": "RC-710 accepted until SP-078 (recorded on #188)"
       }
     ],
-    "next_d_id": "D-75",
+    "next_d_id": "D-78",
     "proto_slot": {
       "holder": "none",
       "next": "SP-025 if D-71 needs it, then SP-077"
