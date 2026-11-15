@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>orch Spaces Plan</title>
 <style>
-/* Layout: a reader for spaces-features.json. It renders the file and holds no plan content of its own, so humans and agents read the same source. */
+/* Layout: a reader for spaces-features.json combined with state/<ID>.json and reconvene/<RC-id>.json (SP-080). It renders those files and holds no plan content of its own, so humans and agents read the same source. */
 :root {
   color-scheme: light;
   --ink: #18222b; --muted: #52606d; --paper: #f4f6f7; --surface: #ffffff; --line: #d8dfe5;
@@ -126,8 +126,8 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
 
 <div class="loader card" id="loader" hidden>
   <h2>Load the plan file</h2>
-  <p>This page renders <code>spaces-features.json</code> and nothing else. Browsers block reading a local file automatically when the page is opened directly from disk. Choose the file, or serve the folder: <code>python3 -m http.server -d docs/spaces 8765</code>, then open <code>http://localhost:8765</code>.</p>
-  <div class="drop" id="drop">Drop <code>spaces-features.json</code> here, or <input type="file" id="file" accept="application/json,.json" aria-label="Choose spaces-features.json"></div>
+  <p>This page renders <code>spaces-features.json</code> together with each feature's <code>state/&lt;ID&gt;.json</code> and each <code>reconvene/&lt;RC-id&gt;.json</code>, and nothing else. Browsers block reading local files automatically when the page is opened directly from disk. Serve the folder: <code>python3 -m http.server -d docs/spaces 8765</code>, then open <code>http://localhost:8765</code> (the reader lists <code>reconvene/</code> through that server's directory listing). Or choose the <code>docs/spaces</code> folder, or drop the files, or a combined plan from <code>python3 docs/spaces/tools/plantotals.py --combined plan.json</code>.</p>
+  <div class="drop" id="drop">Drop <code>spaces-features.json</code> with its <code>state</code> and <code>reconvene</code> files here, or choose files <input type="file" id="file" multiple accept="application/json,.json" aria-label="Choose spaces-features.json and its state and reconvene files"> or the folder <input type="file" id="folder" webkitdirectory aria-label="Choose the docs/spaces folder"></div>
   <p class="muted" id="loadErr" aria-live="polite"></p>
 </div>
 
@@ -198,7 +198,7 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
 </main>
 
 <footer>
-  <p>Source of truth: <code>docs/spaces/spaces-features.json</code> (status is authoritative on origin/main). This page only displays it; edit the JSON, never this page, to change the plan.</p>
+  <p>Source of truth: <code>docs/spaces/spaces-features.json</code> for definitions and decisions, <code>docs/spaces/state/&lt;ID&gt;.json</code> for each feature's status and evidence, <code>docs/spaces/reconvene/&lt;RC-id&gt;.json</code> for reconvene items (status is authoritative on origin/main). This page only displays them; edit the JSON, never this page, to change the plan.</p>
   <p id="hashNote"></p>
 </footer>
 
@@ -207,7 +207,34 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
 <script>
 (function () {
   'use strict';
-  var JSON_PATH = 'spaces-features.json';
+  var JSON_PATH = 'spaces-features.json', STATE_DIR = 'state/', RC_DIR = 'reconvene/', RC_ORDER = 'order.json';
+  // SP-080: a feature's mutable fields and checkpoint evidence live in state/<ID>.json and
+  // each reconvene item in reconvene/<RC-id>.json. combine() rebuilds the single-file view the
+  // rest of this page renders; it mirrors tools/planfiles.py combine().
+  var STATE_FIELDS = ['status', 'passes', 'verified_sha', 'verified_at', 'blocked_reason', 'attempts', 'branch', 'pr'];
+  var STATE_DEFAULTS = { status: 'todo', passes: false, verified_sha: null, verified_at: null, blocked_reason: null, attempts: 0, branch: null, pr: null };
+  function rcNum(id) { var m = /^RC-(\d+)$/.exec(id); return m ? parseInt(m[1], 10) : Infinity; }
+  function isCombined(plan) {
+    if (plan.decisions && plan.decisions.reconvene) return true;
+    return (plan.features || []).some(function (f) { return 'status' in f; });
+  }
+  function combine(plan, states, rcs, order) {
+    var d = JSON.parse(JSON.stringify(plan));
+    d.features.forEach(function (f) {
+      var s = states[f.id] || {}, ev = s.evidence || {};
+      STATE_FIELDS.forEach(function (k) { if (k in s) f[k] = s[k]; else if (!(k in f)) f[k] = STATE_DEFAULTS[k]; });
+      f.checkpoints.forEach(function (c) { if (ev[c.id]) c.evidence = ev[c.id]; else if (!c.evidence) c.evidence = []; });
+    });
+    d.decisions = d.decisions || {};
+    var list = (d.decisions.reconvene || []).slice(), seen = {}, byId = {};
+    list.forEach(function (r) { seen[r.id] = true; });
+    rcs.forEach(function (r) { if (r && typeof r.id === 'string' && !seen[r.id]) byId[r.id] = r; });
+    (Array.isArray(order) ? order : []).forEach(function (id) { if (byId[id]) { list.push(byId[id]); delete byId[id]; } });
+    Object.keys(byId).sort(function (a, b) { return (rcNum(a) - rcNum(b)) || (a < b ? -1 : a > b ? 1 : 0); }).forEach(function (id) { list.push(byId[id]); });
+    d.decisions.reconvene = list;
+    ['open', 'recommended_pending_confirmation', 'confirmed_by_user'].forEach(function (k) { if (!d.decisions[k]) d.decisions[k] = []; });
+    return d;
+  }
 
   function el(tag, opts, kids) {
     var e = document.createElement(tag);
@@ -246,6 +273,8 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
     if (m < 1) return 'just now'; if (m < 60) return m + ' min ago';
     var h = Math.round(m / 60); if (h < 48) return h + ' h ago'; return Math.round(h / 24) + ' days ago';
   }
+  // Links from the plan's text: https or a relative path only, never javascript: or data:.
+  function safeHref(u) { return typeof u === 'string' && (/^https:\/\//.test(u) || /^[\w.\/-]+(#[\w-]*)?$/.test(u)); }
   function ghLink(url, text) {
     return (typeof url === 'string' && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(url))
       ? el('a', { text: text || url.replace('https://github.com/', ''), attrs: { href: url } }) : null;
@@ -378,7 +407,7 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
     document.getElementById('title').textContent = d.title;
     var meta = document.getElementById('meta'); clear(meta);
     meta.appendChild(document.createTextNode('Plan ' + d.plan_id + ' · created ' + d.created + ' · updated ' + d.updated + ' · base ' + d.base_commit + ' · '));
-    if (d.origin && d.origin.issue) meta.appendChild(el('a', { text: 'origin issue', attrs: { href: d.origin.issue } }));
+    if (d.origin && safeHref(d.origin.issue)) meta.appendChild(el('a', { text: 'origin issue', attrs: { href: d.origin.issue } }));
 
     var feats = d.features, byId = {};
     feats.forEach(function (f) { byId[f.id] = f; });
@@ -411,7 +440,7 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
     design.appendChild(dl);
     if (d.origin && d.origin.design_docs) {
       var bg = el('p', { cls: 'muted' }, ['Background docs: ']);
-      d.origin.design_docs.forEach(function (p, i) { if (i) bg.appendChild(document.createTextNode(', ')); bg.appendChild(el('a', { text: p, attrs: { href: p } })); });
+      d.origin.design_docs.forEach(function (p, i) { if (i) bg.appendChild(document.createTextNode(', ')); bg.appendChild(safeHref(p) ? el('a', { text: p, attrs: { href: p } }) : el('span', { text: String(p) })); });
       bg.appendChild(document.createTextNode('. ' + (d.origin.design_docs_note || '')));
       design.appendChild(bg);
     }
@@ -583,31 +612,71 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
     document.getElementById('meta').textContent = 'Plan file not loaded yet.';
     if (msg) document.getElementById('loadErr').textContent = msg;
   }
-  function loadText(text) {
-    try { render(JSON.parse(text)); }
-    catch (e) { showLoader('That file is not a valid plan: ' + e.message); }
+  // Chosen or dropped files: the plan, any state/<ID>.json and reconvene/<RC-id>.json, or one combined plan.
+  function loadFiles(files) {
+    files = Array.prototype.filter.call(files, function (f) { return /\.json$/i.test(f.name) && !/progress\..*local\.json$/.test(f.name); });
+    if (!files.length) return;
+    Promise.all(files.map(function (f) { return f.text().then(function (t) { return { name: f.name, data: JSON.parse(t) }; }); }))
+      .then(function (docs) {
+        var plan = null, states = {}, rcs = [], order = null;
+        docs.forEach(function (x) {
+          var v = x.data;
+          if (v && Array.isArray(v.features)) plan = v;
+          else if (Array.isArray(v) && x.name === RC_ORDER) order = v;
+          else if (v && /^RC-\d+$/.test(v.id)) rcs.push(v);
+          else if (v && /^SP-\d+$/.test(v.id) && v.evidence) states[v.id] = v;
+        });
+        if (!plan) throw new Error('no spaces-features.json among the files');
+        render(combine(plan, states, rcs, order));
+      })
+      .catch(function (e) { showLoader('Those files are not a valid plan: ' + e.message); });
   }
-  document.getElementById('file').addEventListener('change', function (e) {
-    var f = e.target.files[0]; if (!f) return;
-    f.text().then(loadText);
+  ['file', 'folder'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', function (e) { loadFiles(e.target.files); });
   });
   var drop = document.getElementById('drop');
   ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
   ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
-  drop.addEventListener('drop', function (e) { var f = e.dataTransfer.files[0]; if (f) f.text().then(loadText); });
+  drop.addEventListener('drop', function (e) { loadFiles(e.dataTransfer.files); });
 
   function fetchJSON(path) {
     return fetch(path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
   }
   function setLiveNote(text) { document.getElementById('liveNote').textContent = text; }
-  fetchJSON(JSON_PATH)
+  // reconvene/ has no index file, because one shared index would conflict between lanes again;
+  // the served folder's directory listing names the items.
+  function listRC() {
+    return fetch(RC_DIR, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(function (html) {
+        var names = [], re = /href="(?:\.\/)?(RC-\d+\.json)"/g, m;
+        while ((m = re.exec(html))) if (names.indexOf(m[1]) < 0) names.push(m[1]);
+        return names;
+      });
+  }
+  var LOAD_NOTE = '';
+  function loadPlan() {
+    return fetchJSON(JSON_PATH).then(function (plan) {
+      if (isCombined(plan)) { LOAD_NOTE = ''; return plan; }
+      var states = {};
+      var stateP = Promise.all(plan.features.map(function (f) {
+        return fetchJSON(STATE_DIR + f.id + '.json').then(function (s) { states[f.id] = s; }).catch(function () {});
+      }));
+      var orderP = fetchJSON(RC_DIR + RC_ORDER).catch(function () { return null; });
+      var rcP = listRC().then(function (names) {
+        LOAD_NOTE = '';
+        return Promise.all(names.map(function (n) { return fetchJSON(RC_DIR + n).catch(function () { return null; }); }));
+      }).catch(function () { LOAD_NOTE = ' · reconvene items not shown: this server does not list reconvene/'; return []; });
+      return Promise.all([stateP, orderP, rcP]).then(function (r) { return combine(plan, states, r[2], r[1]); });
+    });
+  }
+  loadPlan()
     .then(function (plan) {
       return fetchJSON(LIVE_PATH).catch(function () { return null; }).then(function (live) {
         LIVE = live; render(plan);
-        setLiveNote('Refreshes every 30 s · ' + (live ? 'live progress file found' : 'no live progress file'));
+        setLiveNote('Refreshes every 30 s · ' + (live ? 'live progress file found' : 'no live progress file') + LOAD_NOTE);
         setInterval(function () {
-          Promise.all([fetchJSON(JSON_PATH).catch(function () { return PLAN; }), fetchJSON(LIVE_PATH).catch(function () { return null; })])
-            .then(function (r) { LIVE = r[1]; PLAN = r[0]; renderProgress(r[0], r[1]); setLiveNote('Progress refreshed ' + new Date().toLocaleTimeString() + ' · reload the page to refresh the feature list'); });
+          Promise.all([loadPlan().catch(function () { return PLAN; }), fetchJSON(LIVE_PATH).catch(function () { return null; })])
+            .then(function (r) { LIVE = r[1]; PLAN = r[0]; renderProgress(r[0], r[1]); setLiveNote('Progress refreshed ' + new Date().toLocaleTimeString() + ' · reload the page to refresh the feature list' + LOAD_NOTE); });
         }, 30000);
       });
     })
