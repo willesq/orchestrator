@@ -92,6 +92,19 @@ and asks.
   and time left. It sits above every Settings section (with **Show Switches**) and at the top of the
   menu bar panel, and the Spaces section in the Settings list gets a warning dot.
 - **Menu bar panel:** the switches in compact form, with **Spaces Settings…** to open the section.
+- **Operator unlocks** (SP-077, [daemon.md](daemon.md#operator-unlock)): `UnlocksModel` reads
+  `ListUnlocks` every 2 s for the whole app, and the menu bar panel lists what it returns below the
+  banner. A pending request shows the command line, its terminal (tty), the process and its
+  executable, its parents, how long it asks for, and what confirming allows (operator commands, but not
+  weakening protection, D-78), with **Deny** and **Confirm…**. Confirm asks for Touch ID or the login password
+  first (`DeviceOwnerConfirmer`, LocalAuthentication; the prompt names only the duration and PID;
+  a cancelled or failed check sends nothing), then sends `ConfirmUnlock`. A confirmed request then
+  shows the code orchd made for it, to type in the terminal that asked (named by its tty), with
+  **Cancel**; an active
+  unlock shows a live countdown and **Lock**. New requests post one notification (a later one
+  replaces it) naming only the process and duration, none while screen-share-safe mode is on.
+  orchd answers these RPCs only for the installed, signed app; an empty or refused list shows
+  nothing.
 - **Outbound rules** (SP-075): Settings → Spaces lists the [outbound terms check's
   rules](hooks.md#outbound-rules) from `ListOutboundRules`: every baseline rule with a switch and what
   it does (marked when switching it off reads commands strictly), then the rules the operator added

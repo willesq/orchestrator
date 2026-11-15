@@ -297,6 +297,24 @@ service Orchd {
   rpc UndoPRLanding(PRLandingRequest) returns (PRLanding);
   // DiscardPRLanding sets a proposal aside, or with restore brings it back.
   rpc DiscardPRLanding(DiscardPRLandingRequest) returns (PRLanding);
+  // RequestUnlock asks Orch.app to confirm operator scope for the calling
+  // process and what it starts, for at most 60 minutes, while a spaces
+  // policy is applied (SP-077, D-71). It waits until Orch.app confirms or
+  // denies, the request lapses, or the caller gives up. Refused inside an
+  // agent session and inside tasks orchd runs.
+  rpc RequestUnlock(RequestUnlockRequest) returns (RequestUnlockResponse);
+  // ListUnlocks lists pending and active unlocks. Orch.app only.
+  rpc ListUnlocks(ListUnlocksRequest) returns (ListUnlocksResponse);
+  // ConfirmUnlock confirms or denies a pending unlock. Orch.app only. A
+  // confirmed unlock shows a code in Orch.app, which the user types in the
+  // requesting terminal (ProveUnlock) before anything is granted.
+  rpc ConfirmUnlock(ConfirmUnlockRequest) returns (ConfirmUnlockResponse);
+  // ProveUnlock sends the code Orch.app showed for a confirmed unlock, from
+  // the process that asked for it; a match grants the unlock.
+  rpc ProveUnlock(ProveUnlockRequest) returns (ProveUnlockResponse);
+  // Lock ends unlocks: from Orch.app the one named, or all; from a
+  // terminal the ones that cover the caller.
+  rpc Lock(LockRequest) returns (LockResponse);
 }
 
 message PingRequest {}
@@ -2130,4 +2148,61 @@ message ChangeOutboundRuleResponse {
 // (SP-060).
 message SearchDirectMessagesRequest {
   SearchRequest search = 1;
+}
+
+// OperatorUnlock is one unlock (SP-077): a terminal's request for operator
+// scope and, once Orch.app confirms it, the grant to the requesting process
+// and its descendants.
+message OperatorUnlock {
+  string id = 1;
+  string state = 2;              // pending | confirmed (waiting for the code) | active
+  int64 for_seconds = 3;         // how long the grant lasts once confirmed
+  int32 pid = 4;                 // the requesting process
+  string command = 5;            // its command line, as orchd read it
+  repeated string ancestry = 6;  // its parents' programs, nearest first
+  int64 requested_at = 7;        // unix seconds
+  int64 expires_at = 8;          // pending and confirmed: when the request lapses; active: when the grant ends
+  string code = 9;               // confirmed, to Orch.app only: the code the user types in the terminal
+  string executable = 10;        // the requesting process's executable, as the kernel reports it
+  string tty = 11;               // its controlling terminal, as the kernel reports it (e.g. ttys003); "" for none
+}
+
+message RequestUnlockRequest {
+  int64 for_seconds = 1;         // 1 to 3600
+}
+
+message RequestUnlockResponse {
+  OperatorUnlock unlock = 1;     // confirmed: send the code Orch.app shows with ProveUnlock
+}
+
+message ProveUnlockRequest {
+  string id = 1;
+  string code = 2;               // as Orch.app shows it, e.g. 482-913
+}
+
+message ProveUnlockResponse {
+  OperatorUnlock unlock = 1;     // active
+}
+
+message ListUnlocksRequest {}
+
+message ListUnlocksResponse {
+  repeated OperatorUnlock unlocks = 1; // pending first, then active, oldest first
+}
+
+message ConfirmUnlockRequest {
+  string id = 1;
+  bool allow = 2;                // false denies
+}
+
+message ConfirmUnlockResponse {
+  OperatorUnlock unlock = 1;     // confirmed, with its code, when allowed; empty when denied
+}
+
+message LockRequest {
+  string id = 1;                 // "" for every unlock the caller may end
+}
+
+message LockResponse {
+  int32 ended = 1;
 }
