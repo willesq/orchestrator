@@ -1,0 +1,14 @@
+{
+  "id": "RC-122",
+  "kind": "follow-up",
+  "topic": "Local files placed only by a checkout's remote are quarantined",
+  "detail": "Security review of SP-023: an agent can make a .git naming any org, so an edit hand-off placed by its remote alone or by a remote stricter than its root, and a repo/owner source under no root, go to quarantine. A genuine org checkout under a personal or public root therefore has its edit hand-offs quarantined until hand-offs carry the editing session's space (SP-029). Registered sources under a root still follow the stricter remote, as session pins do (SP-022). Also consider making SaveSource/RefreshSource for repo/owner kinds operator-only, or limiting repo sources to sources.known_roots.",
+  "source": "https://github.com/willesq/orchestrator/pull/173",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-029",
+    "SP-042",
+    "SP-046"
+  ],
+  "status": "open"
+}

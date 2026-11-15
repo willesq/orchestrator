@@ -30,20 +30,22 @@ var eventSlugs = []struct{ Slug, Event string }{
 	{"cwd-changed", "CwdChanged"},
 }
 
-// Edits implements Adapter: settings.json (hooks, MCP, permissions,
+// Units implements Adapter: settings.json (hooks, MCP, permissions,
 // attribution), ~/.claude.json (MCP, if present, where user-scope servers like
 // serena live), the shell alias, the plist, the orchestrator subagents and
-// skills, and the cc-safety-net marketplace and guard rules. The plugin itself
-// is installed by Steps.
-func (c ClaudeCode) Edits(bins Bins, home string) []Edit {
-	edits := append(instructionEdits(home, c.Name()), []Edit{
-		c.settingsEdit(bins, home),
-		c.claudeJSONEdit(bins, home),
-		aliasEdit(bins.Orch, home),
-		plistEdit(bins.Orchd, home),
-	}...)
-	edits = append(edits, claudeAssetEdits(home)...)
-	return append(edits, safetyNetEdits(home)...)
+// skills, and the cc-safety-net marketplace, guard rules and plugin.
+func (c ClaudeCode) Units(bins Bins, home string) []Unit {
+	return append(instructionUnits(home, c.Name()),
+		Unit{Name: "claude-code settings", Edits: []Edit{c.settingsEdit(bins, home)}, Leftovers: func() []string {
+			return []string{"the credential-file Read deny rules stay in ~/.claude/settings.json (" +
+				strings.Join(credentialReadDeny, ", ") + "): they only narrow what agents may read; delete them by hand if you want"}
+		}},
+		Unit{Name: "claude-code mcp", Edits: []Edit{c.claudeJSONEdit(bins, home)}},
+		aliasUnit(bins.Orch, home),
+		launchdUnit(bins.Orchd, home),
+		claudeAssetsUnit(home),
+		safetyNetUnit(home),
+	)
 }
 
 // claudeJSONEdit updates rag/queue MCP registration in ~/.claude.json ONLY if the
@@ -68,6 +70,10 @@ func (ClaudeCode) claudeJSONEdit(bins Bins, home string) Edit {
 				return nil, "", err
 			}
 			return out, "mcp (~/.claude.json): " + summary, nil
+		},
+		// Never removed: the file is Claude Code's, and install never creates it.
+		Reverse: func(cur []byte) (Undo, error) {
+			return undoJSON(cur, "mcp (~/.claude.json)", false, stripMCP("mcpServers", orchMCPNames()))
 		},
 	}
 }
@@ -112,6 +118,12 @@ func (ClaudeCode) settingsEdit(bins Bins, home string) Edit {
 				return nil, "", err
 			}
 			return out, strings.Join([]string{hookSummary, mcpSummary, permSummary, denySummary, attrSummary}, "\n"), nil
+		},
+		// Reason: toggles are not read. Uninstall takes out everything of
+		// orch's, on or off, and must work without orch.db.
+		Reverse: func(cur []byte) (Undo, error) {
+			return undoJSON(cur, "settings.json", true, strips(stripHooks(bins.OrchHook),
+				stripMCP("mcpServers", orchMCPNames()), stripRules, stripAttribution, stripPluginEnabled))
 		},
 	}
 }
@@ -182,7 +194,8 @@ func applyClaudeHooks(root map[string]any, orchHookBin string, t settings.Toggle
 		}
 		return t.Disabled(ProviderClaudeCode, KindHook, HookIdentity(event, slug))
 	}
-	return applyHooksWithEvents(root, orchHookBin, eventSlugs, claudeHookFields, skip)
+	events, note := applyToolHookSwitch(root, eventSlugs, ProviderClaudeCode)
+	return joinSummary(applyHooksWithEvents(root, orchHookBin, events, claudeHookFields, skip), note)
 }
 
 // applyHooksWithEvents registers orch-hook for every event, dropping prior

@@ -1,0 +1,13 @@
+{
+  "id": "RC-1001",
+  "kind": "follow-up",
+  "topic": "No RPC discards a draft",
+  "detail": "Review saves setup's policy as a draft so orchd validates it. Cancel then re-saves the applied document, which clears drift, but only when a policy is applied and no other draft was pending; on a first setup, or over a pending (for example agent-saved) draft, the setup draft stays as the newest revision, unapplied, and the pane says so. Proposed: a DiscardSpacesDraft RPC (orchd.proto change), or saving drafts that DiffSpaces can compare without making them the newest revision.",
+  "source": "https://github.com/willesq/orchestrator/pull/193",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-052",
+    "SP-020"
+  ],
+  "status": "open"
+}

@@ -824,6 +824,42 @@ write is stored again (embedded once) rather than skipped as unchanged.
 collection, every chunk moved to one of four space collections, Qdrant 1.17.1 on this Mac), a
 relabel took 35.7 s (`TestIntegrationRelabel40k`, `ORCH_QDRANT_BENCH=1`).
 
+## Store moves of the spaces switch
+
+When memory spaces are switched off ([daemon.md](daemon.md#spaces-switch)), the store becomes one
+collection again, as it was before spaces (`internal/rag/spacemove.go`):
+
+- **Merge (switching off).** `MergeSpaces` moves every chunk of every `<base>__<space>` collection,
+  `quarantine` included, into the base collection. It then deletes the emptied collections. A
+  collection still holding a chunk that could not move is kept.
+- **Split (switching on).** `SplitSpaces` moves every base chunk whose stored `space` is set and
+  is not `shared` to that space's collection. It places nothing; a chunk whose stored space is
+  not a space name stays and is counted as failed.
+- **No re-embedding.** Both moves reuse the relabel's copy path (`sourcePoints`, `copyPoints`,
+  `pruneChunksFrom`). Payloads and vectors are written as they are, so every chunk keeps `space`,
+  `labels_v` and `origin`. A collection the split creates is hybrid, as a relabel's are.
+- **Resumable without a ledger.** Each source is copied and counted, then deleted where it was,
+  under the source lock live writes take. A stopped run leaves two copies with the same point
+  IDs, and the next run copies over them, then deletes. A copy at the destination that a later
+  write stored (later `ingested_at`, another `ingest_hash`) wins.
+- **Serialized.** A move refuses while a hybrid migration has a shadow. orchd holds its migration
+  lock for the whole run.
+
+**Reads during a move.** While spaces are off, every read covers every collection, so a source
+mid-move is still found. While a move runs, a search keeps one copy of each point ID
+(`onePerPoint`, base first), so nothing is found twice.
+
+**Quarantine.** Quarantined chunks keep `space: quarantine` but are readable while spaces are
+off, as everything was before spaces. The split moves them back into quarantine's collection.
+
+**Writes made while off** are stored unplaced (`space` `shared`, `labels_v` 0) in the base. After
+the split, the relabel places them under the applied policy.
+
+**Tests.** `TestSpaceMoveRoundTrip` and its neighbours cover the round trip with every payload and
+vector kept and zero embeds, interruption and resume in both directions, and a search equal to a
+single store. `TestIntegrationSpaceMoveRoundTrip` runs the same on its own engine (port 6481,
+collections `spaces-off-*`, `ORCH_QDRANT_BENCH=1`).
+
 ## Quarantine
 
 Quarantine is the space of content orchd could not place (INV-03), stored in its own collection

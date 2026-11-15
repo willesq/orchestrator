@@ -1,0 +1,14 @@
+{
+  "id": "RC-31",
+  "kind": "decision",
+  "topic": "Queued tasks may call RecordToolEvent",
+  "detail": "RecordToolEvent was added to taskCallable so tool calls of Claude Code/Codex runs started by the queue are logged; without it orchd's queued-caller guard refused them. The event is attributed to the task orchd resolved, never to the session_id it names. Confirm.",
+  "source": "https://github.com/willesq/orchestrator/pull/150",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-014",
+    "SP-025"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-09 in the SP-014 session; see D-31."
+}

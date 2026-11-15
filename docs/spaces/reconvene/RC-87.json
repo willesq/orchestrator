@@ -1,0 +1,14 @@
+{
+  "id": "RC-87",
+  "kind": "decision",
+  "topic": "What the hooks switch does",
+  "detail": "D-40 made the tool hooks a switch. Implemented as a fifth layer 'hooks' (on/off) beside the four of SP-070.1.a1. orch settings refuse turning the Claude Code tool hooks on or off; orch install writes them whatever a settings toggle says and leaves them out only while the switch is off (or when the switches cannot be read, it writes them). Switching hooks off has orchd turn Claude Code's PreToolUse and CwdChanged orch-hook entries off through the settings service, and on again when switched back or when a timer reverts. Codex's hooks.json is not managed by orch settings, so the switch does not remove Codex's pre-tool-use hook; Codex events keep being logged. Confirm this, or ask for Codex coverage.",
+  "source": "https://github.com/willesq/orchestrator/pull/167",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-070",
+    "SP-041",
+    "SP-072"
+  ],
+  "status": "open"
+}

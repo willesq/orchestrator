@@ -128,6 +128,8 @@ type Service struct {
 	// this process), so a write placed before a retag is not stored after it.
 	retagMu   sync.Mutex
 	retagGens map[string]uint64
+	// moves is set while a store move of the spaces switch runs.
+	moves moveFlag
 	// progress is set while a migration copies sources.
 	progress atomic.Pointer[MigrationProgress]
 	// chunkTokens and overlap size chunks in model tokens.

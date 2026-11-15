@@ -1,0 +1,31 @@
+{
+  "id": "SP-025",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "2719d5124f3a0303f20df72621dfd4ae2097ebdc",
+  "verified_at": "2026-11-15T04:35:18Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-025-read-path-spaces",
+  "pr": "https://github.com/willesq/orchestrator/pull/188",
+  "evidence": {
+    "SP-025.1": [
+      "a1: TestReadPathsKeepSpacesApart (internal/daemon/readscope_test.go): acme, globex, oss (public) and personal hold 200 chunks each, plus quarantine and pre-spaces chunks. From a session in acme, each of globex's 200 chunks is queried with its verbatim text and URI on every read path: Search (6 request shapes: hybrid, dense, plain ranking, source_uri, tags, scope with all_tags), ListSources (3), GetDocument, ListDocs, and auto-RAG, session recall and 'orch rag why' through hook.Explain over a gRPC connection with a globex cwd. Cross-space results: 0; requests to globex's, quarantine's and the base collection: 0.",
+      "a1 (real engine): TestIntegrationReadPathsRealQdrant (internal/daemon/readscope_it_test.go, gated by ORCH_QDRANT_IT=1): the same 4 x 200 chunks written through rag.Service.IngestText into hybrid collections on the native qdrant engine v1.17.1 (own ports and storage, collections prefixed sp-025-it). Cross-space results across all read paths: 0 for the 200 globex chunks; a session in globex finds its own chunk 20 of 20 times. Run 2026-11-14, 106 s, pass.",
+      "a2: TestPublicReadEverywhere: oss's chunk is returned by Search and GetDocument to sessions in acme, globex and personal, to a session with no space, a quarantined pin, an unidentified caller and an operator with no evidence; the last four read nothing beyond public.",
+      "a3: TestCallerFiltersOnlyNarrow: from acme, source_uri, tags, all_tags, scope and source_type naming globex's content return 0 hits, a URI prefix lists 0 sources, GetDocument is NotFound; a tag filter on acme's own content returns only acme's.",
+      "a4: TestMemoryFilterOffIsLogged: with memory filtering switched off (SP-070), globex's chunk is returned to acme and 11 of 11 read responses are logged 'Search for session sess-acme: not enforced (memory filtering is switched off)' (and likewise per RPC); switched on again, nothing leaks.",
+      "a5: TestJobReadsPersonalOnlyWhenOptedIn (acme, which lists personal, reads it; globex does not) and TestJobNeverReadsAnotherJob (acme and globex never read each other, personal reads neither): 2 pass.",
+      "a7 (as amended by D-71, 2026-11-14): TestOnlyOrchAppIsTheOperator: under a policy, Orch.app recognized by its code signature reads every collection; a command typed at a terminal, a process with a pty of its own (RC-705), a setsid double fork, a signed copy outside the installed folder, the app without the hardened runtime, running other code than its bundle's, with no code hash, installed in both folders, not installed, or in a build that cannot check signatures read public only. TestAppSignatureOfARealProcess checks real ad-hoc-signed processes over a socket: the hardened app in the installed folder passes; without the runtime, with another identifier, run from a copy, or re-signed on disk after starting it fails. TestOperatorOnlyRPCsNeedOrchApp and TestUnprovenOperatorGetsTaskLimits: SetEnforcement, DiffSpaces, ApplySpaces and every operatorActions RPC (unary and stream) are refused to those callers and allowed to Orch.app; with no policy a terminal is the operator as before.",
+      "a6: TestDetachedHarnessReadsNoMore: the SP-041 guard (spaces.Decide, block-other-jobs) refuses 'cd <globex>/repo && nohup claude ... &' and '(cd <globex>/repo; setsid claude &)' from a session in acme; a fake claude detached under launchd in globex's folder gets no pin and reads public only; a claude nested in the session copies acme's pin and reads acme's set only. Residual D-38 cases are RC-702.",
+      "a8: TestTasksReadTheirDispatchersSpaces: Dispatch records the dispatching session's space (acme, globex), the operator's working-directory placement (acme, personal; quarantine with no directory), and nothing for an operator with no evidence or an unpinned harness; the space reaches the runner (agentTask) and a task reads what that space reads (acme's task reads personal, never globex), writes there (placed in acme), and an untracked task or one with no space reads public only. Also TestDispatchRecordsReadSpace (internal/queue).",
+      "Also: TestStaleLabelsAreUnreadable (INV-08: chunks with an earlier, later or missing labels_v are unreadable on every read path until relabelled; the operator still sees them), TestNoPolicyReadsAsBefore (INV-10), TestPayloadLayerAndFailures (second layer; store errors without collection names), TestReadScopeFailsClosed (broken policy reads nothing). go test ./..., go vet ./... and make cover (all files >= 80%) pass.",
+      "Independent verifier, 2026-11-14, at 2719d51: a1 to a8 and SP-025.2 a1 pass, including the real-engine run (0 cross-space results, 106 s); four deliberate breakages each failed the matching tests; go test, go vet, make cover (59 daemon files listed), gofmt pass; INV-10 holds.",
+      "DOD-6: security reviews of the diff leave no open critical or high finding; the one open medium, RC-710 (pre-existing code outside this diff), is an accepted risk until SP-078 (D-74), so DOD-6 passes on that accepted risk.",
+      "After merging origin/main at cd1c2bb (SP-071 retag, proto and migration 0031): the merge changed no SP-025 read-path code (it touched write paths: placing.go, Ingest's mayReplace, rag write generations); the registry test caught the new RetagSource RPC, now classed operator-only. go test ./..., go vet ./..., gofmt and make cover (all files >= 80%, 60 daemon files listed) pass, so the verifier was not re-run."
+    ],
+    "SP-025.2": [
+      "a1: TestEveryRPCHasASpaceDecision (internal/daemon/readspaces_registry_test.go): every RPC in Orchd_ServiceDesc must have an entry in readSpaceDecisions (filtered, operator, own, records or none) with a reason; entries must name served RPCs; operator-only entries must be refused to queued tasks; exactly Search, ListSources, GetDocument and ListDocs are filtered. TestRegistryCatchesAMissingRPC shows an added RPC with no entry is caught."
+    ]
+  }
+}

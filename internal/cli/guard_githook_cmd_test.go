@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	osexec "os/exec"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/willesq/orchestrator/internal/config"
+	"github.com/willesq/orchestrator/internal/db"
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/spaces"
 )
@@ -81,6 +84,11 @@ func gitHookRepo(t *testing.T) (dir, marks string) {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv(gitHookCLIEnv, "1")
+	// The install's backups and hook registry stay out of the real data
+	// dir; a test's own snapshot directory is kept.
+	if os.Getenv("ORCH_DATA_DIR") == "" {
+		t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	}
 	dir, _ = filepath.EvalSymlinks(t.TempDir())
 	bare := filepath.Join(t.TempDir(), "remote.git")
 	marks = filepath.Join(t.TempDir(), "marks")
@@ -232,7 +240,9 @@ func TestGitHookPushRefused(t *testing.T) {
 }
 
 // TestGitHookSwitchAndPolicy: the terms layer switched off allows; with
-// nothing configured the hooks allow; an unreadable snapshot refuses.
+// nothing configured the hooks allow; an unreadable snapshot allows while
+// memory spaces are off (no store says otherwise) and refuses once orch.db
+// says they are on.
 func TestGitHookSwitchAndPolicy(t *testing.T) {
 	gitHookSnapshot(t, spaces.SwitchOff)
 	dir, _ := gitHookRepo(t)
@@ -245,6 +255,16 @@ func TestGitHookSwitchAndPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeFile(t, spaces.GuardSnapshotPath(paths.GuardDir()), "{not json")
+	mustGit(t, dir, "commit", "-q", "--allow-empty", "-m", "zephyr with spaces off")
+
+	conn, err := db.Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	if err := config.ApplyStore(context.Background(), conn, map[string]any{config.KeySpacesEnabled: true}, true, "test"); err != nil {
+		t.Fatal(err)
+	}
 	out, err := gitIn(dir, "commit", "-q", "--allow-empty", "-m", "plain")
 	if err == nil || !strings.Contains(out, "rule outbound_unchecked") {
 		t.Fatalf("unreadable snapshot: %v\n%s", err, out)

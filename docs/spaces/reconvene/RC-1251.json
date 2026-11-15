@@ -1,0 +1,12 @@
+{
+  "id": "RC-1251",
+  "kind": "decision",
+  "topic": "The operator's views are not labelled with each record's space",
+  "detail": "SP-026's summary says the operator still sees everything, labelled. orchd now decides each record's space (a PR's owner's space, a task's recorded space), but PullRequest, GitHubItem, PRReview, Task and DocOwner have no field to carry it, and adding fields to existing orchd.proto messages needs the coordinator's field block. The acceptance items do not require labels, so SP-026 ships without them. Options: (a) add an optional 'space' field to those messages and show it in Orch.app and the CLI (a follow-up feature, with a field block); (b) leave records unlabelled.",
+  "source": "https://github.com/willesq/orchestrator/pull/200",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-026"
+  ],
+  "status": "open"
+}

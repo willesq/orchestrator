@@ -1,0 +1,13 @@
+{
+  "id": "RC-1054",
+  "kind": "follow-up",
+  "topic": "displaySafe lets line and paragraph separators through",
+  "detail": "From SP-054's security review (Low). OrchKit's displaySafe escapes control and format characters but not U+2028/U+2029 (Zl/Zp), so a command, draft value or message could fake extra lines in a row; long runs of combining marks are not capped either. It is a shared helper used by every pane, so it was left for its own change.",
+  "source": "https://github.com/willesq/orchestrator/pull/194",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-054",
+    "SP-051"
+  ],
+  "status": "open"
+}

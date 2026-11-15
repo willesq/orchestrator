@@ -331,7 +331,7 @@ func TestAdaptersShipAssets(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.adapter.Name(), func(t *testing.T) {
 			var agents bool
-			for _, e := range tt.adapter.Edits(bins, home) {
+			for _, e := range BuildPlan(tt.adapter, bins, home).Edits {
 				agents = agents || strings.HasPrefix(e.Path, filepath.Join(home, ".claude", "agents"))
 				// gittree is owned outside orch; no target installs helper scripts.
 				if strings.HasPrefix(e.Path, filepath.Join(home, ".config", "orch", "bin")) {

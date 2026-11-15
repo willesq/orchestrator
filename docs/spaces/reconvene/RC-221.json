@@ -1,0 +1,12 @@
+{
+  "id": "RC-221",
+  "kind": "decision",
+  "topic": "Encoded content in outbound text (accepted risk, D-60)",
+  "detail": "Accepted under D-60: the outbound terms check matches text as written. A term inside compressed, base64, UTF-16 or otherwise encoded content, a binary file over 1 MiB or past the 64th binary file of one check, or a binary file only a merge commit adds is not found.",
+  "source": "https://github.com/willesq/orchestrator/pull/177",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-044"
+  ],
+  "status": "open"
+}

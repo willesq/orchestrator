@@ -1,0 +1,13 @@
+{
+  "id": "RC-1252",
+  "kind": "follow-up",
+  "topic": "Record files on disk still hold every space (event streams, PR cache, orch.db)",
+  "detail": "SP-026 filters what orchd returns and what the hook puts in a session's context, and the CLI lists under a policy now come from orchd, but the event streams (<data>/events/*.jsonl), the PR cache (pr_babysitter_state.json) and orch.db (task ledger, docs registry) stay readable by any process of the user, so an agent can read them directly. This is RC-302 option (a)'s file half: deny orch's data directory (except what a session needs) in each job's OS sandbox profile (SP-046), or split the files per space. Also: an event keeps the space it was written with, so after the operator binds an org to another space its earlier events still show to the first space's sessions until they age out of the digest.",
+  "source": "https://github.com/willesq/orchestrator/pull/200",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-046",
+    "SP-026"
+  ],
+  "status": "open"
+}

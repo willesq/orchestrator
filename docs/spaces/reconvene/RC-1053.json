@@ -1,0 +1,13 @@
+{
+  "id": "RC-1053",
+  "kind": "follow-up",
+  "topic": "Review finds a problem's line by parsing orchd's message",
+  "detail": "SpacesProblem carries rule, space and message. The app places each problem on its line from the rule and the value the message quotes (Go %q), or the public_paths entry number; a reworded message makes the problem unplaced (shown apart, Apply still blocked, so it fails safe). Add the field and value index to SpacesProblem (orchd.proto change) and use them.",
+  "source": "https://github.com/willesq/orchestrator/pull/194",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-054",
+    "SP-020"
+  ],
+  "status": "open"
+}

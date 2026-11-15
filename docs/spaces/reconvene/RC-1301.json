@@ -1,0 +1,13 @@
+{
+  "id": "RC-1301",
+  "kind": "follow-up",
+  "topic": "SP-029 security review lows and accepted limits",
+  "detail": "From two security-audit rounds on PR #196 (mediums fixed: PinSession now refuses a new pin under a task's session ID while spaces are configured, an untrusted pin under such an ID places nothing and gets no guard file, the guard pin file is written under the pin registry's lock and removed when it cannot be written). Remaining: (1) a resumed Codex task replaces any pin under its stored thread ID; thread IDs come from the codex CLI's own event stream, so this is accepted. (2) The hook's guard reads the pin file named by the payload's session_id without checking the process, so a nested harness an agent starts with --session-id or --resume of another session's ID (a task's ID is derivable from its task ID) borrows that pin file for guard decisions; orchd's memory enforcement resolves by process and is unaffected, and the OS sandbox still applies. This predates SP-029 for interactive session IDs. (3) Resuming by hand the session of a task that ran before spaces were configured is refused, since that task never got a pin.",
+  "source": "https://github.com/willesq/orchestrator/pull/196",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-029",
+    "SP-041"
+  ],
+  "status": "open"
+}

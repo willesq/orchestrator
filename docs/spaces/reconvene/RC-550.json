@@ -1,0 +1,13 @@
+{
+  "id": "RC-550",
+  "kind": "follow-up",
+  "topic": "Agents can skip the git hooks with --no-verify",
+  "detail": "SP-045's hooks run for every commit and push in a repository, but git commit --no-verify and git push --no-verify skip them (git -c core.hooksPath=... is already refused by SP-044's check). Proposed: while a checkout has orch's hooks installed, the tool hook's outbound check refuses --no-verify (and -n for commit) on git commit, push and merge in agent sessions, so only the user's own terminal can skip them.",
+  "source": "https://github.com/willesq/orchestrator/pull/184",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-045",
+    "SP-044"
+  ],
+  "status": "open"
+}

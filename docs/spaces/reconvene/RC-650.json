@@ -1,0 +1,12 @@
+{
+  "id": "RC-650",
+  "kind": "decision",
+  "topic": "D-69 also counts the default gh login's folder (SP-046)",
+  "detail": "The 2026-11-14 security audit of PR #186 (medium) found that D-69's text ('another space's own login folder') leaves out the default gh login: under auto a job naming its own gh profile, alone among spaces on the default login, got no rules, so its shell could use the default account. Implemented the stricter reading: auto also writes the rules when they deny the default gh login's folder (a space naming its own gh profile, and checkouts of no space), consistent with D-61 ('a space that names its own gh profile reads only that profile'). Confirm, or choose D-69's literal text.",
+  "source": "https://github.com/willesq/orchestrator/pull/186",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

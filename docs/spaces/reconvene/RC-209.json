@@ -1,0 +1,13 @@
+{
+  "id": "RC-209",
+  "kind": "follow-up",
+  "topic": "D-59 and orchd's GitHub routing for isolated spaces without a gh profile",
+  "detail": "D-59 says orch uses whichever gh login is already authenticated for every space. orchd's gh routing from SP-063 (internal/daemon/ghprofiles.go, docs/internals/config.md 'Which login a call runs as') still makes no gh call at all for an org bound to an isolated space that names no gh_config_dir: its docs are not synced, its PRs are dropped from the PR watcher and reviews are refused; docs/INSTALL.md still tells users to give each job its own account. SP-046 did not change this (outside its scope). Decide whether SP-063's rule changes under D-59 (and in which feature).",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-063",
+    "SP-074"
+  ],
+  "status": "open"
+}

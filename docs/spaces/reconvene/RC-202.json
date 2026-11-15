@@ -1,0 +1,12 @@
+{
+  "id": "RC-202",
+  "kind": "follow-up",
+  "topic": "Only the orch binaries beside orchd are protected",
+  "detail": "From the RC-110 security review (low): spaces.GuardProtection protects orch, orchd and orch-hook in the directory orchd runs from (under brew services /opt/homebrew/opt/orch/bin, whose links resolve to the same Cellar files as the bin/orch-hook link harness settings run, so writes through either are refused). An orch-hook installed elsewhere (orch install --bin-dir) is not protected, and moving the whole directory that holds the settings' link (mv /opt/homebrew/bin ...) and planting a new orch-hook is not refused. Proposed: protect the hook command path orch install writes into harness settings (recorded at install, or read from the settings when the snapshot is written).",
+  "source": "https://github.com/willesq/orchestrator/pull/175",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-042"
+  ],
+  "status": "open"
+}

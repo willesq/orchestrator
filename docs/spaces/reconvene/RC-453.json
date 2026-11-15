@@ -1,0 +1,12 @@
+{
+  "id": "RC-453",
+  "kind": "follow-up",
+  "topic": "Refusal event lows from the SP-048 security audit",
+  "detail": "Low/info, accepted for now: (1) any process running as the user can append well-formed refusal lines and so trigger notifications (it can post notifications itself anyway); (2) a refusal write still running at the hook's 100 ms deadline is cut off when the hook exits and that event is lost (the command log keeps the refusal); a partial line is skipped by readers; (3) every event stream is now opened with O_NOFOLLOW|O_NONBLOCK, so a stream file that is itself a symlink is no longer written; (4) the spaces stream, like the other streams, has no size cap or rotation (the app reads at most 1 MiB per poll, from its end at launch); (5) after the app skips a line over 1 MiB, the rest of that line is parsed as the next and dropped.",
+  "source": "https://github.com/willesq/orchestrator/pull/179",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-048"
+  ],
+  "status": "open"
+}

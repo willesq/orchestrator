@@ -1,0 +1,12 @@
+{
+  "id": "RC-1401",
+  "kind": "follow-up",
+  "topic": "Cost of the pane's stale count is unmeasured",
+  "detail": "The Spaces pane counts stale chunks with Relabel without apply each time it shows and after each apply. That count places every stale source again, which can ask GitHub for a repo's visibility, and holds orchd's migration lock while it runs. Its time on a large store has not been measured; if it is slow, count less often or add a cheap stale-count read.",
+  "source": "https://github.com/willesq/orchestrator/pull/202",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-079"
+  ],
+  "status": "open"
+}

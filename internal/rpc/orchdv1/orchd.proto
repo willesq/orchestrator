@@ -546,6 +546,29 @@ message SpacesStatus {
   // counts (SP-031) is what the spaces hold, as the caller may see it;
   // unset with no policy configured.
   SpacesCounts counts = 10;
+  // state is the memory spaces switch (spaces.enabled): "on", "off", or
+  // "turning_on" while the store is split back into the spaces' collections
+  // before enforcement starts. Empty from an orchd that predates the
+  // switch, which always enforces.
+  string state = 11;
+  // store_move is the switch's store move while one runs, or the last one
+  // when it stopped with an error; unset otherwise.
+  SpacesStoreMove store_move = 12;
+}
+
+// SpacesStoreMove is how far the spaces switch's store move has got: a
+// merge of every space's collection into the base (spaces turned off) or a
+// split of the base back into them (turned on). It names no source or space.
+message SpacesStoreMove {
+  string direction = 1;       // "merge" or "split"
+  bool running = 2;
+  int32 collections = 3;      // collections read from
+  int32 collections_done = 4;
+  int32 sources = 5;          // moved so far
+  int32 chunks = 6;
+  int32 failed = 7;           // chunks left where they were; the next run retries
+  int64 started_at = 8;       // unix seconds
+  string error = 9;           // why it stopped; it runs again
 }
 
 // QuarantineCounts is how much content quarantine holds. It never names a

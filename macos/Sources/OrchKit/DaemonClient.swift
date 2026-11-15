@@ -54,7 +54,8 @@ public final class DaemonClient: DaemonAPI, MemoryAPI, ControlAPI, TasksAPI, Git
             subsystems: response.subsystems.map {
                 Subsystem(name: $0.name, state: $0.state, detail: $0.detail, error: $0.error, restarts: Int($0.restarts),
                           startedAt: date(fromUnix: $0.startedAt), lastBeat: date(fromUnix: $0.lastBeat))
-            }
+            },
+            spacesState: response.spaces.state
         )
     }
 

@@ -1,0 +1,12 @@
+{
+  "id": "RC-1305",
+  "kind": "follow-up",
+  "topic": "SP-029 a3 (files outside roots) limits and security lows",
+  "detail": "From two security-audit rounds on PR #196 (the path-claim and eviction highs and both mediums were fixed by matching the hash of the text a Write call carried against the text ingested, applying it only to edit hand-offs, and re-checking the recorded space against the applied policy). Remaining: (1) only a Write call carries the whole text, so a file written or changed by Edit, a shell command or a program stays in quarantine; registered folders (sources refresh) and client Ingest are not placed by the record; with the command log off nothing is recorded. (2) Low: a guess-confirmation oracle: a session can send Write claims with guessed whole texts for a path under no root and hand the path off; on a match the file lands in its space, confirming the guess (only for files short enough to guess whole, and only when no other space recorded the same text). Fix: tie the record to the hand-off's session, or record successful PostToolUse events. (3) Low: a row records a space by name, so a later policy reusing that name for another job honours it within 30 days; store a space identity or revision. (4) Low: paths are compared in lower case, also on case-sensitive volumes; harmless with the hash match. (5) After the 30-day expiry a relabel quarantines such a file.",
+  "source": "https://github.com/willesq/orchestrator/pull/196",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-029"
+  ],
+  "status": "open"
+}

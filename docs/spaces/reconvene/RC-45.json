@@ -1,0 +1,14 @@
+{
+  "id": "RC-45",
+  "kind": "decision",
+  "topic": "A session can hide what it ran by flooding its own queue share",
+  "detail": "Each harness process may hold a quarter of the command log's queue; once it is full its further events are dropped and only a gap record with the count remains. Accepted while the guard only logs (D-30); SP-041 fails closed when enforcing, so a refused call is still decided. Confirm, or decide whether refusals and guard decisions must never be dropped.",
+  "source": "https://github.com/willesq/orchestrator/pull/152",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-041",
+    "SP-048"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: refusals and guard decisions are never dropped; see D-37 and SP-041.1.a4."
+}

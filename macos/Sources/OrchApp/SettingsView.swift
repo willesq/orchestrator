@@ -106,8 +106,20 @@ struct SettingsView: View {
             .onAppear { github.start() }
             .onDisappear { github.stop() }
         case .spaces:
-            SpacesSettingsView(enforcement: enforcement, validator: placement)
+            // The switch first; the policy's settings only while spaces are
+            // on (an orchd without the switch always enforces).
+            if config.fields(section: "Spaces").first(where: { $0.key == "spaces.enabled" })?.boolValue ?? true {
+                VStack(spacing: 0) {
+                    ConfigForm(config: config, sections: navigator.settingsSection.configSections)
+                        .frame(maxHeight: 140)
+                    Divider()
+                    SpacesSettingsView(enforcement: enforcement, validator: placement)
+                }
                 .navigationTitle("Spaces")
+            } else {
+                ConfigForm(config: config, sections: navigator.settingsSection.configSections)
+                    .navigationTitle("Spaces")
+            }
         case .claude:
             ClaudeView(model: claude)
         case .safetyNet:

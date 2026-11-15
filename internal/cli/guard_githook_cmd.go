@@ -52,6 +52,11 @@ func newGitHookCmd() *cobra.Command {
 			if installHooks == uninstall {
 				return errors.New("use exactly one of --install or --uninstall")
 			}
+			// Reason: removing hooks stays possible with spaces off; adding
+			// them would check commits for terms nothing else enforces.
+			if installHooks && cliSpacesOff() {
+				return errCLISpacesOff
+			}
 			dir, err := gitHooksDir(c.Context(), repo, hooksDir)
 			if err != nil {
 				return err
@@ -74,7 +79,21 @@ func newGitHookCmd() *cobra.Command {
 				plan.Print(c.OutOrStdout())
 				return nil
 			}
-			return plan.Apply(c.OutOrStdout(), filepath.Join(paths.DataDir(), "backups", "git-hooks"))
+			// Recorded so `orch install` keeps these hooks current and
+			// `orch uninstall` removes them: before an install, so a hook
+			// is never left unrecorded; after an uninstall, once gone.
+			if !uninstall {
+				if err := install.RecordGitHookDir(paths.DataDir(), dir, true); err != nil {
+					return fmt.Errorf("record %s for orch uninstall: %w", dir, err)
+				}
+			}
+			if err := plan.Apply(c.OutOrStdout(), filepath.Join(paths.DataDir(), "backups", "git-hooks")); err != nil {
+				return err
+			}
+			if uninstall {
+				return install.RecordGitHookDir(paths.DataDir(), dir, false)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&installHooks, "install", false, "add orch's commit-msg and pre-push hooks")
@@ -118,6 +137,11 @@ func newGitHookRunCmd() *cobra.Command {
 		Short: "Run the outbound terms check as a git hook (what the installed hooks call)",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			// With spaces off, hooks installed earlier let everything
+			// through, as git did before them.
+			if cliSpacesOff() {
+				return nil
+			}
 			in, err := gitHookInput(c, args)
 			if err != nil {
 				return err

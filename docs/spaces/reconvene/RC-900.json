@@ -1,0 +1,14 @@
+{
+  "id": "RC-900",
+  "kind": "follow-up",
+  "topic": "Wire quarantine assign to SP-071's RetagSource",
+  "detail": "'orch quarantine assign' calls a Retagger interface (source_uri, space, confirm, expect_from=quarantine). Until SP-071 merges, the build's Retagger refuses and moves nothing, and SP-028.1.a1's assign part is tested against a fake retag that records the override. After SP-071 merges: implement the Retagger with the RetagSource RPC and add a test through orchd showing the source leaves quarantine and the override is recorded.",
+  "source": "https://github.com/willesq/orchestrator/pull/192",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-028",
+    "SP-071"
+  ],
+  "status": "resolved",
+  "note": "Resolved in https://github.com/willesq/orchestrator/pull/192 after SP-071 merged: assign uses RetagSource (expect_from quarantine, --confirm), tested end to end through orchd by TestQuarantineAssignThroughOrchd."
+}

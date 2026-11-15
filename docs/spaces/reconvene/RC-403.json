@@ -1,0 +1,14 @@
+{
+  "id": "RC-403",
+  "kind": "follow-up",
+  "topic": "SP-030 security audit lows and design choices",
+  "detail": "(1) orchd's log names a repo or checkout path whose docs left public; tasks can read that log, but the content was public until then. (2) Folder comparison is case-insensitive, matching how roots are matched. (3) An edit hand-off that would be public goes to public_root_sessions, not to the editing session's space, until hand-offs carry the session (SP-029). (4) With an applied policy that no longer verifies, public copies are not moved; readers must treat a stale labels_v as unreadable (INV-08, SP-027). (5) The harness settings of a checkout quarantined by no_public_proof still follow its public root, unless GitHub does not confirm its repo public, as before SP-030. (6) Round 3 audit lows: a public-bound org rebound to a non-public space keeps its verified-public repos' public docs until their HEAD moves, because the leave pass skips repos GitHub reports public; a broken policy moves nothing; the leave passes read one stored copy per doc (a source registered at / sweeps every checkout doc, with repo lookups); an agent can add a .git with a public remote so its own edit hand-off under a public root goes to public_root_sessions instead of quarantine (pre-SP-030 it went to public). (7) Round 4 audit lows: the docs owner check turns any CheckOrg error, a network failure included, into a quarantined owner, so a temporary GitHub error takes a whole public org out of public (fails closed, re-embeds on recovery); the hourly sources sweep places a stored web page by its registered URL, so a page stored public through a redirect before SP-030 whose source was removed stays public; the sweep reads one stored copy per sources doc each hour.",
+  "source": "https://github.com/willesq/orchestrator/pull/180",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-027",
+    "SP-029",
+    "SP-030"
+  ],
+  "status": "open"
+}

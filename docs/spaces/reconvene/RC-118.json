@@ -1,0 +1,13 @@
+{
+  "id": "RC-118",
+  "kind": "decision",
+  "topic": "How strict the outbound terms check is",
+  "detail": "While the terms layer is on, SP-044 fails closed (outbound_unchecked) on any outbound command it cannot read in full: a variable or command substitution in it (except $HOME and $(cat <<'EOF' ...)), a command name built from a variable, loops, eval/xargs, git -c beyond a small allowlist, an earlier command that changes a remote or config, gh fed from a pipe. A gh write without -R counts every remote of the checkout (and GH_REPO) as a destination, so a fork whose upstream is another space's refuses the session's own terms in gh pr create. After git add/commit in the same call a push also checks the work tree, untracked files and every branch. Confirm this strictness, or say which cases should be allowed.",
+  "source": "https://github.com/willesq/orchestrator/pull/177",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-044"
+  ],
+  "status": "resolved",
+  "note": "2026-11-14: settled by D-60 (best-effort, loosened baseline in SP-044; configurable rules in SP-075)."
+}

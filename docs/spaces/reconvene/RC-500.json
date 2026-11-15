@@ -1,0 +1,13 @@
+{
+  "id": "RC-500",
+  "kind": "follow-up",
+  "topic": "Screen-share-safe mode does not cover the menu bar panel",
+  "detail": "SP-051's screen-share-safe mode (D-21) hides every pane but Spaces in the main window, disables the command palette and stops notifications, but the menu bar panel (TrayMenu.swift, outside SP-051's files) still lists every space's PRs and needs-you items when opened. Proposed: while SpacesOverviewModel.shareSafe is set, the panel shows only the enforcement banner and a 'Sharing only <space>' line, or filters PRs by owner using ListSpaces' github_orgs.",
+  "source": "https://github.com/willesq/orchestrator/pull/181",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-051",
+    "SP-055"
+  ],
+  "status": "open"
+}

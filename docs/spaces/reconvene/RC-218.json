@@ -1,0 +1,12 @@
+{
+  "id": "RC-218",
+  "kind": "follow-up",
+  "topic": "Security audit lows and info on the D-61 rules",
+  "detail": "From the 2026-11-14 audits of PR #171: (1) deny paths are written as the policy spells them plus their real path, not their on-disk case; a root spelled in another case relies on the sandbox matching case-insensitively (not measured); (2) samePlace compares case-sensitively (safe: the default folder is then denied, not exposed); (3) spaces.SwitchHistory also returns sandbox-setting entries, whose Layer is not a layer (no caller today); (4) Loosening does not read ~/.claude settings, managed settings or other --settings files, does not expand '~user/', and cleans '..' before resolving links. Fixed in the same PR: link and real forms of an allowRead are dropped together, an allowRead with a pattern character is never written, a setting that does not verify or cannot be read is on, and settings files are read without following links, blocking or reading more than 4 MiB.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

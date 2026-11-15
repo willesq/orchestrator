@@ -1,0 +1,13 @@
+{
+  "id": "RC-852",
+  "kind": "follow-up",
+  "topic": "Retag has no Orch.app control, no way to clear a retag, and its row outlives a deleted source",
+  "detail": "SP-071's summary mentions the UI; this lane added the RPC and 'orch spaces retag' only. A retag cannot be cleared (the operator can only retag the source again), and deleting a source (DeleteSource, a docs purge or a prune) leaves its spaces_retags row, so a later write of the same URI follows the old retag under the rules in docs/internals/memory.md 'Retag'. Proposed: a retag control in Orch.app's Spaces pane (SP-028's quarantine view can call RetagSource with expect_from), 'orch spaces retag --clear', and removing the row when its source is deleted.",
+  "source": "https://github.com/willesq/orchestrator/pull/191",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-071",
+    "SP-028"
+  ],
+  "status": "open"
+}

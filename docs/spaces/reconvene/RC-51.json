@@ -1,0 +1,13 @@
+{
+  "id": "RC-51",
+  "kind": "follow-up",
+  "topic": "Sessions of subagents and /clear stay listed until their process exits",
+  "detail": "Pins a subagent or an earlier /clear session copied share the harness process; those that get no SessionEnd show as active or idle rows of their own until the process exits. Consider listing only a process's current session, or marking copied pins.",
+  "source": "https://github.com/willesq/orchestrator/pull/154",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-017",
+    "SP-051"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "RC-01",
+  "kind": "decision",
+  "topic": "Gate pin-based access on the tool guard",
+  "detail": "SP-011 and SP-025 must not grant memory reads by a pin's space until SP-041 stops a session from starting a harness outside its tree, or until there is stronger evidence of a real top-level harness (kernel executable path, session and tty checks). Today one command can start a fake 'claude' under a kept-alive shell and pin it in another directory (accepted risk, D-26).",
+  "source": "https://github.com/willesq/orchestrator/pull/147",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-011",
+    "SP-025",
+    "SP-041"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: SP-025 depends on SP-041; see D-38 and SP-025.1.a6."
+}

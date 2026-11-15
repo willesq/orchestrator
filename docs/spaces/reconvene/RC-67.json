@@ -1,0 +1,12 @@
+{
+  "id": "RC-67",
+  "kind": "decision",
+  "topic": "Which task states anchor a task's command log chain",
+  "detail": "SP-073 anchors a queued task's chain once its ledger status is anything but pending or in_progress (queue.Unsettled): complete, failed (a timed-out run is failed with 'timed out after ...'), cancelled, and also blocked and interrupted, and only when no run of it is live. orchd follows the ledger through the task hub, which takes one of its 16 watcher slots (maxWatchers) for good; every retention sweep also anchors any task chain left open whose task is terminal. Confirm the states, and whether internal subscribers should be exempt from maxWatchers.",
+  "source": "https://github.com/willesq/orchestrator/pull/165",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-073"
+  ],
+  "status": "open"
+}

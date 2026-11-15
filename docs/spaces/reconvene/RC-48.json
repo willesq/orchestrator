@@ -1,0 +1,14 @@
+{
+  "id": "RC-48",
+  "kind": "follow-up",
+  "topic": "What counts as session activity",
+  "detail": "'active' vs 'idle' uses the latest of pinned_at, resumed_at and the session's last tool event in the command log. Other hook events (UserPromptSubmit, Stop) do not reach orchd with a session identity, and with the command log off activity is the pin's own times. Refusals count events with decision 'refused' (toollog.DecisionRefused), which SP-041 must write for a refused call.",
+  "source": "https://github.com/willesq/orchestrator/pull/154",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-017",
+    "SP-041",
+    "SP-051"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "RC-25",
+  "kind": "decision",
+  "topic": "Which space a queued task reads and writes",
+  "detail": "SP-011 resolves a task's process to its live run (task ID, directory, session) from the process tree; a reported orch-task-id only marks a caller as a task. No feature decides a task's space (the dispatching session's pin, the placement of its cwd, or a space named at dispatch), and a task whose run orchd is not tracking (a verification run, a run in another worker) has no record and so resolves to no space. Decide before SP-025 enforces reads.",
+  "source": "a local session and https://github.com/willesq/orchestrator/pull/149",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-011",
+    "SP-023",
+    "SP-025",
+    "SP-029"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: the dispatcher's space; see D-46 and SP-025.1.a8."
+}

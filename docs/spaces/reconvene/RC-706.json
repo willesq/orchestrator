@@ -1,0 +1,14 @@
+{
+  "id": "RC-706",
+  "kind": "decision",
+  "topic": "High: Orch.app evidence is by path and the default build can be injected",
+  "detail": "SP-025 security review, high (two findings). Orch.app is recognized by its executable's path: /Applications/Orch.app/Contents/MacOS/Orch or ~/Applications/Orch.app/... A process that copies any binary to an accepted path where no app is installed (~/Applications is user-writable; /Applications is group-admin-writable) passes, and so does the genuine app started detached with DYLD_INSERT_LIBRARIES, because build-app.sh signs ad-hoc builds without the hardened runtime. Options: (a) check the peer's code signature through the socket's audit token (SecCodeCopyGuestWithAttributes, SecCodeCheckValidity) against a requirement recorded at install (Team ID, or the cdhash for ad-hoc builds), and always sign with the hardened runtime and library validation; (b) accept only the one path the install recorded, in a folder the user cannot write, plus the hardened runtime; (c) accept as documented. Recommendation: (a).",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-025",
+    "SP-072"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-14 as D-71: Orch.app is recognized by its code signature, not its path. Implemented in SP-025 (2f39200, internal/daemon/appsig_darwin.go): through the socket's audit token the running code must meet identifier \"com.willesq.orch\", carry the hardened runtime, run from the one installed bundle and have that bundle's code directory hash; ad-hoc builds are now signed with the hardened runtime (TestAppSignatureOfARealProcess, with real signed processes). Remaining accepted risk: an ad-hoc signature names no signer, so writing the install folder is replacing the app (RC-711 proposes a Team ID requirement for Developer ID builds)."
+}

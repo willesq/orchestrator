@@ -1,0 +1,22 @@
+{
+  "id": "SP-013",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "2e44a2843f3656e32f48d411c62b29ff8fcc020b",
+  "verified_at": "2026-11-09T16:13:40Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-013-tool-targets",
+  "pr": "https://github.com/willesq/orchestrator/pull/151",
+  "evidence": {
+    "SP-013.1": [
+      "a1: TestTargetsTable (internal/spaces/targets_test.go) holds 128 command and tool-input forms with expected targets, all passing: cd/pushd/popd (relative, absolute, ~, .., -, -P, quoted, chains, subshell, pipeline, block, if, background), argument and redirection paths, brace expansion, globs and partial words as prefixes, variables the line sets, wrappers (sudo, env -C, timeout, rtk), git -C (cumulative), --git-dir/--work-tree, make -C, gh -R/--repo/api repos/repo clone, github URLs, nested bash -c/eval, file tools (Read, Write, Edit, NotebookEdit, Glob, Grep, EnterWorktree, MCP relative_path, WebFetch), Codex apply_patch and shell argv/workdir, and invalid input. A further 49 cases in TestTargetsAuditBypassesCaught and the round-2/round-3 tables (targets_audit_test.go, targets_audit2_test.go) cover every reproducer from three security-review rounds. TestTargetsRecordedPayloads runs every recorded PreToolUse fixture from SP-001 (internal/hook/testdata/payloads) through Targets and finds each scenario's target (C02, C04, C05, X04, X05, X08).",
+      "a2: TestTargetsPathsCleaned (/a//b/./c/../d -> /a/b/d), TestTargetsResolvesSymlinks (absolute and relative links, link/.. is the target's parent not the link's directory, missing tail after a link, cd logical then files physical, Read through a link, symlink loop terminates), TestTargetsMapWorktreeToMainCheckout (a path, cd and git -C inside a linked worktree are also listed at the same place in the main checkout), TestTargetsWorktreeRelativeGitdir (.claude/worktrees layout with a relative gitdir), TestTargetsNotAWorktree (main checkout, submodule, bare-repo worktree, malformed .git file map to nothing), TestTargetsFIFOCommondirDoesNotHang. All pass (go test ./internal/spaces, darwin/arm64, 2026-11-09)."
+    ],
+    "SP-013.2": [
+      "a1: FuzzTargets (internal/spaces/targets_fs_test.go) over arbitrary command strings: `go test ./internal/spaces -run '^$' -fuzz FuzzTargets -fuzztime 90s` on the committed code (d2a70b5): 90 s, 4,145,387 execs, PASS, no panic or relative target (darwin/arm64, M3 Max, 2026-11-09). An earlier run found one panic (sh +o index overrun), fixed and kept as seed testdata/fuzz/FuzzTargets/7575e4e2c10774b9. Per-input time: TestTargetsCorpusBudget replays the whole corpus the fuzz runs left (2,117 inputs), best of three, one at a time: worst 203 us, mean 12.2 us, every input < 2 ms. (Inside the fuzzer the check is a loose 20 ms ceiling, since 16 parallel workers make wall-clock time unreliable.) BenchmarkTargets over the table: about 6.6 us/op.",
+      "a2: Commands it cannot analyse are flagged opaque with reasons, not returned empty: table cases 'bash -c with variable', 'eval', 'base64 to shell', 'base64 decode alone', 'python -c', 'xargs', 'unknown variable', 'cd unknown variable', 'tilde user', 'command name variable', 'unparseable keeps absolute paths', 'sh reads stdin', 'env -S', 'node stdin', 'xxd revert', plus TestTargetsNestingDepth, TestTargetsCapsTargetCount, TestTargetsUnknownHomeIsOpaque, TestTargetsTimeBudget, TestTargetsBraceBomb, TestTargetsAuditRound3Cost and the opaque cases in the audit tables. TestTargetsAuditRound3NotOpaque guards the reverse: 12 ordinary commands (git switch && go test, python -m pip, commit -m \"$(cat <<'EOF' ...)\", ...) are not opaque.",
+      "Security review (DOD-6): three security-audit rounds on the diff. Round 1: 6 high, 7 medium, 4 low, all fixed with regression tests. Round 2: 62 probe bypasses; the user chose best-effort + layers (D-28); broad classes fixed, probe bypasses 62 -> 0, all kept as TestTargetsAuditRound2*. Round 3 (hangs, cost, false opaque): 1 high, 4 medium fixed with TestTargetsAuditRound3*; lows recorded as RC-40. Remaining accepted limits: RC-36, RC-37, RC-38."
+    ]
+  }
+}

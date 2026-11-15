@@ -1,0 +1,18 @@
+{
+  "id": "SP-082",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "a1578f9",
+  "verified_at": "2026-11-15T16:11:23Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-082-flaky-tests",
+  "pr": "https://github.com/willesq/orchestrator/pull/206",
+  "evidence": {
+    "SP-082.1": [
+      "a1+a2 at f70cad6, every run while `go test -count=1 ./...` looped alongside for load (16 full-suite runs, all passing): TestSweepWhileWriting 50/50 (go test -count=50) and 50/50 with -race; TestRunMeasuresFailedRuns 50/50; TestResolveCost 50/50 (CPU p99 at most 4.0 ms against the 5 ms bound; wall p99 up to 10.2 ms under that load); TestToolHookCost 50/50 (wall p99 at most 80 ms); Swift pollingRetriesScopesUntilTheyLoad, aReloadDuringASaveKeepsTheLocalChange, aSecondChangeWhileSavingIsIgnored and refreshDoesNotOverlap 50/50 swift test runs. aReloadDuringASaveKeepsTheLocalChange was added to the scope by the coordinator after it failed CI on #194; the other two Swift tests had the same delay-against-sleep race.",
+      "a1 root causes: TestSweepWhileWriting failed 12 of 60 runs under 40 CPU burners with -race before the fix (drops 5 to 3607), all from a full queue (D-30), not failed commits; with the write lock removed the fixed test still fails with SQLITE_BUSY, so it still catches the bug it was written for. Before the fix TestResolveCost failed 1 of 50 runs under load even when measured in up to 3 rounds and when each call was timed 3 times keeping the fastest; TestToolHookCost failed on 994/998 of 1000 events reaching orchd, on an event that arrived unresolved after its hook gave up mid-resolve, and on a fail-closed guard_timeout refusal under load.",
+      "a3: no production code changes (diff is test files only). Changed test bounds, each with a reason comment: TestResolveCost bounds CPU time (5 ms, SP-011.2) and keeps a 50 ms wall-time guard; TestToolHookCost allows a lost or unresolved event only per hook run that reached the hook's 20 ms timeout and a guard_timeout refusal only per run that reached 250 ms, and still fails any event attributed to another session; TestRunMeasuresFailedRuns' floor subtracts the setup it observed and gains an upper bound. go vet ./..., make cover (all files >= 80%) and make app-cover (full swift test, all files >= 80%) pass."
+    ]
+  }
+}

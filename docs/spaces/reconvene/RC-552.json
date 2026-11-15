@@ -1,0 +1,12 @@
+{
+  "id": "RC-552",
+  "kind": "follow-up",
+  "topic": "SP-044's push check trusts no-space remotes' tracking refs for a push to a URL",
+  "detail": "Found by the SP-045 security re-audit (2026-11-14): the tool hook's check (OutboundChecker.excluded, a push to a URL) leaves out commits on the tracking refs of every remote whose push URLs lie in the same spaces as the URL; for a URL in no space (another server, a local path) that is every other no-space remote, so commits on a remote of no space are not read when pushed to another place of no space, and tracking refs record fetch URLs rather than push URLs. SP-045's pre-push hook does not do this (only remotes fetched from the destination's own spaces, or for no space its own URL), and it runs on the real push. Proposed: use the same rule in the tool hook's check.",
+  "source": "https://github.com/willesq/orchestrator/pull/184",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-044"
+  ],
+  "status": "open"
+}

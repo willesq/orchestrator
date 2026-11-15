@@ -1,0 +1,15 @@
+{
+  "id": "RC-801",
+  "kind": "decision",
+  "topic": "RC-404 is live again: sessions can publish by writing into a listed folder, and wildcards let them create matching folders",
+  "detail": "Security audit of SP-076 (medium M2, design under D-65). A folder a public_paths pattern lists is trusted as written: any job's session can write files there and register it as a source, and the sources refresh places them in public; a listed folder with no .git needs no other proof. With '*' or '**' a session can also create a new folder the pattern matches (e.g. ~/code/new/docs under ~/code/*/docs). This is the risk the user accepted as RC-404 for declared folders, which said to review it when public_paths exists. Documented in docs/internals/config.md. The independent verifier adds: the sources walk follows a .md symlink to any file inside the walked folder, so a link in an exact listed folder can index a file from an unlisted subfolder under the link's path, again only by someone who can write into the listed folder. Possible mitigations: require a GitHub repo verified public (and only git-tracked files) for wildcard matches; accept only operator-registered sources under public_paths; SP-046 sandbox rules denying job sessions writes to listed folders; warn in 'orch spaces diff' when a pattern holds '*' or '**'. Recommendation: keep as accepted risk now, and have SP-046 deny job-session writes to listed folders.",
+  "source": "https://github.com/willesq/orchestrator/pull/189",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-076",
+    "SP-046",
+    "SP-030"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-14 with option (a): see D-73. Accepted as RC-404's accepted risk extended; the sandbox follow-up is RC-805."
+}

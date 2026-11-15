@@ -1,0 +1,14 @@
+{
+  "id": "RC-1050",
+  "kind": "follow-up",
+  "topic": "Review's effect counts lack chunks, PRs and tasks",
+  "detail": "SP-054's Review counts spaces added, removed and changed, bindings and settings added and removed, and invalid lines, all read from the draft. How many chunks, cached PRs and tasks would move between spaces (the design's 'Preview every effect') needs orchd to compute it for a draft: a DiffSpaces field or a new RPC, so an orchd.proto change for the coordinator to schedule.",
+  "source": "https://github.com/willesq/orchestrator/pull/194",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-054",
+    "SP-024",
+    "SP-027"
+  ],
+  "status": "open"
+}

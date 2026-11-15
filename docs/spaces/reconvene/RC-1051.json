@@ -1,0 +1,13 @@
+{
+  "id": "RC-1051",
+  "kind": "follow-up",
+  "topic": "No way to discard a pending draft",
+  "detail": "The design's Review has 'Discard draft'. orchd has no RPC to discard a draft; today the user saves the applied policy again as a draft (orch spaces draft), which leaves a newer, identical draft pending. Add a DiscardSpacesDraft RPC (or let a draft equal to the applied revision clear drift) and a Discard button.",
+  "source": "https://github.com/willesq/orchestrator/pull/194",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-054",
+    "SP-020"
+  ],
+  "status": "open"
+}

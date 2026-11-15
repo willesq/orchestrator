@@ -1,0 +1,12 @@
+{
+  "id": "RC-451",
+  "kind": "user-action",
+  "topic": "Check refusal notifications in Orch.app by hand",
+  "detail": "Not verifiable by tests (UNUserNotificationCenter needs the app bundle). With a spaces policy applied and the guard enforcing, run a session call into another job's folder while Orch.app built from PR #179 runs: one 'Tool call refused' notification should appear (subtitle 'space <space> · <tool>', body 'Rule <rule> in session <id>.', no command or path); four or more refusals within 5 s should give one 'N tool calls refused' summary; clicking either should open Settings > Spaces. Refusals made before the app started are not announced.",
+  "source": "https://github.com/willesq/orchestrator/pull/179",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-048"
+  ],
+  "status": "open"
+}

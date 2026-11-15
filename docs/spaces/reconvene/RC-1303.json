@@ -1,0 +1,14 @@
+{
+  "id": "RC-1303",
+  "kind": "follow-up",
+  "topic": "Task ledger and queue events filtered by space (left to SP-026)",
+  "detail": "RC-704 asked SP-029 to add a task's dispatch space to the ledger. SP-026 (events, digest, ListTasks, GetTask carry a space set at creation and are filtered) owns the ledger and the readers, so SP-029 only sets the space at creation where it derives content: the queue completion event now carries 'space' (and 'task_id'), and a task's session pin carries the dispatch space. The ledger column (a migration), filtering the queue stream for sessions, and what orchd's own PR-review tasks read remain for SP-026.",
+  "source": "https://github.com/willesq/orchestrator/pull/196",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-026",
+    "SP-029"
+  ],
+  "status": "open",
+  "note": "SP-026 (PR #200, merged) filters the queue stream and the task ledger by the space set at creation (events.Event.Space, set by notifyTaskDone); this covers the follow-up. Recorded 2026-11-15 when #200 was merged into #196."
+}

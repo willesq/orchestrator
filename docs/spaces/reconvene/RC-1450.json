@@ -1,0 +1,14 @@
+{
+  "id": "RC-1450",
+  "kind": "decision",
+  "topic": "Who may search chat direct messages",
+  "detail": "SP-060 makes SearchDirectMessages (orch search --direct-messages) operator-only: Orch.app while a spaces policy is applied, and with none a terminal outside any agent session. Queued tasks (D-19) and agents in interactive sessions are refused, because chat text recalled into a prompt could ask an agent to pull DMs into its context and send them out (security review of the PR). Consequence: under a policy only Orch.app can search DMs, and it has no DM search view yet, so DMs are stored but not searchable in practice. Options: (a) keep operator-only and add an Orch.app DM search view (recommended); (b) also allow the operator terminal under a policy, exempting this RPC from the D-71 terminal refusal; (c) allow interactive sessions to search their own space DMs, accepting the prompt-injection path.",
+  "source": "https://github.com/willesq/orchestrator/pull/203",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-060",
+    "SP-061",
+    "SP-062"
+  ],
+  "status": "open"
+}

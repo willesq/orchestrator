@@ -1,0 +1,14 @@
+{
+  "id": "RC-86",
+  "kind": "follow-up",
+  "topic": "Wire the guard verdict into not-enforced records",
+  "detail": "SP-070.2.a2 records, while the guard is off or in log, the verdict the guard would have given ('would refuse (<rule>)' in the rule field). SP-040's Decide is not on main yet, so orchd's seam server.guardVerdict is nil and such records carry only decision 'not enforced' with an empty rule; the test drives the seam with a fake verdict. SP-040 or SP-041 must set server.guardVerdict from Decide(policy, pin, enforcement, event). The rule column holds the would-be verdict rather than a new column, to avoid a command-log schema change while SP-073 changes that store.",
+  "source": "https://github.com/willesq/orchestrator/pull/167",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-040",
+    "SP-041",
+    "SP-070"
+  ],
+  "status": "open"
+}

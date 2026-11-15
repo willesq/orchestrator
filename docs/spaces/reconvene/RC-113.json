@@ -1,0 +1,14 @@
+{
+  "id": "RC-113",
+  "kind": "follow-up",
+  "topic": "TestToolHookCost flake on Linux CI",
+  "detail": "On PR #175 (no daemon change) CI failed once in TestToolHookCost (internal/daemon): one of 1,000 events reached orchd attributed to no session instead of sess-hook; a re-run passed. It also passes 5/5 locally. Likely a load-dependent race in caller resolution of the real orch-hook process on shared runners; worth a look before the enforcing guard relies on pins (a hook resolved to no session is refused while enforcing). Also from the SP-042 verifier (low): perl -i and xargs touch writes are opaque, allowed in block-other-jobs and refused in strict (see RC-111).",
+  "source": "https://github.com/willesq/orchestrator/pull/175",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-014",
+    "SP-041",
+    "SP-042"
+  ],
+  "status": "open"
+}

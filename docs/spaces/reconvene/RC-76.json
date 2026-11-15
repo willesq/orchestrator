@@ -1,0 +1,14 @@
+{
+  "id": "RC-76",
+  "kind": "decision",
+  "topic": "The guard does not judge what a cwd contains in block-other-jobs",
+  "detail": "SP-040 judges a cd_dest, path, git dir or glob prefix that contains another job's root as reaching that job, but the call's cwd only in strict mode. Otherwise every call of a session started under a public root such as ~/code (which holds every job's root) would be refused. So in block-other-jobs a command that searches its cwd by default (grep -r x, rg x, find, du, tar) run with cwd ~/code is allowed, and the OS sandbox (SP-046) is the boundary. Options: keep this; or refuse such calls when the command is a known recursive reader with no path argument (needs Targets to report it); or pin public-root sessions out of ancestor cwds.",
+  "source": "https://github.com/willesq/orchestrator/pull/166",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-040",
+    "SP-041",
+    "SP-046"
+  ],
+  "status": "open"
+}

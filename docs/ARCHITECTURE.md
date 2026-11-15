@@ -42,7 +42,7 @@ flowchart LR
 | Binary | Role |
 |---|---|
 | `orchd` | Daemon. Serves gRPC on a Unix socket and runs every long-lived subsystem. |
-| `orch` | CLI: search, ingest, dispatch, install, status, config. Also runs the MCP servers (`orch mcp`). |
+| `orch` | CLI: search, ingest, dispatch, install and uninstall, status, config. Also runs the MCP servers (`orch mcp`). |
 | `Orch.app` | macOS menu bar app (Swift, in `macos/`): daemon health and control. A client like `orch`; it never opens the databases. See [internals/app.md](internals/app.md). |
 | `orch-hook` | Called by the harness on lifecycle events. Does only local work and hands anything slow (storing transcripts and edited docs, refreshing PRs) to `orchd`. |
 
@@ -75,7 +75,7 @@ and records the outcome. Routing picks the model per task kind from the models y
 |---|---|
 | `~/.config/orch/AGENTS.md`, `policy/` | Shared agent policy installed from this repo |
 | `~/.local/share/orch/orch.db` | SQLite: settings (changed in the app's Settings pane; an older release's `~/.config/orch/config.yaml` is imported once, then ignored), tasks, sources, model registry, routing |
-| `~/.local/share/orch/toollog.db` | SQLite, mode 0600: the command log of sessions' tool calls, hash-chained per session; never indexed ([daemon.md](internals/daemon.md#command-log)) |
+| `~/.local/share/orch/toollog.db` | SQLite, mode 0600: the command log of sessions' tool calls, hash-chained per session, written only while memory spaces are on; never indexed ([daemon.md](internals/daemon.md#command-log)) |
 | `~/.local/share/orch/workflows.db` | Durable workflow state for the task queue |
 | `~/.local/share/orch/qdrant/` | Vector store (Qdrant runs natively, no Docker) |
 | `~/.local/share/orch/models/` | Embedding model (MiniLM, ONNX) |
@@ -112,6 +112,8 @@ Plans that shaped the code, kept for context; the code is the source of truth:
 [GO_REWRITE_PLAN.md](GO_REWRITE_PLAN.md), [MODEL_ROUTING_PLAN.md](MODEL_ROUTING_PLAN.md),
 [RAG_SENSITIVITY_PLAN.md](RAG_SENSITIVITY_PLAN.md).
 
-Memory spaces are planned in [spaces/spaces-features.json](spaces/spaces-features.json)
-(rendered by [spaces/index.html](spaces/index.html)), with the background design docs in
+Memory spaces are planned in [spaces/spaces-features.json](spaces/spaces-features.json),
+with each feature's status and evidence in [spaces/state/](spaces/state/) and each reconvene item
+in [spaces/reconvene/](spaces/reconvene/) (rendered together by [spaces/index.html](spaces/index.html);
+tools in [spaces/tools/](spaces/tools/)), with the background design docs in
 [spaces/design/](spaces/design/). Where they disagree, the plan JSON wins.

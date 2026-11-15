@@ -1,0 +1,14 @@
+{
+  "id": "RC-1155",
+  "kind": "follow-up",
+  "topic": "Two lasting changes an unlocked terminal can still make",
+  "detail": "From the D-78 security review (low): (1) a spaces draft saved from an unlocked terminal is recorded as the operator's own (ByOperator), so when Orch.app applies it the 'not written by you' (accept_agent_draft) gate does not apply; ApplySpaces itself stays Orch.app-only. Proposed: keep ByOperator for Orch.app only, or show 'unlock' as the draft's origin. (2) RetagSource with confirm is open to an unlock (D-78 allows retag), so an unlocked terminal can move a source out of an isolated space into a public one, a lasting confidentiality change. Proposed: confirm whether retags out of an isolated space should also stay Orch.app-only.",
+  "source": "https://github.com/willesq/orchestrator/pull/198",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-077",
+    "SP-071",
+    "SP-020"
+  ],
+  "status": "open"
+}

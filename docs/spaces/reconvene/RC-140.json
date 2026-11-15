@@ -1,0 +1,13 @@
+{
+  "id": "RC-140",
+  "kind": "decision",
+  "topic": "ListSessionPins is served by ListSessions",
+  "detail": "SP-050 names a ListSessionPins RPC. ListSessions (SP-016) already lists every session pin with its harness, PID, space, first directory, liveness and command-log counts, scoped per caller, so SP-050 adds no second RPC and the Spaces pane (SP-054) reads pins from ListSessions. If the pane needs a field ListSessions lacks (e.g. the chain owner of RC-81), add it to SessionInfo instead.",
+  "source": "https://github.com/willesq/orchestrator/pull/170",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-050",
+    "SP-054"
+  ],
+  "status": "open"
+}

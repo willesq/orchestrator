@@ -1,0 +1,12 @@
+{
+  "id": "RC-144",
+  "kind": "follow-up",
+  "topic": "Replay validation runs without a deadline (accepted low)",
+  "detail": "From the SP-047 security audit (0 critical/high; the one medium was fixed). ReplaySpaces validates the revision or policy it replays under (InGitTree checks and symlink resolution of up to 512 roots, terms and gh_config_dir paths) with no deadline. A draft an agent session saved can be named by --policy <rev>, so a root on an automount or network path could stall that RPC or make the Mac contact a host. Only the operator can call it, and diff and apply validate drafts the same way. Option: validate under the request deadline in a goroutine abandoned on cancellation, and say in the reply when the named revision is an agent's unapplied draft.",
+  "source": "https://github.com/willesq/orchestrator/pull/174",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-047"
+  ],
+  "status": "open"
+}

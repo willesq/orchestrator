@@ -1,0 +1,13 @@
+{
+  "id": "RC-59",
+  "kind": "follow-up",
+  "topic": "Filter unpinned rows in the session list",
+  "detail": "D-48: ListSessions' unpinned rows should skip processes whose parent is a harness process and known daemons (Codex app-server), keeping top-level harnesses even without a TTY. Small change in internal/daemon/liveness.go (unpinned) with a test; can ride along with SP-016 or SP-051.",
+  "source": "RC-49; decision review 2026-11-10",
+  "raised": "2026-11-10",
+  "affects": [
+    "SP-017",
+    "SP-051"
+  ],
+  "status": "open"
+}

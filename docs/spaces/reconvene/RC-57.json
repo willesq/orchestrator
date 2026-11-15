@@ -1,0 +1,14 @@
+{
+  "id": "RC-57",
+  "kind": "user-action",
+  "topic": "Check that Codex sessions are pinned",
+  "detail": "After the next release is installed, open a Codex session, then run `orch install --target codex` (dry run; it should show no difference in ~/.codex/hooks.json) and `orch sessions list`: the Codex session should be listed with a space, not as unpinned. If it is unpinned, the installed hooks.json predates the SessionStart/SessionEnd registration or Codex does not trust the hooks.",
+  "source": "RC-02; decision review 2026-11-10",
+  "raised": "2026-11-10",
+  "affects": [
+    "SP-010",
+    "SP-011",
+    "SP-012"
+  ],
+  "status": "open"
+}

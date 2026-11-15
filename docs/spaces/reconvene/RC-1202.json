@@ -1,0 +1,12 @@
+{
+  "id": "RC-1202",
+  "kind": "follow-up",
+  "topic": "Settings refusals under a policy are logged without a rate limit",
+  "detail": "SP-078.1.a1 asks that each refusal be logged, so refuseSettings (internal/daemon/policy_operator.go) logs every one, as refuseNonOperator does, unlike refuseUnproven, which logs at most one a second. A session or local process calling a refused RPC in a loop can fill orchd's log, which Orch.app shows. Low (security review of SP-078). Proposed: log the first refusal per caller and RPC in full and count repeats.",
+  "source": "https://github.com/willesq/orchestrator/pull/199",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-078"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "RC-36",
+  "kind": "follow-up",
+  "topic": "How the guard reads Targets: ancestors, prefixes and opaque calls",
+  "detail": "From the SP-013 security review. (1) A path or prefix that is an ancestor of another space's root (grep -r ~/code, find ~/code -exec ...) reaches into that space; SP-040 must treat it so, since Targets reports such paths as plain paths. (2) Targets flags many forms opaque (eval, python -c, unknown variables, git -c outside an allowlist, a cd in a loop, ...). SP-040 must decide what 'block other jobs' mode does with an opaque call, and should measure how often ordinary agent commands come back opaque before choosing. (3) Targets stops at 100 ms or 512 targets and flags the call opaque; with INV-13 the enforcing guard must refuse when that happens, not allow.",
+  "source": "https://github.com/willesq/orchestrator/pull/151",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-040",
+    "SP-041"
+  ],
+  "status": "open"
+}

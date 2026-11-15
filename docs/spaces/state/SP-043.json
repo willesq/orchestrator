@@ -1,0 +1,16 @@
+{
+  "id": "SP-043",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "ac8e561a0d2d028e63a708092eac5178d0013839",
+  "verified_at": "2026-11-12T17:09:18Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-043-github-guard",
+  "pr": "https://github.com/willesq/orchestrator/pull/176",
+  "evidence": {
+    "SP-043.1": [
+      "a1: TestGitHubGuardCases (internal/spaces/guard_github_test.go): 24 covered forms (gh api repos/ and /repos/, gh -R, gh --repo=, GH_REPO, gh repo clone of a name and of a URL, gh repo view, git clone over https, ssh and ssh://, git fetch, push and ls-remote to a URL, git push/fetch/pull to a remote named in the checkout's config, gh api orgs/ and users/, gh repo list, gh search --owner and an org: qualifier, curl of the orgs API, an account's page URL) x 4 orgs = 96 cases, all pass: for another job's org (globex, and GLOBEX upper-cased) every form is refused with other_job_repo in both block-other-jobs and strict; for the session's own org (acme) and a public org (oss-org) every form is allowed in block-other-jobs. The security review's reproducers are regression tests too: TestGitRemoteReviewCases (16 config and operand forms refused, 6 made opaque, the branch's own remote chosen for a bare push/fetch/pull, --git-dir, oversized and FIFO configs opaque), TestGitConfigParsing, TestGitDirSymlink, TestGitHubURLReviewCases (www., gist., angle brackets, a sentence-ending URL refused for another job; text ending in an unbound account's URL allowed) and TestGitHubTargets."
+    ]
+  }
+}

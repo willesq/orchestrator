@@ -46,12 +46,13 @@ const maxStreamsPerConn = 128
 // newGRPCServer attributes each connection to its process so operator-only
 // RPCs can refuse queued tasks however they reach the socket (callers.go),
 // and, with a resolver, tells each call whom it serves (caller_session.go).
-func newGRPCServer(res *callerResolver) *grpc.Server {
+func newGRPCServer(res *callerResolver, extra ...grpc.UnaryServerInterceptor) *grpc.Server {
 	unary := []grpc.UnaryServerInterceptor{guardQueuedCallers}
 	stream := []grpc.StreamServerInterceptor{guardQueuedStreams}
 	if res != nil {
 		unary, stream = append(unary, res.unary), append(stream, res.stream)
 	}
+	unary = append(unary, extra...)
 	return grpc.NewServer(
 		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent, program: procstat.ReadProgram, started: procstat.StartTime,
 			app: newAppVerifier(userHome())}),

@@ -1,0 +1,13 @@
+{
+  "id": "RC-213",
+  "kind": "decision",
+  "topic": "gh in the sandbox needs enableWeakerNetworkIsolation and allowedDomains (D-61)",
+  "detail": "Measured 2026-11-14 (Claude Code 2.1.309): with allowRead alone gh fails ('deny network-outbound api.github.com:443', then 'x509: OSStatus -26276'); it works with sandbox.network.allowedDomains [api.github.com, github.com] and sandbox.enableWeakerNetworkIsolation: true (or network.allowMachLookup ['com.apple.trustd.agent']). orch writes both for every placed space's sessions. Trade-offs: Claude Code calls the trustd lookup 'a potential data exfiltration vector'; its messages say a machine whose sandbox has such a setting serves no 'device tools' (not measured); allowedDomains lets every sandboxed program, not only gh and git (which the SP-044 outbound check reads), reach github.com without an approval. The security audit rated it medium. Options: keep; write them only for spaces that opt in to gh in the sandbox; use allowMachLookup instead of the boolean.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046",
+    "SP-044"
+  ],
+  "status": "open"
+}

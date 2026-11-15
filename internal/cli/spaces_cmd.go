@@ -19,8 +19,14 @@ import (
 func newSpacesCmd(cf clientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "spaces",
-		Short: "Draft, review and apply the spaces policy",
-		Long: `The spaces policy says which GitHub orgs, folder roots, web prefixes and
+		Short: "Turn memory spaces on or off; draft, review and apply their policy",
+		Long: `Memory spaces are off by default: orch then works as it did before spaces.
+
+  orch spaces on                     turn them on (operator only)
+  orch spaces off --confirm          turn them off; the policy is kept
+                                     (operator only)
+
+The spaces policy says which GitHub orgs, folder roots, web prefixes and
 chat tenants belong to which space, and which spaces may read which. orchd
 stores it in orch.db as numbered revisions and enforces only the one the
 operator applied.
@@ -57,7 +63,7 @@ agent session may save a draft; applying one needs --accept-agent-draft.`,
 	}
 	cmd.AddCommand(newSpacesDraftCmd(cf), newSpacesDiffCmd(cf), newSpacesApplyCmd(cf), newSpacesWhyCmd(cf),
 		newSpacesLogCmd(cf), newSpacesEnforceCmd(cf), newSpacesSandboxCmd(cf), newSpacesReplayCmd(cf),
-		newSpacesTermsCmd(cf), newSpacesRetagCmd(cf), newSpacesUnlockCmd(cf), newSpacesLockCmd(cf))
+		newSpacesTermsCmd(cf), newSpacesRetagCmd(cf), newSpacesUnlockCmd(cf), newSpacesLockCmd(cf), newSpacesOnCmd(cf), newSpacesOffCmd(cf))
 	return cmd
 }
 

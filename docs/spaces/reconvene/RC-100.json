@@ -1,0 +1,13 @@
+{
+  "id": "RC-100",
+  "kind": "decision",
+  "topic": "Queued tasks under the enforcing guard",
+  "detail": "SP-041's hook decides from a session pin file, and queued tasks have no session pin (PinSession is refused to them), so while spaces are applied and the guard enforces, every tool call of a queued task is refused (pin_missing). Proposed: orchd writes a task pin file keyed by ORCH_TASK_ID when it starts a run, with the space D-46 gives (the dispatching session's space; the operator's task takes its working directory's placement), which needs Dispatch to record the caller's pin. Until then, queued work stops when spaces are applied with the guard enforcing.",
+  "source": "https://github.com/willesq/orchestrator/pull/172",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041",
+    "SP-025"
+  ],
+  "status": "open"
+}

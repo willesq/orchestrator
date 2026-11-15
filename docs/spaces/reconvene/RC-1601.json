@@ -1,0 +1,13 @@
+{
+  "id": "RC-1601",
+  "kind": "follow-up",
+  "topic": "TestToolHookCost copies the hook's 20 ms and 250 ms limits",
+  "detail": "Low, from the SP-082 security review: the test's allowances for lost events and guard_timeout refusals use copies of internal/hook's toolEventTimeout and guardTimeout. If either limit is lowered the test fails loudly; if raised, the test would accept a loss or refusal on a run shorter than the new limit. Proposed: export the limits from internal/hook (or a shared constant) and use them in the test.",
+  "source": "https://github.com/willesq/orchestrator/pull/206",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-082",
+    "SP-012"
+  ],
+  "status": "open"
+}

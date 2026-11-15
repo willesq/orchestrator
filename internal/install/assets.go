@@ -30,14 +30,28 @@ func legacyCheckout(home string) string {
 	return filepath.Join(home, ".claude", "orchestrator")
 }
 
-// claudeAssetEdits installs the orchestrator's Claude Code subagents into
+// claudeAssetsUnit installs the orchestrator's Claude Code subagents into
 // ~/.claude/agents and its skills into ~/.claude/skills: every file of each
 // asset turned on in orch. An asset turned off is left as it is; orchd's
-// settings watcher removes its files.
+// settings watcher removes its files. Uninstall removes every file carrying
+// orch's marker, on or off, and the directories only an asset used.
+func claudeAssetsUnit(home string) Unit {
+	u := Unit{Name: "claude-code agents and skills", Edits: claudeAssetEdits(home)}
+	if list, err := ClaudeAssets(); err == nil {
+		for _, a := range list {
+			for _, d := range a.Dirs {
+				u.Dirs = append(u.Dirs, ClaudeAssetPath(home, d))
+			}
+		}
+	}
+	return u
+}
+
 func claudeAssetEdits(home string) []Edit {
 	list, err := ClaudeAssets()
 	if err != nil {
-		return []Edit{{Path: filepath.Join(home, ".claude"), Compute: func([]byte) ([]byte, string, error) { return nil, "", err }}}
+		return []Edit{{Path: filepath.Join(home, ".claude"), Compute: func([]byte) ([]byte, string, error) { return nil, "", err },
+			Reverse: func([]byte) (Undo, error) { return Undo{}, err }}}
 	}
 	var edits []Edit
 	for _, a := range list {
@@ -107,7 +121,41 @@ func assetEdit(home string, a ClaudeAsset, body []byte, dst string, links []stri
 					dst, managedMarker, label)
 			}
 		},
+		// Reason: only a file carrying orch's marker goes. One without it is
+		// the user's (install refused to overwrite it, or they took it over).
+		// A link into the retired checkout is left whatever it holds: that
+		// checkout is the user's folder, and nothing behind it is emptied.
+		Reverse: func(cur []byte) (Undo, error) {
+			if intoLegacyCheckout(home, dst, links) {
+				return keepUndo(cur, label+": left in place — "+dst+" leads into "+legacyCheckout(home)+
+					", which is yours; remove the link by hand"), nil
+			}
+			return undoOwnedFile(cur, label, IsManaged)
+		},
 	}
+}
+
+// intoLegacyCheckout reports whether dst is, or may be, in the retired
+// checkout: one of links points there, or dst resolves there through a link
+// anywhere on its path (~/.claude/agents, ~/.claude, or the checkout itself
+// being a link). A path that cannot be resolved for another reason than
+// being absent counts as there, so nothing behind it is changed.
+func intoLegacyCheckout(home, dst string, links []string) bool {
+	legacy := legacyCheckout(home)
+	for _, l := range links {
+		if target, isLink, err := linkTarget(l); err == nil && isLink && within(target, legacy) {
+			return true
+		}
+	}
+	real, err := filepath.EvalSymlinks(dst)
+	if err != nil {
+		return !os.IsNotExist(err)
+	}
+	if within(real, legacy) {
+		return true
+	}
+	realLegacy, err := filepath.EvalSymlinks(legacy)
+	return err == nil && within(real, realLegacy)
 }
 
 // linkTarget reports whether p is a symlink and, if so, its absolute target.

@@ -1,0 +1,12 @@
+{
+  "id": "RC-111",
+  "kind": "follow-up",
+  "topic": "Self-protection gaps left after the SP-042 review",
+  "detail": "Accepted for now (best-effort target extraction, D-28; the OS sandbox is the boundary): recursive reads of a directory holding secret files (grep -r or rg over the ssh or gh profile directories, tar of them) are allowed; 'git config core.hooksPath|core.fsmonitor|core.sshCommand' is not refused (writing .git/config directly is); writes by interpreters (perl -pi, python open()) and copies that create protected files without naming them (cp -r template/.claude .) are not caught. Proposed: refuse recursive readers of those directories and those git config keys.",
+  "source": "https://github.com/willesq/orchestrator/pull/175",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-042"
+  ],
+  "status": "open"
+}

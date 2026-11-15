@@ -1,0 +1,12 @@
+{
+  "id": "RC-553",
+  "kind": "user-action",
+  "topic": "Install the git hooks in the repositories you want covered",
+  "detail": "SP-045 installs nothing by itself and was never run against a real repository (local_safety). To cover a repository, run `orch guard git-hook --install` in it to preview, then `--install --apply`; for every repository at once, point git's global core.hooksPath at a directory and run `orch guard git-hook --install --apply --hooks-dir <dir>`. `--uninstall --apply` restores the hooks that were there. The hooks run the orch binary that installed them (or orch on PATH).",
+  "source": "https://github.com/willesq/orchestrator/pull/184",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-045"
+  ],
+  "status": "open"
+}

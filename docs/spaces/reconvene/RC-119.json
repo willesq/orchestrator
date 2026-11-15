@@ -1,0 +1,13 @@
+{
+  "id": "RC-119",
+  "kind": "follow-up",
+  "topic": "Outbound terms elsewhere than the command log (INV-07)",
+  "detail": "SP-044 keeps terms out of refusals, the command log, orchd's log and status output. Session transcripts, session records and anything indexed into RAG from them, the PR digests and event streams can still hold a term a session typed; INV-07 lists SP-053 for those. The terms cache in orchd notices a changed terms file by size and modification time only.",
+  "source": "https://github.com/willesq/orchestrator/pull/177",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-053",
+    "SP-044"
+  ],
+  "status": "open"
+}

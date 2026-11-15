@@ -1,0 +1,11 @@
+{
+  "id": "RC-17",
+  "kind": "user-action",
+  "topic": "Rotate ORCA_AGENT_HOOK_TOKEN",
+  "detail": "The token was printed into a session transcript on 2026-11-08 (SP-001 session). Rotate it; the transcript is also indexed in RAG.",
+  "source": "a local session",
+  "raised": "2026-11-08",
+  "affects": [],
+  "status": "resolved",
+  "note": "Resolved by the user on 2026-11-10: rotation not needed (accepted)."
+}

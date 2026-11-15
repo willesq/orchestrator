@@ -38,6 +38,8 @@ func policyEdits(home string) []Edit {
 		name := path.Base(src)
 		edits = append(edits, Edit{Path: filepath.Join(policyDir(home), name), Compute: func([]byte) ([]byte, string, error) {
 			return body, "instructions: install on-demand policy " + name, nil
+		}, Reverse: func(cur []byte) (Undo, error) {
+			return undoOwnedFile(cur, "instructions: on-demand policy "+name, nil)
 		}})
 	}
 	return edits
@@ -62,15 +64,21 @@ func managedInstructions(old []byte, body string) ([]byte, error) {
 	return []byte(s), nil
 }
 
-// instructionEdits installs the embedded repository policy and modules, then
+// instructionUnits installs the embedded repository policy and modules, then
 // wires native imports (Claude/Gemini) or an explicit startup read directive
 // (Codex) for the shared policy and every module this machine has on.
 // Personal instructions stay in the harness entry files; the shared copy and
 // the modules are Orchestrator-owned and repaired to what this build ships.
-func instructionEdits(home, target string) []Edit {
+//
+// Three units, in the order install writes them: the shared policy, this
+// harness's managed block, then the modules and on-demand policy. The first
+// and last are shared by every harness.
+func instructionUnits(home, target string) []Unit {
 	shared := SharedPolicyPath(home)
 	canonical := Edit{Path: shared, Compute: func(old []byte) ([]byte, string, error) {
 		return []byte(memoryInstructions), "instructions: install version-controlled agent-instructions.md shipped with this CLI", nil
+	}, Reverse: func(cur []byte) (Undo, error) {
+		return undoOwnedFile(cur, "instructions: shared policy", nil)
 	}}
 	entry := ""
 	for _, e := range InstructionEntries(home) {
@@ -88,7 +96,11 @@ func instructionEdits(home, target string) []Edit {
 		}
 		next, err := RenderManagedBlock(old, home, target, ModuleOn(toggles))
 		return next, "instructions: load shared policy and enabled modules from " + filepath.Dir(shared), err
-	}}
-	edits := append([]Edit{canonical, bridge}, moduleEdits(home)...)
-	return append(edits, policyEdits(home)...)
+	}, Reverse: cutManagedInstructions}
+	return []Unit{
+		{Name: "shared policy", Shared: true, Edits: []Edit{canonical}, Dirs: []string{filepath.Dir(shared)}},
+		{Name: target + " instructions", Edits: []Edit{bridge}},
+		{Name: "instruction modules", Shared: true, Edits: append(moduleEdits(home), policyEdits(home)...),
+			Dirs: []string{ModuleDir(home), policyDir(home)}},
+	}
 }

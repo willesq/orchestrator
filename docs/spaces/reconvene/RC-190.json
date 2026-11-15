@@ -1,0 +1,13 @@
+{
+  "id": "RC-190",
+  "kind": "follow-up",
+  "topic": "SP-046 security audit lows (four rounds)",
+  "detail": "Accepted: (1) the session controls .git, so it can point the info/exclude orch appends its one ignore line to at another repository's git folder, and appendLine follows links in folders above the git folder; (2) moved-aside names (*.orch-moved-*) are not git-ignored and moving does not re-check the entry just before the rename; (3) a .claude or settings file that cannot be opened (mode 000, a socket) is reported but not moved, leaving that checkout without rules; (4) a tracked settings file gets no rules and a session can freeze its rules with git add -f (the enforcing guard, SP-041, is the answer); (5) the launcher's profile links share plugins and skills across spaces; (6) GetEnforcement is open to every caller (pre-existing).",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046",
+    "SP-041"
+  ],
+  "status": "open"
+}

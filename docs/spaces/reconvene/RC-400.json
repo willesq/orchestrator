@@ -1,0 +1,15 @@
+{
+  "id": "RC-400",
+  "kind": "decision",
+  "topic": "Local files under a public root can be steered into public by any job session (security audit medium)",
+  "detail": "SP-030 makes a public root alone insufficient for checkouts without a verified-public GitHub remote (D-50), but anything local under a public root can still be written by any job session: the guard and the sandbox allow writes to public roots. Sessions may register repo/owner sources (SaveSource is refused to queued tasks only), and owner sources pick up new folders automatically. A session can therefore copy one job's files into a plain folder under ~/code, or into a folder whose fake .git names a public GitHub repo, or into the uncommitted working tree of a real public checkout, and the sources refresh places that content in public. This is not a regression (before SP-030 everything under a public root went to public), but the gate cannot meet 'only verified-public content reaches public' for local files. Options: (a) local files never go to public automatically: sources content under a public root goes to quarantine (or public_root_sessions); public content comes only from the GitHub docs sync, bound web prefixes and operator retags (SP-071). (b) Keep local placement in public and make repo/owner source registration operator-only (also RC-121/RC-122). This narrows the gap but does not close it, because owner sources still walk new folders and agents can still write into public checkouts. (c) Accept it and rely on the SP-046 sandbox denying job sessions writes to public roots. Recommendation: (a). Blocks SP-030 (DOD-6) until decided.",
+  "source": "https://github.com/willesq/orchestrator/pull/180",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-030",
+    "SP-046",
+    "SP-071"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-14: option (a) with D-50's folder declaration kept; see D-64. The remaining risk for folders the operator declared public is accepted and tracked as RC-404."
+}

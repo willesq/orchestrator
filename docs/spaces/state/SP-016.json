@@ -1,0 +1,22 @@
+{
+  "id": "SP-016",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "329cdb5c866746d5e754d147980ef33cfed300d1",
+  "verified_at": "2026-11-10T18:56:58Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-016-read-log",
+  "pr": "https://github.com/willesq/orchestrator/pull/164",
+  "evidence": {
+    "SP-016.1": [
+      "a1: TestListToolEventsCallerScope (internal/daemon/toollog_read_test.go) passes at 2c9c8ff: session sess-a reading '', 'sess-a' or 'session:sess-a' gets exactly its own events (a-0,a-1,a-2); naming sess-b, session:sess-b, task:t-1 or an unknown session is refused with PermissionDenied and the same message whether or not the chain exists; a pin of another process, an unpinned harness and a task with no record are refused; task t-1 reads only task:t-1; the operator reads any chain and must name one.",
+      "a1 (regressions from the security audits): TestListToolEventsAfterClear (a connection that resolved its pin before /clear can no longer read the replaced session; a fresh one reads the new session; the operator still reads both), TestListToolEventsOneReadPerChain (a second concurrent agent read is ResourceExhausted while the operator's read proceeds), TestListToolEventsByteBudget (300 records of 16 KiB targets come back in several pages each under 4 MiB; an agent's page is at most 512 KiB plus one record), TestListToolEventsPages, TestPage and TestActivitySince (internal/toollog/read_test.go).",
+      "a2: TestSummarizeToolLogPerSpace passes at 2c9c8ff with fixtures in the plan's layout (oss public root, personal private, acme isolated): acme sessions=1 calls=4 moves=4 cross=3 refusals=1 (moves within acme, twice into personal, once under the public root whose sessions are personal's); personal sessions=1 calls=1 moves=2 cross=1 (events 8 days old excluded from the default 7-day window, included with since=9 days); tasks and an unpinned chain under '' with moves not compared; the 500-directory budget counts the rest as unplaced. TestSummarizeToolLogAccess: operator-only (session and queued task refused), since must be in the past, with no policy everything is under '' and no move crosses spaces. TestSummaryPlacingDeadline and TestSummaryPlacesFromCache: past the placing deadline the summary still answers with moves unplaced, and placement makes no gh calls.",
+      "a2 (command): TestSpacesLogCommands runs 'orch spaces log sess-acme' and 'orch spaces log summary' through the real CLI against orchd on a temporary socket; the summary prints 'acme   1         1           1                1                   0'. CLI tests TestSpacesLogShowsEvents, TestSpacesLogOwnAndLimit, TestSpacesLogSummary (internal/cli/spaces_log_test.go).",
+      "DOD at 2c9c8ff: go test ./... exit 0; go vet ./... exit 0; gofmt -l on changed Go files: 0 lines; make cover 'All files >= 80%' with internal/daemon included (35 daemon files listed): toollog_read.go 89.7%, toollog/read.go 90.9%, cli/spaces_log.go 98.9%, callers.go 96.4%, placement_rpc.go 97.9%, recovery.go 88.7%, daemon/toollog.go 93.5%, toollog/store.go 85.8%.",
+      "Security: three security-audit rounds on the diff. Round 1: 1 medium (pages bounded by count, not bytes) and 3 lows (pre-/clear connection could read the replaced session; summary placement spent GitHub lookups and had no deadline; uncoalesced flushes); all fixed with tests. Round 2: 2 mediums (global read semaphore let agents starve the operator; replies gRPC holds after the handler returns) and lows; fixed (per-chain agent reads, operator exempt; 512 KiB agent pages; MaxConcurrentStreams 128; separate placing context; flush failure no longer fails reads), residual recorded as RC-63. Round 3: no critical/high/medium; lows reworded or recorded in RC-65. Open questions RC-62..RC-65.",
+      "Docs: docs/internals/cli.md (spaces log, spaces log summary), docs/internals/daemon.md (Command log, Reading), docs/OPERATIONS.md (Spaces)."
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "id": "RC-14",
+  "kind": "follow-up",
+  "topic": "Test and coverage gate integrity",
+  "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks fails intermittently (also on main), and scripts/cover.sh silently drops a package whose tests fail, so 'make cover' can skip internal/daemon. TestRunMeasuresFailedRuns is timing-flaky. Update 2026-11-09 (SP-014 session): seen again: 'make cover' reported 'All files >= 80%' while omitting every internal/daemon file because the RC-39 flake failed the package; SP-014 measured daemon coverage with a direct go test -coverprofile run instead. Update 2026-11-09 (SP-017 session): seen again; 'make cover' printed 'All files >= 80%' without internal/daemon; SP-017 measured the daemon files with go test -coverprofile directly.",
+  "source": "https://github.com/willesq/orchestrator/pull/145",
+  "raised": "2026-11-08",
+  "affects": [],
+  "status": "open"
+}

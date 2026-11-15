@@ -1,0 +1,13 @@
+{
+  "id": "RC-191",
+  "kind": "user-action",
+  "topic": "Confirm a per-space Claude Code login persists",
+  "detail": "SP-004 measured that a fresh CLAUDE_CONFIG_DIR starts logged out but not whether its login persists. After the first 'orch run <space> -- claude' and /login, start it again and note whether it asks to log in.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open",
+  "note": "2026-11-14: D-59 makes per-space logins optional; the e2e checks run with the default gh login and Claude config. 2026-11-14: now applies only to a space that names its own claude_config_dir (D-59); the per-space profile orch generated under <data dir>/spaces/<space>/claude is gone, 'orch run' uses the user's own config otherwise. Not exercised in the 2026-11-14 run."
+}

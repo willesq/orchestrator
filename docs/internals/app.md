@@ -72,6 +72,15 @@ first, each with its reason (see the PR babysitter in [tasks.md](tasks.md)). Cli
 
 ## Spaces
 
+The app hides its spaces UI while memory spaces are switched off. `DaemonStatus.spacesState` comes
+from `Status`, and `spacesOff` is true for `off`; an orchd that predates the switch reports
+nothing, which counts as on. While spaces are off:
+
+- the sidebar has no Spaces pane and no badge, so there is no "Not set up" dot;
+- the tray shows no enforcement banner or switches;
+- Settings → Spaces shows only the switch. That is the `spaces.enabled` setting, whose
+  confirmation names what turning it off does.
+
 The app shows the spaces enforcement switches ([config.md](config.md#spaces-policy), SP-070) and checks where a
 folder's content goes (`ExplainPlacement`, SP-022). orchd decides everything: the app only reads
 and asks.

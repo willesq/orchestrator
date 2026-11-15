@@ -20,7 +20,6 @@ import (
 	"github.com/willesq/orchestrator/internal/check"
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/db"
-	"github.com/willesq/orchestrator/internal/install"
 	"github.com/willesq/orchestrator/internal/mcpserver"
 	"github.com/willesq/orchestrator/internal/memctx"
 	"github.com/willesq/orchestrator/internal/model"
@@ -81,60 +80,6 @@ func newModelCmd() *cobra.Command {
 			return nil
 		},
 	})
-	return cmd
-}
-
-func newInstallCmd() *cobra.Command {
-	var (
-		apply  bool
-		target string
-		home   string
-		binDir string
-	)
-	cmd := &cobra.Command{
-		Use:   "install",
-		Short: "Wire the orchestrator into a coding-agent harness (dry-run by default)",
-		Args:  cobra.NoArgs,
-		RunE: func(c *cobra.Command, _ []string) error {
-			if home == "" {
-				h, err := os.UserHomeDir()
-				if err != nil {
-					return err
-				}
-				home = h
-			}
-			bins, err := installBins(binDir)
-			if err != nil {
-				return err
-			}
-			var adapters []install.Adapter
-			if target == "all" {
-				adapters = install.AllAdapters()
-			} else {
-				a, err := install.AdapterFor(target)
-				if err != nil {
-					return err
-				}
-				adapters = []install.Adapter{a}
-			}
-			backupDir := filepath.Join(paths.DataDir(), "backups")
-			for _, a := range adapters {
-				plan := install.BuildPlan(a, bins, home)
-				if apply {
-					if err := plan.Apply(c.OutOrStdout(), backupDir); err != nil {
-						return err
-					}
-				} else if err := plan.Print(c.OutOrStdout()); err != nil {
-					return err
-				}
-			}
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&apply, "apply", false, "write the changes (default: dry-run, writes nothing)")
-	cmd.Flags().StringVar(&target, "target", "claude-code", "harness: claude-code, codex, gemini, or all")
-	cmd.Flags().StringVar(&home, "home", "", "override HOME (for testing against a temp dir)")
-	cmd.Flags().StringVar(&binDir, "bin-dir", "", "dir of the built binaries (default: dir of this executable)")
 	return cmd
 }
 

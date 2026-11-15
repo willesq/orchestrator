@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bytes"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,7 @@ import (
 // `service do` block supervises it via `brew services`, so we do NOT create a
 // competing launchd agent — two KeepAlive supervisors would fight over the socket.
 func plistEdit(orchdBin, home string) Edit {
-	path := filepath.Join(home, "Library", "LaunchAgents", "com.orchestrator.orchd.plist")
+	path := PlistPath(home)
 	return Edit{
 		Path: path,
 		Compute: func(old []byte) ([]byte, string, error) {
@@ -27,8 +28,31 @@ func plistEdit(orchdBin, home string) Edit {
 			}
 			return []byte(content), fmt.Sprintf("launchd: %s com.orchestrator.orchd -> %s (KeepAlive)", verb, orchdBin), nil
 		},
+		// The agent is unloaded first, by the daemon unit's undo step.
+		Reverse: func(cur []byte) (Undo, error) {
+			return undoOwnedFile(cur, "launchd: com.orchestrator.orchd agent", func(b []byte) bool {
+				return bytes.Contains(b, []byte("<string>"+OrchdLabel+"</string>"))
+			})
+		},
 	}
 }
+
+// OrchdLabel is the launchd label of the agent install writes.
+const OrchdLabel = "com.orchestrator.orchd"
+
+// PlistPath is where install writes orchd's launchd agent.
+func PlistPath(home string) string {
+	return filepath.Join(home, "Library", "LaunchAgents", OrchdLabel+".plist")
+}
+
+// launchdUnit is orchd's launchd agent, shared by every harness.
+func launchdUnit(orchdBin, home string) Unit {
+	return Unit{Name: "launchd agent", Shared: true, Edits: []Edit{plistEdit(orchdBin, home)}}
+}
+
+// IsHomebrewManaged reports whether orchd at bin is supervised by `brew
+// services` rather than the launchd agent install writes.
+func IsHomebrewManaged(bin string) bool { return isHomebrewManaged(bin) }
 
 // isHomebrewManaged reports whether the binary resolves to a Homebrew Cellar
 // (both /opt/homebrew/Cellar and /usr/local/Cellar contain "/Cellar/"), in which

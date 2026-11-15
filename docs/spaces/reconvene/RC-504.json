@@ -1,0 +1,13 @@
+{
+  "id": "RC-504",
+  "kind": "decision",
+  "topic": "'Not set up' dot on the Spaces row",
+  "detail": "As the design says, with no spaces policy applied the Spaces sidebar row shows a grey dot labelled 'Not set up'. Every install that does not use spaces sees it permanently. Options: (a) keep it; (b) show nothing until a draft exists. Recommendation: (a) until the setup wizard (SP-052) ships, then revisit.",
+  "source": "https://github.com/willesq/orchestrator/pull/181",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-051",
+    "SP-052"
+  ],
+  "status": "open"
+}

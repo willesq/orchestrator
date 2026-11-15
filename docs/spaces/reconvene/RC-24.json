@@ -1,0 +1,10 @@
+{
+  "id": "RC-24",
+  "kind": "follow-up",
+  "topic": "Guard tests against the real data directory",
+  "detail": "internal/daemon tests that call db.Open() without setting ORCH_DATA_DIR use the developer's real orch.db (how RC-23 happened). Proposal: a TestMain in packages that open orch.db sets a temporary ORCH_DATA_DIR, or db.Open refuses the default path under go test.",
+  "source": "a local session and https://github.com/willesq/orchestrator/pull/149",
+  "raised": "2026-11-08",
+  "affects": [],
+  "status": "open"
+}

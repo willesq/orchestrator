@@ -1,0 +1,12 @@
+{
+  "id": "RC-1600",
+  "kind": "follow-up",
+  "topic": "GitHubModel.start() skips its refresh while a stopped refresh is finishing",
+  "detail": "Found while fixing pollingRetriesScopesUntilTheyLoad (SP-082). stop() cancels the poll task, but a refresh it started may still be awaiting its item load; a start() in that window calls refresh(), which returns at once because isRefreshing is still set, so the reopened GitHub tab waits a full interval (30 s) before reloading, and then reloads items only. The test now waits for the refresh to end; the model is unchanged. Proposed: have start() wait for or replace the finishing refresh, or let a cancelled refresh clear isRefreshing at cancellation.",
+  "source": "https://github.com/willesq/orchestrator/pull/206",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-082"
+  ],
+  "status": "open"
+}

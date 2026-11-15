@@ -1,0 +1,12 @@
+{
+  "id": "RC-145",
+  "kind": "decision",
+  "topic": "Replay of session logs runs in orchd (new ReplaySpaces RPC)",
+  "detail": "The session form of 'orch spaces replay' asks orchd (ReplaySpaces, operator-only) rather than reading orch.db and the command log from the CLI: stored revisions name every job's orgs and roots (DiffSpaces is operator-only for that reason) and the log is readable only by the operator or its own session (INV-12), so reading them client-side would bypass those gates. The payload-file form stays in the CLI with no orchd, so CI can replay the SP-001 fixtures. An argument holding '/' or '.' is a path (log owners cannot hold either). Payload fixtures carry no recorded verdicts, so CI compares their replayed verdicts with a committed golden file.",
+  "source": "https://github.com/willesq/orchestrator/pull/174",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-047"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "RC-124",
+  "kind": "follow-up",
+  "topic": "Content stored before SP-023 has no placement",
+  "detail": "Chunks written before SP-023 carry no origin, space or labels_v, and a migration copies them as they are. A docs file whose content and repo HEAD did not change, and a source file whose text did not change, is not written again, so it keeps no placement (or an earlier one) until 'orch rag relabel' (SP-027); a repo whose visibility flips without a new HEAD is not re-stamped (SP-030.1.a2). Repo visibility and owner node ID are recorded on chunks only, not in docs_repos (no migration added, to keep parallel lanes rebase-friendly). Readers must treat a missing space or stale labels_v as unreadable (INV-08, SP-025/SP-027).",
+  "source": "https://github.com/willesq/orchestrator/pull/173",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-025",
+    "SP-027",
+    "SP-030"
+  ],
+  "status": "open"
+}

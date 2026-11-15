@@ -1,0 +1,12 @@
+{
+  "id": "RC-802",
+  "kind": "decision",
+  "topic": "'*' may sit inside a folder name (oss-*)",
+  "detail": "D-65 says '*' matches one folder name. SP-076 matches each '*'-holding folder name with Go's path.Match, so '~/code/*' and '~/code/oss-*' both work, and '*' never crosses a '/'. '?', '[...]', '{...}', '\\', '!' and '**' inside a longer name are refused. If only a whole-name '*' is wanted, the parser can refuse 'oss-*' in one line.",
+  "source": "https://github.com/willesq/orchestrator/pull/189",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-076"
+  ],
+  "status": "open"
+}

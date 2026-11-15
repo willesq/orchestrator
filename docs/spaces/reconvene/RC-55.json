@@ -1,0 +1,14 @@
+{
+  "id": "RC-55",
+  "kind": "follow-up",
+  "topic": "SP-015 audit lows and documented limits",
+  "detail": "Accepted as Low over three SP-015 security reviews and documented in docs/internals/daemon.md: (1) expiry and the cap delete a chain in one statement, so a very large delete holds the write turn and the writer's queue can overflow into a gap (chunk deletes); (2) task chains look ended when no runner exists (at startup before the worker starts, or with the worker off); (3) every sweep scans all records to size chains (keep sizes in a side table); (4) wall-clock jumps move expiry; (5) the one-time VACUUM converting an SP-014 log runs before orchd serves and is retried on every start after a failure; (6) the writer builds records inside its write transaction, so slow work added to toolRecord would hold the write turn; (7) a pruned head written into the file by hand still excuses a chain deleted whole, or a prefix up to a record whose hash is copied: verify shows the cut and orchd's log has no matching line; (8) flooding the log (busy sessions, or an agent) pushes ended sessions' records other than refusals out early through the total cap; (9) a running chain's refusals are never cut, so a refusal flood is bounded only once its session ends.",
+  "source": "https://github.com/willesq/orchestrator/pull/157",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-015",
+    "SP-016",
+    "SP-041"
+  ],
+  "status": "open"
+}

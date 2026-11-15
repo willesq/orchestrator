@@ -89,7 +89,13 @@ type GuardSnapshot struct {
 	Rules       *OutboundRules `json:"rules,omitempty"`
 	RulesRev    int64          `json:"rules_rev,omitempty"`
 	RulesBroken bool           `json:"rules_broken,omitempty"`
-	WrittenAt   time.Time      `json:"written_at"`
+	// SpacesOff is set while memory spaces are switched off
+	// (spaces.enabled): the tool hooks then do nothing, as before spaces.
+	// orchd writes no policy with it, so a hook of an older release, which
+	// does not know the field, allows every call too. A snapshot without
+	// it is on.
+	SpacesOff bool      `json:"spaces_off,omitempty"`
+	WrittenAt time.Time `json:"written_at"`
 }
 
 // Mode is the guard's mode at now, after a timed switch's end.
@@ -484,4 +490,19 @@ func SettingsReopened(r GuardResult) GuardResult {
 // guard's mode when it is known, "" when not (then it enforces).
 func TimedOut(mode GuardMode) GuardResult {
 	return fixed(mode, Refuse, RuleGuardTimeout, 0)
+}
+
+// SwitchedOff reports whether memory spaces are switched off
+// (spaces.enabled), for the hooks that cannot ask orchd: orch-hook and the
+// git hooks. The snapshot orchd writes decides, as it carries the switch as
+// orchd applies it; only without a readable snapshot does enabled (orch.db)
+// decide. Reason, fail closed: a snapshot from an orchd that predates the
+// switch reads as on, as that orchd enforces, and a store that cannot be
+// read is on, so the guard keeps deciding.
+func SwitchedOff(guardDir string, enabled func() (bool, error)) bool {
+	if snap, err := ReadGuardSnapshot(guardDir); err == nil {
+		return snap.SpacesOff
+	}
+	on, err := enabled()
+	return err == nil && !on
 }

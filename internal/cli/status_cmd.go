@@ -194,10 +194,14 @@ func harnessInfo() []status.HarnessInfo {
 		} else {
 			info.Pending = n
 		}
-		if th, err := install.ToolHooks(a.Name(), bins, home); err != nil {
-			info.ToolHooks = &status.ToolHooks{Covered: th.Covered, Err: err.Error()}
-		} else {
-			info.ToolHooks = &status.ToolHooks{Covered: th.Covered, Wired: th.Wired, Missing: th.Missing}
+		// Reason: with memory spaces off no tool hook is wanted, so there
+		// is nothing to report, as before spaces.
+		if !install.SpacesOff() {
+			if th, err := install.ToolHooks(a.Name(), bins, home); err != nil {
+				info.ToolHooks = &status.ToolHooks{Covered: th.Covered, Err: err.Error()}
+			} else {
+				info.ToolHooks = &status.ToolHooks{Covered: th.Covered, Wired: th.Wired, Missing: th.Missing}
+			}
 		}
 		if a.Name() == install.ProviderClaudeCode {
 			// An unreadable store already fails Pending above.

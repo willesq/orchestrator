@@ -1,0 +1,14 @@
+{
+  "id": "RC-351",
+  "kind": "decision",
+  "topic": "Caches outside internal/rag that hold content are not keyed by space (INV-11)",
+  "detail": "SP-024 keys every cache in internal/rag by space or collection (the unchanged-write check, store objects and their layouts, the collection list). Elsewhere: orchd's PR detail cache (internal/daemon/reviews.go detailCache) holds PR titles and bodies keyed by URL only, served to whoever may call GetPRDetail; the docs sync's per-file hash cache (docs_files) decides whether a doc is written again and is keyed by URI (RC-124 covers its placement). Decide whether INV-11 requires keying these by space too, or whether SP-025's read enforcement (the caller's readable spaces) is the rule for them.",
+  "source": "https://github.com/willesq/orchestrator/pull/183",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-025",
+    "SP-030"
+  ],
+  "status": "open",
+  "note": "SP-026 (#200) checks the caller's spaces before GetPRDetail reads or fills the URL-keyed detail cache, so read enforcement already keeps it within spaces; recommended: settle RC-351 as 'read enforcement is the rule for caches outside internal/rag'."
+}

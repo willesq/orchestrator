@@ -1,0 +1,14 @@
+{
+  "id": "RC-47",
+  "kind": "decision",
+  "topic": "A resume moves a pin only to a fresh top-level harness in the same space",
+  "detail": "SP-017 moves a pin on SessionStart source=resume only when the new harness process could take a new pin of its own (not inside another session, holding no pin, not an orphan, under 5 minutes old, kernel-verified cwd) and its directory places into the pin's space. orchd cannot tell an in-process /resume from an agent calling PinSession itself to take a dead session of its space and write that session's command log (SP-017 security review, round 1 medium), so an in-process /resume of another process's session is refused and that session's tool events go to the process's own pin. A 'claude --resume' started in a directory of another space is also refused and that session runs unpinned. Confirm, or decide another rule.",
+  "source": "https://github.com/willesq/orchestrator/pull/154",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-017",
+    "SP-041"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: confirmed as built; see D-41."
+}

@@ -1,0 +1,13 @@
+{
+  "id": "RC-1400",
+  "kind": "follow-up",
+  "topic": "Relabel progress has no percentage",
+  "detail": "Relabel answers only when the run ends, so the pane's control, the needs-you strip and the sidebar badge show the chunks being relabelled and a spinner, not how far the run has got. A progress-reporting RPC (a streaming Relabel or a status read) would let them show a percentage; it needs an orchd.proto change.",
+  "source": "https://github.com/willesq/orchestrator/pull/202",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-079",
+    "SP-027"
+  ],
+  "status": "open"
+}

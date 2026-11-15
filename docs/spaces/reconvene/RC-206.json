@@ -1,0 +1,13 @@
+{
+  "id": "RC-206",
+  "kind": "decision",
+  "topic": "Claude Code sessions started in a checkout share one TMPDIR across spaces (SP-046.1.a6)",
+  "detail": "Measured 2026-11-12 with Claude Code 2.1.309 (RC-184 note): only CLAUDE_CODE_TMPDIR in the environment Claude Code starts with sets its sandboxed commands' TMPDIR; a settings file cannot, and no sandbox setting can. So a session started in a checkout without 'orch run' writes its temp files to /tmp/claude-<uid>, which every such session of every space can read; the per-checkout settings cannot give a space its own TMPDIR, and SP-046.1.a6 is not met on that path. Denying /tmp/claude-<uid> in the checkout settings breaks temp files (mktemp 'Operation not permitted'). What holds: 'orch run' sessions get their space's TMPDIR (/tmp/orch-<uid>/<space>/claude-<uid>), are denied /tmp/claude-<uid>, and every space's settings deny every other space's temp folder, so a file a launched session writes there is unreadable from other spaces however they start. Options: (a) require 'orch run' for Claude Code sessions in isolated spaces and treat a6's per-checkout half as the launcher's (needs a criteria change by the user); (b) deny /tmp/claude-<uid> in isolated spaces' checkout settings and accept broken temp files there; (c) accept the shared folder as a documented limit until Claude Code honours a settings value (ask upstream); (d) have orch start sessions some other way that sets the environment (shell alias or wrapper the user installs).",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "resolved",
+  "note": "Resolved 2026-11-14 as D-58 (option c)."
+}
