@@ -2,8 +2,8 @@
 
 ## Homebrew
 
-The repo and tap are private: tap over SSH, and have `gh` authenticated with read access to
-`willesq/orchestrator`; the formula uses it to download the release.
+The Homebrew tap is private: tap it over SSH. The formula downloads orch's release through your
+`gh` login (it depends on `gh`), so have `gh` authenticated first.
 
 ```sh
 brew install gh && gh auth login
@@ -23,7 +23,7 @@ of the daemon.
 
 ## GitHub accounts per space
 
-One gh login is enough. With [spaces](OPERATIONS.md#spaces), every space uses whichever gh login
+One gh login is enough. With [spaces](SPACES.md), every space uses whichever gh login
 you already have (`gh auth login`) and your normal Claude Code configuration, with nothing to set
 up (D-59). The trade-off: with one login the GitHub account is not a boundary between jobs. A
 session working for one job can reach any repo that login can. The tool guard, memory spaces and
@@ -63,7 +63,8 @@ Memory spaces (policy-driven isolation of memory, tool calls and outbound text b
 off on a new install. Until you turn them on, orch works as it did before spaces, and install adds
 no tool hooks. To turn them on, use Orch.app (Settings → Spaces) or run `orch spaces on`, then
 `orch install --apply`. An upgrade from a release where you had applied a spaces policy keeps
-spaces on. See [OPERATIONS.md](OPERATIONS.md#spaces).
+spaces on. See the [spaces guide](SPACES.md) and the commands in
+[OPERATIONS.md](OPERATIONS.md#spaces).
 
 ## What `orch install` does
 
@@ -268,6 +269,8 @@ launchd agent). It runs with orchd down.
   every path it deletes and asks you to type `delete` (or pass `--yes`). Backups are kept.
 - `--target claude-code`, `codex` or `gemini` removes that harness's wiring and keeps the shared
   policy, the alias and orchd for the others.
+- `--no-git-hooks` leaves orch's git hooks in place; they then refuse commits and pushes once orch
+  is gone.
 - Credentials and logins are never touched.
 
 **Finding git hooks.** `orch guard git-hook --install` records where it puts hooks, but older

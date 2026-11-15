@@ -182,6 +182,10 @@ which would silently turn everything back on.
 The three changes are operator-only (`operatorRPC` beside each handler in `internal/daemon/settings.go`): adding a hook means
 choosing a command Claude Code will run, and a permission rule widens what agents may do, so a
 queued task is refused (`PermissionDenied`) however it reaches the socket.
+While a spaces policy is applied (or kept), the three are Orch.app's alone: a terminal is not the operator
+(D-71), and an unlocked terminal is still refused, since a toggle outlasts the unlock (D-74, D-78;
+`policyOperatorOnly` in `internal/daemon/policy_operator.go`). A policy kept while spaces are
+switched off counts too; with no policy ever applied, nothing changes.
 
 ## Adding a provider
 

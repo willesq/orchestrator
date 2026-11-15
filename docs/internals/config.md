@@ -97,8 +97,8 @@ does not leave its services down until someone notices. When orchd cannot run at
 | `ingest.exclude_dirs` | vendor, node_modules, bower_components, third_party, Pods, .venv, venv, \_\_pycache\_\_, .tox, .terraform, .next, dist, build, target | never walked; `.git` always skipped |
 | `sources.known_roots` | `[~/code]` | where `<owner>/<repo>` checkouts live |
 | `sources.scan_interval` | `5m` | sources scheduler tick |
-| `feeds.chat.direct_messages` | empty | chat tenants (`slack:<id>`, `teams:<id>`) whose DMs and group DMs a chat feed stores; found only by the operator's `orch search --direct-messages` ([memory.md](memory.md#chat-feeds)); sensitive |
-| `feeds.chat.containers` | empty | per tenant, the channel and meeting IDs a chat feed stores; nothing else is stored (DMs follow `direct_messages`); sensitive. Tenant keys are folded to lower case when loaded; tenants match regardless of case |
+| `feeds.chat.direct_messages` | empty | chat tenants (`slack:<id>`, `teams:<id>`) whose DMs and group DMs a chat feed stores; found only by the operator's DM search (Orch.app's Memory → Direct messages, or `orch search --direct-messages`; [memory.md](memory.md#chat-feeds)); sensitive. Nothing runs the chat connectors yet (RC-1650), so this only takes effect once they are scheduled |
+| `feeds.chat.containers` | empty | per tenant, the channel and meeting IDs a chat feed stores; nothing else is stored (DMs follow `direct_messages`); sensitive; like `direct_messages`, unused until the connectors are scheduled (RC-1650). Tenant keys are folded to lower case when loaded; tenants match regardless of case |
 | `docs.scan_interval` | `1m` | docs scheduler tick |
 | `docs.repo_cache` | `<data>/repos` | clones of GitHub owners' repos |
 | `docs.default_refresh` | `6h` | per-owner refresh cadence |
@@ -193,7 +193,10 @@ so the diff names who saved the draft and shows every value it adds or removes.
 
 Apply and diff are the operator's alone. They are refused to queued tasks, to any caller with an
 agent harness among its ancestors, and to a caller orchd cannot place or whose ancestry it cannot
-read ([daemon.md](daemon.md#queued-callers)): the diff names every job's orgs and roots.
+read ([daemon.md](daemon.md#queued-callers)): the diff names every job's orgs and roots. Once a
+policy is applied, a terminal is no longer the operator: only Orch.app is (D-71), or a terminal
+the operator unlocked in Orch.app ([daemon.md](daemon.md#operator-unlock)). An unlocked terminal
+may diff, but applying stays Orch.app's alone (D-78).
 `SetSpacesDraft` is open to interactive sessions (agents may propose a policy, D-25) but refused
 to queued tasks.
 
@@ -417,7 +420,7 @@ These problems name the space and the entry's position, never the entry, so an e
 a term a folder name holds. `orch spaces why <path>` (alias `explain`) shows the rule:
 `public_path` and, to the operator only, the pattern that matched; or `no_public_proof` saying no
 pattern matched. A folder is explained for the files directly in it. `orch spaces diff` shows
-entries added and removed. The app does not edit `public_paths` yet (SP-053). A listed folder
+entries added and removed. The Spaces pane's Edit page edits them per public space (SP-053). A listed folder
 is trusted as written: any session can write files into it, or create a new folder a `*` or `**`
 pattern matches, and the sources refresh indexes them into public (accepted risk RC-404), so list
 only folders whose contents you would publish.
@@ -431,8 +434,8 @@ defines a group named `termb` or `terma`; errors name the line number, never the
 named elsewhere only by its space, line number and the first 12 hex digits of its line's
 HMAC-SHA256, keyed with the SHA-256 of the whole file. How the terms are enforced is in
 [hooks.md](hooks.md#outbound-terms). How strictly commands are read is a fixed baseline of named
-rules ([hooks.md](hooks.md#outbound-baseline), D-60); there is no setting for it yet. SP-075 will
-let the operator switch baseline rules by id and add stricter ones. The whole check is switched
+rules ([hooks.md](hooks.md#outbound-baseline), D-60); the operator can switch baseline rules by id
+and add stricter ones (outbound rules, below). The whole check is switched
 with the `terms` layer below, which orchd also writes into the guard's snapshot for the hook
 (RC-116).
 
@@ -445,13 +448,15 @@ everything is in one implicit `shared` space and orch behaves as it did before s
 settings cannot change them, and the tool hooks they cover cannot be turned off through orch
 settings either (D-40). Each layer (`memory`, `guard`, `terms`, `sandbox`, `hooks`) is switched
 only by the operator, with `SetEnforcement` (`orch spaces enforce <layer> <state> [--for 15m]`),
-optionally for a time after which it reverts. The defaults are memory on, guard
+optionally for a time after which it reverts. Under a policy, switching a layer to a looser state
+is Orch.app's alone, even for an unlocked terminal (D-78). The defaults are memory on, guard
 `block-other-jobs`, terms on, sandbox on and hooks on. Every change is logged with time and
 caller; while a layer is off, `orch status` and every session's start digest say so. See
 [daemon.md](daemon.md#enforcement-switches).
 
 **Outbound rules** (SP-075; `spaces_terms_rules`, migration `0030`). The outbound terms check's
-baseline rules can each be switched off, and stricter rules added, by the operator only; like the
+baseline rules can each be switched off, and stricter rules added, by the operator only (under a
+policy, Orch.app only, D-78); like the
 switches they are not settings, every change is logged with time and caller, and a rule's value
 never leaves `orch.db` and the guard snapshot (INV-07). Switching the `terms` layer off turns the
 whole check off, rules included. See [hooks.md](hooks.md#outbound-rules) and

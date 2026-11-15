@@ -265,7 +265,9 @@ under the home directory, and for the result's last non-empty line to be
    GitHub or the worktree.
 
 Bare repositories untouched for 30 days are pruned when orchd starts. Decisions stay; they only lose
-their commit list. These RPCs are operator-only, so an agent cannot land its own proposal.
+their commit list. These RPCs are operator-only, so an agent cannot land its own proposal; while a
+spaces policy is applied, `LandPR`, `UndoPRLanding` and `DiscardPRLanding` are Orch.app's alone,
+even for an unlocked terminal (D-71, D-78; `policyOperatorOnly`).
 
 The app keeps Push disabled until the user has opened the diff, and says when a diff was cut off or
 a binary file changed.
@@ -277,8 +279,9 @@ a binary file changed.
 - `fsck` runs before each push, so a slow repository takes longer to push, and a change made between
   the check and the push is not caught. A worktree's `.git` file may point outside home; only the
   commit is copied from it.
-- A process that outlives its task's process tree counts as the operator, as for every operator-only
-  RPC ([daemon.md](daemon.md)), so it could call `LandPR`. A same-user agent could equally run `git
+- With no spaces policy applied, a process that outlives its task's process tree counts as the
+  operator, as for every operator-only RPC ([daemon.md](daemon.md#operator-evidence)), so it could
+  call `LandPR`; under a policy only Orch.app can (D-71). A same-user agent could equally run `git
   push` itself: landing is a review gate for honest and prompt-injected runs, not a containment
   boundary. The user's global git config is still read, since commit signing needs it.
 - Protected heads are matched by name (the base, `main`, `master`, `develop`, `trunk`), not by GitHub's

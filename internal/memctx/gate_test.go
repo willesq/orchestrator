@@ -27,7 +27,7 @@ func TestCheckPrompt(t *testing.T) {
 		{"notice", "[SYSTEM NOTIFICATION - NOT USER INPUT] the widget cache task ended", false, ReasonHarnessPrompt},
 		{"empty", "   ", false, ReasonNoTopic},
 		{"whitespace-padded wrapper", "  <system-reminder>widget cache</system-reminder>", false, ReasonHarnessPrompt},
-		{"shell prompt words are not a topic", "williamesquivel@MacBook-Pro-14-M3Max orchestrator % ", false, ReasonNoTopic},
+		{"shell prompt words are not a topic", "user@host orchestrator % ", false, ReasonNoTopic},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

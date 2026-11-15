@@ -65,7 +65,8 @@ orchd stores the events in its [command log](daemon.md#command-log).
 
 The tool hooks are an [enforcement switch](daemon.md#enforcement-switches) (D-40): orch settings
 cannot turn them off or on (`SetSettingEnabled` refuses), and `orch install` writes them whatever a
-settings toggle says. Only the operator can, with `orch spaces enforce hooks off [--for 15m]`,
+settings toggle says. Only the operator can (under a policy, Orch.app alone: an unlocked terminal
+may not switch a layer off, D-78), with `orch spaces enforce hooks off [--for 15m]`,
 which turns Claude Code's two entries off in its settings (Codex's `hooks.json` is not managed by
 orch settings, so its `pre-tool-use` stays), is logged with time and caller, and is named in
 every session's start digest while it lasts. With the guard switched off, events are still

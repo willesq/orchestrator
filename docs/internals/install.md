@@ -31,7 +31,8 @@ Things installed outside install itself (git hooks before the registry) get a di
 
 **One registered list.** `install.FullUnits` is the list, in install order: prerequisites (gh
 login, which only the user can do), data, checkout settings, the embedding model, then each
-harness adapter's units (`Adapter.Units`), then git hooks, the daemon and the app. `InstallPlan`
+harness adapter's units (`Adapter.Units`), then past tools (the retired `gittree` helper), git
+hooks and their discovery, the daemon and the app (`internal/install/machine.go`). `InstallPlan`
 walks it in order (every edit, then every step); `UninstallPlan` walks it in reverse (every undo
 step, then every edit's `Reverse`, then each unit's `Dirs` left empty, deepest first). Units shared
 by several harnesses (the shared policy, the modules, the alias, the launchd agent) and repeated
@@ -569,7 +570,10 @@ and to `.claude/skills`, `agents`, `commands` and `hooks` in a writable folder.)
 
 **Launcher.** `orch run <space> -- claude|codex [args...]` starts a session with the space's
 profile from any folder. It reads the applied policy through `DiffSpaces` (operator-only), so it
-works in your own terminal and not inside an agent session. It refuses a space not in the policy,
+never works inside an agent session or a queued task, and it needs an applied policy. Under a
+policy only Orch.app is the operator (D-71), so from a terminal it works only while that terminal
+is unlocked (`orch spaces unlock --for 15m -- orch run <space> -- claude`; the harness's first
+call to orchd then ends the unlock, so the session is not the operator). It refuses a space not in the policy,
 and a folder another space holds or whose space cannot be decided unless `--force`; a folder no
 root or remote places is allowed. It then replaces itself with the harness (`exec`), with the
 variables set for the harness only:
@@ -602,7 +606,7 @@ variables set for the harness only:
 
 **Sandbox setting (D-61).** Whether orch writes its sandbox rules is the operator's lasting choice,
 `orch spaces sandbox auto|on|off` (operator-only, refused inside agent sessions and orchd's
-tasks; stored in orch.db, each change logged with its time and caller; see
+tasks, and under a policy Orch.app's alone, even for an unlocked terminal, D-78; stored in orch.db, each change logged with its time and caller; see
 [daemon.md](daemon.md#sandbox-setting)):
 
 - `auto` (the default): rules only for a session they keep out of another isolated space's root

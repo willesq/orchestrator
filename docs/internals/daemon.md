@@ -96,11 +96,14 @@ opened it (`internal/daemon/callers.go`) rather than trusting clients to check `
 - **Report:** `orchdclient` sends the `orch-task-id` metadata when `ORCH_TASK_ID` is set, which
   names the task in the refusal and covers callers outside orchd's process tree.
 
-Unary and stream interceptors allow a queued caller only the RPCs that read state: `Ping`,
-`Search`, `ListSources`, `ListTasks`, `GetTask`, `Status`, `RecommendModel`, `ListPRs`, the
-GitHub reads (`GetGitHubIdentity`, `ListGitHubScopes`, `ListGitHubRepos`, `ListGitHubItems`),
-`TailLogs`, `GetSystemMetrics`, `ListDocs`, `GetDocument`, `GetDocsSync` and
-`ListRegisteredSources`. Every other RPC (`Dispatch`, `RateTask`, `RetryTask`, `CancelTask`, `Ingest`, `DeleteSource`,
+Unary and stream interceptors allow a queued caller only the RPCs registered with `taskRPC`
+([Adding an RPC](#adding-an-rpc)), which read state: `Ping`, `Search`, `ListSources`,
+`ListTasks`, `GetTask`, `Status`, `RecommendModel`, `ListPRs`, the GitHub reads
+(`GetGitHubIdentity`, `ListGitHubScopes`, `ListGitHubRepos`, `ListGitHubItems`), `TailLogs`,
+`GetSystemMetrics`, `ListDocs`, `GetDocument`, `GetDocsSync`, `ListRegisteredSources`,
+`ListSettings`, `GetSafetyNet`, the spaces reads `ExplainPlacement`, `GetEnforcement`,
+`ListOutboundRules` and `ListToolEvents` (each answers only about what the caller may see), and
+`RecordToolEvent`, which a task's tool hooks send. Every other RPC (`Dispatch`, `RateTask`, `RetryTask`, `CancelTask`, `Ingest`, `DeleteSource`,
 `SummarizeSession`, the migration calls (`MigrateHybrid`, `DropBackup`, `ReindexKeywords`), the source, docs-sync, GitHub-scope, `RequestGitHubSweep` and `Restart` calls, and any
 RPC added later) is refused with `PermissionDenied`, and the refusal is logged. A test fails
 when an RPC is in neither list. A queued session's own transcript is still
@@ -292,8 +295,10 @@ space](#reading-memory-by-space)). Any process in a session can
 end that session's pin early; retention (SP-015) still keeps a live process's log, and a
 resume in the same process clears the end. The detached fake harness above can also resume a
 dead or ended session of any space whose directory it starts in, and then write that session's
-command log, unless the guard refuses its launch (above). Codex is not pinned yet: orch's Codex install registers no SessionStart or
-SessionEnd hook. SP-011 (below) resolves callers from these rows, and
+command log, unless the guard refuses its launch (above). Codex sessions are pinned the same way:
+orch's Codex install registers SessionStart and SessionEnd too (every Claude Code event but
+`CwdChanged`, `internal/install/codex.go`), and Codex runs them only once the user trusts its
+hooks. Gemini CLI sessions are never pinned (D-20). SP-011 (below) resolves callers from these rows, and
 [session liveness](#session-liveness) follows their processes.
 
 ### Session liveness
@@ -570,8 +575,11 @@ spaces), and the detail goes to orchd's log; others get the error as before.
 
 Chat direct messages are left out of every one of these reads, for every caller, the operator
 included (SP-060). Only `SearchDirectMessages` (`orch search --direct-messages`) keeps them, and
-only the operator may call it: queued tasks (D-19) and interactive sessions are refused; see
-[memory.md](memory.md#chat-feeds).
+only the operator may call it: queued tasks (D-19) and interactive sessions are refused. While a
+spaces policy is applied that is Orch.app, whose Memory → Direct messages view calls it (D-81,
+SP-083); with no policy, also a terminal outside any agent session. `SearchDirectMessages` is not
+among the RPCs [an unlock](#operator-unlock) keeps from a terminal, so an unlocked terminal can call
+it too, although D-81 meant DM search for Orch.app alone. See [memory.md](memory.md#chat-feeds).
 
 Each search hit names the space its chunk is stored in (`SearchHit.space`, from the payload's
 `space`, SP-083), and a chat hit its tenant (`SearchHit.tenant`,
@@ -992,8 +1000,9 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
   [hooks.md](hooks.md#refusal-events)). With the guard off or logging nothing is refused, so no
   refusal event is written; the command log still records the would-be verdict.
 - **The hooks switch** (D-40): orch settings cannot turn the Claude Code tool hooks on or off
-  (`SetSettingEnabled` refuses them with `FailedPrecondition`), and `orch install` writes them
-  whatever a settings toggle says ([install.md](install.md#claude-code)). Switching `hooks` off
+  (`SetSettingEnabled` refuses them with `FailedPrecondition`), and while spaces are on `orch
+  install` writes them whatever a settings toggle says ([install.md](install.md#claude-code)); while
+  spaces are off it writes none ([install.md](install.md#tool-hooks-and-the-spaces-switch)). Switching `hooks` off
   turns Claude Code's `PreToolUse` and `CwdChanged` orch-hook entries off through the settings
   service, and on again when switched back or when the timer reverts it; install then leaves them
   out while the switch is off. Codex's `hooks.json` is not managed by orch settings, so its
@@ -1111,7 +1120,16 @@ they keep it out of another isolated space's root.
 ## gRPC API
 
 Service `orchd.v1.Orchd` (`internal/rpc/orchdv1/orchd.proto`; regenerate with `make proto`).
-Times are Unix seconds with 0 meaning unknown or open.
+Times are Unix seconds with 0 meaning unknown or open. The tables below list most RPCs; the rest
+are described with their feature: the spaces policy's `SetSpacesDraft`, `DiffSpaces` and
+`ApplySpaces` ([config.md](config.md#spaces-policy)), `ExplainPlacement`
+([memory.md](memory.md#placement)), `Relabel` ([memory.md](memory.md#relabel)),
+`ListQuarantine` and `PurgeQuarantine` ([memory.md](memory.md#quarantine)), `BackfillSessions`
+([memory.md](memory.md#transcripts-and-harness-text)), `ListToolEvents` and `SummarizeToolLog`
+([command log](#command-log)), `SetSandboxSetting` ([sandbox setting](#sandbox-setting)),
+`RequestUnlock`, `ProveUnlock`, `ConfirmUnlock`, `ListUnlocks` and `Lock`
+([operator unlock](#operator-unlock)), and `SetPRReviewUpdateInPlace`
+([tasks.md](tasks.md#pr-review-watch)).
 
 | RPC | Request → response | Server rules |
 |---|---|---|
@@ -1299,6 +1317,8 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `<data>/guard/` (0700) | the [enforcing guard](hooks.md#enforcing-guard)'s inputs, 0600: `policy.json` (applied policy, guard switch, `spaces_off`) and `pins/<session>.json` |
 | `<data>/migrations/spaces-split.json` (0600) | the split the [spaces switch](#spaces-switch) owes after being turned on; removed when the split ends |
 | `<data>/workflows.db` | durable workflow state |
+| `<data>/terms-fingerprint-key` (0600) | the random key `GetSpaceTerms` hashes terms files with |
+| `<data>/git-hooks.json` | the hooks folders `orch guard git-hook --install --apply` wrote to, which `orch uninstall` reads ([install.md](install.md#uninstall)) |
 | `<data>/qdrant/`, `bin/qdrant`, `qdrant-api-key` (0600) | vector store, engine binary, API key |
 | `<data>/models/minilm/` | embedding model |
 | `<data>/sessions/` | session records and checkpoints (YAML), per-session hook state |
@@ -1323,6 +1343,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `spaces_enforcement`, `spaces_enforcement_log` | layer (key), state, set_at, set_by, until, previous; every change with at, layer, state, previous, by, until, expired ([enforcement switches](#enforcement-switches)) |
 | `spaces_terms_rules` | rev (key), at, by, action, rule_id, rules (JSON), hash; one row per change of the [outbound rules](#outbound-rules) |
 | `settings_items` | provider, kind, identity (key), enabled, origin (`orch`/`you`/`found`), payload (JSON), present, removed_at, created_at, updated_at ([settings.md](settings.md)) |
+| others | `spaces_revisions`, `spaces_applied`, `spaces_org_bindings` and `spaces_retags` ([config.md](config.md#spaces-policy), [memory.md](memory.md#retag)); `toollog_anchors`, `toollog_cuts` and `toollog_copy_started` ([command log](#command-log)); `github_scopes`, `pr_landings` and `pr_reviews` ([tasks.md](tasks.md)); `session_files`, `prune_state` and `prune_confirm` |
 
 ## Invariants
 

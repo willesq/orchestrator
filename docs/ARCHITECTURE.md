@@ -41,14 +41,15 @@ flowchart LR
 
 | Binary | Role |
 |---|---|
-| `orchd` | Daemon. Serves gRPC on a Unix socket and runs every long-lived subsystem. |
+| `orchd` | Daemon. Serves gRPC on a Unix socket and runs every long-lived subsystem. Decides every caller's and every chunk's space when [spaces](SPACES.md) are on. |
 | `orch` | CLI: search, ingest, dispatch, install and uninstall, status, config. Also runs the MCP servers (`orch mcp`). |
 | `Orch.app` | macOS menu bar app (Swift, in `macos/`): daemon health and control. A client like `orch`; it never opens the databases. See [internals/app.md](internals/app.md). |
 | `orch-hook` | Called by the harness on lifecycle events. Does only local work and hands anything slow (storing transcripts and edited docs, refreshing PRs) to `orchd`. |
 
 `orchd` supervises these subsystems, each restartable on its own (`orch restart <name>`):
-`qdrant`, `workflow-worker`, `sources-scheduler`, `docs-scheduler`, `pr-babysitter`,
-`routing-evaluator`, `handoff`, `session-summarizer`, `self-update`.
+`qdrant`, `workflow-worker`, `sources-scheduler`, `docs-scheduler`, `pr-reviews`,
+`pr-babysitter`, `routing-evaluator`, `handoff`, `session-summarizer`, `settings-watcher`,
+`self-update`.
 
 ## How data flows
 
@@ -64,6 +65,15 @@ reciprocal rank fusion. Each hit keeps its cosine score so relevance floors stay
 best hits to the prompt. At session end it writes the session record and hands the transcript
 to `orchd`, which stores it redacted in the background and later replaces the record with a
 model-written summary.
+
+**Spaces.** With memory spaces on ([SPACES.md](SPACES.md); off by default), orchd places every
+write in one space (or quarantine) from where it came from, keeps one Qdrant collection per space,
+and answers each read only from the spaces its caller may read. It finds the caller's session from
+the kernel-reported peer process, never from request fields (on macOS; see
+[internals/daemon.md](internals/daemon.md) for the limits). A `pre-tool-use` hook refuses tool
+calls that reach another job and records each call in the command log (`toollog.db`). The policy
+is a numbered revision in `orch.db` that only the operator applies: under a policy, Orch.app, or
+a terminal unlocked from it.
 
 **Tasks.** `orch dispatch` or the `queue_dispatch` tool records a durable workflow. The worker
 runs it as a headless agent session, optionally verifies the result by running the repo's tests,
@@ -93,12 +103,13 @@ Swift package in `macos/`.
 | Area | Packages |
 |---|---|
 | Daemon and RPC | `daemon`, `rpc/orchdv1` (generated from `orchd.proto`), `orchdclient`, `supervisor`, `selfupdate` |
-| Memory | `rag` (chunk, embed, store, search, rank, migrate, re-index), `embed`, `bm25`, `qdrant`, `redact`, `rageval` (golden set, seed, bootstrap), `memctx` (prompt pointers, trust tiers) |
-| Sources | `sources` (registry, freshness, canonical URIs), `docs` (GitHub repos), `mdwalk`, `gitdates` (commit dates), `session`, `summarize`, `handoff` |
-| Tasks and routing | `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `taskfmt`, `reviews` (PR review watch) |
+| Memory | `rag` (chunk, embed, store, search, rank, migrate, re-index), `embed`, `bm25`, `qdrant`, `redact`, `rageval` (golden set, seed, bootstrap), `memctx` (prompt pointers, trust tiers), `timeline` (dated transcript text) |
+| Sources | `sources` (registry, freshness, canonical URIs), `docs` (GitHub repos), `github` (identities, org lookups), `mdwalk`, `gitdates` (commit dates), `session`, `summarize`, `handoff`, `feeds` (chat connector framework; `feeds/slack`, `feeds/teams`, not yet run by orchd) |
+| Spaces | `spaces` (policy, validation, placement, guard, tool-call targets, outbound terms, per-space harness settings), `toollog` (command log), `procstat` (process ancestry) |
+| Tasks and routing | `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `taskfmt`, `reviews` (PR review watch), `landing` (PR landings) |
 | Harness integration | `install` (adapters, shipped agents, skills and policy), `safetynet` (cc-safety-net pin, detection and guard rules), `settings` (managed Claude Code and cc-safety-net settings, their store and reconciler; [internals/settings.md](internals/settings.md)), `hook`, `mcpserver` |
 | CLI and status | `cli`, `status`, `check` |
-| Infrastructure | `config`, `paths`, `db`, `events`, `prs`, `model`, `version` |
+| Infrastructure | `config`, `paths`, `db`, `events`, `prs`, `model`, `version`, `logs`, `prunecap` |
 
 ## Internals
 
@@ -110,7 +121,8 @@ configuration, and a build order for a re-implementation.
 
 Plans that shaped the code, kept for context; the code is the source of truth:
 [GO_REWRITE_PLAN.md](GO_REWRITE_PLAN.md), [MODEL_ROUTING_PLAN.md](MODEL_ROUTING_PLAN.md),
-[RAG_SENSITIVITY_PLAN.md](RAG_SENSITIVITY_PLAN.md).
+[CONFIG_IN_DB_PLAN.md](CONFIG_IN_DB_PLAN.md) and
+[RAG_SENSITIVITY_PLAN.md](RAG_SENSITIVITY_PLAN.md) (superseded by memory spaces).
 
 Memory spaces are planned in [spaces/spaces-features.json](spaces/spaces-features.json),
 with each feature's status and evidence in [spaces/state/](spaces/state/) and each reconvene item

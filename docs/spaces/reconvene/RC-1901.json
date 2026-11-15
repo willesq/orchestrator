@@ -1,0 +1,13 @@
+{
+  "id": "RC-1901",
+  "kind": "decision",
+  "topic": "`orch run` needs an unlocked terminal once a policy is applied",
+  "detail": "`orch run <space> -- claude|codex` reads the applied policy through DiffSpaces (internal/cli/run_cmd.go appliedPolicy), which is operator-only (refuseNonOperator). Under a policy only Orch.app is the operator (D-71), so from a plain terminal `orch run` is refused, and it works only as `orch spaces unlock --for 15m -- orch run <space> -- claude` confirmed in Orch.app. Codex sessions depend on `orch run` for per-space settings (it has no per-checkout file), so this adds a confirmation per launch. Options: (a) keep it and document it (done in docs/SPACES.md and docs/internals/install.md); (b) add a read-only RPC that returns only the named space's launch profile (its own roots, denies, gh and Claude config dirs) to a terminal caller, without the other spaces' orgs and roots; (c) let Orch.app launch `orch run` sessions. Recommendation: (b), since the launcher needs only the one space's profile.",
+  "source": "https://github.com/willesq/orchestrator/pull/217",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-046",
+    "SP-077"
+  ],
+  "status": "open"
+}

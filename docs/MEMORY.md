@@ -9,6 +9,9 @@
 | Web pages | Fetched on a schedule (`orch source add web <url>`) | `web` |
 | Anything else | `orch ingest`, or the `rag_ingest_text` MCP tool (not from queued tasks) | your choice |
 
+Slack and Teams connectors exist in the code, but nothing in orchd runs them yet, so no chat is
+stored ([internals/memory.md](internals/memory.md#chat-feeds)).
+
 Every stored chunk records when it was stored. Session transcripts mark each turn with its UTC
 time, such as `[2026-10-21T14:02Z] user: …`, and each chunk is dated by the turns it holds, so a
 session spanning days is found under the day each part happened. Session records carry the
@@ -97,7 +100,7 @@ orch search --mode dense "where is sync_meta kept"
 orch search --require-tag owner:willesq --require-tag repo:orchestrator "install"   # one repo's docs
 orch search --uri repo://willesq/orchestrator/README.md "install"                   # one doc
 orch search --ranking plain --per-source -1 "install"  # fusion order, no cap
-orch search --direct-messages "review my patch"       # chat DMs too (operator only); no other search returns them
+orch search --direct-messages "review my patch"       # chat DMs too (operator only; under a spaces policy use Orch.app, Memory → Direct messages); no other search returns them
 orch rag show repo://willesq/orchestrator/README.md   # the doc as memory holds it
 ```
 
@@ -175,14 +178,18 @@ switches them back, `--drop-backup` deletes the backup's space collections with 
 
 ## Relabelling after a spaces policy change
 
+Memory spaces are off by default; this section and the next two apply only after you turn them
+on and apply a policy ([SPACES.md](SPACES.md)). While spaces are off, `orch rag relabel`,
+`orch quarantine purge` and `orch spaces retag` are refused.
+
 Content stored before memory spaces, before each space had its own collection, or under an older
 spaces policy revision is not read by the spaces it belongs to until it is relabelled. After you
 apply a policy (and after each later revision), relabel it from Orch.app: the Spaces pane shows
 how many stored chunks are labelled for an older policy and a **Relabel Now** button, with the run's
 progress and result. orchd does not relabel on its own after an apply (D-76). While a policy is
 applied only Orch.app is the operator (D-71), so the same commands from a terminal are refused
-unless the terminal is unlocked ('orch spaces unlock', confirmed in Orch.app; see
-OPERATIONS.md); with no policy they run in a terminal
+unless the terminal is unlocked (`orch spaces unlock`, confirmed in Orch.app; see
+[SPACES.md](SPACES.md)); with no policy they run in a terminal
 outside any agent session:
 
 ```sh
@@ -195,7 +202,7 @@ client notes with no session space, sessions whose transcript is gone, conflicts
 quarantine, never to public or another space; retag what you want. Chunks reported as left stale
 (for example, GitHub could not be asked about a repo) are retried by the next run.
 
-To see and clear quarantine (operator only):
+To see and clear quarantine (operator only: Orch.app or an unlocked terminal under a policy):
 
 ```sh
 orch quarantine list                              # quarantined sources and their chunk counts
@@ -208,8 +215,9 @@ quarantined source (see below), so it needs `--confirm` like any move out of qua
 
 ## Retagging a source
 
-To move one source to another space (for example a note left in quarantine), run, in a terminal
-outside any agent session:
+To move one source to another space (for example a note left in quarantine), use **Retag** in
+Orch.app's Spaces pane (Edit → Sources), or run, in a terminal outside any agent session (under a
+policy, one you unlocked from Orch.app):
 
 ```sh
 orch spaces retag <source_uri> <space>             # a space of the applied policy, or quarantine
