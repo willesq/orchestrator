@@ -1,0 +1,13 @@
+{
+  "id": "RC-1004",
+  "kind": "decision",
+  "topic": "A personal root that would hold an open org's private repo",
+  "detail": "Setup gives a Personal or Job group a folder root only when that folder would not take another job's checkout or an open org's private repo out of quarantine. On a typical layout (personal and open-source checkouts side by side in ~/code with one private open-org repo) personal therefore gets no root: its checkouts are placed by their GitHub owner, and non-git folders under ~/code go to quarantine. Options: (a) keep this, so the private open-org repo stays in quarantine (what SP-052.1 a1 asks); (b) bind ~/code to personal anyway, sending that repo to personal; (c) offer a narrower root per checkout. Recommendation: (a), with (c) in the advanced editor (SP-053).",
+  "source": "https://github.com/willesq/orchestrator/pull/193",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-052",
+    "SP-053"
+  ],
+  "status": "open"
+}

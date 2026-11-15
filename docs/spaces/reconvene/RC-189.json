@@ -1,0 +1,12 @@
+{
+  "id": "RC-189",
+  "kind": "follow-up",
+  "topic": "Sandboxed git cannot change tracked .claude files",
+  "detail": "Each checkout's rules deny shell writes to its .claude folder, so a git checkout or pull run by the session that changes tracked files under .claude/ fails; the file tools and the user's terminal are unaffected.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

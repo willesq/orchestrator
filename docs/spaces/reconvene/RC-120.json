@@ -1,0 +1,15 @@
+{
+  "id": "RC-120",
+  "kind": "decision",
+  "topic": "Space of client notes from the operator, queued tasks and unidentified callers",
+  "detail": "SP-023 places a client Ingest only in the caller's pinned space; the operator at a terminal ('orch ingest'), queued tasks and unidentified callers have none, so under a policy their notes go to quarantine until retagged (SP-071). D-46 says a task writes to its dispatcher's space, but tasks do not record the dispatching session yet (SP-025.1.a8/SP-029). Decide how the operator's own notes are placed (e.g. an operator-only space choice, or the placement of the operator's cwd).",
+  "source": "https://github.com/willesq/orchestrator/pull/173",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-023",
+    "SP-025",
+    "SP-029",
+    "SP-071"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "SP-078",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "07bbf7d6ebdef8bf92969e3c99ef89b134846f40",
+  "verified_at": "2026-11-15T05:18:05Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-078-settings-operator-only",
+  "pr": "https://github.com/willesq/orchestrator/pull/199",
+  "evidence": {
+    "SP-078.1": [
+      "a1: TestSettingsAreTheOperatorsUnderAPolicy (internal/daemon/policy_operator_test.go), one subtest per RPC (SetConfig with a Sensitive key, SetSettingEnabled, AddSetting, RemoveSetting, InstallSafetyNet, Restart, LandPR, UndoPRLanding, DiscardPRLanding): under a policy each is refused with PermissionDenied before its handler runs to a pinned session, an unpinned harness session, a queued task, a terminal and a detached process, each refusal is logged (the session's names it: refused <RPC> from session sess-a), and Orch.app is served; also the stream path, an unreadable SetConfig, and a real applied policy (policyApplied). Passes.",
+      "a2: TestSessionsKeepTheirRPCsUnderAPolicy: under a policy pinned and unpinned sessions still call Ingest, Dispatch, ListTasks, GetTask, RateTask, RetryTask, CancelTask, WatchTasks, Search and SetConfig with a non-Sensitive key, without the policy being read; with no policy every listed settings RPC runs for sessions, terminals, detached processes and Orch.app (INV-10). Existing TestUnprovenOperatorGetsTaskLimits and TestOperatorOnlyRPCsNeedOrchApp still pass. Passes.",
+      "a3: docs/internals/daemon.md, Operator evidence, lists the RPCs operator-only under a policy (table) and corrects the recovery server line.",
+      "go test ./... passes except a timing flake in internal/agentrun TestRunMeasuresFailedRuns (199ms against a 200ms timeout under load; passes on rerun -count=3, untouched package); go vet ./... exit 0; make cover: All files >= 80% (policy_operator.go 100.0%, caller_session.go 99.0%); gofmt -l clean.",
+      "Security review of the diff: no critical, high or medium findings; lows recorded as RC-1201 and RC-1202.",
+      "Independent verification at 07bbf7d: a1, a2, a3 and DOD-1 to DOD-8 pass (go test ./... exit 0, go vet exit 0, make cover all files >= 80%, gofmt clean, signed commits, draft PR); DOD-9: CI test and build pass on PR #199 (run 43680018621)."
+    ]
+  }
+}

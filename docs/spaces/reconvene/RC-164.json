@@ -1,0 +1,13 @@
+{
+  "id": "RC-164",
+  "kind": "decision",
+  "topic": "SP-072 adds a Go test that keeps the app's placement fixture honest",
+  "detail": "The lane rule was 'no Go daemon code'. SP-072 adds only internal/daemon/placement_app_fixture_test.go (test code): it compares macos/Tests/Fixtures/placement-explanations.json with ExplainPlacement's live answers for the plan's nested-root fixture and rewrites it with ORCH_UPDATE_APP_FIXTURE=1. A change to placement rules or explanation text therefore needs the fixture regenerated in the same PR.",
+  "source": "https://github.com/willesq/orchestrator/pull/169",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-072",
+    "SP-022"
+  ],
+  "status": "open"
+}

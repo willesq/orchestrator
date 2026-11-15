@@ -1,0 +1,13 @@
+{
+  "id": "RC-64",
+  "kind": "decision",
+  "topic": "Which of a harness process's sessions a session may read",
+  "detail": "ListToolEvents gives a session only the current session of its harness process (the pin caller resolution picks, RC-27), and only while that is still the pin its connection resolved: after /clear, or once a subagent's pin is newer, an earlier session's log is readable only by the operator, and an older connection is refused until it reconnects (the CLI always reconnects). The command log's writer already treats sessions of one process as related (resolveClaim). Confirm, or let a session read every chain pinned to its own harness process.",
+  "source": "https://github.com/willesq/orchestrator/pull/164",
+  "raised": "2026-11-10",
+  "affects": [
+    "SP-016",
+    "SP-054"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "RC-354",
+  "kind": "follow-up",
+  "topic": "Space collections: migration re-embeds, and per-collection overhead is unmeasured",
+  "detail": "MigrateHybrid copies space collections the way it copies the base, re-chunking and re-embedding them, though they are hybrid already; a raw copy of points with their vectors (which SP-071's retag needs anyway) would avoid the embedding cost. Each space collection has its own segments and HNSW index; memory and disk per collection with several spaces were not measured (SP-002 measured latency and relabel only). A space collection removed outside orchd stays in orchd's list until restart (reads treat it as empty).",
+  "source": "https://github.com/willesq/orchestrator/pull/183",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-024",
+    "SP-071"
+  ],
+  "status": "open"
+}

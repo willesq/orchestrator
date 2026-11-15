@@ -1,0 +1,13 @@
+{
+  "id": "RC-06",
+  "kind": "decision",
+  "topic": "Confirm a specific GitHub node ID",
+  "detail": "--confirm-github-org accepts whatever node ID GitHub returns at apply time. Proposal: confirm org=node_id and show old, new and seen node IDs in 'orch spaces diff'.",
+  "source": "https://github.com/willesq/orchestrator/pull/144",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-021"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: confirm a specific node ID; see D-51 and RC-61."
+}

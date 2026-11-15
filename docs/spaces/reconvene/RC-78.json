@@ -1,0 +1,13 @@
+{
+  "id": "RC-78",
+  "kind": "decision",
+  "topic": "Paths that contain another job's root are refused",
+  "detail": "Per RC-36 (1), block-other-jobs refuses a path, cd destination, git dir or glob prefix that contains another isolated space's root (grep -r ~/code, cd ~/code && rg x, find / ..., ls ~/code), because Targets cannot tell a recursive reader from a listing. This adds friction for sessions under a public root (cd ~/code before a git clone, ls ~/code). Confirm, or decide to allow a listing-only set of commands (ls, cd alone) once Targets can report it.",
+  "source": "https://github.com/willesq/orchestrator/pull/166",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-040",
+    "SP-041"
+  ],
+  "status": "open"
+}

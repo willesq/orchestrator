@@ -1,0 +1,12 @@
+{
+  "id": "RC-162",
+  "kind": "decision",
+  "topic": "Low/accepted security notes from SP-072's audit",
+  "detail": "Accepted: (1) an agent with Accessibility or UI-scripting permission could click the app's switch and its confirmation, bypassing the process-ancestry check, as it could by scripting Terminal to run `orch spaces enforce`; the app adds no new class of bypass, and the log and start digest still announce it. (2) With both the Settings window and the menu bar panel open, a relaxing switch can show its confirmation in both; dismissing either cancels, which fails safe. Fixed before commit: orchd strings in the confirmation prompt, menus, banner and kinds now go through displaySafe; a folder picked in the open panel is checked untrimmed.",
+  "source": "https://github.com/willesq/orchestrator/pull/169",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-072"
+  ],
+  "status": "open"
+}

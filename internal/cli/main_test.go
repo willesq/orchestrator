@@ -19,5 +19,8 @@ func TestMain(m *testing.M) {
 	})
 	install.SetToggleLoader(func() (orchsettings.Toggles, error) { return orchsettings.Toggles{}, nil })
 	install.SetSwitchLoader(func() (spaces.Enforcement, error) { return spaces.DefaultEnforcement(), nil })
+	// Reason: these tests exercise spaces on; spaces_off_test.go sets off.
+	install.SetSpacesLoader(func() (bool, error) { return true, nil })
+	cliSpacesOff = func() bool { return false }
 	os.Exit(m.Run())
 }

@@ -1,0 +1,12 @@
+{
+  "id": "RC-109",
+  "kind": "follow-up",
+  "topic": "SP-041 verifier lows",
+  "detail": "From the second independent verification of SP-041 (2026-11-12), all low: (1) if the hook cannot even locate its files (guardFilesFor panics: no home or data directory), the call is refused although no spaces may be configured, a narrow exception to INV-10 in favour of INV-13; (2) no test covers an unreadable pre-tool-use stdin with no spaces configured (allowed by the same path TestGuardFilesNoPolicy covers); (3) a panic recovered in decideWithin for a cwd-changed event is logged as an enforced refuse verdict (nothing is printed, the event cannot be refused), unlike the timeout branch, which marks it not enforced.",
+  "source": "https://github.com/willesq/orchestrator/pull/172",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041"
+  ],
+  "status": "open"
+}

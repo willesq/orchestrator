@@ -1,0 +1,13 @@
+{
+  "id": "RC-227",
+  "kind": "follow-up",
+  "topic": "Command log keeps terms split by shell quoting",
+  "detail": "Low, INV-07 (SP-044 review round 2): the command log redacts the tool input's decoded JSON text, not the words as the shell passes them, so gh issue create -b fal''con is stored as written. The check itself reads the shell words. Proposed: redact, or withhold the command, when a shell-decoded word holds a term.",
+  "source": "https://github.com/willesq/orchestrator/pull/177",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-044",
+    "SP-053"
+  ],
+  "status": "open"
+}

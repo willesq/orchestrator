@@ -1,0 +1,14 @@
+{
+  "id": "RC-803",
+  "kind": "follow-up",
+  "topic": "Limits of keeping a listed folder public while GitHub does not answer (RC-402 item 6)",
+  "detail": "SP-076 implements RC-402(6): a lookup that gets no answer (outage, throttle, spent 30/min budget) does not take a listed folder's stored public copy out, for 6 hours after GitHub last said the repo is public. Security audit M1: any caller can spend the shared budget (ExplainPlacement), so the grace is bounded rather than open-ended; within it a repo that went private keeps its earlier public copy. Limits: the grace is in memory, so after an orchd restart an unanswered repo leaves (fails closed, re-embeds later); a changed file written during an outage goes to quarantine and its public copy moves with it (SP-024's write path). Possible improvement: a lookup budget for the sweep and refresh that RPC callers cannot spend, or cache-only lookups for agent ExplainPlacement.",
+  "source": "https://github.com/willesq/orchestrator/pull/189",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-076",
+    "SP-030",
+    "SP-024"
+  ],
+  "status": "open"
+}

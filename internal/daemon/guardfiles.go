@@ -135,6 +135,8 @@ func (s *server) writeGuardSnapshot() {
 		Guard:    spaces.GuardSwitch{State: g.sw.State, Until: g.sw.Until, Previous: g.sw.Previous},
 		Terms:    spaces.GuardSwitch{State: g.terms.State, Until: g.terms.Until, Previous: g.terms.Previous},
 		RulesRev: g.rules.Rev, RulesBroken: g.rulesBroken,
+		// Off, CurrentRevision reports no policy, so none is written.
+		SpacesOff: s.spaces.Off(),
 	}
 	if g.rules.Rev > 0 && !g.rulesBroken {
 		r := g.rules.Rules

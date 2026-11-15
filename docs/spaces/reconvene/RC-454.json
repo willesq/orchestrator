@@ -1,0 +1,13 @@
+{
+  "id": "RC-454",
+  "kind": "follow-up",
+  "topic": "TestSweepWhileWriting flaked on CI",
+  "detail": "On PR #179 (no toollog change) CI's 'test' job failed once in internal/toollog TestSweepWhileWriting ('30 sweeps trimmed, writer dropped 227; want trims and no drops') and passed on re-run; it passes locally. Likely load-dependent on shared runners (the writer's queue overflows while sweeps hold the write turn). Worth a look so the command log's no-drop claim is not timing-dependent.",
+  "source": "https://github.com/willesq/orchestrator/actions/runs/43638456461",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-015",
+    "SP-073"
+  ],
+  "status": "open"
+}

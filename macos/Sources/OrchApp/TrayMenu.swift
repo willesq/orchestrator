@@ -15,16 +15,22 @@ struct TrayMenu: View {
     var openSpaces: () -> Void = {}
 
     @State private var busy = false
+
+    /// Whether memory spaces are switched off: no enforcement banner or
+    /// switches then, as before spaces.
+    private var spacesOff: Bool { monitor.health.status?.spacesOff ?? false }
     @State private var controlError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
             Divider()
-            EnforcementBanner(model: enforcement, show: nil)
+            if !spacesOff {
+                EnforcementBanner(model: enforcement, show: nil)
+            }
             if let unlocks { UnlocksSection(model: unlocks) }
             NeedsYouSection(monitor: prMonitor)
-            if let switches = enforcement.state?.switches, !switches.isEmpty {
+            if !spacesOff, let switches = enforcement.state?.switches, !switches.isEmpty {
                 Divider()
                 TraySpaces(switches: switches, model: enforcement, openSpaces: openSpaces)
             }

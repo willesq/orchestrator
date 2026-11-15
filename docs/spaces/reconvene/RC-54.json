@@ -1,0 +1,14 @@
+{
+  "id": "RC-54",
+  "kind": "decision",
+  "topic": "Total cap and settings for the command log",
+  "detail": "The total cap (sessions.command_log.max_total_mb, default 500, 100-100000) removes from the chains that ended first only what expiry would: never refusals under 90 days and never a running session's records, so the file can stay over the cap (orchd logs it). The spec's 'deletes the oldest ended sessions first' is read that way after the audit showed whole-chain deletion let a flood erase other sessions' refusals. The 50 MB cap is per chain (a process holding several /clear'd sessions can keep several) and a constant, not a setting. Retention (3d/7d/30d) and the cap are Sensitive settings in a new 'Command log' section, read when orchd starts; another value keeps the default.",
+  "source": "https://github.com/willesq/orchestrator/pull/157",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-015",
+    "SP-070"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: confirmed, with the per-session cap made a setting; see D-34 and SP-073."
+}

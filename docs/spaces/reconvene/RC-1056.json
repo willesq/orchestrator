@@ -1,0 +1,12 @@
+{
+  "id": "RC-1056",
+  "kind": "user-action",
+  "topic": "Check SP-054 Apply's system authentication by hand, and look at the snapshots",
+  "detail": "SP-054.1 a2 is manual: with Orch.app built from PR #194 and a draft with no problems pending, Spaces > Review > Apply rev N should show the system Touch ID or password sheet before anything is applied; Cancel should show 'Not applied: authentication was cancelled or failed.' and orch spaces diff should still show the draft pending. Also look at the Activity and Review snapshots (light and dark, 790 pt and 320 pt).",
+  "source": "https://github.com/willesq/orchestrator/pull/194",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-054"
+  ],
+  "status": "open"
+}

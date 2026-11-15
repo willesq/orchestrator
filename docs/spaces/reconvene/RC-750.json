@@ -1,0 +1,14 @@
+{
+  "id": "RC-750",
+  "kind": "follow-up",
+  "topic": "INV-08 inside a collection needs reads to filter on labels_v",
+  "detail": "A relabel moves every stale chunk to its space's collection, so content stored in the base or in another space's collection is not read by a search of the spaces it belongs to. But after the operator applies a new revision, a chunk that stays in its own space's collection is stale and still readable there until the relabel stamps it: no read path filters on labels_v. SP-025 should add labels_v = applied revision to the second layer (spaceStore.must) for named spaces, or orchd should relabel right after each apply.",
+  "source": "https://github.com/willesq/orchestrator/pull/187",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-025",
+    "SP-027"
+  ],
+  "status": "open",
+  "note": "Covered by SP-025 (in progress): the SP-025 lane was asked to filter reads on labels_v (2026-11-14). SP-025 (PR #188) implements it: every filtered read (Search, ListSources, GetDocument, ListDocs) matches labels_v against the applied revision in each named space's second layer, as an integer; chunks with another or no labels_v are unreadable until relabelled (TestStaleLabelsAreUnreadable; the real-engine run TestIntegrationReadPathsRealQdrant)."
+}

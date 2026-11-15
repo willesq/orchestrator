@@ -30,7 +30,13 @@ func aliasEdit(orchBin, home string) Edit {
 			summary := fmt.Sprintf("alias: %s managed block -> alias orch=\"%s\"", verb, orchBin)
 			return []byte(next), summary, nil
 		},
+		Reverse: cutAliasBlock,
 	}
+}
+
+// aliasUnit is the shell alias, shared by every harness.
+func aliasUnit(orchBin, home string) Unit {
+	return Unit{Name: "shell alias", Shared: true, Edits: []Edit{aliasEdit(orchBin, home)}}
 }
 
 // replaceManagedBlock swaps an existing managed block for the new one, or appends

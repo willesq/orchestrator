@@ -193,6 +193,7 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	if err != nil {
 		return nil, "", err
 	}
+	raw = s.onePerPoint(raw)
 	cands := make([]candidate, 0, n)
 	for _, r := range mergeByScore(raw, n) {
 		cands = append(cands, candidate{hit: r.SearchHit, score: float64(r.Score), cosine: r.Score})
@@ -271,6 +272,7 @@ func (s *Service) hybridSearch(ctx context.Context, targets []spaceStore, query 
 	if derr != nil {
 		return nil, nil, derr
 	}
+	dense, keyword = s.onePerPoint(dense), s.onePerPoint(keyword)
 	var kw []storeHit
 	if kerr == nil {
 		kw = mergeByScore(keyword, kn)

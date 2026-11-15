@@ -1,0 +1,13 @@
+{
+  "id": "RC-08",
+  "kind": "decision",
+  "topic": "Where the command log is stored",
+  "detail": "SP-014 does not say where the command log lives; orch.db is mode 0644. Decide the store and its file mode before SP-014.",
+  "source": "a local session (SP-001 session)",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-014"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-09 in the SP-014 session; see D-29."
+}

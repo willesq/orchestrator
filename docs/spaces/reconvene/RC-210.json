@@ -1,0 +1,14 @@
+{
+  "id": "RC-210",
+  "kind": "decision",
+  "topic": "Per-space logins kept in the macOS keychain are outside the denied folders (security audit, unconfirmed high)",
+  "detail": "2026-11-14 audit of PR #171: denying another space's gh_config_dir or claude_config_dir denies the folder, but gh's default keyring storage keeps the token in the login keychain (service gh:github.com, account = the GitHub login) and Claude Code on macOS keeps its login in the keychain too. If a sandboxed shell can reach the keychain, a session in one space could use another space's account (e.g. gh auth token --user <login>). Not measured: the probe would run a credential command, which agents here must not; the user can measure it (reporting only success or failure). Mitigations: log per-space gh profiles in with 'gh auth login --insecure-storage' so the token stays in the denied folder; orchd could warn when a profile reports keyring storage; Bash denies for 'gh auth token' and 'security find-generic-password' as defence in depth. Documented in docs/internals/install.md Limits.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046",
+    "SP-063"
+  ],
+  "status": "open",
+  "note": "2026-11-14: to be measured by SP-046.4.a4 (metadata only, D-61). 2026-11-14, measured by SP-046.4.a4 (TestClaudeE2E two-logins/keychain at 6baf911, account metadata only): GH_CONFIG_DIR pointed at another space's profile folder is denied ('operation not permitted') both ways, but a session of a space naming its own gh profile wrote its own profile folder naming the default account (no token) and 'GH_CONFIG_DIR=<it> gh auth status' in its sandboxed shell reported 'Logged in to github.com account willesq (keyring)'. So the keychain is reachable from every sandboxed shell, and any gh login stored there can be used by naming its account; the high is confirmed. Also measured: adding ~/Library/Keychains to a session's sandbox denyRead stopped gh reaching the keyring ('The token in default is invalid'), and would break every keyring login in that session. Options: (a) for spaces naming their own profile, require 'gh auth login --insecure-storage' and deny ~/Library/Keychains to them (the default-login spaces still reach every keyring login); (b) require --insecure-storage for every login, including the default, and deny ~/Library/Keychains everywhere (gh's own token then sits in hosts.yml, readable to that space's shell); (c) accept: with keychain-stored logins the GitHub account is not a boundary between spaces (as D-59 already accepts for the single-login case) and document it. Needs a decision."
+}

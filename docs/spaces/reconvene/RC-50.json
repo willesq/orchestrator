@@ -1,0 +1,14 @@
+{
+  "id": "RC-50",
+  "kind": "follow-up",
+  "topic": "SP-017 audit lows",
+  "detail": "Accepted as Low in two SP-017 security reviews and documented in docs/internals/daemon.md: (1) the detached fake harness (D-26) can also resume a dead or ended session of the space whose directory it starts in and write its command log, until SP-041; (2) a process detached from its session resolves as the operator (RC-26) and sees every space and directory in ListSessions; (3) pins are not capped per harness process and never pruned until SP-015, so sweeps and the list read every pin while holding the registry lock, and an agent can insert many copied pins; options: cap pins per process, throttle list-triggered sweeps, sweep by process; (4) the per-connection pin cache is not dropped when a resume moves a pin: ListSessions checks the pin still names the caller's process, and any future session-scoped read of the command log (INV-12) must do the same; (5) a resume between a sweep and its endToolLog leaves an end record in a live chain (re-anchored at the next end).",
+  "source": "https://github.com/willesq/orchestrator/pull/154",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-015",
+    "SP-016",
+    "SP-041"
+  ],
+  "status": "open"
+}

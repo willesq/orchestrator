@@ -9,12 +9,13 @@ The repo and tap are private: tap over SSH, and have `gh` authenticated with rea
 brew install gh && gh auth login
 brew tap willesq/tap git@github.com:willesq/homebrew-tap.git
 brew install willesq/tap/orch     # binaries, plus gh and onnxruntime
-orch model fetch                  # embedding model, ~90 MB
-orch install                      # preview; then orch install --apply
-brew services start orch          # start orchd
+orch install                      # everything else: one plan, one confirmation
 orch check                        # verify preconditions
 brew install --cask willesq/tap/orch-app   # optional: the menu bar app
 ```
+
+Homebrew and your gh login are the only steps orch cannot take for you: it never handles
+credentials. `orch install` lists them at the end of its plan.
 
 The cask needs macOS 15.2 or later, and installs `Orch.app`, a menu bar app showing orchd's
 health with start and restart controls. It depends on the `orch` formula, which stays the owner
@@ -56,14 +57,38 @@ API calls an hour (1000 by default; 0 is no cap). Past it, that account's docs s
 watching wait for the next hour and its watched items stay as they were; reviews still run, and
 other accounts are not affected.
 
+## Memory spaces
+
+Memory spaces (policy-driven isolation of memory, tool calls and outbound text between jobs) are
+off on a new install. Until you turn them on, orch works as it did before spaces, and install adds
+no tool hooks. To turn them on, use Orch.app (Settings → Spaces) or run `orch spaces on`, then
+`orch install --apply`. An upgrade from a release where you had applied a spaces policy keeps
+spaces on. See [OPERATIONS.md](OPERATIONS.md#spaces).
+
 ## What `orch install` does
 
-Install previews by default, backs up every file before changing it, leaves other tools' hooks
-alone, and is safe to repeat. The default target is Claude Code; `--target codex`, `gemini` or
-`all` wire the others. `--home` relocates everything for testing.
+One `orch install` sets everything up. It prints one plan of every change and writes nothing
+until you confirm at the prompt, or pass `--apply` (or `--yes`, for scripts). It backs up every
+file before changing it, leaves other tools' hooks alone, and is safe to repeat: a second run
+repairs whatever drifted and otherwise changes nothing.
+
+- **Harnesses.** It wires every harness whose folder exists (`~/.claude`, `~/.codex`,
+  `~/.gemini`), or Claude Code when there is none. `--target all` wires all three;
+  `--target claude-code`, `codex` or `gemini` wires that one alone and nothing else, as earlier
+  releases did.
+- **Embedding model** (~90 MB), when missing. `--no-model` skips it (`orch model fetch` later).
+- **orchd** is started, through `brew services` for a Homebrew install or launchd otherwise, when
+  it is not already answering. `--no-daemon` skips it.
+- **Git hooks** added with `orch guard git-hook --install` are kept current in every repository
+  they were added to (`--no-git-hooks` leaves them). Adding them to a repository stays a choice
+  you make per repository.
+- `--no-app` drops the reminder about the menu bar app. `--home` relocates everything for
+  testing; launchd and Homebrew are then left alone, and backups go under that home.
 
 - **Hooks** run `orch-hook <event>` on session start and end, prompt submit, tool use,
-  compaction and subagent stop. For Claude Code and Gemini each has a timeout of 5 to 15 s, so a
+  compaction and subagent stop. The tool hooks spaces need (Claude Code's `PreToolUse` and
+  `CwdChanged`, Codex's `PreToolUse`) are added only while memory spaces are on, and removed
+  while they are off. For Claude Code and Gemini each has a timeout of 5 to 15 s, so a
   stalled daemon cannot hold up a session. Codex hooks must be trusted in Codex before they run.
 - **MCP servers** `rag` and `queue` are registered, and for Claude Code their tools are allowed
   (`mcp__rag__*`, `mcp__queue__*`) user-wide, so hooks and background agents can use them
@@ -213,6 +238,69 @@ read only the body.
 To change the policy, edit the repo source, then upgrade or rebuild and rerun install.
 `orch status` reports when the installed copy differs from the one the CLI ships, and, inside
 this repo, when `AGENTS.md`, `CLAUDE.md` or the policy differ from the last commit.
+
+## Uninstalling
+
+```sh
+orch uninstall                    # preview everything it would remove
+orch uninstall --apply            # do it (or confirm at the prompt)
+orch uninstall --purge-data --yes # also delete memory, Qdrant data, models and logs
+```
+
+`orch uninstall` is install's mirror: the same steps, in reverse. It stops orchd, removes orch's
+git hooks wherever it finds them (putting back any hook they chained; see below), removes what
+earlier releases installed and this one no longer does (the `gittree` helper, orch's block in the
+Codex entry file it no longer writes), takes
+orch's entries out of the per-checkout settings orchd wrote for spaces, uninstalls the pinned
+cc-safety-net plugin and its marketplace, takes orch's hooks, MCP servers, permission rules,
+`attribution.commit`, managed instruction block and alias out of each harness file, and deletes
+the files only orch owns (`~/.config/orch/`, its agents and skills, the guard rulebook, the
+launchd agent). It runs with orchd down.
+
+- Your own content stays: other hooks and MCP servers, your rules, text outside orch's block, an
+  agent or skill without orch's marker. A file orch created and nothing else uses is removed.
+- The credential-file Read deny rules (`Read(~/.config/gh/**)`, `Read(~/.netrc)`,
+  `Read(~/.docker/config.json)`) stay in `~/.claude/settings.json`: they only narrow what agents
+  may read, and you may have had them before. Delete them by hand if you want.
+- Every file is backed up to `~/.local/share/orch/backups` before it changes or goes. A symlink
+  is never removed; the file behind it is emptied instead when only orch's part was in it.
+- Your data (memory, Qdrant, models, logs) stays unless you pass `--purge-data`, which lists
+  every path it deletes and asks you to type `delete` (or pass `--yes`). Backups are kept.
+- `--target claude-code`, `codex` or `gemini` removes that harness's wiring and keeps the shared
+  policy, the alias and orchd for the others.
+- Credentials and logins are never touched.
+
+**Finding git hooks.** `orch guard git-hook --install` records where it puts hooks, but older
+releases did not. So uninstall also searches, without orchd: every repository registered with
+`orch repo`, the trusted test repositories, the spaces checkouts orch wrote settings into, the
+known roots (`~/code` by default), every root a saved spaces policy named and the docs clone
+cache (a few folders down), and the global `core.hooksPath`. For each repository it asks git for
+the hooks folder, so a per-repository `core.hooksPath` is found too. `--scan <folder>`
+(repeatable) searches another tree, deeper but bounded, taking folders named `hooks`. Symlinks
+are never followed. A hook is
+orch's only when it carries orch's marker line; the preview lists every folder it would change and
+where it was found. A hook that runs `orch guard git-hook` without the marker, a link to orch's
+hook, or a `<hook>.orch-prev` left after orch's hook was removed by hand is listed for you and
+left alone.
+
+It cannot do these for you, and lists them at the end:
+
+- `brew uninstall orch` (and `brew untap willesq/tap`), or for a source build, deleting the
+  binaries.
+- Orch.app: quit it, turn off **Open at login** in its menu (or System Settings > General >
+  Login Items), then `brew uninstall --cask orch-app` or move it to the Trash. A command-line
+  tool cannot unregister another app's login item.
+- Git hooks in a repository orch has no record of, outside the folders above: run
+  `orch uninstall --scan <folder>` over the folder that holds it. orch's hooks refuse every commit
+  and push once orch is gone.
+- Anything that looks like orch's but is not positively so (above), and Homebrew's
+  `homebrew.mxcl.orch.plist` when orch no longer runs from Homebrew (`brew services stop orch`).
+
+Not reversible byte for byte: a settings file install rewrote comes back in orch's JSON or
+TOML formatting (key order, indentation, TOML comments); an allow rule, the `rtk` wrapper or
+`attribution.commit: ""` that you already had before install is removed with orch's, since
+install did not record that it was there first; the credential deny rules stay (above); the
+line `/.claude/settings.local.json` orch added to a checkout's `.git/info/exclude` stays.
 
 ## Build from source
 

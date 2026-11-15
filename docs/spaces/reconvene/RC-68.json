@@ -1,0 +1,13 @@
+{
+  "id": "RC-68",
+  "kind": "decision",
+  "topic": "Limits of the orch.db copies of command log anchors (SP-073 audit lows and notes)",
+  "detail": "From the two SP-073 security reviews, accepted as Low or informational: (1) toollog.db and orch.db belong to the same user, so the copies are defense in depth against edits to toollog.db, not against a process that can write both; (2) at every open orchd copies anchors toollog.db holds that orch.db lacks (repairs a crash between the two writes), so an anchor only in toollog.db is reported only until the next orchd start; copies are never replaced; (3) pruned heads are copied only the first time (logs from before SP-073 are trusted as they were), and a cut copy lost in a crash or dropped past 10,000 waiting makes verify report that chain until a later cut moves the copy past it; a stronger fix writes the cut to orch.db before the toollog.db delete commits and lets verify accept a copy ahead of the file when the records between still link; (4) verify works per owner, so a chain deleted whole shows only when that owner is verified (consider 'orch spaces log verify --all' over orch.db's owners); (5) copy-at-open logs only how many anchors it copied, not whose; (6) a verify racing a retention cut is retried once and can still, rarely, report a cut not yet copied (never a false pass).",
+  "source": "https://github.com/willesq/orchestrator/pull/165",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-073",
+    "SP-046"
+  ],
+  "status": "open"
+}

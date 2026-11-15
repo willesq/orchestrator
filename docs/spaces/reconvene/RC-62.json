@@ -1,0 +1,15 @@
+{
+  "id": "RC-62",
+  "kind": "decision",
+  "topic": "What the weekly command-log summary counts",
+  "detail": "SP-016's 'orch spaces log summary' counts directory moves only from cwd-changed events: Codex sends none, and a Bash 'cd' (a target SP-013 extracts) or a tool call reaching another space's files is not counted as a move. Queued tasks have no space until SP-023 and are summed under '' with sessions pinned with no policy and chains whose pin is gone; their moves are not compared. A move counts as 'into another space' when a session started in the new directory would be pinned to a different space under the policy applied now, not the revision recorded on the event (policy_rev), and placement answers GitHub lookups from the cache only, so an uncached repo is placed by the owner its remote names and may differ from what PinSession would decide. Decide whether the summary should count calls whose targets reach another space (likely once SP-040 decides per call), place by the recorded revision, and count cache misses as unplaced.",
+  "source": "https://github.com/willesq/orchestrator/pull/164",
+  "raised": "2026-11-10",
+  "affects": [
+    "SP-016",
+    "SP-040",
+    "SP-054",
+    "SP-023"
+  ],
+  "status": "open"
+}

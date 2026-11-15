@@ -1,0 +1,14 @@
+{
+  "id": "RC-43",
+  "kind": "decision",
+  "topic": "Tool events of unpinned sessions are not logged",
+  "detail": "SP-014 stores only events orchd can attribute to a pinned session or a running task; events from a harness with no pin (started before the hooks were installed, or whose PinSession failed), from the operator, or from a task orchd cannot find are counted by caller kind and dropped. Decide whether SP-017's 'unpinned' sessions should get a chain keyed by their harness process.",
+  "source": "https://github.com/willesq/orchestrator/pull/152",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-016",
+    "SP-017"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: unpinned processes get a chain of their own; see D-36 and SP-073."
+}

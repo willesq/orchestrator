@@ -90,13 +90,18 @@ func dispatch(event string, p Payload, out io.Writer, cf clientFactory) error {
 	case "user-prompt-submit":
 		return userPromptSubmit(loadAutoRAG(), p, out, cf)
 	case "session-start":
+		if spacesOff() {
+			return sessionStartWith(p, out, nil)
+		}
 		pinSession(p, cf)
 		notice, sandbox := enforcementNotice(cf)
 		return sessionStartWith(p, out, append(notice, sandboxNotice(p.SessionID, sandbox)...))
 	case "stop":
 		return stop(p)
 	case "session-end":
-		endSession(p, cf)
+		if !spacesOff() {
+			endSession(p, cf)
+		}
 		return sessionEnd(p, cf)
 	case "pre-compact":
 		return preCompact(p)
@@ -105,7 +110,9 @@ func dispatch(event string, p Payload, out io.Writer, cf clientFactory) error {
 	case "post-tool-use":
 		return postToolUse(p)
 	case "pre-tool-use", "cwd-changed":
-		guardToolEvent(event, p, out, cf)
+		if !spacesOff() {
+			guardToolEvent(event, p, out, cf)
+		}
 		return nil
 	default:
 		return nil

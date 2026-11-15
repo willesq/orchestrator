@@ -1,0 +1,12 @@
+{
+  "id": "RC-181",
+  "kind": "decision",
+  "topic": "Which folders the generated rules deny",
+  "detail": "Rules deny only other isolated spaces' roots (plus other spaces' orch folders and gh profiles), never public roots or private spaces, matching block-other-jobs (D-12). A job session can therefore read a private space it does not list (e.g. personal) through the shell. Options: keep; or also deny private roots an isolated space does not read.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

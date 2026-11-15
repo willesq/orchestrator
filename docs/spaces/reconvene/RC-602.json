@@ -1,0 +1,12 @@
+{
+  "id": "RC-602",
+  "kind": "follow-up",
+  "topic": "An on fail_closed rule makes every tool call read the terms files and match its patterns",
+  "detail": "2026-11-14, SP-075 security audit (low): fail_closed rules may match any tool (MCP tools included), so while one is on every PreToolUse reads the spaces' terms files and matches up to 256 patterns over the call's text; a call over 4 MiB is refused. RE2 keeps matching linear and the check is bounded by the hook's 2.5 s, but a large Write or Edit costs more. Options: accept (documented in docs/internals/hooks.md), or cache compiled rules and terms per snapshot in the hook. Recommendation: accept; measure if users report slow hooks.",
+  "source": "https://github.com/willesq/orchestrator/pull/185",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-075"
+  ],
+  "status": "open"
+}

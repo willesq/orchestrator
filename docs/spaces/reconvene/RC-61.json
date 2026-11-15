@@ -1,0 +1,13 @@
+{
+  "id": "RC-61",
+  "kind": "follow-up",
+  "topic": "Confirm a specific GitHub node ID",
+  "detail": "D-51: --confirm-github-org takes org=node_id, and 'orch spaces diff' shows old, new and seen node IDs for each binding. SP-021 is done; this can ride along with SP-053 (advanced editors) or SP-074.",
+  "source": "RC-06; decision review 2026-11-10",
+  "raised": "2026-11-10",
+  "affects": [
+    "SP-021",
+    "SP-053"
+  ],
+  "status": "open"
+}

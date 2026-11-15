@@ -96,6 +96,9 @@ The variables are set for the harness only, never in your shell.`,
 			return nil
 		},
 		RunE: func(c *cobra.Command, args []string) error {
+			if cliSpacesOff() {
+				return errCLISpacesOff
+			}
 			return l.run(c.ErrOrStderr(), args[0], args[1:], force)
 		},
 	}

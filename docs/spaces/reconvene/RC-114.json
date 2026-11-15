@@ -1,0 +1,12 @@
+{
+  "id": "RC-114",
+  "kind": "follow-up",
+  "topic": "GitHub calls the live guard can only mark opaque",
+  "detail": "SP-043 marks these opaque, so block-other-jobs allows them (opaque_unverified) and only strict refuses: a git remote behind an ssh alias whose host name does not say GitHub (the usual per-account setup, e.g. Host work-gh), a checkout config with url.*.insteadOf or an include (the user's global git config is not read at all), gh api graphql, gh aliases and extensions, and gh search beyond the accounts it names. Proposed: read the ssh client config's Host/HostName for aliases and the global git config's insteadOf, or refuse opaque remote-talking git and gh calls in block-other-jobs. GIT_DIR set as a shell variable is not followed either.",
+  "source": "https://github.com/willesq/orchestrator/pull/176",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-043"
+  ],
+  "status": "open"
+}

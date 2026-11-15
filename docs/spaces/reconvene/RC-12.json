@@ -1,0 +1,13 @@
+{
+  "id": "RC-12",
+  "kind": "follow-up",
+  "topic": "SP-022 lows",
+  "detail": "The repo lookup cache and its 30-a-minute budget are shared by agents and the operator (timing side channel; agents can starve the operator). Agent-supplied paths reach the handoff checkout reader, which has no timeout or concurrency cap. Paths match case-insensitively but URL paths case-sensitively, and IDN/punycode hosts are not unified. An applied policy binding both spellings of a web prefix to different spaces fails to load at the next orchd start.",
+  "source": "https://github.com/willesq/orchestrator/pull/145",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-022",
+    "SP-025"
+  ],
+  "status": "open"
+}

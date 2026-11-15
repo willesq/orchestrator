@@ -1,0 +1,13 @@
+{
+  "id": "RC-219",
+  "kind": "user-action",
+  "topic": "The orch installed on this Mac has no tool guard, so D-61's allowRead exposes the default gh folder by name until it is upgraded",
+  "detail": "2026-11-14: the installed orch is 0.45.1 (commit cf031dc), whose Claude Code hooks have no PreToolUse entry. In the first TestClaudeE2E run of this branch, a session in a default-login space with orch's new allowRead of ~/.config/gh ran 'cat ~/.config/gh/config.yml | wc -c' and got the file's size: neither the installed hooks nor cc-safety-net refused it (the Read tool was refused by the installed Read(~/.config/gh/**) rule). The gh-guard probe now runs this tree's orch-hook and is refused (self_protection). Per-checkout files from this branch only reach the user when this release is installed with its PreToolUse hook; until then nothing changes. After upgrading, check 'orch status' lists the tool hooks and 'orch spaces enforce' shows the guard enforcing. With the guard off or logging, a default-login space's shell can read ~/.config/gh/hosts.yml (with keyring storage it names the account but holds no token).",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046",
+    "SP-042"
+  ],
+  "status": "open"
+}

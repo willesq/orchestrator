@@ -1,0 +1,14 @@
+{
+  "id": "RC-302",
+  "kind": "decision",
+  "topic": "Profile-only orgs: agents can still read the PR cache file and synced docs (security audit, low)",
+  "detail": "SP-074 lets an org that only a space's own gh profile reaches be watched. ListPRs, ListGitHubItems, ListGitHubScopes and ListGitHubRepos now leave such owners out for agents, but the PR cache file (pr_babysitter_state.json) stays readable by every process of the user, and ListDocs, GetDocument and GetDocsSync (task-callable) may return docs synced through a space's profile (SP-063 design). Options: (a) deny the cache file to other spaces` sandboxes and filter the docs RPCs per caller space (once records carry a space, SP-030/INV); (b) accept and document.",
+  "source": "https://github.com/willesq/orchestrator/pull/182",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-074",
+    "SP-063"
+  ],
+  "status": "open",
+  "note": "SP-026 (#200) filters the docs registry RPCs (ListDocsOwners, ListDocsOwnerRepos, GetDocsSync) and the PR RPCs by space for agents, and the CLI lists come from orchd under a policy. The cache file's readability is RC-1252."
+}

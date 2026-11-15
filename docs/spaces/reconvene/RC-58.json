@@ -1,0 +1,13 @@
+{
+  "id": "RC-58",
+  "kind": "follow-up",
+  "topic": "Remove TestResolveCost's 5 ms bound",
+  "detail": "D-45 retires SP-011.2's per-connection cost bound. Drop the bound from TestResolveCost (internal/daemon) or turn it into a reported measurement, and say in docs/internals/daemon.md that the hook budget and SP-041's latency check cover the cost. Small; can ride along with SP-041.",
+  "source": "RC-28; decision review 2026-11-10",
+  "raised": "2026-11-10",
+  "affects": [
+    "SP-011",
+    "SP-041"
+  ],
+  "status": "open"
+}

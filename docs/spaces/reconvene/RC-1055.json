@@ -1,0 +1,13 @@
+{
+  "id": "RC-1055",
+  "kind": "decision",
+  "topic": "Which invalid lines the app drops for the user",
+  "detail": "SP-054's 'Drop invalid lines' only reverts lines the draft adds or changes, and never: a line the applied revision already has, a line in a conflict between two spaces (duplicate name, org, prefix, tenant or root bound twice, an isolated root inside another job's), or a binding the applied revision has in any space (moved or renamed). Those are marked with 'fix this in the draft' and block Apply. Options: (a) keep this; (b) let the user pick a side or edit the draft in the app. Recommendation: (a), with (b) as a later Setup feature.",
+  "source": "https://github.com/willesq/orchestrator/pull/194",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-054",
+    "SP-052"
+  ],
+  "status": "open"
+}

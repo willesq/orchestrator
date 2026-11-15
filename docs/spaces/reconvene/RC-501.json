@@ -1,0 +1,15 @@
+{
+  "id": "RC-501",
+  "kind": "follow-up",
+  "topic": "Counts the Overview cannot show yet",
+  "detail": "The Spaces pane shows no chunk counts per space (needs a collection per space, SP-024), counts quarantine as live sessions pinned to quarantine plus unconfirmed GitHub orgs rather than quarantined chunks (SP-028), and never shows relabel progress (SP-027): no RPC reports them. SpacesOverviewModel takes a relabel source and SpacesBadge already orders relabel last. Adding them needs fields in ListSpaces or SpacesStatus, an orchd.proto change for the coordinator to schedule.",
+  "source": "https://github.com/willesq/orchestrator/pull/181",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-051",
+    "SP-024",
+    "SP-027",
+    "SP-028"
+  ],
+  "status": "open"
+}

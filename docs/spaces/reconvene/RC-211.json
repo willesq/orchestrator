@@ -1,0 +1,13 @@
+{
+  "id": "RC-211",
+  "kind": "follow-up",
+  "topic": "Claude Code settings files with hooks are editable from space sessions (security audit medium, existing before D-59)",
+  "detail": "2026-11-14 audit: neither the checkout settings nor the launcher's --settings deny the file tools ~/.claude/settings.json and settings.local.json (shared by every space's sessions that name no claude_config_dir) or a launch folder's .claude/settings*.json. A session whose Edit is approved could add a hook, and hooks run outside the sandbox in the next session of any space. The checkout path had this before D-59. Claude Code's own protection of its settings files was not measured. Denying them in every space would also block the user asking an agent to change their own settings; needs a decision.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "resolved",
+  "note": "Accepted 2026-11-14 in D-61: the SP-042 guard is the protection. 2026-11-14: docs/internals/install.md Limits now say the SP-042 guard, which refuses writes to ~/.claude/settings* and .claude/settings*, is the protection (D-61)."
+}

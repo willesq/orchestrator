@@ -57,7 +57,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .docs: ["Docs"]
         case .github: ["GitHub"]
         case .memory: ["Sources", "Prompt context", "Session summaries", "Command log", "Search", "Embedding", "Vector store"]
-        case .overview, .spaces, .claude, .safetyNet, .app: []
+        case .spaces: ["Spaces"]
+        case .overview, .claude, .safetyNet, .app: []
         }
     }
 }

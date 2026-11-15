@@ -1,0 +1,15 @@
+{
+  "id": "RC-404",
+  "kind": "decision",
+  "topic": "accepted risk: sessions can write into a folder the operator declared public",
+  "detail": "Under D-64, a checkout folder the operator declared public (a public root bound at or inside it) is placed in public by the sources refresh. Any job's session can write files there (the guard and the sandbox allow writes to public roots), so it could stage another job's content in a declared folder and have it indexed into public. The user accepted this on 2026-11-14 when keeping D-50's declaration path. Possible later mitigations: SP-046 sandbox rules denying job sessions writes to declared public folders, or making repo/owner source registration operator-only.",
+  "source": "https://github.com/willesq/orchestrator/pull/180",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-030",
+    "SP-046",
+    "SP-076"
+  ],
+  "status": "open",
+  "note": "Updated 2026-11-14 under D-65: does not apply until SP-076, since nothing can be declared public now. Review again when public_paths lets the operator list folders: a session can write into a listed folder. Updated 2026-11-14 under D-73: public_paths (SP-076) now lets the operator list folders, so a session can write into a listed folder, or create a folder a '*' or '**' pattern matches, and have it indexed into public; the user accepted this as an extension of this risk. Sandbox mitigation tracked in RC-805."
+}

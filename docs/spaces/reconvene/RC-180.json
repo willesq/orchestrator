@@ -1,0 +1,13 @@
+{
+  "id": "RC-180",
+  "kind": "user-action",
+  "topic": "Run the Claude Code checks for SP-046 (a5, a7, a6's Claude side, 2.a2)",
+  "detail": "Needs real Claude Code sessions (haiku, about 15 short headless runs) using your Claude login read-only; they add transcripts under ~/.claude/projects for temp folders. Steps: (1) optional for a5's gh part: mkdir -p <dir> && GH_CONFIG_DIR=<dir> gh auth login (a job or test account). (2) optional for 2.a2: pick a folder L, run CLAUDE_CONFIG_DIR=L/joba/claude claude and /login once, then exit. (3) cd <main checkout>.worktrees/feat/sp-046-per-space-harness-settings && ORCH_CLAUDE_E2E=1 [ORCH_E2E_GH_PROFILE=<dir>] [ORCH_E2E_LAYOUT=L] go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1. The 'protect' probe also checks whether Claude Code's Edit deny on the settings files holds against a link or other-case path (security audit P-1; high if it fails).",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "resolved",
+  "note": "2026-11-12: run with the user's approval without ORCH_E2E_GH_PROFILE and ORCH_E2E_LAYOUT: read, grep, glob, write, bash, edit, launched-tmpdir and protect PASS, tmpdir SKIP (RC-206). Still needed: steps (1) and (2) for a5's gh part and 2.a2. 2026-11-14: D-59 makes per-space logins optional; the e2e checks run with the default gh login and Claude config. 2026-11-14: run again at 1c054e0 with the user's approval and default logins (no profile or layout needed under D-59): read, grep, glob, write, bash, edit, protect, launched-tmpdir and launcher/read, grep, glob, write, bash PASS (SP-046.2.a2 observed); tmpdir SKIP (D-58); gh and launcher/gh FAIL: gh cannot read ~/.config/gh in the sandbox (RC-208). Steps (1) and (2) are now optional (named profiles only). 2026-11-14: run again at 6baf911 with the user's approval and default logins: every subtest PASS including gh, launcher/gh, gh-guard and two-logins; tmpdir SKIP (D-58). Steps (1) and (2) remain optional, for named profiles only. Resolved 2026-11-14: the user directed automatic verification with the current logins, and the run observed every SP-046 Claude check."
+}

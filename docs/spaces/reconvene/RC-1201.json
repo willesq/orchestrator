@@ -1,0 +1,12 @@
+{
+  "id": "RC-1201",
+  "kind": "decision",
+  "topic": "Non-Sensitive settings that weaken safeguards stay open to sessions under a policy",
+  "detail": "SP-078 refuses SetConfig under a policy only when it sets a key marked Sensitive in internal/config/schema.go (D-74). Some keys that are not Sensitive still weaken a safeguard or change what is ingested: queue.worker.verify.enabled (turns off verification of a task's changes), sources.known_roots and ingest.exclude_dirs (which folders are scanned and ingested) and routing.providers. RemoveLegacyConfig (moves the old config.yaml into backups, fixed path, only after the import) is also left open. Low (security review of SP-078). Options: mark these keys Sensitive (which also makes the app ask for confirmation), add a separate policy-only list, or keep them open.",
+  "source": "https://github.com/willesq/orchestrator/pull/199",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-078"
+  ],
+  "status": "open"
+}

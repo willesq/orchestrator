@@ -1,0 +1,13 @@
+{
+  "id": "RC-60",
+  "kind": "follow-up",
+  "topic": "Say redaction is best-effort in the docs",
+  "detail": "D-47: state in docs/internals (ingestion and command log sections) that redaction is pattern-based and best-effort, and that the OS sandbox and per-job accounts are the boundary; list the known gaps from RC-44. Docs only.",
+  "source": "RC-44; decision review 2026-11-10",
+  "raised": "2026-11-10",
+  "affects": [
+    "SP-023",
+    "SP-065"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "RC-1253",
+  "kind": "follow-up",
+  "topic": "Low: some refusals tell an agent that another space owns a GitHub org",
+  "detail": "From SP-026's design: GetPRDetail and ListDocsOwnerRepos answer NotFound for another space's owner where an unknown PR or owner would get GitHub's own error, so an agent can tell that an org is bound to a space it does not read (the org list is policy, not content); review watch changes answer NotFound for another space's PR where an unwatched PR of the caller's own space gets the watcher's own not-found text. Tasks and landings give the answer a missing task gets. Accepted as low; closing it would need orchd to fetch and discard, which spends the other space's account.",
+  "source": "https://github.com/willesq/orchestrator/pull/200",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-026"
+  ],
+  "status": "open"
+}

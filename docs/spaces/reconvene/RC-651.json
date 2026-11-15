@@ -1,0 +1,12 @@
+{
+  "id": "RC-651",
+  "kind": "decision",
+  "topic": "How often D-68 names the sandbox setting (SP-046)",
+  "detail": "D-68 says the next start digest of each session names the setting once after any change, and after any restart while it is off. Implemented per session: the hook remembers per session id the mode, set_at and orchd start it last named. So every session's first start digest names a setting that was ever set (or is off), once, and later digests of that session (resume, compact) stay quiet until the next change or, while off, the next orchd start; the default never set is not named. If the notice should instead stop after some time or after the first session sees it, that needs a decision.",
+  "source": "https://github.com/willesq/orchestrator/pull/186",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "RC-106",
+  "kind": "user-action",
+  "topic": "Check the enforcing guard in real sessions after release",
+  "detail": "After SP-041 ships and orchd restarts: (1) sessions started while orchd was down or an older orchd ran have no pin file; once spaces are applied with the guard enforcing, their calls are refused (pin_missing) and they must be restarted; (2) in one Claude Code and one Codex session in a configured space, try a call into another job's folder and confirm the call is refused and the reason (rule id, no path) is shown; (3) confirm 'orch spaces enforce guard off' takes effect on the next call.",
+  "source": "https://github.com/willesq/orchestrator/pull/172",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041"
+  ],
+  "status": "open"
+}

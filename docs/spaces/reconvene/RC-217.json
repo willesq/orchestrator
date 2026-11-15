@@ -1,0 +1,13 @@
+{
+  "id": "RC-217",
+  "kind": "decision",
+  "topic": "auto judges only isolated roots, not other spaces' login folders (security audit medium)",
+  "detail": "D-61: auto writes rules 'only when another isolated space exists whose folders they would deny'. A policy with one isolated job and a personal or public space that names its own gh_config_dir (stored with --insecure-storage) or claude_config_dir gives the job's checkouts no rules, so nothing denies its sessions those folders or <data>/spaces/.orch (users' settings backups and the list of every space's checkouts). Options: (a) also write rules when the rules would deny another space's login folder; (b) always write them while .orch holds anything; (c) keep D-61's text and document it (done in docs/internals/install.md Limits). Blocks SP-046 (DOD-6) until decided.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "resolved",
+  "resolution": "Settled by the user on 2026-11-14 as D-69; implemented by the SP-046 follow-up lane."
+}

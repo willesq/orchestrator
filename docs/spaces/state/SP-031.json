@@ -1,0 +1,16 @@
+{
+  "id": "SP-031",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "e1813d3b6fd0dc40f52d79b2cb0ff7b815d79258",
+  "verified_at": "2026-11-15T05:42:19Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-031-status-visibility",
+  "pr": "https://github.com/willesq/orchestrator/pull/197",
+  "evidence": {
+    "SP-031.1": [
+      "a1: Six fields in orch status: TestSpacesSectionShowsCounts (internal/status) renders, for the operator, the spaces, each space's chunks (and not-yet-relabelled chunks), quarantine (SP-028's counts), conflicts, drift ('none' when none) and relabel progress; for a session only the spaces orchd counted for it, and conflicts marked as the operator's. TestSpacesSectionCountEdges (internal/status): no counts, a failed count, an empty store, a control character in a space name. Narrowing in orchd: TestStatusCountsOnlyWhatTheCallerReads (internal/daemon) over the SP-025 read fixture: Orch.app gets every space, totals over every collection (unplaced and quarantine included, 12 stale) and 1 conflict (a live quarantined session whose folder acme's root and globex's remote both claim; an ended one and a scratch folder are not counted); a session in acme gets acme, oss and personal; in globex, globex and oss; in quarantine, a task from globex, the operator when not Orch.app and an unidentified caller get only their readable spaces, totals over those, and no conflicts. TestStatusCountsAreCached, TestStatusCountsNeedAPolicy, TestConflictCountFailureIsNotAnAnswer (internal/daemon); TestCountSpacesCountsEachCollection, TestCountSpacesStoreFailure (internal/rag). rag why: TestSearchReportsWhatWasSearched, TestSearchWithoutCollections, TestSearchUnscopedHidesCollections (internal/daemon), TestSearchCollectionsNamesWhatSearchReads (internal/rag), TestExplainRecordsWhatWasSearched (internal/hook), TestRAGWhyShowsTheSearchBoundary (internal/cli). Result: all pass; go test ./... and go vet ./... exit 0; make cover: all files >= 80% (internal/daemon/spacecounts.go 90.7%, searchscope.go 100%, internal/rag/spacecounts.go 86.4%, internal/status/spacecounts.go 100%)."
+    ]
+  }
+}

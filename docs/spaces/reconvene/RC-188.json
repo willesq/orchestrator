@@ -1,0 +1,12 @@
+{
+  "id": "RC-188",
+  "kind": "decision",
+  "topic": "Which folders 'orch run' accepts",
+  "detail": "Interpretation of SP-046.2.a1 'a space the current folder resolves outside of': refused when the folder is placed in another space or its placement is a conflict or quarantine; allowed in the space's own folders and in folders no root or remote places (e.g. ~/scratch). --force allows any.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

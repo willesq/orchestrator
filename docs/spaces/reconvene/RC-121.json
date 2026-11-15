@@ -1,0 +1,14 @@
+{
+  "id": "RC-121",
+  "kind": "decision",
+  "topic": "Registered web sources outside any bound prefix go to quarantine",
+  "detail": "The sources registry does not record who registered a source, so a web source is placed by its bound web prefix only and otherwise quarantined (D-14 places a page by the session that ingested it, which a scheduled refresh does not have). Decide whether SaveSource records the registering caller's space, or the operator binds prefixes.",
+  "source": "https://github.com/willesq/orchestrator/pull/173",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-023",
+    "SP-030",
+    "SP-071"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "RC-09",
+  "kind": "decision",
+  "topic": "SP-046 follow-ups and the shared /tmp channel",
+  "detail": "Write sandbox.enabled, allowUnsandboxedCommands=false and the Read(//...) denies together in the root settings.local.json and test that combination from a subfolder, plus Grep, Glob and Edit against the Read deny. SP-046.1 a5 needs a login in a temp profile (user step). Codex has no per-checkout path, so its coverage depends on the launcher. Codex ':workspace' still lets every space write the shared /tmp and $TMPDIR, a cross-space channel read denies don't close.",
+  "source": "https://github.com/willesq/orchestrator/pull/141",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: per-space TMPDIR and the combined settings test; see D-53."
+}

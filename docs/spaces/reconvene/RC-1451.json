@@ -1,0 +1,14 @@
+{
+  "id": "RC-1451",
+  "kind": "follow-up",
+  "topic": "Chat retention per space and kind, and running connectors",
+  "detail": "SP-060 summary lists retention per space and kind; it has no acceptance item and is not implemented. Proposed new feature: settings for how long each space keeps chat content per container kind (DM, group DM, channel, meeting), enforced by a prune of chat sources older than that. Nothing runs a connector yet either: SP-061 or SP-062 should add the orchd unit that runs connectors on a schedule with feeds.AllowlistFrom(settings.Feeds.Chat), and the per-tenant profile directory the connector process logs in with (the gh profile pattern; orch never reads it).",
+  "source": "https://github.com/willesq/orchestrator/pull/203",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-060",
+    "SP-061",
+    "SP-062"
+  ],
+  "status": "open"
+}

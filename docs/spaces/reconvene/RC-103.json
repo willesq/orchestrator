@@ -1,0 +1,12 @@
+{
+  "id": "RC-103",
+  "kind": "follow-up",
+  "topic": "Guard files need SP-042's shell-write protection",
+  "detail": "SP-041's snapshot (<data>/guard/policy.json) and pin files are protected from file tools only (the guard directory is the snapshot's one protected path). A shell write (echo, tee, cp, mv, sed -i) can still set the guard's switch to off in the snapshot or change a session's pin space, and an edit of orch.db can do the same for the fallback. SP-042 must cover <data>/guard and orch.db for shell writes, and should keep reads of the pin files allowed.",
+  "source": "https://github.com/willesq/orchestrator/pull/172",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-042"
+  ],
+  "status": "open"
+}

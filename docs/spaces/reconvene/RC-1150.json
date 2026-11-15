@@ -1,0 +1,16 @@
+{
+  "id": "RC-1150",
+  "kind": "decision",
+  "topic": "Should an unlocked terminal be allowed to weaken the spaces policy?",
+  "detail": "SP-077's security review (medium, design): an unlock gives the terminal operator evidence ('unlock'), which every operator check accepts like Orch.app's, so an unlocked terminal can also apply a policy (ApplySpaces), switch enforcement layers off (SetEnforcement), change the sandbox setting and the outbound rules, and call SP-078's settings RPCs (refuseSettings accepts any operator evidence: sensitive SetConfig, harness and cc-safety-net settings, Restart, PR landing). Those changes outlast the unlock (at most 60 minutes). Orch.app says so beside each request, and the docs do. Options: (a) keep it (D-71 grants operator scope); (b) keep the policy-weakening RPCs (ApplySpaces, SetEnforcement to a relaxing state, SetSandboxSetting, ChangeOutboundRule) Orch.app-only, so an unlock covers relabel, retag, config and the other operator commands; (c) (b) plus a second confirmation in Orch.app for those RPCs from an unlocked terminal. Recommendation: (b). Touches SP-077, SP-078, SP-070, SP-020.",
+  "source": "https://github.com/willesq/orchestrator/pull/198",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-077",
+    "SP-078",
+    "SP-070",
+    "SP-020"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-15 as D-78: option (b), extended to SP-078's settings RPCs. Implemented in SP-077 (internal/daemon/unlock_scope.go: refuseUnlocked in the resolver interceptor, and refuseUnlockedLoosening in SetEnforcement for a switch looser than its current state; RemoveDocsOwner's purge is Orch.app-only as PurgeDocs is under D-77; TestUnlockCannotWeakenProtection)."
+}

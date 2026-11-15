@@ -1,0 +1,16 @@
+{
+  "id": "RC-707",
+  "kind": "follow-up",
+  "topic": "High (existing code): operator-only RPCs do not ask for D-39's evidence",
+  "detail": "SP-025 security review, high. refuseNonOperator (internal/daemon/callers.go operator()) accepts any identified caller with no harness above it, so a process an agent detaches (setsid, no terminal) can call SetEnforcement to switch memory filtering off for everyone, SetSpacesDraft then ApplySpaces with accept_agent_draft to rewrite the policy, DiffSpaces and ListSpaces (every space's orgs and roots), ListToolEvents (every session's command log) and ExplainPlacement (full answers). That bypasses SP-025's filtering. Proposed: once a policy is applied, require the same evidence of the user that memory reads need (operatorBy, per RC-705's decision) in operator(), with tests. Not done in SP-025: it changes SP-020, SP-050 and SP-070's RPCs and their tests, and its strength depends on RC-705.",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-020",
+    "SP-050",
+    "SP-070",
+    "SP-025"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-14 as D-71: operator-only RPCs need the same evidence. Implemented in SP-025 (2f39200): operator() refuses an operator result without Orch.app's evidence while a policy is applied, and the resolver interceptor gives such a caller a queued task's limits for every RPC in operatorActions (TestOperatorOnlyRPCsNeedOrchApp, TestUnprovenOperatorGetsTaskLimits). With no policy nothing changes (INV-10)."
+}

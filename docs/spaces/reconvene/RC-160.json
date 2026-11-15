@@ -1,0 +1,13 @@
+{
+  "id": "RC-160",
+  "kind": "user-action",
+  "topic": "SP-072 manual checks: switch each layer from the app; review the snapshots",
+  "detail": "SP-072.1.a1 and a2 are manual. a1: with this branch's app opened by the user (not from an agent session, since SetEnforcement is operator-only), switch each of memory, guard, terms and sandbox from Settings -> Spaces (and the menu bar panel), confirm each change shows in `orch status` within 2 s, and set one for 15 minutes to see its countdown; then switch them back. a2: review the four snapshots listed in SP-072.1's evidence (section and banner, light and dark).",
+  "source": "https://github.com/willesq/orchestrator/pull/169",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-072"
+  ],
+  "status": "open",
+  "note": "2026-11-14: a2 confirmed by the user (snapshots regenerated from main); a1 still to do after merging (D-70)."
+}

@@ -1,0 +1,12 @@
+{
+  "id": "RC-112",
+  "kind": "decision",
+  "topic": "Which secret files the guard refuses to read",
+  "detail": "SP-042 refuses reads (not only writes) of terms files and of the secret files listed in docs/internals/hooks.md (Self-protection): the files of each space's gh profile and of the default gh profile, orch's Qdrant API key, the netrc file, the AWS CLI's key file and ssh private keys (id_*, not *.pub). Confirm the list or extend it (for example Docker, kubectl, npm or PyPI login files).",
+  "source": "https://github.com/willesq/orchestrator/pull/175",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-042"
+  ],
+  "status": "open"
+}

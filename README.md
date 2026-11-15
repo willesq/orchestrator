@@ -38,11 +38,12 @@ macOS only. The repo and Homebrew tap are private; `gh` must be authenticated wi
 ```sh
 brew tap willesq/tap git@github.com:willesq/homebrew-tap.git
 brew install willesq/tap/orch
-orch model fetch            # embedding model, ~90 MB
-orch install                # preview changes; add --apply to make them
-brew services start orch    # start orchd
+orch install                # one plan of every change; confirm to apply (or --yes)
 orch check                  # verify preconditions
 ```
+
+`orch install` wires every harness it finds, downloads the embedding model and starts orchd.
+`orch uninstall` reverses it ([docs/INSTALL.md](docs/INSTALL.md#uninstalling)).
 
 Then use your coding agent as usual. `orch search "<query>"` searches memory directly;
 `orch status` reports on the whole system.

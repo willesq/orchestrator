@@ -1,0 +1,13 @@
+{
+  "id": "RC-700",
+  "kind": "follow-up",
+  "topic": "Session-callable RPCs outside memory that name other spaces' orgs, repos, sources or URIs",
+  "detail": "SP-025's registry (internal/daemon/readspaces_registry.go) classes these as 'records' with no filter yet, and SP-026's list does not name them: GetGitHubIdentity, ListGitHubScopes, ListGitHubRepos, GetDocsSync, ListDocsOwners, ListDocsOwnerRepos, ListRegisteredSources, TailLogs (orchd's log lines name source URIs), GetConfig and ListSettings. Interactive sessions may call all of them (only queued tasks are refused some). Proposed: add them to SP-026's scope (filter for agent callers, or make them operator-only), or a new feature. The SP-025 security review adds that TailLogs also undoes the read paths' error redaction: a filtered reader's store failure keeps the collection (and so space) names in orchd's log, which TailLogs serves to sessions and tasks.",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-026"
+  ],
+  "status": "resolved",
+  "note": "SP-026 (#200) filters GetGitHubIdentity (orgs and teams), ListGitHubScopes, ListGitHubRepos, GetDocsSync, ListDocsOwners and ListDocsOwnerRepos by each owner's space for agent callers; ListRegisteredSources is empty and TailLogs refused to everyone but the operator under a policy. GetConfig and ListSettings moved to RC-1250."
+}

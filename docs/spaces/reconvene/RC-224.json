@@ -1,0 +1,13 @@
+{
+  "id": "RC-224",
+  "kind": "follow-up",
+  "topic": "Replay of terms verdicts and redacted fields",
+  "detail": "Low (SP-044 review round 1, RC-116): replay cannot run the terms check again (the log never keeps the text, INV-07, and the checkout moves on), so it carries a recorded outbound_term or outbound_unchecked refusal while the replayed guard lets the call through and the terms layer is on. Replay and orchd's logging-mode verdicts are also computed on redacted directories and targets, so a root or repo whose name is a term can replay differently from the live verdict.",
+  "source": "https://github.com/willesq/orchestrator/pull/177",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-044",
+    "SP-047"
+  ],
+  "status": "open"
+}

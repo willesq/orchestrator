@@ -1,0 +1,14 @@
+{
+  "id": "RC-402",
+  "kind": "follow-up",
+  "topic": "Limits of leaving public on a visibility change",
+  "detail": "(1) When the repo listing fails, every repo keeps its docs as last indexed, public ones included. A listing failure is not treated as unreadable visibility for every repo, because that would delete and re-embed a whole public org after a network blip. (2) Fixed in SP-030: a recorded repo missing from a successful listing, and every recorded repo of an owner whose binding no longer checks out, leave public; an hourly sources sweep covers removed sources and deleted folders. A listing GitHub refuses (the owner is gone or this login lost access) also takes them out. Still kept: when the listing fails for any other reason (network, credentials), public docs stay as last indexed until a listing succeeds, so a blip does not delete and re-embed a whole public org. (3) Leaving public deletes and re-ingests (re-embeds); it is not a move. SP-024 must make DeleteSource remove a source from every collection. (4) Cost: each docs sync reads one stored copy per doc of every listed repo that is not verified public, and each repo/owner source refresh reads one per stored doc. (5) These deletions bypass the prune guard by design, because capping them would keep non-public content readable everywhere. (6) Under D-65 no local content is public, so a public copy of a checkout leaves whatever GitHub answers. When SP-076 lets listed folders be public again, a GitHub outage or a spent lookup budget must not delete their public copies (security audit, round 1).",
+  "source": "https://github.com/willesq/orchestrator/pull/180",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-024",
+    "SP-030",
+    "SP-027"
+  ],
+  "status": "open"
+}

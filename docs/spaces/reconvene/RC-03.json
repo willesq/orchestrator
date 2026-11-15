@@ -1,0 +1,13 @@
+{
+  "id": "RC-03",
+  "kind": "decision",
+  "topic": "Bind the peer PID to its connection (proposed SP-011 acceptance item)",
+  "detail": "NearestAncestor trusts its starting PID; a peer that forks, hands its socket to a child and exits leaves its PID free for reuse under another space's harness. Bound the walk by the accept time, or identify the peer by kernel token (LOCAL_PEERTOKEN, SO_PEERPIDFD). Not found must mean no space, never a default.",
+  "source": "https://github.com/willesq/orchestrator/pull/140 (and RAG orch://spaces/sp-003/process-identity-security-notes)",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-011"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: identify peers by kernel token before enforcement; see D-44 and SP-041.1.a5."
+}

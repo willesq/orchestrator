@@ -74,6 +74,7 @@ struct LiveDaemonTests {
         unit.error = "gh: not logged in"
         unit.restarts = 2
         response.subsystems = [unit]
+        response.spaces.state = "off"
 
         try await withFakeOrchd(FakeOrchdService(status: response)) { socket in
             let client = try DaemonClient(socketPath: socket)
@@ -86,7 +87,8 @@ struct LiveDaemonTests {
             #expect(status == DaemonStatus(version: "0.18.0", uptimeSeconds: 90, subsystems: [
                 Subsystem(name: "pr-babysitter", state: "failed", detail: "open-PR polling via gh",
                           error: "gh: not logged in", restarts: 2),
-            ]))
+            ], spacesState: "off"))
+            #expect(status.spacesOff)
             #expect(Health(status: status) == .degraded(status, failed: ["pr-babysitter"]))
         }
     }

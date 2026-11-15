@@ -1,0 +1,15 @@
+{
+  "id": "RC-705",
+  "kind": "decision",
+  "topic": "Critical: an agent can forge D-39's terminal evidence with a terminal of its own",
+  "detail": "SP-025 security review, critical. D-39 grants operator-scope memory reads (every space) to a caller with a controlling terminal. Any process can open a pseudo-terminal: '( script -q /dev/null orch search <topic> > out & )' leaves script(1) under launchd and the CLI as session leader, group leader and foreground process of a new pty, so it passes (verified with ps: PGID == TPGID == PID, script's parent PID 1). Python's pty module, expect and 'tmux new -d' do the same, and 'open x.command' runs a script in a real Terminal window. No ancestry heuristic separates these from a user in Terminal, iTerm or tmux. SP-025 hardened what it could without changing D-39 (the caller's parents must reach the foreground group's leader or the shell that started it without passing launchd; the leader must be no harness), which stops processes left behind in a group, but not a new pty. Options: (a) only Orch.app is evidence: under a policy, CLI reads at a terminal are public-only unless (b); (b) an operator unlock confirmed in Orch.app ('orch spaces unlock --for 15m' asks the app; the app shows which terminal asked) that gives that terminal's callers operator scope for a while; (c) accept the heuristic as documented. Recommendation: (b), with (a) until it exists. The same evidence should gate operator-only RPCs (RC-707). Lows from the second review, for the same decision: on Linux a non-exec wrapper that is a child subreaper (tini, PR_SET_CHILD_SUBREAPER) adopts a process an agent orphans, so the unbroken-parents check passes (macOS has no subreapers; orch runs on macOS, D-49); and the group leader and its parent are read after the terminal, so a PID reused in between could be read in their place (comparing start times would close it).",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-025",
+    "SP-050",
+    "SP-070"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-14 as D-71: under a policy a terminal is not the operator; only Orch.app is, until the app-confirmed unlock (SP-077). Implemented in SP-025 (2f39200): an operator result without Orch.app's evidence reads public memory only (TestOnlyOrchAppIsTheOperator, including a process with a pty of its own)."
+}

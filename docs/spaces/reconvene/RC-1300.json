@@ -1,0 +1,13 @@
+{
+  "id": "RC-1300",
+  "kind": "follow-up",
+  "topic": "A fresh Codex task's session gets no pin",
+  "detail": "SP-029 pins a queued task's agent session to its dispatch space when the agent process starts. A Claude Code task's session ID is known in advance (agentrun.SessionID) and a resumed Codex run's thread is stored, but a fresh Codex run learns its thread ID only when it ends, so it gets no pin: its transcript, record and summary are quarantined under a policy, and while the guard enforces its tool calls are refused as pin_missing (RC-100 stays open for it). Proposed: have the Codex runner report the thread ID as soon as thread.started arrives (update LiveRun.SessionID and call OnLive), so orchd can pin it like a Claude task.",
+  "source": "https://github.com/willesq/orchestrator/pull/196",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-029",
+    "SP-041"
+  ],
+  "status": "open"
+}

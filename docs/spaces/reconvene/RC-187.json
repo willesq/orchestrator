@@ -1,0 +1,12 @@
+{
+  "id": "RC-187",
+  "kind": "decision",
+  "topic": "A checkout only its remote places gets no space's rules",
+  "detail": "After the security audit (H-1), a checkout gets a space's rules only when its folder root decided the placement; a job repo cloned under a personal root gets a checkout-with-no-space's rules (no GH_CONFIG_DIR, no TMPDIR). Options: keep (move such clones under the job's root); or let the operator pin a checkout to a space.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

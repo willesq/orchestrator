@@ -1,0 +1,13 @@
+{
+  "id": "RC-204",
+  "kind": "follow-up",
+  "topic": "A relative orch directory or no home makes the guard refuse every call",
+  "detail": "From the RC-110 security review (low, fail closed): orchd puts ORCH_CONFIG_DIR/ORCH_DATA_DIR as written, and the home from os.UserHomeDir, into the snapshot's protection. If one is relative, or the home cannot be found, NewGuardPolicyProtecting rejects the entries and the hook answers every call with policy_unreadable while a policy is configured (with no policy nothing is refused: protection is ignored then). Nothing in orchd's log or orch status explains it. Proposed: orchd makes the directories absolute, or validates the protection before writing the snapshot and reports the failure.",
+  "source": "https://github.com/willesq/orchestrator/pull/175",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041",
+    "SP-042"
+  ],
+  "status": "open"
+}

@@ -166,8 +166,9 @@ func policyApplied(e *spaces.Engine) func() bool {
 		if e == nil {
 			return false
 		}
-		r, err := e.Current()
-		return err != nil || r.Configured()
+		// Reason: a policy kept while spaces are off still needs Orch.app
+		// as the operator (D-71), so the switch stays the operator's.
+		return e.PolicyKept()
 	}
 }
 

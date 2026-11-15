@@ -1,0 +1,13 @@
+{
+  "id": "RC-91",
+  "kind": "decision",
+  "topic": "Timed switch limits",
+  "detail": "A timed switch lasts from 1 s to 24 h ('--for 15m'); an untimed switch has no limit and shows in every digest until switched back. A timed switch set over another keeps the first one's revert state, so a chain ends where it began; an untimed set replaces any timer. Confirm the 24 h cap, or choose another.",
+  "source": "https://github.com/willesq/orchestrator/pull/167",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-070",
+    "SP-072"
+  ],
+  "status": "open"
+}

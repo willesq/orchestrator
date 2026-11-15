@@ -1,0 +1,15 @@
+{
+  "id": "RC-710",
+  "kind": "follow-up",
+  "topic": "Interactive sessions can still call task-refused settings RPCs under a policy",
+  "detail": "SP-025's D-71 review (medium, pre-existing): operatorActions RPCs are refused to queued tasks and, since D-71, to a caller that is the operator only by process tree while a policy is applied; interactive harness sessions still reach them as before, including SetConfig with Sensitive keys (command log retention and size caps, queue.worker.permission_mode, claude_bin, codex.sandbox: confirm_sensitive is the client's own flag), SetSettingEnabled, AddSetting and RemoveSetting (cc-safety-net), Restart, InstallSafetyNet, PurgeDocs, DeleteSource and LandPR. Proposed: decide which of these are the operator's alone and send them through refuseNonOperator (Orch.app under a policy), keeping Ingest, Dispatch and the task RPCs sessions use.",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-070",
+    "SP-050",
+    "SP-025"
+  ],
+  "status": "resolved",
+  "note": "Accepted risk until SP-078 (D-74, 2026-11-14): SP-025 merges with it open; SP-078 refuses these RPCs to every caller except Orch.app under a policy. Resolved by SP-078 (https://github.com/willesq/orchestrator/pull/199): under a policy, SetConfig with Sensitive keys, SetSettingEnabled, AddSetting, RemoveSetting, InstallSafetyNet, Restart, LandPR, UndoPRLanding and DiscardPRLanding are refused to every caller except Orch.app (refuseSettings, internal/daemon/policy_operator.go); Ingest, Dispatch and the task RPCs stay open to sessions. DeleteSource and PurgeDocs, also named in the detail, are outside SP-078 and stay open to sessions: see RC-1200."
+}

@@ -1,0 +1,13 @@
+{
+  "id": "RC-303",
+  "kind": "follow-up",
+  "topic": "Claude config folder is not vetted before claude auth status runs (security audit, low)",
+  "detail": "SP-074.3.a2: orchd runs claude auth status with a space's claude_config_dir without a CheckProfileDir-style check (absolute, under home, owner-only). Only status is read; nothing is written. Proposed: apply the same directory check and report refused folders.",
+  "source": "https://github.com/willesq/orchestrator/pull/182",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-074",
+    "SP-046"
+  ],
+  "status": "open"
+}

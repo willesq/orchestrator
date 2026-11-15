@@ -1,0 +1,13 @@
+{
+  "id": "RC-220",
+  "kind": "decision",
+  "topic": "Programs that run git themselves (accepted risk, D-60)",
+  "detail": "Accepted under D-60 and RC-117, recorded by the SP-044 security reviews of 2026-11-14: gh pushing an unpushed head branch itself (its interactive prompt), external git-<name> subcommands on PATH (git town, git-spr) that an alias check finds no alias for, gh's interactive base-repo prompt for a fork under a PTY (Codex exec_command with a tty), and gh api --hostname or -R naming another host. The check does not read what these send; SP-045's git hooks and per-job accounts are the boundary.",
+  "source": "https://github.com/willesq/orchestrator/pull/177",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-044",
+    "SP-045"
+  ],
+  "status": "open"
+}

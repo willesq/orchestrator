@@ -1,0 +1,12 @@
+{
+  "id": "RC-1500",
+  "kind": "follow-up",
+  "topic": "write_split cleanup follows a symlinked reconvene/ folder",
+  "detail": "Low finding from SP-080's verification: if docs/spaces/reconvene/ (or state/) is committed as a symlink to another folder and write_split is called with no items for it, the cleanup step deletes RC-<n>.json (or SP-<n>.json) files inside the link's target. convert_branch.py cannot reach it on the real plan (the write before cleanup refuses the link while items exist). Fix: skip cleanup when os.path.islink(folder), with a test.",
+  "source": "https://github.com/willesq/orchestrator/pull/205",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-080"
+  ],
+  "status": "open"
+}

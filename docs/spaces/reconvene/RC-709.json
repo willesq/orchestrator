@@ -1,0 +1,13 @@
+{
+  "id": "RC-709",
+  "kind": "follow-up",
+  "topic": "Low: labels_v has no payload index",
+  "detail": "SP-025 filters every named space's reads on labels_v (INV-08) as an integer match, but collections index only source_uri, writer, space and the search fields, so Qdrant scans for that condition, and a server with unindexed filtering disabled (strict mode) would refuse every filtered read (it fails closed: sessions read nothing). Proposed: create an integer payload index on labels_v with the others when a collection is made, and add it to existing collections with the reindex or relabel tooling (SP-027).",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-027",
+    "SP-024"
+  ],
+  "status": "open"
+}

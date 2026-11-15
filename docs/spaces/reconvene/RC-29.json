@@ -1,0 +1,13 @@
+{
+  "id": "RC-29",
+  "kind": "follow-up",
+  "topic": "SP-012 audit lows for the command log store",
+  "detail": "The SP-012 security audit found no critical/high/medium issues. Its lows L2-L4 apply once SP-014 stores events: cap each RecordToolEvent string field (e.g. 4 KiB; only gRPC's 4 MiB bounds them now); treat events from unresolved callers (callerNone) as untrusted or drop them, and bound the intake (a buffered channel that drops when full, with a count) so a flood cannot build up memory; redact tool_input with the ingest scrubber before storing it and never log the request. L1 (uncapped hook stdin) was fixed with an 8 MiB cap.",
+  "source": "https://github.com/willesq/orchestrator/pull/150",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-014"
+  ],
+  "status": "resolved",
+  "note": "Done in SP-014 (PR #152), 2026-11-09: fields other than tool_input capped at 4 KiB and unknown protobuf fields refused; operator, unresolved and untracked-task events are counted and not stored; the intake is bounded by count, bytes and a per-process share, with drops written as gap records; commands and every text field are redacted before storage, and requests are never logged."
+}

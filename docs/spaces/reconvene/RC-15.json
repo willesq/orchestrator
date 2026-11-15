@@ -1,0 +1,13 @@
+{
+  "id": "RC-15",
+  "kind": "follow-up",
+  "topic": "Unverified assumptions to check before memory enforcement",
+  "detail": "Qdrant match.except on array fields, and the GetDocument and session-recall handlers' read paths, were assumed in the design but not checked.",
+  "source": "a local session (design session)",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-025",
+    "SP-026"
+  ],
+  "status": "open"
+}

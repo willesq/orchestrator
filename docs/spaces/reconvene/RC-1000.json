@@ -1,0 +1,14 @@
+{
+  "id": "RC-1000",
+  "kind": "follow-up",
+  "topic": "A new job's gh login is unknown until setup is applied",
+  "detail": "The Spaces step shows each new job's gh profile (GH_CONFIG_DIR) with its login status, but orchd checks a profile only once an applied space names it (ListSpaces logins, ScanSpaces accounts). A profile setup proposes therefore shows 'checked once applied' plus the 'GH_CONFIG_DIR=... gh auth login' command; the real status appears after Apply in Settings -> Spaces and on a rerun. Proposed: let ScanSpaces take candidate gh profile folders and report their 'gh auth status' metadata (an orchd.proto change for the coordinator to schedule).",
+  "source": "https://github.com/willesq/orchestrator/pull/193",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-052",
+    "SP-063",
+    "SP-074"
+  ],
+  "status": "open"
+}
