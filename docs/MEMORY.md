@@ -191,6 +191,17 @@ client notes with no session space, sessions whose transcript is gone, conflicts
 quarantine, never to public or another space; retag what you want. Chunks reported as left stale
 (for example, GitHub could not be asked about a repo) are retried by the next run.
 
+To see and clear quarantine (operator only):
+
+```sh
+orch quarantine list                              # quarantined sources and their chunk counts
+orch quarantine assign <source_uri> <space> --confirm   # move one to a space and keep it there
+orch quarantine purge <source_uri>... | --all     # counts only; add --confirm to delete
+```
+
+`orch status` shows how many sources and chunks quarantine holds. `assign` is a retag of a
+quarantined source (see below), so it needs `--confirm` like any move out of quarantine.
+
 ## Retagging a source
 
 To move one source to another space (for example a note left in quarantine), run, in a terminal

@@ -3605,6 +3605,44 @@
         "status": "open"
       },
       {
+        "id": "RC-900",
+        "kind": "follow-up",
+        "topic": "Wire quarantine assign to SP-071's RetagSource",
+        "detail": "'orch quarantine assign' calls a Retagger interface (source_uri, space, confirm, expect_from=quarantine). Until SP-071 merges, the build's Retagger refuses and moves nothing, and SP-028.1.a1's assign part is tested against a fake retag that records the override. After SP-071 merges: implement the Retagger with the RetagSource RPC and add a test through orchd showing the source leaves quarantine and the override is recorded.",
+        "source": "https://github.com/willesq/orchestrator/pull/192",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-028",
+          "SP-071"
+        ],
+        "status": "resolved",
+        "note": "Resolved in https://github.com/willesq/orchestrator/pull/192 after SP-071 merged: assign uses RetagSource (expect_from quarantine, --confirm), tested end to end through orchd by TestQuarantineAssignThroughOrchd."
+      },
+      {
+        "id": "RC-901",
+        "kind": "follow-up",
+        "topic": "Quarantine list is capped at 5,000 sources per answer",
+        "detail": "ListQuarantine names at most 5,000 sources (by URI) so one answer stays under gRPC's message size; totals count all. The proto has no paging, so 'orch quarantine list' shows the first 5,000 and 'assign' refuses a source beyond them. Options: (a) accept; (b) add paging (a proto change) if quarantine ever grows that large. Recommendation: (a).",
+        "source": "https://github.com/willesq/orchestrator/pull/192",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-902",
+        "kind": "follow-up",
+        "topic": "SP-028 security review lows accepted",
+        "detail": "(1) A failed quarantine scan or purge logs the store's error in orchd's local log, which may include a source URI (a local path); orchd's log already names source URIs elsewhere. (2) Quarantine totals are int32 on the wire; only displayed counts would overflow past 2^31. (3) Chunks marked quarantine but still outside the quarantine collection (not yet relabelled) are not listed, counted or purged until 'orch rag relabel' moves them. (4) After an assign (a retag), 'orch status' may show the old quarantine counts for up to 30 s: the count cache is cleared after a purge only, and clearing it on a retag would touch SP-071's code. (5) Fixed in the PR: failed counts are cached for the TTL, and refusal text drops format characters.",
+        "source": "https://github.com/willesq/orchestrator/pull/192",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
         "id": "RC-1200",
         "kind": "decision",
         "topic": "DeleteSource and PurgeDocs stay open to interactive sessions under a policy",
@@ -6335,18 +6373,21 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: List: TestListQuarantineRPC (internal/daemon; the operator sees each quarantined source with its chunk count, only quarantine's), TestListQuarantineShowsSourcesAndCounts (internal/rag), TestQuarantineListShowsSourcesAndCounts (internal/cli); counts in orch status: TestStatusCountsQuarantine (internal/daemon), TestSpacesSectionCountsQuarantine (internal/status). Assign: TestQuarantineAssignThroughOrchd (internal/daemon) runs the real 'orch quarantine assign --confirm' against orchd's handlers and store over a socket: the source moves from quarantine to personal through RetagSource (SP-071, expect_from quarantine), quarantine no longer holds it, and the next write of the same source_uri lands in personal (the override rule); without --confirm nothing moves, and a source outside quarantine is refused. TestQuarantineAssignUsesRetagSource (internal/cli) checks the request. Purge: TestPurgeQuarantineRPC (internal/daemon; no confirm only counts and deletes nothing, confirm deletes from quarantine only, a source in another space or nowhere is refused alike), TestPurgeQuarantineCountsUnlessApplied, TestPurgeQuarantineNamedDeletesOnlyThere, TestPurgeQuarantineReachesTheShadow (internal/rag), TestQuarantinePurgeIsDryRunUnlessConfirmed (internal/cli). Result: 3 of 3 pass.",
+            "a2: TestQuarantineRPCsRefuseAgentCallers (internal/daemon): ListQuarantine and PurgeQuarantine return PermissionDenied for a harness session, a queued task, a harness process and a process orchd started; a refused purge with confirm deletes nothing. TestQuarantineCommandsRefusedThroughOrchd (internal/daemon): the real CLI from a harness process gets orchd's refusal for list, assign and purge, and the source stays in quarantine. TestQuarantineCommandsRefusedForAgentCallers (internal/cli): all three refused inside a queued task before orchd is asked. Result: pass."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "c0c4099",
+      "verified_at": "2026-11-15T04:43:06Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "8b78deb05b7ee728821d2452d6e11460f796408e9822bf1d03d2e68805efc1c7",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-028-quarantine",
+      "pr": "https://github.com/willesq/orchestrator/pull/192"
     },
     {
       "id": "SP-029",

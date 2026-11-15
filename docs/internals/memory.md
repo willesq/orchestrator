@@ -794,6 +794,30 @@ write is stored again (embedded once) rather than skipped as unchanged.
 collection, every chunk moved to one of four space collections, Qdrant 1.17.1 on this Mac), a
 relabel took 35.7 s (`TestIntegrationRelabel40k`, `ORCH_QDRANT_BENCH=1`).
 
+## Quarantine
+
+Quarantine is the space of content orchd could not place (INV-03), stored in its own collection
+(`<base>__quarantine`, D-10). No session reads it. SP-028 gives the operator a way out:
+
+- **List.** `ListQuarantine` scrolls the quarantine collection and returns each source with its
+  chunk count, type and latest store, sorted by URI, plus the totals. One answer names at most
+  5,000 sources so it stays under gRPC's message size; the totals count every source.
+- **Assign** is a retag: the CLI checks that the source is in quarantine, then calls
+  `RetagSource` (see [Retag](#retag)) with `expect_from` set to quarantine and the operator's
+  `--confirm`, which leaving quarantine always needs. The retag moves the chunks without
+  re-embedding them and records the sticky override; assign does not move data itself.
+- **Purge.** `PurgeQuarantine` takes named sources or `all` (one of the two; an empty list never
+  means everything). Without `confirm` it only counts. It deletes from the quarantine collection
+  and, during a hybrid migration, from the shadow's, under each source's write lock. A named source
+  that quarantine does not hold refuses the whole purge before anything is deleted, with the same
+  answer whether the source is in another space or nowhere.
+- **Counts.** `Status` carries the source and chunk counts when a policy is configured, never a
+  source. They are cached for 30 s, with a 2 s limit on counting, and refreshed after a purge.
+
+Both RPCs are operator-only: refused to queued tasks and, through `refuseNonOperator`, to harness
+sessions and processes orchd started. Chunks a relabel has not yet moved into the quarantine
+collection are not counted until it does.
+
 ## Retag
 
 A retag (SP-071, D-14, INV-15) moves one source to the space the operator names:
