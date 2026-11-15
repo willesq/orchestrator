@@ -3603,6 +3603,68 @@
           "SP-026"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-1150",
+        "kind": "decision",
+        "topic": "Should an unlocked terminal be allowed to weaken the spaces policy?",
+        "detail": "SP-077's security review (medium, design): an unlock gives the terminal operator evidence ('unlock'), which every operator check accepts like Orch.app's, so an unlocked terminal can also apply a policy (ApplySpaces), switch enforcement layers off (SetEnforcement), change the sandbox setting and the outbound rules. Those changes outlast the unlock (at most 60 minutes). Orch.app says so beside each request, and the docs do. Options: (a) keep it (D-71 grants operator scope); (b) keep the policy-weakening RPCs (ApplySpaces, SetEnforcement to a relaxing state, SetSandboxSetting, ChangeOutboundRule) Orch.app-only, so an unlock covers relabel, retag, config and the other operator commands; (c) (b) plus a second confirmation in Orch.app for those RPCs from an unlocked terminal. Recommendation: (b). Touches SP-077, SP-078, SP-070, SP-020.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077",
+          "SP-078",
+          "SP-070",
+          "SP-020"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1151",
+        "kind": "decision",
+        "topic": "What the operator unlock still relies on the user for",
+        "detail": "Accepted for now and documented (docs/internals/daemon.md, Operator unlock): (1) the user's choice of which request to confirm is the gate: a process an agent detached, or a terminal window it opened through the terminal app's scripting, can ask at the same time; rows show the terminal (tty), process, executable and parents read from the kernel, but two requests from the same terminal tab (an agent's leftover process that kept the tab's terminal) differ only by their parents; if the user confirms the agent's row, the agent can print a fake code prompt into the user's terminal (nothing else reads it while orch waits) and prove its request with what the user types; (2) requests held open or filed six a minute keep the user's own out (denial of service); (3) an unlocked shell is as trusted as anything that can type into it, and the unlock ends on an agent's first call only if that harness connects to orchd; (4) a stream opened while unlocked (WatchTasks) keeps the caller it resolved to; (5) command lines (with any secret in them) show in the panel; (6) only Claude Code and Codex are told apart from a terminal. Proposed hardening: refuse or flag a request whose process group is not its terminal's foreground group (e_pgid vs e_tpgid); keep reading the terminal from before the request so a fake prompt races the CLI; give rate-limit slots only to requesters with a terminal; or run operator commands from Orch.app itself.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1152",
+        "kind": "user-action",
+        "topic": "SP-077.1.a4: check the unlock in Orch.app by hand",
+        "detail": "Needs the user with a policy applied and Orch.app built from the PR (make app-install): run 'orch spaces unlock --for 5m' in a terminal; check the menu bar panel shows the request with that command, the terminal (tty) and 5 min; Confirm (Touch ID or password), type the code the panel shows into the terminal; check the panel counts down and 'orch spaces diff' works in that shell; Lock it; ask again and Deny. Touch ID and the password prompt cannot be driven by a unit test (the tests inject a confirmer).",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1153",
+        "kind": "follow-up",
+        "topic": "Flaky tests, and make cover drops a package whose tests fail",
+        "detail": "Seen while validating SP-077 on 2026-11-15 under load from parallel lanes: TestRunMeasuresFailedRuns (internal/agentrun) failed 1 in 8 runs on main too ('a timed-out run must still record how long it took'); internal/daemon failed once inside 'make cover' and passed on the rerun. scripts/cover.sh skips a package whose tests fail (go test ... || true), so that run reported 'All files >= 80%' without any internal/daemon file. Proposed: make cover.sh fail when a package's tests fail, and look at the agentrun timing.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-1154",
+        "kind": "follow-up",
+        "topic": "Changes made under an unlock do not say so",
+        "detail": "Low. A change made from an unlocked terminal (SetEnforcement, outbound rules, policy apply) is recorded with callerLabel's 'operator (process N)', the same as before spaces; the record does not name the unlock (its id) or that Orch.app confirmed it. Proposed: label such changes 'operator (process N, unlock <id>)' and keep the unlock log lines with them.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077",
+          "SP-070"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -7713,7 +7775,13 @@
               "threshold": "both"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestUnlockGrantsScopeOnlyOnceConfirmed (internal/daemon/unlock_test.go) passes at 63b6d21: a pending request grants nothing (DiffSpaces refused, public reads only for the requester and its descendants); Orch.app's confirmation grants nothing either until the requester sends the code orchd shows only to Orch.app (ProveUnlock; a descendant or a wrong code is refused); then the requester and its descendants (32, 33, 34) are the operator and its parent, sibling, another terminal, a pty of its own and a detached process are not; it ends at its duration (15m), with 'orch spaces lock' from the unlocked shell (a sibling's lock ends nothing), with Orch.app's Lock, and when the requester exits (a PID reused with another start time is not covered); 0s, -1s and 3601s are refused (at most 60 minutes). Also TestUnlockRequestEndsUnconfirmed (denied, lapsed, withdrawn, locked, confirmed without a code in time, three wrong codes; limits of 4 pending, 6 a minute), TestUnlockFollowsTheConnectionsProcess and TestUnlockWithoutPolicy; CLI: TestSpacesUnlockRunsTheShellThenLocks, TestSpacesUnlockFailures, TestRunUnlockedReportsTheExitStatus, TestSpacesLock (internal/cli/spaces_unlock_test.go); app: UnlocksModelTests and UnlocksClientTests (macos/Tests/OrchKitTests/UnlocksTests.swift).",
+            "a2: TestUnlockRefusedToAgentsAndNonApp (internal/daemon/unlock_refusal_test.go) passes at 63b6d21: RequestUnlock, ProveUnlock and Lock are refused (PermissionDenied) to an agent harness, a shell inside one and a task orchd started, and RequestUnlock and Lock to a pinned session; ConfirmUnlock and ListUnlocks are refused to the requester, another terminal, a pty of its own, a detached process, an agent, a task, an unsigned program named Orch and an Orch.app elsewhere, and to a terminal under a confirmed unlock (it cannot confirm or list another). TestUnlockFollowsTheConnectionsProcess: an agent started in the unlocked shell is not the operator and its first call ends the unlock; a connection handed on by a process that exited does not inherit the unlock of the process reusing its PID (D-44).",
+            "a3: TestUnlockConfirmationNeedsTheSignedApp (internal/daemon/unlock_refusal_test.go) passes at 63b6d21: ConfirmUnlock and ListUnlocks are refused to a signed copy elsewhere (ad-hoc copy), a binary at the app's path with another code directory hash (another signature), the app without the hardened runtime, one with no code hash and one that fails the requirement, and the installed Orch.app's confirmation is what grants it. The recognition itself is checked against real ad-hoc signatures by TestAppSignatureOfARealProcess (internal/daemon/appsig_darwin_test.go, SP-025; passes at 63b6d21).",
+            "a4 (manual, awaiting the user): not yet observed. Supporting: light and dark snapshots of the menu bar panel's unlocks (pending request, confirmed request with its code, active unlock with its countdown) rendered with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter UnlocksSnapshots` (macos/Tests/OrchAppSnapshots/UnlocksSnapshots.swift) at <scratch>/sp-077/shots/menu-bar-unlocks-light.png and -dark.png. The real check needs the user (RC-1152): with a policy applied, run 'orch spaces unlock --for 5m' in a terminal, see the request in Orch.app's menu bar panel with that command, terminal and duration, Confirm (Touch ID or password), type the code shown into the terminal, see the countdown, run an operator command (e.g. 'orch spaces diff'), then Lock; and Deny a second request.",
+            "a5: docs/internals/daemon.md ('Operator evidence' and the new 'Operator unlock' section) and docs/OPERATIONS.md (unlock and lock commands and how to confirm) changed at 63b6d21; also docs/internals/cli.md and docs/internals/app.md."
+          ]
         }
       ],
       "status": "in_progress",
