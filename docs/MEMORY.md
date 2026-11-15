@@ -187,3 +187,14 @@ Nothing is re-embedded. Content that cannot be placed (notes stored before write
 client notes with no session space, sessions whose transcript is gone, conflicts) goes to
 quarantine, never to public or another space; retag what you want. Chunks reported as left stale
 (for example, GitHub could not be asked about a repo) are retried by the next run.
+
+To see and clear quarantine (operator only):
+
+```sh
+orch quarantine list                              # quarantined sources and their chunk counts
+orch quarantine assign <source_uri> <space>       # move one to a space and keep it there
+orch quarantine purge <source_uri>... | --all     # counts only; add --confirm to delete
+```
+
+`orch status` shows how many sources and chunks quarantine holds. `assign` needs the retag
+command (SP-071); until that is merged it refuses and moves nothing.
