@@ -46,6 +46,14 @@ type Origin struct {
 	// WriterSpace is the space of the pinned session that stored a client
 	// write, as orchd resolved it from the caller's process; "" for none.
 	WriterSpace string
+	// Tenant, Container and ContainerKind say where chat content was
+	// written (SP-060): the tenant's stable ID without its provider, the
+	// channel, chat or meeting's stable ID, and one of ChatKinds.
+	Tenant, Container, ContainerKind string
+	// Participants are the stable IDs of a chat container's members, as the
+	// feed reported them, sorted and joined by commas (an ID holds none).
+	// A string keeps Origin comparable.
+	Participants string
 }
 
 // Payload fields of placement.
@@ -61,7 +69,8 @@ func (o Origin) payload() map[string]any {
 	for k, v := range map[string]string{
 		"system": o.System, "path": o.Path, "url": o.URL, "repo_owner": o.RepoOwner, "repo_name": o.RepoName,
 		"visibility": o.Visibility, "owner_node_id": o.OwnerNodeID, "session": o.Session, "caller": o.Caller,
-		"writer_space": o.WriterSpace,
+		"writer_space": o.WriterSpace, "tenant": o.Tenant, "container": o.Container, "container_kind": o.ContainerKind,
+		"participants": o.Participants,
 	} {
 		if v != "" {
 			out[k] = v
@@ -72,8 +81,14 @@ func (o Origin) payload() map[string]any {
 
 // key is o in a stable form, for the write's hash.
 func (o Origin) key() string {
-	return strings.Join([]string{o.System, o.Path, o.URL, o.RepoOwner, o.RepoName, o.Visibility, o.OwnerNodeID,
+	key := strings.Join([]string{o.System, o.Path, o.URL, o.RepoOwner, o.RepoName, o.Visibility, o.OwnerNodeID,
 		o.Session, o.Caller, o.WriterSpace}, "\x01")
+	// Reason: an origin without chat facts keeps the key, and so the
+	// ingest hash, it had before chat origins existed.
+	if o.Tenant != "" || o.Container != "" || o.ContainerKind != "" || o.Participants != "" {
+		key += "\x01" + strings.Join([]string{o.Tenant, o.Container, o.ContainerKind, o.Participants}, "\x01")
+	}
+	return key
 }
 
 // originFrom reads a stored "origin" payload back.
@@ -83,7 +98,8 @@ func originFrom(v any) Origin {
 		System: str(m["system"]), Path: str(m["path"]), URL: str(m["url"]),
 		RepoOwner: str(m["repo_owner"]), RepoName: str(m["repo_name"]), Visibility: str(m["visibility"]),
 		OwnerNodeID: str(m["owner_node_id"]), Session: str(m["session"]), Caller: str(m["caller"]),
-		WriterSpace: str(m["writer_space"]),
+		WriterSpace: str(m["writer_space"]), Tenant: str(m["tenant"]), Container: str(m["container"]),
+		ContainerKind: str(m["container_kind"]), Participants: str(m["participants"]),
 	}
 }
 

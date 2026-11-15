@@ -592,6 +592,7 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 		perSource  int
 		since      string
 		until      string
+		dms        bool
 	)
 	cmd := &cobra.Command{
 		Use:   "search <query>",
@@ -613,7 +614,7 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 			defer cleanup()
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			resp, err := client.Search(ctx, &orchdv1.SearchRequest{
+			req := &orchdv1.SearchRequest{
 				Query:      query,
 				TopK:       int32(topK),
 				Scope:      scope,
@@ -626,7 +627,13 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 				PerSource:  int32(perSource),
 				Since:      from,
 				Until:      to,
-			})
+			}
+			var resp *orchdv1.SearchResponse
+			if dms {
+				resp, err = client.SearchDirectMessages(ctx, &orchdv1.SearchDirectMessagesRequest{Search: req})
+			} else {
+				resp, err = client.Search(ctx, req)
+			}
 			if err != nil {
 				return err
 			}
@@ -672,6 +679,7 @@ func newSearchCmd(cf clientFactory) *cobra.Command {
 	cmd.Flags().StringVar(&mode, "mode", "", "hybrid (keyword + semantic) or dense; default rag.search.mode")
 	cmd.Flags().StringVar(&ranking, "ranking", "", "weighted (source type and recency) or plain; default rag.search.ranking")
 	cmd.Flags().IntVar(&perSource, "per-source", 0, "most results one source may return (default rag.search.per_source; -1 for no cap)")
+	cmd.Flags().BoolVar(&dms, "direct-messages", false, "also search chat direct messages, which no other search returns (the operator only: Orch.app while a spaces policy is applied)")
 	addBoundFlags(cmd, &since, &until)
 	return cmd
 }

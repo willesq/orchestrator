@@ -41,7 +41,10 @@ var readSpaceDecisions = map[string]spaceDecision{
 	orchdv1.Orchd_Search_FullMethodName:      {spaceFiltered, "memory search, read only from the caller's readable spaces' collections"},
 	orchdv1.Orchd_ListSources_FullMethodName: {spaceFiltered, "memory inventory, listed only from the caller's readable spaces"},
 	orchdv1.Orchd_GetDocument_FullMethodName: {spaceFiltered, "one stored source, read only from the caller's readable spaces; NotFound otherwise"},
-	orchdv1.Orchd_ListDocs_FullMethodName:    {spaceFiltered, "synced docs in the caller's readable spaces, with only their owners and repos"},
+	// SP-060: the only read that keeps chat direct messages in; refused to
+	// queued tasks (D-19).
+	orchdv1.Orchd_SearchDirectMessages_FullMethodName: {spaceFiltered, "memory search with chat DMs kept in, read only from the caller's readable spaces' collections"},
+	orchdv1.Orchd_ListDocs_FullMethodName:             {spaceFiltered, "synced docs in the caller's readable spaces, with only their owners and repos"},
 
 	orchdv1.Orchd_DiffSpaces_FullMethodName:         {spaceOperator, "the whole spaces policy"},
 	orchdv1.Orchd_ApplySpaces_FullMethodName:        {spaceOperator, "applies the policy"},

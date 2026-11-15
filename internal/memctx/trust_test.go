@@ -53,8 +53,8 @@ func TestTrustOf(t *testing.T) {
 			t.Errorf("TrustOf(%q, %q, %q) = %q, want %q", c.stored, c.sourceType, c.uri, got, c.want)
 		}
 	}
-	untrusted := map[Trust]bool{TrustWeb: true, TrustTool: true}
-	for _, tier := range []Trust{TrustRepo, TrustSession, TrustFile, TrustClient, TrustWeb, TrustTool, TrustUnverified} {
+	untrusted := map[Trust]bool{TrustWeb: true, TrustTool: true, TrustChat: true}
+	for _, tier := range []Trust{TrustRepo, TrustSession, TrustFile, TrustClient, TrustWeb, TrustTool, TrustChat, TrustUnverified} {
 		if tier.Untrusted() != untrusted[tier] || tier.Label() == "" {
 			t.Errorf("%q: untrusted %v label %q", tier, tier.Untrusted(), tier.Label())
 		}

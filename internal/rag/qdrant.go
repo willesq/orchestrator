@@ -265,7 +265,7 @@ func (q *QdrantStore) EnsureCollection(ctx context.Context, dim int) error {
 	}
 	// Reads and deletes filter by source, prunes by writer and searches by tag and
 	// type, so index them all.
-	for _, field := range append([]string{"source_uri", fieldWriter, fieldSpace}, searchIndexFields...) {
+	for _, field := range append([]string{"source_uri", fieldWriter, fieldSpace, fieldChatKind}, searchIndexFields...) {
 		if err := q.EnsureIndex(ctx, field); err != nil {
 			return err
 		}
@@ -586,9 +586,13 @@ func EqFilter(key, value string) map[string]any {
 }
 
 func buildFilter(must map[string]string, anyTags, allTags []string, tr TimeRange) map[string]any {
-	var conds []any
+	var conds, not []any
 	for k, val := range must {
 		if val == "" {
+			continue
+		}
+		if k == excludeDirectMessages {
+			not = append(not, directMessageFilter())
 			continue
 		}
 		var v any = val
@@ -623,8 +627,15 @@ func buildFilter(must map[string]string, anyTags, allTags []string, tr TimeRange
 		})
 	}
 	conds = append(conds, tr.conditions()...)
-	if len(conds) == 0 {
+	if len(conds) == 0 && len(not) == 0 {
 		return nil
 	}
-	return map[string]any{"must": conds}
+	out := map[string]any{}
+	if len(conds) > 0 {
+		out["must"] = conds
+	}
+	if len(not) > 0 {
+		out["must_not"] = not
+	}
+	return out
 }

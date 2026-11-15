@@ -13,6 +13,10 @@ service Orchd {
   rpc Ingest(IngestRequest) returns (IngestResponse);
   // Search embeds the query and returns the top matching chunks.
   rpc Search(SearchRequest) returns (SearchResponse);
+  // SearchDirectMessages is Search with chat direct messages kept in: an
+  // explicit interactive search (SP-060). Every other read leaves DMs out,
+  // and queued tasks are refused it (D-19).
+  rpc SearchDirectMessages(SearchDirectMessagesRequest) returns (SearchResponse);
   // ListSources enumerates the distinct sources held in the vector store, with
   // per-source chunk counts. This is the store's inventory, as opposed to the
   // cadence-refresh registry that `orch source list` reports.
@@ -2138,6 +2142,12 @@ message ChangeOutboundRuleResponse {
   bool changed = 2;     // false when nothing changed
   int64 revision = 3;   // the rules revision after the change
   OutboundRules current = 4;
+}
+
+// SearchDirectMessagesRequest is a search that keeps chat direct messages in
+// (SP-060).
+message SearchDirectMessagesRequest {
+  SearchRequest search = 1;
 }
 
 // OperatorUnlock is one unlock (SP-077): a terminal's request for operator

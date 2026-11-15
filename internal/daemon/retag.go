@@ -298,7 +298,9 @@ var errRetagUnreadable = grpcstatus.Error(codes.Unavailable, "the source's place
 //     could write its text under a retagged URI into another job's space.
 func (w *writePlacer) honorsRetag(m *rag.Meta, p spaces.Placement, over string) bool {
 	switch {
-	case m.Writer == rag.WriterDocs || m.Writer == rag.WriterSources:
+	case rag.IsSyncWriter(m.Writer):
+		// A chat feed is placed by orchd's tenant binding, as a sync by
+		// what it verified, so an operator's retag holds for it too.
 		return true
 	case w.relabel && m.Space == over:
 		return true

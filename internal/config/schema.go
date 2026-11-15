@@ -158,6 +158,10 @@ func buildFields() []Field {
 		{Key: "sources.scan_interval", Section: SectionSources, Label: "Scan interval", Type: TypeDuration},
 		{Key: "ingest.exclude_dirs", Section: SectionSources, Label: "Excluded folders", Type: TypeList,
 			Help: "Folder names never walked for markdown. .git is always skipped."},
+		{Key: "feeds.chat.direct_messages", Section: SectionSources, Label: "Chat tenants whose DMs are stored", Type: TypeList, Sensitive: true,
+			Help: "Tenants as slack:<id> or teams:<id>. Their DMs and group DMs are stored in the tenant's space and found only by the operator's explicit search (orch search --direct-messages), never added to prompts or given to sessions or tasks."},
+		{Key: "feeds.chat.containers", Section: SectionSources, Label: "Chat channels stored", Type: TypeMap, MapValues: TypeList, Sensitive: true,
+			Help: "Per tenant (slack:<id> or teams:<id>), the channel and meeting IDs stored in the tenant's space. Nothing else is stored; DMs follow the setting above."},
 
 		// GitHub.
 		{Key: "pr_babysitter.enabled", Section: SectionGitHub, Label: "Watch GitHub", Type: TypeBool,

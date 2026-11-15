@@ -342,7 +342,17 @@ func (c *fakeCollection) matching(filter any) []string {
 		}
 		for _, cond := range notMust {
 			m := cond.(map[string]any)
-			if match, has := m["match"].(map[string]any); has && fmt.Sprint(p[m["key"].(string)]) == fmt.Sprint(match["value"]) {
+			match, has := m["match"].(map[string]any)
+			if !has {
+				continue
+			}
+			// Like Qdrant, a point without the field matches no value.
+			v, present := p[m["key"].(string)]
+			if anyOf, isAny := match["any"].([]any); isAny {
+				if present && slices.ContainsFunc(anyOf, func(a any) bool { return str(a) == str(v) }) {
+					ok = false
+				}
+			} else if fmt.Sprint(v) == fmt.Sprint(match["value"]) {
 				ok = false
 			}
 		}

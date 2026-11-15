@@ -159,6 +159,10 @@ var operatorActions = map[string]string{
 	// says which spaces hold it; it is also refused to interactive harness
 	// sessions.
 	orchdv1.Orchd_RetagSource_FullMethodName: "retag a source",
+	// Reason (SP-060, D-19): chat direct messages never reach a queued
+	// task; the handler also refuses interactive harness sessions
+	// (refuseNonOperator).
+	orchdv1.Orchd_SearchDirectMessages_FullMethodName: "search direct messages",
 	// Reason: a queued task's identity comes from its task record, so a pin
 	// would only give it a second, self-reported one. Interactive sessions'
 	// hooks still pin (PinSession checks the harness process itself).

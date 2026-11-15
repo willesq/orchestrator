@@ -32,6 +32,22 @@ type Settings struct {
 	Queue        QueueSettings        `mapstructure:"queue"`
 	Sessions     SessionsSettings     `mapstructure:"sessions"`
 	Routing      RoutingSettings      `mapstructure:"routing"`
+	Feeds        FeedsSettings        `mapstructure:"feeds"`
+}
+
+// FeedsSettings controls the chat feeds (SP-060).
+type FeedsSettings struct {
+	Chat ChatFeedSettings `mapstructure:"chat"`
+}
+
+// ChatFeedSettings is the allowlist of chat conversations stored
+// (feeds.Allowlist). Tenants are named as a spaces policy binds them,
+// "slack:<id>" or "teams:<id>".
+type ChatFeedSettings struct {
+	// DirectMessages lists the tenants whose DMs and group DMs are stored.
+	DirectMessages []string `mapstructure:"direct_messages"`
+	// Containers lists, per tenant, the channels and meetings stored.
+	Containers map[string][]string `mapstructure:"containers"`
 }
 
 // RoutingSettings is the declared-capability policy model routing ranks the
@@ -375,6 +391,8 @@ func setDefaults(v *viper.Viper) {
 	// Third-party and generated trees whose READMEs would crowd out real project docs.
 	v.SetDefault("ingest.exclude_dirs", mdwalk.DefaultExcludeDirs)
 	v.SetDefault("sources.scan_interval", "5m")
+	v.SetDefault("feeds.chat.direct_messages", []string{})
+	v.SetDefault("feeds.chat.containers", map[string]any{})
 	// docs: the GitHub code-docs subsystem (orch docs). Short scan tick so a
 	// manual `orch docs sync` (which marks an owner due) runs near-immediately.
 	v.SetDefault("docs.scan_interval", "1m")
