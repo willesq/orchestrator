@@ -4168,6 +4168,72 @@
           "SP-060"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-1000",
+        "kind": "follow-up",
+        "topic": "A new job's gh login is unknown until setup is applied",
+        "detail": "The Spaces step shows each new job's gh profile (GH_CONFIG_DIR) with its login status, but orchd checks a profile only once an applied space names it (ListSpaces logins, ScanSpaces accounts). A profile setup proposes therefore shows 'checked once applied' plus the 'GH_CONFIG_DIR=... gh auth login' command; the real status appears after Apply in Settings -> Spaces and on a rerun. Proposed: let ScanSpaces take candidate gh profile folders and report their 'gh auth status' metadata (an orchd.proto change for the coordinator to schedule).",
+        "source": "https://github.com/willesq/orchestrator/pull/193",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-052",
+          "SP-063",
+          "SP-074"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1001",
+        "kind": "follow-up",
+        "topic": "No RPC discards a draft",
+        "detail": "Review saves setup's policy as a draft so orchd validates it. Cancel then re-saves the applied document, which clears drift, but only when a policy is applied and no other draft was pending; on a first setup, or over a pending (for example agent-saved) draft, the setup draft stays as the newest revision, unapplied, and the pane says so. Proposed: a DiscardSpacesDraft RPC (orchd.proto change), or saving drafts that DiffSpaces can compare without making them the newest revision.",
+        "source": "https://github.com/willesq/orchestrator/pull/193",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-052",
+          "SP-020"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1002",
+        "kind": "follow-up",
+        "topic": "The Recall step only shows defaults",
+        "detail": "SP-052's Recall step shows the design's safe defaults per content kind (store, auto-recall, search, queued tasks) for reading only: the policy has no per-kind rules until the chat connectors (SP-060). The table was not checked against what orch recalls today for each kind (for example whether session transcripts are auto-recalled). Proposed: verify it, and make it editable once SP-060 adds per-kind rules.",
+        "source": "https://github.com/willesq/orchestrator/pull/193",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-052",
+          "SP-060"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1003",
+        "kind": "follow-up",
+        "topic": "Review counts checkouts, not chunks",
+        "detail": "The Review step's effect counts are estimates over the scanned checkouts (per space, to quarantine, conflicts), computed in the app with a mirror of orchd's placeCheckout and publicProof; chunk, PR and task counts per space need fields orchd does not report (RC-501). Proposed: a dry-run placement count in DiffSpaces when the next orchd.proto change is scheduled, replacing the app's mirror.",
+        "source": "https://github.com/willesq/orchestrator/pull/193",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-052",
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1004",
+        "kind": "decision",
+        "topic": "A personal root that would hold an open org's private repo",
+        "detail": "Setup gives a Personal or Job group a folder root only when that folder would not take another job's checkout or an open org's private repo out of quarantine. On a typical layout (personal and open-source checkouts side by side in ~/code with one private open-org repo) personal therefore gets no root: its checkouts are placed by their GitHub owner, and non-git folders under ~/code go to quarantine. Options: (a) keep this, so the private open-org repo stays in quarantine (what SP-052.1 a1 asks); (b) bind ~/code to personal anyway, sending that repo to personal; (c) offer a narrower root per checkout. Recommendation: (a), with (c) in the advanced editor (SP-053).",
+        "source": "https://github.com/willesq/orchestrator/pull/193",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-052",
+          "SP-053"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -7623,18 +7689,22 @@
               "threshold": "<= 10"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: NOT YET CONFIRMED BY THE USER (manual). Supporting test at 1a47011: SpacesSetupPlanTests.fixtureMachineProposesFourSpacesAndQuarantine passes: on the fixture scan (acme and globex private with membership, oss-org 2 public + 1 private, the user's own login 'me') the planner proposes acme (Job/isolated), globex (Job/isolated), personal (private, org me) and public (open, org oss-org): 4 spaces, the private oss-org/oss-secret checkout placed in quarantine (not_verified_public), no conflicts. Snapshots for review rendered with `ORCH_SNAPSHOT_DIR=<scratch>/sp-052/shots swift test --package-path macos --filter SpacesSetupSnapshots`: <scratch>/sp-052/shots/spaces-setup-{1-scan,2-spaces,3-recall,4-guard,5-review,6-done}-{light,dark}.png and spaces-pane-not-set-up-{light,dark}.png.",
+            "a2: SpacesSetupModelTests.cancellingAtAnyStepChangesNothingApplied (parameterized over Scan, Spaces, Recall, Guard, Review) passes at 1a47011: against a fake orchd that keeps revisions like orch.db, cancelling at each step leaves the applied document identical, makes no ApplySpaces, SetEnforcement or retention call, and leaves no drift. Also cancellingTheFirstSetupKeepsItsDraftUnapplied, cancellingOverAPendingDraftSaysSo, cancelNeverHidesANewerDraftOrRevivesAnOldPolicy, applyNeedsTheDeviceOwner and aRefusedPolicyChangesNothingElse.",
+            "a3: 8 clicks (threshold <= 10), measured on the model flow by SpacesSetupModelTests.fixtureSetupTakesAtMostTenClicks at 1a47011: Set Up Spaces (the scan starts by itself), Continue x4, Apply, the Touch ID prompt, Done; the defaults proposed for the fixture need no change. Not timed by the user on a real machine."
+          ]
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "d5207bab2656d49fd751c1966e69fd38a5f5e9ee49455c46075fd07c108afc08",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-052-setup-wizard",
+      "pr": "https://github.com/willesq/orchestrator/pull/193"
     },
     {
       "id": "SP-053",
