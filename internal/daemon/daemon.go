@@ -99,6 +99,8 @@ type server struct {
 	disp  dispatcher
 	sup   supervisorAPI
 	tasks taskReader
+	// quarantineCounts caches what quarantine holds for Status (SP-028).
+	quarantineCounts quarantineCountCache
 	// workerEnabled reports whether queued tasks will run, so a caller can say
 	// plainly when a dispatch will sit pending instead.
 	workerEnabled bool
