@@ -7,7 +7,7 @@
   "blocked_reason": null,
   "attempts": 1,
   "branch": "feat/sp-061-slack-connector",
-  "pr": null,
+  "pr": "https://github.com/willesq/orchestrator/pull/213",
   "evidence": {
     "SP-061.1": []
   }
