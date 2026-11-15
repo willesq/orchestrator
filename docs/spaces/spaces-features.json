@@ -5990,14 +5990,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "29cdb8a3de681a76e509c5f246f6f5bf4dc36223c5feab836393e4dd133f5c8e",
-      "branch": null,
+      "branch": "feat/sp-071-retag",
       "pr": null
     },
     {
