@@ -34,8 +34,15 @@ operator applied.
   orch spaces draft < policy.json    save a draft (changes nothing)
   orch spaces diff                   compare the draft with what is applied
   orch spaces apply --revision N     enforce draft N (operator only)
+  orch spaces list                   list the applied spaces, their bindings
+                                     and logins (operator only)
+  orch spaces scan <folder>...       find checkouts and orgs to place in
+                                     spaces (operator only)
   orch spaces why <target>           show where a path, URL, repo or chat
                                      tenant's content goes, and why
+  orch spaces log retention [3d|7d|30d]
+                                     show or set how long ended sessions'
+                                     command logs are kept
   orch spaces log verify <session>   check a session's command log was not
                                      changed (operator only)
   orch spaces enforce [<layer> <state>] [--for 15m]
@@ -43,6 +50,11 @@ operator applied.
                                      (switching is operator only)
   orch spaces sandbox [auto|on|off]  show or set whether orch writes sandbox
                                      rules (setting is operator only)
+  orch spaces terms list             each space's terms file: count and
+                                     fingerprint, never a term (operator only)
+  orch spaces terms set <space> < file
+                                     replace a space's terms (Orch.app only
+                                     under a policy)
   orch spaces terms rules [list|enable|disable|add|remove]
                                      list or change the outbound terms
                                      check's rules (changing is operator only)
@@ -57,13 +69,15 @@ operator applied.
                                      terminal for a while (at most 60m)
   orch spaces lock                   end the unlocks covering this terminal
 
-Diff, apply, log verify, replay, enforce <layer> <state>, sandbox <mode> and terms rule changes are refused inside an agent session (Claude Code, Codex) and
+Diff, apply, list, scan, log verify, replay, enforce <layer> <state>, sandbox <mode>,
+terms list and set, and terms rule changes are refused inside an agent session (Claude Code, Codex) and
 inside tasks orchd runs: run them in your own terminal or use Orch.app. An
 agent session may save a draft; applying one needs --accept-agent-draft.`,
 	}
 	cmd.AddCommand(newSpacesDraftCmd(cf), newSpacesDiffCmd(cf), newSpacesApplyCmd(cf), newSpacesWhyCmd(cf),
 		newSpacesLogCmd(cf), newSpacesEnforceCmd(cf), newSpacesSandboxCmd(cf), newSpacesReplayCmd(cf),
-		newSpacesTermsCmd(cf), newSpacesRetagCmd(cf), newSpacesUnlockCmd(cf), newSpacesLockCmd(cf), newSpacesOnCmd(cf), newSpacesOffCmd(cf))
+		newSpacesTermsCmd(cf), newSpacesRetagCmd(cf), newSpacesUnlockCmd(cf), newSpacesLockCmd(cf), newSpacesOnCmd(cf), newSpacesOffCmd(cf),
+		newSpacesListCmd(cf), newSpacesScanCmd(cf))
 	return cmd
 }
 

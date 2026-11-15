@@ -18,9 +18,9 @@ import (
 func newSpacesTermsCmd(cf clientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "terms",
-		Short: "Outbound terms check commands",
+		Short: "Outbound terms check commands: the terms files and the rules",
 	}
-	cmd.AddCommand(newSpacesTermsRulesCmd(cf))
+	cmd.AddCommand(newSpacesTermsListCmd(cf), newSpacesTermsSetCmd(cf), newSpacesTermsRulesCmd(cf))
 	return cmd
 }
 

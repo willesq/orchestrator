@@ -1,0 +1,30 @@
+{
+  "about": "SP-055: every Spaces pane action (each method of an OrchKit Spaces*API protocol, the calls the Spaces pane and Settings > Spaces make to orchd) and its CLI equivalent. TestSpacesPaneParity fails when a method has no entry, an entry names no method, or a command or flag does not exist; TestSpacesPaneParityAccess checks 'access' against orchd's D-78 rules. access: anyone = any caller, orchd narrows what it answers; operator = the operator: a terminal with no policy applied, or under a policy Orch.app or a terminal 'orch spaces unlock' unlocked (D-71, D-78); orch-app = under a policy only Orch.app, even in an unlocked terminal (D-78).",
+  "actions": [
+    {"method": "listSpaces", "pane": "Overview: each space with its bindings and counts", "cli": ["orch spaces list", "orch status"], "rpcs": ["ListSpaces"], "access": "operator"},
+    {"method": "spaceLogins", "pane": "Settings > Spaces: each space's gh login and Claude Code configuration", "cli": ["orch spaces list"], "rpcs": ["ListSpaces"], "access": "operator"},
+    {"method": "listSessions", "pane": "Overview and Activity: live sessions and their pins", "cli": ["orch sessions list [--all]"], "rpcs": ["ListSessions"], "access": "anyone"},
+    {"method": "toolLogSummary", "pane": "Overview: each space's activity and refusals", "cli": ["orch spaces log summary [--since 168h]"], "rpcs": ["SummarizeToolLog"], "access": "operator"},
+    {"method": "unconfirmedGitHubOrgs", "pane": "Overview: GitHub orgs that need confirming", "cli": ["orch spaces diff"], "rpcs": ["DiffSpaces"], "access": "operator"},
+    {"method": "toolEvents", "pane": "Activity: a session's command log", "cli": ["orch spaces log <session> [--after N] [--limit N]"], "rpcs": ["ListToolEvents"], "access": "anyone"},
+    {"method": "diffSpaces", "pane": "Review and Edit: the draft against the applied policy", "cli": ["orch spaces diff [--full]"], "rpcs": ["DiffSpaces"], "access": "operator"},
+    {"method": "saveSpacesDraft", "pane": "Edit: Save Draft; Review: Drop Invalid Lines; Setup: save the proposal", "cli": ["orch spaces draft < policy.json"], "rpcs": ["SetSpacesDraft"], "access": "anyone"},
+    {"method": "applySpaces", "pane": "Review: Apply rev N; Setup: Apply", "cli": ["orch spaces apply --revision N [--accept-agent-draft] [--confirm-github-org <org>]"], "rpcs": ["ApplySpaces"], "access": "orch-app"},
+    {"method": "relabel", "pane": "Overview: Check Again, Relabel Now", "cli": ["orch rag relabel [--dry-run]"], "rpcs": ["Relabel"], "access": "operator"},
+    {"method": "scanSpaces", "pane": "Setup: Scan Again", "cli": ["orch spaces scan <folder>... [--offline] [--depth N]"], "rpcs": ["ScanSpaces"], "access": "operator"},
+    {"method": "commandLogRetention", "pane": "Setup: Keep the command log for", "cli": ["orch spaces log retention"], "rpcs": ["GetConfig"], "access": "operator"},
+    {"method": "setCommandLogRetention", "pane": "Setup: Keep the command log for (applied with setup)", "cli": ["orch spaces log retention <3d|7d|30d>"], "rpcs": ["SetConfig"], "access": "orch-app"},
+    {"method": "enforcement", "pane": "Settings > Spaces and banners: the enforcement switches", "cli": ["orch spaces enforce", "orch spaces sandbox"], "rpcs": ["GetEnforcement"], "access": "anyone"},
+    {"method": "setEnforcement", "pane": "Settings > Spaces and Setup: switch a layer, for a time", "cli": ["orch spaces enforce <layer> <state> [--for 15m]"], "rpcs": ["SetEnforcement"], "access": "operator", "note": "switching a layer to a looser state stays Orch.app's under a policy (D-78)"},
+    {"method": "explainPlacement", "pane": "Edit > Rules and Settings > Spaces: Where would this go?", "cli": ["orch spaces why <target>"], "rpcs": ["ExplainPlacement"], "access": "anyone"},
+    {"method": "outboundRules", "pane": "Settings > Spaces: outbound rules", "cli": ["orch spaces terms rules [list]"], "rpcs": ["ListOutboundRules"], "access": "anyone"},
+    {"method": "changeOutboundRule", "pane": "Settings > Spaces: switch, add or remove an outbound rule", "cli": ["orch spaces terms rules enable <id>", "orch spaces terms rules disable <id>", "orch spaces terms rules add <kind> < value", "orch spaces terms rules remove <id>"], "rpcs": ["ChangeOutboundRule"], "access": "orch-app"},
+    {"method": "status", "pane": "Edit: whether spaces are on", "cli": ["orch status"], "rpcs": ["Status"], "access": "anyone"},
+    {"method": "listSources", "pane": "Edit > Sources: stored sources and their spaces", "cli": ["orch rag sources [--type T] [--limit N]"], "rpcs": ["ListSources"], "access": "anyone"},
+    {"method": "spaceTerms", "pane": "Edit > Spaces: each terms file's count and fingerprint", "cli": ["orch spaces terms list"], "rpcs": ["GetSpaceTerms"], "access": "operator"},
+    {"method": "setSpaceTerms", "pane": "Edit > Spaces: replace a space's terms", "cli": ["orch spaces terms set <space> < terms.txt"], "rpcs": ["SetSpaceTerms"], "access": "orch-app"},
+    {"method": "quarantinedSources", "pane": "Edit > Sources: what quarantine holds", "cli": ["orch quarantine list"], "rpcs": ["ListQuarantine"], "access": "operator"},
+    {"method": "retagSource", "pane": "Edit > Sources: Retag", "cli": ["orch spaces retag <source_uri> <space> [--confirm] [--expect-from <space>]", "orch quarantine assign <source_uri> <space> --confirm"], "rpcs": ["RetagSource"], "access": "operator"},
+    {"method": "spaceChunkCounts", "pane": "Edit > Spaces: chunks per space", "cli": ["orch status"], "rpcs": ["Status"], "access": "anyone"}
+  ]
+}
