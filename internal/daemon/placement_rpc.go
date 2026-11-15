@@ -3,7 +3,9 @@ package daemon
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -64,6 +66,11 @@ func (s *server) ExplainPlacement(ctx context.Context, req *orchdv1.ExplainPlace
 	}
 	out := placementProto(p)
 	out.TargetKind = kind
+	if p.PublicPath != "" && isOperator {
+		// Reason: the pattern is policy text an agent has no need of, and a
+		// folder name in it may hold a term (SP-076.1.a4).
+		out.Reason += fmt.Sprintf(" (public_paths pattern %q)", p.PublicPath)
+	}
 	if kind == "path" && isOperator {
 		so := o
 		so.System = spaces.SystemSession
@@ -102,7 +109,13 @@ func publicOnly(res *spaces.Resolved, p spaces.Placement) bool {
 func (s *server) placementOrigin(ctx context.Context, target string) (spaces.Origin, string, error) {
 	switch {
 	case strings.HasPrefix(target, "/"):
-		return pathOrigin(ctx, s.repos, target), "path", nil
+		o := pathOrigin(ctx, s.repos, target)
+		// A folder's public_paths match is what the files directly in it
+		// get (SP-076).
+		if fi, err := os.Stat(o.Path); err == nil && fi.IsDir() {
+			o.IsDir = true
+		}
+		return o, "path", nil
 	case strings.HasPrefix(target, "http://"), strings.HasPrefix(target, "https://"):
 		return spaces.Origin{System: spaces.SystemWeb, URL: target, SourceURI: target}, "url", nil
 	case strings.HasPrefix(target, "slack:"), strings.HasPrefix(target, "teams:"):
@@ -156,6 +169,12 @@ const (
 	repoLookupTTL     = 10 * time.Minute
 	repoLookupEntries = 512
 	repoLookupsPerMin = 30
+	// unansweredGrace is how long after GitHub last said a repo is public
+	// a lookup that gets no answer still counts as a blip (RC-402). Reason:
+	// any caller can spend the shared lookup budget, so without a limit an
+	// agent could keep a repo that went private in public for as long as it
+	// keeps the budget spent.
+	unansweredGrace = 6 * time.Hour
 )
 
 // repoLookups caches GitHub's answer for a repo's current owner and
@@ -167,8 +186,11 @@ type repoLookups struct {
 
 	mu      sync.Mutex
 	entries map[string]repoEntry
-	window  time.Time
-	spent   int
+	// public is when GitHub last said each repo is public, by key; it
+	// bounds the grace an unanswered lookup gets.
+	public map[string]time.Time
+	window time.Time
+	spent  int
 }
 
 type repoEntry struct {
@@ -177,7 +199,7 @@ type repoEntry struct {
 }
 
 func newRepoLookups(gh github.Runner) *repoLookups {
-	return &repoLookups{gh: gh, now: time.Now, entries: map[string]repoEntry{}}
+	return &repoLookups{gh: gh, now: time.Now, entries: map[string]repoEntry{}, public: map[string]time.Time{}}
 }
 
 type cachedRepoLookupsKey struct{}
@@ -202,23 +224,33 @@ func (l *repoLookups) lookup(ctx context.Context, owner, name string) *spaces.Re
 		r := e.repo
 		return &r
 	}
+	// Reason (RC-402): only a refusal is GitHub's answer; no answer at
+	// all must not take a listed folder's public copy out of public, for
+	// a while after GitHub last said the repo is public.
+	unchecked := fallback
+	if at, ok := l.public[key]; ok && now.Sub(at) < unansweredGrace {
+		unchecked = &spaces.Repo{Owner: owner, Name: name, Unchecked: true}
+	}
 	if ctx.Value(cachedRepoLookupsKey{}) != nil {
 		l.mu.Unlock()
-		return fallback
+		return unchecked
 	}
 	if now.Sub(l.window) >= time.Minute {
 		l.window, l.spent = now, 0
 	}
 	if l.spent >= repoLookupsPerMin {
 		l.mu.Unlock()
-		return fallback
+		return unchecked
 	}
 	l.spent++
 	l.mu.Unlock()
 
 	info, err := github.LookupRepo(ctx, l.gh, owner, name)
 	if err != nil {
-		return fallback
+		if errors.Is(github.MarkNoAccess(err), github.ErrNoAccess) {
+			return fallback
+		}
+		return unchecked
 	}
 	r := spaces.Repo{Owner: info.Owner, Name: info.Name, Visibility: spaces.VisibilityPublic}
 	if info.Private {
@@ -229,6 +261,14 @@ func (l *repoLookups) lookup(ctx context.Context, owner, name string) *spaces.Re
 		clear(l.entries)
 	}
 	l.entries[key] = repoEntry{repo: r, at: now}
+	if len(l.public) >= repoLookupEntries {
+		clear(l.public) // fails closed: unanswered lookups then leave
+	}
+	if r.Visibility == spaces.VisibilityPublic {
+		l.public[key] = now
+	} else {
+		delete(l.public, key)
+	}
 	l.mu.Unlock()
 	return &r
 }
