@@ -1,0 +1,12 @@
+{
+  "id": "RC-1653",
+  "kind": "follow-up",
+  "topic": "SP-061 security lows: state folder and content hashes",
+  "detail": "From the PR security review, low: the Slack connector's watermark file is written mode 0600, but the folder it is in is created 0700 only when missing; an existing folder others can write would let them replace the file (watermarks only, no content). The file holds plain SHA-256 hashes of each record's text, so someone able to read it could confirm a guessed short message. Options: check the folder is the user's alone when the scheduler (RC-1650) picks it (inside orch's data dir), and key the hashes with a per-install secret (HMAC).",
+  "source": "https://github.com/willesq/orchestrator/pull/213",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-061"
+  ],
+  "status": "open"
+}

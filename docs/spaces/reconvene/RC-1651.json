@@ -1,0 +1,12 @@
+{
+  "id": "RC-1651",
+  "kind": "follow-up",
+  "topic": "Slack connector limits: edits, deletions, old threads, names",
+  "detail": "Accepted limits of SP-061, documented in docs/internals/memory.md: (1) an edited or deleted message is not followed once stored, since a run reads history only from the watermark's day; (2) a reply to a thread whose parent is older than the lookback (14 days by default) is not fetched; (3) messages show authors by stable user or bot ID, not display name (users.info is not called); (4) file attachments and message blocks are stored as their text field only. Each could become its own feature if the user wants it. (5) A record feeds.Sync refuses (its facts do not hold) or skips is counted and logged by URI, and the conversation's watermark still advances past it, so it is not offered again until the conversation changes.",
+  "source": "https://github.com/willesq/orchestrator/pull/213",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-061"
+  ],
+  "status": "open"
+}
