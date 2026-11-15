@@ -16,14 +16,20 @@ import (
 
 // must adds the second layer, the filter on the collection's own space, to a
 // search's exact-match conditions, and for a read by policy the filter on
-// the policy's revision (INV-08).
+// the policy's revision (INV-08). Every read leaves chat direct messages out
+// unless the store keeps them (SP-060): a whole-store read, the operator's
+// included, is no exception, since auto-recall runs as whoever is at the
+// prompt.
 func (t spaceStore) must(must map[string]string) map[string]string {
-	if t.space == "" {
-		return must
-	}
-	out := make(map[string]string, len(must)+2)
+	out := make(map[string]string, len(must)+3)
 	for k, v := range must {
 		out[k] = v
+	}
+	if !t.directMessages {
+		out[excludeDirectMessages] = "1"
+	}
+	if t.space == "" {
+		return out
 	}
 	out[fieldSpace] = t.space
 	if t.labelsV > 0 {

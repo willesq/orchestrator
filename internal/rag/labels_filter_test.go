@@ -17,7 +17,7 @@ func TestLabelsFilterIsNumeric(t *testing.T) {
 		}
 	}
 	stores := withLabels([]spaceStore{{space: "acme"}, {}}, 7)
-	if stores[0].must(nil)[fieldLabelsV] != "7" || stores[1].must(nil) != nil {
+	if stores[0].must(nil)[fieldLabelsV] != "7" || stores[1].must(nil)[fieldLabelsV] != "" {
 		t.Fatalf("withLabels = %+v", stores)
 	}
 	if withLabels([]spaceStore{{space: "acme"}}, 0)[0].must(nil)[fieldLabelsV] != "" {

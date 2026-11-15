@@ -4117,6 +4117,59 @@
         "status": "open"
       },
       {
+        "id": "RC-1450",
+        "kind": "decision",
+        "topic": "Who may search chat direct messages",
+        "detail": "SP-060 makes SearchDirectMessages (orch search --direct-messages) operator-only: Orch.app while a spaces policy is applied, and with none a terminal outside any agent session. Queued tasks (D-19) and agents in interactive sessions are refused, because chat text recalled into a prompt could ask an agent to pull DMs into its context and send them out (security review of the PR). Consequence: under a policy only Orch.app can search DMs, and it has no DM search view yet, so DMs are stored but not searchable in practice. Options: (a) keep operator-only and add an Orch.app DM search view (recommended); (b) also allow the operator terminal under a policy, exempting this RPC from the D-71 terminal refusal; (c) allow interactive sessions to search their own space DMs, accepting the prompt-injection path.",
+        "source": "https://github.com/willesq/orchestrator/pull/203",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-060",
+          "SP-061",
+          "SP-062"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1451",
+        "kind": "follow-up",
+        "topic": "Chat retention per space and kind, and running connectors",
+        "detail": "SP-060 summary lists retention per space and kind; it has no acceptance item and is not implemented. Proposed new feature: settings for how long each space keeps chat content per container kind (DM, group DM, channel, meeting), enforced by a prune of chat sources older than that. Nothing runs a connector yet either: SP-061 or SP-062 should add the orchd unit that runs connectors on a schedule with feeds.AllowlistFrom(settings.Feeds.Chat), and the per-tenant profile directory the connector process logs in with (the gh profile pattern; orch never reads it).",
+        "source": "https://github.com/willesq/orchestrator/pull/203",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-060",
+          "SP-061",
+          "SP-062"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1452",
+        "kind": "follow-up",
+        "topic": "SP-060 security lows: chat in public spaces",
+        "detail": "From the PR security review. (1) Low: a chat tenant bound to a public space is quarantined at placement, but the policy still accepts the binding; consider refusing it at apply time. (2) Low: an operator retag of a chat source into a public space is honoured (honorsRetag treats chat like the syncs), so that thread would be read by every space; refuse retags of chat sources into public spaces. (3) Low, pre-existing D-71: with no spaces policy a process an agent detached from its session passes as the operator, so it can call SearchDirectMessages; with no policy there is no isolation either.",
+        "source": "https://github.com/willesq/orchestrator/pull/203",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-060",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1453",
+        "kind": "follow-up",
+        "topic": "DMs cannot be opened whole, and chat_kind is unindexed in older collections",
+        "detail": "(1) GetDocument, ListSources and orch rag show leave DMs out for every caller, so a DM the operator finds with orch search --direct-messages cannot be opened whole; a DM-aware document read would need the same operator gate. (2) The chat_kind keyword index is created only with a new collection; existing ones filter on it unindexed (correct, slower). Add it lazily when chat content first lands.",
+        "source": "https://github.com/willesq/orchestrator/pull/203",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-060"
+        ],
+        "status": "open"
+      },
+      {
         "id": "RC-1000",
         "kind": "follow-up",
         "topic": "A new job's gh login is unknown until setup is applied",
@@ -7866,18 +7919,24 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestChatRecordsPlacedByTenant (internal/daemon/chat_feed_test.go): a fake Slack connector and a fake Teams connector run through feeds.Sync into a real rag.Service whose writes the server placer places under the applied example policy (acme binds slack:TACME, globex teams:globex-tenant). A TACME private-channel thread and a TACME DM land in acme collection, the globex-tenant meeting in globex, and the unbound TOTHER channel in quarantine (INV-03); every chunk carries writer chat, trust chat, chat_kind and an origin with tenant, container, container_kind and sorted participants. Supporting: TestChatTenantInPublicSpaceQuarantined (internal/spaces/chat_test.go: a tenant bound to a public space is quarantined, rule not_verified_public), TestChatSourceNotReplacedByClients, TestSyncCountsAndRedacts, TestSyncStopsOnFailedWrite, TestAllowlist, TestChatFeedSettings (internal/config).",
+            "a2 (3 tests): TestChatDMsNeverAutoRecalled: auto-RAG (hook.Explain over a session client, prompted with the DM text verbatim) considers and injects acme channel but never a DM; every other read path of a session (Search in 6 shapes, ListSources, GetDocument, ListDocs) and the operator whole-store Search return no DM. TestChatDMsNeverGivenToTasks: a queued task in acme reads its channel and no DM on every read path, and SearchDirectMessages is refused (PermissionDenied) by the queued-caller guard and the handler. TestChatDMsInExplicitSearch: the operator explicit DM search (Orch.app, behind orch search --direct-messages) returns the DMs, while a session agent, a session on a clean socket, a terminal under a policy (D-71) and an unidentified caller are refused. Supporting: TestChatDirectMessagesLeftOutOfReads and TestDirectMessageFilter (internal/rag), TestSearchDirectMessagesFlag (internal/cli), TestChatIsUntrusted (internal/memctx). Mutation check: disabling the DM filter fails the first two; dropping the task refusal fails the second.",
+            "a3: TestRecordCarriesFactsOnly (internal/feeds/feeds_test.go): feeds.Record has only fact fields (no space, level, trust, scope, tag, writer or label field), and the rag.Meta Sync writes has an empty Space and LabelsV, no scope or tags, writer chat and an origin of facts only, so placement is the placer alone. Supporting: TestRecordValidate and TestDirectIDsMustBeDirectMessages (a DM ID under another kind is refused), TestChatWriteNeedsAKnownKind (internal/rag: unknown kind, or a chat origin from a non-chat writer, refused before placement).",
+            "Validation at 4ae5dc3: go test ./... exit 0; go vet ./... exit 0; make cover: All files >= 80% (feeds.go, sync.go, rag/chat.go, origin.go 100%; daemon chat_search.go 100%); gofmt -l empty. Security audit of the diff: two mediums (DM search callable by sessions; chat not an untrusted tier) and two lows fixed and re-audited, no critical/high/medium open; remaining lows in RC-1452.",
+            "Independent verification at 2919fec (a fresh agent given only the diff, this feature, INV-02/INV-03 and the definition of done): a1, a2 (3 of 3) and a3 PASS; DOD-2 to DOD-8 PASS; DOD-9 CI test, build and app green on PR #203. DOD-1: go test ./... passed at 4ae5dc3 and in CI; under a load average near 460 the verifier saw TestResolveCost and TestToolHookCost (timing tests outside this diff) fail on main as well, and both pass on re-run at 2919fec."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "2919fec42c5d1944ede0f7a4aa95f85e77508fb1",
+      "verified_at": "2026-11-15T14:30:39Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f0f14f5b8c199b7be636183df41b2454c6142a36acb8f5a54f2243b104299101",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-060-chat-connectors",
+      "pr": "https://github.com/willesq/orchestrator/pull/203"
     },
     {
       "id": "SP-061",

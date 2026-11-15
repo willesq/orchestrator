@@ -284,6 +284,9 @@ func (s *Service) split(text string) []chunk {
 // written, and the next write tries again.
 func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, error) {
 	gen := s.retagGeneration(m.SourceURI)
+	if err := checkChatOrigin(m.Origin, m.Writer); err != nil {
+		return 0, err
+	}
 	if err := s.place(ctx, &m); err != nil {
 		return 0, err
 	}
@@ -393,6 +396,9 @@ func (s *Service) prepare(ctx context.Context, text string, m Meta) ([]Point, in
 		}
 		if o := m.Origin.payload(); len(o) > 0 {
 			payload[fieldOrigin] = o
+		}
+		if IsChatOrigin(m.Origin.System) {
+			payload[fieldChatKind] = m.Origin.ContainerKind
 		}
 		if m.Space != "" {
 			payload[fieldSpace] = m.Space
