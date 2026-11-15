@@ -310,9 +310,10 @@ operator commands are refused and Orch.app is the way to run them.
 Interactive sessions keep `Ingest`, `Dispatch` and the task RPCs (`ListTasks`, `GetTask`,
 `WatchTasks`, `RateTask`, `RetryTask`, `CancelTask`), but some settings are the operator's alone
 while a policy is applied (D-74, settling RC-710; `internal/daemon/policy_operator.go`). The
-resolver interceptor refuses these to every caller except Orch.app, interactive harness sessions
-(pinned or not) and queued tasks included, before the handler runs, and logs each refusal with the
-RPC and the caller's kind and ID (`refuseSettings`):
+resolver interceptor refuses these to every caller except Orch.app (and a terminal under an
+[unlock](#operator-unlock), whose evidence `refuseSettings` accepts like the app's; RC-1150),
+interactive harness sessions (pinned or not) and queued tasks included, before the handler runs,
+and logs each refusal with the RPC and the caller's kind and ID (`refuseSettings`):
 
 | RPC | Operator-only under a policy |
 | --- | --- |
