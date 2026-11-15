@@ -5953,14 +5953,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "8b78deb05b7ee728821d2452d6e11460f796408e9822bf1d03d2e68805efc1c7",
-      "branch": null,
+      "branch": "feat/sp-028-quarantine",
       "pr": null
     },
     {
