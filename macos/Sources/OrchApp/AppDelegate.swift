@@ -58,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 docs: model.docs, registeredSources: model.registeredSources,
                 safetyNet: model.safetyNet, claude: model.claude, config: model.config, docsOwners: model.docsOwners,
                 enforcement: model.enforcement, placement: model.placement, spaces: model.spaces,
+                spacesActivity: model.spacesActivity, spacesReview: model.spacesReview,
                 loginItem: model.loginItem, navigator: model.navigator,
                 window: model.windowControl
             )

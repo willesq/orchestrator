@@ -58,6 +58,8 @@ struct MainWindow: View {
     let enforcement: EnforcementModel
     let placement: PlacementValidator
     let spaces: SpacesOverviewModel
+    let spacesActivity: SpacesActivityModel
+    let spacesReview: SpacesReviewModel
     let loginItem: LoginItem
     @Bindable var navigator: Navigator
     let window: WindowControl
@@ -79,7 +81,8 @@ struct MainWindow: View {
     var body: some View {
         Group {
             if shareSafe != nil && compact {
-                SpacesView(model: spaces, enforcement: enforcement, navigator: navigator)
+                SpacesView(model: spaces, enforcement: enforcement, navigator: navigator, activity: spacesActivity,
+                           review: spacesReview)
             } else if compact {
                 CompanionView(monitor: monitor, prMonitor: prMonitor, tasks: tasks, window: window,
                               status: sidebarStatus, open: { show($0) },
@@ -152,7 +155,8 @@ struct MainWindow: View {
             case .memory:
                 MemoryView(search: search, sources: sources)
             case .spaces:
-                SpacesView(model: spaces, enforcement: enforcement, navigator: navigator)
+                SpacesView(model: spaces, enforcement: enforcement, navigator: navigator, activity: spacesActivity,
+                           review: spacesReview)
             case .docs:
                 DocsView(model: docs)
             case .sources:
