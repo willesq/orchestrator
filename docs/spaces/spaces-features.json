@@ -7374,15 +7374,17 @@
             "Validation at 456cc4a: go test ./... pass; go vet ./... clean; gofmt clean; make cover All files >= 80% (public_paths.go 100%, classify.go 98.8%, validate.go 98.9%, spaces_why.go 95.1%). App placement fixture regenerated for the new no_public_proof reason.",
             "DOD-6: security audit of the diff: M1 (any caller could keep the unchecked grace open by spending the lookup budget) fixed with a 6-hour bound, re-audited Low (RC-803); L5 ('**' cost) fixed; M2 (sessions can write into a listed folder, wildcards let them create matching folders) is D-65's design and RC-404's accepted risk extended, recorded as RC-801 for the user's decision; lows in RC-804.",
             "Independent verifier at 90b9b5f: a1-a5 PASS; DOD-1,2,3,4,5,7,8 PASS (daemon coverage checked directly: placing.go 93.1%, placement_rpc.go 97.3%, checkout_settings.go 88.2%); DOD-6 PASS apart from the recorded RC-801; DOD-9 was blocked by a plan conflict with main; INV-02, INV-03, INV-06, INV-07, INV-10, INV-14 OK; no home paths or IDs in the diff or commits. Its symlink note was added to RC-801.",
-            "After merging origin/main (51b7b25): go test ./... pass, go vet clean, make cover All files >= 80%; CI on PR #189: test (passed on rerun of an unrelated internal/memctx timing flake), build (ORT, macOS) and app pass."
+            "After merging origin/main (51b7b25): go test ./... pass, go vet clean, make cover All files >= 80%; CI on PR #189: test (passed on rerun of an unrelated internal/memctx timing flake), build (ORT, macOS) and app pass.",
+            "DOD-6 now passes: the user settled RC-801 on 2026-11-14 with option (a), recorded as D-73 (accepted risk, RC-404 extended); the sandbox follow-up is RC-805. No critical, high or medium findings remain open.",
+            "After merging origin/main at 97fdc74 (#181, #187, #190): this feature's code files are unchanged since the verified 90b9b5f; the merge brought only the plan and other features' files (the one code file both touched, internal/daemon/checkout_settings.go, gained main's unrelated StateFile line). go test ./... pass, go vet clean, make cover All files >= 80% (internal/daemon checked directly too); CI on PR #189 at 97fdc74: test (passed on rerun of an unrelated internal/toollog concurrency flake), build (ORT, macOS) and app pass."
           ]
         }
       ],
-      "status": "blocked",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
-      "blocked_reason": "DOD-6: the security audit's medium M2 (RC-801) needs the user: sessions can publish by writing into a folder public_paths lists, and wildcards let them create matching folders (RC-404's accepted risk, extended). Everything else is verified and CI is green; accept the risk or pick a mitigation.",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "97fdc74bb981619b0558ba1ce33eee5d99253cf0",
+      "verified_at": "2026-11-15T01:36:55Z",
+      "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "01ef9bae725c1b6ed0ccbd6b3194d8d30de872c6e7cceb59eb24d0db1046735b",
       "branch": "feat/sp-076-public-paths",
