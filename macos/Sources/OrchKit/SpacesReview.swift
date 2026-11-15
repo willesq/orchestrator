@@ -14,6 +14,23 @@ public struct SpacesProblemInfo: Sendable, Equatable, Hashable {
     }
 }
 
+/// How one space differs between the applied revision and the draft.
+public struct SpacesPolicyChange: Sendable, Equatable {
+    /// "" for the policy's own fields.
+    public var space: String
+    /// added | removed | changed
+    public var kind: String
+    public var fields: [String]
+    public var details: [String]
+
+    public init(space: String, kind: String, fields: [String] = [], details: [String] = []) {
+        self.space = space
+        self.kind = kind
+        self.fields = fields
+        self.details = details
+    }
+}
+
 /// DiffSpaces' answer: the enforced revision, the newest draft and its
 /// problems.
 public struct SpacesPolicyDiff: Sendable, Equatable {
@@ -23,6 +40,8 @@ public struct SpacesPolicyDiff: Sendable, Equatable {
     /// 0 when no draft is newer than the applied revision.
     public var draftRevision: Int64
     public var draftJSON: String
+    /// How each space differs, as orchd summarizes it (the setup wizard's review).
+    public var changes: [SpacesPolicyChange]
     public var problems: [SpacesProblemInfo]
     public var draftCreatedBy: String
     public var draftCreatedAt: Date?
@@ -32,12 +51,13 @@ public struct SpacesPolicyDiff: Sendable, Equatable {
     public var unconfirmedGitHubOrgs: [String]
 
     public init(appliedRevision: Int64 = 0, appliedJSON: String = "", draftRevision: Int64 = 0, draftJSON: String = "",
-                problems: [SpacesProblemInfo] = [], draftCreatedBy: String = "", draftCreatedAt: Date? = nil,
+                changes: [SpacesPolicyChange] = [], problems: [SpacesProblemInfo] = [], draftCreatedBy: String = "", draftCreatedAt: Date? = nil,
                 draftByOperator: Bool = true, unconfirmedGitHubOrgs: [String] = []) {
         self.appliedRevision = appliedRevision
         self.appliedJSON = appliedJSON
         self.draftRevision = draftRevision
         self.draftJSON = draftJSON
+        self.changes = changes
         self.problems = problems
         self.draftCreatedBy = draftCreatedBy
         self.draftCreatedAt = draftCreatedAt

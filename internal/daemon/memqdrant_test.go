@@ -201,7 +201,19 @@ func matching(points map[string]map[string]any, filter any) []string {
 		}
 		for _, cond := range mustNot {
 			m := cond.(map[string]any)
-			if match, has := m["match"].(map[string]any); has && fmt.Sprint(p[m["key"].(string)]) == fmt.Sprint(match["value"]) {
+			match, has := m["match"].(map[string]any)
+			if !has {
+				continue
+			}
+			// Like Qdrant, a point without the field matches no value.
+			v, present := p[m["key"].(string)]
+			if anyOf, isAny := match["any"].([]any); isAny {
+				for _, a := range anyOf {
+					if present && fmt.Sprint(a) == fmt.Sprint(v) {
+						ok = false
+					}
+				}
+			} else if fmt.Sprint(v) == fmt.Sprint(match["value"]) {
 				ok = false
 			}
 		}

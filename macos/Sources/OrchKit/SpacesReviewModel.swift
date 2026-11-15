@@ -17,10 +17,13 @@ public protocol SpacesReviewAPI: Sendable {
 /// SetSpacesDraft's answer.
 public struct SavedSpacesDraft: Sendable, Equatable {
     public var revision: Int64
+    /// The saved document's SHA-256, as orchd reports it.
+    public var sha256: String
     public var problems: [SpacesProblemInfo]
 
-    public init(revision: Int64, problems: [SpacesProblemInfo] = []) {
+    public init(revision: Int64, sha256: String = "", problems: [SpacesProblemInfo] = []) {
         self.revision = revision
+        self.sha256 = sha256
         self.problems = problems
     }
 }

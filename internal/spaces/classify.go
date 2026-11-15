@@ -463,9 +463,17 @@ func placeChat(o Origin, res *Resolved) Placement {
 	if o.Tenant != "" {
 		for _, s := range res.Policy.Spaces {
 			for _, t := range s.Chat {
-				if strings.ToLower(t) == key {
-					return placed(Placement{}, s.Name, PlaceChatTenant, fmt.Sprintf("%s tenant bound to %s", o.System, s.Name))
+				if strings.ToLower(t) != key {
+					continue
 				}
+				if s.Kind == Public {
+					// Reason: every space reads public, and nothing about
+					// a chat proves its messages public, DMs least of all
+					// (SP-060, INV-03).
+					return quarantine(Placement{}, PlaceNotVerifiedPublic,
+						fmt.Sprintf("the %s tenant is bound to public space %s, and chat content is never verified public", o.System, s.Name))
+				}
+				return placed(Placement{}, s.Name, PlaceChatTenant, fmt.Sprintf("%s tenant bound to %s", o.System, s.Name))
 			}
 		}
 	}

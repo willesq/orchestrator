@@ -66,6 +66,9 @@ type spaceStore struct {
 	// labelsV, when set, keeps only chunks labelled under that policy
 	// revision (withLabels).
 	labelsV int64
+	// directMessages keeps chat direct messages in what is read; only an
+	// explicit interactive search sets it (withDirectMessages, SP-060).
+	directMessages bool
 }
 
 // derive returns the store for space's collection under base. Stores are
