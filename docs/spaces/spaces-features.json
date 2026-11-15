@@ -6792,7 +6792,7 @@
       "attempts": 1,
       "criteria_sha256": "d5207bab2656d49fd751c1966e69fd38a5f5e9ee49455c46075fd07c108afc08",
       "branch": "feat/sp-052-setup-wizard",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/193"
     },
     {
       "id": "SP-053",
