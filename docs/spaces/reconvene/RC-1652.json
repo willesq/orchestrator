@@ -1,0 +1,12 @@
+{
+  "id": "RC-1652",
+  "kind": "user-action",
+  "topic": "Try the Slack connector against a real workspace once it runs",
+  "detail": "SP-061 is tested only against a fake Slack Web API shaped after Slack's documented responses (auth.test, conversations.list, .info, .history, .replies, cursor paging, 429 Retry-After); no session contacts Slack or handles a real token. Unverified assumption: real responses match. Once the connector runs (RC-1650), the user writes a user token with the channels:history, groups:history, im:history, mpim:history, channels:read, groups:read, im:read and mpim:read scopes to <profile>/token (mode 0600, the folder mode 0700) themselves, allowlists one channel, and checks that one sync stores it under slack://<team>/<channel>/... in the expected space.",
+  "source": "https://github.com/willesq/orchestrator/pull/213",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-061"
+  ],
+  "status": "open"
+}
