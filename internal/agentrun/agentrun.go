@@ -153,6 +153,15 @@ func SessionID(taskID string) string {
 	return uuid.NewSHA1(sessionNamespace, []byte(taskID)).String()
 }
 
+// IsTaskSessionID reports whether id has the shape SessionID gives: a
+// name-based (version 5) UUID. Claude Code and Codex name their own
+// sessions with random or time-based UUIDs, so only a task's session, or
+// an ID made to look like one, has it.
+func IsTaskSessionID(id string) bool {
+	u, err := uuid.Parse(id)
+	return err == nil && u.Version() == 5 && u.String() == id
+}
+
 // Runner runs tasks through the Claude Code CLI.
 type Runner struct {
 	Bin string // absolute path to the claude binary

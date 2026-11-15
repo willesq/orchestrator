@@ -179,6 +179,31 @@ process may call it, and an unknown session is `NotFound`. Session IDs must matc
 `^[A-Za-z0-9_-]{1,128}$` (`InvalidArgument`). Both RPCs are refused to queued tasks, whose
 identity comes from their task record (SP-011).
 
+<a id="task-pins"></a>**Task pins (SP-029, INV-09).** A queued task runs pinned to the space its
+dispatch recorded (D-46), but orchd pins it, not its hooks: the runner tells orchd each time a
+run changes (`agentrun.Runner.OnLive`), and once the run's agent process has started
+(`internal/daemon/task_pins.go`) orchd records a pin for the run's session ID (the task's own,
+`agentrun.SessionID`; a resumed Codex run's thread) with that process, the run's directory, the
+recorded space and the applied revision, with `inherited_from` set to `task:<id>`, and writes its
+guard pin file (or removes a stale one it cannot write). A task with no recorded space, or one the
+applied policy does not have or makes public, is pinned to `quarantine`. While spaces are
+configured, `PinSession` refuses a new pin under an ID shaped like a task's (a version 5 UUID,
+which harnesses never generate) (`PermissionDenied`), since any harness may call it with any ID
+and a pin taken before the task starts would place the task's records, and judge its calls, in
+that harness's space. Once the task holds the pin, `PinSession` from another process is refused as
+pinned elsewhere; a resume follows the usual rule (same space only). The task's pin replaces a
+pin in another space found under its ID (one taken before this check, or a Codex thread resumed by
+hand), and a run of the same task restarted in the same space takes it over. A pin under a task's
+session ID that does not name a task (taken before this check) is not trusted: the session's
+records are quarantined and no guard pin file is written for it (the file sync re-reads each pin
+under the registry's lock, so it never writes back a pin a task replaced). Replay trusts a task's
+pin only when it names that task. One cost: resuming by hand the session of a task that ran
+before spaces were configured is refused, since that task never got a pin. The pin decides where the task's transcript,
+record and summary are placed and the guard's verdicts on its calls; the task's own RPCs still
+resolve to the task (its reads and client writes use the recorded space directly). With no
+policy configured nothing is pinned (INV-10). A fresh Codex run learns its thread only when it
+ends, so it gets no pin: its records are quarantined and the enforcing guard refuses its calls.
+
 Refusals name no process to the caller; orchd logs why.
 
 **Limits.** Harnesses are recognised by name, executable or first arguments, all of which a
@@ -718,8 +743,8 @@ commands up to 2 hours (migration).
 `ReplaySpaces` (SP-047, `internal/daemon/spaces_replay_rpc.go`) decides one command log's stored
 tool events again and reports where the verdict differs from the recorded one, so a policy
 change can be tried on real behavior first. It reads the chain a page at a time (after flushing
-what is queued), deciding each page before reading the next and keeping only the rows it returns, the owner's pin (a session's; tasks and harness processes have none, so the
-guard judges them `pin_missing`), and stored revisions; it writes nothing. Each event becomes the
+what is queued), deciding each page before reading the next and keeping only the rows it returns, the owner's pin (a session's, or for a task its agent session's [task pin](#task-pins);
+harness processes, and tasks with no pin, have none, so the guard judges them `pin_missing`), and stored revisions; it writes nothing. Each event becomes the
 guard's input with `spaces.GuardEventOf`: a tool call's stored targets JSON (never re-extracted
 from the redacted command; unreadable targets are opaque), and for a cwd-changed event the old
 directory as cwd and the new one as its destination. `spaces.Replay` then calls the live

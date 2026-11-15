@@ -344,6 +344,10 @@ func (s *server) toolRecord(ev toolEvent, harness string) toollog.Record {
 	// Reason: terms come out before any field is cut to its cap, so a term
 	// cut in half cannot stay (SP-044).
 	tv := s.termsView()
+	var (
+		writtenPath, writtenBody string
+		wrote                    bool
+	)
 	r := toollog.Record{
 		TS: ev.received.UnixNano(), HookAt: req.GetAt(),
 		Harness: f(harness), Event: f(req.GetEvent()), Tool: f(req.GetToolName()),
@@ -363,11 +367,14 @@ func (s *server) toolRecord(ev toolEvent, harness string) toollog.Record {
 			// joined text is redacted again before it is cleaned and cut.
 			r.Command = toollog.Clean(tv.text(toollog.CommandText(req.GetToolName(), tv.json(input))), toollog.MaxCommand)
 		}
-		r.Targets = targetsJSON(tv.targets(spaces.Targets(req.GetToolName(), input, req.GetCwd())))
+		targets := spaces.Targets(req.GetToolName(), input, req.GetCwd())
+		r.Targets = targetsJSON(tv.targets(targets))
+		writtenPath, writtenBody, wrote = writtenText(req.GetToolName(), input, targets.Writes)
 	}
+	var res *spaces.Resolved
 	if s.spaces != nil {
-		if _, rev, err := s.spaces.CurrentRevision(); err == nil {
-			r.PolicyRev = rev
+		if cur, rev, err := s.spaces.CurrentRevision(); err == nil {
+			r.PolicyRev, res = rev, cur
 		}
 	}
 	// The outbound rules revision the call was judged under (D-66):
@@ -376,6 +383,11 @@ func (s *server) toolRecord(ev toolEvent, harness string) toollog.Record {
 	r.RulesRev = ev.rulesRev
 	applyHookDecision(&r, req)
 	s.markGuardState(&r)
+	// Reason (SP-029): a call the guard refused wrote nothing.
+	if wrote && r.Decision != toollog.DecisionRefused {
+		writer, space := fileWriter(ev.caller)
+		s.files.record(context.Background(), res, space, writer, writtenPath, writtenBody)
+	}
 	tv.withhold(&r)
 	return r
 }

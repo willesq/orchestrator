@@ -535,3 +535,16 @@ func TestDeniedTools(t *testing.T) {
 		}
 	}
 }
+
+// TestIsTaskSessionID: a task's session ID is recognised, a harness's own
+// random session ID and anything else are not.
+func TestIsTaskSessionID(t *testing.T) {
+	if !IsTaskSessionID(SessionID("task-1")) {
+		t.Error("a task's session ID is not recognised")
+	}
+	for _, id := range []string{"4b5c2f1e-7a3d-4e8f-9c0b-1d2e3f4a5b6c", "sess-1", "", strings.ToUpper(SessionID("task-1"))} {
+		if IsTaskSessionID(id) {
+			t.Errorf("%q recognised as a task's session ID", id)
+		}
+	}
+}

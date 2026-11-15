@@ -50,6 +50,15 @@ func (l *liveRunner) taskOf(proc procstat.Identity) (agentrun.LiveRun, bool) {
 	return r.LiveByProcess(proc)
 }
 
+// run returns the current runner's run of task id, if it is running it.
+func (l *liveRunner) run(id string) (agentrun.LiveRun, bool) {
+	r := l.get()
+	if r == nil {
+		return agentrun.LiveRun{}, false
+	}
+	return r.Live(id)
+}
+
 // cancel stops a task the current runner is running, with reason as its
 // result, reporting whether it was.
 func (l *liveRunner) cancel(taskID, reason string) bool {
