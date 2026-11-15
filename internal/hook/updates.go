@@ -56,6 +56,7 @@ func takeUpdates(st *sessionState, sessionID string) []string {
 		st.Seen = map[string]int{}
 	}
 	var lines []string
+	var shows func(events.Event) bool
 	for _, s := range updateStreams(sessionID) {
 		evs, _ := events.Read(paths.EventsDir(), s)
 		seen, ok := st.Seen[s]
@@ -63,7 +64,16 @@ func takeUpdates(st *sessionState, sessionID string) []string {
 		if !ok || seen > len(evs) {
 			continue
 		}
-		for _, e := range evs[seen:] {
+		fresh := evs[seen:]
+		if s != sessionID && len(fresh) > 0 {
+			// Reason: the guard files are read only when a shared stream
+			// has something new to show.
+			if shows == nil {
+				shows = eventFilter(sessionID)
+			}
+			fresh = sharedEvents(s, sessionID, fresh, shows)
+		}
+		for _, e := range fresh {
 			lines = append(lines, eventLine(e))
 		}
 	}
@@ -71,6 +81,38 @@ func takeUpdates(st *sessionState, sessionID string) []string {
 		lines = append([]string{fmt.Sprintf("- (%d earlier update(s) not shown)", extra)}, lines[extra:]...)
 	}
 	return lines
+}
+
+// spaceFreeStreams are shared streams of orchd's own state, which belong
+// to no space: model routing changes. Every other shared stream's events
+// carry the space of their subject (SP-026).
+var spaceFreeStreams = map[string]bool{"routing": true}
+
+// eventFilter returns whether an event of a shared stream may reach session
+// sessionID's context: one placed in a space the session reads, by orchd's
+// guard files (SP-026, INV-01). With no policy applied every event shows
+// (INV-10); a policy that cannot be read shows none.
+func eventFilter(sessionID string) func(events.Event) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), enforcementTimeout)
+	defer cancel()
+	reads := guardFilesFor().SessionReads(ctx, sessionID)
+	return func(e events.Event) bool { return reads.Shows(e.Space) }
+}
+
+// sharedEvents keeps of stream's events those session sessionID may see:
+// all of its own stream and of a space-free stream, and of another shared
+// stream those shows passes.
+func sharedEvents(stream, sessionID string, evs []events.Event, shows func(events.Event) bool) []events.Event {
+	if stream == sessionID || spaceFreeStreams[stream] {
+		return evs
+	}
+	out := evs[:0:0]
+	for _, e := range evs {
+		if shows(e) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 func writeUpdates(out io.Writer, lines []string) {

@@ -533,10 +533,10 @@ func TestListDocsOwnerReposAsTheSpacesAccount(t *testing.T) {
 	f.login(t, "acme", "work-acme", "acme")
 	s, _ := profilesServer(t, profilesDoc)
 	s.docsGH = docs.NewGitHub()
-	if _, err := s.ListDocsOwnerRepos(operatorCtx, &orchdv1.ListDocsOwnerReposRequest{Owner: "acme"}); err != nil {
+	if _, err := s.ListDocsOwnerRepos(appOperatorCtx, &orchdv1.ListDocsOwnerReposRequest{Owner: "acme"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ListDocsOwnerRepos(operatorCtx, &orchdv1.ListDocsOwnerReposRequest{Owner: "initech"}); err == nil {
+	if _, err := s.ListDocsOwnerRepos(appOperatorCtx, &orchdv1.ListDocsOwnerReposRequest{Owner: "initech"}); err == nil {
 		t.Error("listed an org whose profile is not logged in")
 	}
 	for _, c := range f.calls(t) {

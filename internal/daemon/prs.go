@@ -31,8 +31,10 @@ func (s *server) ListPRs(ctx context.Context, req *orchdv1.ListPRsRequest) (*orc
 		out.UpdatedAt = fi.ModTime().Unix()
 	}
 	hidden := s.profileItemsHidden(ctx)
+	scope := s.recordScope(ctx, orchdv1.Orchd_ListPRs_FullMethodName)
 	for _, pr := range list {
-		if hidden(pr.Repo) {
+		// Reason: a PR is its repo owner's space's (SP-026).
+		if hidden(pr.Repo) || !scope.seesRepo(pr.Repo) {
 			continue
 		}
 		out.Prs = append(out.Prs, &orchdv1.PullRequest{
@@ -86,8 +88,9 @@ func (s *server) ListGitHubItems(ctx context.Context, req *orchdv1.ListGitHubIte
 		out.UpdatedAt = fi.ModTime().Unix()
 	}
 	hidden := s.profileItemsHidden(ctx)
+	scope := s.recordScope(ctx, orchdv1.Orchd_ListGitHubItems_FullMethodName)
 	for _, item := range prs.Ordered(state) {
-		if hidden(item.Repo) {
+		if hidden(item.Repo) || !scope.seesRepo(item.Repo) {
 			continue
 		}
 		kind := item.Kind
