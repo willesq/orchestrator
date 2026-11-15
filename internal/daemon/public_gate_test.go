@@ -221,21 +221,23 @@ func TestSessionWritersNeverTargetPublic(t *testing.T) {
 // and returns the new revision.
 func applyOSSRoots(t *testing.T, e *writesEnv, extra ...string) {
 	t.Helper()
-	applyOSS(t, e, extra, nil)
+	applyOSS(t, e, extra, nil, nil)
 }
 
 // applyOSSPrefix applies the example policy again with an extra web prefix
 // bound to oss.
 func applyOSSPrefix(t *testing.T, e *writesEnv, prefix string) {
 	t.Helper()
-	applyOSS(t, e, nil, []string{prefix})
+	applyOSS(t, e, nil, []string{prefix}, nil)
 }
 
-func applyOSS(t *testing.T, e *writesEnv, roots, prefixes []string) {
+// applyOSS applies the example policy with extra public roots and web
+// prefixes, and oss's public_paths (SP-076).
+func applyOSS(t *testing.T, e *writesEnv, roots, prefixes, publicPaths []string) {
 	t.Helper()
 	p := spaces.Policy{
 		Spaces: []spaces.Space{
-			{Name: "oss", Kind: spaces.Public, GitHubOrgs: []string{"oss-org"}, Roots: append([]string{e.code}, roots...), WebPrefixes: append([]string{"https://docs.oss.dev/"}, prefixes...)},
+			{Name: "oss", Kind: spaces.Public, GitHubOrgs: []string{"oss-org"}, Roots: append([]string{e.code}, roots...), WebPrefixes: append([]string{"https://docs.oss.dev/"}, prefixes...), PublicPaths: publicPaths},
 			{Name: "personal", Kind: spaces.Private, GitHubOrgs: []string{"willesq"}, Roots: []string{e.code + "/willesq"}},
 			{Name: "acme", Kind: spaces.Isolated, GitHubOrgs: []string{"acme"}, Roots: []string{e.code + "/company1"}, Chat: []string{"slack:TACME"}},
 			{Name: "globex", Kind: spaces.Isolated, GitHubOrgs: []string{"globex"}, Chat: []string{"teams:globex-tenant"}},

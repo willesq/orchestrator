@@ -255,12 +255,14 @@ no origin, or that the placer leaves without a space, stores nothing.
   editing session's space (SP-029), and since SP-030 so is a registered source there (above).
   Edit hand-offs use cached repo lookups only, so files an agent picks spend none of GitHub's
   budget.
-- **The public-space write gate (SP-030, D-64, D-65).** Only the docs sync and the sources
+- **The public-space write gate (SP-030, SP-076, D-64, D-65).** Only the docs sync and the sources
   refresh may place content in a public space, and only by what verifies it public: a repo GitHub
-  reports public (docs sync) or a bound web prefix. Local content under a public root such as
-  `~/code` is quarantined, whatever its remote ([Placement](#placement)), because any job's session
-  can write there, create a `.git` there or register a folder there as a source. Local folders
-  will reach public only through the applied policy's explicit `public_paths` list (SP-076). Session
+  reports public (docs sync), a bound web prefix, or a folder the operator listed in the applied
+  policy's `public_paths` ([config.md](config.md#spaces-policy)). Other local content under a
+  public root such as `~/code` is quarantined, whatever its remote ([Placement](#placement)),
+  because any job's session can write there, create a `.git` there or register a folder there as
+  a source. A session can still write into a listed folder and have the sources refresh index it
+  into public (RC-404, accepted risk). Session
   records, summaries, edit hand-offs and client notes never land in public: sessions and client
   notes from a session pinned to a public space go to quarantine, and an edit hand-off that would
   be public (a file in a verified public repo under a public root) goes to `public_root_sessions`,
@@ -883,15 +885,27 @@ matching root and the remote's effect.
 - **Public needs proof.** A result that would be public is quarantined (`not_verified_public`)
   whenever the checkout has a remote that GitHub has not confirmed is public, whoever owns it. That
   includes the times GitHub cannot be reached. A public root is never proof for local content
-  (D-50, D-65, SP-030): every file whose deepest root is public and that would be placed public
-  is quarantined (`no_public_proof`), whatever its checkout or remote (GitHub, another host, none,
-  an anonymous or symlinked `.git`), and so is one GitHub has not confirmed public. Nothing on
-  disk, not even a public root bound exactly at the folder, declares it: a session can create any
-  of it. Local folders will reach public only through the policy's `public_paths` (SP-076) or an
-  operator retag; public repos reach public through the docs sync. A stricter root nested in the
-  public one still decides first; a stricter remote does not (it is quarantined too). Sessions keep D-22 (below), an edit hand-off of such a file goes to
+  (D-50, D-65, SP-030): nothing on disk, not even a public root bound exactly at the folder,
+  declares a folder public, since a session can create any of it. D-50's "declares that folder
+  public" is now the policy's `public_paths` (SP-076, D-65; forms in
+  [config.md](config.md#spaces-policy)): a file whose deepest root is public and that would be
+  placed public is public (`public_path`) only when a `public_paths` pattern of that root's space
+  matches it. Otherwise it is quarantined (`no_public_proof`), whatever its checkout or remote
+  (GitHub, another host, none, an anonymous or symlinked `.git`). A matched file still stays out
+  when its repo is not verified public (`not_verified_public`) or its remote names a stricter
+  space's org (`no_public_proof`: a `.git` a session writes never moves content). A stricter root
+  nested in the public one, or inside a `**` pattern, still decides first, and so does a deeper
+  root of another public space. Public repos reach public through the docs sync, and an operator
+  retag wins over everything. Sessions keep D-22 (below), an edit hand-off of such a file goes to
   `public_root_sessions` unless its repo is not verified public, and a checkout's harness
   settings still follow its root.
+- **A listed folder survives a GitHub blip** (RC-402). When the visibility check of a listed
+  folder's checkout gets no answer from GitHub (it cannot be reached, or the lookup budget of 30
+  a minute is spent), its stored public copy is not taken out; new writes from it stay out of
+  public until GitHub answers. The grace lasts 6 hours from when GitHub last said the repo is
+  public, as orchd remembers since it started, because any caller can spend the shared budget;
+  after that, or after a restart, an unanswered repo leaves. GitHub answering that the repo is
+  private, or refusing to show it (403 or 404), takes the copy out as before.
 - **Org bindings must hold.** A remote whose owner's binding is suspended or unconfirmed
   (SP-021) sends the content to quarantine (`org_unconfirmed`). `Engine.Place` reads the binding
   from `orch.db`. A nil `Options.Confirmed` confirms nothing.

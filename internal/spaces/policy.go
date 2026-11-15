@@ -54,6 +54,11 @@ type Space struct {
 	GitHubOrgs  []string `json:"github_orgs,omitempty"`
 	Roots       []string `json:"roots,omitempty"`
 	WebPrefixes []string `json:"web_prefixes,omitempty"`
+	// PublicPaths, on a public space only, are the local folders under its
+	// roots whose content may be public (SP-076, D-65): an exact folder (the
+	// files directly in it), '*' within one folder name, or '**' for any
+	// depth. Other local content under a public root is quarantined.
+	PublicPaths []string `json:"public_paths,omitempty"`
 	// Chat names chat tenants as "<provider>:<id>", e.g. "slack:T0123".
 	Chat []string `json:"chat,omitempty"`
 	// Reads lists the other spaces this one may read.
@@ -127,7 +132,7 @@ func checkSize(p Policy) error {
 		return fmt.Errorf("spaces policy: public_root_sessions is over %d bytes", maxString)
 	}
 	for _, s := range p.Spaces {
-		for _, l := range [][]string{s.GitHubOrgs, s.Roots, s.WebPrefixes, s.Chat, s.Reads} {
+		for _, l := range [][]string{s.GitHubOrgs, s.Roots, s.WebPrefixes, s.Chat, s.Reads, s.PublicPaths} {
 			if len(l) > maxPerList {
 				return fmt.Errorf("spaces policy: a space has %d entries in one list, over the limit of %d", len(l), maxPerList)
 			}
@@ -142,7 +147,7 @@ func checkSize(p Policy) error {
 				return fmt.Errorf("spaces policy: a value is over %d bytes", maxString)
 			}
 		}
-		for _, path := range append([]string{s.TermsFile, s.GHConfigDir, s.ClaudeConfigDir}, s.Roots...) {
+		for _, path := range append(append([]string{s.TermsFile, s.GHConfigDir, s.ClaudeConfigDir}, s.Roots...), s.PublicPaths...) {
 			if strings.Count(path, "/") > maxDepth {
 				return fmt.Errorf("spaces policy: a path is more than %d folders deep", maxDepth)
 			}
