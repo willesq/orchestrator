@@ -7716,14 +7716,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f8afd77c35f69708b328a563d6ffe56f236a5b995bab7cf38f88735dbc4a4985",
-      "branch": null,
+      "branch": "feat/sp-077-operator-unlock",
       "pr": null
     },
     {
