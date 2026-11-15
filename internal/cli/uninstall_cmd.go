@@ -14,12 +14,15 @@ import (
 
 func newUninstallCmd() *cobra.Command {
 	var f setupFlags
+	var scan []string
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove everything orch install put in place (dry-run by default)",
 		Long: "uninstall reverses `orch install`, walking the same steps in reverse: it stops orchd,\n" +
-			"removes orch's git hooks from the repositories they were recorded in, takes orch's\n" +
-			"entries out of per-checkout settings, the Claude Code plugin and every harness file,\n" +
+			"removes orch's git hooks wherever it finds them (the repositories they were recorded\n" +
+			"in, every repository and root orch has a record of, the global core.hooksPath, and any\n" +
+			"--scan folder), putting back the hooks they chained, removes what earlier releases\n" +
+			"installed, and takes orch's entries out of per-checkout settings, the Claude Code plugin and every harness file,\n" +
 			"and deletes the files only orch owns. Your own content in those files is kept, and\n" +
 			"every file is backed up before it changes. It works with orchd down.\n" +
 			"Your data (memory, Qdrant, models, logs) is kept unless --purge-data, which lists\n" +
@@ -39,6 +42,15 @@ func newUninstallCmd() *cobra.Command {
 				return errors.New("--purge-data needs a full uninstall (--target all)")
 			}
 			m := machineFor(f, home, relocated, bins)
+			m.Git = uninstallGit(home, relocated)
+			for _, dir := range scan {
+				abs, err := filepath.Abs(dir)
+				if err != nil {
+					return err
+				}
+				m.GitHookScan = append(m.GitHookScan, abs)
+			}
+			m.GitHookPlaces = func() install.GitHookPlaces { return uninstallPlaces(contextOf(c), home, m.DataDir) }
 			var purge []string
 			if f.purgeData {
 				if purge, err = m.PurgeTargets(); err != nil {
@@ -89,6 +101,7 @@ func newUninstallCmd() *cobra.Command {
 	cmd.Flags().StringVar(&f.home, "home", "", "override HOME (for testing against a temp dir; launchd and brew are then left alone)")
 	cmd.Flags().StringVar(&f.binDir, "bin-dir", "", "dir of the built binaries (default: dir of this executable)")
 	cmd.Flags().BoolVar(&f.noGitHooks, "no-git-hooks", false, "leave orch's git hooks in place (they refuse commits once orch is gone)")
+	cmd.Flags().StringArrayVar(&scan, "scan", nil, "also search this folder for orch's git hooks (repeatable; bounded depth, symlinks not followed)")
 	cmd.Flags().BoolVar(&f.purgeData, "purge-data", false, "also delete orch's data: memory, Qdrant, models, logs (backups are kept)")
 	return cmd
 }

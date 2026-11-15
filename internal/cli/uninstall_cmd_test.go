@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"os"
@@ -38,6 +39,12 @@ func setupHome(t *testing.T) (home, binDir string, calls *[]string) {
 	var recorded []string
 	calls = &recorded
 	prevRun, prevUp, prevModel, prevTTY := setupRunner, setupDaemonUp, setupModel, stdinIsTerminal
+	prevGit := uninstallGit
+	// No test runs git: the search sees no global core.hooksPath and asks
+	// git nothing about any repository.
+	uninstallGit = func(string, bool) install.GitRunner {
+		return func(context.Context, ...string) (string, error) { return "", errors.New("no git in tests") }
+	}
 	setupRunner = func(_ context.Context, name string, args ...string) (string, error) {
 		recorded = append(recorded, name+" "+strings.Join(args, " "))
 		return "", nil
@@ -55,7 +62,10 @@ func setupHome(t *testing.T) (home, binDir string, calls *[]string) {
 		}
 	}
 	stdinIsTerminal = func(io.Reader) bool { return false }
-	t.Cleanup(func() { setupRunner, setupDaemonUp, setupModel, stdinIsTerminal = prevRun, prevUp, prevModel, prevTTY })
+	t.Cleanup(func() {
+		setupRunner, setupDaemonUp, setupModel, stdinIsTerminal = prevRun, prevUp, prevModel, prevTTY
+		uninstallGit = prevGit
+	})
 	return home, binDir, calls
 }
 

@@ -36,6 +36,11 @@ type Unit struct {
 	// another harness may still load them.
 	Shared bool
 	Edits  []Edit
+	// Past are uninstall-only edits: what an earlier orch version put in
+	// place and this one no longer installs (a file it stopped shipping, a
+	// block in a file it no longer edits). Each has a Reverse and no
+	// Compute; InstalledBy names the version that installed it.
+	Past []Edit
 	// Steps plans the install's actions from the current state; UndoSteps
 	// plans the uninstall's. Each step must be idempotent.
 	Steps     func() []Step
@@ -80,6 +85,14 @@ func ValidateUnits(units []Unit) error {
 				errs = append(errs, fmt.Errorf("unit %s: edit of %s lacks its install or its uninstall", u.Name, e.Path))
 			}
 		}
+		for _, e := range u.Past {
+			if e.Reverse == nil {
+				errs = append(errs, fmt.Errorf("unit %s: past edit of %s has no uninstall", u.Name, e.Path))
+			}
+		}
+		if len(u.Past) > 0 && u.InstalledBy == "" {
+			errs = append(errs, fmt.Errorf("unit %s: undoes past installs but does not say what installed them", u.Name))
+		}
 		if u.Steps != nil && u.UndoSteps == nil {
 			errs = append(errs, fmt.Errorf("unit %s: has install steps but no undo steps", u.Name))
 		}
@@ -87,7 +100,7 @@ func ValidateUnits(units []Unit) error {
 		if !installs && u.InstalledBy == "" {
 			errs = append(errs, fmt.Errorf("unit %s: installs nothing and does not say what installs it", u.Name))
 		}
-		uninstalls := len(u.Edits) > 0 || u.UndoSteps != nil || len(u.Dirs) > 0 || u.Leftovers != nil
+		uninstalls := len(u.Edits) > 0 || len(u.Past) > 0 || u.UndoSteps != nil || len(u.Dirs) > 0 || u.Leftovers != nil
 		if !uninstalls {
 			errs = append(errs, fmt.Errorf("unit %s: has no uninstall", u.Name))
 		}
@@ -96,7 +109,8 @@ func ValidateUnits(units []Unit) error {
 }
 
 // dedupe drops repeated units (shared units appear in every harness) and
-// repeated edits of one path, keeping the first.
+// repeated edits of one path, keeping the first. A past edit of a path that
+// a current edit also covers is dropped, wherever the units sit.
 func dedupe(units []Unit) []Unit {
 	seenUnit, seenPath := map[string]bool{}, map[string]bool{}
 	out := make([]Unit, 0, len(units))
@@ -114,6 +128,17 @@ func dedupe(units []Unit) []Unit {
 		}
 		u.Edits = edits
 		out = append(out, u)
+	}
+	// Reason: a path a current edit already reverses is not undone twice.
+	for i := range out {
+		past := make([]Edit, 0, len(out[i].Past))
+		for _, e := range out[i].Past {
+			if !seenPath[e.Path] {
+				seenPath[e.Path] = true
+				past = append(past, e)
+			}
+		}
+		out[i].Past = past
 	}
 	return out
 }
@@ -151,8 +176,9 @@ func UninstallPlan(target string, units []Unit, sharedToo bool) Plan {
 			continue
 		}
 		kept = append(kept, u)
-		for j := len(u.Edits) - 1; j >= 0; j-- {
-			e := u.Edits[j]
+		all := append(slices.Clone(u.Edits), u.Past...)
+		for j := len(all) - 1; j >= 0; j-- {
+			e := all[j]
 			e.undo, e.Unlink = true, nil
 			p.Edits = append(p.Edits, e)
 		}

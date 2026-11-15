@@ -3,7 +3,6 @@ package install
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -43,6 +42,15 @@ type Machine struct {
 	// AppPaths are where Orch.app may be installed.
 	AppPaths []string
 
+	// Git runs git for the uninstall's search for orch's git hooks; nil
+	// asks git nothing (only <repo>/.git/hooks is then looked at).
+	Git GitRunner
+	// GitHookPlaces lists the repositories and folders orch has a record
+	// of (RecordedGitHookPlaces); GitHookScan are folders the user asked
+	// to search as well (--scan).
+	GitHookPlaces func() GitHookPlaces
+	GitHookScan   []string
+
 	NoModel, NoDaemon, NoGitHooks, NoApp bool
 	// PurgeData makes the uninstall delete orch's data (PurgeTargets);
 	// PurgeList, when set, is the list the user confirmed, and only it is
@@ -53,14 +61,16 @@ type Machine struct {
 
 // FullUnits is the whole registered list for a machine, in install order:
 // the machine units that hold data first (so an uninstall reaches them
-// last), then each harness's units, then the git hooks and the daemon (so
-// an uninstall stops orchd before anything else).
+// last), then each harness's units and what earlier releases installed,
+// then the git hooks and the daemon (so an uninstall stops orchd before
+// anything else).
 func FullUnits(m Machine, adapters []Adapter) []Unit {
 	units := []Unit{m.prerequisitesUnit(), m.dataUnit(), m.checkoutSettingsUnit(), m.modelUnit()}
 	for _, a := range adapters {
 		units = append(units, a.Units(m.Bins, m.Home)...)
 	}
-	return append(units, m.gitHooksUnit(), m.daemonUnit(), m.appUnit())
+	units = append(units, pastToolsUnit(m.Home))
+	return append(units, m.gitHooksUnit(), m.gitHookDiscoveryUnit(), m.daemonUnit(), m.appUnit())
 }
 
 // prerequisitesUnit names what only the user can set up: Homebrew itself
@@ -134,19 +144,7 @@ func (m Machine) checkoutSettingsUnit() Unit {
 }
 
 // recordedCheckouts counts the checkouts orch's record says it wrote.
-func recordedCheckouts(stateFile string) int {
-	b, err := os.ReadFile(stateFile)
-	if err != nil {
-		return 0
-	}
-	var st struct {
-		Checkouts map[string]json.RawMessage `json:"checkouts"`
-	}
-	if json.Unmarshal(b, &st) != nil {
-		return 0
-	}
-	return len(st.Checkouts)
-}
+func recordedCheckouts(stateFile string) int { return len(recordedCheckoutPaths(stateFile)) }
 
 // modelUnit downloads the embedding model when it is missing. The model is
 // data: uninstall keeps it, and only --purge-data deletes it (dataUnit).
@@ -230,11 +228,6 @@ func (m Machine) gitHooksUnit() Unit {
 		Name:      "git hooks",
 		Steps:     func() []Step { return plan(false) },
 		UndoSteps: func() []Step { return plan(true) },
-		Leftovers: func() []string {
-			return []string{"git hooks added by `orch guard git-hook` before orch recorded them are not found " +
-				"automatically, and refuse every commit and push once orch is gone: in such a repository run " +
-				"`orch guard git-hook --uninstall --apply --repo <dir>` first"}
-		},
 	}
 }
 
@@ -288,7 +281,8 @@ func (m Machine) daemonUnit() Unit {
 			case m.Homebrew:
 				return []string{"remove the binaries with Homebrew: `brew uninstall orch` (and `brew untap willesq/tap` if nothing else uses it)"}
 			}
-			return []string{"remove the orch, orchd and orch-hook binaries from " + filepath.Dir(m.Bins.Orch)}
+			return append(strayHomebrewService(m.Home, m.Homebrew),
+				"remove the orch, orchd and orch-hook binaries from "+filepath.Dir(m.Bins.Orch))
 		},
 	}
 }

@@ -248,7 +248,9 @@ orch uninstall --purge-data --yes # also delete memory, Qdrant data, models and 
 ```
 
 `orch uninstall` is install's mirror: the same steps, in reverse. It stops orchd, removes orch's
-git hooks from the repositories they were recorded in (putting back any hook they chained), takes
+git hooks wherever it finds them (putting back any hook they chained; see below), removes what
+earlier releases installed and this one no longer does (the `gittree` helper, orch's block in the
+Codex entry file it no longer writes), takes
 orch's entries out of the per-checkout settings orchd wrote for spaces, uninstalls the pinned
 cc-safety-net plugin and its marketplace, takes orch's hooks, MCP servers, permission rules,
 `attribution.commit`, managed instruction block and alias out of each harness file, and deletes
@@ -268,6 +270,19 @@ launchd agent). It runs with orchd down.
   policy, the alias and orchd for the others.
 - Credentials and logins are never touched.
 
+**Finding git hooks.** `orch guard git-hook --install` records where it puts hooks, but older
+releases did not. So uninstall also searches, without orchd: every repository registered with
+`orch repo`, the trusted test repositories, the spaces checkouts orch wrote settings into, the
+known roots (`~/code` by default), every root a saved spaces policy named and the docs clone
+cache (a few folders down), and the global `core.hooksPath`. For each repository it asks git for
+the hooks folder, so a per-repository `core.hooksPath` is found too. `--scan <folder>`
+(repeatable) searches another tree, deeper but bounded, taking folders named `hooks`. Symlinks
+are never followed. A hook is
+orch's only when it carries orch's marker line; the preview lists every folder it would change and
+where it was found. A hook that runs `orch guard git-hook` without the marker, a link to orch's
+hook, or a `<hook>.orch-prev` left after orch's hook was removed by hand is listed for you and
+left alone.
+
 It cannot do these for you, and lists them at the end:
 
 - `brew uninstall orch` (and `brew untap willesq/tap`), or for a source build, deleting the
@@ -275,9 +290,11 @@ It cannot do these for you, and lists them at the end:
 - Orch.app: quit it, turn off **Open at login** in its menu (or System Settings > General >
   Login Items), then `brew uninstall --cask orch-app` or move it to the Trash. A command-line
   tool cannot unregister another app's login item.
-- Git hooks added before orch recorded them: in such a repository run
-  `orch guard git-hook --uninstall --apply --repo <dir>`. orch's hooks refuse every commit and
-  push once orch is gone.
+- Git hooks in a repository orch has no record of, outside the folders above: run
+  `orch uninstall --scan <folder>` over the folder that holds it. orch's hooks refuse every commit
+  and push once orch is gone.
+- Anything that looks like orch's but is not positively so (above), and Homebrew's
+  `homebrew.mxcl.orch.plist` when orch no longer runs from Homebrew (`brew services stop orch`).
 
 Not reversible byte for byte: a settings file install rewrote comes back in orch's JSON or
 TOML formatting (key order, indentation, TOML comments); an allow rule, the `rtk` wrapper or
