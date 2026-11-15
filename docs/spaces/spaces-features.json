@@ -7570,14 +7570,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f0f14f5b8c199b7be636183df41b2454c6142a36acb8f5a54f2243b104299101",
-      "branch": null,
+      "branch": "feat/sp-060-chat-connectors",
       "pr": null
     },
     {
