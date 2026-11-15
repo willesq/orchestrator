@@ -142,7 +142,7 @@ func TestInstallWritesModulesAndHonorsToggles(t *testing.T) {
 	defer SetToggleLoader(func() (settings.Toggles, error) {
 		return settings.NewToggles([]settings.Row{{Provider: InstructionsProvider, Kind: KindModule, Identity: off, Present: true}}), nil
 	})()
-	plan := Plan{Target: "codex", Edits: instructionEdits(home, "codex")}
+	plan := InstallPlan("codex", instructionUnits(home, "codex"))
 	if err := plan.Apply(io.Discard, filepath.Join(home, "backups")); err != nil {
 		t.Fatal(err)
 	}

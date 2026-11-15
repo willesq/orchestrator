@@ -20,14 +20,14 @@ type Codex struct{}
 // Name implements Adapter.
 func (Codex) Name() string { return "codex" }
 
-// Edits implements Adapter.
-func (c Codex) Edits(bins Bins, home string) []Edit {
-	return append(instructionEdits(home, c.Name()), []Edit{
-		codexTOMLEdit(bins, home),
-		codexHooksEdit(bins, home),
-		aliasEdit(bins.Orch, home),
-		plistEdit(bins.Orchd, home),
-	}...)
+// Units implements Adapter.
+func (c Codex) Units(bins Bins, home string) []Unit {
+	return append(instructionUnits(home, c.Name()),
+		Unit{Name: "codex mcp", Edits: []Edit{codexTOMLEdit(bins, home)}},
+		Unit{Name: "codex hooks", Edits: []Edit{codexHooksEdit(bins, home)}},
+		aliasUnit(bins.Orch, home),
+		launchdUnit(bins.Orchd, home),
+	)
 }
 
 // codexEvents are the Claude Code events Codex also has. Codex has no
@@ -67,6 +67,9 @@ func codexTOMLEdit(bins Bins, home string) Edit {
 			}
 			return out, fmt.Sprintf("mcp (config.toml): registered orch_rag + orch_queue; preserved %d other server(s)", preserved), nil
 		},
+		Reverse: func(cur []byte) (Undo, error) {
+			return undoTOML(cur, "mcp (config.toml)", stripMCP("mcp_servers", map[string]string{"orch_rag": "rag", "orch_queue": "queue"}))
+		},
 	}
 }
 
@@ -88,6 +91,9 @@ func codexHooksEdit(bins Bins, home string) Edit {
 				return nil, "", err
 			}
 			return out, summary, nil
+		},
+		Reverse: func(cur []byte) (Undo, error) {
+			return undoJSON(cur, "hooks (hooks.json)", true, stripHooks(bins.OrchHook))
 		},
 	}
 }

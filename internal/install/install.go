@@ -34,8 +34,9 @@ type Bins struct {
 // Adapter wires the orchestrator into one harness (Claude Code, Codex, Gemini).
 type Adapter interface {
 	Name() string
-	// Edits returns the file transforms for this harness under the given home.
-	Edits(bins Bins, home string) []Edit
+	// Units returns what this harness's install puts in place under the given
+	// home, in install order, each unit carrying its own uninstall (unit.go).
+	Units(bins Bins, home string) []Unit
 }
 
 // Edit is one file transform. Compute is a pure function of the current bytes,
@@ -52,11 +53,21 @@ type Adapter interface {
 // of them is removed (the link, never its target) before the write, so the write
 // lands in a real file. Compute must refuse any link it has not vetted as
 // replaceable, because Apply removes whatever links it finds there.
+//
+// Reverse is the edit's uninstall, defined beside Compute so that no install
+// edit exists without one (see Unit): given the file as it is now, it returns
+// the file with orch's part taken out, or asks for the file to be removed when
+// nothing but orch's part is in it. It must leave everything else as it is.
 type Edit struct {
 	Path      string
 	Compute   func(old []byte) (newBytes []byte, summary string, err error)
+	Reverse   func(cur []byte) (Undo, error)
 	Normalize func(old []byte) (normalized []byte, err error)
 	Unlink    []string
+
+	// undo is set on the edits of an uninstall plan: the edit then runs
+	// Reverse instead of Compute.
+	undo bool
 }
 
 // evaluated is an edit measured against the file currently on disk.
@@ -65,6 +76,8 @@ type evaluated struct {
 	next    []byte
 	summary string
 	changed bool
+	// remove deletes the file instead of writing next (uninstall only).
+	remove bool
 }
 
 // evaluate computes the edit against the file on disk, writing nothing.
@@ -72,6 +85,12 @@ func (e Edit) evaluate() (evaluated, error) {
 	old, readErr := os.ReadFile(e.Path)
 	if readErr != nil && !os.IsNotExist(readErr) {
 		return evaluated{}, fmt.Errorf("%s: %w", e.Path, readErr)
+	}
+	if e.undo {
+		return e.evaluateUndo(old)
+	}
+	if e.Compute == nil {
+		return evaluated{}, fmt.Errorf("%s: edit has no install transform", e.Path)
 	}
 	next, summary, err := e.Compute(old)
 	if err != nil {
@@ -97,11 +116,6 @@ type Step struct {
 	Run     func(ctx context.Context) (output string, err error)
 }
 
-// stepper is implemented by adapters that also take actions.
-type stepper interface {
-	Steps(home string) []Step
-}
-
 // Plan is an ordered set of edits, then steps, for a target harness.
 //
 // Steps is called each time the plan is printed, counted or applied, rather
@@ -111,15 +125,23 @@ type Plan struct {
 	Target string
 	Edits  []Edit
 	Steps  func() []Step
+	// Uninstall marks a plan built by UninstallPlan: its steps run before
+	// its edits, the reverse of an install, and it removes empty Prune
+	// directories last.
+	Uninstall bool
+	// Prune are directories only orch's files live in, deepest first; an
+	// uninstall removes each one left empty.
+	Prune []string
+	// Notes lists what the plan leaves for the user to do by hand.
+	Notes func() []string
+	// err is a defect found while building the plan (an unpaired unit); it
+	// fails every evaluation, so nothing is printed or written.
+	err error
 }
 
-// BuildPlan computes the plan for an adapter.
+// BuildPlan computes the install plan for an adapter: its units in order.
 func BuildPlan(a Adapter, bins Bins, home string) Plan {
-	p := Plan{Target: a.Name(), Edits: a.Edits(bins, home)}
-	if s, ok := a.(stepper); ok {
-		p.Steps = func() []Step { return s.Steps(home) }
-	}
-	return p
+	return InstallPlan(a.Name(), a.Units(bins, home))
 }
 
 // steps plans the steps against the current state.
@@ -159,6 +181,9 @@ func AllAdapters() []Adapter {
 // front makes a plan all-or-nothing: either every edit is writable, or nothing is
 // written and the error names the offending file.
 func (p Plan) evaluateAll() ([]evaluated, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
 	out := make([]evaluated, 0, len(p.Edits))
 	for _, e := range p.Edits {
 		ev, err := e.evaluate()
@@ -197,6 +222,10 @@ func (p Plan) Print(w io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if p.Uninstall {
+		p.printUninstall(w, evs)
+		return nil
+	}
 	fmt.Fprintf(w, "DRY RUN — target %q. No files will be written.\n", p.Target)
 	changed := 0
 	for i, e := range p.Edits {
@@ -224,6 +253,7 @@ func (p Plan) Print(w io.Writer) error {
 	default:
 		fmt.Fprintf(w, "\n%d file(s) would change and %d step(s) would run. Re-run with --apply to do it (originals backed up first).\n", changed, len(steps))
 	}
+	p.printNotes(w)
 	return nil
 }
 
@@ -240,6 +270,9 @@ func (p Plan) ApplyContext(ctx context.Context, w io.Writer, backupDir string) e
 	evs, err := p.evaluateAll()
 	if err != nil {
 		return err
+	}
+	if p.Uninstall {
+		return p.applyUninstall(ctx, w, backupDir, evs)
 	}
 	stamp := time.Now().UTC().Format("20060102-150405")
 	dest := filepath.Join(backupDir, stamp)
@@ -293,6 +326,7 @@ func (p Plan) ApplyContext(ctx context.Context, w io.Writer, backupDir string) e
 	if changed == 0 && ran == 0 {
 		fmt.Fprintf(w, "already fully installed for %q — nothing changed.\n", p.Target)
 	}
+	p.printNotes(w)
 	return nil
 }
 

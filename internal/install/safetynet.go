@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/willesq/orchestrator/internal/safetynet"
@@ -48,16 +49,56 @@ func SafetyNetPlan(loc safetynet.Locations, opts SafetyNetOptions) Plan {
 	return p
 }
 
-// safetyNetEdits are the files the Claude Code install writes for safety-net.
-func safetyNetEdits(home string) []Edit {
+// safetyNetUnit is the safety-net part of the Claude Code install: the
+// marketplace manifest, the guard rules, then the plugin commands. Its
+// uninstall removes the plugin and the marketplace through the claude CLI,
+// then the rules and the manifest.
+func safetyNetUnit(home string) Unit {
 	loc := safetynet.Locate(home)
-	return append([]Edit{safetyNetManifestEdit(loc)}, safetyNetRuleEdits(loc)...)
+	return Unit{
+		Name:  "safety net",
+		Edits: append([]Edit{safetyNetManifestEdit(loc)}, safetyNetRuleEdits(loc)...),
+		Steps: func() []Step { return safetyNetSteps(loc, safetynet.PlanOptions{}, nil, true) },
+		UndoSteps: func() []Step {
+			return safetyNetUndoSteps(loc, nil)
+		},
+		Dirs: []string{
+			filepath.Dir(loc.RulebookPath(safetynet.RulebookName)),
+			filepath.Dir(loc.ManifestPath()), loc.MarketplaceDir, filepath.Dir(loc.MarketplaceDir),
+		},
+	}
+}
+
+// safetyNetUndoSteps plans the claude commands that take orch's plugin and
+// marketplace out of Claude Code, from the current state. Without the claude
+// CLI each is skipped with a note naming the command to run.
+func safetyNetUndoSteps(loc safetynet.Locations, r safetynet.Runner) []Step {
+	if r == nil {
+		r = safetyNetRunner(loc)
+	}
+	var steps []Step
+	for _, c := range safetynet.UninstallCommands(safetynet.Detect(loc)) {
+		steps = append(steps, Step{
+			Summary: "safety-net: " + c.Summary + "\n  " + c.String(),
+			Run: func(ctx context.Context) (string, error) {
+				out, err := r.Run(ctx, c.Args)
+				if errors.Is(err, safetynet.ErrNoClaude) {
+					return "skipped: " + err.Error() + "; run `" + c.String() + "` once Claude Code is installed", nil
+				}
+				return out, err
+			},
+		})
+	}
+	return steps
 }
 
 // safetyNetManifestEdit writes the orch-owned marketplace manifest.
 func safetyNetManifestEdit(loc safetynet.Locations) Edit {
 	return Edit{
 		Path: loc.ManifestPath(),
+		Reverse: func(cur []byte) (Undo, error) {
+			return undoOwnedFile(cur, "safety-net: orch-owned marketplace "+safetynet.MarketplaceName, nil)
+		},
 		Compute: func([]byte) ([]byte, string, error) {
 			b, err := safetynet.Manifest(safetynet.Pinned)
 			if err != nil {
@@ -79,26 +120,29 @@ func safetyNetRuleEdits(loc safetynet.Locations) []Edit {
 				return safetynet.Rulebook(), "safety-net: orch-owned " + safetynet.RulebookName +
 					" rulebook (shared-policy guards; overwritten on upgrade)", nil
 			},
+			Reverse: func(cur []byte) (Undo, error) {
+				return undoOwnedFile(cur, "safety-net: orch-owned "+safetynet.RulebookName+" rulebook", nil)
+			},
 			Normalize: safetynet.NormalizeJSON,
 		},
 		{
-			Path:      loc.RuleConfigPath(),
-			Compute:   safetynet.MergeRuleConfig,
+			Path:    loc.RuleConfigPath(),
+			Compute: safetynet.MergeRuleConfig,
+			Reverse: func(cur []byte) (Undo, error) {
+				next, remove, summary, err := safetynet.UnmergeRuleConfig(cur)
+				return Undo{Data: next, Remove: remove, Summary: summary}, err
+			},
 			Normalize: safetynet.NormalizeJSON,
 		},
 	}
 }
 
-// Steps implements stepper: the plugin commands Claude Code still needs.
-//
-// Reason: without the claude CLI the steps are skipped with a note rather
-// than failing, so `orch install --target all` on a machine without Claude
-// Code still wires the other harnesses. `orch status` keeps reporting them.
-func (ClaudeCode) Steps(home string) []Step {
-	return safetyNetSteps(safetynet.Locate(home), safetynet.PlanOptions{}, nil, true)
-}
-
 // safetyNetSteps plans the plugin commands from the current state.
+//
+// Reason, skipWithoutClaude: without the claude CLI the steps are skipped
+// with a note rather than failing, so `orch install --target all` on a
+// machine without Claude Code still wires the other harnesses. `orch status`
+// keeps reporting them.
 func safetyNetSteps(loc safetynet.Locations, opts safetynet.PlanOptions, r safetynet.Runner, skipWithoutClaude bool) []Step {
 	if r == nil {
 		r = safetyNetRunner(loc)

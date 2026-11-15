@@ -233,6 +233,12 @@ SessionEnd. `claude --resume` in a new process keeps the session's pin and space
 codex or gemini processes with no pin (started before the hooks were installed) show as
 `unpinned`. See [internals/daemon.md](internals/daemon.md#session-liveness).
 
+## Uninstall
+
+`orch uninstall` previews; `--apply` removes everything orch install and orchd put in place and
+keeps your data, `--purge-data` deletes that too. See
+[INSTALL.md](INSTALL.md#uninstalling) for what it removes and what it leaves for you.
+
 ## Upgrades
 
 After an upgrade, the `self-update` subsystem notices the new `orchd` binary within a minute

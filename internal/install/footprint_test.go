@@ -78,7 +78,7 @@ func TestCodexOverrideIsMeasured(t *testing.T) {
 
 func TestPolicyFilesInstall(t *testing.T) {
 	home := t.TempDir()
-	plan := Plan{Target: "claude-code", Edits: instructionEdits(home, "claude-code")}
+	plan := InstallPlan("claude-code", instructionUnits(home, "claude-code"))
 	if err := plan.Apply(io.Discard, filepath.Join(home, "backups")); err != nil {
 		t.Fatal(err)
 	}

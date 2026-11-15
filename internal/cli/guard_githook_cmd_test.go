@@ -81,6 +81,11 @@ func gitHookRepo(t *testing.T) (dir, marks string) {
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv(gitHookCLIEnv, "1")
+	// The install's backups and hook registry stay out of the real data
+	// dir; a test's own snapshot directory is kept.
+	if os.Getenv("ORCH_DATA_DIR") == "" {
+		t.Setenv("ORCH_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	}
 	dir, _ = filepath.EvalSymlinks(t.TempDir())
 	bare := filepath.Join(t.TempDir(), "remote.git")
 	marks = filepath.Join(t.TempDir(), "marks")
