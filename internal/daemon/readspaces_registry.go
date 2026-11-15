@@ -36,7 +36,8 @@ const (
 )
 
 // readSpaceDecisions is the space decision of every RPC, by full method
-// name.
+// name. A new feature's RPCs add theirs from the feature's own file through
+// registerRPCs (rpc_registry.go), together with their caller class (SP-081).
 var readSpaceDecisions = map[string]spaceDecision{
 	orchdv1.Orchd_Search_FullMethodName:      {spaceFiltered, "memory search, read only from the caller's readable spaces' collections"},
 	orchdv1.Orchd_ListSources_FullMethodName: {spaceFiltered, "memory inventory, listed only from the caller's readable spaces"},

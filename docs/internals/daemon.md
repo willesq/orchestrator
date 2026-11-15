@@ -1036,6 +1036,31 @@ Dispatch inserts the ledger row before creating the workflow (a row without a wo
 diagnosable; the reverse is invisible), redacts the body, assigns `task-<uuid>`, and snapshots git
 HEADs of the task's repository for later verification.
 
+### Adding an RPC
+
+A new RPC changes no shared registration line (SP-081), so features built in parallel add files:
+
+- **Caller class and space decision:** in the feature's own file under `internal/daemon/`,
+  `var _ = registerRPCs(taskRPC(method, decision))` or `operatorRPC(method, action, decision)`
+  (`rpc_registry.go`). Go fills the maps before any initializer that uses them, so the entries are
+  in `taskCallable` or `operatorActions` and in `readSpaceDecisions` before orchd serves. A second
+  claim on an RPC (from another feature or the shared maps), an operator RPC without an action or
+  a registration without a method panics at start. The shared maps in `callers.go` and
+  `readspaces_registry.go` keep the RPCs that predate SP-081. `TestEveryRPCIsClassified` and
+  `TestEveryRPCHasASpaceDecision` check the merged maps, so an RPC with no registration still
+  fails them.
+- **Test fakes:** the `fakeClient` in `internal/cli`, `internal/hook` and `internal/mcpserver`
+  embeds a nil `orchdv1.OrchdClient`, so an RPC the fake does not stub needs no edit there; a test
+  that calls one panics. A test that needs an answer stubs the method in a
+  `<feature>_fake_test.go` file.
+- **Still shared:** the RPC itself in `orchd.proto` and its generated code (keep both sides of a
+  conflict and run `make proto`), the handler's wiring in `server` and `Run` in `daemon.go`, and
+  a supervised unit in `subsystems.go`.
+
+`scripts/check-registration-merge.sh [REF]` clones the committed tree, adds a fixture RPC and app
+model on each of two branches, merges them and builds the result; it fails on a conflict or an
+edit to a shared file (`SWIFT=1` also builds the app).
+
 ## Supervised subsystems
 
 A unit is either `Run(ctx, beat)` (returns promptly, works in its own goroutine) or `Tick` +

@@ -35,7 +35,9 @@ import (
 // serve the session's own work. Every other RPC changes what later sessions
 // see or run (further tasks, routing evidence, stored memory, the sources
 // orchd ingests, orchd's subsystems), so a new RPC is refused to tasks until
-// it is added here.
+// it is added here. A new feature's RPCs register from the feature's own
+// file instead (registerRPCs, rpc_registry.go), so parallel features do not
+// edit these lines (SP-081).
 var taskCallable = map[string]bool{
 	orchdv1.Orchd_Ping_FullMethodName:                  true,
 	orchdv1.Orchd_Search_FullMethodName:                true,
@@ -73,7 +75,8 @@ var taskCallable = map[string]bool{
 	orchdv1.Orchd_ListOutboundRules_FullMethodName: true,
 }
 
-// operatorActions says what each operator-only RPC would do, for the refusal.
+// operatorActions says what each operator-only RPC would do, for the
+// refusal. New features register theirs with operatorRPC (rpc_registry.go).
 var operatorActions = map[string]string{
 	orchdv1.Orchd_Dispatch_FullMethodName:           "dispatch further tasks",
 	orchdv1.Orchd_RateTask_FullMethodName:           "rate tasks",
