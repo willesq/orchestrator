@@ -59,6 +59,8 @@ var readSpaceDecisions = map[string]spaceDecision{
 	orchdv1.Orchd_RequestUnlock_FullMethodName:      {spaceOwn, "the caller's own unlock request (SP-077)"},
 	orchdv1.Orchd_ProveUnlock_FullMethodName:        {spaceOwn, "the caller's own unlock, without its code (SP-077)"},
 	orchdv1.Orchd_Lock_FullMethodName:               {spaceNone, "ends unlocks; answers a count (SP-077)"},
+	orchdv1.Orchd_ListQuarantine_FullMethodName:     {spaceOperator, "names every quarantined source, which no session may read"},
+	orchdv1.Orchd_PurgeQuarantine_FullMethodName:    {spaceOperator, "deletes quarantined sources; its answer counts them"},
 
 	orchdv1.Orchd_ListToolEvents_FullMethodName:    {spaceOwn, "the caller's own command log; the operator's is everyone's (INV-12)"},
 	orchdv1.Orchd_ExplainPlacement_FullMethodName:  {spaceOwn, "answers agents only about public placements"},

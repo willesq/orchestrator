@@ -307,6 +307,27 @@ alone is the operator, as before spaces (INV-10). Under a policy a terminal beco
 only through an [unlock confirmed in Orch.app](#operator-unlock) (SP-077); without one, the CLI's
 operator commands are refused and Orch.app is the way to run them.
 
+Interactive sessions keep `Ingest`, `Dispatch` and the task RPCs (`ListTasks`, `GetTask`,
+`WatchTasks`, `RateTask`, `RetryTask`, `CancelTask`), but some settings are the operator's alone
+while a policy is applied (D-74, settling RC-710; `internal/daemon/policy_operator.go`). The
+resolver interceptor refuses these to every caller except Orch.app, interactive harness sessions
+(pinned or not) and queued tasks included, before the handler runs, and logs each refusal with the
+RPC and the caller's kind and ID (`refuseSettings`):
+
+| RPC | Operator-only under a policy |
+| --- | --- |
+| `SetConfig` | when the request sets a `Sensitive` key (`internal/config/schema.go`); other keys stay open to sessions |
+| `SetSettingEnabled`, `AddSetting`, `RemoveSetting` | always (Claude Code, cc-safety-net, instruction, subagent and skill settings) |
+| `InstallSafetyNet` | always |
+| `Restart` | always |
+| `LandPR`, `UndoPRLanding`, `DiscardPRLanding` | always |
+
+The policy is read only for these RPCs, so other calls from sessions cost nothing more. With no
+policy applied every RPC behaves as before (INV-10). Refused to sessions with or without a policy,
+through `refuseNonOperator`, are the spaces policy RPCs (diff, apply, list, scan and replay), the
+enforcement and sandbox switches, outbound rule changes, relabel, retag and the command log
+verification and summary.
+
 orchd recognizes Orch.app by its code signature (RC-706; `appsig_darwin.go`, macOS with cgo).
 The check runs the first time a call on a connection needs evidence, while a policy is applied,
 and its answer is kept for the connection. Other builds recognize no app, so under a policy no
@@ -325,7 +346,9 @@ log says why, once per connection. Accepted risk: an ad-hoc
 signature names no signer, so a process that can write the install folder can put its own
 bundle with that identifier there, which is replacing the app the user opens.
 
-The recovery server (settings only) resolves no caller and keeps the process-tree rule.
+The recovery server (settings only) resolves callers without session pins, so a harness caller
+there is no session; while a policy is applied it holds the same Orch.app rule, the settings
+refusals above included.
 
 ### Operator unlock
 
@@ -442,10 +465,32 @@ SP-025.2): `filtered` (the four above), `operator` (refused to every caller but 
 SP-026's, or RC-700's for the registries, settings and logs it lists) or `none`. A test fails for
 an RPC with no entry, as for one missing from `taskCallable` and `operatorActions`.
 
+`Search` also says what it searched (SP-031; `internal/daemon/searchscope.go`), for `orch rag
+why`: `caller_space` (the session's pin or the queued task's recorded space; empty for anyone
+else), `scoped` (false when every collection was read) and `collections`, the collections read.
+A filtered reader's collections are only its readable spaces' own; an unscoped search under a
+policy (memory filtering switched off) lists them only for Orch.app, since every collection's
+name holds a space's.
+
 A filtered read sees only chunks labelled under the applied revision (INV-08;
 [memory.md](memory.md#spaces)), so after a new apply sessions and tasks read nothing placed
 earlier until `orch rag relabel` (SP-027) runs. Chunks stored before SP-024 stay in the base,
 which only the operator and unfiltered reads see (RC-355).
+
+### Spaces counts
+
+`Status` carries `SpacesStatus.counts` (SP-031; `internal/daemon/spacecounts.go`) while a policy
+with spaces is applied: each collection's chunks and how many are not labelled by the applied
+revision (`rag.CountSpaces`, two exact Qdrant counts per collection), and the live sessions
+pinned to quarantine whose first folder places as a conflict under the applied policy (at most
+50 are placed again; a pin does not record why it went to quarantine, RC-502). The counts are
+taken at most once per 30 s per revision, with a 3 s limit, and a failed count is not retried
+until that time ends (a count that runs out of time, conflicts included, is a failure, never a
+partial answer); the caller then gets a fixed error, the detail going to orchd's log
+(RC-350). Each caller gets them narrowed by `readableBy`: Orch.app every policy space, the
+totals over every collection (unplaced content and quarantine included) and the conflicts;
+anyone else only the spaces it reads, totals over those, and no conflicts. Quarantine's own
+counts are SP-028's `SpacesStatus.quarantine`.
 
 ### Command log
 

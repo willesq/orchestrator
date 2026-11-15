@@ -6,7 +6,7 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | Command | Purpose |
 |---|---|
 | `version`, `ping` | build version; orchd reachability |
-| `status [--json]` | whole-system report, including the `safety-net` line; works with orchd down; always exits 0 |
+| `status [--json]` | whole-system report, including the `safety-net` line; works with orchd down; always exits 0. Under an applied spaces policy its `spaces` section (SP-031) lists the spaces the caller may see with the chunks each holds and how many are not yet relabelled, the relabel progress (chunks labelled by the applied revision), drift (`none` when there is none), how many sources and chunks quarantine holds (SP-028, counts only) and the live sessions in a conflict. orchd counts at most every 30 s and narrows the answer to the caller: Orch.app sees every space, the totals over every collection and the conflicts; anyone else, the CLI included, only its own space and public ones ([daemon.md](daemon.md#spaces-counts)) |
 | `check` | pass/fail preconditions: ONNX Runtime dylib, embedding model, `gh auth status`, orchd ping |
 | `config get\|set\|list` | settings ([config.md](config.md)) |
 | `daemon status\|start\|stop\|restart` | orchd via `brew services` or launchd |
@@ -18,11 +18,14 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | `rag sources [--type] [--scope] [--prefix] [--limit] [--since] [--until]` | list stored sources |
 | `rag forget <uri> --yes` | delete one source |
 | `rag eval [--set] [--top-k] [--save] [--compare] [--mode] [--ranking] [--per-source] [--section] [--split] [--inject-format] [--cases] [--json]`, `rag eval add <query> <uri>… [--span] [--section]`, `rag eval seed` | retrieval golden set, scoring and paired-bootstrap comparison ([memory.md](memory.md#retrieval-evaluation)) |
-| `rag why [prompt] [--cwd] [--json]` | the prompt from stdin when omitted or `-`; replay prompt context for a prompt: whether it would search, each candidate's score and verdict, the exact block; changes nothing ([hooks.md](hooks.md#prompt-context)) |
+| `rag why [prompt] [--cwd] [--json]` | the prompt from stdin when omitted or `-`; replay prompt context for a prompt: whether it would search, each candidate's score and verdict, the exact block, and (SP-031) the caller's space and the collections searched, as orchd decided them from the calling process (`--cwd` never changes them; `searched` in `--json`); changes nothing ([hooks.md](hooks.md#prompt-context)) |
 | `rag backfill-sessions [--all [--summaries]] [--apply]` | store undated sessions again, or with `--all` every transcript still on disk, without harness text, and with `--summaries` their summaries too ([memory.md](memory.md#transcripts-and-harness-text)) |
 | `rag dedupe [--apply]` | delete path-keyed copies identical to a synced doc of a registered source (*operator-only*) |
 | `rag reindex-keywords [--apply]` | rebuild keyword vectors for the current tokenizer, in place (*operator-only*) |
 | `rag relabel [--dry-run]` | place every chunk whose `labels_v` is not the applied spaces policy revision again, and stamp it or move it with its vectors to its space's collection; content that cannot be placed goes to quarantine. Resumable; `--dry-run` places and counts only. Prints counts per transition and space names, never a source (`Relabel`, *operator-only*, refused inside harness sessions too; [memory.md](memory.md#relabel)) |
+| `quarantine list` | the sources in [quarantine](memory.md#quarantine) with their chunk count, type and last store, then the totals (`ListQuarantine`, *operator-only*, refused inside harness sessions too) |
+| `quarantine assign <source_uri> <space> --confirm` | move a quarantined source to a space and keep it there on later refreshes: checks the source is in quarantine (`ListQuarantine`), then asks `RetagSource` for a retag with `expect_from` quarantine, which moves the chunks without re-embedding and records the override. orchd needs `--confirm` to move anything out of quarantine; without it nothing moves (*operator-only*) |
+| `quarantine purge [<source_uri>...\|--all] [--confirm]` | delete quarantined sources; without `--confirm` it only counts (orchd checks confirm). A named source not in quarantine refuses the whole purge, worded the same whether it is elsewhere or nowhere; nothing outside quarantine is deleted (`PurgeQuarantine`, *operator-only*) |
 | `rag migrate-hybrid [--target] [--apply] [--rollback] [--drop-backup]` | layout migration (*operator-only*) |
 | `rag backfill-sessions [--apply]` | date older sessions (*operator-only*) |
 | `source add\|list\|remove\|refresh [--confirm-prune]`, `repo add\|list` | cadence-refreshed sources; `--confirm-prune` lets the next refresh of one source prune past the cap (through orchd, operator-only) |

@@ -151,6 +151,10 @@ var operatorActions = map[string]string{
 	// Reason (SP-027): a relabel moves every space's content and its report
 	// names spaces; it is also refused to interactive harness sessions.
 	orchdv1.Orchd_Relabel_FullMethodName: "relabel the RAG store",
+	// Reason (SP-028): quarantine is readable by no session, and a purge
+	// deletes content; both are also refused to interactive harness sessions.
+	orchdv1.Orchd_ListQuarantine_FullMethodName:  "list quarantine",
+	orchdv1.Orchd_PurgeQuarantine_FullMethodName: "purge quarantine",
 	// Reason (SP-071): a retag moves a source between spaces and its answer
 	// says which spaces hold it; it is also refused to interactive harness
 	// sessions.
