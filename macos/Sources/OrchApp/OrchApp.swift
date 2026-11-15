@@ -61,12 +61,13 @@ final class AppModel {
     let spaces: SpacesOverviewModel
     let spacesActivity: SpacesActivityModel
     let spacesReview: SpacesReviewModel
+    let relabel: SpacesRelabelModel
     /// Keeps the sidebar's badges current between visits to their tabs.
     private(set) var badges: PeriodicRefresh?
 
     init() {
         let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & PRReviewAPI & PRLandingAPI & SystemAPI & CatalogAPI
-            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesOverviewAPI & SpacesReviewAPI & SpacesActivityAPI
+            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesOverviewAPI & SpacesReviewAPI & SpacesActivityAPI & SpacesRelabelAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -98,7 +99,12 @@ final class AppModel {
         config = ConfigModel(api: api, restartDaemon: { [control] in try await control.perform(.restart) })
         enforcement = EnforcementModel(api: api)
         placement = PlacementValidator(api: api)
-        spaces = SpacesOverviewModel(api: api)
+        // The Overview and the sidebar badge show a relabel the pane started (SP-079).
+        let relabel = SpacesRelabelModel(api: api)
+        let spaces = SpacesOverviewModel(api: api, relabel: { await relabel.progress })
+        relabel.onChange = { await spaces.load() }
+        self.relabel = relabel
+        self.spaces = spaces
         spacesActivity = SpacesActivityModel(api: api)
         spacesReview = SpacesReviewModel(api: api, authenticator: SystemAuthentication())
         docsOwners = DocsOwnersModel(api: api, knownOwners: { [api] in try await api.gitHubScopes(refresh: false).scopes.map(\.owner) })
@@ -282,6 +288,10 @@ extension UnreachableDaemon: SpacesReviewAPI, SpacesActivityAPI {
     func saveSpacesDraft(policyJSON: String) async throws -> SavedSpacesDraft { throw failure }
     func applySpaces(reviewedRevision: Int64, acceptAgentDraft: Bool, confirmGitHubOrgs: [String]) async throws -> Int64 { throw failure }
     func toolEvents(owner: String, afterSeq: Int64, limit: Int32) async throws -> ToolLogPage { throw failure }
+}
+
+extension UnreachableDaemon: SpacesRelabelAPI {
+    func relabel(apply: Bool) async throws -> RelabelRun { throw failure }
 }
 
 extension UnreachableDaemon: PRLandingAPI {
