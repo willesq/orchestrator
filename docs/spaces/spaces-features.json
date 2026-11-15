@@ -3038,6 +3038,74 @@
           "SP-041"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-800",
+        "kind": "follow-up",
+        "topic": "orch spaces explain is an alias of why; the matched pattern travels in the reason text",
+        "detail": "SP-076.1.a4 names 'orch spaces explain <path>'; the existing command is 'orch spaces why' (SP-022), so SP-076 adds 'explain' as an alias rather than a second command. PlacementExplanation has no field for the matched public_paths pattern and SP-076 may not change orchd.proto, so orchd appends it to the reason for the operator only (rule public_path), and the no_public_proof reason says no pattern matched. SpaceInfo (ListSpaces, the app) does not carry public_paths either. When the proto slot is free: add a public_path field to PlacementExplanation and public_paths to SpaceInfo, for SP-053's editor.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-053",
+          "SP-022"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-801",
+        "kind": "decision",
+        "topic": "RC-404 is live again: sessions can publish by writing into a listed folder, and wildcards let them create matching folders",
+        "detail": "Security audit of SP-076 (medium M2, design under D-65). A folder a public_paths pattern lists is trusted as written: any job's session can write files there and register it as a source, and the sources refresh places them in public; a listed folder with no .git needs no other proof. With '*' or '**' a session can also create a new folder the pattern matches (e.g. ~/code/new/docs under ~/code/*/docs). This is the risk the user accepted as RC-404 for declared folders, which said to review it when public_paths exists. Documented in docs/internals/config.md. Possible mitigations: require a GitHub repo verified public (and only git-tracked files) for wildcard matches; accept only operator-registered sources under public_paths; SP-046 sandbox rules denying job sessions writes to listed folders; warn in 'orch spaces diff' when a pattern holds '*' or '**'. Recommendation: keep as accepted risk now, and have SP-046 deny job-session writes to listed folders.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-046",
+          "SP-030"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-802",
+        "kind": "decision",
+        "topic": "'*' may sit inside a folder name (oss-*)",
+        "detail": "D-65 says '*' matches one folder name. SP-076 matches each '*'-holding folder name with Go's path.Match, so '~/code/*' and '~/code/oss-*' both work, and '*' never crosses a '/'. '?', '[...]', '{...}', '\\', '!' and '**' inside a longer name are refused. If only a whole-name '*' is wanted, the parser can refuse 'oss-*' in one line.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-803",
+        "kind": "follow-up",
+        "topic": "Limits of keeping a listed folder public while GitHub does not answer (RC-402 item 6)",
+        "detail": "SP-076 implements RC-402(6): a lookup that gets no answer (outage, throttle, spent 30/min budget) does not take a listed folder's stored public copy out, for 6 hours after GitHub last said the repo is public. Security audit M1: any caller can spend the shared budget (ExplainPlacement), so the grace is bounded rather than open-ended; within it a repo that went private keeps its earlier public copy. Limits: the grace is in memory, so after an orchd restart an unanswered repo leaves (fails closed, re-embeds later); a changed file written during an outage goes to quarantine and its public copy moves with it (SP-024's write path). Possible improvement: a lookup budget for the sweep and refresh that RPC callers cannot spend, or cache-only lookups for agent ExplainPlacement.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-030",
+          "SP-024"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-804",
+        "kind": "follow-up",
+        "topic": "Low findings of the SP-076 security audit",
+        "detail": "(1) Paths, roots and patterns compare by Go's strings.ToLower text, not as APFS compares names (Unicode NFC/NFD, full case folding): a source registered under another spelling of a private root's folder could miss that root and, under a '~/code/**' pattern, be placed public. The text comparison predates SP-076 but SP-076 makes it reachable; a fix needs Unicode normalization (golang.org/x/text, a new dependency) or an os.SameFile check against stricter roots. Not tested on disk. (2) An agent's ExplainPlacement answers only for public_path matches, so it can confirm a guessed folder name in a literal pattern even though the pattern is never shown; mitigations: refuse non-existent paths for agents, or rate-limit per caller. (3) Patterns are case-insensitive, so on a case-sensitive volume '~/code/oss' also matches a session-created '~/code/OSS'.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-020",
+          "SP-022"
+        ],
+        "status": "open"
       }
     ]
   },

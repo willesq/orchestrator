@@ -40,6 +40,8 @@ const (
 	RuleClaudeDirInGitTree    Rule = "claude_config_dir_in_git_tree"
 	RuleClaudeDirShared       Rule = "claude_config_dir_shared"
 	RulePublicRootSessions    Rule = "public_root_sessions"
+	RuleBadPublicPath         Rule = "bad_public_path"
+	RulePublicPathOutsideRoot Rule = "public_path_outside_root"
 	RuleTooLarge              Rule = "too_large"
 	RuleUnparseable           Rule = "unparseable"
 )
@@ -287,6 +289,7 @@ func Validate(p Policy, env Env) (*Resolved, error) {
 		}
 	}
 	checkRoots(roots, add)
+	publicPaths := checkPublicPaths(names, byName, roots, env.Home, add)
 
 	for _, n := range names {
 		s := byName[n]
@@ -306,7 +309,7 @@ func Validate(p Policy, env Env) (*Resolved, error) {
 		}
 	}
 
-	res := &Resolved{Policy: p, spaces: byName, roots: roots, ghDirs: ghDirs, claudeDirs: claudeDirs}
+	res := &Resolved{Policy: p, spaces: byName, roots: roots, publicPaths: publicPaths, ghDirs: ghDirs, claudeDirs: claudeDirs}
 	res.PublicRootSessions = publicRootSessions(p.PublicRootSessions, byName, names, add)
 	if len(ps) > 0 {
 		return nil, ps

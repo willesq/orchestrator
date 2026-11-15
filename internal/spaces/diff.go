@@ -80,6 +80,7 @@ func changedFields(x, y Space) fieldChanges {
 		{"github_orgs", x.GitHubOrgs, y.GitHubOrgs},
 		{"roots", x.Roots, y.Roots},
 		{"web_prefixes", x.WebPrefixes, y.WebPrefixes},
+		{"public_paths", x.PublicPaths, y.PublicPaths},
 		{"chat", x.Chat, y.Chat},
 		{"reads", x.Reads, y.Reads},
 	} {

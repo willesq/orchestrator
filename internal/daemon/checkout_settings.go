@@ -142,14 +142,14 @@ func (s *server) placeCheckout(ctx context.Context, checkout string) (string, bo
 	if err != nil {
 		return "", false, err
 	}
-	// Reason: content from a checkout under a public root the operator did
-	// not declare is quarantined (SP-030, D-64), but the folder's rules are
-	// still its root's, as before: the root decided. A repo GitHub did not
-	// confirm public kept the rules of a checkout with no space before, and
-	// still does.
+	// Reason: content from a checkout under a public root that no
+	// public_paths pattern lists is quarantined (SP-030, SP-076, D-65), but
+	// the folder's rules are still its root's, as before: the root decided.
+	// A repo GitHub did not confirm public kept the rules of a checkout with
+	// no space before, and still does.
 	if p.Rule == spaces.PlaceNoPublicProof && len(p.Roots) > 0 && (p.Remote == nil || p.Remote.Repo.Visibility == spaces.VisibilityPublic) {
 		return p.Roots[len(p.Roots)-1].Space, true, nil
 	}
-	byRoot := p.Rule == spaces.PlaceRoot || p.Rule == spaces.PlaceRootStricter || p.Rule == spaces.PlaceAgree
+	byRoot := p.Rule == spaces.PlaceRoot || p.Rule == spaces.PlaceRootStricter || p.Rule == spaces.PlaceAgree || p.Rule == spaces.PlacePublicPath
 	return p.Space, p.Outcome == spaces.Placed && byRoot, nil
 }

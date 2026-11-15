@@ -38,9 +38,16 @@ type writePlacer struct {
 
 // place is a rag.PlaceFunc.
 func (w *writePlacer) place(ctx context.Context, m *rag.Meta) error {
+	_, err := w.placeMeta(ctx, m)
+	return err
+}
+
+// placeMeta places m, setting its space and policy revision, and returns
+// the classifier's placement when a configured policy decided it.
+func (w *writePlacer) placeMeta(ctx context.Context, m *rag.Meta) (spaces.Placement, error) {
 	if w.spaces == nil {
 		m.Space = spaces.Shared
-		return nil
+		return spaces.Placement{}, nil
 	}
 	res, rev, err := w.spaces.CurrentRevision()
 	switch {
@@ -48,12 +55,12 @@ func (w *writePlacer) place(ctx context.Context, m *rag.Meta) error {
 		// Reason: with no policy that verifies, nothing can be placed, and
 		// unplaceable content is quarantined, never shared (INV-03).
 		m.Space = spaces.Quarantine
-		return nil
+		return spaces.Placement{}, nil
 	case err != nil:
-		return err
+		return spaces.Placement{}, err
 	case !res.Configured():
 		m.Space, m.LabelsV = spaces.Shared, rev
-		return nil
+		return spaces.Placement{}, nil
 	}
 	if m.Writer == rag.WriterFile {
 		// Reason: an agent picks which files are handed off, so placing
@@ -62,7 +69,7 @@ func (w *writePlacer) place(ctx context.Context, m *rag.Meta) error {
 	}
 	p, err := w.placement(ctx, res, m.Origin)
 	if err != nil {
-		return fmt.Errorf("place %s: %w", m.SourceURI, err)
+		return spaces.Placement{}, fmt.Errorf("place %s: %w", m.SourceURI, err)
 	}
 	if remoteSteered(m, p) {
 		// Reason: an agent can write a .git naming any org beside a file it
@@ -80,10 +87,10 @@ func (w *writePlacer) place(ctx context.Context, m *rag.Meta) error {
 		p = publicRootSessions(res)
 	}
 	if p.Outcome == spaces.Conflict {
-		return fmt.Errorf("%s: %w", m.SourceURI, errWriteConflict)
+		return p, fmt.Errorf("%s: %w", m.SourceURI, errWriteConflict)
 	}
 	m.Space, m.LabelsV = p.Space, rev
-	return nil
+	return p, nil
 }
 
 // remoteSteered reports whether p placed a local file by its checkout's
@@ -149,9 +156,8 @@ func (w *writePlacer) sessionPlacement(ctx context.Context, res *spaces.Resolved
 
 // mayWritePublic reports whether writer may place content in a public
 // space: only the docs sync and the sources refresh, which place by what
-// GitHub or a bound web prefix verifies (and, with SP-076, the policy's
-// public_paths). Session
-// records, summaries, hand-offs and client notes never do (SP-030.1.a4).
+// GitHub or a bound web prefix verifies and by the policy's public_paths
+// (SP-076). Session records, summaries, hand-offs and client notes never do (SP-030.1.a4).
 func mayWritePublic(writer string) bool {
 	return writer == rag.WriterDocs || writer == rag.WriterSources
 }
@@ -195,11 +201,24 @@ func (w *writePlacer) leavesPublic(ctx context.Context, stored string, m rag.Met
 	if s, ok := res.Space(stored); !ok || s.Kind != spaces.Public {
 		return false
 	}
-	if err := w.place(ctx, &m); err != nil {
+	p, err := w.placeMeta(ctx, &m)
+	if err != nil {
 		return true
 	}
-	s, ok := res.Space(m.Space)
-	return !ok || s.Kind != spaces.Public
+	if s, ok := res.Space(m.Space); ok && s.Kind == spaces.Public {
+		return false
+	}
+	return !awaitsGitHub(p)
+}
+
+// awaitsGitHub reports whether p keeps a folder public_paths list out of
+// public only because GitHub gave no answer about its repo (an outage, or a
+// spent lookup budget). Reason (RC-402): such a blip must not delete and
+// re-embed a listed folder's public copy; it leaves once GitHub answers
+// that the repo is private or refuses to show it.
+func awaitsGitHub(p spaces.Placement) bool {
+	return p.Rule == spaces.PlaceNotVerifiedPublic && p.PublicPath != "" &&
+		p.Remote != nil && p.Remote.Repo.Unchecked && p.Remote.Repo.Visibility == spaces.VisibilityUnknown
 }
 
 func quarantined(reason string) spaces.Placement {

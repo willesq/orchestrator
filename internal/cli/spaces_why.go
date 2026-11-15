@@ -15,10 +15,14 @@ import (
 
 func newSpacesWhyCmd(cf clientFactory) *cobra.Command {
 	return &cobra.Command{
-		Use:   "why <path|url|owner/repo|slack:<id>|teams:<id>>",
-		Short: "Show which space a target's content goes to, and why",
+		Use:     "why <path|url|owner/repo|slack:<id>|teams:<id>>",
+		Aliases: []string{"explain"},
+		Short:   "Show which space a target's content goes to, and why",
 		Long: `Shows every bound root holding the target from shallowest to deepest,
 what its GitHub remote contributes, the rule that decided, and the result.
+For local content under a public root, the rule says which public_paths
+pattern made it public (rule public_path), or that none matched
+(no_public_proof); a folder is explained for the files directly in it.
 A path starts with /, ~ or . (write ./dir for a folder here); anything else
 without a scheme is read as owner/repo. Inside an agent session orchd answers
 only when every space in the answer is public.`,

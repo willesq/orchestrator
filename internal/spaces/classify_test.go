@@ -336,7 +336,7 @@ func TestWebPrefixBoundaries(t *testing.T) {
 }
 
 // TestPublicRootNeedsProofForCheckouts is SP-030.1.a5 (D-50, D-65) in the
-// classifier: until public_paths exist (SP-076), no local content under a
+// classifier: with no public_paths listed (SP-076), no local content under a
 // public root is placed public, whatever the remote and however the roots
 // are nested, even with a public root bound exactly at the folder. A repo
 // GitHub does not report public is named for the root's lack of proof too.
