@@ -1,0 +1,14 @@
+{
+  "id": "SP-083",
+  "status": "in_progress",
+  "passes": false,
+  "verified_sha": null,
+  "verified_at": null,
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-083-dm-search",
+  "pr": null,
+  "evidence": {
+    "SP-083.1": []
+  }
+}
