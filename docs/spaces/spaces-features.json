@@ -7578,7 +7578,7 @@
       "attempts": 1,
       "criteria_sha256": "f0f14f5b8c199b7be636183df41b2454c6142a36acb8f5a54f2243b104299101",
       "branch": "feat/sp-060-chat-connectors",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/203"
     },
     {
       "id": "SP-061",
