@@ -9,8 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
+
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/rag"
+	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/session"
 	"github.com/willesq/orchestrator/internal/sources"
 	"github.com/willesq/orchestrator/internal/spaces"
@@ -159,4 +163,27 @@ func storedOrigin(ctx context.Context, repos *repoLookups, m rag.Meta) rag.Origi
 		return rag.Origin{System: rag.OriginClient}
 	}
 	return rag.Origin{}
+}
+
+// Relabel is the RPC: operator only, since the report names spaces and the
+// run moves every space's content. A run that fails part-way still reports
+// what it did.
+func (s *server) Relabel(ctx context.Context, req *orchdv1.RelabelRequest) (*orchdv1.RelabelResponse, error) {
+	if err := refuseNonOperator(ctx, orchdv1.Orchd_Relabel_FullMethodName, "relabel the RAG store"); err != nil {
+		return nil, err
+	}
+	rep, err := s.relabel(ctx, req.GetApply())
+	if err != nil && rep.Rev == 0 {
+		// Refused before anything was read.
+		return nil, grpcstatus.Error(codes.FailedPrecondition, err.Error())
+	}
+	resp := &orchdv1.RelabelResponse{Revision: rep.Rev, Total: int64(rep.Total), Stale: int64(rep.Stale),
+		Changed: int64(rep.Changed), Moved: int64(rep.Moved), Failed: int64(rep.Failed), Applied: rep.Applied}
+	for _, t := range rep.Transitions {
+		resp.Transitions = append(resp.Transitions, &orchdv1.RelabelTransition{From: t.From, To: t.To, Chunks: int64(t.Chunks)})
+	}
+	if err != nil {
+		resp.Error = err.Error()
+	}
+	return resp, nil
 }

@@ -57,6 +57,11 @@ service Orchd {
   // tokenizer made, from each chunk's stored text; counts unless apply.
   // Resumable: chunks already re-indexed are skipped.
   rpc ReindexKeywords(ReindexKeywordsRequest) returns (ReindexKeywordsResponse);
+  // Relabel (SP-027) places every chunk whose labels_v is not the applied
+  // spaces policy revision again and stamps it, or moves it with its vectors
+  // to its space's collection; counts unless apply. Resumable. Operator only:
+  // the report names spaces.
+  rpc Relabel(RelabelRequest) returns (RelabelResponse);
   // BackfillSessions stores sessions again from their transcripts on disk.
   rpc BackfillSessions(BackfillSessionsRequest) returns (BackfillSessionsResponse);
   // ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
@@ -648,6 +653,30 @@ message ReindexKeywordsResponse {
   int64 updated = 5; // chunks this run re-indexed
   bool applied = 6;
   string error = 7;  // why an applied run stopped early; what it did is still reported
+}
+
+message RelabelRequest {
+  bool apply = 1;
+}
+// RelabelTransition counts stale chunks by the space they were in
+// ("unplaced" for none) and the space they were placed in.
+message RelabelTransition {
+  string from = 1;
+  string to = 2;
+  int64 chunks = 3;
+}
+// RelabelResponse holds counts and space names only: never a source, its
+// text or a collection.
+message RelabelResponse {
+  int64 revision = 1; // the applied policy revision chunks were brought up to
+  int64 total = 2;    // chunks in every collection
+  int64 stale = 3;    // chunks not labelled by revision, before this run
+  int64 changed = 4;  // chunks stamped or moved (or, without apply, that would be)
+  int64 moved = 5;    // of those, chunks that changed collection
+  int64 failed = 6;   // stale chunks left stale, to be retried by the next run
+  repeated RelabelTransition transitions = 7;
+  bool applied = 8;
+  string error = 9;   // why an applied run stopped early; what it did is still reported
 }
 
 message ListPRsRequest {

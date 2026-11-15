@@ -267,6 +267,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "Relabel" metadata.
+        public enum Relabel: Sendable {
+            /// Request type for "Relabel".
+            public typealias Input = Orchd_V1_RelabelRequest
+            /// Response type for "Relabel".
+            public typealias Output = Orchd_V1_RelabelResponse
+            /// Descriptor for "Relabel".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "Relabel",
+                type: .unary
+            )
+        }
         /// Namespace for "BackfillSessions" metadata.
         public enum BackfillSessions: Sendable {
             /// Request type for "BackfillSessions".
@@ -1094,6 +1107,7 @@ public enum Orchd_V1_Orchd: Sendable {
             MigrateHybrid.descriptor,
             DropBackup.descriptor,
             ReindexKeywords.descriptor,
+            Relabel.descriptor,
             BackfillSessions.descriptor,
             ListPRs.descriptor,
             GetGitHubIdentity.descriptor,
@@ -1627,6 +1641,32 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ReindexKeywordsResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ReindexKeywordsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "Relabel" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Relabel (SP-027) places every chunk whose labels_v is not the applied
+        /// > spaces policy revision again and stamps it, or moves it with its vectors
+        /// > to its space's collection; counts unless apply. Resumable. Operator only:
+        /// > the report names spaces.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RelabelRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RelabelRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RelabelResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func relabel<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RelabelRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RelabelRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RelabelResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RelabelResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "BackfillSessions" method.
@@ -3821,6 +3861,43 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.ReindexKeywords.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "Relabel" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Relabel (SP-027) places every chunk whose labels_v is not the applied
+        /// > spaces policy revision again and stamps it, or moves it with its vectors
+        /// > to its space's collection; counts unless apply. Resumable. Operator only:
+        /// > the report names spaces.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RelabelRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RelabelRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RelabelResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func relabel<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RelabelRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RelabelRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RelabelResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RelabelResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.Relabel.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -6597,6 +6674,38 @@ extension Orchd_V1_Orchd.ClientProtocol {
         )
     }
 
+    /// Call the "Relabel" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Relabel (SP-027) places every chunk whose labels_v is not the applied
+    /// > spaces policy revision again and stamps it, or moves it with its vectors
+    /// > to its space's collection; counts unless apply. Resumable. Operator only:
+    /// > the report names spaces.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RelabelRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func relabel<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RelabelRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RelabelResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.relabel(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RelabelRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RelabelResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "BackfillSessions" method.
     ///
     /// > Source IDL Documentation:
@@ -9125,6 +9234,42 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.reindexKeywords(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "Relabel" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Relabel (SP-027) places every chunk whose labels_v is not the applied
+    /// > spaces policy revision again and stamps it, or moves it with its vectors
+    /// > to its space's collection; counts unless apply. Resumable. Operator only:
+    /// > the report names spaces.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func relabel<Result>(
+        _ message: Orchd_V1_RelabelRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RelabelResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RelabelRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.relabel(
             request: request,
             options: options,
             onResponse: handleResponse

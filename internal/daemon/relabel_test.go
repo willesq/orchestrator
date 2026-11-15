@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
+
 	"github.com/willesq/orchestrator/internal/paths"
 	"github.com/willesq/orchestrator/internal/procstat"
 	"github.com/willesq/orchestrator/internal/rag"
@@ -233,5 +236,43 @@ func TestStoredOriginClaudeConfig(t *testing.T) {
 	}
 	if o := storedOrigin(context.Background(), nil, rag.Meta{SourceURI: "session://x", Writer: rag.WriterSession}); o.System != "" {
 		t.Fatalf("a session URI with no kind got origin %+v", o)
+	}
+}
+
+// TestRelabelRPC: the Relabel RPC answers the operator with counts and space
+// names, refuses sessions and queued tasks (the report names spaces), and
+// reports a refused run as FailedPrecondition.
+func TestRelabelRPC(t *testing.T) {
+	e, s := relabelEnv(t)
+	e.q.seedBase("repo://acme/app/README.md", rag.WriterDocs, nil)
+	for name, ctx := range map[string]context.Context{
+		"session": sessionCtx(context.Background(), sessionPin{SessionID: "s-p", Space: "acme", Revision: e.rev}),
+		"task":    taskCtx("t-1"),
+	} {
+		if _, err := s.Relabel(ctx, &orchdv1.RelabelRequest{}); grpcstatus.Code(err) != codes.PermissionDenied {
+			t.Fatalf("%s caller: %v", name, err)
+		}
+	}
+	dry, err := s.Relabel(operatorCtx, &orchdv1.RelabelRequest{})
+	if err != nil || dry.GetApplied() || dry.GetChanged() != 1 || dry.GetRevision() != e.rev || dry.GetError() != "" {
+		t.Fatalf("dry run = %v, %v", dry, err)
+	}
+	if tr := dry.GetTransitions(); len(tr) != 1 || tr[0].GetFrom() != rag.Unplaced || tr[0].GetTo() != "acme" || tr[0].GetChunks() != 1 {
+		t.Fatalf("transitions = %v", tr)
+	}
+	done, err := s.Relabel(operatorCtx, &orchdv1.RelabelRequest{Apply: true})
+	if err != nil || !done.GetApplied() || done.GetMoved() != 1 || len(e.q.storedIn("c__acme", "repo://acme/app/README.md")) != 1 {
+		t.Fatalf("apply = %v, %v", done, err)
+	}
+	// A store that fails mid-run still reports, with a generic error.
+	e.q.seedBase("repo://acme/app/OTHER.md", rag.WriterDocs, nil)
+	failing := &server{spaces: s.spaces, pins: s.pins, repos: s.repos,
+		migrator: rag.NewService(unitEmbedder{}, rag.NewQdrantStore("http://127.0.0.1:1", "c", ""), 200, 0)}
+	resp, err := failing.Relabel(operatorCtx, &orchdv1.RelabelRequest{Apply: true})
+	if err != nil || resp.GetError() == "" || strings.Contains(resp.GetError(), "127.0.0.1") {
+		t.Fatalf("failing store = %v, %v", resp, err)
+	}
+	if _, err := (&server{}).Relabel(operatorCtx, &orchdv1.RelabelRequest{}); grpcstatus.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("unavailable: %v", err)
 	}
 }

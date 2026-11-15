@@ -777,8 +777,11 @@ hand-offs began resolving links, and SP-023) is placed by the path it was edited
 that can write there could replace a link with a regular file before the relabel, so content read
 through the link is placed by the link's folder. It needs write access at that path and timing.
 
-**Not done yet.** No RPC or command runs the relabel yet: `orch rag relabel [--dry-run]` needs an
-RPC in `orchd.proto` (see the plan's SP-027). Reads do not filter on `labels_v` yet (SP-025): a
+**Running it.** `orch rag relabel [--dry-run]` calls the `Relabel` RPC, which only the operator
+may call (refused to queued tasks and harness sessions, since the report names spaces). A run
+that stops part-way still reports what it did, with a generic error.
+
+**Not done yet.** Reads do not filter on `labels_v` yet (SP-025): a
 stale chunk left in its own space's collection by a revision change is readable there until
 relabelled; one stored in the base or another space's collection is not read by a search of the
 spaces it belongs to. A relabelled source's write hash still names its old placement, so its next
