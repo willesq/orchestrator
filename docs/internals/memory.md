@@ -1131,8 +1131,9 @@ may call it on the same terms.
 ## Chat feeds
 
 `internal/feeds` is the chat connector framework (SP-060, D-07). The Slack connector is
-`internal/feeds/slack` (SP-061, [below](#slack-connector)); Teams is SP-062. Nothing runs a
-connector on a schedule yet, so no chat content is stored until that lands.
+`internal/feeds/slack` (SP-061, [below](#slack-connector)); the Teams connector is
+`internal/feeds/teams` (SP-062, [below](#teams-connector)). Nothing runs a connector on a schedule
+yet, so no chat content is stored until orchd does.
 
 - **Facts only.** A `feeds.Connector` reports each conversation (a thread, a container's messages
   outside threads, or a meeting's chat) as a `feeds.Record`: system (`slack` or `teams`), tenant,
@@ -1179,9 +1180,73 @@ connector on a schedule yet, so no chat content is stored until that lands.
   per-space gh profiles ([daemon.md](daemon.md)): the user logs a connector's own client in to a
   profile directory themselves, orchd checks only that the directory is the user's alone, and
   passes the connector process that directory's path. The token stays inside the connector
-  process and its profile (the Slack connector implements this; Teams is SP-062).
-- **Not yet.** Retention per space and kind, and running connectors on a schedule, are not
-  implemented.
+  process and its profile (the Slack and Teams connectors implement this).
+- **Not yet.** Retention per space and kind, running connectors on a schedule, and the
+  settings naming each connector's profile directory and state file are not implemented.
+
+### Teams connector
+
+`teams.Connector` (SP-062) reads Microsoft Teams through Microsoft Graph v1.0 for `feeds.Sync`.
+
+- **What it reads.** The signed-in user's chats (`GET /me/chats`: `oneOnOne` is `dm`, `group`
+  is `group_dm`, `meeting` is `meeting`; other chat types are not read) and the channels of the
+  teams they belong to (`GET /me/joinedTeams`, `GET /teams/{id}/channels`). A standard channel
+  of a team Graph reports `public` is `public_channel`; every other channel, private and shared
+  ones included, is `private_channel`. Messages are read only from conversations the allowlist
+  allows: the connector is given the same `feeds.Allowlist` as `Sync` and lists the others by ID
+  and kind alone. With no Teams tenant on the allowlist it makes no Graph request at all.
+- **Own tenant only.** The connector is given the tenant its login belongs to
+  (`teams.AzRest.Status`) and refuses to run without one (`ErrNoTenant`). A chat or team
+  hosted in another tenant, such as a guest's or a federated chat, carries that tenant's ID,
+  and the tenant decides the space, so it is not read: whoever created such a chat cannot send
+  this login's content into the space that binds their tenant (`TestOtherTenantsNotRead`).
+  A meeting started from a one-to-one chat is a `meeting` chat, not a DM; it is stored only
+  when the operator lists its ID.
+- **Conversations and URIs.** A channel thread (root message and replies) is one record, its
+  thread the root message's ID: `teams://<tenant>/<channel>/<root id>`. Chats have no threads,
+  so each UTC day of a chat is one record: `teams://<tenant>/<chat>/2026-11-15`. A record's
+  text is its messages in order, `[2026-11-15 09:00 UTC] <name>: <text>`, with Teams' HTML
+  reduced to text (text a message hides with markup is kept, as chat is untrusted anyway);
+  system events, deleted messages and empty bodies are left out, a name's line breaks become
+  spaces and a message's later lines are indented, so no line can pose as another person's
+  message, and the participants are the senders' user IDs. A thread or day that grows or has a message edited
+  is emitted again whole under the same URI, which replaces it in the store.
+- **Watermarks and dedupe.** The connector's state file (`teams.OpenState`, written whole with
+  mode 0600) keeps, per container, the newest change stored, and per URI a hash of the text and
+  participants stored. A chat is read with Graph's `lastModifiedDateTime gt` filter from a
+  millisecond before its watermark (Graph keeps milliseconds), setting aside the messages it
+  already had at that millisecond; then the changed days are read whole from the start of the
+  earliest one, since a message is never modified before it is created. Graph has no such
+  filter for channels, so a channel's root messages are listed with their replies
+  (`$expand=replies`, and a thread's `/replies` listing when Graph left some out), and threads
+  whose latest activity is before the watermark are skipped. A record whose hash is unchanged
+  is not emitted. The watermark advances and the state is saved only after every record of
+  the container was emitted without error; a failed write stops the run. A Graph error on one
+  container does not stop the others and is returned at the end. A container taken off the
+  allowlist is no longer read and its watermark and hashes are forgotten, so allowing it again
+  reads it from the start.
+- **Graph and credentials.** Requests go through a `teams.Graph`. The production one,
+  `teams.AzRest`, runs `az rest --method get --url <url>` with `AZURE_CONFIG_DIR` set to the
+  connector's profile directory, which the user logs in themselves
+  (`AZURE_CONFIG_DIR=<dir> az login`); the Graph token stays inside az. orch checks a profile
+  only with `az account show` (tenant and account name). It never asks az for a token, never
+  reads files in the profile (`TestNoCodeReadsAzureCredentials`), and never keeps or shows az's
+  error output, which could hold anything; an error says only whether the login is missing or
+  az's exit status. An answer over 64 MiB stops az and fails the request. Only URLs under `https://graph.microsoft.com/v1.0/` are requested, and a
+  next link pointing anywhere else ends the listing, so the login is never sent elsewhere. IDs
+  from Graph that are not stable IDs are not put in a URL or a record.
+- **Spaces.** The connector reports facts only, so placement is as for every chat write: with
+  memory spaces on, the tenant's binding (`teams:<tenant id>`) decides the space; with them off,
+  everything goes to the one store (`TestTeamsConnectorPlacedByTenant`).
+- **Tests.** `internal/feeds/teams` tests against a fake Graph API serving a made-up tenant in
+  Graph's wire format (`testdata/graph.json`), with paging, the chat filter and partial reply
+  expansion: first sync, incremental sync from the watermark, thread growth replacing the same
+  URI, and a channel taken off the allowlist (`TestFirstSync`,
+  `TestIncrementalSyncFromWatermark`, `TestThreadGrowthReplacesURI`,
+  `TestRemovedFromAllowlistStopsSyncing`), and a sync through a stand-in `az` that prints its
+  token when it fails, which leaves no token in errors, logs, stored content or state
+  (`TestNoTokenInLogsErrorsOrContent`). How Graph behaves for a real tenant (the chat filter,
+  reply expansion, whether az's Graph login may read chats) has not been checked against one.
 
 ### Slack connector
 

@@ -1,0 +1,12 @@
+{
+  "id": "RC-1702",
+  "kind": "follow-up",
+  "topic": "Teams channel sync reads every root message each run",
+  "detail": "Graph has no lastModifiedDateTime filter on a channel's message listing, so each run lists every root message of each allowed channel with its replies, and skips unchanged threads by their latest activity and content hash. That is correct but costs one listing of the whole channel per run. Once RC-1700 confirms Graph's behaviour, consider the channel messages delta query (GET /teams/{id}/channels/{id}/messages/delta with its deltaLink as the watermark) to read only changes. The security review also notes that each listing is held in memory whole (up to 2,000 pages); a cap on the items read per container per run would bound it.",
+  "source": "https://github.com/willesq/orchestrator/pull/211",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-062"
+  ],
+  "status": "open"
+}

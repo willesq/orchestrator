@@ -1,0 +1,13 @@
+{
+  "id": "RC-1703",
+  "kind": "follow-up",
+  "topic": "Chat content deleted in Teams stays stored",
+  "detail": "A Teams message deleted or edited is reflected the next time its thread or chat day is emitted, since the whole conversation replaces its URI. But a conversation whose messages were all deleted emits nothing, so its stored record stays; and a channel or chat taken off the allowlist keeps what was stored before (the connector only forgets its watermark). The framework has no delete for chat sources; consider one in feeds (a connector reporting a conversation gone) together with retention (RC-1451). The PR security review rated this low: deleted text stays searchable until then.",
+  "source": "https://github.com/willesq/orchestrator/pull/211",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-062",
+    "SP-060"
+  ],
+  "status": "open"
+}
