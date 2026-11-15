@@ -26,6 +26,9 @@ func TestMain(m *testing.M) {
 	}
 	_ = os.Setenv("ORCH_DATA_DIR", filepath.Join(dir, "data"))
 	_ = os.Setenv("ORCH_CONFIG_DIR", filepath.Join(dir, "config"))
+	// Reason: these tests exercise the hooks with memory spaces on; the
+	// ones with spaces off (spaces_off_test.go) set it themselves.
+	spacesOff = func() bool { return false }
 	code := m.Run()
 	_ = os.RemoveAll(dir)
 	os.Exit(code)

@@ -121,6 +121,9 @@ func ResetStore(ctx context.Context, db *sql.DB, keys []string, confirmSensitive
 		if !ok {
 			return fmt.Errorf("unknown setting %q", key)
 		}
+		if f.KeepDefault {
+			return fmt.Errorf("%s has no default to reset to; %s", key, keepDefaultHint(key))
+		}
 		val, err := canonicalValue(defaults, f)
 		if err != nil {
 			return err
@@ -172,7 +175,7 @@ func storeValues(ctx context.Context, tx *sql.Tx, values map[string]any, by stri
 		if err != nil {
 			return err
 		}
-		if enc == defEnc {
+		if enc == defEnc && !f.KeepDefault {
 			if _, err := tx.ExecContext(ctx, `DELETE FROM config_values WHERE key = ?`, key); err != nil {
 				return err
 			}
@@ -226,4 +229,12 @@ func canonicalValue(v *viper.Viper, f Field) (any, error) {
 		return nil, fmt.Errorf("%s: %w", f.Key, err)
 	}
 	return ParseJSON(f, string(b))
+}
+
+// keepDefaultHint says how a KeepDefault setting is changed instead.
+func keepDefaultHint(key string) string {
+	if key == KeySpacesEnabled {
+		return "turn memory spaces on or off with 'orch spaces on|off' or in Orch.app"
+	}
+	return "change it in Orch.app"
 }

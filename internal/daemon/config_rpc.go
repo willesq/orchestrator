@@ -34,6 +34,9 @@ type configService struct {
 	legacyFile string
 	// mu keeps two writes from interleaving their read and write.
 	mu sync.Mutex
+	// spaces applies the memory spaces switch; nil while orchd serves only
+	// settings, which then cannot switch spaces.
+	spaces *spacesSwitch
 }
 
 func newConfigService(db *sql.DB, start map[string]string) *configService {
@@ -69,6 +72,9 @@ func (c *configService) set(ctx context.Context, req *orchdv1.SetConfigRequest) 
 			return nil, grpcstatus.Error(codes.InvalidArgument, err.Error())
 		}
 		values[key] = val
+	}
+	if _, ok := values[config.KeySpacesEnabled]; ok {
+		return c.setSpacesSwitch(ctx, values, req.GetConfirmSensitive())
 	}
 	if err := config.ApplyStore(ctx, c.db, values, req.GetConfirmSensitive(), "app"); err != nil {
 		code := codes.InvalidArgument

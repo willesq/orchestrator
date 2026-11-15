@@ -155,6 +155,9 @@ type server struct {
 	config *configService
 	// spaces holds the enforced spaces policy; nil when unavailable.
 	spaces *spaces.Engine
+	// spacesSwitch applies the memory spaces switch (spaces.enabled) and
+	// runs its store moves; nil when unavailable.
+	spacesSwitch *spacesSwitch
 	// pins records each session's pin; nil when unavailable.
 	pins *pinRegistry
 	// files records the files sessions write outside every root (SP-029);
@@ -672,6 +675,10 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	ghp.spaces = sp
+	// Reason: set before any reader starts, so off (the default) nothing
+	// is enforced from the first call, as before spaces.
+	spacesOn := spacesSwitchAtStart(ctx, store)
+	sp.SetOff(!spacesOn)
 	// Reason: only the load result is logged here. Status would validate the
 	// newest draft, which anyone may save, and must not hold up startup.
 	if _, err := sp.Current(); err != nil {
@@ -703,6 +710,9 @@ func Run(ctx context.Context) error {
 	files := newSessionFiles(store)
 	placer := &writePlacer{spaces: sp, pins: pins, repos: repos, files: files}
 	svc.Place = placer.place
+	spacesSw := newSpacesSwitch(sp, svc, defaultMoveMarker(paths.DataDir()))
+	spacesSw.prepare(spacesOn)
+	cfg.spaces = spacesSw
 
 	// Durable workflow engine: the worker unit drains AgentTask instances; the
 	// dispatcher (used by the RPC handler, not a subsystem) enqueues them.
@@ -807,7 +817,7 @@ func Run(ctx context.Context) error {
 		tlog.taskStatus = tasks.Status
 	}
 	unlocks := newUnlockRegistry()
-	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf, needsEvidence: policyApplied(sp), unlocks: unlocks})
+	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf, needsEvidence: policyApplied(sp), unlocks: unlocks}, spacesOffGate(spacesSw))
 	srv = &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks, ctl: ctl, live: live, home: userHome(), hub: hub,
 		stopping:      runCtx.Done(),
@@ -829,6 +839,7 @@ func Run(ctx context.Context) error {
 		docsRefresh:  refreshSecs(s.Docs.DefaultRefresh),
 		config:       cfg,
 		spaces:       sp,
+		spacesSwitch: spacesSw,
 		pins:         pins,
 		files:        files,
 		repos:        repos,
@@ -846,6 +857,11 @@ func Run(ctx context.Context) error {
 		guard:        guardFiles,
 		unlocks:      unlocks,
 	}
+	spacesSw.applied = func() {
+		srv.writeGuardSnapshot()
+		srv.checkouts.nudge()
+	}
+	spacesSw.enforce = srv.relabelAfterSplit
 	srv.startGuardFiles(runCtx)
 	if tlog != nil {
 		srv.toolEvents.setSink(srv.logToolEvent)
@@ -862,6 +878,7 @@ func Run(ctx context.Context) error {
 	go srv.runCheckoutSettings(runCtx, checkoutSettingsEvery)
 	go srv.runTaskAnchors(runCtx)
 	go srv.resumeRetags(runCtx, resumeRetagsDelay)
+	spacesSw.start(runCtx)
 	orchdv1.RegisterOrchdServer(gs, srv)
 	go func() {
 		<-runCtx.Done()

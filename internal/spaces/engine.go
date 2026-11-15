@@ -22,6 +22,10 @@ const (
 // longer verifies. Callers that enforce must fail closed.
 var ErrBroken = errors.New("the applied spaces policy does not verify")
 
+// ErrSpacesOff refuses what only makes sense while memory spaces are on
+// (the spaces.enabled switch): applying a policy, say.
+var ErrSpacesOff = errors.New("memory spaces are off; turn them on first ('orch spaces on', or Settings > Spaces in Orch.app)")
+
 // Status is the spaces line of orch status. Error never names a space, root
 // or org: Status is open to every caller.
 type Status struct {
@@ -32,6 +36,10 @@ type Status struct {
 	DraftRevision int64
 	Drift         []string
 	Error         string
+	// Off is set while memory spaces are switched off: nothing is
+	// enforced, and AppliedRevision is the revision kept for when they are
+	// turned on again.
+	Off bool
 }
 
 // Engine holds the policy orchd enforces. Only Apply changes it; anything
@@ -43,6 +51,10 @@ type Engine struct {
 
 	mu      sync.RWMutex
 	applied *Applied
+	// off is set while memory spaces are switched off (spaces.enabled):
+	// the engine then enforces nothing, as with no policy (INV-10), and
+	// keeps the applied revision for when they are turned on.
+	off bool
 	// broken says why the newest apply did not verify at startup; empty
 	// when it did or nothing was applied.
 	broken string
@@ -69,12 +81,41 @@ func Open(ctx context.Context, db *sql.DB, env Env) (*Engine, error) {
 	return e, nil
 }
 
+// SetOff switches memory spaces off or on. Off, the engine reports no
+// policy to every reader, so orchd behaves as it did before spaces; the
+// applied revision is kept and enforced again once they are on.
+func (e *Engine) SetOff(off bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.off = off
+}
+
+// PolicyKept reports whether a policy with spaces is applied, or the newest
+// apply does not verify, whether or not spaces are switched off. Reason
+// (D-71): once a policy exists only Orch.app is the operator, also while
+// spaces are off, so an agent cannot keep them from being turned on again.
+func (e *Engine) PolicyKept() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.broken != "" || (e.applied != nil && e.applied.Resolved.Configured())
+}
+
+// Off reports whether memory spaces are switched off.
+func (e *Engine) Off() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.off
+}
+
 // Current returns the enforced policy: nil for none (the implicit Shared
-// space), or ErrBroken when the newest apply did not verify.
+// space, and whenever spaces are off), or ErrBroken when the newest apply
+// did not verify.
 func (e *Engine) Current() (*Resolved, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	switch {
+	case e.off:
+		return nil, nil
 	case e.broken != "":
 		return nil, ErrBroken
 	case e.applied == nil:
@@ -89,6 +130,8 @@ func (e *Engine) CurrentRevision() (*Resolved, int64, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	switch {
+	case e.off:
+		return nil, 0, nil
 	case e.broken != "":
 		return nil, 0, ErrBroken
 	case e.applied == nil:
@@ -113,12 +156,18 @@ func (e *Engine) SaveDraft(ctx context.Context, p Policy, by string, byOperator 
 // GitHub orgs whose changed identity the operator accepts. Every bound org is
 // looked up on GitHub first. On any error the enforced policy is unchanged.
 func (e *Engine) Apply(ctx context.Context, reviewed int64, by string, acceptAgentDraft bool, confirmOrgs []string) (Revision, error) {
+	if e.Off() {
+		return Revision{}, ErrSpacesOff
+	}
 	ids, err := e.resolveOrgs(ctx, reviewed, acceptAgentDraft)
 	if err != nil {
 		return Revision{}, err
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if e.off {
+		return Revision{}, ErrSpacesOff
+	}
 	a, err := Apply(ctx, e.db, reviewed, by, acceptAgentDraft, e.now(), e.env, ids, confirmOrgs)
 	if err != nil {
 		return Revision{}, err
@@ -174,12 +223,14 @@ func (e *Engine) Diff(ctx context.Context) (Diff, error) {
 // Status reports the applied and pending revisions and any drift.
 func (e *Engine) Status(ctx context.Context) (Status, error) {
 	e.mu.RLock()
-	applied, broken := e.applied, e.broken
+	applied, broken, off := e.applied, e.broken, e.off
 	e.mu.RUnlock()
-	st := Status{Error: broken}
+	st := Status{Error: broken, Off: off}
 	if applied != nil {
 		st.AppliedRevision = applied.Revision.Number
-		st.Configured = applied.Resolved.Configured()
+		// Reason: off, nothing is enforced, so no space is configured for
+		// any reader; the revision is still shown, as kept.
+		st.Configured = applied.Resolved.Configured() && !off
 	}
 	unconfirmed, err := e.UnconfirmedOrgs(ctx)
 	if err != nil {

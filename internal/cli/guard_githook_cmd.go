@@ -52,6 +52,11 @@ func newGitHookCmd() *cobra.Command {
 			if installHooks == uninstall {
 				return errors.New("use exactly one of --install or --uninstall")
 			}
+			// Reason: removing hooks stays possible with spaces off; adding
+			// them would check commits for terms nothing else enforces.
+			if installHooks && cliSpacesOff() {
+				return errCLISpacesOff
+			}
 			dir, err := gitHooksDir(c.Context(), repo, hooksDir)
 			if err != nil {
 				return err
@@ -132,6 +137,11 @@ func newGitHookRunCmd() *cobra.Command {
 		Short: "Run the outbound terms check as a git hook (what the installed hooks call)",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
+			// With spaces off, hooks installed earlier let everything
+			// through, as git did before them.
+			if cliSpacesOff() {
+				return nil
+			}
 			in, err := gitHookInput(c, args)
 			if err != nil {
 				return err

@@ -382,11 +382,21 @@ func subsystemSection(d Deps, resp *orchdv1.StatusResponse, err error) Section {
 func spacesSection(resp *orchdv1.StatusResponse, err error) (sec Section, ok bool) {
 	sec = Section{Title: "spaces"}
 	sp := resp.GetSpaces()
+	if err == nil && sp.GetState() == spacesOff {
+		return spacesOffSection(sp)
+	}
 	if err != nil || sp == nil ||
 		(sp.GetAppliedRevision() == 0 && sp.GetDraftRevision() == 0 && len(sp.GetDrift()) == 0 && sp.GetError() == "" &&
 			len(sp.GetRelaxed()) == 0 && sp.GetEnforcementError() == "" && sp.GetSandbox().GetSetAt() == 0 &&
 			sp.GetSandbox().GetProblem() == "") {
 		return sec, false
+	}
+	if sp.GetState() == spacesTurningOn {
+		sec.Lines = append(sec.Lines, Line{Name: "switch", Value: "turning on", Level: LevelWarn,
+			Detail: "nothing is enforced until memory is moved back into its spaces"})
+	}
+	if l, ok := storeMoveLine(sp.GetStoreMove()); ok {
+		sec.Lines = append(sec.Lines, l)
 	}
 	policy := Line{Name: "policy", Value: "none applied", Level: LevelOK, Detail: "one shared space, as before spaces"}
 	if n := sp.GetAppliedRevision(); n > 0 {
