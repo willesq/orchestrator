@@ -175,6 +175,74 @@ orgs). All four are operator-only in orchd, so the pane works in an app the user
   (`screenShareSafeModeHoldsNothingOfAnotherSpace`). `SpacesPaneSnapshots` renders the pane at both
   widths in light and dark (see [Snapshots](#snapshots)).
 
+### Spaces pane: basic setup (SP-052)
+
+**Set Up Spaces…** (the empty pane) or **Run Setup…** (the header, once a policy is applied)
+opens a sheet with five steps (`SpacesSetupView`, `SpacesSetupModel`, `SpacesSetupPlanner`). It is
+never offered in screen-share-safe mode, since it lists every space. The model comes from
+`SpacesOverviewModel.makeSetup()`, on the pane's own source: `SpacesOverviewAPI` inherits
+`SpacesSetupAPI`, whose calls default to "setup needs orchd" for a source without them.
+
+- **Before Apply nothing enforced changes.** Opening setup reads `DiffSpaces` (the applied
+  document), the logins, `GetEnforcement` and the command log retention, then runs `ScanSpaces`
+  on the usual checkout folders under home that exist (`~/code`, `~/work`, `~/src`,
+  `~/Developer`, …; **Add Folder…** and **Scan Again** change them). The scan writes nothing. The
+  only write before Apply is the draft revision Review saves, which enforces nothing.
+- **Scan:** checkouts found (and how many have no GitHub remote), each gh login's orgs, and the
+  visibility per owner. Chat has no connector yet.
+- **Spaces:** one group per GitHub owner with a believed remote, with a plain-language kind:
+  **Job: keep separate** (isolated), **Personal** (private), **Open** (public) or **Leave out**.
+  The proposal: an owner already bound in the applied policy keeps its space and is locked (change
+  it in the advanced editor); the user's own login is Personal; an owner with more public than
+  other repos is Open; anything else is a Job, the strictest. Each Job becomes its own space named
+  after the org; every Personal owner joins one private space (the applied one if there is one,
+  else `personal`) and every Open owner one public space (else `public`). An Open owner's repos
+  GitHub does not report public are listed as going to quarantine (`not_verified_public`).
+- **Folders:** a Job or Personal group gets a root at the deepest folder holding all its
+  checkouts, if that folder is below home and would not claim another job's checkout (a conflict)
+  or an Open owner's private repo (which must stay in quarantine); a Job's root also never holds
+  a Personal or left-out owner's checkouts, only public forks and checkouts without a GitHub
+  remote. A truncated scan proposes no roots. Open spaces get no root (D-65):
+  local folders reach public only through an explicit `public_paths` list (SP-076, not on main
+  yet), so setup never writes one. Roots are then checked against each other and the applied ones
+  with the stricter-only rule (INV-14), shallow first; a root that breaks it is shown as "Not
+  bound" with the reason. The tree shows every root, applied ones marked.
+- **gh profiles:** each new Job gets `gh_config_dir` `~/.config/gh-<space>`, editable. Its login
+  shows from `ListSpaces`' logins or the scan's accounts when orchd already checks that profile;
+  a profile no applied space names yet shows "checked once applied" and the `GH_CONFIG_DIR=… gh
+  auth login` command. orch never handles the token.
+- **Recall:** the safe defaults per content kind, for reading only: the policy has no per-kind
+  rules until the chat connectors (SP-060).
+- **Guard:** on a first setup each enforcement switch starts at its default (on; the guard at
+  Block other jobs), or its current state if that is stricter; a rerun starts at the current state, so a layer switched off is not turned
+  back on unasked. The command log retention (3, 7 or 30 days after a session ends) starts at its
+  current value.
+- **Review:** setup saves its policy as a draft, then reads `DiffSpaces`: orchd's problems block
+  Apply, and so does a newer draft saved meanwhile (Apply names the revision reviewed). Effect
+  counts: spaces created or extended, orgs and roots bound, checkouts per space and to quarantine
+  (an estimate mirroring `placeCheckout`; orchd decides once applied), conflicts, checkouts a
+  folder alone places, switch and retention changes, and job logins. Review stops if the applied
+  revision changed since setup opened, or if setup cannot read the applied document (it never
+  replaces one with a smaller policy). Chunk counts per space are not shown (RC-501).
+- **Apply** fixes what it sends and locks the sheet, then asks for Touch ID or the login password
+  (`DeviceOwner.confirm`, LocalAuthentication),
+  a speed bump; orchd's operator check is the real gate (INV-06; under a policy only Orch.app is
+  the operator, D-71). It applies the reviewed draft, then sets each changed switch (untimed),
+  then the retention (`SetConfig`, confirmed as sensitive; it takes effect when orchd restarts). If
+  the policy is refused nothing else changes; a later failure is listed on the closing screen.
+- **Cancel** at any step applies nothing. If Review saved a draft over an applied policy with no
+  other draft pending, and setup's draft is still the newest and the applied revision unchanged,
+  setup saves the applied document again so no drift is left; otherwise the pane says the draft
+  stays saved, unapplied.
+- **Rerun** starts from the applied document, kept whole (fields setup does not know, such as web
+  prefixes, chat tenants and `public_paths`, survive), and only adds: new spaces, and orgs and
+  roots on existing ones.
+- **Tests:** `SpacesSetupPlanTests` (the fixture machine's four spaces and quarantine, roots and
+  nesting, reruns, names, the placement estimate), `SpacesSetupModelTests` (cancelling at each
+  step, the click count, Apply's order and refusals, logins) and `SpacesSetupClientTests` (the
+  RPCs over a fake orchd). `SpacesSetupSnapshots` renders each step and the empty pane in light
+  and dark.
+
 ## Launching
 
 Orch.app lives in the menu bar and, by default, the Dock. With the Dock icon turned off, opening it
@@ -666,8 +734,8 @@ rebuild.
   to `OrchKit` (generated code excluded).
 - <a id="snapshots"></a>**Snapshots:** `ORCH_SNAPSHOT_DIR=<folder> swift test --package-path macos
   --filter OrchAppSnapshots` renders the Spaces section, the "enforcement off" banner, the menu
-  bar panel's switches and the Spaces pane (at 790 pt and the 320 pt companion width, and in
-  screen-share-safe mode) in light and dark from sample data, writing one PNG each. It draws offscreen
+  bar panel's switches, the Spaces pane (at 790 pt and the 320 pt companion width, and in
+  screen-share-safe mode) and each step of its setup wizard in light and dark from sample data, writing one PNG each. It draws offscreen
   (`cacheDisplay`), so no window appears, the installed app and orchd are not involved, and no
   Screen Recording permission is needed. Without `ORCH_SNAPSHOT_DIR` the suite is skipped.
 - **CI:** `app.yml` runs on pull requests to `main` that touch `macos/**`, `orchd.proto` or the

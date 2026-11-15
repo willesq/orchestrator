@@ -132,8 +132,9 @@ public struct RelabelProgress: Sendable, Equatable {
 }
 
 /// The reads the Spaces pane's Overview needs, beyond the switches and the
-/// validator. Every call is operator-only in orchd.
-public protocol SpacesOverviewAPI: SpacesAPI {
+/// validator, plus the setup wizard's (SP-052). Every call is operator-only
+/// in orchd.
+public protocol SpacesOverviewAPI: SpacesSetupAPI {
     func listSpaces() async throws -> SpacesListing
     func listSessions(includeEnded: Bool) async throws -> [PinnedSession]
     /// The command log per space over the last 7 days.

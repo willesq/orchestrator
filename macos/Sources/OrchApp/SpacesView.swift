@@ -9,15 +9,39 @@ struct SpacesView: View {
     let model: SpacesOverviewModel
     let enforcement: EnforcementModel
     let navigator: Navigator
+    /// The setup wizard while its sheet is open (SP-052).
+    @State private var setup: SpacesSetupModel?
+    /// What the wizard left to know after it closed, such as a saved draft.
+    @State private var setupNote: String?
 
     var body: some View {
         VStack(spacing: 0) {
-            SpacesHeader(model: model)
+            SpacesHeader(model: model, runSetup: openSetup)
             Divider()
+            if let note = setupNote {
+                Text(verbatim: note).textStyle(.caption).padding(.horizontal, 12).padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             content
         }
         .navigationTitle("Spaces")
         .task { await model.load() }
+        .sheet(isPresented: Binding(get: { setup != nil }, set: { if !$0 { setup = nil } })) {
+            if let setup {
+                SpacesSetupView(model: setup) { note in
+                    self.setup = nil
+                    setupNote = note
+                    Task { await model.load() }
+                }
+            }
+        }
+    }
+
+    /// Setup lists every space, so it never opens while sharing the screen.
+    private func openSetup() {
+        guard model.shareSafe == nil else { return }
+        setupNote = nil
+        setup = model.makeSetup()
     }
 
     @ViewBuilder private var content: some View {
@@ -26,8 +50,8 @@ struct SpacesView: View {
                 VStack(spacing: 0) {
                     EnforcementBanner(model: enforcement, show: { navigator.showSettings(.spaces) }).padding(12)
                     EmptyState(symbol: "square.3.layers.3d", title: "Spaces are not set up",
-                               message: "With no spaces applied, orch keeps one shared memory, as before. Draft a policy with orch spaces draft and apply it with orch spaces apply; Settings → Spaces checks where a folder would go.",
-                               actionTitle: "Check a Folder", action: { navigator.showSettings(.spaces) })
+                               message: "With no spaces applied, orch keeps one shared memory, as before. Setup proposes spaces from your checkouts and GitHub orgs; nothing changes until you apply.",
+                               actionTitle: "Set Up Spaces…", action: openSetup)
                 }
             } else {
                 AdaptiveSplit(primaryWidth: .init(min: 300, ideal: 460), secondaryWidth: .init(min: 300, ideal: 380),
@@ -64,6 +88,7 @@ struct SpacesView: View {
 /// The policy's revision, Basic/Advanced, and screen-share-safe mode.
 private struct SpacesHeader: View {
     let model: SpacesOverviewModel
+    let runSetup: () -> Void
 
     var body: some View {
         // Wraps onto two lines at companion width rather than clipping.
@@ -89,6 +114,10 @@ private struct SpacesHeader: View {
                 .fixedSize()
                 .disabled(model.spaceChoices.isEmpty)
                 .help("Hide every space except one, and every other pane, while you share your screen")
+                if model.overview?.configured == true {
+                    Button("Run Setup…", action: runSetup)
+                        .help("Scan again and propose spaces for new checkouts and orgs; nothing changes until you apply")
+                }
             }
         }
         .padding(.horizontal, 12)
