@@ -86,7 +86,7 @@ func (c *Connector) Read(ctx context.Context, emit func(feeds.Record) error) err
 	}
 	for _, ch := range chats {
 		kind, ok := chatKinds[ch.ChatType]
-		if !ok || !idPattern.MatchString(ch.ID) || !c.own(ch.TenantID) {
+		if !ok || !validID(ch.ID) || !c.own(ch.TenantID) {
 			continue
 		}
 		base := feeds.Record{System: feeds.Teams, Tenant: c.Tenant, Container: ch.ID, Kind: kind}
@@ -111,7 +111,7 @@ func (c *Connector) readChannels(ctx context.Context, emit func(feeds.Record) er
 		*errs = append(*errs, fmt.Errorf("list teams: %w", err))
 	}
 	for _, tm := range teams {
-		if !idPattern.MatchString(tm.ID) || !c.own(tm.TenantID) {
+		if !validID(tm.ID) || !c.own(tm.TenantID) {
 			continue
 		}
 		channels, err := list[channel](ctx, c.Graph, graphURL(nil, "teams", tm.ID, "channels"))
@@ -120,7 +120,7 @@ func (c *Connector) readChannels(ctx context.Context, emit func(feeds.Record) er
 			continue
 		}
 		for _, ch := range channels {
-			if !idPattern.MatchString(ch.ID) {
+			if !validID(ch.ID) {
 				continue
 			}
 			base := feeds.Record{System: feeds.Teams, Tenant: c.Tenant, Container: ch.ID, Kind: channelKind(tm, ch)}
@@ -144,7 +144,7 @@ func (c *Connector) readChannels(ctx context.Context, emit func(feeds.Record) er
 // read with this login would land in whatever space binds the other tenant,
 // chosen by whoever created the chat. Such chats are not read.
 func (c *Connector) own(tenant string) bool {
-	return idPattern.MatchString(tenant) && strings.EqualFold(tenant, c.Tenant)
+	return validID(tenant) && strings.EqualFold(tenant, c.Tenant)
 }
 
 // channelKind is a channel's container kind. Reason: only a standard
@@ -300,7 +300,7 @@ func (c *Connector) channelConversations(ctx context.Context, teamID string, bas
 	next := mark{at: w.at, has: true}
 	var recs []feeds.Record
 	for _, root := range roots {
-		if !idPattern.MatchString(root.ID) {
+		if !validID(root.ID) {
 			continue
 		}
 		if root.RepliesNext != "" {

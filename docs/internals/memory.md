@@ -1130,9 +1130,10 @@ may call it on the same terms.
 
 ## Chat feeds
 
-`internal/feeds` is the chat connector framework (SP-060, D-07). The Slack connector is SP-061;
-the Teams connector is `internal/feeds/teams` (SP-062, [below](#teams-connector)). Nothing runs
-a connector on a schedule yet, so no chat content is stored until orchd does.
+`internal/feeds` is the chat connector framework (SP-060, D-07). The Slack connector is
+`internal/feeds/slack` (SP-061, [below](#slack-connector)); the Teams connector is
+`internal/feeds/teams` (SP-062, [below](#teams-connector)). Nothing runs a connector on a schedule
+yet, so no chat content is stored until orchd does.
 
 - **Facts only.** A `feeds.Connector` reports each conversation (a thread, a container's messages
   outside threads, or a meeting's chat) as a `feeds.Record`: system (`slack` or `teams`), tenant,
@@ -1179,7 +1180,7 @@ a connector on a schedule yet, so no chat content is stored until orchd does.
   per-space gh profiles ([daemon.md](daemon.md)): the user logs a connector's own client in to a
   profile directory themselves, orchd checks only that the directory is the user's alone, and
   passes the connector process that directory's path. The token stays inside the connector
-  process and its profile (SP-061 and SP-062 implement this).
+  process and its profile (the Slack and Teams connectors implement this).
 - **Not yet.** Retention per space and kind, running connectors on a schedule, and the
   settings naming each connector's profile directory and state file are not implemented.
 
@@ -1246,6 +1247,55 @@ a connector on a schedule yet, so no chat content is stored until orchd does.
   token when it fails, which leaves no token in errors, logs, stored content or state
   (`TestNoTokenInLogsErrorsOrContent`). How Graph behaves for a real tenant (the chat filter,
   reply expansion, whether az's Graph login may read chats) has not been checked against one.
+
+### Slack connector
+
+`internal/feeds/slack` (SP-061) reads one Slack workspace for `feeds.Sync`.
+
+- **Order and scope.** A run reads only what the allowlist names for the workspace
+  (`feeds.Allowlist.For("slack:<team>")`): the user's DMs and group DMs when DMs are on for it,
+  then the listed private channels, then the listed public ones (`conversations.info`; an
+  archived channel, or a DM listed as a channel, is not read). A conversation taken off the list
+  is not called at all and its watermark is dropped, so adding it back syncs it from the start.
+  With nothing listed for the workspace, the connector process is not started.
+- **Records.** A day's messages outside threads (UTC) are one record,
+  `slack://<team>/<channel>/<YYYY-MM-DD>`, and a thread is one record under its parent's ts,
+  `slack://<team>/<channel>/<ts>`, holding the parent and every reply. Joins, leaves and topic
+  changes are left out. Messages show the author's stable user or bot ID, with a message's own
+  line breaks indented so its text cannot read as another author's line; participants are the
+  authors (and, for a DM, both members). A record's text is capped at 4 MiB (later messages are
+  counted, not stored), and one conversation's listing at 256 MiB.
+- **Watermarks.** Each conversation keeps a watermark (`slack.ChannelState`): the newest
+  top-level message stored, each thread's newest reply stored, and the SHA-256 of each record's
+  text last handed over. A first sync reads 90 days of history unless told otherwise; a later run
+  reads from the watermark's day (or the lookback, 14 days
+  by default, if earlier), sends each day that gained a message again whole, and fetches a
+  thread again only when Slack's `latest_reply` is newer than the stored one; the grown thread
+  is written under the same URI, so it replaces the stored copy. A record whose text is
+  unchanged is not sent (and the store skips an unchanged write by URI and content hash). A
+  conversation's watermark is saved, in a JSON file of IDs, timestamps and hashes only (mode
+  0600), after all of its records were stored; a failed write stops the run before it, so the
+  next run reads them again. Threads older than the lookback are no longer watched for replies,
+  and edits and deletions of stored messages are not followed.
+- **Connector process.** The Slack API is called only from the connector process: orchd's own
+  executable run as `orchd slack-connector`, which reads one request (profile path, team ID,
+  allowlist, watermarks) on stdin and answers in JSON lines (records, each conversation's new
+  watermark, a status, or an error). It reads the token from the file `token` in the profile
+  directory, which the user writes themselves; the directory must pass the gh profile checks
+  (absolute, under the home directory, the user's alone, checked on its resolved path) and the
+  file, opened without following a link and checked on the open file, must be a regular file of
+  the user's with no group or other permissions (`chmod 600`), holding a Slack token. The token
+  goes only into the `Authorization` header of HTTPS calls to `slack.com`, and no redirect is
+  followed; the process replaces it in any message text before
+  answering, and no error repeats it or the file's content (`TestSlackTokenNeverLeaks`). It
+  checks with `auth.test` that the token belongs to the workspace asked for, since a record's
+  team decides its space, and orchd refuses a record of another workspace or of a conversation
+  it did not ask for, or a watermark of a conversation it did not ask for. `slack.Check` asks the process whom the profile is logged in to (team and
+  user IDs only). Slack's rate limits are waited out (`Retry-After`, up to five times).
+- **Spaces.** Records go through `rag.Service.IngestText` like every chat write: with spaces on,
+  the policy's binding of `slack:<team>` decides the space and an unbound workspace goes to
+  quarantine; with spaces off, everything is in the one shared store
+  (`TestSlackConnectorSpacesOnAndOff`).
 
 ## Cost of a collection per space
 

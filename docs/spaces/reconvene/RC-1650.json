@@ -1,0 +1,13 @@
+{
+  "id": "RC-1650",
+  "kind": "follow-up",
+  "topic": "Run the Slack connector from orchd on a schedule, with a per-workspace profile setting",
+  "detail": "SP-061 builds the Slack connector (internal/feeds/slack) and its connector process (`orchd slack-connector`), but nothing starts it yet, as RC-1451 noted for SP-060. Proposed new feature: an orchd unit that, every interval, runs slack.Connector{Tenant, Profile, Allow: feeds.AllowlistFrom(settings.Feeds.Chat), State: FileState under the data dir, Run: slack.Process(os.Executable(), slack.Command)} through feeds.Sync into the placed write path, for each workspace that has both an allowlist entry and a profile; a setting naming each tenant's profile directory (e.g. feeds.chat.profiles: {\"slack:T0123\": \"~/.config/orch-slack/acme\"}, sensitive) and an interval; and slack.Check's team and user IDs shown in orch status and the app (metadata only, like the gh logins of SP-074). The same unit should run the Teams connector (SP-062), so it belongs in internal/feeds. From the PR security review, when wiring it: start the process as os.Executable() (never a PATH lookup), give it a minimal environment (HOME, proxy and TLS certificate variables) rather than orchd's, and bound each run with a timeout.",
+  "source": "https://github.com/willesq/orchestrator/pull/213",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-061",
+    "SP-062"
+  ],
+  "status": "open"
+}

@@ -15,9 +15,10 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
+
+	"github.com/willesq/orchestrator/internal/feeds"
 )
 
 // GraphBase is the Microsoft Graph endpoint every request goes to.
@@ -132,10 +133,11 @@ func list[T any](ctx context.Context, g Graph, rawURL string) ([]T, error) {
 	return all, nil
 }
 
-// idPattern is a Graph ID the connector puts in a URL or a record: chat and
-// channel IDs (19:abc@thread.v2), GUIDs and message IDs. It matches the IDs
-// feeds.Record accepts, and has no '/', '?' or '%'.
-var idPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@=+-]{0,255}$`)
+// validID reports whether v is a Graph ID the connector puts in a URL or a
+// record: chat and channel IDs (19:abc@thread.v2), GUIDs and message IDs.
+// It is the stable ID feeds.Record accepts (feeds.ValidID), which has no
+// '/', '?' or '%'.
+func validID(v string) bool { return feeds.ValidID(v) }
 
 // graphURL is GraphBase joined with path segments, each an ID or a fixed
 // name, and query q.
