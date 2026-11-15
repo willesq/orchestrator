@@ -14,7 +14,7 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | `install [--apply] [--target] [--home] [--bin-dir]` | wire harnesses, and for Claude Code the pinned cc-safety-net and its guard rules ([install.md](install.md)) |
 | `mcp rag\|queue` | stdio MCP servers |
 | `ingest text --source-uri <uri> [--type] [--scope] [--tag]` | store stdin |
-| `search <query> [--top-k] [--scope] [--type] [--tag] [--require-tag] [--uri] [--mode] [--ranking] [--per-source] [--since] [--until]` | search memory |
+| `search <query> [--top-k] [--scope] [--type] [--tag] [--require-tag] [--uri] [--mode] [--ranking] [--per-source] [--direct-messages] [--since] [--until]` | search memory; `--direct-messages` also searches chat DMs ([memory.md](memory.md#chat-feeds)), the operator's only (Orch.app's while a spaces policy is applied) |
 | `rag sources [--type] [--scope] [--prefix] [--limit] [--since] [--until]` | list stored sources |
 | `rag forget <uri> --yes` | delete one source |
 | `rag eval [--set] [--top-k] [--save] [--compare] [--mode] [--ranking] [--per-source] [--section] [--split] [--inject-format] [--cases] [--json]`, `rag eval add <query> <uri>… [--span] [--section]`, `rag eval seed` | retrieval golden set, scoring and paired-bootstrap comparison ([memory.md](memory.md#retrieval-evaluation)) |

@@ -416,8 +416,13 @@ returned only for an owner that is listed. For a filtered reader a
 store failure answers `Unavailable` without the store's error (which names collections, and so
 spaces), and the detail goes to orchd's log; others get the error as before.
 
+Chat direct messages are left out of every one of these reads, for every caller, the operator
+included (SP-060). Only `SearchDirectMessages` (`orch search --direct-messages`) keeps them, and
+only the operator may call it: queued tasks (D-19) and interactive sessions are refused; see
+[memory.md](memory.md#chat-feeds).
+
 Every RPC has an entry in `readSpaceDecisions` (`internal/daemon/readspaces_registry.go`,
-SP-025.2): `filtered` (the four above), `operator` (refused to every caller but the operator),
+SP-025.2): `filtered` (the four above and `SearchDirectMessages`), `operator` (refused to every caller but the operator),
 `own` (the caller's own data or public content), `records` (orch records other than memory,
 [kept by space](#records-by-space)) or `none`. A test fails for an RPC with no entry, as for one
 missing from `taskCallable` and `operatorActions`.
@@ -991,6 +996,7 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `TailLogs` | after_seq, source, limit → entries (seq, time, source, message), last_seq, oldest_seq, sources | in-memory lines only; limit default 500, max 5000, and at most 3 MiB, newest kept when more match; `oldest_seq` past the caller's `after_seq` means lines rolled out |
 | `GetSystemMetrics` | → processes (orchd, qdrant: pid, RSS, CPU %, uptime), goroutines, heap, data sizes, task counts by status | read natively through `internal/procstat`, never a command; CPU since the previous call; data sizes cached 30 s; a failed task count leaves `tasks` empty |
 | `Search` filters | source_uri, all_tags | `source_uri` keeps one source; `all_tags` requires every tag (e.g. `owner:o`, `repo:r` for one repo's docs), alongside `tags` (any); each tag list at most 32 tags of 256 bytes |
+| `SearchDirectMessages` | search (a `SearchRequest`) → as `Search` | `Search` with chat DMs and group DMs kept in ([memory.md](memory.md#chat-feeds)); every other read leaves them out. Operator-only (`refuseNonOperator`; the handler also refuses a caller resolved as a task or session, D-19); read with the operator's readable spaces; no search → `InvalidArgument` |
 | `ListDocs` | → owners (repos, indexed commit), files (URI, path, chunks, GitHub URL), truncated | files are docs both the store holds and the registry recorded; GitHub URLs pinned to the indexed commit; owner and repo names validated before a URL is built; at most 10,000 files or 3 MiB |
 | `SyncDocs` | owner (empty = all), force, confirm_prune (needs owner: grants each of its repos with a current refused prune, for one prune no larger within the hour, and forgets their HEAD so this sync walks them; `FailedPrecondition` when none is refused) → sync state | refused with `Aborted` while a sync runs, which is never interrupted (nothing is queued); owner validated and must be registered (`NotFound`); with the scheduler's run lock held, force clears the owner's caches and the owner is marked due; the `docs-scheduler` tick (every 2 s) then scans |
 | `ListDocsOwners` | → owners (enabled, repo mode, selected repos, each repo's files and status) | operator-only |

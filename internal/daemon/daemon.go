@@ -221,11 +221,13 @@ func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchd
 	// would hide the synced text until the sync next rewrote it.
 	if c, ok := s.rag.(copyReader); ok {
 		cp, found, err := c.Copy(ctx, req.GetSourceUri())
-		if err == nil && found && (cp.Writer == rag.WriterDocs || cp.Writer == rag.WriterSources) {
+		if err == nil && found && rag.IsSyncWriter(cp.Writer) {
 			// Reason: under a policy a caller is not told which sync keeps
 			// a copy in a space it does not read: it gets the refusal a
 			// copy of another space gets (SP-026, RC-701).
-			if !s.recordScope(ctx, orchdv1.Orchd_Ingest_FullMethodName).seesSpace(cp.Space) {
+			// A chat source's URI names a conversation, so its existence is
+			// not confirmed either (SP-060).
+			if cp.Writer == rag.WriterChat || !s.recordScope(ctx, orchdv1.Orchd_Ingest_FullMethodName).seesSpace(cp.Space) {
 				return nil, errReplaceRefused
 			}
 			return nil, grpcstatus.Errorf(codes.FailedPrecondition,
@@ -275,6 +277,12 @@ func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchd
 const maxSearchTopK = 100
 
 func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchdv1.SearchResponse, error) {
+	return s.search(ctx, req, orchdv1.Orchd_Search_FullMethodName, false)
+}
+
+// search runs a memory search for method; directMessages keeps chat direct
+// messages in, which only SearchDirectMessages asks (SP-060).
+func (s *server) search(ctx context.Context, req *orchdv1.SearchRequest, method string, directMessages bool) (*orchdv1.SearchResponse, error) {
 	if m := req.GetMode(); m != "" && m != rag.ModeHybrid && m != rag.ModeDense {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "search mode %q must be hybrid or dense", m)
 	}
@@ -296,8 +304,8 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 	}
 	// The caller's spaces choose what is searched; the request's filters
 	// only narrow within them (SP-025, INV-02).
-	scope := s.readScope(ctx, orchdv1.Orchd_Search_FullMethodName)
-	hits, fallback, err := s.rag.Search(ctx, req.GetQuery(), rag.SearchOpts{
+	scope := s.readScope(ctx, method)
+	opts := rag.SearchOpts{
 		Spaces:     scope.spaces,
 		LabelsV:    scope.labelsV,
 		PerSource:  int(req.GetPerSource()),
@@ -310,7 +318,9 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 		SourceURI:  req.GetSourceUri(),
 		Mode:       req.GetMode(),
 		Range:      tr,
-	})
+	}
+	opts.DirectMessages = directMessages
+	hits, fallback, err := s.rag.Search(ctx, req.GetQuery(), opts)
 	if errors.Is(err, rag.ErrHybridUnavailable) {
 		if scope.filtered() {
 			// Reason: the detail names a collection, and a collection's name

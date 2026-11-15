@@ -171,12 +171,13 @@ Every write names its **writer**, set by orchd's own code, never by a client:
 | `session` | orchd's session storage (hand-off, summaries) | `session` |
 | `file` | the edit hand-off | `file` |
 | `client` | the Ingest RPC, so the CLI, hooks and MCP `rag_ingest_text` | `client` |
+| `chat` | a chat feed ([Chat feeds](#chat-feeds)) | `chat` (untrusted) |
 
 `writer`, `trust` and `content_hash` (the first 16 bytes of SHA-256 of the text as given, kept
 through a migration) are stored on every chunk. A client cannot claim a tier: whatever type or URI
 it declares, an Ingest RPC write is `client`, and the Ingest RPC refuses (`FailedPrecondition`) to
-replace a source the docs or sources sync stored, so a client cannot hide a synced doc behind its
-own text. That refusal matches the exact URI only: a client can still store the same text under a
+replace a source the docs or sources sync or a chat feed stored (`rag.IsSyncWriter`), so a client
+cannot hide a synced doc or thread behind its own text. That refusal matches the exact URI only: a client can still store the same text under a
 different spelling of a URI (another case, a trailing slash), which is a separate `client` source
 and labelled as one, so the refusal is advisory, not what makes a tier. Hits return `trust`, and `GetDocument` returns
 `writer`, `content_hash` and `trust`. Chunks stored before this have none, and readers treat them
@@ -1088,6 +1089,61 @@ naming any org under a public root. If an unbound owner were answered, the refus
 which orgs the other spaces bind. One thing still shows: an agent can learn that a folder it
 names lies under a non-public root. Folder names are already visible to it on disk. Queued tasks
 may call it on the same terms.
+
+## Chat feeds
+
+`internal/feeds` is the chat connector framework (SP-060, D-07). The Slack and Teams connectors
+themselves are SP-061 and SP-062; nothing runs a connector yet, so no chat content is stored
+until they land.
+
+- **Facts only.** A `feeds.Connector` reports each conversation (a thread, a container's messages
+  outside threads, or a meeting's chat) as a `feeds.Record`: system (`slack` or `teams`), tenant,
+  container, container kind (`dm`, `group_dm`, `private_channel`, `public_channel`, `meeting`),
+  thread, participants by stable ID, text and dates. A record has no field for a space, trust
+  tier, scope or tag (`TestRecordCarriesFactsOnly`), so a connector cannot choose where its
+  content goes or how it is labelled. `Record.Validate` refuses an unknown system or kind, any
+  ID that is not a stable ID (letters, digits and `._:@=+-`, no `/` or `,`), and a conversation
+  whose ID says it is a DM (a Slack `D…` ID, a Teams `…@unq.gbl.spaces` chat) under another kind,
+  since the kind alone keeps a DM out of reads.
+- **URIs.** A record is stored as `<system>://<tenant>/<container>[/<thread>]`, for example
+  `slack://T0123/C0456/1700000000.000100`. A thread that grows is written again under its URI.
+- **Allowlist.** `feeds.Sync(connector, allowlist, ingester)` stores only what the operator
+  named: a channel or meeting listed for its tenant in `feeds.chat.containers`, and DMs
+  and group DMs only for a tenant listed in `feeds.chat.direct_messages`
+  ([config.md](config.md)). Tenants match regardless of case, container IDs exactly. Everything
+  else is skipped; nothing is stored by default.
+- **Write path.** Allowed records are redacted ([Redaction](#redaction)) and written through
+  `rag.Service.IngestText` with writer `chat` and the record's facts as `rag.Origin` (`tenant`,
+  `container`, `container_kind`, sorted `participants`). orchd's placer classifies them by
+  tenant: a tenant bound in the policy's `chat` list goes to that space, an unbound one to
+  quarantine (INV-03), and a tenant bound to a public space to quarantine too, since nothing
+  proves a chat public (rule `not_verified_public`). An operator's retag holds for chat sources
+  as for the syncs. A chat write naming a kind orch does not know, or a chat origin from any
+  writer but `chat`, is refused before it is placed. A failed write stops the connector's run and is returned, so the connector does not
+  advance its watermark past it; an invalid or unlisted record is counted and skipped.
+- **Direct messages.** Each chat chunk stores its kind in the top-level payload field
+  `chat_kind`. Every read (`Search`, `ListSources`, `GetDocument`, auto-RAG and `orch rag why`,
+  for the operator too) filters out `chat_kind` `dm` and `group_dm` (`spaceStore.must`, a
+  `must_not` condition), so DMs are never recalled into a prompt and never reach a queued task
+  (D-19). The one read that keeps them is `SearchDirectMessages`, behind
+  `orch search --direct-messages`: the operator's explicit search (`refuseNonOperator`: Orch.app
+  while a policy is applied, and with none a terminal outside any agent session). Queued tasks
+  and agents in interactive sessions are refused it, so text recalled from a chat cannot get an
+  agent to pull DMs into its context. With no policy, or with memory filtering switched off,
+  chat content is in the shared store like everything else, but DMs are still left out of every
+  read but this one; with no policy the operator is known only by its process tree, so a process
+  an agent detached from its session passes as the operator (D-71), and DMs are as protected as
+  the rest of memory then. Channels and meetings are read like any other content of their space.
+- **Untrusted.** Chat is third-party text, guests' included: its tier `chat` is labelled
+  "chat message, untrusted" in prompt context, ranked and gated as web pages are, and dropped
+  under `hooks.auto_rag.untrusted: exclude` (`memctx.TrustChat`).
+- **Credentials.** orch never reads, stores or prints a chat token. The design follows the
+  per-space gh profiles ([daemon.md](daemon.md)): the user logs a connector's own client in to a
+  profile directory themselves, orchd checks only that the directory is the user's alone, and
+  passes the connector process that directory's path. The token stays inside the connector
+  process and its profile (SP-061 and SP-062 implement this).
+- **Not yet.** Retention per space and kind, and running connectors on a schedule, are not
+  implemented.
 
 ## Cost of a collection per space
 

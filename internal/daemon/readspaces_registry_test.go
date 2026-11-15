@@ -46,8 +46,8 @@ func TestEveryRPCHasASpaceDecision(t *testing.T) {
 			filtered++
 		}
 	}
-	if filtered != 4 {
-		t.Errorf("%d filtered memory reads, want Search, ListSources, GetDocument and ListDocs", filtered)
+	if filtered != 5 {
+		t.Errorf("%d filtered memory reads, want Search, SearchDirectMessages, ListSources, GetDocument and ListDocs", filtered)
 	}
 }
 

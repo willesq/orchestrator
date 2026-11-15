@@ -67,6 +67,8 @@ func TrustFor(writer, sourceType string) string {
 		return TrustFile
 	case WriterClient:
 		return TrustClient
+	case WriterChat:
+		return TrustChat
 	}
 	return ""
 }
@@ -140,7 +142,7 @@ func (s *Service) Copy(ctx context.Context, uri string) (StoredCopy, bool, error
 		c := StoredCopy{Writer: str(p[fieldWriter]), Trust: str(p[fieldTrust]), ContentHash: str(p[fieldContentHash]), Space: str(p[fieldSpace])}
 		r := 0
 		switch {
-		case c.Writer == WriterDocs || c.Writer == WriterSources:
+		case IsSyncWriter(c.Writer):
 			r = 2
 		case c.Space != "":
 			r = 1

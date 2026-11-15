@@ -22,6 +22,7 @@ const (
 	Orchd_Ping_FullMethodName                     = "/orchd.v1.Orchd/Ping"
 	Orchd_Ingest_FullMethodName                   = "/orchd.v1.Orchd/Ingest"
 	Orchd_Search_FullMethodName                   = "/orchd.v1.Orchd/Search"
+	Orchd_SearchDirectMessages_FullMethodName     = "/orchd.v1.Orchd/SearchDirectMessages"
 	Orchd_ListSources_FullMethodName              = "/orchd.v1.Orchd/ListSources"
 	Orchd_DeleteSource_FullMethodName             = "/orchd.v1.Orchd/DeleteSource"
 	Orchd_Dispatch_FullMethodName                 = "/orchd.v1.Orchd/Dispatch"
@@ -119,6 +120,10 @@ type OrchdClient interface {
 	Ingest(ctx context.Context, in *IngestRequest, opts ...grpc.CallOption) (*IngestResponse, error)
 	// Search embeds the query and returns the top matching chunks.
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
+	// SearchDirectMessages is Search with chat direct messages kept in: an
+	// explicit interactive search (SP-060). Every other read leaves DMs out,
+	// and queued tasks are refused it (D-19).
+	SearchDirectMessages(ctx context.Context, in *SearchDirectMessagesRequest, opts ...grpc.CallOption) (*SearchResponse, error)
 	// ListSources enumerates the distinct sources held in the vector store, with
 	// per-source chunk counts. This is the store's inventory, as opposed to the
 	// cadence-refresh registry that `orch source list` reports.
@@ -433,6 +438,16 @@ func (c *orchdClient) Search(ctx context.Context, in *SearchRequest, opts ...grp
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SearchResponse)
 	err := c.cc.Invoke(ctx, Orchd_Search_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) SearchDirectMessages(ctx context.Context, in *SearchDirectMessagesRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchResponse)
+	err := c.cc.Invoke(ctx, Orchd_SearchDirectMessages_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1281,6 +1296,10 @@ type OrchdServer interface {
 	Ingest(context.Context, *IngestRequest) (*IngestResponse, error)
 	// Search embeds the query and returns the top matching chunks.
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
+	// SearchDirectMessages is Search with chat direct messages kept in: an
+	// explicit interactive search (SP-060). Every other read leaves DMs out,
+	// and queued tasks are refused it (D-19).
+	SearchDirectMessages(context.Context, *SearchDirectMessagesRequest) (*SearchResponse, error)
 	// ListSources enumerates the distinct sources held in the vector store, with
 	// per-source chunk counts. This is the store's inventory, as opposed to the
 	// cadence-refresh registry that `orch source list` reports.
@@ -1579,6 +1598,9 @@ func (UnimplementedOrchdServer) Ingest(context.Context, *IngestRequest) (*Ingest
 }
 func (UnimplementedOrchdServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Search not implemented")
+}
+func (UnimplementedOrchdServer) SearchDirectMessages(context.Context, *SearchDirectMessagesRequest) (*SearchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchDirectMessages not implemented")
 }
 func (UnimplementedOrchdServer) ListSources(context.Context, *ListSourcesRequest) (*ListSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSources not implemented")
@@ -1897,6 +1919,24 @@ func _Orchd_Search_Handler(srv interface{}, ctx context.Context, dec func(interf
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).Search(ctx, req.(*SearchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_SearchDirectMessages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchDirectMessagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SearchDirectMessages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SearchDirectMessages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SearchDirectMessages(ctx, req.(*SearchDirectMessagesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3388,6 +3428,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Search",
 			Handler:    _Orchd_Search_Handler,
+		},
+		{
+			MethodName: "SearchDirectMessages",
+			Handler:    _Orchd_SearchDirectMessages_Handler,
 		},
 		{
 			MethodName: "ListSources",

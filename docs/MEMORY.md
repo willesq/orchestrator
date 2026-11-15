@@ -97,6 +97,7 @@ orch search --mode dense "where is sync_meta kept"
 orch search --require-tag owner:willesq --require-tag repo:orchestrator "install"   # one repo's docs
 orch search --uri repo://willesq/orchestrator/README.md "install"                   # one doc
 orch search --ranking plain --per-source -1 "install"  # fusion order, no cap
+orch search --direct-messages "review my patch"       # chat DMs too (operator only); no other search returns them
 orch rag show repo://willesq/orchestrator/README.md   # the doc as memory holds it
 ```
 
