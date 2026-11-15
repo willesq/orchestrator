@@ -53,6 +53,15 @@ func recordToolEvent(event string, p Payload, cf clientFactory, g *spaces.GuardR
 	if g != nil {
 		req.GuardVerdict, req.GuardRule = string(g.Would), string(g.Rule)
 		req.GuardEnforced, req.GuardPolicyRev = g.Enforced, g.Revision
+		if g.Terms.Known {
+			// The rules revision the terms check judges under (D-66).
+			rev := g.Terms.RulesRev
+			if g.Terms.RulesBroken {
+				// Rules orchd could not read: no revision to judge with.
+				rev = -1
+			}
+			req.GuardRulesRev = &rev
+		}
 		if g.Verdict == spaces.Refuse {
 			wait = refusalEventTimeout
 		}

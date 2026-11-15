@@ -42,7 +42,17 @@ type OutboundResult struct {
 	// "" for none (or, with several possible destinations, the first that
 	// does not hold the term).
 	Kind, Dest string
+	// UserRule is the id of the operator's rule that refused the call
+	// (SP-075), "" for the baseline. Only its id is ever shown.
+	UserRule string
 }
+
+// UserCommandKind is the kind of an action a command rule (SP-075) names.
+// Reason: it never names the program, which is the rule's value (INV-07).
+const UserCommandKind = "a command an outbound rule names"
+
+// userFailKind is the kind of a call a fail_closed rule refused.
+const userFailKind = "a call an outbound rule checks"
 
 // Reason is the refusal as the session sees it: the rule, the action and,
 // for a term, its space, line and hash; never the term.
@@ -51,11 +61,17 @@ func (r OutboundResult) Reason() string {
 	if r.Dest != "" {
 		dest = fmt.Sprintf("space %q", r.Dest)
 	}
-	switch r.Rule {
-	case RuleOutboundTerm:
+	switch {
+	case r.Rule == RuleOutboundUnchecked && r.UserRule != "":
+		return fmt.Sprintf("orch outbound terms refused %s (rule %s): the operator's outbound rule %s refuses it. Ask the operator, or run it yourself outside the session.",
+			safeKind(r.Kind), r.Rule, r.UserRule)
+	case r.Rule == RuleOutboundUnchecked && r.Kind == unreadableRulesKind:
+		return fmt.Sprintf("orch outbound terms refused %s (rule %s): the operator's outbound rules cannot be read, so nothing that may send text out can be checked. Ask the operator to look at 'orch spaces terms rules list'.",
+			safeKind(r.Kind), r.Rule)
+	case r.Rule == RuleOutboundTerm:
 		return fmt.Sprintf("orch outbound terms refused %s (rule %s): it would send a term of %s to %s. Remove it and try again.",
 			safeKind(r.Kind), r.Rule, r.Hit, dest)
-	case RuleOutboundUnchecked:
+	case r.Rule == RuleOutboundUnchecked:
 		return fmt.Sprintf("orch outbound terms refused %s (rule %s): what it sends to %s could not all be checked for other spaces' terms (a variable, command output or alias, another repository named through git's options or environment, an unreadable file or terms file, or git failing). Write the text out in the command or a file and try again.",
 			safeKind(r.Kind), r.Rule, dest)
 	}
@@ -77,6 +93,29 @@ type OutboundChecker struct {
 	Getenv func(string) string
 	// Git runs git in dir and returns its output; nil runs the git binary.
 	Git func(ctx context.Context, dir string, args ...string) ([]byte, error)
+	// Rules are the operator's outbound rules (SP-075); nil is the
+	// baseline, every rule on and none added. RulesBroken is set when
+	// orchd could not read them.
+	Rules       *OutboundRules
+	RulesBroken bool
+
+	// rules is Rules compiled, set by Check.
+	rules *ruleSet
+}
+
+// unreadableRulesKind is the kind of a call refused because the rules
+// could not be read.
+const unreadableRulesKind = "a call the operator's outbound rules may cover"
+
+// rulesMayCover reports whether rules that cannot be read could have
+// refused a call by tool: any shell command (a command rule may name any
+// program, a fail_closed rule any text) and any MCP tool. Local file tools
+// send nothing out.
+func rulesMayCover(tool string, input []byte) bool {
+	if _, _, ok := shellCommand(tool, input); ok {
+		return true
+	}
+	return strings.HasPrefix(tool, "mcp__")
 }
 
 // Check checks one tool call.
@@ -84,11 +123,41 @@ func (c OutboundChecker) Check(ctx context.Context, tool string, input []byte, c
 	if len(c.Terms) == 0 && len(c.TermErrs) == 0 {
 		return OutboundResult{}
 	}
-	acts, unknown, words := OutboundRead(tool, input, cwd, c.Home)
+	rules, rerr := c.Rules.compile()
+	if rerr != nil || c.RulesBroken {
+		// Reason: rules that cannot be read cannot be vouched for, as
+		// terms that cannot be read, and the operator's stricter rules
+		// may have covered any shell command or MCP tool; a stored rule
+		// set is checked when saved, so this is damage.
+		if rulesMayCover(tool, input) && c.applies(nil) {
+			return OutboundResult{Refuse: true, Rule: RuleOutboundUnchecked, Kind: unreadableRulesKind}
+		}
+		return OutboundResult{}
+	}
+	c.rules = rules
+	acts, unknown, words := readOutbound(tool, input, cwd, c.Home, rules)
+	if len(acts) == 0 && !unknown && (rules == nil || len(rules.fail) == 0) {
+		return OutboundResult{}
+	}
 	// Reason: the text as written, decoded, so a term after a newline or
 	// tab escape is still on a word boundary; and the words as the shell
 	// passes them, so a term split by quoting ('fal''con') is found.
 	text := JSONText(input) + "\n" + strings.Join(words, "\n")
+	if rules != nil && len(rules.fail) > 0 && c.applies(nil) {
+		// Reason: matching every pattern must end within the hook's
+		// time, so a larger call is refused, as a larger file is.
+		if len(text) > maxOutboundText {
+			return OutboundResult{Refuse: true, Rule: RuleOutboundUnchecked, Kind: userFailKind, UserRule: rules.fail[0].id}
+		}
+		// The operator's fail_closed rules see the tool's name too, so
+		// one can name a tool that is not a shell (an MCP tool).
+		if id := rules.failClosed(ctx.Done(), tool+"\n"+text); id != "" {
+			return OutboundResult{Refuse: true, Rule: RuleOutboundUnchecked, Kind: userFailKind, UserRule: id}
+		}
+		if ctx.Err() != nil {
+			return OutboundResult{Refuse: true, Rule: RuleOutboundUnchecked, Kind: userFailKind}
+		}
+	}
 	if len(acts) == 0 {
 		if !unknown {
 			return OutboundResult{}
@@ -97,7 +166,7 @@ func (c OutboundChecker) Check(ctx context.Context, tool string, input []byte, c
 		r := OutboundResult{Kind: "a command that may send text out"}
 		if hit, ok := c.match(ctx, text, nil); ok {
 			r.Refuse, r.Rule, r.Hit = true, RuleOutboundTerm, hit
-		} else if c.applies(nil) {
+		} else if c.applies(nil) && rules.on(OutboundFailClosed) {
 			r.Refuse, r.Rule = true, RuleOutboundUnchecked
 		}
 		return r
@@ -142,12 +211,21 @@ func (c OutboundChecker) checkAction(ctx context.Context, a Outbound, text strin
 			return refuse(RuleOutboundUnchecked)
 		}
 	}
+	// Baseline rule fail_closed_unreadable: what cannot be read is
+	// refused. Switched off, what can be read is still checked, and the
+	// rest is let through.
+	failClosed := c.rules.on(OutboundFailClosed)
 	if !known || unknown || a.Dir == "" {
-		return refuse(RuleOutboundUnchecked)
+		if failClosed {
+			return refuse(RuleOutboundUnchecked)
+		}
+		if a.Dir == "" {
+			return OutboundResult{}
+		}
 	}
 	if a.Alias != "" {
 		out, err := c.git(ctx, a.Dir, "config", "--get", "alias."+a.Alias)
-		if err == nil && strings.TrimSpace(string(out)) != "" {
+		if err == nil && strings.TrimSpace(string(out)) != "" && failClosed {
 			return refuse(RuleOutboundUnchecked)
 		}
 		return OutboundResult{}
@@ -162,7 +240,7 @@ func (c OutboundChecker) checkAction(ctx context.Context, a Outbound, text strin
 			return refuse(RuleOutboundTerm)
 		}
 	}
-	if err != nil || ctx.Err() != nil {
+	if err != nil && failClosed || ctx.Err() != nil {
 		return refuse(RuleOutboundUnchecked)
 	}
 	return r
@@ -220,18 +298,15 @@ func (c OutboundChecker) match(ctx context.Context, text string, dests []string)
 // be told: the repo or org the command names; else, for git, the
 // checkout's push remote; for gh, the repo gh picks (ghDefaultURLs).
 func (c OutboundChecker) destinations(ctx context.Context, a Outbound) ([]string, bool) {
-	space := func(owner string) string {
-		s, _ := c.Policy.GitHubOrgSpace(owner)
-		return s
-	}
+	space := c.destSpace
 	switch {
 	case a.NoRepo:
 		return []string{""}, true
 	case a.Repo != "":
-		owner, _, _ := strings.Cut(a.Repo, "/")
-		return []string{space(owner)}, true
+		owner, repo, _ := strings.Cut(a.Repo, "/")
+		return []string{space(owner, repo)}, true
 	case a.Org != "":
-		return []string{space(a.Org)}, true
+		return []string{space(a.Org, "")}, true
 	case a.Dir == "":
 		return nil, false
 	case a.GHDefault:
@@ -248,9 +323,20 @@ func (c OutboundChecker) destinations(ctx context.Context, a Outbound) ([]string
 	return urlSpaces(strings.Split(url, "\n"), space), true
 }
 
+// destSpace is the space a GitHub destination holds for the check: its
+// owner's, or none when an operator's destination rule (SP-075) names the
+// owner or the repo.
+func (c OutboundChecker) destSpace(owner, repo string) string {
+	if c.rules.destination(owner, repo) != "" {
+		return ""
+	}
+	s, _ := c.Policy.GitHubOrgSpace(owner)
+	return s
+}
+
 // urlSpaces are the spaces of remote URLs; a URL that is not GitHub, or
 // none at all, holds no space.
-func urlSpaces(urls []string, space func(string) string) []string {
+func urlSpaces(urls []string, space func(owner, repo string) string) []string {
 	seen := map[string]bool{}
 	var out []string
 	add := func(s string) {
@@ -260,8 +346,8 @@ func urlSpaces(urls []string, space func(string) string) []string {
 		}
 	}
 	for _, u := range urls {
-		if owner, ok := githubOwner(u); ok {
-			add(space(owner))
+		if owner, repo, ok := githubOwnerRepo(u); ok {
+			add(space(owner, repo))
 		} else {
 			add("")
 		}
@@ -281,15 +367,15 @@ func isGitHubHost(host string) bool {
 		!strings.Contains(h, ".") && strings.Contains(h, "github")
 }
 
-// githubOwner is the owner of a GitHub remote URL.
-func githubOwner(url string) (string, bool) {
-	host, owner := "", ""
+// githubOwnerRepo is the owner and repo of a GitHub remote URL.
+func githubOwnerRepo(url string) (owner, repo string, ok bool) {
+	host := ""
 	if m := urlRemote.FindStringSubmatch(url); m != nil {
-		host, owner = m[1], m[2]
+		host, owner, repo = m[1], m[2], m[3]
 	} else if m := scpRemote.FindStringSubmatch(url); m != nil {
-		host, owner = m[2], m[3]
+		host, owner, repo = m[2], m[3], m[4]
 	}
-	return owner, owner != "" && isGitHubHost(host)
+	return owner, repo, owner != "" && isGitHubHost(host)
 }
 
 // remoteURL is the push URL of the remote a's checkout sends to: the one a

@@ -143,7 +143,7 @@ func CheckGitHook(ctx context.Context, g GuardTerms, in GitHookInput) OutboundRe
 		termsHome = home
 	}
 	lists, errs := SpaceTerms(g.Policy, termsHome)
-	c := OutboundChecker{Policy: g.Policy, Terms: lists, TermErrs: errs, Home: home}
+	c := OutboundChecker{Policy: g.Policy, Terms: lists, TermErrs: errs, Home: home, Rules: g.Rules, RulesBroken: g.RulesBroken}
 	return c.CheckGitHook(ctx, in)
 }
 
@@ -151,6 +151,17 @@ func CheckGitHook(ctx context.Context, g GuardTerms, in GitHookInput) OutboundRe
 func (c OutboundChecker) CheckGitHook(ctx context.Context, in GitHookInput) OutboundResult {
 	if len(c.Terms) == 0 && len(c.TermErrs) == 0 {
 		return OutboundResult{}
+	}
+	// The operator's outbound rules (SP-075): a git hook reads what git
+	// really sends, so the baseline's switches, which are about reading
+	// shell, do not apply; the destination rules, which only make the
+	// check stricter, do. Rules that cannot be read are refused.
+	rules, err := c.Rules.compile()
+	if err != nil || c.RulesBroken {
+		return OutboundResult{Refuse: true, Rule: RuleOutboundUnchecked, Kind: unreadableRulesKind}
+	}
+	if rules != nil {
+		c.rules = &ruleSet{dests: rules.dests}
 	}
 	switch in.Hook {
 	case GitHookCommitMsg:
@@ -265,11 +276,14 @@ func (c OutboundChecker) tagObjects(ctx context.Context, dir string, objects []s
 // fetched from that very URL count for it: other servers and paths in no
 // space may hold anything. A name git would read as a pattern is left out.
 func (c OutboundChecker) sameSpaceRemotes(ctx context.Context, dir, url string) ([]string, error) {
-	space := func(owner string) string {
+	// Reason: as in excluded, a remote counts only when it lies in the
+	// URL's spaces both as the policy places owners and under the
+	// operator's destination rules (SP-075).
+	space := func(owner, _ string) string {
 		s, _ := c.Policy.GitHubOrgSpace(owner)
 		return s
 	}
-	want := urlSpaces([]string{url}, space)
+	want, wantRules := urlSpaces([]string{url}, space), urlSpaces([]string{url}, c.destSpace)
 	out, err := c.git(ctx, dir, "remote")
 	if err != nil {
 		return nil, err
@@ -284,13 +298,13 @@ func (c OutboundChecker) sameSpaceRemotes(ctx context.Context, dir, url string) 
 			continue
 		}
 		fetched := strings.Fields(string(urls))
-		if slicesContains(want, "") {
+		if slicesContains(want, "") || slicesContains(wantRules, "") {
 			if len(fetched) > 0 && allEqual(fetched, url) {
 				same = append(same, name)
 			}
 			continue
 		}
-		if sameSpaces(urlSpaces(fetched, space), want) {
+		if sameSpaces(urlSpaces(fetched, space), want) && sameSpaces(urlSpaces(fetched, c.destSpace), wantRules) {
 			same = append(same, name)
 		}
 	}

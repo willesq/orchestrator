@@ -3074,6 +3074,58 @@
           "SP-046"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-600",
+        "kind": "follow-up",
+        "topic": "The outbound rules' hash in orch.db finds damage, not a writer who recomputes it",
+        "detail": "2026-11-14, SP-075 security audit (low): each spaces_terms_rules row holds a plain SHA-256 of its rules. A process running as the user can write orch.db while orchd is stopped (or while the guard is off or logging) and insert a correctly hashed row with every baseline rule off, or delete the newest row to roll back to looser rules; the next orchd start takes it. Same limit as the enforcement switches and the sandbox setting (RC-216). Options: (a) accept and document (done in docs/internals/daemon.md); (b) HMAC rows with a key orchd keeps in a 0600 file in its protected data dir and keep orchd's highest revision to detect a rollback. Recommendation: (a) now, (b) together with the switches if they get one. Since D-66 a replay looks rules up by revision, and a row's hash covers only its rules document, not its rev, time or caller, so such a writer could also move a document to another revision; option (b) would cover those columns too.",
+        "source": "https://github.com/willesq/orchestrator/pull/185",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-075",
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-601",
+        "kind": "decision",
+        "topic": "How replay judges events with the outbound rules: by the event's time, and only fail_closed rules",
+        "detail": "2026-11-14, SP-075.1.a3 says replay judges 'with the rules recorded for the event's policy revision'. Rules change apart from policy revisions, so SP-075 stores every rules change with its time (spaces_terms_rules) and a replay uses the rules in force at each event's recorded time (spaces.RulesTimeline), which is exact and needs no change to the hash-chained command log. Only fail_closed rules are judged again (against the stored, redacted, capped command); command and destination rules and the baseline switches need the text the log never keeps (INV-07) and the checkout as it was, so a recorded terms verdict is carried (RC-116) as before. Alternative: record the rules revision in each command log record (a toollog column plus a RecordToolEvent field), which would also let a replay report which rules a call was judged under. Recommendation: keep the time-based lookup; confirm the interpretation.",
+        "source": "https://github.com/willesq/orchestrator/pull/185",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-075",
+          "SP-047"
+        ],
+        "status": "resolved",
+        "note": "2026-11-14: the user chose the alternative, recorded by the coordinator as D-66 (PR #178): each command log record stores the outbound rules revision it was judged under (toollog column rules_rev, and a RecordToolEvent field once orchd.proto can change), and a replay uses that revision instead of a time lookup. Built on PR #185."
+      },
+      {
+        "id": "RC-602",
+        "kind": "follow-up",
+        "topic": "An on fail_closed rule makes every tool call read the terms files and match its patterns",
+        "detail": "2026-11-14, SP-075 security audit (low): fail_closed rules may match any tool (MCP tools included), so while one is on every PreToolUse reads the spaces' terms files and matches up to 256 patterns over the call's text; a call over 4 MiB is refused. RE2 keeps matching linear and the check is bounded by the hook's 2.5 s, but a large Write or Edit costs more. Options: accept (documented in docs/internals/hooks.md), or cache compiled rules and terms per snapshot in the hook. Recommendation: accept; measure if users report slow hooks.",
+        "source": "https://github.com/willesq/orchestrator/pull/185",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-075"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-603",
+        "kind": "decision",
+        "topic": "orch.db stays readable by agents' tool calls, so the outbound rules' values can be read from it",
+        "detail": "2026-11-14, SP-075 security review (info): rule values are kept like terms (INV-07) and the guard snapshot that carries them is now read-protected, but orch.db is not: the self-protection test TestSelfProtectionAllowsReads (SP-042) deliberately allows reading orch data such as orch.db, and a session can read spaces_terms_rules with sqlite3. Terms files themselves are read-protected. Options: (a) accept: a rule's value is the operator's configuration, not a secret term, and reading it only tells an agent what is refused; (b) read-protect orch.db* in ProtectedPaths, which changes SP-042's accepted behavior. Recommendation: (a), and advise operators to put anything secret in a terms file rather than a rule.",
+        "source": "https://github.com/willesq/orchestrator/pull/185",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-075",
+          "SP-042"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -6944,7 +6996,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestOutboundBaselineRuleSwitches (internal/spaces/terms_rules_test.go) passes at 46e3449: the six baseline rules (fail_closed_unreadable, gh_default_repo, plain_variables, command_assignments, git_config_harmless_keys, pending_work_after_staging) keep their stable ids and are on by default; one command per rule is decided with every rule on and with each rule alone off (7 configurations x 6 rows, real git checkouts) and only that rule's row changes verdict (e.g. 'git -C \"$PWD\" commit' allowed on, outbound_unchecked with plain_variables off; 'gh pr create' with a globex remote allowed on, outbound_term with gh_default_repo off).",
+            "a2: TestParseUserRuleRejects, TestOutboundUserRulesNeverLoosen, TestOutboundUserRulesStricter and TestOutboundRulesChanges (internal/spaces/terms_rules_test.go) pass at 46e3449: kinds allow/exempt and values starting with ! are rejected at save time with ErrRuleLoosens; command rules naming git, gh, a shell, a wrapper or a git-* helper, wildcard destinations, empty-matching or invalid patterns are ErrBadRule, and no error quotes the value; 8 added rules x 8 baseline-refused commands stay refused; each kind refuses what the baseline let through (glab with a term, a term to acme/public-sdk, an MCP tool and curl to api.github.com matching fail_closed patterns), names the rule by id only, stops applying when switched off or removed, and never leaves a push's commits unchecked that the baseline checks (security-audit M1 regression).",
+            "a3: TestOutboundRulesStore and TestReplayWithRules (internal/spaces/terms_rules_store_test.go), TestOutboundRulesPersistAndReachHook and TestReplayJudgesWithRecordedRules (internal/daemon/terms_rules_test.go), TestOutboundRulesReachHook (internal/hook/terms_rules_test.go) and TestRulesRevColumn (internal/toollog/rulesrev_test.go) pass at e3bfd4b: rules are stored per change in spaces_terms_rules (migration 0030), read back by a new orchd (restart) and written into the guard snapshot (rules, rules_rev), from which the hook's check applies them end to end through pre-tool-use; rows changed outside orchd do not verify and make the hook refuse shell and MCP calls. Per D-66 each command log record stores the rules revision (toollog schema 3, column rules_rev, taken when orchd receives the event; old records keep their hashes) and a replay judges each event with that revision: a fail_closed rule refuses only the call recorded under the revision that held it, both after the rule is removed and after it is added again. The hook-supplied revision in RecordToolEvent waits for the orchd.proto slot (PR #182)."
+          ]
         },
         {
           "id": "SP-075.2",
@@ -6972,18 +7028,22 @@
               "threshold": "true"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestOutboundRulesOperatorOnly (internal/daemon/terms_rules_test.go), TestOutboundRulesRPCs (internal/daemon/terms_rules_rpc_test.go), TestEveryRPCIsClassified (internal/daemon/callers_test.go), TestSpacesTermsRulesList and TestSpacesTermsRulesChange (internal/cli/spaces_terms_test.go) pass at fef1fb2: ChangeOutboundRule (enable, disable, add, remove, and an unknown action) is PermissionDenied for claude and codex sessions, a process orchd started, a queued task, an unreadable ancestry and no peer, and nothing is stored; the operator's changes are stored with time and caller 'operator (process 42)', logged and emitted as 'outbound rule <id>: <action> by <caller> (rules revision n)' with no value in orchd's log, events, errors, responses or the list; ListOutboundRules gives sessions ids, kinds and states only and the operator also who changed them and the history. 'orch spaces terms rules [list|enable|disable|add|remove]' is tested for each command, its output, orchd's refusal, and that 'add' takes the value only from input, never an argument.",
+            "a2: OutboundRulesModelTests and OutboundRulesClientTests (macos/Tests/OrchKitTests/OutboundRulesTests.swift) pass at fef1fb2 (make app-test, 421+ tests; make app-cover all files >= 80%): the app lists the baseline rules and the added rules with their state, switches them and adds and removes rules through ChangeOutboundRule over gRPC (FakeOrchd), asks before a baseline rule is switched off, shows orchd's operator-only refusal under the rule or the add form, and shows that the terms layer is off (no rule applies; switched under Enforcement or 'orch spaces enforce terms off'). Snapshot outbound-rules-light/dark.png (SpacesSnapshots) checked by eye in light and dark.",
+            "a3: docs at fef1fb2: docs/internals/hooks.md (Outbound baseline: each rule on and off; Outbound rules: kinds, what is rejected, never shown, in the hook), docs/OPERATIONS.md (Outbound terms rules: the baseline, how to relax and tighten it, how to switch the terms layer off entirely, that a rule's value never appears in logs, refusals, orch output or the app), docs/internals/cli.md (orch spaces terms rules), docs/internals/app.md (Outbound rules), docs/internals/daemon.md (Outbound rules, gRPC rows, command log rules_rev, replay) and docs/internals/config.md."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "cfe6e98",
+      "verified_at": "2026-11-15T00:06:19Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f09b8ebcceabae3c53278bbf89426eec5db6e7a09c656b08af71fa359704171c",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-075-configurable-outbound-rules",
+      "pr": "https://github.com/willesq/orchestrator/pull/185"
     },
     {
       "id": "SP-076",

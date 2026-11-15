@@ -62,6 +62,9 @@ orch spaces log verify <session|task:ID>   # check a session's command log was n
 orch spaces enforce                   # every enforcement layer's switch
 orch spaces enforce guard off --for 15m   # switch a layer, optionally for a time (operator only)
 orch spaces sandbox [auto|on|off]     # show or set whether orch writes sandbox rules (operator only)
+orch spaces terms rules               # the outbound terms check's rules and their state
+orch spaces terms rules disable plain_variables   # relax a baseline rule (operator only)
+orch spaces terms rules add fail_closed < rule.txt   # add a stricter rule; the value is read from input (operator only)
 orch guard git-hook --install [--apply]   # git hooks that refuse commits and pushes carrying another space's terms
 orch sessions list [--all]   # sessions and their state: active, idle, ended (with --all), unpinned
 orch run <space> -- claude   # start Claude Code with the space's profile, from any folder
@@ -165,6 +168,41 @@ writes them for every space while a policy is applied; `off` writes none (a spac
 warn that enforcement is off, but each session's next start digest names it once after you change
 it, and after orchd starts while it is off. `orch spaces enforce sandbox off [--for 15m]` is the debugging switch: it takes everything
 out, and every digest says so while it is off.
+
+### Outbound terms rules
+
+The outbound terms check (a space's `terms_file`) refuses a commit, push or GitHub write that would
+carry one space's terms to a destination outside it. How strictly it reads commands is a baseline
+of named rules, all on by default:
+
+| Rule | On (default) |
+|---|---|
+| `fail_closed_unreadable` | a command the check cannot read in full is refused |
+| `gh_default_repo` | a gh write without `-R` counts only the repo gh would use |
+| `plain_variables` | `$PWD`, `$USER` and `$HOME` are read |
+| `command_assignments` | variables set earlier in the same command are read |
+| `git_config_harmless_keys` | `git -c` with harmless keys is read |
+| `pending_work_after_staging` | after `git add` in the same call, a commit or push also checks the work tree and every branch |
+
+**Relax** it by switching a baseline rule off (`orch spaces terms rules disable <id>`, or its switch
+in Orch.app → Settings → Spaces → Outbound rules). Switching off `fail_closed_unreadable` lets what
+cannot be read through; switching off any other rule reads commands more strictly than the default
+or checks less (`pending_work_after_staging`). **Tighten** it by adding rules of your own:
+`command <program>` (check a program such as `glab` like a git or gh write), `destination
+<owner[/repo]>` (no space's terms may reach it, e.g. a public repo of a job's org) and
+`fail_closed <text|re:regex>` (refuse any tool call whose tool name or text matches, e.g. a GitHub
+MCP tool). An added rule can only make the check stricter; one that would allow or exempt is
+rejected. **Switch the whole check off** with the terms layer: `orch spaces enforce terms off [--for
+15m]` (every session's start digest says so while it is off).
+
+Only you can change the rules, from your own terminal or the app; each change is logged with its
+time and caller. `add` reads the value from its input (pipe a file, or type it at the prompt), so
+it stays out of your shell history. A rule's value, like a term, never appears in logs, refusals, `orch` output or the
+app: rules are named by id (`user-1`, …), so keep your own note of what each one holds. A refusal
+by one of your rules names it: `the operator's outbound rule user-1 refuses it`. If `orch.db`'s
+rules cannot be read, `orch spaces terms rules` warns, and every shell command and MCP tool is
+refused while terms apply, until you make any change. See
+[internals/hooks.md](internals/hooks.md#outbound-rules).
 
 `orch run <space> -- claude|codex` gives a session the same rules from any folder (Codex has no
 per-checkout settings, so this is how Codex sessions get them). By default it uses your own
