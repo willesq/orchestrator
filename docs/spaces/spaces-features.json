@@ -8145,14 +8145,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "b2975ea74e5cf3cd33657dbec78cd5b4ff84ac2c9882e4833e2907321b850162",
-      "branch": null,
+      "branch": "feat/sp-080-state-files",
       "pr": null
     },
     {
