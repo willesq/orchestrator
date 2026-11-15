@@ -6645,10 +6645,10 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "e1813d3b6fd0dc40f52d79b2cb0ff7b815d79258",
+      "verified_at": "2026-11-15T05:42:19Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "f334012d02c2c9c118e211015950a80e0234c453ca65ed1894ac756872e8c3be",
