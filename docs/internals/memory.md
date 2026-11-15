@@ -304,7 +304,8 @@ no origin, or that the placer leaves without a space, stores nothing.
 - **What is not done yet.** Each space's chunks go to its own collection (SP-024, see
   [Storage](#storage-qdrant)), but no read path passes the caller's spaces or filters by
   `labels_v` yet (SP-025): a search without `SearchOpts.Spaces` reads every collection. Chunks stored before SP-023 have
-  no placement; `orch rag relabel` (SP-027) places them. A docs file whose content and repo HEAD
+  no placement, and chunks stored before SP-024 sit in the base collection whatever their space;
+  a [relabel](#relabel) (SP-027) places and moves them. A docs file whose content and repo HEAD
   did not change is not stored again, so it keeps its earlier placement until relabelled, except
   that a public copy of a repo no longer public leaves (above). When the repo listing fails
   other than by GitHub refusing the owner, every repo keeps its docs as last indexed, public ones
@@ -711,6 +712,84 @@ and breaks reuse only past about 256 KiB left unread. The store now defends anyw
   run finishes instead of stopping. Nothing reached Qdrant, so this is safe for writes.
 - **Counts connections:** the progress line every 10 s reports how many Qdrant connections the
   store has opened. A few means reuse; thousands is the #98 symptom, and the next place to look.
+
+## Relabel
+
+A relabel (SP-027, INV-08, INV-03) brings every stored chunk up to the applied spaces policy:
+`rag.Service.Relabel` in `internal/rag/relabel.go`, run by orchd with its relabel placer
+(`internal/daemon/relabel.go`) under the migration lock. A chunk is **stale** when its `labels_v`
+is not the applied revision, which includes chunks stored before placement (no `labels_v`) and
+every chunk after the operator applies a new revision.
+
+1. Refuse with no applied revision, with an applied revision that no longer verifies (everything
+   would be quarantined; content stays stale and unreadable until a revision is applied again),
+   while a migration shadow is installed, or while a migration, backup drop or keyword re-index
+   holds the lock.
+2. Count every chunk of the base and each space collection, and list each collection's stale
+   chunks by source (`must_not labels_v = <rev>`, payload `source_uri` only). Every collection is
+   listed before any is changed, so a chunk moved into a collection not yet read is counted once.
+3. For each stale source, under its write lock, re-read its chunks in that collection and place
+   it again from its first chunk's stored origin, type, tags and writer. A source a live write
+   replaced since it was listed is current and skipped.
+4. Where the new space's collection is the one it is in, stamp the stale chunks' `space` and
+   `labels_v` (`POST /points/payload`). Otherwise move the whole source: read its points with
+   their vectors, upsert them into the new collection (created hybrid when missing; a dense
+   chunk gets its keyword vector from its stored text, nothing is re-embedded) with the new
+   `space`, `labels_v` and any reconstructed origin, prune surplus chunks of an older, longer copy
+   there, check the new collection holds at least as many chunks, then delete the source from the
+   old collection. A newer copy already in the new collection (a live write placed it there under
+   the applied revision, with another write hash) is kept, and the stale copy is only deleted.
+   Either way the source is then deleted from every other collection, so a copy an earlier,
+   stopped run left where the source no longer belongs never stays readable there.
+5. Without apply, steps 3 and 4 place and count only. The report gives totals, chunks changed and
+   moved, chunks left stale, and counts per transition (`unplaced` for chunks stored with no
+   space): counts and space names only, never a source, its text or a collection name.
+
+**Resumable.** A source is copied before its old copy is deleted, and point IDs are
+deterministic, so a run stopped between the two leaves a stale copy that the next run copies
+again over the same points and deletes: the chunk count is unchanged and no source ends in two
+collections, even when the next run places the source elsewhere. A source that cannot be placed
+now (the policy changed mid-run, or GitHub could not be asked about a docs repo) or whose chunks
+cannot be moved as they are (no dense vector) stays stale, is counted as left stale, and is retried
+by the next run; the run goes on with the other sources. A failed store request stops the run with
+a generic error, since Qdrant's errors name collections and so spaces (RC-350); the detail goes
+to orchd's log.
+
+**Placing stored content.** A chunk with a stored origin is placed from it, exactly as a write
+would be ([Placement of writes](#placement-of-writes)). A chunk stored before SP-023 has none, so
+its origin is reconstructed from the writer orchd stored with it and the URI that writer makes;
+the reconstructed origin is stored with the chunks. A URI is read only for its own writer, so a
+client's note named like another space's source is not placed by its name:
+
+| Writer | URI | Origin |
+|---|---|---|
+| docs sync | `repo://<owner>/<repo>/<path>` | `github`, with the repo's visibility asked of GitHub again; when it cannot be asked (budget, error), the source stays stale |
+| sources refresh | `checkout://<absolute path>`; a web URL | `fs` with the path; `web` with the URL |
+| edit hand-off | `file://<absolute path>`; `claude://<path>` | `fs` with the path (under `~/.claude` for `claude://`), only while it resolves to itself: the live write placed what the path resolved to then, so a link, or a file that is gone, gets none |
+| session hand-off, summaries | `session://<id>/record\|transcript` (a valid session ID) | `session`, tied to the session only when its record names a transcript that is that session's own, where its harness keeps it (the live write's check); placed by its pin |
+| Ingest RPC | any | `client` with no writer space: quarantined |
+| none recorded (before writers were, 2026-10-28) | any | none: quarantined |
+
+Content that cannot be placed (no origin, a conflict between two equally strict spaces) goes to
+`quarantine`, never to public or another space (INV-03); the operator can retag it (SP-071).
+Accepted risk: a hand-off chunk stored without an origin (written between 2026-10-20, when
+hand-offs began resolving links, and SP-023) is placed by the path it was edited at. A process
+that can write there could replace a link with a regular file before the relabel, so content read
+through the link is placed by the link's folder. It needs write access at that path and timing.
+
+**Running it.** `orch rag relabel [--dry-run]` calls the `Relabel` RPC, which only the operator
+may call (refused to queued tasks and harness sessions, since the report names spaces). A run
+that stops part-way still reports what it did, with a generic error.
+
+**Not done yet.** Reads do not filter on `labels_v` yet (SP-025): a
+stale chunk left in its own space's collection by a revision change is readable there until
+relabelled; one stored in the base or another space's collection is not read by a search of the
+spaces it belongs to. A relabelled source's write hash still names its old placement, so its next
+write is stored again (embedded once) rather than skipped as unchanged.
+
+**Cost.** On the SP-002 corpus (40,000 chunks of 384 dimensions stored unplaced in one base
+collection, every chunk moved to one of four space collections, Qdrant 1.17.1 on this Mac), a
+relabel took 35.7 s (`TestIntegrationRelabel40k`, `ORCH_QDRANT_BENCH=1`).
 
 ## Duplicate clean-up
 

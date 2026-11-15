@@ -22,6 +22,7 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | `rag backfill-sessions [--all [--summaries]] [--apply]` | store undated sessions again, or with `--all` every transcript still on disk, without harness text, and with `--summaries` their summaries too ([memory.md](memory.md#transcripts-and-harness-text)) |
 | `rag dedupe [--apply]` | delete path-keyed copies identical to a synced doc of a registered source (*operator-only*) |
 | `rag reindex-keywords [--apply]` | rebuild keyword vectors for the current tokenizer, in place (*operator-only*) |
+| `rag relabel [--dry-run]` | place every chunk whose `labels_v` is not the applied spaces policy revision again, and stamp it or move it with its vectors to its space's collection; content that cannot be placed goes to quarantine. Resumable; `--dry-run` places and counts only. Prints counts per transition and space names, never a source (`Relabel`, *operator-only*, refused inside harness sessions too; [memory.md](memory.md#relabel)) |
 | `rag migrate-hybrid [--target] [--apply] [--rollback] [--drop-backup]` | layout migration (*operator-only*) |
 | `rag backfill-sessions [--apply]` | date older sessions (*operator-only*) |
 | `source add\|list\|remove\|refresh [--confirm-prune]`, `repo add\|list` | cadence-refreshed sources; `--confirm-prune` lets the next refresh of one source prune past the cap (through orchd, operator-only) |
