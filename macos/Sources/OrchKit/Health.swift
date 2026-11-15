@@ -34,12 +34,20 @@ public struct DaemonStatus: Sendable, Equatable {
     public let version: String
     public let uptimeSeconds: Int64
     public let subsystems: [Subsystem]
+    /// The memory spaces switch: "on", "off" or "turning_on"; empty from an
+    /// orchd that predates it, which always enforces.
+    public let spacesState: String
 
-    public init(version: String, uptimeSeconds: Int64, subsystems: [Subsystem]) {
+    public init(version: String, uptimeSeconds: Int64, subsystems: [Subsystem], spacesState: String = "") {
         self.version = version
         self.uptimeSeconds = uptimeSeconds
         self.subsystems = subsystems
+        self.spacesState = spacesState
     }
+
+    /// Whether memory spaces are switched off: the app then shows no
+    /// Spaces pane, badge or tray switches, as before spaces.
+    public var spacesOff: Bool { spacesState == "off" }
 }
 
 /// What the tray icon shows.

@@ -12,6 +12,14 @@ import Testing
         #expect(Health(status: s).summary == "orchd 0.17.1 running, up 1h31m")
     }
 
+    @Test func spacesSwitch() {
+        #expect(DaemonStatus(version: "1", uptimeSeconds: 1, subsystems: [], spacesState: "off").spacesOff)
+        #expect(!DaemonStatus(version: "1", uptimeSeconds: 1, subsystems: [], spacesState: "turning_on").spacesOff)
+        #expect(!DaemonStatus(version: "1", uptimeSeconds: 1, subsystems: [], spacesState: "on").spacesOff)
+        // An orchd that predates the switch always enforces.
+        #expect(!status([]).spacesOff)
+    }
+
     @Test func stoppedUnitIsNotDegraded() {
         let s = status([Subsystem(name: "workflow-worker", state: "stopped")])
         #expect(Health(status: s) == .healthy(s))
