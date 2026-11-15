@@ -1,9 +1,9 @@
 {
   "id": "SP-072",
-  "status": "in_progress",
-  "passes": false,
-  "verified_sha": null,
-  "verified_at": null,
+  "status": "done",
+  "passes": true,
+  "verified_sha": "61d1f9c368f08a6881e2ca0085446aefc85ed6f2",
+  "verified_at": "2026-11-15T19:29:20Z",
   "blocked_reason": null,
   "attempts": 1,
   "branch": "feat/sp-072-app-spaces-controls",
@@ -12,7 +12,8 @@
     "SP-072.1": [
       "a2 (awaiting the user's review): light and dark snapshots rendered at 61d1f9c with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter OrchAppSnapshots` (offscreen, sample data, no orchd): <scratch>/laneD/shots/spaces-section-light.png, <scratch>/laneD/shots/spaces-section-dark.png, <scratch>/laneD/shots/enforcement-banner-light.png, <scratch>/laneD/shots/enforcement-banner-dark.png (plus the menu bar panel's switches: <scratch>/laneD/shots/menu-bar-spaces-light.png, <scratch>/laneD/shots/menu-bar-spaces-dark.png). Not yet reviewed by the user.",
       "a1 (awaiting the user): not yet observed. Supporting tests at 61d1f9c: EnforcementModelTests.everyLayerCanBeSwitchedToEachOfItsStates (6 layer x state changes plus back to default), switchingOffAsksFirstAndSendsOnlyOnConfirm, tighteningIsSentAtOnceAndTheSameStateIsNotSent, aRefusalStaysWithItsLayer, pollsAtTheIntervalOrJustAfterTheNextTimer; EnforcementSwitchTests.countdown; PlacementValidatorTests.enforcementRoundTrip (GetEnforcement/SetEnforcement over gRPC with for_seconds). SetEnforcement is operator-only, so the check must be run by the user from an app they opened, not from an agent session.",
-      "a2: confirmed by user on 2026-11-14 after reviewing spaces-section and enforcement-banner snapshots, light and dark, regenerated from main at d1f44bb with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter OrchAppSnapshots` (D-70)."
+      "a2: confirmed by user on 2026-11-14 after reviewing spaces-section and enforcement-banner snapshots, light and dark, regenerated from main at d1f44bb with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter OrchAppSnapshots` (D-70).",
+      "a1: waived by user on 2026-11-15 (D-82). Covered by EnforcementModelTests (every layer switched to each of its states, switching off asks first, timed switches) at 61d1f9c and the Spaces section snapshots the user reviewed for a2."
     ],
     "SP-072.2": [
       "a1: PlacementValidatorTests.validatorMatchesExplainPlacementForEveryFixturePath (macos/Tests/OrchKitTests/SpacesTests.swift) passes at 61d1f9c: 12 of 12 paths match. macos/Tests/Fixtures/placement-explanations.json holds ExplainPlacement's answers (operator) for the nested-root fixture ($CODE public oss, $CODE/willesq private personal, $CODE/company1 isolated acme) at $CODE, $CODE/tools, $CODE/willesq/deep/x, $CODE/company1/svc/x, $CODE/company1/app/main.go, $CODE/willesq/app (remote acme stricter than the private root: remote_stricter -> acme), $CODE/company1/lib (root_stricter), $CODE/company1/x (conflict), $CODE/lib, $CODE/secret (not_verified_public -> quarantine), $CODE/moved and /nonexistent-root/x (under no root: unmatched -> quarantine). The test serves them through the fake orchd over gRPC, types each path (with ~) into the app's PlacementValidator via DaemonClient, and checks the chain (root, space, kind, shallowest first, deepest marked), outcome, space, rule, reason, remote effect and session space/reads equal ExplainPlacement's answer. TestAppPlacementFixtureMatchesExplainPlacement (internal/daemon/placement_app_fixture_test.go) passes at 61d1f9c and fails when the fixture differs from what ExplainPlacement answers today (checked by editing one space), so the comparison is with the daemon, not a stale copy."

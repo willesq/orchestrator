@@ -10,5 +10,6 @@
     "SP-061",
     "SP-062"
   ],
-  "status": "open"
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-15 as D-81: option (a). SearchDirectMessages stays operator-only; Orch.app gets a DM search view (SP-083)."
 }

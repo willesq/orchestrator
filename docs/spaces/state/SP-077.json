@@ -1,9 +1,9 @@
 {
   "id": "SP-077",
-  "status": "in_progress",
-  "passes": false,
-  "verified_sha": null,
-  "verified_at": null,
+  "status": "done",
+  "passes": true,
+  "verified_sha": "af3780ab5e1752edf1d25340defa1f32574fffe7",
+  "verified_at": "2026-11-15T19:29:20Z",
   "blocked_reason": null,
   "attempts": 1,
   "branch": "feat/sp-077-operator-unlock",
@@ -15,7 +15,8 @@
       "a3: TestUnlockConfirmationNeedsTheSignedApp (internal/daemon/unlock_refusal_test.go) passes at 63b6d21: ConfirmUnlock and ListUnlocks are refused to a signed copy elsewhere (ad-hoc copy), a binary at the app's path with another code directory hash (another signature), the app without the hardened runtime, one with no code hash and one that fails the requirement, and the installed Orch.app's confirmation is what grants it. The recognition itself is checked against real ad-hoc signatures by TestAppSignatureOfARealProcess (internal/daemon/appsig_darwin_test.go, SP-025; passes at 63b6d21).",
       "a4 (manual, awaiting the user): not yet observed. Supporting: light and dark snapshots of the menu bar panel's unlocks (pending request, confirmed request with its code, active unlock with its countdown) rendered with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter UnlocksSnapshots` (macos/Tests/OrchAppSnapshots/UnlocksSnapshots.swift) at <scratch>/sp-077/shots/menu-bar-unlocks-light.png and -dark.png. The real check needs the user (RC-1152): with a policy applied, run 'orch spaces unlock --for 5m' in a terminal, see the request in Orch.app's menu bar panel with that command, terminal and duration, Confirm (Touch ID or password), type the code shown into the terminal, see the countdown, run an operator command (e.g. 'orch spaces diff'), then Lock; and Deny a second request.",
       "a5: docs/internals/daemon.md ('Operator evidence' and the new 'Operator unlock' section) and docs/OPERATIONS.md (unlock and lock commands and how to confirm) changed at 63b6d21; also docs/internals/cli.md and docs/internals/app.md.",
-      "D-78 (RC-1150, 2026-11-15): TestUnlockCannotWeakenProtection (internal/daemon/unlock_scope_test.go) passes: a terminal under a confirmed unlock is refused, before the handler runs, ApplySpaces, SetEnforcement to a relaxing state (memory ' OFF', guard log, an unknown layer), SetSandboxSetting, ChangeOutboundRule and every SP-078 settings RPC (settingsRPCs), each let through from Orch.app; the unlocked terminal keeps reads of every space, Relabel, RetagSource, DiffSpaces, tightening a switch and SetConfig without a Sensitive key; a terminal with no unlock still reaches none of them. The SetEnforcement handler also refuses the unlocked terminal a switch looser than the current state (the guard from strict back to block-other-jobs, or a lasting block-other-jobs over Orch.app's timed off that reverts to strict) while letting it keep or restore strict, and RemoveDocsOwner with purge is refused to it as PurgeDocs is (D-77)."
+      "D-78 (RC-1150, 2026-11-15): TestUnlockCannotWeakenProtection (internal/daemon/unlock_scope_test.go) passes: a terminal under a confirmed unlock is refused, before the handler runs, ApplySpaces, SetEnforcement to a relaxing state (memory ' OFF', guard log, an unknown layer), SetSandboxSetting, ChangeOutboundRule and every SP-078 settings RPC (settingsRPCs), each let through from Orch.app; the unlocked terminal keeps reads of every space, Relabel, RetagSource, DiffSpaces, tightening a switch and SetConfig without a Sensitive key; a terminal with no unlock still reaches none of them. The SetEnforcement handler also refuses the unlocked terminal a switch looser than the current state (the guard from strict back to block-other-jobs, or a lasting block-other-jobs over Orch.app's timed off that reverts to strict) while letting it keep or restore strict, and RemoveDocsOwner with purge is refused to it as PurgeDocs is (D-77).",
+      "a4: waived by user on 2026-11-15 (D-82). Covered by the menu bar panel's unlock snapshots (pending, confirmed with its code, active with its countdown) and UnlocksModel tests; verified independently at af3780a."
     ]
   }
 }
