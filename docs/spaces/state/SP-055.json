@@ -7,7 +7,7 @@
   "blocked_reason": null,
   "attempts": 1,
   "branch": "feat/sp-055-palette-cli-parity",
-  "pr": null,
+  "pr": "https://github.com/willesq/orchestrator/pull/216",
   "evidence": {
     "SP-055.1": []
   }
