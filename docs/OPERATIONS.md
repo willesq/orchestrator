@@ -55,7 +55,7 @@ orch spaces draft < policy.json       # save a draft revision; changes nothing
 orch spaces diff [--full]             # what the newest draft changes, and its problems
 orch spaces apply --revision N        # enforce draft N
 orch spaces apply --revision N --confirm-github-org ORG   # also accept ORG's changed GitHub identity
-orch spaces why <path|url|owner/repo|slack:ID|teams:ID>   # which space its content goes to, and why
+orch spaces why <path|url|owner/repo|slack:ID|teams:ID>   # which space its content goes to, and why (alias: explain)
 orch spaces log [<session>|task:ID]   # a session's command log, in order
 orch spaces log summary [--since 168h]   # per space: tool calls, directory moves, moves into another space
 orch spaces log verify <session|task:ID>   # check a session's command log was not changed
@@ -105,6 +105,13 @@ shallowest to deepest, what its GitHub remote contributes, the rule that decided
 For a path it also says where a session started there would write and which space it would read
 as. Inside an agent session orchd answers only when every space in the answer is public. See
 [internals/memory.md](internals/memory.md#placement).
+
+Local folders under a public root (such as `~/code`) are public only when you list them in that
+public space's `public_paths` in the policy: `~/code/x` for the files directly in it,
+`~/code/*/docs` for one folder name, `~/code/x/**` for everything below. There is no `!`; list
+only what is public. Everything else under the public root is quarantined, whatever its `.git`
+says, and `orch spaces why <path>` names the pattern that matched or says none did. See
+[internals/config.md](internals/config.md#spaces-policy).
 
 orchd keeps a command log of every tool call and directory change Claude Code and Codex sessions
 report, in `~/.local/share/orch/toollog.db` (owner-only, never indexed into RAG). Commands are

@@ -12,6 +12,8 @@ type Resolved struct {
 	spaces             map[string]*Space
 	// roots are every bound folder root, expanded, for placement.
 	roots []root
+	// publicPaths are each public space's public_paths, parsed, by space.
+	publicPaths map[string][]publicPath
 	// ghDirs are each space's gh_config_dir, expanded, by space.
 	ghDirs map[string]string
 	// claudeDirs are each space's claude_config_dir, expanded, by space.

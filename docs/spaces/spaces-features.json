@@ -606,6 +606,11 @@
         "id": "D-72",
         "decision": "The repository has been public since 2026-11-14. Private strings already pushed (this Mac's home path, temporary-folder paths with session ids) are replaced with placeholders such as '<main checkout>' and '<scratch>' in new commits, on main's plan file and on open branches; git history is not rewritten.",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-73",
+        "decision": "Sessions can write files into folders listed in a public space's public_paths, or create new folders that a '*' or '**' pattern matches, and the sources refresh indexes that content into public. The user accepts this as an extension of RC-404's accepted risk (SP-076). Later, SP-046's per-checkout sandbox rules will also deny job sessions writes to listed folders (RC-805) (was RC-801).",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -3018,7 +3023,7 @@
           "SP-076"
         ],
         "status": "open",
-        "note": "Updated 2026-11-14 under D-65: does not apply until SP-076, since nothing can be declared public now. Review again when public_paths lets the operator list folders: a session can write into a listed folder."
+        "note": "Updated 2026-11-14 under D-65: does not apply until SP-076, since nothing can be declared public now. Review again when public_paths lets the operator list folders: a session can write into a listed folder. Updated 2026-11-14 under D-73: public_paths (SP-076) now lets the operator list folders, so a session can write into a listed folder, or create a folder a '*' or '**' pattern matches, and have it indexed into public; the user accepted this as an extension of this risk. Sandbox mitigation tracked in RC-805."
       },
       {
         "id": "RC-405",
@@ -3280,6 +3285,88 @@
         "affects": [
           "SP-051",
           "SP-052"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-800",
+        "kind": "follow-up",
+        "topic": "orch spaces explain is an alias of why; the matched pattern travels in the reason text",
+        "detail": "SP-076.1.a4 names 'orch spaces explain <path>'; the existing command is 'orch spaces why' (SP-022), so SP-076 adds 'explain' as an alias rather than a second command. PlacementExplanation has no field for the matched public_paths pattern and SP-076 may not change orchd.proto, so orchd appends it to the reason for the operator only (rule public_path), and the no_public_proof reason says no pattern matched. SpaceInfo (ListSpaces, the app) does not carry public_paths either. When the proto slot is free: add a public_path field to PlacementExplanation and public_paths to SpaceInfo, for SP-053's editor.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-053",
+          "SP-022"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-801",
+        "kind": "decision",
+        "topic": "RC-404 is live again: sessions can publish by writing into a listed folder, and wildcards let them create matching folders",
+        "detail": "Security audit of SP-076 (medium M2, design under D-65). A folder a public_paths pattern lists is trusted as written: any job's session can write files there and register it as a source, and the sources refresh places them in public; a listed folder with no .git needs no other proof. With '*' or '**' a session can also create a new folder the pattern matches (e.g. ~/code/new/docs under ~/code/*/docs). This is the risk the user accepted as RC-404 for declared folders, which said to review it when public_paths exists. Documented in docs/internals/config.md. The independent verifier adds: the sources walk follows a .md symlink to any file inside the walked folder, so a link in an exact listed folder can index a file from an unlisted subfolder under the link's path, again only by someone who can write into the listed folder. Possible mitigations: require a GitHub repo verified public (and only git-tracked files) for wildcard matches; accept only operator-registered sources under public_paths; SP-046 sandbox rules denying job sessions writes to listed folders; warn in 'orch spaces diff' when a pattern holds '*' or '**'. Recommendation: keep as accepted risk now, and have SP-046 deny job-session writes to listed folders.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-046",
+          "SP-030"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14 with option (a): see D-73. Accepted as RC-404's accepted risk extended; the sandbox follow-up is RC-805."
+      },
+      {
+        "id": "RC-802",
+        "kind": "decision",
+        "topic": "'*' may sit inside a folder name (oss-*)",
+        "detail": "D-65 says '*' matches one folder name. SP-076 matches each '*'-holding folder name with Go's path.Match, so '~/code/*' and '~/code/oss-*' both work, and '*' never crosses a '/'. '?', '[...]', '{...}', '\\', '!' and '**' inside a longer name are refused. If only a whole-name '*' is wanted, the parser can refuse 'oss-*' in one line.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-803",
+        "kind": "follow-up",
+        "topic": "Limits of keeping a listed folder public while GitHub does not answer (RC-402 item 6)",
+        "detail": "SP-076 implements RC-402(6): a lookup that gets no answer (outage, throttle, spent 30/min budget) does not take a listed folder's stored public copy out, for 6 hours after GitHub last said the repo is public. Security audit M1: any caller can spend the shared budget (ExplainPlacement), so the grace is bounded rather than open-ended; within it a repo that went private keeps its earlier public copy. Limits: the grace is in memory, so after an orchd restart an unanswered repo leaves (fails closed, re-embeds later); a changed file written during an outage goes to quarantine and its public copy moves with it (SP-024's write path). Possible improvement: a lookup budget for the sweep and refresh that RPC callers cannot spend, or cache-only lookups for agent ExplainPlacement.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-030",
+          "SP-024"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-804",
+        "kind": "follow-up",
+        "topic": "Low findings of the SP-076 security audit",
+        "detail": "(1) Paths, roots and patterns compare by Go's strings.ToLower text, not as APFS compares names (Unicode NFC/NFD, full case folding): a source registered under another spelling of a private root's folder could miss that root and, under a '~/code/**' pattern, be placed public. The text comparison predates SP-076 but SP-076 makes it reachable; a fix needs Unicode normalization (golang.org/x/text, a new dependency) or an os.SameFile check against stricter roots. Not tested on disk. (2) An agent's ExplainPlacement answers only for public_path matches, so it can confirm a guessed folder name in a literal pattern even though the pattern is never shown; mitigations: refuse non-existent paths for agents, or rate-limit per caller. (3) Patterns are case-insensitive, so on a case-sensitive volume '~/code/oss' also matches a session-created '~/code/OSS'.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-020",
+          "SP-022"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-805",
+        "kind": "follow-up",
+        "topic": "Sandbox rules should deny job sessions writes to public_paths folders",
+        "detail": "D-73 accepts that sessions can write into folders public_paths lists (or create folders a '*' or '**' pattern matches) and have them indexed into public. The planned mitigation: SP-046's per-checkout sandbox rules deny writes to every folder a public_paths pattern matches, and to the folders a '*' or '**' pattern could create, for the sessions of job (isolated) spaces. Patterns with wildcards need a rule form the sandbox can express (e.g. denying the pattern's literal prefix, or each existing matching folder refreshed on apply).",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046",
+          "SP-076"
         ],
         "status": "open"
       },
@@ -7318,18 +7405,30 @@
               "threshold": "both"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: internal/spaces TestPublicPathPatterns (27-row table over exact folder, '*' whole and within a name, '**' at end, middle and repeated; case-insensitive), TestPublicPathForFolders, TestPublicPathRejectedSyntax ('!', '?', '[...]', '{...}', backslash, '**' inside a name, '***', trailing '/', '//', '.', '..', relative, '~user'; reasons never repeat the pattern; a '*' in the home folder's own name stays literal) pass at 456cc4a.",
+            "a2: internal/spaces TestValidatePublicPaths (outside every root, above its root, inside a private or isolated root, malformed, '!', glob class, relative, and public_paths on a private space are refused; messages name 'entry N', never the pattern holding a term), TestPublicPathsLimits, TestApplyRefusesBadPublicPaths (three bad revisions refused at apply, the applied policy's pattern still enforced, errors do not echo the term) pass at 456cc4a.",
+            "a3: internal/daemon TestPublicPathsDecideLocalContentUnderPublicRoot passes: with '<code>/oss/**' listed, a plain folder, a verified public checkout, a GitLab checkout and a folder an acme session registered as a source are refreshed into oss; a private repo, a remote naming acme, and an unlisted folder go to quarantine; a .git at, above and inside the public root and in each folder changes no placement (write and explanation); with '<code>/**' the private and isolated roots keep personal and acme; a hand-off in a listed folder goes to public_root_sessions. internal/spaces TestClassifyPublicPaths (rules public_path, not_verified_public, no_public_proof; nested public root decides first; retag still wins). TestListedFolderKeepsPublicCopyWithoutGitHubAnswer covers RC-402(6) with the 6-hour grace.",
+            "a4: internal/daemon TestExplainNamesThePublicPath passes: ExplainPlacement gives rule public_path with '(public_paths pattern \"...\")' for the operator, no_public_proof with 'no public_paths pattern of public space oss matches it' otherwise, folders explained for their direct files, and an agent sees the public answer without the pattern. internal/cli TestSpacesExplainNamesPublicPath runs 'orch spaces explain' (alias of why, RC-800) and prints both reasons.",
+            "a5: docs/internals/memory.md (write gate, 'Public needs proof' now says D-50's declaration is public_paths, RC-402 grace) and docs/internals/config.md ('Public paths' with the three forms, validation rules, explain and diff) changed in the diff; also docs/OPERATIONS.md and docs/internals/cli.md.",
+            "Validation at 456cc4a: go test ./... pass; go vet ./... clean; gofmt clean; make cover All files >= 80% (public_paths.go 100%, classify.go 98.8%, validate.go 98.9%, spaces_why.go 95.1%). App placement fixture regenerated for the new no_public_proof reason.",
+            "DOD-6: security audit of the diff: M1 (any caller could keep the unchecked grace open by spending the lookup budget) fixed with a 6-hour bound, re-audited Low (RC-803); L5 ('**' cost) fixed; M2 (sessions can write into a listed folder, wildcards let them create matching folders) is D-65's design and RC-404's accepted risk extended, recorded as RC-801 for the user's decision; lows in RC-804.",
+            "Independent verifier at 90b9b5f: a1-a5 PASS; DOD-1,2,3,4,5,7,8 PASS (daemon coverage checked directly: placing.go 93.1%, placement_rpc.go 97.3%, checkout_settings.go 88.2%); DOD-6 PASS apart from the recorded RC-801; DOD-9 was blocked by a plan conflict with main; INV-02, INV-03, INV-06, INV-07, INV-10, INV-14 OK; no home paths or IDs in the diff or commits. Its symlink note was added to RC-801.",
+            "After merging origin/main (51b7b25): go test ./... pass, go vet clean, make cover All files >= 80%; CI on PR #189: test (passed on rerun of an unrelated internal/memctx timing flake), build (ORT, macOS) and app pass.",
+            "DOD-6 now passes: the user settled RC-801 on 2026-11-14 with option (a), recorded as D-73 (accepted risk, RC-404 extended); the sandbox follow-up is RC-805. No critical, high or medium findings remain open.",
+            "After merging origin/main at 97fdc74 (#181, #187, #190): this feature's code files are unchanged since the verified 90b9b5f; the merge brought only the plan and other features' files (the one code file both touched, internal/daemon/checkout_settings.go, gained main's unrelated StateFile line). go test ./... pass, go vet clean, make cover All files >= 80% (internal/daemon checked directly too); CI on PR #189 at 97fdc74: test (passed on rerun of an unrelated internal/toollog concurrency flake), build (ORT, macOS) and app pass."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "97fdc74bb981619b0558ba1ce33eee5d99253cf0",
+      "verified_at": "2026-11-15T01:36:55Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "01ef9bae725c1b6ed0ccbd6b3194d8d30de872c6e7cceb59eb24d0db1046735b",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-076-public-paths",
+      "pr": "https://github.com/willesq/orchestrator/pull/189"
     },
     {
       "id": "SP-077",
