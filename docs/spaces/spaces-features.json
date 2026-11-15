@@ -3,7 +3,7 @@
   "plan_id": "orch-memory-spaces",
   "title": "orch memory spaces: isolation of memory, sessions and tools across contexts",
   "created": "2026-11-08",
-  "updated": "2026-11-14",
+  "updated": "2026-11-15",
   "repo": "willesq/orchestrator",
   "base_commit": "5796fa6",
   "origin": {
@@ -630,6 +630,16 @@
       {
         "id": "D-77",
         "decision": "RC-1200: under a spaces policy, DeleteSource is limited to sources in the calling session's own space (Orch.app may delete any), and PurgeDocs is Orch.app-only. Built by SP-026.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-79",
+        "decision": "The user chose to admin-merge #194, #198, #193 and #202 (SP-054, SP-077, SP-052, SP-079) before their hands-on checks, as with D-70. Each feature stays in_progress until its check is confirmed: SP-054.1.a2, SP-077.1.a4, SP-052.1.a1, SP-079.1.a3, plus SP-072.1.a1 and SP-048's RC-451.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-80",
+        "decision": "Parallel lanes cut integration overhead: 24 PRs needed 27 catch-up merges, because every PR edited the shared plan file and a few junction files. From now on: (1) a lane writes its feature's mutable state and its reconvene items to per-feature files, not the shared plan file (SP-080); (2) shared registration points are split so additions don't touch the same lines (SP-081); (3) the recurring flaky tests are fixed (SP-082); (4) run 2-3 lanes on features with disjoint files, build in parallel, and merge one at a time as each turns green; (5) catching a branch up with main is a light merge: resolve, build, push, let CI test.",
         "date": "2026-11-15"
       }
     ],
@@ -8074,6 +8084,195 @@
       "pr": null
     },
     {
+      "id": "SP-080",
+      "phase": "P2",
+      "priority": 26.7,
+      "title": "Per-feature state files (D-80)",
+      "summary": "A feature's mutable fields (status, passes, verified_sha, verified_at, blocked_reason, attempts, branch, pr and checkpoint evidence) live in docs/spaces/state/<ID>.json, and each reconvene item lives in docs/spaces/reconvene/<RC-id>.json. The plan file keeps only definitions, criteria and decisions; docs/spaces/index.html and the session procedure read the combined view.",
+      "why": "D-80: every lane PR edited the shared plan file, so 24 PRs needed 27 catch-up merges.",
+      "depends_on": [],
+      "touches": [
+        "docs/spaces/spaces-features.json",
+        "docs/spaces/state/ (new)",
+        "docs/spaces/reconvene/ (new)",
+        "docs/spaces/index.html",
+        "scripts/ (migration and converter)"
+      ],
+      "docs_to_update": [
+        "docs/spaces/spaces-features.json (session_procedure, plan_location)"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-080.1",
+          "title": "Split state out of the plan file",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "A one-shot migration moves every feature's status, passes, verified_sha, verified_at, blocked_reason, attempts, branch, pr and checkpoint evidence into docs/spaces/state/<ID>.json and every reconvene item into docs/spaces/reconvene/<RC-id>.json; afterwards the plan file holds none of those fields, and combining the files reproduces the pre-migration plan exactly.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "Two branches that each change a different feature's state (status, evidence and a new reconvene item) merge into main without a textual conflict.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "docs/spaces/index.html reads the combined view and shows the same feature, status, checkpoint and reconvene totals as before the migration.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "A converter script rewrites an open branch's plan-file edits into the per-feature files, so a branch cut before the migration merges cleanly after converting.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a5",
+              "type": "doc",
+              "check": "session_procedure and plan_location describe where a lane writes its state and reconvene items.",
+              "measure": "files changed in the diff",
+              "threshold": "both updated"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "b2975ea74e5cf3cd33657dbec78cd5b4ff84ac2c9882e4833e2907321b850162",
+      "branch": null,
+      "pr": null
+    },
+    {
+      "id": "SP-081",
+      "phase": "P2",
+      "priority": 26.8,
+      "title": "Split shared registration points (D-80)",
+      "summary": "New RPCs register their caller class and read-space decision from their own Go files through registration rather than one shared map literal, and app features register their models without editing the same lines of OrchApp.swift.",
+      "why": "D-80: the RPC decision maps and OrchApp.swift were junction files that conflicted on almost every lane PR.",
+      "depends_on": [],
+      "touches": [
+        "internal/daemon/ (caller class and read-space registration)",
+        "macos/Sources/OrchApp/OrchApp.swift",
+        "macos/Sources (model registration)"
+      ],
+      "docs_to_update": [
+        "docs/internals/daemon.md",
+        "docs/internals/app.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-081.1",
+          "title": "Registration instead of shared literals",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Each RPC's caller class and read-space decision is registered from the RPC's own Go file; no shared map literal lists them.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "Two fixture branches that each add an RPC and an app model merge with each other without a textual conflict.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "TestEveryRPCHasASpaceDecision still fails when an RPC has no registered decision.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "doc",
+              "check": "docs/internals/daemon.md and docs/internals/app.md describe how a new RPC and a new app model register.",
+              "measure": "files changed in the diff",
+              "threshold": "both"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "3326031cb1102775723a0b3fb534f93776837a141cc2f1bbe6382b6a3e2ec570",
+      "branch": null,
+      "pr": null
+    },
+    {
+      "id": "SP-082",
+      "phase": "P2",
+      "priority": 26.9,
+      "title": "Fix recurring flaky tests (D-80)",
+      "summary": "Make pollingRetriesScopesUntilTheyLoad, TestSweepWhileWriting, TestRunMeasuresFailedRuns and TestResolveCost deterministic.",
+      "why": "D-80: these four tests failed intermittently in CI and each failure cost a rerun.",
+      "depends_on": [],
+      "touches": [
+        "macos/Tests",
+        "internal/ (the packages of the three Go tests)"
+      ],
+      "docs_to_update": [],
+      "checkpoints": [
+        {
+          "id": "SP-082.1",
+          "title": "Deterministic tests",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "pollingRetriesScopesUntilTheyLoad, TestSweepWhileWriting, TestRunMeasuresFailedRuns and TestResolveCost each pass 50 consecutive runs (go test -count=50, or a 50-run repeat for the Swift test).",
+              "measure": "consecutive passing runs",
+              "threshold": "50 of 50"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "The same 50 runs pass while `go test ./...` runs alongside to add parallel load.",
+              "measure": "consecutive passing runs under load",
+              "threshold": "50 of 50"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "No production timeout, interval or retry is weakened, unless the PR states the reason.",
+              "measure": "diff review",
+              "threshold": "none, or each with a stated reason"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "534d3126d96ee6923f83bb9f80fffb8c337e4bd11bd5beb82d3426d8223e8847",
+      "branch": null,
+      "pr": null
+    },
+    {
       "id": "SP-078",
       "phase": "P2",
       "priority": 26.6,
@@ -8329,6 +8528,10 @@
     {
       "date": "2026-11-15",
       "change": "D-75 defers SP-064; D-76 adds SP-079 (Relabel now in Orch.app) for RC-229; D-77 scopes DeleteSource and makes PurgeDocs operator-only (SP-026)."
+    },
+    {
+      "date": "2026-11-15",
+      "change": "D-79 records the admin merges of #194, #198, #193 and #202 before their hands-on checks; D-80 cuts lane integration overhead and adds SP-080 (per-feature state files), SP-081 (split shared registration points) and SP-082 (fix recurring flaky tests); parallel lanes: max 3, SP-060 and SP-080 to SP-082 active."
     }
   ],
   "plan_location": {
@@ -8391,54 +8594,42 @@
   ],
   "parallel_lanes": {
     "decision": "D-63",
-    "max_parallel": 5,
+    "max_parallel": 3,
     "id_ranges_note": "Only the coordinator session assigns D-ids. RC-ids: the coordinator uses RC-229 to RC-299; each lane gets a block of 50 when it is assigned. Blocks are never reused.",
     "coordinator": {
       "rc_range": "RC-229..RC-299"
     },
     "active": [
       {
-        "feature": "SP-025",
-        "rc_range": "RC-700..RC-749",
-        "note": "PR #188; D-71 done; finishing on D-74"
+        "feature": "SP-060",
+        "rc_range": "RC-1450..RC-1499",
+        "note": "PR #203"
       },
       {
-        "feature": "SP-028",
-        "rc_range": "RC-900..RC-949",
-        "note": "PR #192; wiring assign to RetagSource after #191 merged"
+        "feature": "SP-080",
+        "rc_range": "RC-1500..RC-1549",
+        "note": "per-feature state files (D-80)"
       },
       {
-        "feature": "SP-052",
-        "rc_range": "RC-1000..RC-1049",
-        "note": "PR #193; waiting on the user's a1 snapshot review"
+        "feature": "SP-081",
+        "rc_range": "RC-1550..RC-1599",
+        "note": "split shared registration points (D-80)"
       },
       {
-        "feature": "SP-054",
-        "rc_range": "RC-1050..RC-1099",
-        "note": "PR #194; waiting on the user's a2 hands-on check"
+        "feature": "SP-082",
+        "rc_range": "RC-1600..RC-1649",
+        "note": "fix recurring flaky tests (D-80)"
       }
     ],
-    "next_rc_block": "RC-1100",
+    "next_rc_block": "RC-1650",
     "queued": [
-      "SP-031, SP-077, SP-078, SP-026, SP-029, SP-064 after SP-025",
       "SP-053 after SP-071 and SP-072 (a1 needs the user)"
     ],
-    "d_ids_reserved": [
-      {
-        "id": "D-73",
-        "for": "SP-076",
-        "topic": "RC-801 accepted (recorded in #189)"
-      },
-      {
-        "id": "D-74",
-        "for": "SP-025",
-        "topic": "RC-710 accepted until SP-078 (recorded on #188)"
-      }
-    ],
-    "next_d_id": "D-78",
+    "d_ids_reserved": [],
+    "next_d_id": "D-81",
     "proto_slot": {
       "holder": "none",
-      "next": "SP-025 if D-71 needs it, then SP-077"
+      "next": "none"
     },
     "migration_slot": {
       "holder": "none"
@@ -8454,7 +8645,17 @@
       "SP-027 (#187)",
       "SP-076 (#189)",
       "SP-051 (#181)",
-      "SP-071 (#191)"
+      "SP-071 (#191)",
+      "SP-025 (#188)",
+      "SP-028 (#192)",
+      "SP-029 (#196)",
+      "SP-031 (#197)",
+      "SP-078 (#199)",
+      "SP-026 (#200)",
+      "SP-079 (#202, check pending under D-79)",
+      "SP-054 (#194, check pending under D-79)",
+      "SP-077 (#198, check pending under D-79)",
+      "SP-052 (#193, check pending under D-79)"
     ]
   }
 }
