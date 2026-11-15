@@ -60,7 +60,7 @@ struct UnlockRow: View {
                 .lineLimit(2)
                 .help(unlock.origin)
             if unlock.isPending {
-                Text("Confirming lets this terminal do anything Orch.app can, including changing the spaces policy, for \(unlock.durationText).")
+                Text("Confirming lets this terminal read every space and run operator commands such as relabel for \(unlock.durationText). Applying a policy and switching protection off stay in Orch.app.")
                     .font(.caption2)
                     .foregroundStyle(Color.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)

@@ -92,8 +92,11 @@ mistake; if no terminal of yours waits for a code, cancel it in the panel. Once 
 starts your shell (or the command after `--`, e.g. `orch spaces unlock --for 30m -- orch rag
 relabel`, which is safer) as the operator until the time is up (at most 60 minutes), the shell
 exits, or `orch spaces lock` (or Lock in the panel) ends it; the panel counts down. Only that shell
-and what it starts are the operator, and it can do anything Orch.app can, including applying a
-policy. An agent started in it is not the operator, and its first call to orchd ends the unlock;
+and what it starts are the operator: they read every space and run operator commands such as
+relabel, retag and diff. Applying a policy, switching enforcement off or loosening it, the sandbox
+setting, outbound rules and the settings only Orch.app may change under a policy (sensitive
+config, harness and cc-safety-net settings, restart, PR landing, purging docs) stay in Orch.app
+(D-78). An agent started in it is not the operator, and its first call to orchd ends the unlock;
 the unlock is refused inside an agent session or a queued task. Unlocks end when orchd restarts.
 
 Apply takes only the newest draft, the one you reviewed, and only when

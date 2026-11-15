@@ -190,9 +190,24 @@ func (e *enforcement) state(l spaces.Layer) string {
 // side effects did, for the operator. Setting the hooks layer to the state
 // it has applies it to Claude Code's settings again.
 func (e *enforcement) set(ctx context.Context, l spaces.Layer, state, by string, forDur time.Duration) (bool, []string, error) {
+	return e.setIf(ctx, l, state, by, forDur, nil)
+}
+
+// setIf is set, refused when check (if any) refuses the layer's current
+// switch; check runs under the same lock as the write.
+func (e *enforcement) setIf(ctx context.Context, l spaces.Layer, state, by string, forDur time.Duration, check func(spaces.Switch) error) (bool, []string, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.expireLocked(ctx)
+	if check != nil {
+		cur, ok := e.cur[l]
+		if !ok {
+			cur = spaces.Switch{Layer: l, State: l.Default()}
+		}
+		if err := check(cur); err != nil {
+			return false, nil, err
+		}
+	}
 	c, sw, changed, err := spaces.NextSwitch(e.cur, l, state, by, forDur, e.now())
 	if err != nil {
 		return false, nil, err
@@ -412,8 +427,11 @@ func (s *server) SetEnforcement(ctx context.Context, req *orchdv1.SetEnforcement
 	if secs < 0 || secs > int64(spaces.MaxSwitchFor/time.Second) {
 		return nil, grpcstatus.Error(codes.InvalidArgument, spaces.ErrBadDuration.Error())
 	}
-	changed, notes, err := s.enforcement.set(ctx, l, req.GetState(), callerLabel(ctx), time.Duration(secs)*time.Second)
+	changed, notes, err := s.enforcement.setIf(ctx, l, req.GetState(), callerLabel(ctx), time.Duration(secs)*time.Second,
+		func(cur spaces.Switch) error { return refuseUnlockedLoosening(ctx, cur, req.GetState()) })
 	switch {
+	case grpcstatus.Code(err) == codes.PermissionDenied:
+		return nil, err
 	case errors.Is(err, spaces.ErrBadState), errors.Is(err, spaces.ErrBadDuration):
 		return nil, grpcstatus.Error(codes.InvalidArgument, err.Error())
 	case err != nil:

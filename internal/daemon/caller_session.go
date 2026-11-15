@@ -263,6 +263,9 @@ func (r *callerResolver) unary(ctx context.Context, req any, info *grpc.UnarySer
 	if err := r.refuseSettings(c, info.FullMethod, req); err != nil {
 		return nil, err
 	}
+	if err := refuseUnlocked(c, info.FullMethod, req); err != nil {
+		return nil, err
+	}
 	if err := refuseUnproven(c, info.FullMethod); err != nil {
 		return nil, err
 	}
@@ -276,6 +279,9 @@ func (r *callerResolver) stream(srv any, ss grpc.ServerStream, info *grpc.Stream
 	// Reason: refuseSettings logs every refusal it makes, so it runs
 	// before refuseUnproven, whose log line is rate-limited.
 	if err := r.refuseSettings(c, info.FullMethod, nil); err != nil {
+		return err
+	}
+	if err := refuseUnlocked(c, info.FullMethod, nil); err != nil {
 		return err
 	}
 	if err := refuseUnproven(c, info.FullMethod); err != nil {

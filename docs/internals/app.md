@@ -95,8 +95,8 @@ and asks.
 - **Operator unlocks** (SP-077, [daemon.md](daemon.md#operator-unlock)): `UnlocksModel` reads
   `ListUnlocks` every 2 s for the whole app, and the menu bar panel lists what it returns below the
   banner. A pending request shows the command line, its terminal (tty), the process and its
-  executable, its parents, how long it asks for, and that confirming lets the terminal do anything
-  Orch.app can, with **Deny** and **Confirm…**. Confirm asks for Touch ID or the login password
+  executable, its parents, how long it asks for, and what confirming allows (operator commands, but not
+  weakening protection, D-78), with **Deny** and **Confirm…**. Confirm asks for Touch ID or the login password
   first (`DeviceOwnerConfirmer`, LocalAuthentication; the prompt names only the duration and PID;
   a cancelled or failed check sends nothing), then sends `ConfirmUnlock`. A confirmed request then
   shows the code orchd made for it, to type in the terminal that asked (named by its tty), with

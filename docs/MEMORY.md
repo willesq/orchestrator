@@ -178,7 +178,8 @@ Content stored before memory spaces, before each space had its own collection, o
 spaces policy revision is not read by the spaces it belongs to until it is relabelled. After you
 apply a policy (and after each later revision), relabel it from Orch.app. While a policy is
 applied only Orch.app is the operator (D-71), so the same commands from a terminal are refused
-until a terminal can be unlocked from the app (planned); with no policy they run in a terminal
+unless the terminal is unlocked ('orch spaces unlock', confirmed in Orch.app; see
+OPERATIONS.md); with no policy they run in a terminal
 outside any agent session:
 
 ```sh

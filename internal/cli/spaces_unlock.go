@@ -126,7 +126,11 @@ terminal reads public memory only and operator actions such as
 'orch rag relabel' or 'orch spaces apply' are refused there.
 
 'orch spaces unlock' asks Orch.app to confirm operator scope for this
-process and what it starts. Orch.app shows the request with this command,
+process and what it starts: it reads every space and runs operator commands
+such as 'orch rag relabel', 'orch spaces retag' and 'orch spaces diff'.
+Applying a policy, switching enforcement off or loosening it, the sandbox
+setting, outbound rules and the settings Orch.app keeps for itself stay in
+Orch.app even then (D-78). Orch.app shows the request with this command,
 its process and the terminal it runs in. Confirm it there (it asks for Touch
 ID or your password); Orch.app then shows a code, which you type here.
 Nothing is granted until the code matches, so a request an agent filed at

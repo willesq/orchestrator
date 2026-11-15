@@ -335,9 +335,9 @@ operator commands are refused and Orch.app is the way to run them.
 Interactive sessions keep `Ingest`, `Dispatch` and the task RPCs (`ListTasks`, `GetTask`,
 `WatchTasks`, `RateTask`, `RetryTask`, `CancelTask`), but some settings are the operator's alone
 while a policy is applied (D-74, settling RC-710; `internal/daemon/policy_operator.go`). The
-resolver interceptor refuses these to every caller except Orch.app (and a terminal under an
-[unlock](#operator-unlock), whose evidence `refuseSettings` accepts like the app's; RC-1150),
-interactive harness sessions (pinned or not) and queued tasks included, before the handler runs,
+resolver interceptor refuses these to every caller except Orch.app (a terminal under an
+[unlock](#operator-unlock) included, D-78), interactive harness sessions (pinned or not) and
+queued tasks included, before the handler runs,
 and logs each refusal with the RPC and the caller's kind and ID (`refuseSettings`):
 
 | RPC | Operator-only under a policy |
@@ -386,9 +386,16 @@ refusals above included.
 `unlock_rpc.go`) is how a terminal becomes the operator while a policy is applied, for example to
 run `orch rag relabel`. Its evidence is `operatorBy = "unlock"`, which every check that accepts
 Orch.app's evidence accepts too (reads of every space, `refuseNonOperator`, `refuseUnproven`,
-dispatch placement), except confirming or listing unlocks, which stay Orch.app's alone
-(`refuseNonApp`). An unlocked terminal can therefore also apply a policy or switch enforcement
-off, changes that outlast the unlock; Orch.app says so beside each request.
+dispatch placement), with two exceptions. Confirming or listing unlocks stays Orch.app's alone
+(`refuseNonApp`). And RPCs that weaken protection stay Orch.app's alone even under an unlock (D-78,
+settling RC-1150; `unlock_scope.go`, `refuseUnlocked` in the resolver interceptor): `ApplySpaces`,
+`SetEnforcement` to a relaxing state (off, or the guard's log) or, in the handler, to any state
+looser than the layer's current one or than the state its running timer reverts to (the guard
+from strict back to block-other-jobs; checked under the switches' lock), `SetSandboxSetting`,
+`ChangeOutboundRule` and SP-078's settings RPCs below. Reason: those changes outlast the unlock,
+so a mistaken confirmation must not leave a weaker policy behind. Reads of every space, relabel,
+retag, diff, tightening a switch and the other operator commands stay open to the unlocked
+terminal.
 
 1. **Request.** `RequestUnlock{for_seconds}` (1 s to 60 min) is accepted only from a caller that
    resolves as the operator by process tree: no harness above it and not started by orchd
