@@ -70,9 +70,15 @@ func newSystemProbe(ring *logs.Ring) *systemProbe {
 	}
 }
 
-func (s *server) TailLogs(_ context.Context, req *orchdv1.TailLogsRequest) (*orchdv1.TailLogsResponse, error) {
+func (s *server) TailLogs(ctx context.Context, req *orchdv1.TailLogsRequest) (*orchdv1.TailLogsResponse, error) {
 	if s.system == nil || s.system.logs == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "orchd is not keeping logs")
+	}
+	// Reason: orchd's log names source URIs, and the read paths keep a
+	// filtered reader's store errors (which name spaces) there, so under a
+	// policy it is the operator's alone (SP-026, RC-700).
+	if s.recordScope(ctx, orchdv1.Orchd_TailLogs_FullMethodName).filtered() {
+		return nil, grpcstatus.Error(codes.PermissionDenied, "under a spaces policy orchd's log is shown only to the operator (Orch.app)")
 	}
 	limit := int(req.GetLimit())
 	switch {

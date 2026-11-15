@@ -46,7 +46,12 @@ func (s *server) ListDocsOwners(ctx context.Context, _ *orchdv1.ListDocsOwnersRe
 		return nil, err
 	}
 	out := &orchdv1.ListDocsOwnersResponse{}
+	scope := s.recordScope(ctx, orchdv1.Orchd_ListDocsOwners_FullMethodName)
 	for _, o := range owners {
+		// Reason: an owner and its repos are its org's space's (SP-026).
+		if !scope.seesOwner(o.Owner) {
+			continue
+		}
 		pb := docOwnerPB(o)
 		repos, err := s.docsReg.ListRepos(ctx, o.Owner)
 		if err != nil {
@@ -68,6 +73,11 @@ func (s *server) ListDocsOwnerRepos(ctx context.Context, req *orchdv1.ListDocsOw
 	}
 	if !github.ValidLogin(req.GetOwner()) {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "invalid GitHub login %q", req.GetOwner())
+	}
+	// Reason: another space's owner reads as one GitHub does not show
+	// this caller (SP-026).
+	if !s.recordScope(ctx, orchdv1.Orchd_ListDocsOwnerRepos_FullMethodName).seesOwner(req.GetOwner()) {
+		return nil, grpcstatus.Errorf(codes.NotFound, "GitHub: %s: %v", req.GetOwner(), github.ErrNotMember)
 	}
 	gh := s.docsGH
 	if s.ghProfiles != nil {
@@ -98,6 +108,12 @@ func (s *server) SaveDocsOwner(ctx context.Context, req *orchdv1.SaveDocsOwnerRe
 	owner := req.GetOwner()
 	if !github.ValidLogin(owner) {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "invalid GitHub login %q", owner)
+	}
+	// Reason: an owner's docs are its org's space's, so only that space's
+	// callers change what is synced (SP-026); to anyone else it reads as
+	// not registered.
+	if !changesRepo(ctx, s.recordScope(ctx, orchdv1.Orchd_SaveDocsOwner_FullMethodName), owner+"/") {
+		return nil, notDocsOwner(owner)
 	}
 	choice := docs.Choice{Enabled: req.GetEnabled(), RepoMode: req.GetRepoMode(), Repos: req.GetRepos(), RefreshSecs: req.GetRefreshSecs()}
 	if err := choice.Validate(); err != nil {
@@ -138,6 +154,15 @@ func (s *server) RemoveDocsOwner(ctx context.Context, req *orchdv1.RemoveDocsOwn
 	owner := req.GetOwner()
 	if !github.ValidLogin(owner) {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "invalid GitHub login %q", owner)
+	}
+	if !changesRepo(ctx, s.recordScope(ctx, orchdv1.Orchd_RemoveDocsOwner_FullMethodName), owner+"/") {
+		return nil, notDocsOwner(owner)
+	}
+	// Reason: a purge deletes synced docs, which under a policy only
+	// Orch.app may do, as for PurgeDocs (D-77).
+	if c := callerOf(ctx); req.GetPurge() && s.spacesConfigured() && (c.kind != callerOperator || c.operatorBy == "") {
+		return nil, grpcstatus.Error(codes.PermissionDenied,
+			"only Orch.app can purge synced docs while a spaces policy is applied (D-77); remove the owner without purging, or ask the user")
 	}
 	found, err := s.findDocsOwner(ctx, owner)
 	if err != nil {

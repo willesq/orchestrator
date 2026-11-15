@@ -321,6 +321,10 @@ RPC and the caller's kind and ID (`refuseSettings`):
 | `InstallSafetyNet` | always |
 | `Restart` | always |
 | `LandPR`, `UndoPRLanding`, `DiscardPRLanding` | always |
+| `PurgeDocs` | always (D-77) |
+
+`DeleteSource` stays open to sessions, but under a policy a session deletes only from its own
+space ([records by space](#records-by-space), D-77).
 
 The policy is read only for these RPCs, so other calls from sessions cost nothing more. With no
 policy applied every RPC behaves as before (INV-10). Refused to sessions with or without a policy,
@@ -369,8 +373,10 @@ and so every client built on them (`rag_search`, `rag_list_sources`, auto-RAG, s
   session started through the guard reads no more than its original session (D-38).
 - **A queued task:** what the space recorded when it was dispatched reads (D-46). `Dispatch`
   records the dispatching session's pin, or for Orch.app (or, with no policy, the operator) the placement of the
-  task's directory as a session there would get it (quarantine for a scratch directory); any
-  other dispatcher, orchd's own review tasks and tasks dispatched before SP-025 record none. The
+  task's directory as a session there would get it (quarantine for a scratch directory). A PR
+  review task orchd dispatches records its PR owner's space (quarantine, so public memory only,
+  for an owner no space binds; SP-026). Any other dispatcher, and tasks dispatched before SP-025,
+  record none. The
   space travels in the task's durable workflow input (`AgentTaskInput.Space`) to the live run
   the resolver finds, and a task's client writes are placed in it too.
 - **Anyone else** (an unpinned harness, an unidentified process, the operator when it is not Orch.app,
@@ -387,9 +393,66 @@ spaces), and the detail goes to orchd's log; others get the error as before.
 
 Every RPC has an entry in `readSpaceDecisions` (`internal/daemon/readspaces_registry.go`,
 SP-025.2): `filtered` (the four above), `operator` (refused to every caller but the operator),
-`own` (the caller's own data or public content), `records` (orch records other than memory:
-SP-026's, or RC-700's for the registries, settings and logs it lists) or `none`. A test fails for
-an RPC with no entry, as for one missing from `taskCallable` and `operatorActions`.
+`own` (the caller's own data or public content), `records` (orch records other than memory,
+[kept by space](#records-by-space)) or `none`. A test fails for an RPC with no entry, as for one
+missing from `taskCallable` and `operatorActions`.
+
+### Records by space
+
+orch records other than memory are kept within the same readable spaces (SP-026, INV-01;
+`internal/daemon/records_scope.go`). `recordScope` is `readScope` for these RPCs, except that
+Orch.app reads every record without a log line while memory filtering is switched off (the app
+polls them). Each record's space is decided by orchd, never by a request field:
+
+- **PRs and GitHub items** (`ListPRs`, `ListGitHubItems`, `GetPRDetail`, `ListPRReviews`, PR
+  landings): the space the repo's owner is bound to under the applied policy, matched as GitHub
+  matches logins; an owner no space binds is quarantine, the operator's alone. Fork parents play
+  no part. `GetPRDetail` answers `NotFound` before the detail cache (keyed by URL, RC-351) is read
+  or filled. The babysitter also stamps each cached item with that space each sweep (`prs.PR.Space`,
+  `prs.Watch.Space`), and its events carry it.
+- **Tasks** (`ListTasks`, `GetTask`, `WatchTasks`, `GetTaskActivity`, landings): the space the
+  task recorded at dispatch, read from its durable workflow input (`queue.Runs.RecordedInput`,
+  which also reads a waiting task's start event from the backend's pending queue). A task with
+  no space (dispatched before SP-025, or by a caller orchd does not track) is the operator's
+  alone. Another space's task reads as one that does not exist (`GetTask` found false, empty
+  activity). `ListTasks` applies its limit before the filter, so a caller may get fewer.
+  `RetryTask`, `CancelTask` and `RateTask` need the caller to act in the task's own space (a
+  session's pin or a task's recorded space), not just read it (RC-708); others get the
+  `no such task` answer a missing task gets.
+- **GitHub and docs registries** (RC-700): `GetGitHubIdentity` keeps the orgs and teams of the
+  caller's spaces; `ListGitHubScopes`, `ListDocsOwners` keep their owners; `ListGitHubRepos`
+  and `ListDocsOwnerRepos` answer `NotFound` for another space's owner; `GetDocsSync` reads as
+  idle while another space's owner syncs. `ListRegisteredSources` records no space, so under a
+  policy it is empty for everyone but the operator, and `TailLogs` (whose lines name source URIs
+  and filtered readers' store errors) is refused to them.
+- **Review watches** (`WatchPRReview`, `SetPRReviewUpdateInPlace`, `StopPRReview`): a watch
+  dispatches a task that reads the PR owner's space with the caller's instructions, and the
+  answer carries the review's report, so only a caller acting in that space (a session's pin or
+  a task's recorded space) or the operator may start, change or stop one; others are told the PR
+  does not exist. `SyncDocs` answers for another space's owner as for one not registered, and its
+  progress and busy message name no owner, repo or counts of another space's sync.
+  `SaveDocsOwner`, `RemoveDocsOwner` and `SetGitHubScope` change an owner only from its space
+  (others are told it is not registered, or not the user's), and under a policy a
+  `RemoveDocsOwner` purge, like `PurgeDocs`, is Orch.app's alone (D-77).
+- **Ingest** (RC-701): a caller that does not read the space holding a synced copy gets the
+  refusal any other space's copy gets, not which sync keeps it.
+- **DeleteSource** (D-77): under a policy a session deletes a source only from its own space's
+  collection (`rag.Service.DeleteSourceIn`), and is told only that count, so it neither deletes
+  nor learns of another space's copy. A caller with no space of its own, or pinned to quarantine,
+  is refused; Orch.app deletes from every space. `PurgeDocs` is Orch.app's alone.
+
+Quarantine holds what no space could place, so a session pinned to it (one started outside every
+root) reads none of it and cannot retry, cancel, rate, watch or delete in it. A task's space is
+cached for orchd's life once found, since it is fixed at dispatch.
+
+With no policy, or memory filtering switched off, every caller sees every record (INV-10): the
+[memory filtering switch](#enforcement-switches) governs these records too, and has no separate
+layer for them.
+`GetConfig` and `ListSettings` are not filtered (RC-1250). The CLI commands that read orch's
+files directly (`orch docs list`, `orch docs owners list`, `orch docs status`, `orch prs`) show,
+under a policy, only what orchd's `ListDocs` and `ListPRs` list for the caller, and fail when
+orchd does not answer; the files themselves stay readable by any process of the user, which the
+OS sandbox layer bounds (RC-302).
 
 A filtered read sees only chunks labelled under the applied revision (INV-08;
 [memory.md](memory.md#spaces)), so after a new apply sessions and tasks read nothing placed

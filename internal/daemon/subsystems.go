@@ -589,8 +589,11 @@ const taskEventStream = "queue"
 // fetch the result deliberately with queue_read.
 func notifyTaskDone(in workflows.AgentTaskInput, o workflows.Outcome) {
 	summary := in.ID + " finished " + o.Status + "; read the result with queue_read or `orch task " + in.ID + "`"
+	// Reason (INV-09): the event is derived from the task, so it carries
+	// the space the task reads and writes, for readers to filter by.
 	if err := events.Append(paths.EventsDir(), taskEventStream, events.Event{
-		Kind: o.Status, Source: in.Agent, Summary: summary, Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Kind: o.Status, Source: in.Agent, TaskID: in.ID, Summary: summary, Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Space: in.Space,
 	}); err != nil {
 		log.Printf("queue: record completion of %s: %v", in.ID, err)
 	}

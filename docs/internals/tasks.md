@@ -11,7 +11,8 @@ Packages: `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `pr
 2. **Workflow** (go-workflows on SQLite `workflows.db`): `AgentTask` runs `StartActivity` (status
    `in_progress`) then `RunActivity` with one attempt (a failed run may already have pushed, so it
    is never retried), saves the outcome to the ledger, and appends a `queue` event naming the task
-   and status, never its result. Inputs (including the route) are fixed at dispatch, so a resumed
+   and status, never its result, with the space the task recorded at dispatch (SP-026; see
+   [hooks.md](hooks.md#events-by-space)). Inputs (including the route) are fixed at dispatch, so a resumed
    task keeps its model.
    - **Interrupted runs:** go-workflows records any error an activity returns, even one from a
      stopping worker, as that activity's failure. So `AgentTask` recognizes the runner's
@@ -93,6 +94,17 @@ Packages: `queue`, `workflows`, `agentrun`, `models`, `routing`, `evidence`, `pr
      (no error), even when it leaves while a snapshot, change or tick is being read; a ledger
      failure while the client is still connected ends the stream with that error.
    - **Access:** operator-only. Queued tasks are refused it and use `ListTasks` and `GetTask`.
+
+### Tasks by space
+
+Under a spaces policy a task's ledger record, result, live run, transcript activity and landing
+are its dispatching space's (SP-026; [daemon.md](daemon.md#records-by-space)): `ListTasks`,
+`GetTask`, `WatchTasks` and `GetTaskActivity` show an agent only the tasks of spaces it reads,
+by the space each recorded at dispatch (`AgentTaskInput.Space`, D-46), and retry, cancel and
+rating need the caller to act in that space (RC-708). The ledger row itself carries no space
+(RC-704): orchd reads it from the task's workflow input, or a waiting task's start event. PR
+review tasks orchd dispatches record their PR owner's space, so a review reads that space's
+memory. A task with no space is the operator's alone; Orch.app sees every task.
 
 ## Claude Code runner
 
@@ -331,7 +343,11 @@ Codex runs have no such transcript, and show as unavailable.
 
 ## PR babysitter
 
-The `pr-babysitter` unit watches the user's enabled GitHub scopes for open PRs and issues.
+The `pr-babysitter` unit watches the user's enabled GitHub scopes for open PRs and issues. Under a
+spaces policy each cached item is stamped with the space its repo's owner is bound to
+(quarantine for an owner no space binds), restamped every sweep, and its events carry that
+space; orchd's reads judge each item by its owner under the policy applied when they run
+(SP-026; [daemon.md](daemon.md#records-by-space)).
 
 **When it sweeps:**
 - Every poll (10 min), and on first start.
@@ -411,6 +427,9 @@ other people, and events reach every agent session through the SessionStart dige
 - `orch prs`, which agents read, shows only PRs the user opened or was asked to review
   (`prs.Trusted`). The rest of the cache has titles anyone who can open a PR wrote, so only the app
   shows it. `orch prs` also strips control and bidi characters from titles.
+- Under a spaces policy both RPCs list only items whose owner's space the caller reads, and
+  `orch prs`, which reads the cache file itself, shows only the PRs `ListPRs` lists for it and
+  fails when orchd does not answer (SP-026).
 - None of them call gh. Both RPCs answer `Unavailable` when the file exists but cannot be parsed, rather than
 an empty list.
 

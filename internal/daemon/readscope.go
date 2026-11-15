@@ -104,18 +104,8 @@ func readableBy(res *spaces.Resolved, c resolvedCaller) []string {
 }
 
 // readableFrom lists every public space and each space reader may read
-// under res, sorted. A reader the policy does not name (none, Quarantine,
-// or a space a later policy dropped) reads public spaces only.
-func readableFrom(res *spaces.Resolved, reader string) []string {
-	out := []string{}
-	for _, sp := range res.Policy.Spaces {
-		if sp.Kind == spaces.Public || (reader != "" && res.CanRead(reader, sp.Name)) {
-			out = append(out, sp.Name)
-		}
-	}
-	slices.Sort(out)
-	return slices.Compact(out)
-}
+// under res, sorted (spaces.Resolved.ReadableFrom).
+func readableFrom(res *spaces.Resolved, reader string) []string { return res.ReadableFrom(reader) }
 
 // readerLabel names c for orchd's log, never with a request's own words.
 func readerLabel(c resolvedCaller) string {

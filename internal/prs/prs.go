@@ -45,6 +45,11 @@ type PR struct {
 	// Reasons says why the item is watched (ReasonAuthored, ReasonAssigned,
 	// ReasonInvolved, ReasonReviewRequested, ReasonAllOpen).
 	Reasons []string `json:"reasons,omitempty"`
+	// Space is the space the item's repo owner was bound to when the sweep
+	// cached it (Watch.Space, SP-026); its events carry it. "" with no
+	// policy applied. orchd's reads judge an item by its owner under the
+	// policy applied when they run.
+	Space string `json:"space,omitempty"`
 }
 
 // IsPR reports whether the item is a pull request.
@@ -134,6 +139,7 @@ func Diff(old, next State) []events.Event {
 		}
 		evs = append(evs, events.Event{
 			Kind:    classify(pr),
+			Space:   pr.Space,
 			Source:  "pr-babysitter",
 			Summary: pr.Repo + ": " + pr.Title + " [ci=" + pr.CIState + " review=" + orNone(pr.ReviewDecision) + "]",
 		})

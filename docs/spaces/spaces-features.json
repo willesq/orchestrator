@@ -2758,7 +2758,8 @@
           "SP-025",
           "SP-030"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "SP-026 (#200) checks the caller's spaces before GetPRDetail reads or fills the URL-keyed detail cache, so read enforcement already keeps it within spaces; recommended: settle RC-351 as 'read enforcement is the rule for caches outside internal/rag'."
       },
       {
         "id": "RC-352",
@@ -2847,7 +2848,8 @@
           "SP-074",
           "SP-063"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "SP-026 (#200) filters the docs registry RPCs (ListDocsOwners, ListDocsOwnerRepos, GetDocsSync) and the PR RPCs by space for agents, and the CLI lists come from orchd under a policy. The cache file's readability is RC-1252."
       },
       {
         "id": "RC-303",
@@ -3451,7 +3453,8 @@
         "affects": [
           "SP-026"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "SP-026 (#200) filters GetGitHubIdentity (orgs and teams), ListGitHubScopes, ListGitHubRepos, GetDocsSync, ListDocsOwners and ListDocsOwnerRepos by each owner's space for agent callers; ListRegisteredSources is empty and TailLogs refused to everyone but the operator under a policy. GetConfig and ListSettings moved to RC-1250."
       },
       {
         "id": "RC-701",
@@ -3465,7 +3468,8 @@
           "SP-025",
           "SP-071"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "Mostly addressed by SP-026 (#200): Ingest no longer says which sync keeps a copy in a space the caller does not read (it gets the other-space refusal), and under a policy DeleteSource deletes only from a session's own space and counts only that (D-77, rag.Service.DeleteSourceIn). Still open: Ingest ignores a failed Copy (fail-open; a fresh store's missing-collection error is not told apart outside internal/rag), and handoff.go canonicalStored matches synced copies in any space (derived content, SP-029)."
       },
       {
         "id": "RC-702",
@@ -3505,7 +3509,8 @@
           "SP-029",
           "SP-026"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "SP-026 (#200) reads each task's space from its durable input, including a waiting task's pending start event (queue.Runs.RecordedInput), to filter the task RPCs, and orchd's PR review tasks now record their PR owner's space. Still open for SP-029: the ledger row and the Task message do not carry the space; the dispatch-cwd note stands."
       },
       {
         "id": "RC-705",
@@ -3563,7 +3568,8 @@
           "SP-026",
           "SP-029"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "SP-026 (#200): RetryTask, CancelTask and RateTask need the caller to act in the task's recorded space (a session's pin or a task's own space) or be the operator; others get the answer a missing task gets."
       },
       {
         "id": "RC-709",
@@ -3617,7 +3623,8 @@
         "affects": [
           "SP-026"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "SP-026 (#200): under an applied policy 'orch docs list', 'orch docs owners list', 'orch docs status' and 'orch prs' show only what orchd's ListDocs and ListPRs list for the caller, and fail when orchd does not answer; with no policy they read the files as before. Reading orch.db directly is RC-1252."
       },
       {
         "id": "RC-900",
@@ -3709,6 +3716,56 @@
         ],
         "status": "resolved",
         "resolution": "Settled as D-76; built by SP-079."
+      },
+      {
+        "id": "RC-1250",
+        "kind": "follow-up",
+        "topic": "GetConfig and ListSettings are still unfiltered for agent callers (rest of RC-700)",
+        "detail": "SP-026 filters every RPC RC-700 named except GetConfig (orch's settings) and ListSettings (managed harness settings), which sessions may still call under a policy. Settings can name folders, collections and profile directories of every space. Proposed: under a policy refuse both to all but Orch.app (refuseNonOperator, as SP-078 did for the setters) or return only keys that name no space; SP-078's owner should decide, since it changed the setters.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026",
+          "SP-078"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1251",
+        "kind": "decision",
+        "topic": "The operator's views are not labelled with each record's space",
+        "detail": "SP-026's summary says the operator still sees everything, labelled. orchd now decides each record's space (a PR's owner's space, a task's recorded space), but PullRequest, GitHubItem, PRReview, Task and DocOwner have no field to carry it, and adding fields to existing orchd.proto messages needs the coordinator's field block. The acceptance items do not require labels, so SP-026 ships without them. Options: (a) add an optional 'space' field to those messages and show it in Orch.app and the CLI (a follow-up feature, with a field block); (b) leave records unlabelled.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1252",
+        "kind": "follow-up",
+        "topic": "Record files on disk still hold every space (event streams, PR cache, orch.db)",
+        "detail": "SP-026 filters what orchd returns and what the hook puts in a session's context, and the CLI lists under a policy now come from orchd, but the event streams (<data>/events/*.jsonl), the PR cache (pr_babysitter_state.json) and orch.db (task ledger, docs registry) stay readable by any process of the user, so an agent can read them directly. This is RC-302 option (a)'s file half: deny orch's data directory (except what a session needs) in each job's OS sandbox profile (SP-046), or split the files per space. Also: an event keeps the space it was written with, so after the operator binds an org to another space its earlier events still show to the first space's sessions until they age out of the digest.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-046",
+          "SP-026"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1253",
+        "kind": "follow-up",
+        "topic": "Low: some refusals tell an agent that another space owns a GitHub org",
+        "detail": "From SP-026's design: GetPRDetail and ListDocsOwnerRepos answer NotFound for another space's owner where an unknown PR or owner would get GitHub's own error, so an agent can tell that an org is bound to a space it does not read (the org list is policy, not content); review watch changes answer NotFound for another space's PR where an unwatched PR of the caller's own space gets the watcher's own not-found text. Tasks and landings give the answer a missing task gets. Accepted as low; closing it would need orchd to fetch and discard, which spends the other space's account.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026"
+        ],
+        "status": "open"
       }
     ]
   },
