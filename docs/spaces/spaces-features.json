@@ -7773,14 +7773,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "901473b12fe5cd0035785d2271433e5396c60ed79717edc54f187b4072c72bdc",
-      "branch": null,
+      "branch": "feat/sp-078-settings-operator-only",
       "pr": null
     }
   ],
