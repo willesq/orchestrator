@@ -6080,11 +6080,11 @@
           ]
         }
       ],
-      "status": "in_progress",
+      "status": "blocked",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": null,
+      "blocked_reason": "SP-071 merge: the independent verifier (2026-11-14) passed SP-028.1.a2 and the list and purge parts of a1, but did not accept assign tested against a fake retag; assign needs SP-071's RetagSource to move the source and record the override (RC-900). Resume once SP-071 is merged: implement the Retagger with RetagSource and test assign through orchd.",
       "attempts": 1,
       "criteria_sha256": "8b78deb05b7ee728821d2452d6e11460f796408e9822bf1d03d2e68805efc1c7",
       "branch": "feat/sp-028-quarantine",
