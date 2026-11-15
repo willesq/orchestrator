@@ -351,3 +351,56 @@ func TestGitHookPushNoSpaceRemotes(t *testing.T) {
 		t.Errorf("the destination's own remote: %+v", r)
 	}
 }
+
+// TestGitHookOutboundRules (SP-075): a git hook applies the operator's
+// destination rules, which only make it stricter, but not the baseline's
+// switches, which are about reading shell; rules that cannot be read are
+// refused.
+func TestGitHookOutboundRules(t *testing.T) {
+	repo := newTestRepo(t, "acme")
+	base := termsChecker(t)
+	writeFile(t, filepath.Join(repo.dir, "w.md"), "falcon\n")
+	repo.git("add", "w.md")
+	repo.git("commit", "-q", "-m", "w")
+	head := repo.out("rev-parse", "HEAD")
+	const sdk = "https://github.com/acme/public-sdk.git"
+	repo.git("remote", "add", "sdk", sdk)
+	up := PushUpdate{"refs/heads/main", head, "refs/heads/main", zeroSHA}
+	in := GitHookInput{Hook: GitHookPrePush, Dir: repo.dir, Remote: sdk, URL: sdk, Updates: []PushUpdate{up}}
+	// The baseline lets acme's term go to acme's repo.
+	if r := hookCheck(base, in); r.Refuse {
+		t.Fatalf("baseline: %+v", r)
+	}
+	rs, _, err := OutboundRules{}.Add("destination", "acme/public-sdk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs, _, _ = rs.Switch(string(OutboundFailClosed), false)
+	c := base
+	c.Rules = &rs
+	if r := hookCheck(c, in); !r.Refuse || r.Rule != RuleOutboundTerm || r.Hit.Space != "acme" || r.Dest != "" {
+		t.Errorf("destination rule: %+v", r)
+	}
+	// Commits already on origin (acme) are not trusted for the repo the
+	// rule covers, so they are sent and checked.
+	repo.git("update-ref", "refs/remotes/origin/main", head)
+	if r := hookCheck(c, in); !r.Refuse {
+		t.Errorf("destination rule with origin's tracking ref: %+v", r)
+	}
+	// fail_closed_unreadable off does not let a missing message file
+	// through in a hook.
+	if r := hookCheck(c, GitHookInput{Hook: GitHookCommitMsg, Dir: repo.dir, MsgFile: "/nonexistent"}); !r.Refuse ||
+		r.Rule != RuleOutboundUnchecked {
+		t.Errorf("baseline switch applied in a hook: %+v", r)
+	}
+	broken := base
+	broken.RulesBroken = true
+	if r := hookCheck(broken, in); !r.Refuse || r.Rule != RuleOutboundUnchecked {
+		t.Errorf("broken rules: %+v", r)
+	}
+	bad := base
+	bad.Rules = &OutboundRules{Off: []OutboundRule{"nope"}}
+	if r := hookCheck(bad, in); !r.Refuse || r.Rule != RuleOutboundUnchecked {
+		t.Errorf("invalid rules: %+v", r)
+	}
+}

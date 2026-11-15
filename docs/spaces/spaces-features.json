@@ -3040,6 +3040,94 @@
         "status": "open"
       },
       {
+        "id": "RC-650",
+        "kind": "decision",
+        "topic": "D-69 also counts the default gh login's folder (SP-046)",
+        "detail": "The 2026-11-14 security audit of PR #186 (medium) found that D-69's text ('another space's own login folder') leaves out the default gh login: under auto a job naming its own gh profile, alone among spaces on the default login, got no rules, so its shell could use the default account. Implemented the stricter reading: auto also writes the rules when they deny the default gh login's folder (a space naming its own gh profile, and checkouts of no space), consistent with D-61 ('a space that names its own gh profile reads only that profile'). Confirm, or choose D-69's literal text.",
+        "source": "https://github.com/willesq/orchestrator/pull/186",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-651",
+        "kind": "decision",
+        "topic": "How often D-68 names the sandbox setting (SP-046)",
+        "detail": "D-68 says the next start digest of each session names the setting once after any change, and after any restart while it is off. Implemented per session: the hook remembers per session id the mode, set_at and orchd start it last named. So every session's first start digest names a setting that was ever set (or is off), once, and later digests of that session (resume, compact) stay quiet until the next change or, while off, the next orchd start; the default never set is not named. If the notice should instead stop after some time or after the first session sees it, that needs a decision.",
+        "source": "https://github.com/willesq/orchestrator/pull/186",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-652",
+        "kind": "follow-up",
+        "topic": "Gaps left in the D-67 settings check (security audit lows)",
+        "detail": "The guard's settings_reopen check (PR #186) reads .claude folders from the call's cwd and the session's project folder up to the recorded checkout. Not covered: (1) settings folders above the checkout (which ancestors Claude Code loads is not measured); (2) a folder spelled in another Unicode normalization than orchd's record is not matched (APFS treats them as one); (3) a checkout's real path is recorded at sync, so a link re-pointed between syncs is matched only after the next sync (30 s). Measure (1) with TestClaudeE2E and compare canonical paths for (2) if wanted.",
+        "source": "https://github.com/willesq/orchestrator/pull/186",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-600",
+        "kind": "follow-up",
+        "topic": "The outbound rules' hash in orch.db finds damage, not a writer who recomputes it",
+        "detail": "2026-11-14, SP-075 security audit (low): each spaces_terms_rules row holds a plain SHA-256 of its rules. A process running as the user can write orch.db while orchd is stopped (or while the guard is off or logging) and insert a correctly hashed row with every baseline rule off, or delete the newest row to roll back to looser rules; the next orchd start takes it. Same limit as the enforcement switches and the sandbox setting (RC-216). Options: (a) accept and document (done in docs/internals/daemon.md); (b) HMAC rows with a key orchd keeps in a 0600 file in its protected data dir and keep orchd's highest revision to detect a rollback. Recommendation: (a) now, (b) together with the switches if they get one. Since D-66 a replay looks rules up by revision, and a row's hash covers only its rules document, not its rev, time or caller, so such a writer could also move a document to another revision; option (b) would cover those columns too.",
+        "source": "https://github.com/willesq/orchestrator/pull/185",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-075",
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-601",
+        "kind": "decision",
+        "topic": "How replay judges events with the outbound rules: by the event's time, and only fail_closed rules",
+        "detail": "2026-11-14, SP-075.1.a3 says replay judges 'with the rules recorded for the event's policy revision'. Rules change apart from policy revisions, so SP-075 stores every rules change with its time (spaces_terms_rules) and a replay uses the rules in force at each event's recorded time (spaces.RulesTimeline), which is exact and needs no change to the hash-chained command log. Only fail_closed rules are judged again (against the stored, redacted, capped command); command and destination rules and the baseline switches need the text the log never keeps (INV-07) and the checkout as it was, so a recorded terms verdict is carried (RC-116) as before. Alternative: record the rules revision in each command log record (a toollog column plus a RecordToolEvent field), which would also let a replay report which rules a call was judged under. Recommendation: keep the time-based lookup; confirm the interpretation.",
+        "source": "https://github.com/willesq/orchestrator/pull/185",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-075",
+          "SP-047"
+        ],
+        "status": "resolved",
+        "note": "2026-11-14: the user chose the alternative, recorded by the coordinator as D-66 (PR #178): each command log record stores the outbound rules revision it was judged under (toollog column rules_rev, and a RecordToolEvent field once orchd.proto can change), and a replay uses that revision instead of a time lookup. Built on PR #185."
+      },
+      {
+        "id": "RC-602",
+        "kind": "follow-up",
+        "topic": "An on fail_closed rule makes every tool call read the terms files and match its patterns",
+        "detail": "2026-11-14, SP-075 security audit (low): fail_closed rules may match any tool (MCP tools included), so while one is on every PreToolUse reads the spaces' terms files and matches up to 256 patterns over the call's text; a call over 4 MiB is refused. RE2 keeps matching linear and the check is bounded by the hook's 2.5 s, but a large Write or Edit costs more. Options: accept (documented in docs/internals/hooks.md), or cache compiled rules and terms per snapshot in the hook. Recommendation: accept; measure if users report slow hooks.",
+        "source": "https://github.com/willesq/orchestrator/pull/185",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-075"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-603",
+        "kind": "decision",
+        "topic": "orch.db stays readable by agents' tool calls, so the outbound rules' values can be read from it",
+        "detail": "2026-11-14, SP-075 security review (info): rule values are kept like terms (INV-07) and the guard snapshot that carries them is now read-protected, but orch.db is not: the self-protection test TestSelfProtectionAllowsReads (SP-042) deliberately allows reading orch data such as orch.db, and a session can read spaces_terms_rules with sqlite3. Terms files themselves are read-protected. Options: (a) accept: a rule's value is the operator's configuration, not a secret term, and reading it only tells an agent what is refused; (b) read-protect orch.db* in ProtectedPaths, which changes SP-042's accepted behavior. Recommendation: (a), and advise operators to put anything secret in a terms file rather than a rule.",
+        "source": "https://github.com/willesq/orchestrator/pull/185",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-075",
+          "SP-042"
+        ],
+        "status": "open"
+      },
+      {
         "id": "RC-800",
         "kind": "follow-up",
         "topic": "orch spaces explain is an alias of why; the matched pattern travels in the reason text",
@@ -3057,7 +3145,7 @@
         "id": "RC-801",
         "kind": "decision",
         "topic": "RC-404 is live again: sessions can publish by writing into a listed folder, and wildcards let them create matching folders",
-        "detail": "Security audit of SP-076 (medium M2, design under D-65). A folder a public_paths pattern lists is trusted as written: any job's session can write files there and register it as a source, and the sources refresh places them in public; a listed folder with no .git needs no other proof. With '*' or '**' a session can also create a new folder the pattern matches (e.g. ~/code/new/docs under ~/code/*/docs). This is the risk the user accepted as RC-404 for declared folders, which said to review it when public_paths exists. Documented in docs/internals/config.md. Possible mitigations: require a GitHub repo verified public (and only git-tracked files) for wildcard matches; accept only operator-registered sources under public_paths; SP-046 sandbox rules denying job sessions writes to listed folders; warn in 'orch spaces diff' when a pattern holds '*' or '**'. Recommendation: keep as accepted risk now, and have SP-046 deny job-session writes to listed folders.",
+        "detail": "Security audit of SP-076 (medium M2, design under D-65). A folder a public_paths pattern lists is trusted as written: any job's session can write files there and register it as a source, and the sources refresh places them in public; a listed folder with no .git needs no other proof. With '*' or '**' a session can also create a new folder the pattern matches (e.g. ~/code/new/docs under ~/code/*/docs). This is the risk the user accepted as RC-404 for declared folders, which said to review it when public_paths exists. Documented in docs/internals/config.md. The independent verifier adds: the sources walk follows a .md symlink to any file inside the walked folder, so a link in an exact listed folder can index a file from an unlisted subfolder under the link's path, again only by someone who can write into the listed folder. Possible mitigations: require a GitHub repo verified public (and only git-tracked files) for wildcard matches; accept only operator-registered sources under public_paths; SP-046 sandbox rules denying job sessions writes to listed folders; warn in 'orch spaces diff' when a pattern holds '*' or '**'. Recommendation: keep as accepted risk now, and have SP-046 deny job-session writes to listed folders.",
         "source": "https://github.com/willesq/orchestrator/pull/189",
         "raised": "2026-11-14",
         "affects": [
@@ -6183,7 +6271,9 @@
             "a4 (2026-11-14): TestSyncPicksUpNewClone and TestCheckoutSettingsLoop pass at 6baf911 (the loop test sets the sandbox setting on, as one isolated space alone gets no rules under auto, D-61); orchd still syncs every 30 s and at once on a setting change; the 2026-11-12 measurement (<= 30 s + one sync, <= 60 s) stands.",
             "a5 (2026-11-14, D-61): both true. Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14. 'bash' PASS: a session started in job A's checkout subfolder ran cat of job B's root file and of job B's temp file -> 'Operation not permitted', the control in job A's folder printed its content. 'gh' PASS: 'gh auth status' in that session's sandboxed shell -> 'Logged in to github.com account willesq (keyring)', exit 0 (job A uses the default login, D-59; the settings carry allowRead of ~/.config/gh, allowedDomains api.github.com/github.com and enableWeakerNetworkIsolation, RC-208 option a). 'launcher/gh' PASS the same in a launched session.",
             "a6 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14: 'launched-tmpdir' PASS (job B's launched TMPDIR=/tmp/oe2955965139/r/jobb/claude-501 holding b-launch.txt; job A's /tmp/oe2955965139/r/joba/claude-501 written and read; cat of B's file and of a file in the shared /tmp/claude-501 -> 'Operation not permitted'; job A's per-checkout session could not read B's file); 'tmpdir' SKIP citing D-58. Unit tests TestPerSpaceTmpDir, TestShortTmpLayout, TestClaudeSandboxTmp, TestLauncherFragment, TestEnsureTmpDir, TestRunClaudeTmp, TestRunSetsProfileForChildOnly pass at 6baf911.",
-            "a7 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14: read, grep, glob, write and edit PASS (job B's root refused to Read, Grep, Glob, Write and Edit from a session started in <checkout>/sub/deep; each control on job A's folder succeeded); 'protect' PASS (settings unchanged)."
+            "a7 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14: read, grep, glob, write and edit PASS (job B's root refused to Read, Grep, Glob, Write and Edit from a session started in <checkout>/sub/deep; each control on job A's folder succeeded); 'protect' PASS (settings unchanged).",
+            "a5 (2026-11-14, D-67): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 510f3ca on 2026-11-14 (PASS in 266 s; tmpdir SKIP citing D-58), with the user's default Claude Code configuration and default gh login (metadata only), as the user directed for automatic verification on 2026-11-14: bash and gh PASS as before. 'loosening' shows why D-67 was needed: a checkout whose own .claude/settings.json allows job B's root still lets a sandboxed cat read it (RC-215 MEASURED read = true; launched session false). 'loosening/guard' PASS: the same checkout with this tree's orch-hook as PreToolUse hook and orchd's record of the checkout files: a cat of job B's file whose path is built at run time is refused 'orch spaces guard refused this call (rule settings_reopen)' and the file is not read; control in job A's other checkout: the guard lets it through and the sandbox answers 'Operation not permitted'. 'hook-pin' PASS: a checkout whose settings.json sets disableAllHooks true and env ORCH_DATA_DIR to an empty folder; orch's settings.local.json pins both back (local wins, measured), the sync reports the entries and the guard refuses the call as settings_reopen. 'permission-rules' PASS: permissions.allow Edit(//<job B root>/**) or Read(...), or additionalDirectories naming it, do not re-open the sandbox (runtime-built write and read both fail), so they are not checked. Unit: TestGuardRefusesReopeningCheckout, TestGuardReopenRecordUnreadable (internal/hook), TestReopened, TestReopenedRecord, TestReopenedRealPath, TestLoosening (internal/settings/spacesettings), TestReplayCarriesSettingsReopen (internal/spaces) pass.",
+            "a7 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 510f3ca on 2026-11-14 (PASS in 266 s; tmpdir SKIP citing D-58), with the user's default Claude Code configuration and default gh login (metadata only), as the user directed for automatic verification on 2026-11-14: read, grep, glob, write, edit and protect PASS from <checkout>/sub/deep with orch's settings, which now also hold disableAllHooks false and (in orchd's checkouts) env ORCH_DATA_DIR (D-67)."
           ]
         },
         {
@@ -6278,19 +6368,22 @@
             "a1 (2026-11-14): TestSandboxSettingOperatorOnly (internal/daemon: auto by default; claude, codex, orchd-started, queued, unreadable and peerless callers refused with PermissionDenied and nothing changed; operator set logged in spaces_enforcement_log with time and 'operator (process 42)'; shown by GetEnforcement (set_by for the operator only) and Status; back after a restart via newEnforcement), TestSandboxSettingStore and TestSandboxSettingTampered (internal/spaces), TestSandboxSettingChangedOutsideOrchd (drift reported, orchd keeps its own; a restart over an edited row is on), TestSpacesSandboxCmd (internal/cli) and TestSpacesSectionShowsSandboxSetting (internal/status: one 'sandbox' line) pass at 6baf911.",
             "a2 (2026-11-14): TestSandboxChoice and TestSyncFollowsSandboxChoice (internal/settings/spacesettings), TestSandboxSettingDecidesCheckouts (internal/daemon: auto writes only the public checkout kept out of job a, nothing with job a alone; on writes it; off clears it; no switch reads relaxed and orch status names none; a 15 min timed switch to off is relaxed and clears the files, and its revert restores them), TestSandboxSettingIsNotASwitch (internal/spaces) and TestSessionStartIgnoresSandboxSetting (internal/hook: no digest line for off or auto-with-nothing, from orchd or orch.db; a timed sandbox switch is named), and TestRunFollowsSandboxSetting (internal/cli) pass at 6baf911.",
             "a3 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14. 'gh' and 'launcher/gh' PASS ('Logged in to github.com account willesq (keyring)'). 'gh-guard' PASS: a session running this tree's orch-hook as its PreToolUse hook (temp ORCH_DATA_DIR, guard snapshot of the test policy, job A pin) was refused 'cat ~/.config/gh/config.yml | wc -c' by the guard ('orch spaces guard refused this call (rule self_protection)') and the Read tool by the installed Read(~/.config/gh/**) rule; the file's size never came back. Unit: TestGHReadRules and the guard's credential-read test in internal/spaces pass. Measured on the way (docs/internals/install.md): allowRead overrides the installed Read deny for sandboxed commands; gh then needs allowedDomains (else 'deny network-outbound api.github.com:443') and enableWeakerNetworkIsolation or allowMachLookup com.apple.trustd.agent (else 'x509: OSStatus -26276').",
-            "a4 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14; job B names its own gh profile, an unauthenticated temp folder whose config.yml sets git_protocol https (the default login uses ssh). two-logins/joba PASS (account willesq, GH_CONFIG_DIR empty), two-logins/jobb PASS ('You are not logged into any GitHub hosts', git_protocol https, GH=<its profile>), two-logins/joba-uses-jobb PASS (GH_CONFIG_DIR=<job B's profile> -> 'open .../gh-b/config.yml: operation not permitted'), two-logins/jobb-uses-default PASS (GH_CONFIG_DIR=~/.config/gh -> 'operation not permitted'). Metadata only. Measured beside it (RC-210, does not fail the test): a profile folder job B made itself naming the default account made gh report that account logged in from the keyring."
+            "a4 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14; job B names its own gh profile, an unauthenticated temp folder whose config.yml sets git_protocol https (the default login uses ssh). two-logins/joba PASS (account willesq, GH_CONFIG_DIR empty), two-logins/jobb PASS ('You are not logged into any GitHub hosts', git_protocol https, GH=<its profile>), two-logins/joba-uses-jobb PASS (GH_CONFIG_DIR=<job B's profile> -> 'open .../gh-b/config.yml: operation not permitted'), two-logins/jobb-uses-default PASS (GH_CONFIG_DIR=~/.config/gh -> 'operation not permitted'). Metadata only. Measured beside it (RC-210, does not fail the test): a profile folder job B made itself naming the default account made gh report that account logged in from the keyring.",
+            "a2 (2026-11-14, D-68, D-69): TestAutoDeniesOtherLogins (internal/settings/spacesettings: under auto a job alone gets the rules when another space, of any kind, names its own gh_config_dir or claude_config_dir, or when it names its own gh profile and so is denied the default gh login's folder; a job alone on the default logins among spaces naming none still gets none; checkouts of no space likewise), TestSandboxChoice, TestSyncFollowsSandboxChoice, TestRunFollowsSandboxSetting (internal/cli) pass at 510f3ca. Digests: TestSessionStartIgnoresSandboxSetting (off and auto never mark a digest as enforcement off, from orchd or orch.db; a timed sandbox switch does) and TestSessionStartNamesSandboxSetting (internal/hook: the default never named; after a change each session's next start digest names the setting once as an [info] line; a restart while on is not named; while off, again once after each orchd start, from Ping's uptime within 5 s; read from orch.db when orchd is down, saying so) and TestReadSandboxSetting (internal/spaces) pass. go test ./..., go vet ./..., gofmt -l (none) and make cover (all files >= 80%) at 510f3ca.",
+            "a3 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 510f3ca on 2026-11-14 (PASS in 266 s; tmpdir SKIP citing D-58), with the user's default Claude Code configuration and default gh login (metadata only), as the user directed for automatic verification on 2026-11-14: gh, launcher/gh and gh-guard PASS ('Logged in to github.com account <default>'; the guard refuses reading the default gh config by name).",
+            "a4 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 510f3ca on 2026-11-14 (PASS in 266 s; tmpdir SKIP citing D-58), with the user's default Claude Code configuration and default gh login (metadata only), as the user directed for automatic verification on 2026-11-14: two-logins/joba, jobb, joba-uses-jobb and jobb-uses-default PASS as before."
           ]
         }
       ],
-      "status": "blocked",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
-      "blocked_reason": "2026-11-14: D-61 is implemented and every SP-046 acceptance item has evidence at 6baf911 (unit tests, make cover, and the full TestClaudeE2E suite PASS), but DOD-6 is not met. The security audit's HIGH, RC-215 (measured: an allowRead or allowWrite in a checkout's own .claude/settings.json, or the user's own entries in settings.local.json, re-opens orch's sandbox denies for sessions started in the checkout; orch now reports it but cannot prevent it without editing tracked files or users' entries, which SP-046.1.a2 forbids), and two MEDIUMs that follow from D-61's own text, RC-216 (a consistent forged setting is taken at restart and never marks a digest) and RC-217 (auto judges only isolated roots), need user decisions. The independent verifier was not run. 2026-11-14: the user settled RC-215/216/217 as D-67, D-68 and D-69; a follow-up lane implements them, then runs the audit and the independent verifier.",
-      "attempts": 2,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "e963791232c2f3fe9ad0ab5f2ea40fcc700df59e",
+      "verified_at": "2026-11-14T23:34:21Z",
+      "blocked_reason": null,
+      "attempts": 3,
       "criteria_sha256": "cba1332a2b5973eb9c82362ed430d3a8c28df32d635b00bfea8a90589908f887",
-      "branch": "feat/sp-046-per-space-harness-settings",
-      "pr": "https://github.com/willesq/orchestrator/pull/171"
+      "branch": "feat/sp-046-audit-followups",
+      "pr": "https://github.com/willesq/orchestrator/pull/186"
     },
     {
       "id": "SP-048",
@@ -6971,7 +7064,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestOutboundBaselineRuleSwitches (internal/spaces/terms_rules_test.go) passes at 46e3449: the six baseline rules (fail_closed_unreadable, gh_default_repo, plain_variables, command_assignments, git_config_harmless_keys, pending_work_after_staging) keep their stable ids and are on by default; one command per rule is decided with every rule on and with each rule alone off (7 configurations x 6 rows, real git checkouts) and only that rule's row changes verdict (e.g. 'git -C \"$PWD\" commit' allowed on, outbound_unchecked with plain_variables off; 'gh pr create' with a globex remote allowed on, outbound_term with gh_default_repo off).",
+            "a2: TestParseUserRuleRejects, TestOutboundUserRulesNeverLoosen, TestOutboundUserRulesStricter and TestOutboundRulesChanges (internal/spaces/terms_rules_test.go) pass at 46e3449: kinds allow/exempt and values starting with ! are rejected at save time with ErrRuleLoosens; command rules naming git, gh, a shell, a wrapper or a git-* helper, wildcard destinations, empty-matching or invalid patterns are ErrBadRule, and no error quotes the value; 8 added rules x 8 baseline-refused commands stay refused; each kind refuses what the baseline let through (glab with a term, a term to acme/public-sdk, an MCP tool and curl to api.github.com matching fail_closed patterns), names the rule by id only, stops applying when switched off or removed, and never leaves a push's commits unchecked that the baseline checks (security-audit M1 regression).",
+            "a3: TestOutboundRulesStore and TestReplayWithRules (internal/spaces/terms_rules_store_test.go), TestOutboundRulesPersistAndReachHook and TestReplayJudgesWithRecordedRules (internal/daemon/terms_rules_test.go), TestOutboundRulesReachHook (internal/hook/terms_rules_test.go) and TestRulesRevColumn (internal/toollog/rulesrev_test.go) pass at e3bfd4b: rules are stored per change in spaces_terms_rules (migration 0030), read back by a new orchd (restart) and written into the guard snapshot (rules, rules_rev), from which the hook's check applies them end to end through pre-tool-use; rows changed outside orchd do not verify and make the hook refuse shell and MCP calls. Per D-66 each command log record stores the rules revision (toollog schema 3, column rules_rev, taken when orchd receives the event; old records keep their hashes) and a replay judges each event with that revision: a fail_closed rule refuses only the call recorded under the revision that held it, both after the rule is removed and after it is added again. The hook-supplied revision in RecordToolEvent waits for the orchd.proto slot (PR #182)."
+          ]
         },
         {
           "id": "SP-075.2",
@@ -6999,18 +7096,22 @@
               "threshold": "true"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestOutboundRulesOperatorOnly (internal/daemon/terms_rules_test.go), TestOutboundRulesRPCs (internal/daemon/terms_rules_rpc_test.go), TestEveryRPCIsClassified (internal/daemon/callers_test.go), TestSpacesTermsRulesList and TestSpacesTermsRulesChange (internal/cli/spaces_terms_test.go) pass at fef1fb2: ChangeOutboundRule (enable, disable, add, remove, and an unknown action) is PermissionDenied for claude and codex sessions, a process orchd started, a queued task, an unreadable ancestry and no peer, and nothing is stored; the operator's changes are stored with time and caller 'operator (process 42)', logged and emitted as 'outbound rule <id>: <action> by <caller> (rules revision n)' with no value in orchd's log, events, errors, responses or the list; ListOutboundRules gives sessions ids, kinds and states only and the operator also who changed them and the history. 'orch spaces terms rules [list|enable|disable|add|remove]' is tested for each command, its output, orchd's refusal, and that 'add' takes the value only from input, never an argument.",
+            "a2: OutboundRulesModelTests and OutboundRulesClientTests (macos/Tests/OrchKitTests/OutboundRulesTests.swift) pass at fef1fb2 (make app-test, 421+ tests; make app-cover all files >= 80%): the app lists the baseline rules and the added rules with their state, switches them and adds and removes rules through ChangeOutboundRule over gRPC (FakeOrchd), asks before a baseline rule is switched off, shows orchd's operator-only refusal under the rule or the add form, and shows that the terms layer is off (no rule applies; switched under Enforcement or 'orch spaces enforce terms off'). Snapshot outbound-rules-light/dark.png (SpacesSnapshots) checked by eye in light and dark.",
+            "a3: docs at fef1fb2: docs/internals/hooks.md (Outbound baseline: each rule on and off; Outbound rules: kinds, what is rejected, never shown, in the hook), docs/OPERATIONS.md (Outbound terms rules: the baseline, how to relax and tighten it, how to switch the terms layer off entirely, that a rule's value never appears in logs, refusals, orch output or the app), docs/internals/cli.md (orch spaces terms rules), docs/internals/app.md (Outbound rules), docs/internals/daemon.md (Outbound rules, gRPC rows, command log rules_rev, replay) and docs/internals/config.md."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "cfe6e98",
+      "verified_at": "2026-11-15T00:06:19Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f09b8ebcceabae3c53278bbf89426eec5db6e7a09c656b08af71fa359704171c",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-075-configurable-outbound-rules",
+      "pr": "https://github.com/willesq/orchestrator/pull/185"
     },
     {
       "id": "SP-076",

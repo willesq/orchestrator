@@ -101,8 +101,11 @@ func (c OutboundChecker) ghDefaultURLs(ctx context.Context, dir string, cmdEnv m
 		remotes = append(remotes, ghRemote{f[0], f[1]})
 	}
 	// Reason: another host, or another gh config whose logins the check
-	// cannot read, may make gh skip github.com remotes.
-	if host != "" && !strings.EqualFold(host, "github.com") || configMoved || len(remotes) == 0 {
+	// cannot read, may make gh skip github.com remotes. With baseline
+	// rule gh_default_repo switched off, every remote counts, as before
+	// D-60.
+	if host != "" && !strings.EqualFold(host, "github.com") || configMoved || len(remotes) == 0 ||
+		!c.rules.on(OutboundGHDefaultRepo) {
 		var all []string
 		for _, r := range remotes {
 			all = append(all, r.url)

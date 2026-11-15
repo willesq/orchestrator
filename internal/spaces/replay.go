@@ -23,6 +23,12 @@ type ReplayEvent struct {
 	// Recorded is the verdict recorded with it; ok is false when the record
 	// carries none (RecordedVerdict).
 	Recorded RecordedDecision
+	// RulesRev is the outbound rules revision it was judged under (D-66);
+	// 0 for the baseline.
+	RulesRev int64
+	// Command is the command text the log kept (credentials and terms
+	// redacted, capped); "" for none.
+	Command string
 }
 
 // RecordedDecision is a verdict and rule as a log recorded them.
@@ -63,12 +69,27 @@ type ReplayReport struct {
 // revision recorded with it. Replaying under one fixed policy ignores rev.
 type ReplayPolicies func(rev int64) (GuardPolicy, error)
 
+// ReplayRules returns the operator's outbound rules (SP-075) of the
+// revision an event was recorded with (D-66); nil is the baseline.
+type ReplayRules func(rev int64) (*OutboundRules, error)
+
 // Replay decides every event again under pin, enf and the policy policies
 // gives for it. It calls the live guard's Decide, so a replay judges exactly
 // as the guard does, and changes nothing. A call the outbound terms check
 // refused keeps that verdict while the guard, replayed, lets it through and
 // enf's terms layer is on, as the hook decides it (RC-116).
 func Replay(events []ReplayEvent, pin GuardPin, enf GuardEnforcement, policies ReplayPolicies) ReplayReport {
+	return ReplayWithRules(events, pin, enf, policies, nil)
+}
+
+// ReplayWithRules is Replay that also judges each call the guard lets
+// through with the operator's outbound rules of the revision it was
+// recorded with (rules; nil judges none): a call an on fail_closed rule matches, while
+// the policy names a terms file, is refused as outbound_unchecked, as the
+// hook refuses it. The rest of the terms check needs the text the log
+// never keeps and the checkout as it was, so a recorded terms verdict is
+// carried (RC-116) and other calls are not judged again.
+func ReplayWithRules(events []ReplayEvent, pin GuardPin, enf GuardEnforcement, policies ReplayPolicies, rules ReplayRules) ReplayReport {
 	var rep ReplayReport
 	type cached struct {
 		pol GuardPolicy
@@ -82,18 +103,38 @@ func Replay(events []ReplayEvent, pin GuardPin, enf GuardEnforcement, policies R
 			c.pol, c.err = policies(ev.PolicyRev)
 			seen[ev.PolicyRev] = c
 		}
+		var d GuardDecision
+		var rerr error
+		if c.err == nil {
+			d = Decide(c.pol, pin, enf, ev.Guard)
+			if d.Verdict != Refuse && enf.Terms != SwitchOff && !carriesTerms(ev.Recorded) {
+				var refuse bool
+				refuse, rerr = ruleRefuses(rules, ev, c.pol.res)
+				if refuse {
+					d.Would, d.Rule = Refuse, RuleOutboundUnchecked
+				}
+			}
+		}
 		switch {
 		case c.err != nil:
 			row.Problem = c.err.Error()
 			rep.Problems++
+		case rerr != nil:
+			row.Problem = rerr.Error()
+			rep.Problems++
 		default:
-			d := Decide(c.pol, pin, enf, ev.Guard)
 			row.Verdict, row.Rule = d.Would, d.Rule
 			if d.Verdict != Refuse && enf.Terms != SwitchOff && carriesTerms(ev.Recorded) {
 				// Reason: the hook checks terms only after the guard let
 				// the call through, against text the log never keeps
 				// (INV-07) and a checkout that has moved on since; the
 				// recorded terms verdict is the one the call got.
+				row.Verdict, row.Rule = Refuse, ev.Recorded.Rule
+			}
+			if d.Would != Refuse && carriesReopen(ev.Recorded) {
+				// Reason: as for terms, the hook decides this from the
+				// checkout's settings files at the time, which the log
+				// does not keep (D-67).
 				row.Verdict, row.Rule = Refuse, ev.Recorded.Rule
 			}
 			if ev.Recorded.OK {
@@ -115,10 +156,35 @@ func Replay(events []ReplayEvent, pin GuardPin, enf GuardEnforcement, policies R
 	return rep
 }
 
+// ruleRefuses reports whether an on fail_closed rule of the revision ev was
+// recorded with refuses it. Like the hook's check, the rules apply only while
+// some space has terms; here, while the policy names a terms file.
+func ruleRefuses(rules ReplayRules, ev ReplayEvent, res *Resolved) (bool, error) {
+	if rules == nil || ev.Command == "" || len(TermsPaths(res, "")) == 0 {
+		return false, nil
+	}
+	r, err := rules(ev.RulesRev)
+	if err != nil {
+		return false, err
+	}
+	rs, err := r.compile()
+	if err != nil {
+		return false, ErrRulesUnreadable
+	}
+	return rs.failClosed(nil, ev.Guard.Tool+"\n"+ev.Command) != "", nil
+}
+
 // carriesTerms reports whether r is a refusal by the outbound terms check
 // (SP-044), which a replay carries rather than decides (RC-116).
 func carriesTerms(r RecordedDecision) bool {
 	return r.OK && r.Verdict == Refuse && (r.Rule == RuleOutboundTerm || r.Rule == RuleOutboundUnchecked)
+}
+
+// carriesReopen reports whether r is a refusal, or a would-refuse, by the
+// check of a checkout's own settings (RuleSettingsReopen), which a replay
+// carries rather than decides.
+func carriesReopen(r RecordedDecision) bool {
+	return r.OK && r.Verdict == Refuse && r.Rule == RuleSettingsReopen
 }
 
 // Recorded decision forms. orchd stores a call the guard decided as its

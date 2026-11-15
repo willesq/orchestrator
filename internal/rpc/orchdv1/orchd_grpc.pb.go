@@ -82,6 +82,8 @@ const (
 	Orchd_GetEnforcement_FullMethodName           = "/orchd.v1.Orchd/GetEnforcement"
 	Orchd_SetEnforcement_FullMethodName           = "/orchd.v1.Orchd/SetEnforcement"
 	Orchd_SetSandboxSetting_FullMethodName        = "/orchd.v1.Orchd/SetSandboxSetting"
+	Orchd_ListOutboundRules_FullMethodName        = "/orchd.v1.Orchd/ListOutboundRules"
+	Orchd_ChangeOutboundRule_FullMethodName       = "/orchd.v1.Orchd/ChangeOutboundRule"
 	Orchd_ListRegisteredSources_FullMethodName    = "/orchd.v1.Orchd/ListRegisteredSources"
 	Orchd_SaveSource_FullMethodName               = "/orchd.v1.Orchd/SaveSource"
 	Orchd_RemoveSource_FullMethodName             = "/orchd.v1.Orchd/RemoveSource"
@@ -316,6 +318,18 @@ type OrchdClient interface {
 	// it. Operator-only like SetEnforcement; every change is logged with its
 	// time and caller and emits an event on the "spaces" stream.
 	SetSandboxSetting(ctx context.Context, in *SetSandboxSettingRequest, opts ...grpc.CallOption) (*SetSandboxSettingResponse, error)
+	// ListOutboundRules lists the outbound terms check's rules (spaces
+	// SP-075): the baseline rules with their state and the rules the
+	// operator added, by id and kind. A rule's value is never returned
+	// (INV-07). Open to every caller; who changed the rules, and the change
+	// history, are shown to the operator only.
+	ListOutboundRules(ctx context.Context, in *ListOutboundRulesRequest, opts ...grpc.CallOption) (*OutboundRules, error)
+	// ChangeOutboundRule enables, disables, adds or removes one outbound
+	// rule. Operator-only like SetEnforcement: refused to callers descended
+	// from a harness or from orchd. An added rule may only make the check
+	// stricter. Every change is logged with its time and caller (never a
+	// value) and emits an event on the "spaces" stream.
+	ChangeOutboundRule(ctx context.Context, in *ChangeOutboundRuleRequest, opts ...grpc.CallOption) (*ChangeOutboundRuleResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error)
@@ -1013,6 +1027,26 @@ func (c *orchdClient) SetSandboxSetting(ctx context.Context, in *SetSandboxSetti
 	return out, nil
 }
 
+func (c *orchdClient) ListOutboundRules(ctx context.Context, in *ListOutboundRulesRequest, opts ...grpc.CallOption) (*OutboundRules, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OutboundRules)
+	err := c.cc.Invoke(ctx, Orchd_ListOutboundRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ChangeOutboundRule(ctx context.Context, in *ChangeOutboundRuleRequest, opts ...grpc.CallOption) (*ChangeOutboundRuleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChangeOutboundRuleResponse)
+	err := c.cc.Invoke(ctx, Orchd_ChangeOutboundRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *orchdClient) ListRegisteredSources(ctx context.Context, in *ListRegisteredSourcesRequest, opts ...grpc.CallOption) (*ListRegisteredSourcesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListRegisteredSourcesResponse)
@@ -1389,6 +1423,18 @@ type OrchdServer interface {
 	// it. Operator-only like SetEnforcement; every change is logged with its
 	// time and caller and emits an event on the "spaces" stream.
 	SetSandboxSetting(context.Context, *SetSandboxSettingRequest) (*SetSandboxSettingResponse, error)
+	// ListOutboundRules lists the outbound terms check's rules (spaces
+	// SP-075): the baseline rules with their state and the rules the
+	// operator added, by id and kind. A rule's value is never returned
+	// (INV-07). Open to every caller; who changed the rules, and the change
+	// history, are shown to the operator only.
+	ListOutboundRules(context.Context, *ListOutboundRulesRequest) (*OutboundRules, error)
+	// ChangeOutboundRule enables, disables, adds or removes one outbound
+	// rule. Operator-only like SetEnforcement: refused to callers descended
+	// from a harness or from orchd. An added rule may only make the check
+	// stricter. Every change is logged with its time and caller (never a
+	// value) and emits an event on the "spaces" stream.
+	ChangeOutboundRule(context.Context, *ChangeOutboundRuleRequest) (*ChangeOutboundRuleResponse, error)
 	// ListRegisteredSources lists the sources registered for refresh on a
 	// cadence (web URLs, local repos, local owner directories).
 	ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error)
@@ -1635,6 +1681,12 @@ func (UnimplementedOrchdServer) SetEnforcement(context.Context, *SetEnforcementR
 }
 func (UnimplementedOrchdServer) SetSandboxSetting(context.Context, *SetSandboxSettingRequest) (*SetSandboxSettingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetSandboxSetting not implemented")
+}
+func (UnimplementedOrchdServer) ListOutboundRules(context.Context, *ListOutboundRulesRequest) (*OutboundRules, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOutboundRules not implemented")
+}
+func (UnimplementedOrchdServer) ChangeOutboundRule(context.Context, *ChangeOutboundRuleRequest) (*ChangeOutboundRuleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangeOutboundRule not implemented")
 }
 func (UnimplementedOrchdServer) ListRegisteredSources(context.Context, *ListRegisteredSourcesRequest) (*ListRegisteredSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListRegisteredSources not implemented")
@@ -2832,6 +2884,42 @@ func _Orchd_SetSandboxSetting_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_ListOutboundRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOutboundRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListOutboundRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListOutboundRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListOutboundRules(ctx, req.(*ListOutboundRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ChangeOutboundRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangeOutboundRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ChangeOutboundRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ChangeOutboundRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ChangeOutboundRule(ctx, req.(*ChangeOutboundRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Orchd_ListRegisteredSources_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListRegisteredSourcesRequest)
 	if err := dec(in); err != nil {
@@ -3374,6 +3462,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetSandboxSetting",
 			Handler:    _Orchd_SetSandboxSetting_Handler,
+		},
+		{
+			MethodName: "ListOutboundRules",
+			Handler:    _Orchd_ListOutboundRules_Handler,
+		},
+		{
+			MethodName: "ChangeOutboundRule",
+			Handler:    _Orchd_ChangeOutboundRule_Handler,
 		},
 		{
 			MethodName: "ListRegisteredSources",

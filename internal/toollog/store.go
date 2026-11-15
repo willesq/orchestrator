@@ -16,7 +16,9 @@ import (
 // fileMode is the command log's mode, and its -wal and -shm files' (D-29).
 const fileMode fs.FileMode = 0o600
 
-const schemaVersion = 2
+// schemaVersion 3 adds events.rules_rev (spaces D-66), added in place to
+// a log of an older version.
+const schemaVersion = 3
 
 const schema = `
 CREATE TABLE IF NOT EXISTS events (
@@ -42,6 +44,7 @@ CREATE TABLE IF NOT EXISTS events (
 	decision        TEXT    NOT NULL,
 	rule            TEXT    NOT NULL,
 	policy_rev      INTEGER NOT NULL,
+	rules_rev       INTEGER NOT NULL DEFAULT 0,
 	dropped         INTEGER NOT NULL,
 	prev_hash       TEXT    NOT NULL,
 	hash            TEXT    NOT NULL,
@@ -67,7 +70,7 @@ CREATE TABLE IF NOT EXISTS pruned (
 
 const recordColumns = `owner_kind, owner_id, seq, ts, hook_at, kind, harness, event, tool,
 	claimed_session, tool_use_id, agent_id, agent_type, cwd, old_cwd, new_cwd, targets,
-	command, input_size, decision, rule, policy_rev, dropped, prev_hash, hash`
+	command, input_size, decision, rule, policy_rev, rules_rev, dropped, prev_hash, hash`
 
 // Store is the command log database.
 type Store struct {
@@ -162,6 +165,9 @@ func (s *Store) init() error {
 	if _, err := conn.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("command log: %w", err)
 	}
+	if err := addRulesRev(ctx, conn); err != nil {
+		return fmt.Errorf("command log: %w", err)
+	}
 	var vacuum int
 	if err := conn.QueryRowContext(ctx, `PRAGMA auto_vacuum`).Scan(&vacuum); err != nil {
 		return fmt.Errorf("command log: %w", err)
@@ -176,6 +182,22 @@ func (s *Store) init() error {
 		}
 	}
 	_, err = conn.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion))
+	return err
+}
+
+// addRulesRev adds events.rules_rev to a log made before schema 3. Reason:
+// CREATE TABLE IF NOT EXISTS leaves an existing table as it was. Records
+// stored before it read as revision 0, the baseline, and keep their hashes,
+// since a record's JSON leaves a zero revision out.
+func addRulesRev(ctx context.Context, conn *sql.Conn) error {
+	var n int
+	if err := conn.QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_info('events') WHERE name = 'rules_rev'`).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	_, err := conn.ExecContext(ctx, `ALTER TABLE events ADD COLUMN rules_rev INTEGER NOT NULL DEFAULT 0`)
 	return err
 }
 
@@ -248,10 +270,10 @@ func head(ctx context.Context, q execer, o Owner) (chainHead, error) {
 
 func insert(ctx context.Context, q execer, r Record) error {
 	_, err := q.ExecContext(ctx, `INSERT INTO events (`+recordColumns+`)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		r.OwnerKind, r.OwnerID, r.Seq, r.TS, r.HookAt, r.Kind, r.Harness, r.Event, r.Tool,
 		r.ClaimedSession, r.ToolUseID, r.AgentID, r.AgentType, r.Cwd, r.OldCwd, r.NewCwd, r.Targets,
-		r.Command, r.InputSize, r.Decision, r.Rule, r.PolicyRev, r.Dropped, r.PrevHash, r.Hash)
+		r.Command, r.InputSize, r.Decision, r.Rule, r.PolicyRev, r.RulesRev, r.Dropped, r.PrevHash, r.Hash)
 	return err
 }
 

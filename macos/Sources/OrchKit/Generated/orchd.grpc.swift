@@ -839,6 +839,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ListOutboundRules" metadata.
+        public enum ListOutboundRules: Sendable {
+            /// Request type for "ListOutboundRules".
+            public typealias Input = Orchd_V1_ListOutboundRulesRequest
+            /// Response type for "ListOutboundRules".
+            public typealias Output = Orchd_V1_OutboundRules
+            /// Descriptor for "ListOutboundRules".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListOutboundRules",
+                type: .unary
+            )
+        }
+        /// Namespace for "ChangeOutboundRule" metadata.
+        public enum ChangeOutboundRule: Sendable {
+            /// Request type for "ChangeOutboundRule".
+            public typealias Input = Orchd_V1_ChangeOutboundRuleRequest
+            /// Response type for "ChangeOutboundRule".
+            public typealias Output = Orchd_V1_ChangeOutboundRuleResponse
+            /// Descriptor for "ChangeOutboundRule".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ChangeOutboundRule",
+                type: .unary
+            )
+        }
         /// Namespace for "ListRegisteredSources" metadata.
         public enum ListRegisteredSources: Sendable {
             /// Request type for "ListRegisteredSources".
@@ -1112,6 +1138,8 @@ public enum Orchd_V1_Orchd: Sendable {
             GetEnforcement.descriptor,
             SetEnforcement.descriptor,
             SetSandboxSetting.descriptor,
+            ListOutboundRules.descriptor,
+            ChangeOutboundRule.descriptor,
             ListRegisteredSources.descriptor,
             SaveSource.descriptor,
             RemoveSource.descriptor,
@@ -2682,6 +2710,60 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SetSandboxSettingResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SetSandboxSettingResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListOutboundRules" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListOutboundRules lists the outbound terms check's rules (spaces
+        /// > SP-075): the baseline rules with their state and the rules the
+        /// > operator added, by id and kind. A rule's value is never returned
+        /// > (INV-07). Open to every caller; who changed the rules, and the change
+        /// > history, are shown to the operator only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListOutboundRulesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListOutboundRulesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_OutboundRules` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listOutboundRules<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListOutboundRulesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListOutboundRulesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_OutboundRules>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_OutboundRules>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ChangeOutboundRule" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ChangeOutboundRule enables, disables, adds or removes one outbound
+        /// > rule. Operator-only like SetEnforcement: refused to callers descended
+        /// > from a harness or from orchd. An added rule may only make the check
+        /// > stricter. Every change is logged with its time and caller (never a
+        /// > value) and emits an event on the "spaces" stream.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ChangeOutboundRuleRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ChangeOutboundRuleRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ChangeOutboundRuleResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func changeOutboundRule<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ChangeOutboundRuleRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ChangeOutboundRuleRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ChangeOutboundRuleResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ChangeOutboundRuleResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "ListRegisteredSources" method.
@@ -5313,6 +5395,82 @@ extension Orchd_V1_Orchd {
             )
         }
 
+        /// Call the "ListOutboundRules" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListOutboundRules lists the outbound terms check's rules (spaces
+        /// > SP-075): the baseline rules with their state and the rules the
+        /// > operator added, by id and kind. A rule's value is never returned
+        /// > (INV-07). Open to every caller; who changed the rules, and the change
+        /// > history, are shown to the operator only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListOutboundRulesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListOutboundRulesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_OutboundRules` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listOutboundRules<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListOutboundRulesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListOutboundRulesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_OutboundRules>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_OutboundRules>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListOutboundRules.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ChangeOutboundRule" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ChangeOutboundRule enables, disables, adds or removes one outbound
+        /// > rule. Operator-only like SetEnforcement: refused to callers descended
+        /// > from a harness or from orchd. An added rule may only make the check
+        /// > stricter. Every change is logged with its time and caller (never a
+        /// > value) and emits an event on the "spaces" stream.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ChangeOutboundRuleRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ChangeOutboundRuleRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ChangeOutboundRuleResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func changeOutboundRule<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ChangeOutboundRuleRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ChangeOutboundRuleRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ChangeOutboundRuleResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ChangeOutboundRuleResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ChangeOutboundRule.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "ListRegisteredSources" method.
         ///
         /// > Source IDL Documentation:
@@ -7781,6 +7939,72 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SetSandboxSettingRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SetSandboxSettingResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListOutboundRules" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListOutboundRules lists the outbound terms check's rules (spaces
+    /// > SP-075): the baseline rules with their state and the rules the
+    /// > operator added, by id and kind. A rule's value is never returned
+    /// > (INV-07). Open to every caller; who changed the rules, and the change
+    /// > history, are shown to the operator only.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListOutboundRulesRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listOutboundRules<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListOutboundRulesRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_OutboundRules>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listOutboundRules(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListOutboundRulesRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_OutboundRules>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ChangeOutboundRule" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ChangeOutboundRule enables, disables, adds or removes one outbound
+    /// > rule. Operator-only like SetEnforcement: refused to callers descended
+    /// > from a harness or from orchd. An added rule may only make the check
+    /// > stricter. Every change is logged with its time and caller (never a
+    /// > value) and emits an event on the "spaces" stream.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ChangeOutboundRuleRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func changeOutboundRule<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ChangeOutboundRuleRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ChangeOutboundRuleResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.changeOutboundRule(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ChangeOutboundRuleRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ChangeOutboundRuleResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -10424,6 +10648,80 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.setSandboxSetting(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListOutboundRules" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListOutboundRules lists the outbound terms check's rules (spaces
+    /// > SP-075): the baseline rules with their state and the rules the
+    /// > operator added, by id and kind. A rule's value is never returned
+    /// > (INV-07). Open to every caller; who changed the rules, and the change
+    /// > history, are shown to the operator only.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listOutboundRules<Result>(
+        _ message: Orchd_V1_ListOutboundRulesRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_OutboundRules>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListOutboundRulesRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listOutboundRules(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ChangeOutboundRule" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ChangeOutboundRule enables, disables, adds or removes one outbound
+    /// > rule. Operator-only like SetEnforcement: refused to callers descended
+    /// > from a harness or from orchd. An added rule may only make the check
+    /// > stricter. Every change is logged with its time and caller (never a
+    /// > value) and emits an event on the "spaces" stream.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func changeOutboundRule<Result>(
+        _ message: Orchd_V1_ChangeOutboundRuleRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ChangeOutboundRuleResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ChangeOutboundRuleRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.changeOutboundRule(
             request: request,
             options: options,
             onResponse: handleResponse

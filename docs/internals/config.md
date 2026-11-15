@@ -420,6 +420,13 @@ optionally for a time after which it reverts. The defaults are memory on, guard
 caller; while a layer is off, `orch status` and every session's start digest say so. See
 [daemon.md](daemon.md#enforcement-switches).
 
+**Outbound rules** (SP-075; `spaces_terms_rules`, migration `0030`). The outbound terms check's
+baseline rules can each be switched off, and stricter rules added, by the operator only; like the
+switches they are not settings, every change is logged with time and caller, and a rule's value
+never leaves `orch.db` and the guard snapshot (INV-07). Switching the `terms` layer off turns the
+whole check off, rules included. See [hooks.md](hooks.md#outbound-rules) and
+[daemon.md](daemon.md#outbound-rules).
+
 ## Schema
 
 `config.Fields` (`internal/config/schema.go`) describes every key: its section, label, help, type, range or

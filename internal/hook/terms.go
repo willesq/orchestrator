@@ -49,11 +49,12 @@ func defaultCheckOutbound(ctx context.Context, p Payload, g spaces.GuardTerms) s
 	if g.State == spaces.SwitchOff {
 		return spaces.OutboundResult{}
 	}
-	acts, unknown := spaces.OutboundActions(p.ToolName, p.ToolInput, p.Cwd)
-	if len(acts) == 0 && !unknown {
-		return spaces.OutboundResult{}
-	}
+	home, _ := os.UserHomeDir()
 	if !g.Known {
+		acts, unknown := spaces.OutboundActions(p.ToolName, p.ToolInput, p.Cwd)
+		if len(acts) == 0 && !unknown {
+			return spaces.OutboundResult{}
+		}
 		// Reason: the terms cannot be known, so text cannot be vouched
 		// for; only a call that sends something out is refused.
 		kind := "a command that may send text out"
@@ -62,12 +63,16 @@ func defaultCheckOutbound(ctx context.Context, p Payload, g spaces.GuardTerms) s
 		}
 		return spaces.OutboundResult{Refuse: true, Rule: spaces.RuleOutboundUnchecked, Kind: kind}
 	}
-	home, _ := os.UserHomeDir()
+	// Reason: most calls send nothing out; their terms files are not read.
+	if !g.RulesBroken && !spaces.OutboundCandidate(p.ToolName, p.ToolInput, p.Cwd, home, g.Rules) {
+		return spaces.OutboundResult{}
+	}
 	termsHome := g.Home
 	if termsHome == "" {
 		termsHome = home
 	}
 	lists, errs := spaces.SpaceTerms(g.Policy, termsHome)
-	c := spaces.OutboundChecker{Policy: g.Policy, Terms: lists, TermErrs: errs, Home: home}
+	c := spaces.OutboundChecker{Policy: g.Policy, Terms: lists, TermErrs: errs, Home: home, Rules: g.Rules,
+		RulesBroken: g.RulesBroken}
 	return c.Check(ctx, p.ToolName, p.ToolInput, p.Cwd)
 }

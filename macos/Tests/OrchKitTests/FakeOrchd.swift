@@ -40,6 +40,8 @@ struct FakeOrchdService: RegistrableRPCService {
     var purge = Orchd_V1_PurgeDocsResponse()
     var enforcement = Orchd_V1_EnforcementState()
     var setEnforcement = Orchd_V1_SetEnforcementResponse()
+    var outboundRules = Orchd_V1_OutboundRules()
+    var changeOutboundRule = Orchd_V1_ChangeOutboundRuleResponse()
     /// ExplainPlacement's answer per target; any other target is refused.
     var placements: [String: Orchd_V1_PlacementExplanation] = [:]
     /// Records requests the fake received, for assertions.
@@ -59,6 +61,23 @@ struct FakeOrchdService: RegistrableRPCService {
         let configState = self.configState, docsOwners = self.docsOwners, docsOwnerRepos = self.docsOwnerRepos
         let docOwner = self.docOwner, purge = self.purge
         let enforcement = self.enforcement, setEnforcement = self.setEnforcement, placements = self.placements
+        let outboundRules = self.outboundRules, changeOutboundRule = self.changeOutboundRule
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ListOutboundRules.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ListOutboundRulesRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_OutboundRules>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: outboundRules))
+        }
+        router.registerHandler(
+            forMethod: Orchd_V1_Orchd.Method.ChangeOutboundRule.descriptor,
+            deserializer: ProtobufDeserializer<Orchd_V1_ChangeOutboundRuleRequest>(),
+            serializer: ProtobufSerializer<Orchd_V1_ChangeOutboundRuleResponse>()
+        ) { request, _ in
+            for try await message in request.messages { recorder.record(message) }
+            return StreamingServerResponse(single: ServerResponse(message: changeOutboundRule))
+        }
         router.registerHandler(
             forMethod: Orchd_V1_Orchd.Method.GetEnforcement.descriptor,
             deserializer: ProtobufDeserializer<Orchd_V1_GetEnforcementRequest>(),
