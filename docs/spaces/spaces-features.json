@@ -611,6 +611,11 @@
         "id": "D-73",
         "decision": "Sessions can write files into folders listed in a public space's public_paths, or create new folders that a '*' or '**' pattern matches, and the sources refresh indexes that content into public. The user accepts this as an extension of RC-404's accepted risk (SP-076). Later, SP-046's per-checkout sandbox rules will also deny job sessions writes to listed folders (RC-805) (was RC-801).",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-74",
+        "decision": "RC-710: SP-025 merges with RC-710 accepted until a follow-up feature refuses, under a spaces policy, the task-refused settings RPCs (SetConfig with Sensitive keys, the harness and cc-safety-net settings, Restart, PR landing) to every caller except Orch.app, keeping Ingest, Dispatch and the task RPCs sessions use. The follow-up touches SP-070 and SP-050 and is added to the plan by the coordinator as SP-078.",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -3570,7 +3575,8 @@
           "SP-050",
           "SP-025"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "Accepted risk until SP-078 (D-74, 2026-11-14): SP-025 merges with it open; SP-078 refuses these RPCs to every caller except Orch.app under a policy."
       },
       {
         "id": "RC-711",
@@ -3583,6 +3589,18 @@
           "SP-025",
           "SP-077",
           "SP-072"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-712",
+        "kind": "follow-up",
+        "topic": "'orch docs list' reads orch.db directly and lists every space's doc URIs",
+        "detail": "Found by SP-025's independent verifier (pre-existing): internal/cli/docs_cmd.go opens orch.db itself rather than asking orchd, so it lists every synced doc URI of every space whatever the caller's space, bypassing SP-025's read filtering (ListDocs). Whether an agent can use it depends on whether the sandbox lets it read orch.db. Proposed: have the command ask orchd (ListDocs), or refuse it when it runs inside a session under a policy.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-026"
         ],
         "status": "open"
       }
@@ -5959,7 +5977,9 @@
             "a6: TestDetachedHarnessReadsNoMore: the SP-041 guard (spaces.Decide, block-other-jobs) refuses 'cd <globex>/repo && nohup claude ... &' and '(cd <globex>/repo; setsid claude &)' from a session in acme; a fake claude detached under launchd in globex's folder gets no pin and reads public only; a claude nested in the session copies acme's pin and reads acme's set only. Residual D-38 cases are RC-702.",
             "a8: TestTasksReadTheirDispatchersSpaces: Dispatch records the dispatching session's space (acme, globex), the operator's working-directory placement (acme, personal; quarantine with no directory), and nothing for an operator with no evidence or an unpinned harness; the space reaches the runner (agentTask) and a task reads what that space reads (acme's task reads personal, never globex), writes there (placed in acme), and an untracked task or one with no space reads public only. Also TestDispatchRecordsReadSpace (internal/queue).",
             "Also: TestStaleLabelsAreUnreadable (INV-08: chunks with an earlier, later or missing labels_v are unreadable on every read path until relabelled; the operator still sees them), TestNoPolicyReadsAsBefore (INV-10), TestPayloadLayerAndFailures (second layer; store errors without collection names), TestReadScopeFailsClosed (broken policy reads nothing). go test ./..., go vet ./... and make cover (all files >= 80%) pass.",
-            "Independent verifier, 2026-11-14, at 2719d51: a1 to a8 and SP-025.2 a1 pass, including the real-engine run (0 cross-space results, 106 s); four deliberate breakages each failed the matching tests; go test, go vet, make cover (59 daemon files listed), gofmt pass; INV-10 holds."
+            "Independent verifier, 2026-11-14, at 2719d51: a1 to a8 and SP-025.2 a1 pass, including the real-engine run (0 cross-space results, 106 s); four deliberate breakages each failed the matching tests; go test, go vet, make cover (59 daemon files listed), gofmt pass; INV-10 holds.",
+            "DOD-6: security reviews of the diff leave no open critical or high finding; the one open medium, RC-710 (pre-existing code outside this diff), is an accepted risk until SP-078 (D-74), so DOD-6 passes on that accepted risk.",
+            "After merging origin/main at cd1c2bb (SP-071 retag, proto and migration 0031): the merge changed no SP-025 read-path code (it touched write paths: placing.go, Ingest's mayReplace, rag write generations); the registry test caught the new RetagSource RPC, now classed operator-only. go test ./..., go vet ./..., gofmt and make cover (all files >= 80%, 60 daemon files listed) pass, so the verifier was not re-run."
           ]
         },
         {
@@ -5979,11 +5999,11 @@
           ]
         }
       ],
-      "status": "blocked",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
-      "blocked_reason": "Independent verifier at 2719d51: every acceptance item and DOD-1 to DOD-5, DOD-7 and DOD-8 pass; INV-10 holds. DOD-6 is not met on a strict reading: RC-710 (medium, pre-existing code outside this diff) stays open because it needs a user decision on which task-refused RPCs (SetConfig with Sensitive keys, harness settings, Restart, PR landing) interactive sessions may still call under a policy. DOD-9 waits for CI on the merged head.",
+      "status": "done",
+      "passes": true,
+      "verified_sha": "2719d5124f3a0303f20df72621dfd4ae2097ebdc",
+      "verified_at": "2026-11-15T04:35:18Z",
+      "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "b1af57cfe7ce23368c77882ead3d99ad6081ed3e2eb32334e37edc4dccd2ca93",
       "branch": "feat/sp-025-read-path-spaces",
