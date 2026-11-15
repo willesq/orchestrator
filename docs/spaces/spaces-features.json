@@ -3451,7 +3451,7 @@
         "id": "RC-902",
         "kind": "follow-up",
         "topic": "SP-028 security review lows accepted",
-        "detail": "(1) A failed quarantine scan or purge logs the store's error in orchd's local log, which may include a source URI (a local path); orchd's log already names source URIs elsewhere. (2) Quarantine totals are int32 on the wire; only displayed counts would overflow past 2^31. (3) Chunks marked quarantine but still outside the quarantine collection (not yet relabelled) are not listed, counted or purged until 'orch rag relabel' moves them. (4) Fixed in the PR: failed counts are cached for the TTL, and refusal text drops format characters.",
+        "detail": "(1) A failed quarantine scan or purge logs the store's error in orchd's local log, which may include a source URI (a local path); orchd's log already names source URIs elsewhere. (2) Quarantine totals are int32 on the wire; only displayed counts would overflow past 2^31. (3) Chunks marked quarantine but still outside the quarantine collection (not yet relabelled) are not listed, counted or purged until 'orch rag relabel' moves them. (4) After an assign (a retag), 'orch status' may show the old quarantine counts for up to 30 s: the count cache is cleared after a purge only, and clearing it on a retag would touch SP-071's code. (5) Fixed in the PR: failed counts are cached for the TTL, and refusal text drops format characters.",
         "source": "https://github.com/willesq/orchestrator/pull/192",
         "raised": "2026-11-14",
         "affects": [
@@ -6143,10 +6143,10 @@
           ]
         }
       ],
-      "status": "in_progress",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "c0c4099",
+      "verified_at": "2026-11-15T04:43:06Z",
       "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "8b78deb05b7ee728821d2452d6e11460f796408e9822bf1d03d2e68805efc1c7",
