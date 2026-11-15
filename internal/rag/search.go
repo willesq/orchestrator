@@ -75,6 +75,10 @@ type SearchOpts struct {
 	// LabelsV, when set, reads in each named space only chunks labelled
 	// under that policy revision (INV-08); 0 reads every chunk.
 	LabelsV int64
+	// DirectMessages keeps chat direct messages in the search. Only an
+	// explicit interactive search sets it; every other read leaves them out
+	// (SP-060, D-19).
+	DirectMessages bool
 }
 
 // ErrHybridUnavailable means a search asked explicitly for hybrid mode could
@@ -117,7 +121,7 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	if err != nil {
 		return nil, "", err
 	}
-	targets = withLabels(targets, opts.LabelsV)
+	targets = withDirectMessages(withLabels(targets, opts.LabelsV), opts.DirectMessages)
 	if len(targets) == 0 {
 		// No space is readable: nothing to search, and nothing to embed.
 		return nil, "", nil

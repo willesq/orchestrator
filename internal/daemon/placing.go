@@ -145,6 +145,10 @@ func (w *writePlacer) placement(ctx context.Context, res *spaces.Resolved, o rag
 		return w.sessionPlacement(ctx, res, o)
 	case rag.OriginClient:
 		so = spaces.Origin{System: spaces.SystemClient, WriterSpace: o.WriterSpace}
+	case rag.OriginSlack, rag.OriginTeams:
+		// A chat feed's content goes where its tenant is bound (SP-060);
+		// an unbound tenant is quarantined by the classifier (INV-03).
+		so = spaces.Origin{System: spaces.System(o.System), Tenant: o.Tenant}
 	default:
 		return quarantined(fmt.Sprintf("unknown origin system %q", o.System)), nil
 	}

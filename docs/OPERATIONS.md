@@ -66,6 +66,8 @@ orch spaces terms rules               # the outbound terms check's rules and the
 orch spaces terms rules disable plain_variables   # relax a baseline rule (operator only)
 orch spaces terms rules add fail_closed < rule.txt   # add a stricter rule; the value is read from input (operator only)
 orch spaces retag <source_uri> <space> [--confirm]   # move a source's content to another space and keep it there (operator only)
+orch spaces unlock --for 15m [-- <command>]   # ask Orch.app for operator scope in this terminal (at most 60m)
+orch spaces lock                      # end the unlocks covering this terminal
 orch guard git-hook --install [--apply]   # git hooks that refuse commits and pushes carrying another space's terms
 orch sessions list [--all]   # sessions and their state: active, idle, ended (with --all), unpinned
 orch run <space> -- claude   # start Claude Code with the space's profile, from any folder
@@ -78,7 +80,26 @@ terminal (or use Orch.app). Once a policy is applied, only Orch.app is the opera
 is not (D-71), so these operator commands, `orch rag relabel`, `orch config set` and the other
 operator-only commands are refused from a terminal, and `orch search` there reads public memory
 only. Use Orch.app for them; it is recognized by its code signature, so reinstall it
-(`make app-install`) if it was built before ad-hoc builds got the hardened runtime. Apply takes only the newest draft, the one you reviewed, and only when
+(`make app-install`) if it was built before ad-hoc builds got the hardened runtime.
+
+To run operator commands from a terminal under a policy, unlock it: `orch spaces unlock --for
+15m` prints its process and terminal (e.g. ttys003) and asks Orch.app, whose menu bar panel (and
+a notification) shows the request with its command, process and terminal. Confirm it there with
+Touch ID or your password only when the terminal is yours (Terminal can show its tty name in the
+window title), or deny it. Orch.app then shows a code: type it into the terminal that asked. Nothing is granted until the
+code matches, so a request an agent filed at the same time gets nothing even if you confirm it by
+mistake; if no terminal of yours waits for a code, cancel it in the panel. Once granted, orch
+starts your shell (or the command after `--`, e.g. `orch spaces unlock --for 30m -- orch rag
+relabel`, which is safer) as the operator until the time is up (at most 60 minutes), the shell
+exits, or `orch spaces lock` (or Lock in the panel) ends it; the panel counts down. Only that shell
+and what it starts are the operator: they read every space and run operator commands such as
+relabel, retag and diff. Applying a policy, switching enforcement off or loosening it, the sandbox
+setting, outbound rules and the settings only Orch.app may change under a policy (sensitive
+config, harness and cc-safety-net settings, restart, PR landing, purging docs) stay in Orch.app
+(D-78). An agent started in it is not the operator, and its first call to orchd ends the unlock;
+the unlock is refused inside an agent session or a queued task. Unlocks end when orchd restarts.
+
+Apply takes only the newest draft, the one you reviewed, and only when
 it validates. An agent session may save a draft. The diff says when it did and shows every value
 it changes, and applying it needs `--accept-agent-draft`. A saved draft, or an edit to `orch.db`, changes nothing that is enforced; `orch status`
 shows it in its `spaces` section as drift.

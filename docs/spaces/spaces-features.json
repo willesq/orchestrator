@@ -3,7 +3,7 @@
   "plan_id": "orch-memory-spaces",
   "title": "orch memory spaces: isolation of memory, sessions and tools across contexts",
   "created": "2026-11-08",
-  "updated": "2026-11-14",
+  "updated": "2026-11-15",
   "repo": "willesq/orchestrator",
   "base_commit": "5796fa6",
   "origin": {
@@ -533,11 +533,6 @@
         "date": "2026-11-12"
       },
       {
-        "id": "D-60",
-        "decision": "SP-044's outbound terms hook check is best-effort static reading of shell, like D-28; SP-045's git hooks and per-job accounts are the boundary for git. The residual classes in RC-117 (MCP tools, scripts and programs that run git, interpreters, curl, forged tracking refs) stay accepted risk. The baseline is loosened in SP-044: a gh write without -R counts only the repo gh would use (its default repo, else the checkout's base remote), not every remote; plain variables ($PWD, $USER, $HOME) and literal assignments made earlier in the same command are read instead of refused; more harmless 'git -c' keys are allowed. Making the rules configurable (baseline rules switchable by id, user-added stricter rules, CLI and app, stored in orch.db, operator-only) is SP-075.",
-        "date": "2026-11-14"
-      },
-      {
         "id": "D-58",
         "decision": "RC-206 option (c): Claude Code sessions started inside a checkout share Claude Code's own temp folder (/tmp/claude-<uid>) across spaces, because Claude Code takes its sandbox temp folder only from its startup environment. This is accepted as a documented limit until Claude Code honours a settings value; 'orch run <space>' gives each space its own temp folder. For SP-046.1.a6 the per-checkout side is met by this decision, the launcher side by test.",
         "date": "2026-11-14"
@@ -545,6 +540,11 @@
       {
         "id": "D-59",
         "decision": "Revisits D-18. One login works by default: orch uses whichever gh login is already authenticated for every space, and 'orch run' uses the user's normal Claude config. A space may optionally name its own gh profile (gh_config_dir) and Claude config dir; only then does orch switch to them. orch detects and shows which login each space will use (orch status and the app) without reading credentials. Accepted trade-off: with a single login the GitHub account is not a boundary between jobs; the guard, memory spaces and folder deny rules still are. SP-046.1.a1 and SP-046.2.a1 are amended to set GH_CONFIG_DIR/CLAUDE_CONFIG_DIR only when the space names one; SP-074 gains checkpoint SP-074.3 for detection and display.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-60",
+        "decision": "SP-044's outbound terms hook check is best-effort static reading of shell, like D-28; SP-045's git hooks and per-job accounts are the boundary for git. The residual classes in RC-117 (MCP tools, scripts and programs that run git, interpreters, curl, forged tracking refs) stay accepted risk. The baseline is loosened in SP-044: a gh write without -R counts only the repo gh would use (its default repo, else the checkout's base remote), not every remote; plain variables ($PWD, $USER, $HOME) and literal assignments made earlier in the same command are read instead of refused; more harmless 'git -c' keys are allowed. Making the rules configurable (baseline rules switchable by id, user-added stricter rules, CLI and app, stored in orch.db, operator-only) is SP-075.",
         "date": "2026-11-14"
       },
       {
@@ -560,6 +560,11 @@
       {
         "id": "D-63",
         "decision": "Features may be worked in parallel lanes, up to 5 at a time, each lane a separate session on one feature, following the swim lanes the coordinator proposed on 2026-11-14: first wave SP-074, SP-024, SP-030, SP-048, SP-051; SP-045 after SP-074's cli changes; SP-075 after SP-074. Each lane has its own RC-id range and its own progress file; only the coordinator assigns D-ids and schedules changes to orchd.proto and DB migrations. This amends session_procedure steps 2, 3, 5 and 12 and adds step 13.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-64",
+        "decision": "Public-space write gate (SP-030): local content under a public root does not reach the public space automatically. Public content comes from the GitHub docs sync, bound web URL prefixes, operator retags (SP-071), and, as D-50 already allows, a checkout folder the operator explicitly declares public by binding a public root at that folder or inside it. Local content under a broader public root (such as ~/code) that was not declared that way, including a folder a session registered as a source and a checkout of a public GitHub repo, goes to quarantine; edit hand-offs go to public_root_sessions as before. The user kept D-50's declaration path knowing that a folder they declared public can still be written by any job's session (accepted risk, RC-404) (was RC-400).",
         "date": "2026-11-14"
       },
       {
@@ -590,11 +595,6 @@
       {
         "id": "D-70",
         "decision": "Review results and merge order, 2026-11-14: the user approved the SP-051.1.a1 snapshots and the SP-072.1.a2 snapshots, and told the coordinator to merge the ready lane PRs (#178, #182, #183, #184, #179, #181) in the order it sees fit, before the remaining hands-on checks. The hands-on checks SP-072.1.a1 (switch each layer from the app, RC-160) and RC-451 (SP-048 refusal notifications) are done by the user after merging; SP-072 stays in_progress until a1 is confirmed.",
-        "date": "2026-11-14"
-      },
-      {
-        "id": "D-64",
-        "decision": "Public-space write gate (SP-030): local content under a public root does not reach the public space automatically. Public content comes from the GitHub docs sync, bound web URL prefixes, operator retags (SP-071), and, as D-50 already allows, a checkout folder the operator explicitly declares public by binding a public root at that folder or inside it. Local content under a broader public root (such as ~/code) that was not declared that way, including a folder a session registered as a source and a checkout of a public GitHub repo, goes to quarantine; edit hand-offs go to public_root_sessions as before. The user kept D-50's declaration path knowing that a folder they declared public can still be written by any job's session (accepted risk, RC-404) (was RC-400).",
         "date": "2026-11-14"
       },
       {
@@ -630,6 +630,21 @@
       {
         "id": "D-77",
         "decision": "RC-1200: under a spaces policy, DeleteSource is limited to sources in the calling session's own space (Orch.app may delete any), and PurgeDocs is Orch.app-only. Built by SP-026.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-78",
+        "decision": "RC-1150: an unlocked terminal (SP-077) gets operator scope for reads and operator tasks such as relabel and retag, but RPCs that weaken protection stay Orch.app-only even under an unlock: applying a policy, switching enforcement off, changing the sandbox setting or outbound rules, and SP-078's settings RPCs.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-79",
+        "decision": "The user chose to admin-merge #194, #198, #193 and #202 (SP-054, SP-077, SP-052, SP-079) before their hands-on checks, as with D-70. Each feature stays in_progress until its check is confirmed: SP-054.1.a2, SP-077.1.a4, SP-052.1.a1, SP-079.1.a3, plus SP-072.1.a1 and SP-048's RC-451.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-80",
+        "decision": "Parallel lanes cut integration overhead: 24 PRs needed 27 catch-up merges, because every PR edited the shared plan file and a few junction files. From now on: (1) a lane writes its feature's mutable state and its reconvene items to per-feature files, not the shared plan file (SP-080); (2) shared registration points are split so additions don't touch the same lines (SP-081); (3) the recurring flaky tests are fixed (SP-082); (4) run 2-3 lanes on features with disjoint files, build in parallel, and merge one at a time as each turns green; (5) catching a branch up with main is a light merge: resolve, build, push, let CI test.",
         "date": "2026-11-15"
       }
     ],
@@ -3930,6 +3945,227 @@
         "affects": [
           "SP-079",
           "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1050",
+        "kind": "follow-up",
+        "topic": "Review's effect counts lack chunks, PRs and tasks",
+        "detail": "SP-054's Review counts spaces added, removed and changed, bindings and settings added and removed, and invalid lines, all read from the draft. How many chunks, cached PRs and tasks would move between spaces (the design's 'Preview every effect') needs orchd to compute it for a draft: a DiffSpaces field or a new RPC, so an orchd.proto change for the coordinator to schedule.",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-024",
+          "SP-027"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1051",
+        "kind": "follow-up",
+        "topic": "No way to discard a pending draft",
+        "detail": "The design's Review has 'Discard draft'. orchd has no RPC to discard a draft; today the user saves the applied policy again as a draft (orch spaces draft), which leaves a newer, identical draft pending. Add a DiscardSpacesDraft RPC (or let a draft equal to the applied revision clear drift) and a Discard button.",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-020"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1052",
+        "kind": "follow-up",
+        "topic": "A draft the app saves from an agent's draft is recorded as the operator's",
+        "detail": "From SP-054's security review (accepted as Low). 'Drop invalid lines' saves the rest of a draft as a new revision through SetSpacesDraft, which orchd records as the operator's (Orch.app is the operator, D-71), so the agent's authorship drops out of the record and accept_agent_draft is no longer asked for it. The app therefore requires 'I reviewed this draft' before it drops lines from an agent's draft. Server-side fix: SetSpacesDraft takes the revision it derives from and keeps its by-agent flag, so orchd still requires accept_agent_draft (orchd.proto change).",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-020"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1053",
+        "kind": "follow-up",
+        "topic": "Review finds a problem's line by parsing orchd's message",
+        "detail": "SpacesProblem carries rule, space and message. The app places each problem on its line from the rule and the value the message quotes (Go %q), or the public_paths entry number; a reworded message makes the problem unplaced (shown apart, Apply still blocked, so it fails safe). Add the field and value index to SpacesProblem (orchd.proto change) and use them.",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-020"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1054",
+        "kind": "follow-up",
+        "topic": "displaySafe lets line and paragraph separators through",
+        "detail": "From SP-054's security review (Low). OrchKit's displaySafe escapes control and format characters but not U+2028/U+2029 (Zl/Zp), so a command, draft value or message could fake extra lines in a row; long runs of combining marks are not capped either. It is a shared helper used by every pane, so it was left for its own change.",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1055",
+        "kind": "decision",
+        "topic": "Which invalid lines the app drops for the user",
+        "detail": "SP-054's 'Drop invalid lines' only reverts lines the draft adds or changes, and never: a line the applied revision already has, a line in a conflict between two spaces (duplicate name, org, prefix, tenant or root bound twice, an isolated root inside another job's), or a binding the applied revision has in any space (moved or renamed). Those are marked with 'fix this in the draft' and block Apply. Options: (a) keep this; (b) let the user pick a side or edit the draft in the app. Recommendation: (a), with (b) as a later Setup feature.",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-052"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1056",
+        "kind": "user-action",
+        "topic": "Check SP-054 Apply's system authentication by hand, and look at the snapshots",
+        "detail": "SP-054.1 a2 is manual: with Orch.app built from PR #194 and a draft with no problems pending, Spaces > Review > Apply rev N should show the system Touch ID or password sheet before anything is applied; Cancel should show 'Not applied: authentication was cancelled or failed.' and orch spaces diff should still show the draft pending. Also look at the Activity and Review snapshots (light and dark, 790 pt and 320 pt).",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1150",
+        "kind": "decision",
+        "topic": "Should an unlocked terminal be allowed to weaken the spaces policy?",
+        "detail": "SP-077's security review (medium, design): an unlock gives the terminal operator evidence ('unlock'), which every operator check accepts like Orch.app's, so an unlocked terminal can also apply a policy (ApplySpaces), switch enforcement layers off (SetEnforcement), change the sandbox setting and the outbound rules, and call SP-078's settings RPCs (refuseSettings accepts any operator evidence: sensitive SetConfig, harness and cc-safety-net settings, Restart, PR landing). Those changes outlast the unlock (at most 60 minutes). Orch.app says so beside each request, and the docs do. Options: (a) keep it (D-71 grants operator scope); (b) keep the policy-weakening RPCs (ApplySpaces, SetEnforcement to a relaxing state, SetSandboxSetting, ChangeOutboundRule) Orch.app-only, so an unlock covers relabel, retag, config and the other operator commands; (c) (b) plus a second confirmation in Orch.app for those RPCs from an unlocked terminal. Recommendation: (b). Touches SP-077, SP-078, SP-070, SP-020.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077",
+          "SP-078",
+          "SP-070",
+          "SP-020"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-15 as D-78: option (b), extended to SP-078's settings RPCs. Implemented in SP-077 (internal/daemon/unlock_scope.go: refuseUnlocked in the resolver interceptor, and refuseUnlockedLoosening in SetEnforcement for a switch looser than its current state; RemoveDocsOwner's purge is Orch.app-only as PurgeDocs is under D-77; TestUnlockCannotWeakenProtection)."
+      },
+      {
+        "id": "RC-1151",
+        "kind": "decision",
+        "topic": "What the operator unlock still relies on the user for",
+        "detail": "Accepted for now and documented (docs/internals/daemon.md, Operator unlock): (1) the user's choice of which request to confirm is the gate: a process an agent detached, or a terminal window it opened through the terminal app's scripting, can ask at the same time; rows show the terminal (tty), process, executable and parents read from the kernel, but two requests from the same terminal tab (an agent's leftover process that kept the tab's terminal) differ only by their parents; if the user confirms the agent's row, the agent can print a fake code prompt into the user's terminal (nothing else reads it while orch waits) and prove its request with what the user types; (2) requests held open or filed six a minute keep the user's own out (denial of service); (3) an unlocked shell is as trusted as anything that can type into it, and the unlock ends on an agent's first call only if that harness connects to orchd; (4) a stream opened while unlocked (WatchTasks) keeps the caller it resolved to; (5) command lines (with any secret in them) show in the panel; (6) only Claude Code and Codex are told apart from a terminal. Proposed hardening: refuse or flag a request whose process group is not its terminal's foreground group (e_pgid vs e_tpgid); keep reading the terminal from before the request so a fake prompt races the CLI; give rate-limit slots only to requesters with a terminal; or run operator commands from Orch.app itself.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1152",
+        "kind": "user-action",
+        "topic": "SP-077.1.a4: check the unlock in Orch.app by hand",
+        "detail": "Needs the user with a policy applied and Orch.app built from the PR (make app-install): run 'orch spaces unlock --for 5m' in a terminal; check the menu bar panel shows the request with that command, the terminal (tty) and 5 min; Confirm (Touch ID or password), type the code the panel shows into the terminal; check the panel counts down and 'orch spaces diff' works in that shell; Lock it; ask again and Deny. Touch ID and the password prompt cannot be driven by a unit test (the tests inject a confirmer).",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1153",
+        "kind": "follow-up",
+        "topic": "Flaky tests, and make cover drops a package whose tests fail",
+        "detail": "Seen while validating SP-077 on 2026-11-15 under load from parallel lanes: TestRunMeasuresFailedRuns (internal/agentrun) failed 1 in 8 runs on main too ('a timed-out run must still record how long it took'); internal/daemon failed once inside 'make cover' and passed on the rerun. scripts/cover.sh skips a package whose tests fail (go test ... || true), so that run reported 'All files >= 80%' without any internal/daemon file. Proposed: make cover.sh fail when a package's tests fail, and look at the agentrun timing.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-1154",
+        "kind": "follow-up",
+        "topic": "Changes made under an unlock do not say so",
+        "detail": "Low. A change made from an unlocked terminal (SetEnforcement, outbound rules, policy apply) is recorded with callerLabel's 'operator (process N)', the same as before spaces; the record does not name the unlock (its id) or that Orch.app confirmed it. Proposed: label such changes 'operator (process N, unlock <id>)' and keep the unlock log lines with them.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077",
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1155",
+        "kind": "follow-up",
+        "topic": "Two lasting changes an unlocked terminal can still make",
+        "detail": "From the D-78 security review (low): (1) a spaces draft saved from an unlocked terminal is recorded as the operator's own (ByOperator), so when Orch.app applies it the 'not written by you' (accept_agent_draft) gate does not apply; ApplySpaces itself stays Orch.app-only. Proposed: keep ByOperator for Orch.app only, or show 'unlock' as the draft's origin. (2) RetagSource with confirm is open to an unlock (D-78 allows retag), so an unlocked terminal can move a source out of an isolated space into a public one, a lasting confidentiality change. Proposed: confirm whether retags out of an isolated space should also stay Orch.app-only.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077",
+          "SP-071",
+          "SP-020"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1450",
+        "kind": "decision",
+        "topic": "Who may search chat direct messages",
+        "detail": "SP-060 makes SearchDirectMessages (orch search --direct-messages) operator-only: Orch.app while a spaces policy is applied, and with none a terminal outside any agent session. Queued tasks (D-19) and agents in interactive sessions are refused, because chat text recalled into a prompt could ask an agent to pull DMs into its context and send them out (security review of the PR). Consequence: under a policy only Orch.app can search DMs, and it has no DM search view yet, so DMs are stored but not searchable in practice. Options: (a) keep operator-only and add an Orch.app DM search view (recommended); (b) also allow the operator terminal under a policy, exempting this RPC from the D-71 terminal refusal; (c) allow interactive sessions to search their own space DMs, accepting the prompt-injection path.",
+        "source": "https://github.com/willesq/orchestrator/pull/203",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-060",
+          "SP-061",
+          "SP-062"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1451",
+        "kind": "follow-up",
+        "topic": "Chat retention per space and kind, and running connectors",
+        "detail": "SP-060 summary lists retention per space and kind; it has no acceptance item and is not implemented. Proposed new feature: settings for how long each space keeps chat content per container kind (DM, group DM, channel, meeting), enforced by a prune of chat sources older than that. Nothing runs a connector yet either: SP-061 or SP-062 should add the orchd unit that runs connectors on a schedule with feeds.AllowlistFrom(settings.Feeds.Chat), and the per-tenant profile directory the connector process logs in with (the gh profile pattern; orch never reads it).",
+        "source": "https://github.com/willesq/orchestrator/pull/203",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-060",
+          "SP-061",
+          "SP-062"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1452",
+        "kind": "follow-up",
+        "topic": "SP-060 security lows: chat in public spaces",
+        "detail": "From the PR security review. (1) Low: a chat tenant bound to a public space is quarantined at placement, but the policy still accepts the binding; consider refusing it at apply time. (2) Low: an operator retag of a chat source into a public space is honoured (honorsRetag treats chat like the syncs), so that thread would be read by every space; refuse retags of chat sources into public spaces. (3) Low, pre-existing D-71: with no spaces policy a process an agent detached from its session passes as the operator, so it can call SearchDirectMessages; with no policy there is no isolation either.",
+        "source": "https://github.com/willesq/orchestrator/pull/203",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-060",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1453",
+        "kind": "follow-up",
+        "topic": "DMs cannot be opened whole, and chat_kind is unindexed in older collections",
+        "detail": "(1) GetDocument, ListSources and orch rag show leave DMs out for every caller, so a DM the operator finds with orch search --direct-messages cannot be opened whole; a DM-aware document read would need the same operator gate. (2) The chat_kind keyword index is created only with a new collection; existing ones filter on it unindexed (correct, slower). Add it lazily when chat content first lands.",
+        "source": "https://github.com/willesq/orchestrator/pull/203",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-060"
         ],
         "status": "open"
       }
@@ -7501,18 +7737,26 @@
               "threshold": "true"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: tests pass at 855d4af. `make app-cover` exit 0 runs the whole Swift suite and the 80% per-file gate on OrchKit; the new files: DaemonClient+SpacesReview 100%, SpacesPolicyDoc 98.68%, SpacesReview 97.54%, SpacesReviewLines 100%, SpacesReviewModel 97.98%, SpacesActivity 98.59%, SpacesActivityModel 97.03%.",
+            "a1 (invalid lines marked): SpacesReviewTests.invalidLinesMarked (the refused line carries its rule and message, nothing else is marked); ruleTargets (16 orchd rules each find their line, including public_paths entries); unplacedProblems (a problem with no line is listed apart and blocks Apply); badBindingPhraseAnchored.",
+            "a1 (invalid lines excluded): SpacesReviewTests.excludingDropsInvalidLine (the saved draft lacks only the refused line and keeps every other field, unknown ones included; it has nothing left to drop); revertsSettingsAndSpaces; repeatedValues; unchangedLineIsNotExcludable, conflictsAreNotDropped and movedBindingsAreNotDropped (lines whose removal could move content or pick a side are marked but not dropped); SpacesReviewModelTests.dropThenApplyReviewed (Drop saves the cleaned draft with SetSpacesDraft and the page then reviews the new revision).",
+            "a1 (Apply sends the reviewed revision): SpacesReviewModelTests.dropThenApplyReviewed (calls in order: diff, save, diff, auth, apply 9; ApplySpaces gets reviewed_revision 9, the revision shown; Apply with problems never reaches orchd); staleReviewRefused (a newer draft saved after the review is refused by the fake orchd, not applied in its place); authenticationGatesApply (system authentication runs first and a cancel sends nothing); agentDraftNeedsAcceptance and agentDraftAccepted (accept_agent_draft and confirm_github_orgs); SpacesReviewClientTests.mapsRPCs (DiffSpaces, SetSpacesDraft, ApplySpaces and ListToolEvents fields over a fake orchd socket).",
+            "Activity (summary, no acceptance item): SpacesActivityTests (loadsLog, filters, rows, loadMore, select, emptyAndErrors).",
+            "Snapshots for the user's look (not an acceptance item): `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter SpacesActivityReviewSnapshots` renders spaces-activity-{default,companion}-{light,dark}.png, spaces-review-{default,companion}-{light,dark}.png and spaces-review-clean-default-{light,dark}.png (offscreen, sample data, no orchd).",
+            "Independent verification at 4b57d93 (a fresh verifier given only the diff, this feature, INV-06, INV-12 and definition_of_done): a1 PASS; DOD-1 (go test ./... exit 0), DOD-2, DOD-3 (no Go files; make app-cover exit 0), DOD-4, DOD-5, DOD-6 (0 critical/high/medium), DOD-7, DOD-8 PASS; DOD-9: the app check passed on PR #194 (no Go workflow runs, no Go files changed). a2 is manual and waits for the user (RC-1056)."
+          ]
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "8898813f34128e91855054965a6bfac28a0a729888e1ecaf4b3aa6ca95fed588",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-054-activity-review",
+      "pr": "https://github.com/willesq/orchestrator/pull/194"
     },
     {
       "id": "SP-055",
@@ -7605,18 +7849,24 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestChatRecordsPlacedByTenant (internal/daemon/chat_feed_test.go): a fake Slack connector and a fake Teams connector run through feeds.Sync into a real rag.Service whose writes the server placer places under the applied example policy (acme binds slack:TACME, globex teams:globex-tenant). A TACME private-channel thread and a TACME DM land in acme collection, the globex-tenant meeting in globex, and the unbound TOTHER channel in quarantine (INV-03); every chunk carries writer chat, trust chat, chat_kind and an origin with tenant, container, container_kind and sorted participants. Supporting: TestChatTenantInPublicSpaceQuarantined (internal/spaces/chat_test.go: a tenant bound to a public space is quarantined, rule not_verified_public), TestChatSourceNotReplacedByClients, TestSyncCountsAndRedacts, TestSyncStopsOnFailedWrite, TestAllowlist, TestChatFeedSettings (internal/config).",
+            "a2 (3 tests): TestChatDMsNeverAutoRecalled: auto-RAG (hook.Explain over a session client, prompted with the DM text verbatim) considers and injects acme channel but never a DM; every other read path of a session (Search in 6 shapes, ListSources, GetDocument, ListDocs) and the operator whole-store Search return no DM. TestChatDMsNeverGivenToTasks: a queued task in acme reads its channel and no DM on every read path, and SearchDirectMessages is refused (PermissionDenied) by the queued-caller guard and the handler. TestChatDMsInExplicitSearch: the operator explicit DM search (Orch.app, behind orch search --direct-messages) returns the DMs, while a session agent, a session on a clean socket, a terminal under a policy (D-71) and an unidentified caller are refused. Supporting: TestChatDirectMessagesLeftOutOfReads and TestDirectMessageFilter (internal/rag), TestSearchDirectMessagesFlag (internal/cli), TestChatIsUntrusted (internal/memctx). Mutation check: disabling the DM filter fails the first two; dropping the task refusal fails the second.",
+            "a3: TestRecordCarriesFactsOnly (internal/feeds/feeds_test.go): feeds.Record has only fact fields (no space, level, trust, scope, tag, writer or label field), and the rag.Meta Sync writes has an empty Space and LabelsV, no scope or tags, writer chat and an origin of facts only, so placement is the placer alone. Supporting: TestRecordValidate and TestDirectIDsMustBeDirectMessages (a DM ID under another kind is refused), TestChatWriteNeedsAKnownKind (internal/rag: unknown kind, or a chat origin from a non-chat writer, refused before placement).",
+            "Validation at 4ae5dc3: go test ./... exit 0; go vet ./... exit 0; make cover: All files >= 80% (feeds.go, sync.go, rag/chat.go, origin.go 100%; daemon chat_search.go 100%); gofmt -l empty. Security audit of the diff: two mediums (DM search callable by sessions; chat not an untrusted tier) and two lows fixed and re-audited, no critical/high/medium open; remaining lows in RC-1452.",
+            "Independent verification at 2919fec (a fresh agent given only the diff, this feature, INV-02/INV-03 and the definition of done): a1, a2 (3 of 3) and a3 PASS; DOD-2 to DOD-8 PASS; DOD-9 CI test, build and app green on PR #203. DOD-1: go test ./... passed at 4ae5dc3 and in CI; under a load average near 460 the verifier saw TestResolveCost and TestToolHookCost (timing tests outside this diff) fail on main as well, and both pass on re-run at 2919fec."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "2919fec42c5d1944ede0f7a4aa95f85e77508fb1",
+      "verified_at": "2026-11-15T14:30:39Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f0f14f5b8c199b7be636183df41b2454c6142a36acb8f5a54f2243b104299101",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-060-chat-connectors",
+      "pr": "https://github.com/willesq/orchestrator/pull/203"
     },
     {
       "id": "SP-061",
@@ -8060,6 +8310,85 @@
               "threshold": "both"
             }
           ],
+          "evidence": [
+            "a1: TestUnlockGrantsScopeOnlyOnceConfirmed (internal/daemon/unlock_test.go) passes at 63b6d21: a pending request grants nothing (DiffSpaces refused, public reads only for the requester and its descendants); Orch.app's confirmation grants nothing either until the requester sends the code orchd shows only to Orch.app (ProveUnlock; a descendant or a wrong code is refused); then the requester and its descendants (32, 33, 34) are the operator and its parent, sibling, another terminal, a pty of its own and a detached process are not; it ends at its duration (15m), with 'orch spaces lock' from the unlocked shell (a sibling's lock ends nothing), with Orch.app's Lock, and when the requester exits (a PID reused with another start time is not covered); 0s, -1s and 3601s are refused (at most 60 minutes). Also TestUnlockRequestEndsUnconfirmed (denied, lapsed, withdrawn, locked, confirmed without a code in time, three wrong codes; limits of 4 pending, 6 a minute), TestUnlockFollowsTheConnectionsProcess and TestUnlockWithoutPolicy; CLI: TestSpacesUnlockRunsTheShellThenLocks, TestSpacesUnlockFailures, TestRunUnlockedReportsTheExitStatus, TestSpacesLock (internal/cli/spaces_unlock_test.go); app: UnlocksModelTests and UnlocksClientTests (macos/Tests/OrchKitTests/UnlocksTests.swift).",
+            "a2: TestUnlockRefusedToAgentsAndNonApp (internal/daemon/unlock_refusal_test.go) passes at 63b6d21: RequestUnlock, ProveUnlock and Lock are refused (PermissionDenied) to an agent harness, a shell inside one and a task orchd started, and RequestUnlock and Lock to a pinned session; ConfirmUnlock and ListUnlocks are refused to the requester, another terminal, a pty of its own, a detached process, an agent, a task, an unsigned program named Orch and an Orch.app elsewhere, and to a terminal under a confirmed unlock (it cannot confirm or list another). TestUnlockFollowsTheConnectionsProcess: an agent started in the unlocked shell is not the operator and its first call ends the unlock; a connection handed on by a process that exited does not inherit the unlock of the process reusing its PID (D-44).",
+            "a3: TestUnlockConfirmationNeedsTheSignedApp (internal/daemon/unlock_refusal_test.go) passes at 63b6d21: ConfirmUnlock and ListUnlocks are refused to a signed copy elsewhere (ad-hoc copy), a binary at the app's path with another code directory hash (another signature), the app without the hardened runtime, one with no code hash and one that fails the requirement, and the installed Orch.app's confirmation is what grants it. The recognition itself is checked against real ad-hoc signatures by TestAppSignatureOfARealProcess (internal/daemon/appsig_darwin_test.go, SP-025; passes at 63b6d21).",
+            "a4 (manual, awaiting the user): not yet observed. Supporting: light and dark snapshots of the menu bar panel's unlocks (pending request, confirmed request with its code, active unlock with its countdown) rendered with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter UnlocksSnapshots` (macos/Tests/OrchAppSnapshots/UnlocksSnapshots.swift) at <scratch>/sp-077/shots/menu-bar-unlocks-light.png and -dark.png. The real check needs the user (RC-1152): with a policy applied, run 'orch spaces unlock --for 5m' in a terminal, see the request in Orch.app's menu bar panel with that command, terminal and duration, Confirm (Touch ID or password), type the code shown into the terminal, see the countdown, run an operator command (e.g. 'orch spaces diff'), then Lock; and Deny a second request.",
+            "a5: docs/internals/daemon.md ('Operator evidence' and the new 'Operator unlock' section) and docs/OPERATIONS.md (unlock and lock commands and how to confirm) changed at 63b6d21; also docs/internals/cli.md and docs/internals/app.md.",
+            "D-78 (RC-1150, 2026-11-15): TestUnlockCannotWeakenProtection (internal/daemon/unlock_scope_test.go) passes: a terminal under a confirmed unlock is refused, before the handler runs, ApplySpaces, SetEnforcement to a relaxing state (memory ' OFF', guard log, an unknown layer), SetSandboxSetting, ChangeOutboundRule and every SP-078 settings RPC (settingsRPCs), each let through from Orch.app; the unlocked terminal keeps reads of every space, Relabel, RetagSource, DiffSpaces, tightening a switch and SetConfig without a Sensitive key; a terminal with no unlock still reaches none of them. The SetEnforcement handler also refuses the unlocked terminal a switch looser than the current state (the guard from strict back to block-other-jobs, or a lasting block-other-jobs over Orch.app's timed off that reverts to strict) while letting it keep or restore strict, and RemoveDocsOwner with purge is refused to it as PurgeDocs is (D-77)."
+          ]
+        }
+      ],
+      "status": "in_progress",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 1,
+      "criteria_sha256": "f8afd77c35f69708b328a563d6ffe56f236a5b995bab7cf38f88735dbc4a4985",
+      "branch": "feat/sp-077-operator-unlock",
+      "pr": "https://github.com/willesq/orchestrator/pull/198"
+    },
+    {
+      "id": "SP-080",
+      "phase": "P2",
+      "priority": 26.7,
+      "title": "Per-feature state files (D-80)",
+      "summary": "A feature's mutable fields (status, passes, verified_sha, verified_at, blocked_reason, attempts, branch, pr and checkpoint evidence) live in docs/spaces/state/<ID>.json, and each reconvene item lives in docs/spaces/reconvene/<RC-id>.json. The plan file keeps only definitions, criteria and decisions; docs/spaces/index.html and the session procedure read the combined view.",
+      "why": "D-80: every lane PR edited the shared plan file, so 24 PRs needed 27 catch-up merges.",
+      "depends_on": [],
+      "touches": [
+        "docs/spaces/spaces-features.json",
+        "docs/spaces/state/ (new)",
+        "docs/spaces/reconvene/ (new)",
+        "docs/spaces/index.html",
+        "scripts/ (migration and converter)"
+      ],
+      "docs_to_update": [
+        "docs/spaces/spaces-features.json (session_procedure, plan_location)"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-080.1",
+          "title": "Split state out of the plan file",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "A one-shot migration moves every feature's status, passes, verified_sha, verified_at, blocked_reason, attempts, branch, pr and checkpoint evidence into docs/spaces/state/<ID>.json and every reconvene item into docs/spaces/reconvene/<RC-id>.json; afterwards the plan file holds none of those fields, and combining the files reproduces the pre-migration plan exactly.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "Two branches that each change a different feature's state (status, evidence and a new reconvene item) merge into main without a textual conflict.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "docs/spaces/index.html reads the combined view and shows the same feature, status, checkpoint and reconvene totals as before the migration.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "test",
+              "check": "A converter script rewrites an open branch's plan-file edits into the per-feature files, so a branch cut before the migration merges cleanly after converting.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a5",
+              "type": "doc",
+              "check": "session_procedure and plan_location describe where a lane writes its state and reconvene items.",
+              "measure": "files changed in the diff",
+              "threshold": "both updated"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -8069,7 +8398,124 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "f8afd77c35f69708b328a563d6ffe56f236a5b995bab7cf38f88735dbc4a4985",
+      "criteria_sha256": "b2975ea74e5cf3cd33657dbec78cd5b4ff84ac2c9882e4833e2907321b850162",
+      "branch": null,
+      "pr": null
+    },
+    {
+      "id": "SP-081",
+      "phase": "P2",
+      "priority": 26.8,
+      "title": "Split shared registration points (D-80)",
+      "summary": "New RPCs register their caller class and read-space decision from their own Go files through registration rather than one shared map literal, and app features register their models without editing the same lines of OrchApp.swift.",
+      "why": "D-80: the RPC decision maps and OrchApp.swift were junction files that conflicted on almost every lane PR.",
+      "depends_on": [],
+      "touches": [
+        "internal/daemon/ (caller class and read-space registration)",
+        "macos/Sources/OrchApp/OrchApp.swift",
+        "macos/Sources (model registration)"
+      ],
+      "docs_to_update": [
+        "docs/internals/daemon.md",
+        "docs/internals/app.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-081.1",
+          "title": "Registration instead of shared literals",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Each RPC's caller class and read-space decision is registered from the RPC's own Go file; no shared map literal lists them.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "Two fixture branches that each add an RPC and an app model merge with each other without a textual conflict.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "TestEveryRPCHasASpaceDecision still fails when an RPC has no registered decision.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a4",
+              "type": "doc",
+              "check": "docs/internals/daemon.md and docs/internals/app.md describe how a new RPC and a new app model register.",
+              "measure": "files changed in the diff",
+              "threshold": "both"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "3326031cb1102775723a0b3fb534f93776837a141cc2f1bbe6382b6a3e2ec570",
+      "branch": null,
+      "pr": null
+    },
+    {
+      "id": "SP-082",
+      "phase": "P2",
+      "priority": 26.9,
+      "title": "Fix recurring flaky tests (D-80)",
+      "summary": "Make pollingRetriesScopesUntilTheyLoad, TestSweepWhileWriting, TestRunMeasuresFailedRuns and TestResolveCost deterministic.",
+      "why": "D-80: these four tests failed intermittently in CI and each failure cost a rerun.",
+      "depends_on": [],
+      "touches": [
+        "macos/Tests",
+        "internal/ (the packages of the three Go tests)"
+      ],
+      "docs_to_update": [],
+      "checkpoints": [
+        {
+          "id": "SP-082.1",
+          "title": "Deterministic tests",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "pollingRetriesScopesUntilTheyLoad, TestSweepWhileWriting, TestRunMeasuresFailedRuns and TestResolveCost each pass 50 consecutive runs (go test -count=50, or a 50-run repeat for the Swift test).",
+              "measure": "consecutive passing runs",
+              "threshold": "50 of 50"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "The same 50 runs pass while `go test ./...` runs alongside to add parallel load.",
+              "measure": "consecutive passing runs under load",
+              "threshold": "50 of 50"
+            },
+            {
+              "id": "a3",
+              "type": "test",
+              "check": "No production timeout, interval or retry is weakened, unless the PR states the reason.",
+              "measure": "diff review",
+              "threshold": "none, or each with a stated reason"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "534d3126d96ee6923f83bb9f80fffb8c337e4bd11bd5beb82d3426d8223e8847",
       "branch": null,
       "pr": null
     },
@@ -8329,6 +8775,10 @@
     {
       "date": "2026-11-15",
       "change": "D-75 defers SP-064; D-76 adds SP-079 (Relabel now in Orch.app) for RC-229; D-77 scopes DeleteSource and makes PurgeDocs operator-only (SP-026)."
+    },
+    {
+      "date": "2026-11-15",
+      "change": "D-79 records the admin merges of #194, #198, #193 and #202 before their hands-on checks; D-80 cuts lane integration overhead and adds SP-080 (per-feature state files), SP-081 (split shared registration points) and SP-082 (fix recurring flaky tests); parallel lanes: max 3, SP-060 and SP-080 to SP-082 active."
     }
   ],
   "plan_location": {
@@ -8391,54 +8841,42 @@
   ],
   "parallel_lanes": {
     "decision": "D-63",
-    "max_parallel": 5,
+    "max_parallel": 3,
     "id_ranges_note": "Only the coordinator session assigns D-ids. RC-ids: the coordinator uses RC-229 to RC-299; each lane gets a block of 50 when it is assigned. Blocks are never reused.",
     "coordinator": {
       "rc_range": "RC-229..RC-299"
     },
     "active": [
       {
-        "feature": "SP-025",
-        "rc_range": "RC-700..RC-749",
-        "note": "PR #188; D-71 done; finishing on D-74"
+        "feature": "SP-060",
+        "rc_range": "RC-1450..RC-1499",
+        "note": "PR #203"
       },
       {
-        "feature": "SP-028",
-        "rc_range": "RC-900..RC-949",
-        "note": "PR #192; wiring assign to RetagSource after #191 merged"
+        "feature": "SP-080",
+        "rc_range": "RC-1500..RC-1549",
+        "note": "per-feature state files (D-80)"
       },
       {
-        "feature": "SP-052",
-        "rc_range": "RC-1000..RC-1049",
-        "note": "PR #193; waiting on the user's a1 snapshot review"
+        "feature": "SP-081",
+        "rc_range": "RC-1550..RC-1599",
+        "note": "split shared registration points (D-80)"
       },
       {
-        "feature": "SP-054",
-        "rc_range": "RC-1050..RC-1099",
-        "note": "PR #194; waiting on the user's a2 hands-on check"
+        "feature": "SP-082",
+        "rc_range": "RC-1600..RC-1649",
+        "note": "fix recurring flaky tests (D-80)"
       }
     ],
-    "next_rc_block": "RC-1100",
+    "next_rc_block": "RC-1650",
     "queued": [
-      "SP-031, SP-077, SP-078, SP-026, SP-029, SP-064 after SP-025",
       "SP-053 after SP-071 and SP-072 (a1 needs the user)"
     ],
-    "d_ids_reserved": [
-      {
-        "id": "D-73",
-        "for": "SP-076",
-        "topic": "RC-801 accepted (recorded in #189)"
-      },
-      {
-        "id": "D-74",
-        "for": "SP-025",
-        "topic": "RC-710 accepted until SP-078 (recorded on #188)"
-      }
-    ],
-    "next_d_id": "D-78",
+    "d_ids_reserved": [],
+    "next_d_id": "D-81",
     "proto_slot": {
       "holder": "none",
-      "next": "SP-025 if D-71 needs it, then SP-077"
+      "next": "none"
     },
     "migration_slot": {
       "holder": "none"
@@ -8454,7 +8892,17 @@
       "SP-027 (#187)",
       "SP-076 (#189)",
       "SP-051 (#181)",
-      "SP-071 (#191)"
+      "SP-071 (#191)",
+      "SP-025 (#188)",
+      "SP-028 (#192)",
+      "SP-029 (#196)",
+      "SP-031 (#197)",
+      "SP-078 (#199)",
+      "SP-026 (#200)",
+      "SP-079 (#202, check pending under D-79)",
+      "SP-054 (#194, check pending under D-79)",
+      "SP-077 (#198, check pending under D-79)",
+      "SP-052 (#193, check pending under D-79)"
     ]
   }
 }

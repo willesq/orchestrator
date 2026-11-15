@@ -159,6 +159,10 @@ var operatorActions = map[string]string{
 	// says which spaces hold it; it is also refused to interactive harness
 	// sessions.
 	orchdv1.Orchd_RetagSource_FullMethodName: "retag a source",
+	// Reason (SP-060, D-19): chat direct messages never reach a queued
+	// task; the handler also refuses interactive harness sessions
+	// (refuseNonOperator).
+	orchdv1.Orchd_SearchDirectMessages_FullMethodName: "search direct messages",
 	// Reason: a queued task's identity comes from its task record, so a pin
 	// would only give it a second, self-reported one. Interactive sessions'
 	// hooks still pin (PinSession checks the harness process itself).
@@ -176,6 +180,13 @@ var operatorActions = map[string]string{
 	// (refuseNonOperator).
 	orchdv1.Orchd_ListSpaces_FullMethodName: "list the spaces",
 	orchdv1.Orchd_ScanSpaces_FullMethodName: "scan folders for spaces",
+	// Reason (SP-077): an unlock makes a terminal the operator, so only the
+	// user's own terminal asks for one and only Orch.app confirms it.
+	orchdv1.Orchd_RequestUnlock_FullMethodName: "ask for an operator unlock",
+	orchdv1.Orchd_ListUnlocks_FullMethodName:   "list operator unlocks",
+	orchdv1.Orchd_ConfirmUnlock_FullMethodName: "confirm operator unlocks",
+	orchdv1.Orchd_ProveUnlock_FullMethodName:   "prove an operator unlock",
+	orchdv1.Orchd_Lock_FullMethodName:          "end operator unlocks",
 }
 
 // refuseQueued returns the refusal for method when ctx's caller is a queued
