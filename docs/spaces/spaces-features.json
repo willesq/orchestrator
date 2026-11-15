@@ -6055,14 +6055,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "a5da712089124df4e4493329f043ceaecffb3bbd075e5295d27a80fa098ec58f",
-      "branch": null,
+      "branch": "feat/sp-026-non-memory-bleed",
       "pr": null
     },
     {
