@@ -263,7 +263,9 @@ bindings.
 opens a sheet with five steps (`SpacesSetupView`, `SpacesSetupModel`, `SpacesSetupPlanner`). It is
 never offered in screen-share-safe mode, since it lists every space. The model comes from
 `SpacesOverviewModel.makeSetup()`, on the pane's own source: `SpacesOverviewAPI` inherits
-`SpacesSetupAPI`, whose calls default to "setup needs orchd" for a source without them.
+`SpacesSetupAPI`, whose calls default to "setup needs orchd" for a source without them. Its draft
+calls are the Review page's (`diffSpaces`, `saveSpacesDraft`, `applySpaces`, with the same
+types); setup applies only its own draft, so it never sets `accept_agent_draft` or confirms an org.
 
 - **Before Apply nothing enforced changes.** Opening setup reads `DiffSpaces` (the applied
   document), the logins, `GetEnforcement` and the command log retention, then runs `ScanSpaces`

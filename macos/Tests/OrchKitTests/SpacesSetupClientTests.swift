@@ -77,15 +77,15 @@ import Testing
 
             let d = try await client.saveSpacesDraft(policyJSON: "{\"spaces\":[]}")
             #expect(service.recorder.last(Orchd_V1_SetSpacesDraftRequest.self)?.policyJson == "{\"spaces\":[]}")
-            #expect(d == SavedSpacesDraft(revision: 4, sha256: "abc", problems: [SpacesProblem(rule: "bad_binding", space: "acme", message: "m")]))
+            #expect(d == SavedSpacesDraft(revision: 4, sha256: "abc", problems: [SpacesProblemInfo(rule: "bad_binding", space: "acme", message: "m")]))
 
             let df = try await client.diffSpaces()
             #expect(df == SpacesPolicyDiff(appliedRevision: 3, appliedJSON: "{}", draftRevision: 4,
                                            changes: [SpacesPolicyChange(space: "acme", kind: "added", fields: ["roots"], details: ["d"])],
-                                           problems: [SpacesProblem(rule: "bad_binding", space: "acme", message: "m")],
+                                           problems: [SpacesProblemInfo(rule: "bad_binding", space: "acme", message: "m")],
                                            draftCreatedBy: "operator", draftByOperator: true))
 
-            #expect(try await client.applySpaces(reviewedRevision: 4) == 4)
+            #expect(try await client.applySpaces(reviewedRevision: 4, acceptAgentDraft: false, confirmGitHubOrgs: []) == 4)
             let apply = service.recorder.last(Orchd_V1_ApplySpacesRequest.self)
             #expect(apply?.reviewedRevision == 4)
             #expect(apply?.acceptAgentDraft == false)

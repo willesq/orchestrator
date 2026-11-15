@@ -98,6 +98,8 @@ private let applied = """
         #expect(api.enforcementCalls.map(\.1) == ["block-other-jobs"])
         #expect(api.retentionCalls.isEmpty)
         #expect(m.outcome?.done.first == "Applied policy revision 1.")
+        // The wizard applies only its own draft: no agent draft accepted, no org confirmed.
+        #expect(api.applyOptions.count == 1 && api.applyOptions.allSatisfy { !$0.0 && $0.1.isEmpty })
     }
 
     /// Cancel re-saves the applied policy only while setup's draft is the
@@ -219,7 +221,7 @@ private let applied = """
 
     @Test func problemsAndANewerDraftBlockApply() async {
         let api = FakeSetupAPI()
-        api.problems = [SpacesProblem(rule: "bad_binding", space: "acme", message: "bad")]
+        api.problems = [SpacesProblemInfo(rule: "bad_binding", space: "acme", message: "bad")]
         let m = wizard(api)
         await m.load()
         await walk(m, to: .review)
@@ -354,7 +356,7 @@ private let applied = """
         await #expect(throws: SpacesSetupUnavailable.self) { try await bare.scanSpaces(folders: [], offline: true) }
         await #expect(throws: SpacesSetupUnavailable.self) { try await bare.saveSpacesDraft(policyJSON: "{}") }
         await #expect(throws: SpacesSetupUnavailable.self) { try await bare.diffSpaces() }
-        await #expect(throws: SpacesSetupUnavailable.self) { try await bare.applySpaces(reviewedRevision: 1) }
+        await #expect(throws: SpacesSetupUnavailable.self) { try await bare.applySpaces(reviewedRevision: 1, acceptAgentDraft: false, confirmGitHubOrgs: []) }
         await #expect(throws: SpacesSetupUnavailable.self) { try await bare.commandLogRetention() }
         await #expect(throws: SpacesSetupUnavailable.self) { try await bare.setCommandLogRetention("3d") }
         let m = SpacesSetupModel(api: bare, home: setupHome, folders: [])

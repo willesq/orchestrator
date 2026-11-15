@@ -68,7 +68,9 @@ private final class SampleSetup: SpacesOverviewAPI, @unchecked Sendable {
             SpacesPolicyChange(space: "public", kind: "added", details: ["kind: public", "github_orgs: oss-org"]),
         ])
     }
-    func applySpaces(reviewedRevision: Int64) async throws -> Int64 { reviewedRevision }
+    func applySpaces(reviewedRevision: Int64, acceptAgentDraft: Bool, confirmGitHubOrgs: [String]) async throws -> Int64 {
+        reviewedRevision
+    }
     func commandLogRetention() async throws -> CommandLogRetention { CommandLogRetention(value: "7d") }
     func setCommandLogRetention(_ value: String) async throws {}
 }

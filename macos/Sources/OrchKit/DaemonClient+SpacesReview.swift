@@ -7,7 +7,9 @@ extension DaemonClient: SpacesReviewAPI, SpacesActivityAPI {
         let r = try await orchd.diffSpaces(Orchd_V1_DiffSpacesRequest())
         return SpacesPolicyDiff(
             appliedRevision: r.appliedRevision, appliedJSON: r.appliedJson, draftRevision: r.draftRevision,
-            draftJSON: r.draftJson, problems: r.problems.map(Self.problem), draftCreatedBy: r.draftCreatedBy,
+            draftJSON: r.draftJson,
+            changes: r.changes.map { SpacesPolicyChange(space: $0.space, kind: $0.kind, fields: $0.fields, details: $0.details) },
+            problems: r.problems.map(Self.problem), draftCreatedBy: r.draftCreatedBy,
             draftCreatedAt: r.draftCreatedAt > 0 ? Date(timeIntervalSince1970: TimeInterval(r.draftCreatedAt)) : nil,
             draftByOperator: r.draftByOperator, unconfirmedGitHubOrgs: r.unconfirmedGithubOrgs
         )
@@ -17,7 +19,7 @@ extension DaemonClient: SpacesReviewAPI, SpacesActivityAPI {
         var request = Orchd_V1_SetSpacesDraftRequest()
         request.policyJson = policyJSON
         let r = try await orchd.setSpacesDraft(request)
-        return SavedSpacesDraft(revision: r.revision, problems: r.problems.map(Self.problem))
+        return SavedSpacesDraft(revision: r.revision, sha256: r.sha256, problems: r.problems.map(Self.problem))
     }
 
     public func applySpaces(reviewedRevision: Int64, acceptAgentDraft: Bool, confirmGitHubOrgs: [String]) async throws -> Int64 {

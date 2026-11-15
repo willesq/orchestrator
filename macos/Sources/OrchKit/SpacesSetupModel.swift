@@ -56,7 +56,7 @@ public final class SpacesSetupModel {
     public private(set) var plan: SetupPlan?
     public private(set) var draft: SavedSpacesDraft?
     public private(set) var reviewChanges: [SpacesPolicyChange] = []
-    public private(set) var reviewProblems: [SpacesProblem] = []
+    public private(set) var reviewProblems: [SpacesProblemInfo] = []
     public private(set) var reviewError: String?
     public private(set) var reviewing = false
     public private(set) var applying = false
@@ -318,7 +318,9 @@ public final class SpacesSetupModel {
         var failed: [String] = []
         if plan.changesPolicy, let reviewed {
             do {
-                let rev = try await api.applySpaces(reviewedRevision: reviewed)
+                // Reason: the wizard applies only the draft it saved itself,
+                // never an agent's, so it accepts no agent draft and confirms no org.
+                let rev = try await api.applySpaces(reviewedRevision: reviewed, acceptAgentDraft: false, confirmGitHubOrgs: [])
                 done.append("Applied policy revision \(rev).")
             } catch {
                 applyError = "Not applied: " + refusal(error)

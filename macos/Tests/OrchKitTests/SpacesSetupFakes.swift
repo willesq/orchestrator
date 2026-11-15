@@ -37,7 +37,7 @@ final class FakeSetupAPI: SpacesSetupAPI, @unchecked Sendable {
     ]
     var retention = CommandLogRetention(value: "7d")
     var logins: [SpaceLogin] = []
-    var problems: [SpacesProblem] = []
+    var problems: [SpacesProblemInfo] = []
     var failApply: (any Error)?
     var failScan: (any Error)?
     var failDiff: (any Error)?
@@ -47,6 +47,8 @@ final class FakeSetupAPI: SpacesSetupAPI, @unchecked Sendable {
     private(set) var enforcementCalls: [(String, String)] = []
     private(set) var retentionCalls: [String] = []
     private(set) var applyCalls: [Int64] = []
+    /// acceptAgentDraft and confirmGitHubOrgs of each apply.
+    private(set) var applyOptions: [(Bool, [String])] = []
 
     init(applied: String? = nil, pendingDraft: String? = nil) {
         if let applied {
@@ -114,8 +116,11 @@ final class FakeSetupAPI: SpacesSetupAPI, @unchecked Sendable {
         }
     }
 
-    func applySpaces(reviewedRevision: Int64) async throws -> Int64 {
-        lock.withLock { applyCalls.append(reviewedRevision) }
+    func applySpaces(reviewedRevision: Int64, acceptAgentDraft: Bool, confirmGitHubOrgs: [String]) async throws -> Int64 {
+        lock.withLock {
+            applyCalls.append(reviewedRevision)
+            applyOptions.append((acceptAgentDraft, confirmGitHubOrgs))
+        }
         if let failApply { throw failApply }
         return try lock.withLock {
             guard reviewedRevision == Int64(revisions.count) else { throw CancellationError() }

@@ -68,75 +68,6 @@ public struct SpacesScan: Sendable, Equatable {
     }
 }
 
-/// A rule a policy breaks, as orchd's validator reports it.
-public struct SpacesProblem: Sendable, Equatable {
-    public var rule: String
-    public var space: String
-    public var message: String
-
-    public init(rule: String, space: String = "", message: String) {
-        self.rule = rule
-        self.space = space
-        self.message = message
-    }
-}
-
-/// A draft revision orchd saved. Saving changes nothing that is enforced.
-public struct SavedSpacesDraft: Sendable, Equatable {
-    public var revision: Int64
-    public var sha256: String
-    public var problems: [SpacesProblem]
-
-    public init(revision: Int64, sha256: String = "", problems: [SpacesProblem] = []) {
-        self.revision = revision
-        self.sha256 = sha256
-        self.problems = problems
-    }
-}
-
-/// How one space differs between the applied revision and the draft.
-public struct SpacesPolicyChange: Sendable, Equatable {
-    /// "" for the policy's own fields.
-    public var space: String
-    /// added | removed | changed
-    public var kind: String
-    public var fields: [String]
-    public var details: [String]
-
-    public init(space: String, kind: String, fields: [String] = [], details: [String] = []) {
-        self.space = space
-        self.kind = kind
-        self.fields = fields
-        self.details = details
-    }
-}
-
-/// The applied revision and the newest draft, compared (DiffSpaces).
-public struct SpacesPolicyDiff: Sendable, Equatable {
-    /// 0: nothing applied.
-    public var appliedRevision: Int64
-    public var appliedJSON: String
-    /// 0: no draft newer than the applied revision.
-    public var draftRevision: Int64
-    public var changes: [SpacesPolicyChange]
-    public var problems: [SpacesProblem]
-    public var draftCreatedBy: String
-    /// false: an agent session saved the draft.
-    public var draftByOperator: Bool
-
-    public init(appliedRevision: Int64 = 0, appliedJSON: String = "", draftRevision: Int64 = 0,
-                changes: [SpacesPolicyChange] = [], problems: [SpacesProblem] = [], draftCreatedBy: String = "",
-                draftByOperator: Bool = true) {
-        self.appliedRevision = appliedRevision
-        self.appliedJSON = appliedJSON
-        self.draftRevision = draftRevision
-        self.changes = changes
-        self.problems = problems
-        self.draftCreatedBy = draftCreatedBy
-        self.draftByOperator = draftByOperator
-    }
-}
-
 /// Why the setup wizard cannot run against this source.
 public struct SpacesSetupUnavailable: LocalizedError, Sendable, Equatable {
     public init() {}
@@ -149,11 +80,13 @@ public struct SpacesSetupUnavailable: LocalizedError, Sendable, Equatable {
 public protocol SpacesSetupAPI: SpacesAPI {
     /// Looks through `folders` for git checkouts and lists each gh login's orgs.
     func scanSpaces(folders: [String], offline: Bool) async throws -> SpacesScan
+    // The draft calls are the Review page's (SpacesReviewAPI, SP-054), with
+    // the same signatures, so one implementation serves both.
     /// Saves `policyJSON` as a new draft revision; enforces nothing.
     func saveSpacesDraft(policyJSON: String) async throws -> SavedSpacesDraft
     func diffSpaces() async throws -> SpacesPolicyDiff
     /// Enforces the newest draft, which must be `reviewedRevision`.
-    func applySpaces(reviewedRevision: Int64) async throws -> Int64
+    func applySpaces(reviewedRevision: Int64, acceptAgentDraft: Bool, confirmGitHubOrgs: [String]) async throws -> Int64
     /// The command log's retention after a session ends: 3d, 7d or 30d.
     func commandLogRetention() async throws -> CommandLogRetention
     func setCommandLogRetention(_ value: String) async throws
@@ -187,7 +120,9 @@ extension SpacesSetupAPI {
     public func scanSpaces(folders: [String], offline: Bool) async throws -> SpacesScan { throw SpacesSetupUnavailable() }
     public func saveSpacesDraft(policyJSON: String) async throws -> SavedSpacesDraft { throw SpacesSetupUnavailable() }
     public func diffSpaces() async throws -> SpacesPolicyDiff { throw SpacesSetupUnavailable() }
-    public func applySpaces(reviewedRevision: Int64) async throws -> Int64 { throw SpacesSetupUnavailable() }
+    public func applySpaces(reviewedRevision: Int64, acceptAgentDraft: Bool, confirmGitHubOrgs: [String]) async throws -> Int64 {
+        throw SpacesSetupUnavailable()
+    }
     public func commandLogRetention() async throws -> CommandLogRetention { throw SpacesSetupUnavailable() }
     public func setCommandLogRetention(_ value: String) async throws { throw SpacesSetupUnavailable() }
 }

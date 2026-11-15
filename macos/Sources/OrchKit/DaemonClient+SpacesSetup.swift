@@ -17,31 +17,6 @@ extension DaemonClient: SpacesSetupAPI {
         )
     }
 
-    public func saveSpacesDraft(policyJSON: String) async throws -> SavedSpacesDraft {
-        var request = Orchd_V1_SetSpacesDraftRequest()
-        request.policyJson = policyJSON
-        let r = try await orchd.setSpacesDraft(request)
-        return SavedSpacesDraft(revision: r.revision, sha256: r.sha256, problems: r.problems.map(Self.spacesProblem))
-    }
-
-    public func diffSpaces() async throws -> SpacesPolicyDiff {
-        let r = try await orchd.diffSpaces(Orchd_V1_DiffSpacesRequest())
-        return SpacesPolicyDiff(
-            appliedRevision: r.appliedRevision, appliedJSON: r.appliedJson, draftRevision: r.draftRevision,
-            changes: r.changes.map { SpacesPolicyChange(space: $0.space, kind: $0.kind, fields: $0.fields, details: $0.details) },
-            problems: r.problems.map(Self.spacesProblem), draftCreatedBy: r.draftCreatedBy, draftByOperator: r.draftByOperator
-        )
-    }
-
-    public func applySpaces(reviewedRevision: Int64) async throws -> Int64 {
-        var request = Orchd_V1_ApplySpacesRequest()
-        request.reviewedRevision = reviewedRevision
-        // Reason: the wizard applies only the draft it saved itself, never an
-        // agent's, so it never accepts an agent draft or a changed org.
-        request.acceptAgentDraft = false
-        return try await orchd.applySpaces(request).appliedRevision
-    }
-
     public func commandLogRetention() async throws -> CommandLogRetention {
         let state = try await config()
         guard let field = state.fields.first(where: { $0.key == CommandLogRetention.key }) else {
@@ -54,9 +29,5 @@ extension DaemonClient: SpacesSetupAPI {
     public func setCommandLogRetention(_ value: String) async throws {
         // A sensitive setting: the operator confirmed it by applying setup.
         _ = try await setConfig([CommandLogRetention.key: ConfigJSON.encode(value)], confirmSensitive: true)
-    }
-
-    static func spacesProblem(_ p: Orchd_V1_SpacesProblem) -> SpacesProblem {
-        SpacesProblem(rule: p.rule, space: p.space, message: p.message)
     }
 }
