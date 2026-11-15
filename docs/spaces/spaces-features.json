@@ -533,11 +533,6 @@
         "date": "2026-11-12"
       },
       {
-        "id": "D-60",
-        "decision": "SP-044's outbound terms hook check is best-effort static reading of shell, like D-28; SP-045's git hooks and per-job accounts are the boundary for git. The residual classes in RC-117 (MCP tools, scripts and programs that run git, interpreters, curl, forged tracking refs) stay accepted risk. The baseline is loosened in SP-044: a gh write without -R counts only the repo gh would use (its default repo, else the checkout's base remote), not every remote; plain variables ($PWD, $USER, $HOME) and literal assignments made earlier in the same command are read instead of refused; more harmless 'git -c' keys are allowed. Making the rules configurable (baseline rules switchable by id, user-added stricter rules, CLI and app, stored in orch.db, operator-only) is SP-075.",
-        "date": "2026-11-14"
-      },
-      {
         "id": "D-58",
         "decision": "RC-206 option (c): Claude Code sessions started inside a checkout share Claude Code's own temp folder (/tmp/claude-<uid>) across spaces, because Claude Code takes its sandbox temp folder only from its startup environment. This is accepted as a documented limit until Claude Code honours a settings value; 'orch run <space>' gives each space its own temp folder. For SP-046.1.a6 the per-checkout side is met by this decision, the launcher side by test.",
         "date": "2026-11-14"
@@ -545,6 +540,11 @@
       {
         "id": "D-59",
         "decision": "Revisits D-18. One login works by default: orch uses whichever gh login is already authenticated for every space, and 'orch run' uses the user's normal Claude config. A space may optionally name its own gh profile (gh_config_dir) and Claude config dir; only then does orch switch to them. orch detects and shows which login each space will use (orch status and the app) without reading credentials. Accepted trade-off: with a single login the GitHub account is not a boundary between jobs; the guard, memory spaces and folder deny rules still are. SP-046.1.a1 and SP-046.2.a1 are amended to set GH_CONFIG_DIR/CLAUDE_CONFIG_DIR only when the space names one; SP-074 gains checkpoint SP-074.3 for detection and display.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-60",
+        "decision": "SP-044's outbound terms hook check is best-effort static reading of shell, like D-28; SP-045's git hooks and per-job accounts are the boundary for git. The residual classes in RC-117 (MCP tools, scripts and programs that run git, interpreters, curl, forged tracking refs) stay accepted risk. The baseline is loosened in SP-044: a gh write without -R counts only the repo gh would use (its default repo, else the checkout's base remote), not every remote; plain variables ($PWD, $USER, $HOME) and literal assignments made earlier in the same command are read instead of refused; more harmless 'git -c' keys are allowed. Making the rules configurable (baseline rules switchable by id, user-added stricter rules, CLI and app, stored in orch.db, operator-only) is SP-075.",
         "date": "2026-11-14"
       },
       {
@@ -560,6 +560,11 @@
       {
         "id": "D-63",
         "decision": "Features may be worked in parallel lanes, up to 5 at a time, each lane a separate session on one feature, following the swim lanes the coordinator proposed on 2026-11-14: first wave SP-074, SP-024, SP-030, SP-048, SP-051; SP-045 after SP-074's cli changes; SP-075 after SP-074. Each lane has its own RC-id range and its own progress file; only the coordinator assigns D-ids and schedules changes to orchd.proto and DB migrations. This amends session_procedure steps 2, 3, 5 and 12 and adds step 13.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-64",
+        "decision": "Public-space write gate (SP-030): local content under a public root does not reach the public space automatically. Public content comes from the GitHub docs sync, bound web URL prefixes, operator retags (SP-071), and, as D-50 already allows, a checkout folder the operator explicitly declares public by binding a public root at that folder or inside it. Local content under a broader public root (such as ~/code) that was not declared that way, including a folder a session registered as a source and a checkout of a public GitHub repo, goes to quarantine; edit hand-offs go to public_root_sessions as before. The user kept D-50's declaration path knowing that a folder they declared public can still be written by any job's session (accepted risk, RC-404) (was RC-400).",
         "date": "2026-11-14"
       },
       {
@@ -590,11 +595,6 @@
       {
         "id": "D-70",
         "decision": "Review results and merge order, 2026-11-14: the user approved the SP-051.1.a1 snapshots and the SP-072.1.a2 snapshots, and told the coordinator to merge the ready lane PRs (#178, #182, #183, #184, #179, #181) in the order it sees fit, before the remaining hands-on checks. The hands-on checks SP-072.1.a1 (switch each layer from the app, RC-160) and RC-451 (SP-048 refusal notifications) are done by the user after merging; SP-072 stays in_progress until a1 is confirmed.",
-        "date": "2026-11-14"
-      },
-      {
-        "id": "D-64",
-        "decision": "Public-space write gate (SP-030): local content under a public root does not reach the public space automatically. Public content comes from the GitHub docs sync, bound web URL prefixes, operator retags (SP-071), and, as D-50 already allows, a checkout folder the operator explicitly declares public by binding a public root at that folder or inside it. Local content under a broader public root (such as ~/code) that was not declared that way, including a folder a session registered as a source and a checkout of a public GitHub repo, goes to quarantine; edit hand-offs go to public_root_sessions as before. The user kept D-50's declaration path knowing that a folder they declared public can still be written by any job's session (accepted risk, RC-404) (was RC-400).",
         "date": "2026-11-14"
       },
       {
@@ -630,6 +630,11 @@
       {
         "id": "D-77",
         "decision": "RC-1200: under a spaces policy, DeleteSource is limited to sources in the calling session's own space (Orch.app may delete any), and PurgeDocs is Orch.app-only. Built by SP-026.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-78",
+        "decision": "RC-1150: an unlocked terminal (SP-077) gets operator scope for reads and operator tasks such as relabel and retag, but RPCs that weaken protection stay Orch.app-only even under an unlock: applying a policy, switching enforcement off, changing the sandbox setting or outbound rules, and SP-078's settings RPCs.",
         "date": "2026-11-15"
       },
       {
@@ -4031,6 +4036,83 @@
         "raised": "2026-11-14",
         "affects": [
           "SP-054"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1150",
+        "kind": "decision",
+        "topic": "Should an unlocked terminal be allowed to weaken the spaces policy?",
+        "detail": "SP-077's security review (medium, design): an unlock gives the terminal operator evidence ('unlock'), which every operator check accepts like Orch.app's, so an unlocked terminal can also apply a policy (ApplySpaces), switch enforcement layers off (SetEnforcement), change the sandbox setting and the outbound rules, and call SP-078's settings RPCs (refuseSettings accepts any operator evidence: sensitive SetConfig, harness and cc-safety-net settings, Restart, PR landing). Those changes outlast the unlock (at most 60 minutes). Orch.app says so beside each request, and the docs do. Options: (a) keep it (D-71 grants operator scope); (b) keep the policy-weakening RPCs (ApplySpaces, SetEnforcement to a relaxing state, SetSandboxSetting, ChangeOutboundRule) Orch.app-only, so an unlock covers relabel, retag, config and the other operator commands; (c) (b) plus a second confirmation in Orch.app for those RPCs from an unlocked terminal. Recommendation: (b). Touches SP-077, SP-078, SP-070, SP-020.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077",
+          "SP-078",
+          "SP-070",
+          "SP-020"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-15 as D-78: option (b), extended to SP-078's settings RPCs. Implemented in SP-077 (internal/daemon/unlock_scope.go: refuseUnlocked in the resolver interceptor, and refuseUnlockedLoosening in SetEnforcement for a switch looser than its current state; RemoveDocsOwner's purge is Orch.app-only as PurgeDocs is under D-77; TestUnlockCannotWeakenProtection)."
+      },
+      {
+        "id": "RC-1151",
+        "kind": "decision",
+        "topic": "What the operator unlock still relies on the user for",
+        "detail": "Accepted for now and documented (docs/internals/daemon.md, Operator unlock): (1) the user's choice of which request to confirm is the gate: a process an agent detached, or a terminal window it opened through the terminal app's scripting, can ask at the same time; rows show the terminal (tty), process, executable and parents read from the kernel, but two requests from the same terminal tab (an agent's leftover process that kept the tab's terminal) differ only by their parents; if the user confirms the agent's row, the agent can print a fake code prompt into the user's terminal (nothing else reads it while orch waits) and prove its request with what the user types; (2) requests held open or filed six a minute keep the user's own out (denial of service); (3) an unlocked shell is as trusted as anything that can type into it, and the unlock ends on an agent's first call only if that harness connects to orchd; (4) a stream opened while unlocked (WatchTasks) keeps the caller it resolved to; (5) command lines (with any secret in them) show in the panel; (6) only Claude Code and Codex are told apart from a terminal. Proposed hardening: refuse or flag a request whose process group is not its terminal's foreground group (e_pgid vs e_tpgid); keep reading the terminal from before the request so a fake prompt races the CLI; give rate-limit slots only to requesters with a terminal; or run operator commands from Orch.app itself.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1152",
+        "kind": "user-action",
+        "topic": "SP-077.1.a4: check the unlock in Orch.app by hand",
+        "detail": "Needs the user with a policy applied and Orch.app built from the PR (make app-install): run 'orch spaces unlock --for 5m' in a terminal; check the menu bar panel shows the request with that command, the terminal (tty) and 5 min; Confirm (Touch ID or password), type the code the panel shows into the terminal; check the panel counts down and 'orch spaces diff' works in that shell; Lock it; ask again and Deny. Touch ID and the password prompt cannot be driven by a unit test (the tests inject a confirmer).",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1153",
+        "kind": "follow-up",
+        "topic": "Flaky tests, and make cover drops a package whose tests fail",
+        "detail": "Seen while validating SP-077 on 2026-11-15 under load from parallel lanes: TestRunMeasuresFailedRuns (internal/agentrun) failed 1 in 8 runs on main too ('a timed-out run must still record how long it took'); internal/daemon failed once inside 'make cover' and passed on the rerun. scripts/cover.sh skips a package whose tests fail (go test ... || true), so that run reported 'All files >= 80%' without any internal/daemon file. Proposed: make cover.sh fail when a package's tests fail, and look at the agentrun timing.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [],
+        "status": "open"
+      },
+      {
+        "id": "RC-1154",
+        "kind": "follow-up",
+        "topic": "Changes made under an unlock do not say so",
+        "detail": "Low. A change made from an unlocked terminal (SetEnforcement, outbound rules, policy apply) is recorded with callerLabel's 'operator (process N)', the same as before spaces; the record does not name the unlock (its id) or that Orch.app confirmed it. Proposed: label such changes 'operator (process N, unlock <id>)' and keep the unlock log lines with them.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077",
+          "SP-070"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1155",
+        "kind": "follow-up",
+        "topic": "Two lasting changes an unlocked terminal can still make",
+        "detail": "From the D-78 security review (low): (1) a spaces draft saved from an unlocked terminal is recorded as the operator's own (ByOperator), so when Orch.app applies it the 'not written by you' (accept_agent_draft) gate does not apply; ApplySpaces itself stays Orch.app-only. Proposed: keep ByOperator for Orch.app only, or show 'unlock' as the draft's origin. (2) RetagSource with confirm is open to an unlock (D-78 allows retag), so an unlocked terminal can move a source out of an isolated space into a public one, a lasting confidentiality change. Proposed: confirm whether retags out of an isolated space should also stay Orch.app-only.",
+        "source": "https://github.com/willesq/orchestrator/pull/198",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-077",
+          "SP-071",
+          "SP-020"
         ],
         "status": "open"
       },
@@ -8239,18 +8321,25 @@
               "threshold": "both"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestUnlockGrantsScopeOnlyOnceConfirmed (internal/daemon/unlock_test.go) passes at 63b6d21: a pending request grants nothing (DiffSpaces refused, public reads only for the requester and its descendants); Orch.app's confirmation grants nothing either until the requester sends the code orchd shows only to Orch.app (ProveUnlock; a descendant or a wrong code is refused); then the requester and its descendants (32, 33, 34) are the operator and its parent, sibling, another terminal, a pty of its own and a detached process are not; it ends at its duration (15m), with 'orch spaces lock' from the unlocked shell (a sibling's lock ends nothing), with Orch.app's Lock, and when the requester exits (a PID reused with another start time is not covered); 0s, -1s and 3601s are refused (at most 60 minutes). Also TestUnlockRequestEndsUnconfirmed (denied, lapsed, withdrawn, locked, confirmed without a code in time, three wrong codes; limits of 4 pending, 6 a minute), TestUnlockFollowsTheConnectionsProcess and TestUnlockWithoutPolicy; CLI: TestSpacesUnlockRunsTheShellThenLocks, TestSpacesUnlockFailures, TestRunUnlockedReportsTheExitStatus, TestSpacesLock (internal/cli/spaces_unlock_test.go); app: UnlocksModelTests and UnlocksClientTests (macos/Tests/OrchKitTests/UnlocksTests.swift).",
+            "a2: TestUnlockRefusedToAgentsAndNonApp (internal/daemon/unlock_refusal_test.go) passes at 63b6d21: RequestUnlock, ProveUnlock and Lock are refused (PermissionDenied) to an agent harness, a shell inside one and a task orchd started, and RequestUnlock and Lock to a pinned session; ConfirmUnlock and ListUnlocks are refused to the requester, another terminal, a pty of its own, a detached process, an agent, a task, an unsigned program named Orch and an Orch.app elsewhere, and to a terminal under a confirmed unlock (it cannot confirm or list another). TestUnlockFollowsTheConnectionsProcess: an agent started in the unlocked shell is not the operator and its first call ends the unlock; a connection handed on by a process that exited does not inherit the unlock of the process reusing its PID (D-44).",
+            "a3: TestUnlockConfirmationNeedsTheSignedApp (internal/daemon/unlock_refusal_test.go) passes at 63b6d21: ConfirmUnlock and ListUnlocks are refused to a signed copy elsewhere (ad-hoc copy), a binary at the app's path with another code directory hash (another signature), the app without the hardened runtime, one with no code hash and one that fails the requirement, and the installed Orch.app's confirmation is what grants it. The recognition itself is checked against real ad-hoc signatures by TestAppSignatureOfARealProcess (internal/daemon/appsig_darwin_test.go, SP-025; passes at 63b6d21).",
+            "a4 (manual, awaiting the user): not yet observed. Supporting: light and dark snapshots of the menu bar panel's unlocks (pending request, confirmed request with its code, active unlock with its countdown) rendered with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter UnlocksSnapshots` (macos/Tests/OrchAppSnapshots/UnlocksSnapshots.swift) at <scratch>/sp-077/shots/menu-bar-unlocks-light.png and -dark.png. The real check needs the user (RC-1152): with a policy applied, run 'orch spaces unlock --for 5m' in a terminal, see the request in Orch.app's menu bar panel with that command, terminal and duration, Confirm (Touch ID or password), type the code shown into the terminal, see the countdown, run an operator command (e.g. 'orch spaces diff'), then Lock; and Deny a second request.",
+            "a5: docs/internals/daemon.md ('Operator evidence' and the new 'Operator unlock' section) and docs/OPERATIONS.md (unlock and lock commands and how to confirm) changed at 63b6d21; also docs/internals/cli.md and docs/internals/app.md.",
+            "D-78 (RC-1150, 2026-11-15): TestUnlockCannotWeakenProtection (internal/daemon/unlock_scope_test.go) passes: a terminal under a confirmed unlock is refused, before the handler runs, ApplySpaces, SetEnforcement to a relaxing state (memory ' OFF', guard log, an unknown layer), SetSandboxSetting, ChangeOutboundRule and every SP-078 settings RPC (settingsRPCs), each let through from Orch.app; the unlocked terminal keeps reads of every space, Relabel, RetagSource, DiffSpaces, tightening a switch and SetConfig without a Sensitive key; a terminal with no unlock still reaches none of them. The SetEnforcement handler also refuses the unlocked terminal a switch looser than the current state (the guard from strict back to block-other-jobs, or a lasting block-other-jobs over Orch.app's timed off that reverts to strict) while letting it keep or restore strict, and RemoveDocsOwner with purge is refused to it as PurgeDocs is (D-77)."
+          ]
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f8afd77c35f69708b328a563d6ffe56f236a5b995bab7cf38f88735dbc4a4985",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-077-operator-unlock",
+      "pr": "https://github.com/willesq/orchestrator/pull/198"
     },
     {
       "id": "SP-080",
