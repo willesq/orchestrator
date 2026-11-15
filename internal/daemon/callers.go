@@ -151,6 +151,10 @@ var operatorActions = map[string]string{
 	// Reason (SP-027): a relabel moves every space's content and its report
 	// names spaces; it is also refused to interactive harness sessions.
 	orchdv1.Orchd_Relabel_FullMethodName: "relabel the RAG store",
+	// Reason (SP-028): quarantine is readable by no session, and a purge
+	// deletes content; both are also refused to interactive harness sessions.
+	orchdv1.Orchd_ListQuarantine_FullMethodName:  "list quarantine",
+	orchdv1.Orchd_PurgeQuarantine_FullMethodName: "purge quarantine",
 	// Reason: a queued task's identity comes from its task record, so a pin
 	// would only give it a second, self-reported one. Interactive sessions'
 	// hooks still pin (PinSession checks the harness process itself).

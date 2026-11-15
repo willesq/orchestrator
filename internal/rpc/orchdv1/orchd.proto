@@ -62,6 +62,14 @@ service Orchd {
   // to its space's collection; counts unless apply. Resumable. Operator only:
   // the report names spaces.
   rpc Relabel(RelabelRequest) returns (RelabelResponse);
+  // ListQuarantine (SP-028) lists the sources held in quarantine, the space
+  // of content that could not be placed, with their chunk counts. Operator
+  // only: no session may read quarantine.
+  rpc ListQuarantine(ListQuarantineRequest) returns (ListQuarantineResponse);
+  // PurgeQuarantine (SP-028) deletes quarantined sources, the named ones or
+  // all of them (all). It only counts unless confirm is set; orchd checks confirm,
+  // so every caller opts in deliberately. Operator only.
+  rpc PurgeQuarantine(PurgeQuarantineRequest) returns (PurgeQuarantineResponse);
   // BackfillSessions stores sessions again from their transcripts on disk.
   rpc BackfillSessions(BackfillSessionsRequest) returns (BackfillSessionsResponse);
   // ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
@@ -495,6 +503,16 @@ message SpacesStatus {
   string enforcement_error = 7;
   // The sandbox setting (D-61); unset when spaces are unavailable.
   SandboxSetting sandbox = 8;
+  // What quarantine holds (SP-028); unset when spaces are unavailable or
+  // the store could not be counted.
+  QuarantineCounts quarantine = 9;
+}
+
+// QuarantineCounts is how much content quarantine holds. It never names a
+// source.
+message QuarantineCounts {
+  int32 sources = 1;
+  int32 chunks = 2;
 }
 
 // MigrationProgress is how far a running hybrid migration has got.
@@ -677,6 +695,40 @@ message RelabelResponse {
   repeated RelabelTransition transitions = 7;
   bool applied = 8;
   string error = 9;   // why an applied run stopped early; what it did is still reported
+}
+
+message ListQuarantineRequest {}
+
+// QuarantineSource is one source held in quarantine.
+message QuarantineSource {
+  string source_uri = 1;
+  string source_type = 2;
+  int32 chunks = 3;
+  int64 ingested_at = 4; // unix seconds of its latest store; 0 = unknown
+}
+
+message ListQuarantineResponse {
+  repeated QuarantineSource sources = 1; // by source_uri
+  int32 total_sources = 2;
+  int32 total_chunks = 3;
+}
+
+message PurgeQuarantineRequest {
+  // source_uris names the quarantined sources to delete. A named source
+  // that is not in quarantine is refused, never deleted elsewhere.
+  repeated string source_uris = 1;
+  // confirm must be set to delete; without it the purge only counts.
+  bool confirm = 2;
+  // all purges every quarantined source. It must be set when source_uris is
+  // empty and is refused with it, so an empty list sent by mistake never
+  // purges everything.
+  bool all = 3;
+}
+
+message PurgeQuarantineResponse {
+  int32 sources = 1; // sources deleted, or that would be without confirm
+  int32 chunks = 2;  // their chunks
+  bool purged = 3;   // false for a dry run
 }
 
 message ListPRsRequest {
