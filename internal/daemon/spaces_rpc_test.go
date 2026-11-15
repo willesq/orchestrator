@@ -419,7 +419,7 @@ func TestDocsOwnerCheckWithoutSpaces(t *testing.T) {
 	if docsOwnerCheck(nil) != nil {
 		t.Error("no engine should mean no check")
 	}
-	if spacesEnv(newGHProfiles()).LookupOrg == nil {
+	if spacesEnv(newGHProfiles(0)).LookupOrg == nil {
 		t.Error("orchd's spaces env has no GitHub lookup")
 	}
 }

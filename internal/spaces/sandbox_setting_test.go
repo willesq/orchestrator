@@ -3,6 +3,7 @@ package spaces
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -149,5 +150,34 @@ func TestSandboxSettingTampered(t *testing.T) {
 	}
 	if _, _, err := LoadSandboxSetting(ctx, conn); err == nil {
 		t.Error("read a store without the log table")
+	}
+}
+
+// TestReadSandboxSetting (D-68): the hooks read the setting from orch.db
+// read-only when orchd does not answer; a missing store or one without the
+// tables is the default, and one that is not a database is an error.
+func TestReadSandboxSetting(t *testing.T) {
+	ctx := context.Background()
+	if s, p, err := ReadSandboxSetting(ctx, filepath.Join(t.TempDir(), "none.db")); err != nil || p != "" || s != DefaultSandboxSetting() {
+		t.Errorf("missing store: %+v %q %v", s, p, err)
+	}
+	conn := openStore(t)
+	setSandbox(t, ctx, conn, func(c SwitchChange, s SandboxSetting) error { return WriteSandboxSetting(ctx, conn, c, s) }, SandboxOff, "operator (process 1)", t0)
+	if s, p, err := ReadSandboxSetting(ctx, paths.DBFile()); err != nil || p != "" || s.Mode != SandboxOff || !s.SetAt.Equal(t0) {
+		t.Errorf("off: %+v %q %v", s, p, err)
+	}
+	empty := filepath.Join(t.TempDir(), "empty.db")
+	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if s, _, err := ReadSandboxSetting(ctx, empty); err != nil || s != DefaultSandboxSetting() {
+		t.Errorf("store without the tables: %+v %v", s, err)
+	}
+	garbage := filepath.Join(t.TempDir(), "garbage.db")
+	if err := os.WriteFile(garbage, []byte(strings.Repeat("not a database ", 100)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ReadSandboxSetting(ctx, garbage); err == nil {
+		t.Error("an unreadable store read as the default")
 	}
 }

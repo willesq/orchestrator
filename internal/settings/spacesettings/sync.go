@@ -62,6 +62,13 @@ type fileState struct {
 	BackedUp bool `json:"backed_up,omitempty"`
 	// Ignored reports that git was last seen ignoring the file.
 	Ignored bool `json:"ignored,omitempty"`
+	// Deny are the folders orch's sandbox rules in the file deny, while
+	// they are there: the tool guard refuses calls in the checkout when
+	// its own settings re-open one (D-67, Reopened).
+	Deny []string `json:"deny,omitempty"`
+	// Real is the checkout's real path when a link leads to it, recorded
+	// with Deny so the guard need not resolve every checkout on each call.
+	Real string `json:"real,omitempty"`
 }
 
 type state struct {
@@ -171,10 +178,23 @@ func (s *Syncer) Sync(ctx context.Context, res *spaces.Resolved, choice Choice) 
 		if next.note != "" {
 			rep.Problems = append(rep.Problems, c+": "+next.note)
 		}
-		if wanted && choice.Sandboxes(r) {
+		sandboxed := wanted && choice.Sandboxes(r)
+		if sandboxed {
 			for _, l := range Loosening(c, r.Deny, next.st.Owned) {
 				rep.Problems = append(rep.Problems, c+": "+l)
 			}
+		}
+		// Reason: the denies are recorded only once the file holds them,
+		// and kept as they were when this sync could not write it.
+		switch {
+		case err != nil:
+		case sandboxed:
+			next.st.Deny, next.st.Real = r.Deny, ""
+			if real, ok := realPath(c); ok && real != c {
+				next.st.Real = real
+			}
+		default:
+			next.st.Deny, next.st.Real = nil, ""
 		}
 		next.st.Space = r.Space
 		if next.st.Owned.Empty() && !wanted {

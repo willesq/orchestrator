@@ -137,7 +137,13 @@ func sessionStartWith(p Payload, out io.Writer, notice []string) error {
 	lines := append([]string(nil), notice...)
 	// "queue" carries finished background tasks, so their results reach the next
 	// session without anyone polling the ledger.
-	for _, stream := range []string{p.SessionID, "pr-babysitter", "routing", taskEventStream} {
+	own := p.SessionID
+	if sharedStreams[own] {
+		// Reason: a session named like a shared stream must not read it
+		// as its own; the spaces stream is the operator's.
+		own = ""
+	}
+	for _, stream := range []string{own, "pr-babysitter", "routing", taskEventStream} {
 		if stream == "" {
 			continue
 		}

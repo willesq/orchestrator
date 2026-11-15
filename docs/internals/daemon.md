@@ -665,6 +665,10 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
   drift ([hooks.md](hooks.md#events)). When orchd does not answer, the digest reads `orch.db`'s
   switches read-only (`spaces.ReadEnforcement`), so stopping orchd does not hide a switched-off
   layer. `orch status` names them in its `spaces` section, with who set them for the operator.
+- **Refusals** (SP-048) go to the same `spaces` stream, written by orch-hook rather than orchd:
+  one `refusal` event per tool call the enforcing guard or the outbound terms check refuses (see
+  [hooks.md](hooks.md#refusal-events)). With the guard off or logging nothing is refused, so no
+  refusal event is written; the command log still records the would-be verdict.
 - **The hooks switch** (D-40): orch settings cannot turn the Claude Code tool hooks on or off
   (`SetSettingEnabled` refuses them with `FailedPrecondition`), and `orch install` writes them
   whatever a settings toggle says ([install.md](install.md#claude-code)). Switching `hooks` off
@@ -689,8 +693,9 @@ INV-16; `internal/spaces/enforce.go`, `enforce_store.go`, `internal/daemon/enfor
   consistently while orchd is stopped, which the next start takes. Either way the switch shows in
   every digest and in `orch status`. Self-protection paths (SP-042) are the guard's answer to
   both. A `"disableAllHooks": true` in a project's Claude Code settings turns off every hook,
-  the digest included, without any switch; the hooks check reads only the user's
-  `~/.claude/settings.json`. When orchd does not answer, the digest's fallback reads only the
+  the digest included, without any switch, except in a checkout holding orch's sandbox rules,
+  whose `settings.local.json` sets it back to false (D-67, [install.md](install.md#per-space-harness-settings));
+  the hooks check reads only the user's `~/.claude/settings.json`. When orchd does not answer, the digest's fallback reads only the
   switches in `orch.db`, not whether the tool hooks are still in `settings.json`.
 - **The sandbox switch** (SP-046): orchd's checkout sync reads it at every sync, and a change
   asks for a sync at once. Off takes orch's entries out of every per-checkout settings file and
@@ -729,11 +734,18 @@ they keep it out of another isolated space's root.
   sessions are sandboxed now (`active`) and what that means (`detail`). `orch status` prints one
   `sandbox` line; `off` is a warning there, a problem with `orch.db`'s copy an error.
 - **Not a switch** (INV-16 as amended by D-61): `off`, or `auto` with nothing to deny, does not
-  mark any session's start digest. The `sandbox` switch still does whenever it is off, timed or
-  not, and while it is off no rules are written whatever the setting says.
+  mark any session's start digest as enforcement off. The `sandbox` switch still does whenever it
+  is off, timed or not, and while it is off no rules are written whatever the setting says.
+- **Named once** (D-68): a session's next start digest names the setting once (`[info] orchd: the
+  sandbox setting is <mode> (set <time>): <detail>`) after each change to it, and, while it is
+  `off`, after each orchd start. The hook remembers per session the mode, `set_at` and orchd's
+  start (from `Ping`'s uptime, within 5 s) it last named, so later digests of that session stay
+  quiet until one of them changes; a session's first digest names a setting that was ever set
+  (or is off), and the default never set is not named. With orchd down the hook reads the setting
+  from `orch.db` read-only (`spaces.ReadSandboxSetting`) and says so.
 - **Limits:** as for the switches, a process running as the user can write a matching row and
-  log entry while orchd is stopped, which the next start takes; for the setting nothing then
-  warns in a digest, only `orch status` and the app show it (RC-216). Sandboxed shells cannot
+  log entry while orchd is stopped, which the next start takes; it is then named in the next
+  start digest of each session (D-68, RC-216), and `orch status` and the app show it. Sandboxed shells cannot
   write `orch.db` (it is outside every space's writable folders) and the guard refuses tool calls
   that name it.
 
@@ -757,7 +769,7 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `EndSession` | session_id → ended_at | sets `ended_at` once; only the pinned harness process; refused to queued tasks; writes the session's [command log](#command-log) end record and anchors its head in the background |
 | `RecordToolEvent` | event (`pre-tool-use`/`cwd-changed`), session_id, cwd, tool_name, tool_input (≤ 1 MiB), tool_input_size, tool_use_id, agent_id, agent_type, old_cwd, new_cwd, at → — | takes a [tool hook](hooks.md#tool-hooks) event and answers at once; attributed to the [caller orchd resolved](#caller-sessions), never to session_id; open to queued tasks. Counted by caller kind and stored in the [command log](#command-log) when its caller is a pinned session, a running task or a harness process holding no pin; never indexed |
 | `ListSessions` | all → sessions (harness, session_id, harness_pid, space, first_cwd, state, last_activity, tool_events, refusals, ended_at) | runs a [liveness](#session-liveness) sweep first; the operator sees every session and unpinned harness process (with its command log chain's counts and last event), a session only its own row, anyone else none; refused to queued tasks; ended sessions, and the chains of unpinned processes that exited or were pinned since, only with `all` |
-| `ListSpaces` | → status (as in `Status`), spaces (name, kind, github_orgs, roots, web_prefixes, chat, reads, readable, terms_file, gh_config_dir), public_root_sessions | the applied revision's spaces by name; `readable` is every space it may read (itself, public spaces, the ones it lists); a policy that does not verify lists none and the status says why; operator-only (`refuseNonOperator`) |
+| `ListSpaces` | → status (as in `Status`), spaces (name, kind, github_orgs, roots, web_prefixes, chat, reads, readable, terms_file, gh_config_dir), public_root_sessions, logins (space; gh and claude, each own, dir, state, account, storage, detail: SP-074, from `gh auth status` and `claude auth status` metadata, never a token) | the applied revision's spaces by name; `readable` is every space it may read (itself, public spaces, the ones it lists); a policy that does not verify lists none and the status says why; operator-only (`refuseNonOperator`) |
 | `ScanSpaces` | folders (≤ 32, absolute), max_depth (0 = 3, capped at 6), offline → checkouts (path, owner, repo, visibility, anonymous, space, rule, outcome, reason), accounts (profile, login, orgs, error), truncated, problems | one scan at a time (`Aborted` while one runs); walks each folder through a read-only `fs.FS` over an `os.Root`, so no path resolves outside it, never following symbolic links or entering hidden folders below it (a chosen hidden folder is walked) or a checkout's own folders, at most 20,000 folders and 2,000 checkouts (`truncated`); reads each checkout's `.git` without running git (`handoff.CheckoutAt`, which follows a linked worktree's `.git` pointer; an anonymous `.git`'s remote is not believed); looks up visibility through the placement repo lookups, at most 15 from GitHub per scan so `ExplainPlacement` keeps its budget, the rest (all when `offline`) from the cache, and places each checkout as `ExplainPlacement` does; accounts are the default gh login and each space's gh profile, from the profiles' 5-minute check (none when `offline`). Writes nothing: no file, revision or org binding. Unreadable folders → `problems`; a policy that does not verify → `FailedPrecondition`; operator-only |
 | `GetEnforcement` | → switches (layer, title, state, default, states, relaxed, set_at, set_by, until, reverts_to), error | every [enforcement switch](#enforcement-switches); open to every caller, queued tasks included; `set_by` only for the operator; switches that cannot be read are returned as the defaults with `error` |
 | `SetEnforcement` | layer, state, for_seconds → current switch, changed, notes | operator-only (refused to callers descended from a harness or orchd); unknown layer or state, or `for_seconds` outside 0–86400 → `InvalidArgument`; logged with time and caller and emitted on the `spaces` stream; `notes` say what the hooks switch did to Claude Code's settings |
@@ -773,9 +785,9 @@ Times are Unix seconds with 0 meaning unknown or open.
 | `DropBackup` | apply → collection, points, dropped | collection name only from config, never the caller; shares the migration lock |
 | `ReindexKeywords` | apply → collection, tokenizer_version, total, stale, updated, applied, error | shares the migration lock (`Aborted` if busy); a refused plan → `FailedPrecondition`; an applied run that stops reports what it did in `error`; see [memory.md](memory.md#keyword-re-index) |
 | `GetGitHubIdentity` | refresh → login, orgs, teams | through `gh`; cached 10 minutes unless `refresh`; GitHub unreachable → `Unavailable` |
-| `ListGitHubScopes` | refresh → scopes, warning | creates a scope for each newly discovered account (the user's own enabled, orgs disabled) and never overwrites one; GitHub unreachable → the stored scopes plus a `warning` |
-| `SetGitHubScope` | scope → scope | only a discovered scope (`NotFound` otherwise); its kind cannot change; enabled, items (`involving`/`all`), repo mode (`all`/`include`/`exclude`) and repo names, including `everything_repos`, are validated (`InvalidArgument`) |
-| `ListGitHubRepos` | owner → repos (name, private, archived) | the user's own account through `/user/repos?affiliation=owner`, an org through `/orgs/<org>/repos`; login validated |
+| `ListGitHubScopes` | refresh → scopes, warning | creates a scope for each newly discovered account (the user's own enabled, orgs disabled) and never overwrites one; with spaces, also a disabled scope for each org a space binds that only its own gh profile's account is or belongs to (SP-074), listed to the operator only; GitHub unreachable → the stored scopes plus a `warning` |
+| `SetGitHubScope` | scope → scope | only a discovered scope (`NotFound` otherwise); its kind cannot change; enabled, items (`involving`/`all`), repo mode (`all`/`include`/`exclude`) and repo names, including `everything_repos`, are validated (`InvalidArgument`); turning one on checks membership as the gh login the owner's space uses |
+| `ListGitHubRepos` | owner → repos (name, private, archived) | as the gh login the owner's space uses (SP-074; a refused profile → `Unavailable`, never another login; an owner whose space names its own profile → `NotFound` for agents): that account's own repos through `/user/repos?affiliation=owner`, an org through `/orgs/<org>/repos`; login validated |
 | `ListGitHubItems` | kind, owner → items (PRs and issues with kind, number, author, reasons, attention), updated_at | the watcher's cache only, never `gh`; kind `pr`/`issue` or empty (anything else → `InvalidArgument`); owner matched case-insensitively |
 | `RequestGitHubSweep` | → nothing | asks the watcher to sweep soon, at most once a minute with other requests; returns before the sweep, whose result shows as `ListGitHubItems`' `updated_at` advancing; refused to queued tasks |
 | `TailLogs` | after_seq, source, limit → entries (seq, time, source, message), last_seq, oldest_seq, sources | in-memory lines only; limit default 500, max 5000, and at most 3 MiB, newest kept when more match; `oldest_seq` past the caller's `after_seq` means lines rolled out |
@@ -842,7 +854,7 @@ Unit names are a public contract (`orch restart <name>`).
 | `sources-scheduler` | Tick | `sources.scan_interval` (5m) | always | refresh due web/repo/owner sources |
 | `docs-scheduler` | Tick | `docs.scan_interval` (1m) | always | sync GitHub owners' repo markdown |
 | `pr-reviews` | Tick | 15 s; each watched PR read from GitHub every 2 minutes or when changed | always (needs `orch.db`) | review watched PRs once ready and post what the user opted in to ([tasks.md](tasks.md#pr-review-watch)) |
-| `pr-babysitter` | Tick | 15 s check; sweep every `poll_interval` (10m) or on request | `pr_babysitter.enabled` | refresh the cache of PRs and issues in enabled GitHub scopes, label task outcomes |
+| `pr-babysitter` | Tick | 15 s check; sweep every `poll_interval` (10m) or on request | `pr_babysitter.enabled` | refresh the cache of PRs and issues in enabled GitHub scopes, label task outcomes; each space's own gh account searches its orgs, and an isolated one past `github.isolated_account_hourly_budget` is deferred with its items kept (SP-074) |
 | `routing-evaluator` | Tick | hourly check; run every `routing.evaluate.interval` (168h) | `routing.evaluate.enabled` | discover models, propose routes |
 | `handoff` | Run | 10 s; entries settle 5 s | always | store work hooks handed off |
 | `session-summarizer` | Run | queue-driven | `sessions.summarize.enabled` | model-written session summaries |
@@ -896,7 +908,7 @@ Socket: `$ORCH_SOCKET`, else `<data>/orchd.sock` (macOS limits socket paths to 1
 | `<data>/models/minilm/` | embedding model |
 | `<data>/sessions/` | session records and checkpoints (YAML), per-session hook state |
 | `<data>/handoff/` (0700) | work hooks left for orchd; `failed/` after 8 attempts; `pr-sweep` request |
-| `<data>/events/` | JSONL event streams (`queue`, `routing`, `pr-babysitter`, per session) |
+| `<data>/events/` | JSONL event streams (`queue`, `routing`, `pr-babysitter`, per session; `spaces`, the operator's, 0600: enforcement switch changes and refusals) |
 | `<data>/pr_babysitter_state.json`, `routing_evaluator_state.json` | subsystem state |
 | `<data>/marketplaces/orch-pinned/` | the orch-owned Claude Code marketplace pinning cc-safety-net |
 | `<data>/repos/`, `tasks/`, `codex/`, `migrations/`, `eval/`, `backups/` | repo clones, task scratch, Codex state, migration markers, eval runs, install backups (0600 files) |

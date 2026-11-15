@@ -591,6 +591,11 @@
         "id": "D-70",
         "decision": "Review results and merge order, 2026-11-14: the user approved the SP-051.1.a1 snapshots and the SP-072.1.a2 snapshots, and told the coordinator to merge the ready lane PRs (#178, #182, #183, #184, #179, #181) in the order it sees fit, before the remaining hands-on checks. The hands-on checks SP-072.1.a1 (switch each layer from the app, RC-160) and RC-451 (SP-048 refusal notifications) are done by the user after merging; SP-072 stays in_progress until a1 is confirmed.",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-64",
+        "decision": "Public-space write gate (SP-030): local content under a public root does not reach the public space automatically. Public content comes from the GitHub docs sync, bound web URL prefixes, operator retags (SP-071), and, as D-50 already allows, a checkout folder the operator explicitly declares public by binding a public root at that folder or inside it. Local content under a broader public root (such as ~/code) that was not declared that way, including a folder a session registered as a source and a checkout of a public GitHub repo, goes to quarantine; edit hand-offs go to public_root_sessions as before. The user kept D-50's declaration path knowing that a folder they declared public can still be written by any job's session (accepted risk, RC-404) (was RC-400).",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -2772,6 +2777,305 @@
         "status": "open"
       },
       {
+        "id": "RC-300",
+        "kind": "follow-up",
+        "topic": "gh_config_dir checks: path race, ACLs and budget key (security audit, low)",
+        "detail": "SP-074 audit of PR #182: github.CheckProfileDir resolves symbolic links to check the directory, but gh is started with the unresolved gh_config_dir, so a link swapped between the check and the run is not caught; macOS ACLs are not checked; the hourly budget is keyed on the gh_config_dir string, so two spellings of one folder would get two budgets (validation only rejects equal expanded paths). Proposed: pass the resolved path as GH_CONFIG_DIR, reject folders with an extended ACL, key the budget on the resolved path.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074",
+          "SP-063"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-301",
+        "kind": "follow-up",
+        "topic": "GitHub budget counts gh calls, not API requests (security audit, low)",
+        "detail": "SP-074.2: a gh api --paginate call counts as one call however many pages it fetches, and counts live in orchd memory, so a restart starts a new hour. Proposed: count pages (or weight paginated calls) and keep the window across restarts if that matters.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-302",
+        "kind": "decision",
+        "topic": "Profile-only orgs: agents can still read the PR cache file and synced docs (security audit, low)",
+        "detail": "SP-074 lets an org that only a space's own gh profile reaches be watched. ListPRs, ListGitHubItems, ListGitHubScopes and ListGitHubRepos now leave such owners out for agents, but the PR cache file (pr_babysitter_state.json) stays readable by every process of the user, and ListDocs, GetDocument and GetDocsSync (task-callable) may return docs synced through a space's profile (SP-063 design). Options: (a) deny the cache file to other spaces` sandboxes and filter the docs RPCs per caller space (once records carry a space, SP-030/INV); (b) accept and document.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074",
+          "SP-063"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-303",
+        "kind": "follow-up",
+        "topic": "Claude config folder is not vetted before claude auth status runs (security audit, low)",
+        "detail": "SP-074.3.a2: orchd runs claude auth status with a space's claude_config_dir without a CheckProfileDir-style check (absolute, under home, owner-only). Only status is read; nothing is written. Proposed: apply the same directory check and report refused folders.",
+        "source": "https://github.com/willesq/orchestrator/pull/182",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-074",
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-550",
+        "kind": "follow-up",
+        "topic": "Agents can skip the git hooks with --no-verify",
+        "detail": "SP-045's hooks run for every commit and push in a repository, but git commit --no-verify and git push --no-verify skip them (git -c core.hooksPath=... is already refused by SP-044's check). Proposed: while a checkout has orch's hooks installed, the tool hook's outbound check refuses --no-verify (and -n for commit) on git commit, push and merge in agent sessions, so only the user's own terminal can skip them.",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-045",
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-551",
+        "kind": "decision",
+        "topic": "Low findings accepted in SP-045's git hooks",
+        "detail": "From the SP-045 security audit (2026-11-14), documented in docs/internals/install.md: (1) the hook finds the guard files from its own environment (ORCH_DATA_DIR, HOME), so git run with another home holding no snapshot and no orch.db reads as nothing configured and allows (INV-10); (2) on systems other than macOS and Linux the no-replace rename used to chain and restore hooks is check-then-rename, not atomic; on Linux filesystems without RENAME_NOREPLACE install fails with that error; (3) installing into a core.hooksPath tracked in the work tree (husky, .githooks) changes tracked files and writes the local orch path into them. Proposed if wanted: record the guard directory in the hook at install and refuse when it holds a snapshot the hook's own environment does not find. (4) Found by the verifier: git push -o <option> sends push options the pre-push hook cannot see, so they are not checked; and backups of an install and an uninstall in the same second share a directory (the user hook is still kept as .orch-prev or restored).",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-045"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-552",
+        "kind": "follow-up",
+        "topic": "SP-044's push check trusts no-space remotes' tracking refs for a push to a URL",
+        "detail": "Found by the SP-045 security re-audit (2026-11-14): the tool hook's check (OutboundChecker.excluded, a push to a URL) leaves out commits on the tracking refs of every remote whose push URLs lie in the same spaces as the URL; for a URL in no space (another server, a local path) that is every other no-space remote, so commits on a remote of no space are not read when pushed to another place of no space, and tracking refs record fetch URLs rather than push URLs. SP-045's pre-push hook does not do this (only remotes fetched from the destination's own spaces, or for no space its own URL), and it runs on the real push. Proposed: use the same rule in the tool hook's check.",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-044"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-553",
+        "kind": "user-action",
+        "topic": "Install the git hooks in the repositories you want covered",
+        "detail": "SP-045 installs nothing by itself and was never run against a real repository (local_safety). To cover a repository, run `orch guard git-hook --install` in it to preview, then `--install --apply`; for every repository at once, point git's global core.hooksPath at a directory and run `orch guard git-hook --install --apply --hooks-dir <dir>`. `--uninstall --apply` restores the hooks that were there. The hooks run the orch binary that installed them (or orch on PATH).",
+        "source": "https://github.com/willesq/orchestrator/pull/184",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-045"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-450",
+        "kind": "follow-up",
+        "topic": "Refusals in the app's Needs-you list",
+        "detail": "SP-048's summary names the app's Needs-you section. This lane kept its Swift changes to the Notifier (SP-051 owns the Spaces pane, SP-074 may edit macos/Sources), so refusals reach the user as macOS notifications only; the menu's Needs you list (NeedsYouSection) still shows PRs. RefusalMonitor.recent (OrchKit) keeps the latest 20 refusals for a list. Proposed: show recent refusals in the Needs-you list or the Spaces pane's needs-you strip once SP-051 merges.",
+        "source": "https://github.com/willesq/orchestrator/pull/179",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-048",
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-451",
+        "kind": "user-action",
+        "topic": "Check refusal notifications in Orch.app by hand",
+        "detail": "Not verifiable by tests (UNUserNotificationCenter needs the app bundle). With a spaces policy applied and the guard enforcing, run a session call into another job's folder while Orch.app built from PR #179 runs: one 'Tool call refused' notification should appear (subtitle 'space <space> · <tool>', body 'Rule <rule> in session <id>.', no command or path); four or more refusals within 5 s should give one 'N tool calls refused' summary; clicking either should open Settings > Spaces. Refusals made before the app started are not announced.",
+        "source": "https://github.com/willesq/orchestrator/pull/179",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-048"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-452",
+        "kind": "decision",
+        "topic": "Refusal events are written by orch-hook, not orchd",
+        "detail": "SP-048's event needs the term's line and hash, which only the hook knows: RecordToolEventRequest has no field for it, and adding one changes orchd.proto (coordinator-scheduled under D-63). So orch-hook appends the refusal to the spaces stream after printing the deny. Its session is the harness's session_id, the one the guard read the pin for (the space comes from that orchd-written pin); orchd's command log stays the authoritative, caller-resolved record. Upside: refusals stay visible while orchd is down. Confirm, or schedule a proto field (e.g. guard_term_line, guard_term_hash) so orchd writes the event with its resolved identity.",
+        "source": "https://github.com/willesq/orchestrator/pull/179",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-048"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-453",
+        "kind": "follow-up",
+        "topic": "Refusal event lows from the SP-048 security audit",
+        "detail": "Low/info, accepted for now: (1) any process running as the user can append well-formed refusal lines and so trigger notifications (it can post notifications itself anyway); (2) a refusal write still running at the hook's 100 ms deadline is cut off when the hook exits and that event is lost (the command log keeps the refusal); a partial line is skipped by readers; (3) every event stream is now opened with O_NOFOLLOW|O_NONBLOCK, so a stream file that is itself a symlink is no longer written; (4) the spaces stream, like the other streams, has no size cap or rotation (the app reads at most 1 MiB per poll, from its end at launch); (5) after the app skips a line over 1 MiB, the rest of that line is parsed as the next and dropped.",
+        "source": "https://github.com/willesq/orchestrator/pull/179",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-048"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-454",
+        "kind": "follow-up",
+        "topic": "TestSweepWhileWriting flaked on CI",
+        "detail": "On PR #179 (no toollog change) CI's 'test' job failed once in internal/toollog TestSweepWhileWriting ('30 sweeps trimmed, writer dropped 227; want trims and no drops') and passed on re-run; it passes locally. Likely load-dependent on shared runners (the writer's queue overflows while sweeps hold the write turn). Worth a look so the command log's no-drop claim is not timing-dependent.",
+        "source": "https://github.com/willesq/orchestrator/actions/runs/43638456461",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-015",
+          "SP-073"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-400",
+        "kind": "decision",
+        "topic": "Local files under a public root can be steered into public by any job session (security audit medium)",
+        "detail": "SP-030 makes a public root alone insufficient for checkouts without a verified-public GitHub remote (D-50), but anything local under a public root can still be written by any job session: the guard and the sandbox allow writes to public roots. Sessions may register repo/owner sources (SaveSource is refused to queued tasks only), and owner sources pick up new folders automatically. A session can therefore copy one job's files into a plain folder under ~/code, or into a folder whose fake .git names a public GitHub repo, or into the uncommitted working tree of a real public checkout, and the sources refresh places that content in public. This is not a regression (before SP-030 everything under a public root went to public), but the gate cannot meet 'only verified-public content reaches public' for local files. Options: (a) local files never go to public automatically: sources content under a public root goes to quarantine (or public_root_sessions); public content comes only from the GitHub docs sync, bound web prefixes and operator retags (SP-071). (b) Keep local placement in public and make repo/owner source registration operator-only (also RC-121/RC-122). This narrows the gap but does not close it, because owner sources still walk new folders and agents can still write into public checkouts. (c) Accept it and rely on the SP-046 sandbox denying job sessions writes to public roots. Recommendation: (a). Blocks SP-030 (DOD-6) until decided.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-046",
+          "SP-071"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14: option (a) with D-50's folder declaration kept; see D-64. The remaining risk for folders the operator declared public is accepted and tracked as RC-404."
+      },
+      {
+        "id": "RC-401",
+        "kind": "decision",
+        "topic": "What counts as declaring a folder public (D-50)",
+        "detail": "Implemented under D-64: under a public root, local content is public only in a checkout the operator declared by binding a public root at the checkout's folder or inside it (a .git anywhere above the file, symlinked included, makes it a checkout); a remote GitHub does not report public still keeps it out. Content in no checkout is quarantined.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-071"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14: see D-65. Nothing on disk declares a folder public; local folders reach public only through the applied policy's public_paths list (SP-076). Until then all local content under public roots is quarantined."
+      },
+      {
+        "id": "RC-402",
+        "kind": "follow-up",
+        "topic": "Limits of leaving public on a visibility change",
+        "detail": "(1) When the repo listing fails, every repo keeps its docs as last indexed, public ones included. A listing failure is not treated as unreadable visibility for every repo, because that would delete and re-embed a whole public org after a network blip. (2) Fixed in SP-030: a recorded repo missing from a successful listing, and every recorded repo of an owner whose binding no longer checks out, leave public; an hourly sources sweep covers removed sources and deleted folders. A listing GitHub refuses (the owner is gone or this login lost access) also takes them out. Still kept: when the listing fails for any other reason (network, credentials), public docs stay as last indexed until a listing succeeds, so a blip does not delete and re-embed a whole public org. (3) Leaving public deletes and re-ingests (re-embeds); it is not a move. SP-024 must make DeleteSource remove a source from every collection. (4) Cost: each docs sync reads one stored copy per doc of every listed repo that is not verified public, and each repo/owner source refresh reads one per stored doc. (5) These deletions bypass the prune guard by design, because capping them would keep non-public content readable everywhere. (6) Under D-65 no local content is public, so a public copy of a checkout leaves whatever GitHub answers. When SP-076 lets listed folders be public again, a GitHub outage or a spent lookup budget must not delete their public copies (security audit, round 1).",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-024",
+          "SP-030",
+          "SP-027"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-403",
+        "kind": "follow-up",
+        "topic": "SP-030 security audit lows and design choices",
+        "detail": "(1) orchd's log names a repo or checkout path whose docs left public; tasks can read that log, but the content was public until then. (2) Folder comparison is case-insensitive, matching how roots are matched. (3) An edit hand-off that would be public goes to public_root_sessions, not to the editing session's space, until hand-offs carry the session (SP-029). (4) With an applied policy that no longer verifies, public copies are not moved; readers must treat a stale labels_v as unreadable (INV-08, SP-027). (5) The harness settings of a checkout quarantined by no_public_proof still follow its public root, unless GitHub does not confirm its repo public, as before SP-030. (6) Round 3 audit lows: a public-bound org rebound to a non-public space keeps its verified-public repos' public docs until their HEAD moves, because the leave pass skips repos GitHub reports public; a broken policy moves nothing; the leave passes read one stored copy per doc (a source registered at / sweeps every checkout doc, with repo lookups); an agent can add a .git with a public remote so its own edit hand-off under a public root goes to public_root_sessions instead of quarantine (pre-SP-030 it went to public). (7) Round 4 audit lows: the docs owner check turns any CheckOrg error, a network failure included, into a quarantined owner, so a temporary GitHub error takes a whole public org out of public (fails closed, re-embeds on recovery); the hourly sources sweep places a stored web page by its registered URL, so a page stored public through a redirect before SP-030 whose source was removed stays public; the sweep reads one stored copy per sources doc each hour.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-029",
+          "SP-030"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-404",
+        "kind": "decision",
+        "topic": "accepted risk: sessions can write into a folder the operator declared public",
+        "detail": "Under D-64, a checkout folder the operator declared public (a public root bound at or inside it) is placed in public by the sources refresh. Any job's session can write files there (the guard and the sandbox allow writes to public roots), so it could stage another job's content in a declared folder and have it indexed into public. The user accepted this on 2026-11-14 when keeping D-50's declaration path. Possible later mitigations: SP-046 sandbox rules denying job sessions writes to declared public folders, or making repo/owner source registration operator-only.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-046",
+          "SP-076"
+        ],
+        "status": "open",
+        "note": "Updated 2026-11-14 under D-65: does not apply until SP-076, since nothing can be declared public now. Review again when public_paths lets the operator list folders: a session can write into a listed folder."
+      },
+      {
+        "id": "RC-405",
+        "kind": "decision",
+        "topic": "A declaration of a checkout public cannot be told from a .git a session plants (security audit high)",
+        "detail": "D-64 keeps D-50's declaration: a checkout the operator declared public by binding a public root at its folder or inside it. orch can only see a checkout as a .git on disk when content is placed, and any job's session can create one at any time. A .git planted at a broad public root (git init ~/code) or between it and an enclosing root (~/work/.git with ~ bound and ~/work/code public) makes the broad root look declared, so plain content anywhere under it, including folders a session registers as sources, goes to public. SP-030 already rejects a .git above the broad root and a lone root that holds other bound roots, but no rule based on what is on disk closes every case. Options: (a) make the declaration explicit in the operator-applied policy (e.g. a per-public-space list of declared checkout folders, validated at apply, changing the SP-020 policy schema, CLI and app), and until then no folder counts as declared, so all local content under public roots is quarantined; (b) record at apply time which public roots sit exactly at a checkout and count only those (needs storage with the applied revision); (c) accept that a session can turn a public root into a declared one (widens RC-404 to every public root). Recommendation: (a). Blocks SP-030 (DOD-6) until decided.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-030",
+          "SP-020",
+          "SP-050"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14: see D-65. The on-disk declaration was removed in SP-030; a .git anywhere (at, above or inside a public root) no longer matters, because no local content under a public root is placed public."
+      },
+      {
+        "id": "RC-406",
+        "kind": "follow-up",
+        "topic": "Session pins still follow a stricter remote a session can write",
+        "detail": "Security audit of SP-030 (high H1, fixed for writes): a .git naming another job's org beside files under a public or private root moved sources content into that job's isolated space (remote_stricter). SP-030 now quarantines every write placed by a stricter remote (D-65: nothing on disk places content). Session pins are unchanged (SP-022): a session started in a folder whose .git names another job's org is pinned to, and reads, that job's space. Starting a session there is the user's act, but an agent can plant the .git for a later session. Consider pinning sessions under a public or private root by the root alone, as writes now are. Availability effect of the write fix: a checkout whose remote is in a stricter org but which sits under a public or private root (not its job's root) is now quarantined instead of placed in that org's space; the operator binds the job's root over it or retags it.",
+        "source": "https://github.com/willesq/orchestrator/pull/180",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-022",
+          "SP-010",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-650",
+        "kind": "decision",
+        "topic": "D-69 also counts the default gh login's folder (SP-046)",
+        "detail": "The 2026-11-14 security audit of PR #186 (medium) found that D-69's text ('another space's own login folder') leaves out the default gh login: under auto a job naming its own gh profile, alone among spaces on the default login, got no rules, so its shell could use the default account. Implemented the stricter reading: auto also writes the rules when they deny the default gh login's folder (a space naming its own gh profile, and checkouts of no space), consistent with D-61 ('a space that names its own gh profile reads only that profile'). Confirm, or choose D-69's literal text.",
+        "source": "https://github.com/willesq/orchestrator/pull/186",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-651",
+        "kind": "decision",
+        "topic": "How often D-68 names the sandbox setting (SP-046)",
+        "detail": "D-68 says the next start digest of each session names the setting once after any change, and after any restart while it is off. Implemented per session: the hook remembers per session id the mode, set_at and orchd start it last named. So every session's first start digest names a setting that was ever set (or is off), once, and later digests of that session (resume, compact) stay quiet until the next change or, while off, the next orchd start; the default never set is not named. If the notice should instead stop after some time or after the first session sees it, that needs a decision.",
+        "source": "https://github.com/willesq/orchestrator/pull/186",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-652",
+        "kind": "follow-up",
+        "topic": "Gaps left in the D-67 settings check (security audit lows)",
+        "detail": "The guard's settings_reopen check (PR #186) reads .claude folders from the call's cwd and the session's project folder up to the recorded checkout. Not covered: (1) settings folders above the checkout (which ancestors Claude Code loads is not measured); (2) a folder spelled in another Unicode normalization than orchd's record is not matched (APFS treats them as one); (3) a checkout's real path is recorded at sync, so a link re-pointed between syncs is matched only after the next sync (30 s). Measure (1) with TestClaudeE2E and compare canonical paths for (2) if wanted.",
+        "source": "https://github.com/willesq/orchestrator/pull/186",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046"
+        ],
+        "status": "open"
+      },
+      {
         "id": "RC-700",
         "kind": "follow-up",
         "topic": "Session-callable RPCs outside memory that name other spaces' orgs, repos, sources or URIs",
@@ -4793,7 +5097,13 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestProfileOnlyOrgIsWatchedThroughItsProfile (internal/daemon): org acme reachable only via its space profile is offered as a disabled scope, turned on via SetGitHubScope, its PR is found and enriched by the PR watcher and a review is posted, every gh run about acme with GH_CONFIG_DIR=/profiles/acme; TestServiceRoutesProfileOnlyOrgs (internal/github); TestProfileOwnedGitHubDataIsTheOperators (agents do not see profile-owned scopes, repos or PR items; enabling a refused profile's scope fails).",
+            "a2: TestProfileCallsItCannotReadAreRefused (internal/daemon): a 404 as the profile fails with github.ErrNoAccess, runs once and only as the profile; a 0755 profile dir and one outside $HOME are refused before any gh run and named for the operator with the fix; TestCheckProfileDir and TestMarkNoAccess (internal/github).",
+            "a3: TestRepoPickerAndPROutcomesUseTheSpacesProfile (internal/daemon): ListGitHubRepos and the PR-outcome sweep (newAttributor) read acme as its profile, the outcome is good, and the default login is never asked; TestAttributorCountsPRsAsTheirSpacesAccount (internal/evidence).",
+            "go test ./... and go vet ./... pass; make cover: All files >= 80% (ghprofiles.go 97.6%, ghprofiles_routes.go 94.3%, github/accounts.go 91.9%, evidence.go 93.2%); security-audit: one high and two mediums fixed and re-audited clean, lows recorded as RC-300..RC-303.",
+            "Independent verifier (step 8): every acceptance item and DOD-1..DOD-9 pass at 4da29c1 (round 2 after the CI app job flaked on fixed-sleep polling tests, fixed in 4da29c1); CI app, build and test green."
+          ]
         },
         {
           "id": "SP-074.2",
@@ -4807,7 +5117,11 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestIsolatedAccountBudget (internal/daemon): with github.isolated_account_hourly_budget=3 an isolated profile's docs sync and PR-watch calls return github.ErrQuota after 3 calls (logged once, naming no space), PR-outcome reads wait too, reviews run up to 2x, a private space's profile and the default login are unaffected, and the budget renews after the hour; TestGHBudgetWindow; TestPRWatchDefersASpentAccount and TestDeferredAccountKeepsItsItems (internal/prs): a spent account is not searched and its items stay cached while others refresh.",
+            "Config key github.isolated_account_hourly_budget (default 1000, 0 = no cap) in internal/config/schema.go; make cover passes.",
+            "Independent verifier (step 8): every acceptance item and DOD-1..DOD-9 pass at 4da29c1 (round 2 after the CI app job flaked on fixed-sleep polling tests, fixed in 4da29c1); CI app, build and test green."
+          ]
         },
         {
           "id": "SP-074.3",
@@ -4842,18 +5156,25 @@
               "threshold": "true"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestOneLoginForEverySpace (internal/daemon): with no space naming a gh profile, docs sync, PR watching, reviews, the guard's repo lookups and generated checkout settings (spacesettings.For/ClaudeFragment/LauncherFragment) all run with no GH_CONFIG_DIR and status reports no problem; a space naming gh_config_dir uses it for its orgs; also TestGHProfilesIsolatedSpaceWithoutLoginIsNotSynced (amended for D-59).",
+            "a2: TestSpaceLoginsDetection, TestClaudeLoginCache, TestRunClaudeAuth (internal/daemon): per space, which gh login and Claude config (default or own) and whether each is logged in, in one-login and two-login layouts, from gh auth status --json hosts and claude auth status --json only (no token asked for; email and org not kept; credential env vars stripped).",
+            "a3: TestSpaceLoginLines (internal/status): orch status spaces section shows one line per space with gh and Claude login source (default or own) and state, for one-login and two-login layouts, nothing for a refused caller; TestListSpacesCarriesLogins (internal/daemon): ListSpaces (operator-only) carries logins as metadata, no email, refused to an agent; SpaceLoginsTests oneLogin/twoLogins/refusalAndOlderSources (macos OrchKitTests) for the app Settings > Spaces section (SpacesSection.swift). orchd.proto gained ListSpacesResponse.logins = 4 (SpaceLogin, LoginState) under the coordinator go-ahead (D-63 step 13); make proto regenerated Go and Swift.",
+            "a4: docs/INSTALL.md (GitHub accounts per space) and docs/OPERATIONS.md (spaces) describe the single-login default, adding a per-space gh profile or claude_config_dir, and that one login is not a boundary between jobs.",
+            "go test ./..., go vet ./..., gofmt clean; make cover: All files >= 80% (status/logins.go 100%, daemon/logins.go 97.4%); swift test: 415 tests passed; security audit of the new field: no critical/high/medium, its two lows fixed.",
+            "Independent verifier (step 8): every acceptance item and DOD-1..DOD-9 pass at 4da29c1 (round 2 after the CI app job flaked on fixed-sleep polling tests, fixed in 4da29c1); CI app, build and test green."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "4da29c1",
+      "verified_at": "2026-11-14T22:02:24Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "2da46d2348de350e8f61196826bc0dc17990a6e620ad2419bcfdbe65138a815d",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-074-gh-profile-follow-ups",
+      "pr": "https://github.com/willesq/orchestrator/pull/182"
     },
     {
       "id": "SP-047",
@@ -5689,18 +6010,27 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: internal/daemon TestPrivateRepoInPublicOrgIsQuarantined passes (docs sync oss-org/secret private -> quarantine, oss-org/lib -> oss; sources checkout of oss-org/secret -> quarantine). Verified at b9dd920.",
+            "a2: internal/daemon TestRepoTurnedPrivateLeavesPublicInTheSameSync passes (same HEAD, lib now private: left public before aaa was cloned, cloned first, re-placed in quarantine in the same sync); internal/docs TestRepoTurnedPrivateLeavesPublicFirst (exact delete/clone/write order); internal/sources TestCheckoutNoLongerPublicLeavesFirst (sources do it before walking, skipped checkouts included). Fails with the leave pass removed.",
+            "a3: internal/daemon TestUnreadableVisibilityIsPrivate passes (repo listed without owner node ID leaves public and syncs to quarantine; checkout whose repo GitHub will not show -> quarantine, and its public copy leaves).",
+            "a4: internal/daemon TestSessionWritersNeverTargetPublic 4/4 subtests pass: session and summary of a session pinned to public -> quarantine; hand-off of a file in a public repo under the public root -> personal (public_root_sessions), of a private repo -> quarantine; client note and public-prefix page from a session pinned to public -> quarantine.",
+            "a5 (D-65): internal/daemon TestCheckoutWithoutGitHubRemoteNeedsProofUnderPublicRoot passes: GitLab, no-remote, symlinked .git, plain and public GitHub folders under the public root are quarantined (no_public_proof), with a .git at, above or inside the public root and with a public root bound exactly at each folder; nothing on disk declares a folder public, so content becomes public only by a retag until public_paths (SP-076). internal/spaces TestPublicRootNeedsProofForCheckouts. D-65 regression: TestLocalContentUnderBroadPublicRootNeverPublic (session-registered sources, stricter-remote checkouts, web pages under a bound prefix still public, redirects placed by where they land).",
+            "Validation at b9dd920: go test ./... pass; go vet ./... clean; gofmt clean; make cover All files >= 80% (classify.go 98.8%, placing.go 92.7%, docs/public.go 91.2%, sources/public.go 96.7%); macOS swift tests 412 pass and make app-cover pass; CI build, test and app pass on PR #180 (app passed on rerun of a failed job; the same job also failed on other lanes branches).",
+            "DOD-6: security audit of the final diff (4 rounds): 0 critical, 0 high, 0 medium open; lows in RC-403; RC-406 (session pins follow a stricter remote) recorded for SP-022.",
+            "Independent verifier at b9dd920: a1-a5 PASS, D-65 regression present; DOD-1,2,3,4,5,7,8 PASS; DOD-9 pending at the time, since green; INV-10 and INV-03 PASS; no home paths or session IDs in the diff or commits."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "b9dd920975b4b0fddbaa5c58b47a8ea3f2b1ceb3",
+      "verified_at": "2026-11-14T22:55:06Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "285ce77da8c1a9b5024a92a920ea21f2b54cf013a465814d3808d27d29495726",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-030-public-write-gate",
+      "pr": "https://github.com/willesq/orchestrator/pull/180"
     },
     {
       "id": "SP-031",
@@ -5854,18 +6184,23 @@
               "threshold": "3 pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestGitHookInstallProperties (internal/install/githook_test.go, temp hooks directory holding a 0750 user commit-msg hook): (1) the dry run prints DRY RUN and 2 changes and writes no file or backup; (2) apply backs the user's hook up (0600 under <backups>/<UTC stamp>/) and (3) chains it as commit-msg.orch-prev with its mode and content, orch's hooks 0755 naming the orch binary; (4) a second install plans 0 changes and its apply writes nothing; (5) uninstall restores the directory exactly (names, modes, content) and a second uninstall plans 0 changes. Also TestGitHookInstallEmptyAndUpdate, TestGitHookInstallRefusals (hook and .orch-prev both present, relative paths, changed between plan and apply), TestGitHookUninstallLeavesOthersAlone, TestGitHookChainsSymlink, TestGitHookScript, TestGitHookInstallReview; CLI: TestGitHookCmdDryRun (no --apply writes nothing; --hooks-dir), TestGitHookCmdErrors. All in temp repositories and directories with ORCH_DATA_DIR and GIT_CONFIG_GLOBAL in temp.",
+            "a2: TestGitHookCommitRefused (internal/cli/guard_githook_cmd_test.go: a real temp repository with orch's hooks installed through `orch guard git-hook --install --apply` over a user commit-msg and pre-push hook, the hooks running this test binary as orch): a commit whose message holds globex's term is refused (rule outbound_term, space globex, the term absent from git's output); a term in a staged file with an innocent message, one a chained hook appends to the message, and commit -a with a tracked change are refused; a commit without a term passes and the user's commit-msg hook runs with .git/COMMIT_EDITMSG. TestGitHookPushRefused: a commit with a term made with --no-verify is refused at push (to the named remote, as a tag, to the URL itself) and the user's pre-push hook does not run; a clean push, a new branch and a deletion pass, and the user's pre-push hook gets git's arguments and ref lines. TestGitHookSwitchAndPolicy: terms layer off allows, nothing configured allows, an unreadable snapshot refuses (outbound_unchecked). TestGitHookRunInProcess. Check unit tests (internal/spaces/githook_test.go): TestGitHookCommitCheck, TestGitHookPushCheck, TestGitHookPushReview, TestGitHookPushNoSpaceRemotes, TestGitHookTagObjects, TestParsePushUpdates, TestGuardFilesReadTerms, TestCheckGitHookTerms.",
+            "2026-11-14 on 29ed33f: go test ./... 4729+ pass, go vet ./... clean, gofmt clean, make cover passes (guard_githook_cmd.go 87.7%, install/githook.go 89.6%, spaces/githook.go 95.4%, outbound_git.go 88.3%). Security audit (security-audit agent, two rounds): 0 critical/high; 5 medium (destination read from config instead of git's URL, tracking refs of other spaces trusted, ref names unchecked, annotated tags pushed by object unchecked, no-space remotes trusted for no-space destinations) and 4 low fixed with the review tests above; the remaining lows are RC-551.",
+            "Independent verifier (fresh subagent, 2026-11-14) on 734d5fb: a1 PASS (5 properties; mutants removing the backup, the restore, the chaining, idempotence and dry run each fail a named test), a2 PASS (3; mutants dropping orch from either hook or skipping the chained hook fail), DOD-1..DOD-9 PASS (CI run 43642899271 test and macOS build green), 0 critical/high/medium."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "734d5fbb47a5c6aafff01077dac73a7a49255ea2",
+      "verified_at": "2026-11-14T21:37:38Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "125ea6a040c8fa44e5b63bcb2304574bcc3c1b7a37da67f40bd0412593545586",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-045-git-hook-terms",
+      "pr": "https://github.com/willesq/orchestrator/pull/184"
     },
     {
       "id": "SP-046",
@@ -5962,7 +6297,9 @@
             "a4 (2026-11-14): TestSyncPicksUpNewClone and TestCheckoutSettingsLoop pass at 6baf911 (the loop test sets the sandbox setting on, as one isolated space alone gets no rules under auto, D-61); orchd still syncs every 30 s and at once on a setting change; the 2026-11-12 measurement (<= 30 s + one sync, <= 60 s) stands.",
             "a5 (2026-11-14, D-61): both true. Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14. 'bash' PASS: a session started in job A's checkout subfolder ran cat of job B's root file and of job B's temp file -> 'Operation not permitted', the control in job A's folder printed its content. 'gh' PASS: 'gh auth status' in that session's sandboxed shell -> 'Logged in to github.com account willesq (keyring)', exit 0 (job A uses the default login, D-59; the settings carry allowRead of ~/.config/gh, allowedDomains api.github.com/github.com and enableWeakerNetworkIsolation, RC-208 option a). 'launcher/gh' PASS the same in a launched session.",
             "a6 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14: 'launched-tmpdir' PASS (job B's launched TMPDIR=/tmp/oe2955965139/r/jobb/claude-501 holding b-launch.txt; job A's /tmp/oe2955965139/r/joba/claude-501 written and read; cat of B's file and of a file in the shared /tmp/claude-501 -> 'Operation not permitted'; job A's per-checkout session could not read B's file); 'tmpdir' SKIP citing D-58. Unit tests TestPerSpaceTmpDir, TestShortTmpLayout, TestClaudeSandboxTmp, TestLauncherFragment, TestEnsureTmpDir, TestRunClaudeTmp, TestRunSetsProfileForChildOnly pass at 6baf911.",
-            "a7 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14: read, grep, glob, write and edit PASS (job B's root refused to Read, Grep, Glob, Write and Edit from a session started in <checkout>/sub/deep; each control on job A's folder succeeded); 'protect' PASS (settings unchanged)."
+            "a7 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14: read, grep, glob, write and edit PASS (job B's root refused to Read, Grep, Glob, Write and Edit from a session started in <checkout>/sub/deep; each control on job A's folder succeeded); 'protect' PASS (settings unchanged).",
+            "a5 (2026-11-14, D-67): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 510f3ca on 2026-11-14 (PASS in 266 s; tmpdir SKIP citing D-58), with the user's default Claude Code configuration and default gh login (metadata only), as the user directed for automatic verification on 2026-11-14: bash and gh PASS as before. 'loosening' shows why D-67 was needed: a checkout whose own .claude/settings.json allows job B's root still lets a sandboxed cat read it (RC-215 MEASURED read = true; launched session false). 'loosening/guard' PASS: the same checkout with this tree's orch-hook as PreToolUse hook and orchd's record of the checkout files: a cat of job B's file whose path is built at run time is refused 'orch spaces guard refused this call (rule settings_reopen)' and the file is not read; control in job A's other checkout: the guard lets it through and the sandbox answers 'Operation not permitted'. 'hook-pin' PASS: a checkout whose settings.json sets disableAllHooks true and env ORCH_DATA_DIR to an empty folder; orch's settings.local.json pins both back (local wins, measured), the sync reports the entries and the guard refuses the call as settings_reopen. 'permission-rules' PASS: permissions.allow Edit(//<job B root>/**) or Read(...), or additionalDirectories naming it, do not re-open the sandbox (runtime-built write and read both fail), so they are not checked. Unit: TestGuardRefusesReopeningCheckout, TestGuardReopenRecordUnreadable (internal/hook), TestReopened, TestReopenedRecord, TestReopenedRealPath, TestLoosening (internal/settings/spacesettings), TestReplayCarriesSettingsReopen (internal/spaces) pass.",
+            "a7 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 510f3ca on 2026-11-14 (PASS in 266 s; tmpdir SKIP citing D-58), with the user's default Claude Code configuration and default gh login (metadata only), as the user directed for automatic verification on 2026-11-14: read, grep, glob, write, edit and protect PASS from <checkout>/sub/deep with orch's settings, which now also hold disableAllHooks false and (in orchd's checkouts) env ORCH_DATA_DIR (D-67)."
           ]
         },
         {
@@ -6057,19 +6394,22 @@
             "a1 (2026-11-14): TestSandboxSettingOperatorOnly (internal/daemon: auto by default; claude, codex, orchd-started, queued, unreadable and peerless callers refused with PermissionDenied and nothing changed; operator set logged in spaces_enforcement_log with time and 'operator (process 42)'; shown by GetEnforcement (set_by for the operator only) and Status; back after a restart via newEnforcement), TestSandboxSettingStore and TestSandboxSettingTampered (internal/spaces), TestSandboxSettingChangedOutsideOrchd (drift reported, orchd keeps its own; a restart over an edited row is on), TestSpacesSandboxCmd (internal/cli) and TestSpacesSectionShowsSandboxSetting (internal/status: one 'sandbox' line) pass at 6baf911.",
             "a2 (2026-11-14): TestSandboxChoice and TestSyncFollowsSandboxChoice (internal/settings/spacesettings), TestSandboxSettingDecidesCheckouts (internal/daemon: auto writes only the public checkout kept out of job a, nothing with job a alone; on writes it; off clears it; no switch reads relaxed and orch status names none; a 15 min timed switch to off is relaxed and clears the files, and its revert restores them), TestSandboxSettingIsNotASwitch (internal/spaces) and TestSessionStartIgnoresSandboxSetting (internal/hook: no digest line for off or auto-with-nothing, from orchd or orch.db; a timed sandbox switch is named), and TestRunFollowsSandboxSetting (internal/cli) pass at 6baf911.",
             "a3 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14. 'gh' and 'launcher/gh' PASS ('Logged in to github.com account willesq (keyring)'). 'gh-guard' PASS: a session running this tree's orch-hook as its PreToolUse hook (temp ORCH_DATA_DIR, guard snapshot of the test policy, job A pin) was refused 'cat ~/.config/gh/config.yml | wc -c' by the guard ('orch spaces guard refused this call (rule self_protection)') and the Read tool by the installed Read(~/.config/gh/**) rule; the file's size never came back. Unit: TestGHReadRules and the guard's credential-read test in internal/spaces pass. Measured on the way (docs/internals/install.md): allowRead overrides the installed Read deny for sandboxed commands; gh then needs allowedDomains (else 'deny network-outbound api.github.com:443') and enableWeakerNetworkIsolation or allowMachLookup com.apple.trustd.agent (else 'x509: OSStatus -26276').",
-            "a4 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14; job B names its own gh profile, an unauthenticated temp folder whose config.yml sets git_protocol https (the default login uses ssh). two-logins/joba PASS (account willesq, GH_CONFIG_DIR empty), two-logins/jobb PASS ('You are not logged into any GitHub hosts', git_protocol https, GH=<its profile>), two-logins/joba-uses-jobb PASS (GH_CONFIG_DIR=<job B's profile> -> 'open .../gh-b/config.yml: operation not permitted'), two-logins/jobb-uses-default PASS (GH_CONFIG_DIR=~/.config/gh -> 'operation not permitted'). Metadata only. Measured beside it (RC-210, does not fail the test): a profile folder job B made itself naming the default account made gh report that account logged in from the keyring."
+            "a4 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 6baf911 on 2026-11-14 (PASS in 195 s), with the user's default Claude Code configuration and default gh login (account willesq; metadata only) and no ORCH_E2E_GH_PROFILE or ORCH_E2E_LAYOUT; the user approved the run and directed automatic verification with the current logins on 2026-11-14; job B names its own gh profile, an unauthenticated temp folder whose config.yml sets git_protocol https (the default login uses ssh). two-logins/joba PASS (account willesq, GH_CONFIG_DIR empty), two-logins/jobb PASS ('You are not logged into any GitHub hosts', git_protocol https, GH=<its profile>), two-logins/joba-uses-jobb PASS (GH_CONFIG_DIR=<job B's profile> -> 'open .../gh-b/config.yml: operation not permitted'), two-logins/jobb-uses-default PASS (GH_CONFIG_DIR=~/.config/gh -> 'operation not permitted'). Metadata only. Measured beside it (RC-210, does not fail the test): a profile folder job B made itself naming the default account made gh report that account logged in from the keyring.",
+            "a2 (2026-11-14, D-68, D-69): TestAutoDeniesOtherLogins (internal/settings/spacesettings: under auto a job alone gets the rules when another space, of any kind, names its own gh_config_dir or claude_config_dir, or when it names its own gh profile and so is denied the default gh login's folder; a job alone on the default logins among spaces naming none still gets none; checkouts of no space likewise), TestSandboxChoice, TestSyncFollowsSandboxChoice, TestRunFollowsSandboxSetting (internal/cli) pass at 510f3ca. Digests: TestSessionStartIgnoresSandboxSetting (off and auto never mark a digest as enforcement off, from orchd or orch.db; a timed sandbox switch does) and TestSessionStartNamesSandboxSetting (internal/hook: the default never named; after a change each session's next start digest names the setting once as an [info] line; a restart while on is not named; while off, again once after each orchd start, from Ping's uptime within 5 s; read from orch.db when orchd is down, saying so) and TestReadSandboxSetting (internal/spaces) pass. go test ./..., go vet ./..., gofmt -l (none) and make cover (all files >= 80%) at 510f3ca.",
+            "a3 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 510f3ca on 2026-11-14 (PASS in 266 s; tmpdir SKIP citing D-58), with the user's default Claude Code configuration and default gh login (metadata only), as the user directed for automatic verification on 2026-11-14: gh, launcher/gh and gh-guard PASS ('Logged in to github.com account <default>'; the guard refuses reading the default gh config by name).",
+            "a4 (2026-11-14): Claude Code 2.1.309, 'ORCH_CLAUDE_E2E=1 go test ./internal/settings/spacesettings -run TestClaudeE2E -v -count=1 -timeout 30m' at 510f3ca on 2026-11-14 (PASS in 266 s; tmpdir SKIP citing D-58), with the user's default Claude Code configuration and default gh login (metadata only), as the user directed for automatic verification on 2026-11-14: two-logins/joba, jobb, joba-uses-jobb and jobb-uses-default PASS as before."
           ]
         }
       ],
-      "status": "blocked",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
-      "blocked_reason": "2026-11-14: D-61 is implemented and every SP-046 acceptance item has evidence at 6baf911 (unit tests, make cover, and the full TestClaudeE2E suite PASS), but DOD-6 is not met. The security audit's HIGH, RC-215 (measured: an allowRead or allowWrite in a checkout's own .claude/settings.json, or the user's own entries in settings.local.json, re-opens orch's sandbox denies for sessions started in the checkout; orch now reports it but cannot prevent it without editing tracked files or users' entries, which SP-046.1.a2 forbids), and two MEDIUMs that follow from D-61's own text, RC-216 (a consistent forged setting is taken at restart and never marks a digest) and RC-217 (auto judges only isolated roots), need user decisions. The independent verifier was not run. 2026-11-14: the user settled RC-215/216/217 as D-67, D-68 and D-69; a follow-up lane implements them, then runs the audit and the independent verifier.",
-      "attempts": 2,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "e963791232c2f3fe9ad0ab5f2ea40fcc700df59e",
+      "verified_at": "2026-11-14T23:34:21Z",
+      "blocked_reason": null,
+      "attempts": 3,
       "criteria_sha256": "cba1332a2b5973eb9c82362ed430d3a8c28df32d635b00bfea8a90589908f887",
-      "branch": "feat/sp-046-per-space-harness-settings",
-      "pr": "https://github.com/willesq/orchestrator/pull/171"
+      "branch": "feat/sp-046-audit-followups",
+      "pr": "https://github.com/willesq/orchestrator/pull/186"
     },
     {
       "id": "SP-048",
@@ -6102,18 +6442,23 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestRefusalEventPerRefusal (internal/hook/refusal_test.go) runs the real pre-tool-use hook (run()) over 11 cases: 8 refusals (other_job_path, other_job_repo in strict, self_protection by the Write tool, pin_missing, policy_unreadable, guard_timeout, outbound_term, outbound_unchecked) each put exactly one event on the operator's spaces stream (<data>/events/spaces.jsonl, mode 0600) with kind refusal, source guard, timestamp, and refusal.session, .space (the pin's: job/acme, '' when refused before a pin is read), .tool (Bash/Write), .rule, and for outbound_term only term {space globex, line 1, 12-hex hash}; the raw stream holds none of the call's command marker, '/scratch', the term (zephyr/Zephyr), 'git commit', 'echo', 'cat ', the repo owner or the written file's name. An allowed call, the guard in log and the guard off emit no event. TestRefusalEventsAccumulate: 3 refusals in a row -> 3 events, a cwd-changed into another job (never refused) adds none. Pass.",
+            "a1 (supporting): internal/events TestNewRefusal (field shape checks: hostile session/space/tool/rule/hash replaced or dropped; summary built from checked fields only), TestAppendSpaces (owner-only stream, narrowed from 0644), TestAppendSpacesRefusesOddFiles (FIFO and symlink refused without blocking), TestAppendSpacesErrors; internal/hook TestRefusalReportNeverChangesTheDeny (write error or panic keeps the deny), TestRefusalReportBounded (a stalled write does not hold the hook), TestSessionNamedLikeSharedStream (a session named 'spaces' never reads the stream); internal/daemon TestSwitchEventStream (orchd's switch events also 0600). App: macos/Tests/OrchKitTests/RefusalsTests.swift, 12 tests (RefusalStream parsing, whole lines only, replaced/missing stream, 1 MiB read cap, 8 hostile lines rejected; RefusalMonitor announces only refusals after launch, keeps 20; RefusalNotificationPlan each up to 3 then one summary). Pass.",
+            "DOD: go test ./... exit 0; go vet ./... exit 0; make cover 'All files >= 80%' (events/refusal.go 100%, events/events.go 89.6%, hook/guard.go 100%, hook/updates.go 97.4%, hook/sessions.go 91.9%, spaces/guard_files.go 91.1%, daemon/enforcement.go 98.5%, daemon/sandbox_setting.go 94.7%); go test -race on internal/hook and internal/events pass; gofmt -l: 0 lines; git diff --check clean; swift test 424 tests pass; macos/scripts/cover.sh 80 passes (Refusals.swift 98.37%); make app builds and signs build/app.noindex/Orch.app (not installed). Security audit (security-audit agent, 2 rounds, 2026-11-14): round 1 0 critical/high, 2 medium (a FIFO at the stream path could block the hook past the harness timeout; a session whose ID is 'spaces' read the stream as its own), 1 low (orchd created the stream 0644), all fixed; round 2 found 1 low (data race in the bounded write under -race), fixed; remaining info/low in RC-453.",
+            "Independent verification (fresh verifier, 2026-11-14) at 36378b2: criteria_sha256 matches; a1 PASS (re-ran TestRefusalEventPerRefusal and TestRefusalEventsAccumulate, also under -race; mutations in a scratch copy, removing reportRefusal and appending the tool input to the summary, each make them fail); DOD-1..DOD-8 PASS (go test, go vet, make cover with all 8 changed Go files listed, swift test 424 and cover.sh 80, gofmt, diff --check, docs_to_update changed, signed commits, draft PR registered). DOD-9: CI on PR #179 run 43638456461 'test' failed once in internal/toollog TestSweepWhileWriting (not in the diff, RC-454) and passed on re-run; 'build' (macOS ORT) and 'app' pass."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "36378b29b9261675563c44ad78c1bfca15b61997",
+      "verified_at": "2026-11-14T20:51:54Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "c5aabd610b376971547b4771af9a15d3b76323aa3b29aef2ecfc3fefe7ae0eec",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-048-refusal-events",
+      "pr": "https://github.com/willesq/orchestrator/pull/179"
     },
     {
       "id": "SP-050",

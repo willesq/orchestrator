@@ -44,6 +44,10 @@ const (
 	// RuleGuardTimeout: the decision did not finish in time; enforcing
 	// modes refuse (INV-13).
 	RuleGuardTimeout GuardRule = "guard_timeout"
+	// RuleSettingsReopen: the checkout the call runs in holds orch's
+	// sandbox denies, and its own Claude Code settings re-open a denied
+	// folder, or cannot be checked (D-67); enforcing modes refuse.
+	RuleSettingsReopen GuardRule = "settings_reopen"
 )
 
 // GuardSwitch is the guard layer's switch as the snapshot carries it. A
@@ -305,6 +309,10 @@ type GuardFiles struct {
 type GuardResult struct {
 	GuardDecision
 	Revision int64
+	// Space is the space of the session's pin; "" when no pin was read
+	// (none configured or found, or the decision ended before reading it).
+	// Refusal events name it (SP-048).
+	Space string
 	// Terms is what the outbound terms check needs from the same files.
 	Terms GuardTerms
 }
@@ -397,7 +405,7 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 		ev.Targets = Targets(in.Tool, in.Input, in.Cwd)
 	}
 	d := Decide(pol, pin, GuardEnforcement{Guard: mode}, ev)
-	return GuardResult{GuardDecision: d, Revision: snap.Revision, Terms: terms}
+	return GuardResult{GuardDecision: d, Revision: snap.Revision, Space: pin.Space, Terms: terms}
 }
 
 // withTerms is r with the terms check's inputs.
@@ -446,6 +454,15 @@ func fixed(mode GuardMode, would Verdict, rule GuardRule, rev int64) GuardResult
 		d.Verdict, d.Enforced = would, true
 	}
 	return GuardResult{GuardDecision: d, Revision: rev}
+}
+
+// SettingsReopened is r refused by the check of the checkout's own settings
+// (RuleSettingsReopen), in r's mode: it takes effect only when the guard
+// enforces, as the guard's own rules do.
+func SettingsReopened(r GuardResult) GuardResult {
+	out := fixed(r.Mode, Refuse, RuleSettingsReopen, r.Revision)
+	out.Terms = r.Terms
+	return out
 }
 
 // TimedOut is the decision when deciding took too long; mode is the

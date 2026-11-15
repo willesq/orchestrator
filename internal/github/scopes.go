@@ -201,14 +201,8 @@ func (st *Store) Set(ctx context.Context, s Scope) (Scope, error) {
 // account enabled, orgs disabled. Existing rows are left alone, so choices the
 // user made survive rediscovery.
 func (st *Store) Sync(ctx context.Context, id Identity) error {
-	add := func(owner, kind string, enabled bool) error {
-		_, err := st.db.ExecContext(ctx,
-			`INSERT INTO github_scopes (owner, kind, enabled, updated_at) VALUES (?, ?, ?, ?)
-			 ON CONFLICT(owner) DO NOTHING`, owner, kind, boolInt(enabled), st.now().Unix())
-		return err
-	}
 	if ValidLogin(id.Login) {
-		if err := add(id.Login, KindUser, true); err != nil {
+		if err := st.add(ctx, id.Login, KindUser, true); err != nil {
 			return err
 		}
 	}
@@ -216,11 +210,19 @@ func (st *Store) Sync(ctx context.Context, id Identity) error {
 		if !ValidLogin(org) {
 			continue
 		}
-		if err := add(org, KindOrg, false); err != nil {
+		if err := st.add(ctx, org, KindOrg, false); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// add inserts a scope for owner unless it has one.
+func (st *Store) add(ctx context.Context, owner, kind string, enabled bool) error {
+	_, err := st.db.ExecContext(ctx,
+		`INSERT INTO github_scopes (owner, kind, enabled, updated_at) VALUES (?, ?, ?, ?)
+		 ON CONFLICT(owner) DO NOTHING`, owner, kind, boolInt(enabled), st.now().Unix())
+	return err
 }
 
 func normaliseRepos(repos []string) []string {

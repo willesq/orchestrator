@@ -51,30 +51,60 @@ var ErrNotLoggedIn = errors.New("gh is not logged in to github.com")
 // status' reports it. It is how orch checks a profile: it never asks gh for
 // the token and never reads gh's files.
 func AuthLogin(ctx context.Context, gh Runner) (string, error) {
+	st, err := AuthStatus(ctx, gh)
+	return st.Login, err
+}
+
+// Auth is what 'gh auth status' says about gh's active github.com login:
+// metadata only, never the token.
+type Auth struct {
+	Login string
+	// Storage is where gh keeps the token: "keyring" (the macOS login
+	// keychain), "file" (the profile's hosts.yml, --insecure-storage), or
+	// the variable it came from.
+	Storage string
+}
+
+// AuthStatus reads gh's active github.com login and where its token is
+// stored from 'gh auth status --json hosts'. That output carries no token
+// unless --show-token is given, which orch never passes.
+func AuthStatus(ctx context.Context, gh Runner) (Auth, error) {
 	out, err := gh(ctx, "auth", "status", "--active", "--hostname", "github.com", "--json", "hosts")
 	if err != nil {
-		return "", err
+		return Auth{}, err
 	}
 	var st struct {
 		Hosts map[string][]struct {
-			State  string `json:"state"`
-			Active bool   `json:"active"`
-			Login  string `json:"login"`
+			State       string `json:"state"`
+			Active      bool   `json:"active"`
+			Login       string `json:"login"`
+			TokenSource string `json:"tokenSource"`
 		} `json:"hosts"`
 	}
 	if err := json.Unmarshal(out, &st); err != nil {
-		return "", fmt.Errorf("parse gh auth status: %w", err)
+		return Auth{}, fmt.Errorf("parse gh auth status: %w", err)
 	}
 	for _, a := range st.Hosts["github.com"] {
 		if !a.Active {
 			continue
 		}
 		if a.State != "success" || !ValidLogin(a.Login) {
-			return "", fmt.Errorf("%w: its login does not work (%s)", ErrNotLoggedIn, Printable(a.State, 32))
+			return Auth{}, fmt.Errorf("%w: its login does not work (%s)", ErrNotLoggedIn, Printable(a.State, 32))
 		}
-		return a.Login, nil
+		return Auth{Login: a.Login, Storage: tokenStorage(a.TokenSource)}, nil
 	}
-	return "", ErrNotLoggedIn
+	return Auth{}, ErrNotLoggedIn
+}
+
+// tokenStorage names where gh said its token is: a path is its hosts.yml.
+func tokenStorage(source string) string {
+	switch {
+	case source == "keyring":
+		return "keyring"
+	case strings.HasPrefix(source, "/"):
+		return "file"
+	}
+	return Printable(source, 32)
 }
 
 // Orgs lists the orgs gh's account belongs to.

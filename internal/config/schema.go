@@ -163,6 +163,8 @@ func buildFields() []Field {
 		{Key: "pr_babysitter.enabled", Section: SectionGitHub, Label: "Watch GitHub", Type: TypeBool,
 			Help: "Keep the cache of PRs and issues in your enabled scopes fresh."},
 		{Key: "pr_babysitter.poll_interval", Section: SectionGitHub, Label: "Sweep interval", Type: TypeDuration},
+		ranged(Field{Key: "github.isolated_account_hourly_budget", Section: SectionGitHub, Label: "Hourly API calls per job account", Type: TypeInt,
+			Help: "GitHub API calls each isolated space's own gh account may make an hour. Past it, that account's docs sync and PR watching wait for the next hour; other accounts are not affected. 0 is no cap."}, 0, 5000),
 		{Key: "pr_reviews.poll_interval", Section: SectionGitHub, Label: "Review watch check interval", Type: TypeDuration,
 			Help: "How often each PR watched for review is read: whether it is ready, and during a review whether new commits or a close cancel it. At least 15s."},
 

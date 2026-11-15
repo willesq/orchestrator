@@ -494,23 +494,30 @@ func TestRunFollowsSandboxSetting(t *testing.T) {
 
 	solo := fmt.Sprintf(`{"spaces":[{"name":"joba","kind":"isolated","roots":[%q],"gh_config_dir":%q}]}`,
 		filepath.Join(home, "code", "a"), filepath.Join(home, "gh", "a"))
+	plain := fmt.Sprintf(`{"spaces":[{"name":"joba","kind":"isolated","roots":[%q]}]}`, filepath.Join(home, "code", "a"))
 	for _, tt := range []struct {
-		setting, says string
+		setting, policy, says, gh string
 	}{
-		{"auto", "no other isolated space's folders to deny"},
-		{"off", "the sandbox setting is off"},
+		{"auto", plain, "no other isolated space's folders or login folders to deny", ""},
+		{"off", solo, "the sandbox setting is off", filepath.Join(home, "gh", "a")},
 	} {
-		got := doLaunchIn(t, home, layout, &runClient{applied: solo, placement: unmatched(), sandbox: "on", setting: tt.setting}, "joba", "--", "claude")
+		got := doLaunchIn(t, home, layout, &runClient{applied: tt.policy, placement: unmatched(), sandbox: "on", setting: tt.setting}, "joba", "--", "claude")
 		if got.err != nil || claudeSettings(got.argv) != "" || !strings.Contains(got.out, tt.says) {
 			t.Errorf("%s: %v %q %q", tt.setting, got.err, got.argv, got.out)
 		}
-		if gh := envOf(got.env, "GH_CONFIG_DIR"); len(gh) != 1 || gh[0] != filepath.Join(home, "gh", "a") || len(envOf(got.env, "TMPDIR")) != 1 {
+		if gh := envOf(got.env, "GH_CONFIG_DIR"); (tt.gh != "" && (len(gh) != 1 || gh[0] != tt.gh)) || len(envOf(got.env, "TMPDIR")) != 1 {
 			t.Errorf("%s: env %q", tt.setting, got.env)
 		}
-		got = doLaunchIn(t, home, layout, &runClient{applied: solo, placement: unmatched(), sandbox: "on", setting: tt.setting}, "joba", "--", "codex")
+		got = doLaunchIn(t, home, layout, &runClient{applied: tt.policy, placement: unmatched(), sandbox: "on", setting: tt.setting}, "joba", "--", "codex")
 		if got.err != nil || !slices.Equal(got.argv, []string{"codex"}) {
 			t.Errorf("%s codex: %v %q", tt.setting, got.err, got.argv)
 		}
+	}
+	// auto, one job naming its own gh profile: the rules keep it out of
+	// the default login's folder, so it gets them (D-69).
+	got = doLaunchIn(t, home, layout, &runClient{applied: solo, placement: unmatched(), sandbox: "on", setting: "auto"}, "joba", "--", "claude")
+	if set := claudeSettings(got.argv); got.err != nil || !strings.Contains(set, `"Read(/`+def+`/**)"`) {
+		t.Errorf("auto, one job with its own gh profile: %v %s", got.err, set)
 	}
 	got = doLaunchIn(t, home, layout, &runClient{applied: solo, placement: unmatched(), sandbox: "on", setting: "on"}, "joba", "--", "claude")
 	if got.err != nil || claudeSettings(got.argv) == "" {

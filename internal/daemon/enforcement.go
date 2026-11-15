@@ -26,9 +26,10 @@ import (
 // "Enforcement switches".
 
 // spacesEventStream is where orchd reports switch changes, for the app and
-// the operator. Sessions learn of a switched-off layer from GetEnforcement,
-// never from this stream, which any process running as the user can append to.
-const spacesEventStream = "spaces"
+// the operator; orch-hook reports refusals there too (SP-048). Sessions
+// learn of a switched-off layer from GetEnforcement, never from this
+// stream, which any process running as the user can append to.
+const spacesEventStream = events.SpacesStream
 
 // enforcementTick is how often orchd reverts timed switches whose time is
 // up. Every read also reverts them first, so a reader never sees an expired
@@ -256,7 +257,7 @@ func (e *enforcement) changed(ctx context.Context, c spaces.SwitchChange) []stri
 	if len(notes) > 0 {
 		summary += "; " + strings.Join(notes, "; ")
 	}
-	if err := events.Append(paths.EventsDir(), spacesEventStream, events.Event{
+	if err := events.AppendSpaces(paths.EventsDir(), events.Event{
 		Kind: "info", Source: "enforcement", Summary: summary, Timestamp: c.At.UTC().Format(time.RFC3339),
 	}); err != nil {
 		log.Printf("orchd: enforcement: record event: %v", err)

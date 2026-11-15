@@ -18,6 +18,9 @@ type sessionState struct {
 	Injected []string `json:"injected,omitempty"`
 	// Seen counts, per event stream, the events this session has been shown.
 	Seen map[string]int `json:"seen,omitempty"`
+	// Sandbox is the sandbox setting this session's digest last named
+	// (D-68); nil when none was.
+	Sandbox *sandboxSeen `json:"sandbox,omitempty"`
 }
 
 // maxInjected bounds the remembered hits; a very long session forgets its

@@ -39,7 +39,7 @@ func newCheckoutSettings() *checkoutSettings {
 			// Reason: in the folder every space's rules deny, since the
 			// record names every space's checkouts and the backups hold
 			// users' own settings.
-			StateFile: filepath.Join(l.OrchDir(), "checkouts.json"),
+			StateFile: l.StateFile(),
 			BackupDir: filepath.Join(l.OrchDir(), "backups"),
 		},
 		kick: make(chan struct{}, 1),
@@ -141,6 +141,14 @@ func (s *server) placeCheckout(ctx context.Context, checkout string) (string, bo
 	p, err := s.spaces.PlaceUnder(ctx, res, o)
 	if err != nil {
 		return "", false, err
+	}
+	// Reason: content from a checkout under a public root the operator did
+	// not declare is quarantined (SP-030, D-64), but the folder's rules are
+	// still its root's, as before: the root decided. A repo GitHub did not
+	// confirm public kept the rules of a checkout with no space before, and
+	// still does.
+	if p.Rule == spaces.PlaceNoPublicProof && len(p.Roots) > 0 && (p.Remote == nil || p.Remote.Repo.Visibility == spaces.VisibilityPublic) {
+		return p.Roots[len(p.Roots)-1].Space, true, nil
 	}
 	byRoot := p.Rule == spaces.PlaceRoot || p.Rule == spaces.PlaceRootStricter || p.Rule == spaces.PlaceAgree
 	return p.Space, p.Outcome == spaces.Placed && byRoot, nil

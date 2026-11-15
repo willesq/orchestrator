@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
 	"sync/atomic"
 	"time"
 
+	"github.com/willesq/orchestrator/internal/events"
 	"github.com/willesq/orchestrator/internal/paths"
+	"github.com/willesq/orchestrator/internal/settings/spacesettings"
 	"github.com/willesq/orchestrator/internal/spaces"
 )
 
@@ -28,6 +31,12 @@ var guardFilesFor = func() spaces.GuardFiles {
 	return spaces.GuardFiles{Dir: paths.GuardDir(), DB: paths.DBFile()}
 }
 
+// reopenedFor lists the entries of the checkout settings around dirs that
+// re-open orch's sandbox denies (D-67); tests replace it.
+var reopenedFor = func(dirs []string) ([]string, error) {
+	return spacesettings.Reopened(spacesettings.DefaultLayout().StateFile(), dirs)
+}
+
 // decideGuard runs one decision; tests replace it to stall a decision.
 // onMode is called once the guard's mode is known.
 var decideGuard = func(ctx context.Context, f spaces.GuardFiles, in spaces.GuardInput, onMode func(spaces.GuardMode)) spaces.GuardResult {
@@ -43,16 +52,57 @@ var decideGuard = func(ctx context.Context, f spaces.GuardFiles, in spaces.Guard
 func guardToolEvent(event string, p Payload, out io.Writer, cf clientFactory) {
 	res := decideWithin(guardTimeout, guardInput(event, p))
 	reason := ""
+	var hit spaces.TermHit
 	if event == "pre-tool-use" && res.Verdict != spaces.Refuse {
 		if t := outboundTerms(p, res.Terms); t.Refuse {
 			res = termsRefusal(res, t)
-			reason = t.Reason()
+			reason, hit = t.Reason(), t.Hit
 		}
 	}
 	if res.Verdict == spaces.Refuse && event == "pre-tool-use" {
 		writeDeny(out, res.Rule, reason)
+		reportRefusal(p, res, hit)
 	}
 	recordToolEvent(event, p, cf, &res)
+}
+
+// appendRefusal writes a refusal event to the operator's stream; tests
+// replace it.
+var appendRefusal = func(e events.Event) error { return events.AppendSpaces(paths.EventsDir(), e) }
+
+// refusalReportTimeout bounds writing a refusal event. Reason: the harness
+// kills a hook that runs past its own timeout and then lets the call run,
+// so a write that stalls must never hold the hook (INV-13).
+var refusalReportTimeout = 100 * time.Millisecond
+
+// reportRefusal puts a refused call on the operator's spaces stream
+// (SP-048), where the app and the operator see it without reading the
+// command log. The event names the session, its space, the tool, the rule
+// and, for a term, the term's space, line and hash; never the call's
+// command, paths or text (INV-07). The hook writes it rather than orchd
+// because only the hook knows the term's line, and a refusal stays
+// visible when orchd is down. It never changes the deny already printed.
+func reportRefusal(p Payload, res spaces.GuardResult, hit spaces.TermHit) {
+	r := events.Refusal{Session: p.SessionID, Space: res.Space, Tool: p.ToolName, Rule: string(res.Rule)}
+	if res.Rule == spaces.RuleOutboundTerm && hit.Line > 0 {
+		r.Term = &events.TermRef{Space: hit.Space, Line: hit.Line, Hash: hit.Hash}
+	}
+	e := events.NewRefusal(r, time.Now())
+	write := appendRefusal
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer func() {
+			// Reason: locating the data directory panics without a
+			// home; the call is refused either way.
+			_ = recover()
+		}()
+		_ = write(e)
+	}()
+	select {
+	case <-done:
+	case <-time.After(refusalReportTimeout):
+	}
 }
 
 // termsRefusal is g refused by the terms check's result t. The terms layer
@@ -97,7 +147,8 @@ func decideWithin(limit time.Duration, in spaces.GuardInput) spaces.GuardResult 
 				done <- spaces.TimedOut(m)
 			}
 		}()
-		done <- decide(ctx, filesFor(), in, func(m spaces.GuardMode) { mode.Store(m) })
+		r := decide(ctx, filesFor(), in, func(m spaces.GuardMode) { mode.Store(m) })
+		done <- checkReopened(r, in)
 	}()
 	select {
 	case r := <-done:
@@ -110,6 +161,27 @@ func decideWithin(limit time.Duration, in spaces.GuardInput) spaces.GuardResult 
 		}
 		return r
 	}
+}
+
+// checkReopened refuses, in r's mode, a tool call the guard would allow
+// while spaces are configured when a checkout it runs in holds orch's
+// sandbox denies and its own Claude Code settings re-open one, or cannot
+// be checked (D-67, RC-215). Reason: such an entry lets every sandboxed
+// command of a session started there into the denied folder, and orch may
+// not remove it. The folders are the call's cwd and the session's project
+// folder, from which Claude Code loaded its settings.
+func checkReopened(r spaces.GuardResult, in spaces.GuardInput) spaces.GuardResult {
+	if in.Kind != spaces.EventPreToolUse || r.Would == spaces.Refuse || r.Rule == spaces.RuleNoPolicy {
+		return r
+	}
+	dirs := []string{in.Cwd}
+	if d := os.Getenv("CLAUDE_PROJECT_DIR"); d != "" && d != in.Cwd {
+		dirs = append(dirs, d)
+	}
+	if found, err := reopenedFor(dirs); err != nil || len(found) > 0 {
+		return spaces.SettingsReopened(r)
+	}
+	return r
 }
 
 // guardReasons say why a call was refused, by rule. They name the rule and
@@ -126,6 +198,7 @@ var guardReasons = map[spaces.GuardRule]string{
 	spaces.RuleOpaqueStrict:     "part of the call cannot be checked (strict mode)",
 	spaces.RulePolicyUnreadable: "the spaces policy orchd wrote for the guard cannot be read; check that orchd is running",
 	spaces.RuleGuardTimeout:     "the check did not finish in time",
+	spaces.RuleSettingsReopen:   "this checkout's own Claude Code settings (.claude/settings.json, or your entries in .claude/settings.local.json) re-open a folder orch's sandbox denies, or orch cannot check them; remove that sandbox allowRead or allowWrite entry (orchd's log and 'orch run' name it)",
 }
 
 // writeDeny prints the deny both Claude Code and Codex read from a

@@ -168,7 +168,7 @@ private func page(_ seqs: ClosedRange<UInt64>, last: UInt64? = nil, oldest: UInt
         let model = LogsModel(api: api, interval: .milliseconds(10))
         model.start()
         model.start()
-        try await Task.sleep(for: .milliseconds(100))
+        try await eventually { api.tails.count >= 2 }
         model.stop()
         let count = api.tails.count
         #expect(count >= 2)
@@ -265,7 +265,7 @@ private func metrics(at seconds: TimeInterval, qdrantRunning: Bool = true, cpu: 
         }, interval: .milliseconds(10), reportInterval: .milliseconds(30))
         model.start()
         model.start()
-        try await Task.sleep(for: .milliseconds(150))
+        try await eventually { model.metrics != nil && reports.value >= 2 }
         model.stop()
         #expect(model.metrics != nil)
         #expect(reports.value >= 2)

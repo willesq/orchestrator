@@ -20,7 +20,9 @@ import (
 // tasks report. The PR babysitter's stream refreshes every few minutes and stays
 // in the SessionStart digest only.
 func updateStreams(sessionID string) []string {
-	if !sessionIDPattern.MatchString(sessionID) {
+	// Reason: a session named like a shared stream ("spaces") must not
+	// read it as its own; the spaces stream is the operator's.
+	if !sessionIDPattern.MatchString(sessionID) || sharedStreams[sessionID] {
 		return []string{taskEventStream}
 	}
 	return []string{sessionID, taskEventStream}
@@ -111,9 +113,11 @@ const enforcementTimeout = 500 * time.Millisecond
 // when (SP-070, INV-16). It asks orchd, never a file a session could write
 // alone. When orchd does not answer it reads orch.db's switches read-only,
 // so a stopped orchd cannot hide a layer the operator switched off, and
-// says when it cannot tell at all.
-func enforcementNotice(cf clientFactory) []string {
-	if rep, ok := askEnforcement(cf); ok {
+// says when it cannot tell at all. It also returns the sandbox setting as
+// orchd, or else orch.db, gives it (D-68), nil when unknown.
+func enforcementNotice(cf clientFactory) ([]string, *sandboxView) {
+	if rep, client, cleanup, ok := askEnforcement(cf); ok {
+		defer cleanup()
 		var lines []string
 		for _, sw := range rep.GetSwitches() {
 			if sw.GetRelaxed() {
@@ -123,13 +127,13 @@ func enforcementNotice(cf clientFactory) []string {
 		if e := rep.GetError(); e != "" {
 			lines = append(lines, noticeLine(e))
 		}
-		return lines
+		return lines, sandboxFromOrchd(client, rep)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), enforcementTimeout)
 	defer cancel()
 	sw, err := spaces.ReadEnforcement(ctx, paths.DBFile())
 	if sw == nil {
-		return []string{noticeLine("orchd did not answer and orch.db's enforcement switches could not be read, so a layer may be switched off; check 'orch spaces enforce'")}
+		return []string{noticeLine("orchd did not answer and orch.db's enforcement switches could not be read, so a layer may be switched off; check 'orch spaces enforce'")}, sandboxFromDB()
 	}
 	var lines []string
 	for _, s := range sw.At(time.Now()).Relaxed() {
@@ -141,21 +145,24 @@ func enforcementNotice(cf clientFactory) []string {
 	if err != nil {
 		lines = append(lines, noticeLine(err.Error()+"; those layers enforce"))
 	}
-	return lines
+	return lines, sandboxFromDB()
 }
 
 // askEnforcement asks orchd for the switches; ok is false when it did not
-// answer.
-func askEnforcement(cf clientFactory) (*orchdv1.EnforcementState, bool) {
+// answer. When ok, the caller closes the client with cleanup.
+func askEnforcement(cf clientFactory) (*orchdv1.EnforcementState, orchdv1.OrchdClient, func(), bool) {
 	client, cleanup, err := cf()
 	if err != nil {
-		return nil, false
+		return nil, nil, nil, false
 	}
-	defer cleanup()
 	ctx, cancel := context.WithTimeout(context.Background(), enforcementTimeout)
 	defer cancel()
 	rep, err := client.GetEnforcement(ctx, &orchdv1.GetEnforcementRequest{})
-	return rep, err == nil && rep != nil
+	if err != nil || rep == nil {
+		cleanup()
+		return nil, nil, nil, false
+	}
+	return rep, client, cleanup, true
 }
 
 // switchLine is one layer that does not enforce, flattened and capped like
