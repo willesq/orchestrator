@@ -180,7 +180,8 @@ apply a policy (and after each later revision), relabel it from Orch.app: the Sp
 how many stored chunks are labelled for an older policy and a **Relabel Now** button, with the run's
 progress and result. orchd does not relabel on its own after an apply (D-76). While a policy is
 applied only Orch.app is the operator (D-71), so the same commands from a terminal are refused
-until a terminal can be unlocked from the app (planned); with no policy they run in a terminal
+unless the terminal is unlocked ('orch spaces unlock', confirmed in Orch.app; see
+OPERATIONS.md); with no policy they run in a terminal
 outside any agent session:
 
 ```sh

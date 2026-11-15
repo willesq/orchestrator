@@ -176,6 +176,13 @@ var operatorActions = map[string]string{
 	// (refuseNonOperator).
 	orchdv1.Orchd_ListSpaces_FullMethodName: "list the spaces",
 	orchdv1.Orchd_ScanSpaces_FullMethodName: "scan folders for spaces",
+	// Reason (SP-077): an unlock makes a terminal the operator, so only the
+	// user's own terminal asks for one and only Orch.app confirms it.
+	orchdv1.Orchd_RequestUnlock_FullMethodName: "ask for an operator unlock",
+	orchdv1.Orchd_ListUnlocks_FullMethodName:   "list operator unlocks",
+	orchdv1.Orchd_ConfirmUnlock_FullMethodName: "confirm operator unlocks",
+	orchdv1.Orchd_ProveUnlock_FullMethodName:   "prove an operator unlock",
+	orchdv1.Orchd_Lock_FullMethodName:          "end operator unlocks",
 }
 
 // refuseQueued returns the refusal for method when ctx's caller is a queued
