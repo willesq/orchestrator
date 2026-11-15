@@ -10,7 +10,10 @@ struct CompanionView: View {
     let prMonitor: PRMonitor
     let tasks: TasksModel
     let window: WindowControl
-    /// A pane's badge, as the sidebar shows it.
+    /// The panes the strip lists, as the sidebar does: no Spaces while
+    /// spaces are off.
+    let panes: [Pane]
+    /// A pane's badge, as the sidebar shows it; Spaces' is its badge (SP-055).
     let status: (Pane) -> SidebarStatus
     /// Shows a pane in the full layout.
     let open: (Pane) -> Void
@@ -136,7 +139,7 @@ struct CompanionView: View {
     /// Every pane as an icon with its badge; a click expands the window to it.
     private var paneStrip: some View {
         HStack(spacing: 0) {
-            ForEach(Pane.allCases) { pane in
+            ForEach(panes) { pane in
                 Button { open(pane) } label: {
                     Image(systemName: pane.symbol)
                         .frame(maxWidth: .infinity, minHeight: 28)
@@ -146,10 +149,19 @@ struct CompanionView: View {
                 .buttonStyle(.borderless)
                 .help("Open \(pane.title)")
                 .accessibilityLabel(pane.title)
+                .accessibilityValue(badgeLabel(status(pane)))
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+    }
+
+    /// What a badge says, for VoiceOver, which does not read the dot.
+    private func badgeLabel(_ status: SidebarStatus) -> String {
+        switch status {
+        case .none: ""
+        case .count(_, _, let label), .dot(_, let label): label
+        }
     }
 
     @ViewBuilder private func badge(_ status: SidebarStatus) -> some View {

@@ -84,6 +84,10 @@ final class Navigator {
     /// the pane clears it once the sheet is up.
     var dispatchRequested = false
 
+    /// Set to move the Spaces pane to a palette entry's place (SP-055); the
+    /// pane clears it once it shows there.
+    var spacesRequest: SpacesPaletteTarget?
+
     init() {
         let defaults = UserDefaults.standard
         let stored = defaults.string(forKey: "pane")

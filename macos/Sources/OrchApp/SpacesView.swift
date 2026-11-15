@@ -21,6 +21,8 @@ struct SpacesView: View {
     @State private var setup: SpacesSetupModel?
     /// What the wizard left to know after it closed, such as a saved draft.
     @State private var setupNote: String?
+    /// The space a palette entry asked the Overview to show (SP-055).
+    @State private var focusedSpace: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -51,6 +53,7 @@ struct SpacesView: View {
         }
         .navigationTitle("Spaces")
         .task { await model.load() }
+        .onChange(of: navigator.spacesRequest, initial: true) { _, request in follow(request) }
         .sheet(isPresented: Binding(get: { setup != nil }, set: { if !$0 { setup = nil } })) {
             if let setup {
                 SpacesSetupView(model: setup) { note in
@@ -59,6 +62,29 @@ struct SpacesView: View {
                     Task { await model.load() }
                 }
             }
+        }
+    }
+
+    /// Moves to where a ⌘K palette entry points (SP-055), then clears the
+    /// request so the same entry works again.
+    private func follow(_ request: SpacesPaletteTarget?) {
+        guard let request else { return }
+        navigator.spacesRequest = nil
+        // Screen-share-safe mode keeps to the Overview and its one space.
+        guard model.shareSafe == nil else { return }
+        switch request {
+        case .review:
+            page = .review
+        case .tester:
+            if let editor {
+                editor.tab = .rules
+                page = .edit
+            } else {
+                navigator.showSettings(.spaces)
+            }
+        case .space(let id):
+            page = .overview
+            focusedSpace = id
         }
     }
 
@@ -81,6 +107,7 @@ struct SpacesView: View {
             } else {
                 AdaptiveSplit(primaryWidth: .init(min: 300, ideal: 460), secondaryWidth: .init(min: 300, ideal: 380),
                               stacking: .tabs(primary: "Spaces", secondary: "Sessions")) {
+                    ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: Metrics.stackSpacing) {
                             // Settings stays out of reach while sharing: the
@@ -97,6 +124,12 @@ struct SpacesView: View {
                         }
                         .padding(Metrics.pagePadding)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .onChange(of: focusedSpace, initial: true) { _, space in
+                        guard let space else { return }
+                        withAnimation { proxy.scrollTo(SpaceCards.anchor(space), anchor: .top) }
+                        focusedSpace = nil
+                    }
                     }
                     // Counts stale chunks when the pane shows and after each apply.
                     .task(id: overview.shareSafe == nil ? overview.appliedRevision : -1) {
@@ -221,6 +254,9 @@ private struct SpaceCards: View {
     let cards: [SpaceCard]
     let shareSafe: String?
 
+    /// A card's scroll position, for the palette's space entries.
+    static func anchor(_ space: String) -> String { "space-card:" + space }
+
     var body: some View {
         if cards.isEmpty {
             Text(shareSafe == nil ? "The applied policy has no spaces." : "The space you chose is not in the applied policy.")
@@ -228,7 +264,7 @@ private struct SpaceCards: View {
         } else {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 12, alignment: .top)], alignment: .leading,
                       spacing: 12) {
-                ForEach(cards) { SpaceCardView(card: $0) }
+                ForEach(cards) { SpaceCardView(card: $0).id(Self.anchor($0.id)) }
             }
         }
     }
