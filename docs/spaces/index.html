@@ -643,30 +643,59 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
     return fetch(path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
   }
   function setLiveNote(text) { document.getElementById('liveNote').textContent = text; }
+  // A simple local server can drop a connection when hundreds of small files are fetched,
+  // so a failed fetch is retried; a missing file (404) is an answer, not a failure.
+  var MISSING = {};
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function getText(path, tries) {
+    tries = tries || 4;
+    return fetch(path, { cache: 'no-store' }).then(function (r) {
+      if (r.status === 404) return MISSING;
+      if (!r.ok) throw new Error(path + ': HTTP ' + r.status);
+      return r.text();
+    }).catch(function (e) {
+      if (tries <= 1) throw e;
+      return wait(250).then(function () { return getText(path, tries - 1); });
+    });
+  }
+  function getJSON(path) { return getText(path).then(function (t) { return t === MISSING ? MISSING : JSON.parse(t); }); }
+  // At most n requests at a time, in order.
+  function mapLimit(items, n, fn) {
+    var out = new Array(items.length), i = 0, workers = [];
+    function next() { if (i >= items.length) return Promise.resolve(); var k = i++; return fn(items[k]).then(function (v) { out[k] = v; return next(); }); }
+    for (var w = 0; w < Math.min(n, items.length); w++) workers.push(next());
+    return Promise.all(workers).then(function () { return out; });
+  }
   // reconvene/ has no index file, because one shared index would conflict between lanes again;
   // the served folder's directory listing names the items.
   function listRC() {
-    return fetch(RC_DIR, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then(function (html) {
-        var names = [], re = /href="(?:\.\/)?(RC-\d+\.json)"/g, m;
-        while ((m = re.exec(html))) if (names.indexOf(m[1]) < 0) names.push(m[1]);
-        return names;
-      });
+    return getText(RC_DIR).then(function (html) {
+      if (html === MISSING) throw new Error('no listing');
+      var names = [], re = /href="(?:\.\/)?(RC-\d+\.json)"/g, m;
+      while ((m = re.exec(html))) if (names.indexOf(m[1]) < 0) names.push(m[1]);
+      return names;
+    });
   }
-  var LOAD_NOTE = '';
+  var LOAD_NOTE = '', LOAD_FAILED = 0;
+  // Resolves to the combined plan. LOAD_FAILED counts files that could not be read even
+  // after retries; the page then says its totals are incomplete instead of guessing.
   function loadPlan() {
     return fetchJSON(JSON_PATH).then(function (plan) {
+      LOAD_FAILED = 0;
       if (isCombined(plan)) { LOAD_NOTE = ''; return plan; }
-      var states = {};
-      var stateP = Promise.all(plan.features.map(function (f) {
-        return fetchJSON(STATE_DIR + f.id + '.json').then(function (s) { states[f.id] = s; }).catch(function () {});
-      }));
-      var orderP = fetchJSON(RC_DIR + RC_ORDER).catch(function () { return null; });
+      function soft(p) { return p.catch(function () { LOAD_FAILED++; return MISSING; }); }
+      var states = {}, note = '';
+      var stateP = mapLimit(plan.features, 6, function (f) {
+        return soft(getJSON(STATE_DIR + f.id + '.json')).then(function (s) { if (s !== MISSING) states[f.id] = s; });
+      });
+      var orderP = soft(getJSON(RC_DIR + RC_ORDER)).then(function (o) { return o === MISSING ? null : o; });
       var rcP = listRC().then(function (names) {
-        LOAD_NOTE = '';
-        return Promise.all(names.map(function (n) { return fetchJSON(RC_DIR + n).catch(function () { return null; }); }));
-      }).catch(function () { LOAD_NOTE = ' · reconvene items not shown: this server does not list reconvene/'; return []; });
-      return Promise.all([stateP, orderP, rcP]).then(function (r) { return combine(plan, states, r[2], r[1]); });
+        return mapLimit(names, 6, function (n) { return soft(getJSON(RC_DIR + n)).then(function (r) { return r === MISSING ? null : r; }); });
+      }).catch(function () { note = ' · reconvene items not shown: this server does not list reconvene/'; return []; });
+      return Promise.all([stateP, orderP, rcP]).then(function (r) {
+        LOAD_NOTE = note + (LOAD_FAILED ? ' · ' + LOAD_FAILED + ' file(s) could not be read: totals are incomplete, reload to retry' : '');
+        return combine(plan, states, r[2].filter(Boolean), r[1]);
+      });
     });
   }
   loadPlan()
@@ -675,7 +704,8 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
         LIVE = live; render(plan);
         setLiveNote('Refreshes every 30 s · ' + (live ? 'live progress file found' : 'no live progress file') + LOAD_NOTE);
         setInterval(function () {
-          Promise.all([loadPlan().catch(function () { return PLAN; }), fetchJSON(LIVE_PATH).catch(function () { return null; })])
+          // A refresh that could not read every file keeps the last complete view.
+          Promise.all([loadPlan().then(function (p) { return LOAD_FAILED ? PLAN : p; }).catch(function () { return PLAN; }), fetchJSON(LIVE_PATH).catch(function () { return null; })])
             .then(function (r) { LIVE = r[1]; PLAN = r[0]; renderProgress(r[0], r[1]); setLiveNote('Progress refreshed ' + new Date().toLocaleTimeString() + ' · reload the page to refresh the feature list' + LOAD_NOTE); });
         }, 30000);
       });

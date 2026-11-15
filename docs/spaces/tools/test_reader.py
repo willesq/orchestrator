@@ -45,9 +45,25 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
         pass
 
 
-def render(chrome: str, directory: str, profile: str) -> str:
+class _Flaky(_Quiet):
+    """Fails the first request for every state and reconvene file (a dropped request),
+    and every request for the paths in `always`."""
+
+    seen: set = set()
+    always: set = set()
+
+    def do_GET(self):
+        p = self.path
+        if ("/state/" in p or "/reconvene/RC-" in p) and (p not in self.seen or p in self.always):
+            self.seen.add(p)
+            self.send_error(503)
+            return
+        super().do_GET()
+
+
+def render(chrome: str, directory: str, profile: str, handler=_Quiet) -> str:
     """The reader's DOM after it has loaded the files in directory."""
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(_Quiet, directory=directory))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(handler, directory=directory))
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     try:
@@ -93,6 +109,7 @@ def page_totals(dom: str) -> dict:
         "reconvene_ids": rc_rows,
         "reconvene_open": int(stats["to reconvene on"]),
         "hash_note": (re.search(r'id="hashNote">([^<]*)<', dom) or [None, ""])[1],
+        "live_note": (re.search(r'id="liveNote"[^>]*>([^<]*)<', dom) or [None, ""])[1],
     }
 
 
@@ -141,8 +158,25 @@ class ReaderTotalsTest(unittest.TestCase):
             got[name] = page_totals(render(self.chrome, d, os.path.join(self.root, "profile-" + name)))
             note = got[name].pop("hash_note")
             self.assertRegex(note, r"^All \d+ criteria hashes match", name)
+            self.assertNotIn("could not be read", got[name].pop("live_note"), name)
         self.assertEqual(got["before"], want)
         self.assertEqual(got["after"], want)
+
+    def test_dropped_requests_are_retried_and_lost_files_reported(self):
+        combined = planfiles.load_combined(SPACES)
+        want = expected(plantotals.totals(combined), combined)
+        d = self.site("flaky", combined, True)
+        _Flaky.seen = set()
+        _Flaky.always = set()
+        got = page_totals(render(self.chrome, d, os.path.join(self.root, "profile-flaky"), _Flaky))
+        got.pop("hash_note")
+        self.assertNotIn("could not be read", got.pop("live_note"))
+        self.assertEqual(got, want)
+        # A file that never loads is reported, not silently shown as 'todo'.
+        _Flaky.seen = set()
+        _Flaky.always = {f"/state/{combined['features'][0]['id']}.json"}
+        got = page_totals(render(self.chrome, d, os.path.join(self.root, "profile-lost"), _Flaky))
+        self.assertIn("1 file(s) could not be read", got["live_note"])
 
 
 if __name__ == "__main__":
