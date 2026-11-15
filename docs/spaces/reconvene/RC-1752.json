@@ -1,0 +1,14 @@
+{
+  "id": "RC-1752",
+  "kind": "follow-up",
+  "topic": "Overview space cards still show no chunk counts (rest of RC-1101)",
+  "detail": "SP-053's Spaces editor shows each space's chunk and stale counts from Status' SpacesCounts (SP-031). The Overview's space cards (SpacesOverviewModel, SP-051) and its needs-you strip do not read them yet, nor conflicts from ExplainPlacement per quarantined session (RC-502).",
+  "source": "https://github.com/willesq/orchestrator/pull/214",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-051",
+    "SP-031",
+    "SP-053"
+  ],
+  "status": "open"
+}

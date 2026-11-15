@@ -4,7 +4,7 @@ import SwiftUI
 /// The Spaces pane's pages. Screen-share-safe mode shows only the Overview:
 /// the other two name every space's sessions and bindings.
 enum SpacesPage: String, CaseIterable, Identifiable {
-    case overview, activity, review
+    case overview, activity, review, edit
 
     var id: String { rawValue }
 
@@ -13,6 +13,7 @@ enum SpacesPage: String, CaseIterable, Identifiable {
         case .overview: "Overview"
         case .activity: "Activity"
         case .review: "Review"
+        case .edit: "Edit"
         }
     }
 }

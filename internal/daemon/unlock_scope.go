@@ -29,6 +29,7 @@ var unlockWeakens = map[string]string{
 	orchdv1.Orchd_SetEnforcement_FullMethodName:     "switch enforcement off",
 	orchdv1.Orchd_SetSandboxSetting_FullMethodName:  "change the sandbox setting",
 	orchdv1.Orchd_ChangeOutboundRule_FullMethodName: "change the outbound rules",
+	orchdv1.Orchd_SetSpaceTerms_FullMethodName:      "change a space's terms",
 }
 
 // weakens returns what method would do when it weakens protection under

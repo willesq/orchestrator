@@ -66,6 +66,9 @@ func ProtectedPaths(home, configDir, dataDir string, res *Resolved) Protection {
 		},
 		Read: []string{
 			filepath.Join(dataDir, "qdrant-api-key"),
+			// Reason (SP-053): with it, a terms fingerprint the app shows
+			// could be matched against guessed files offline.
+			filepath.Join(dataDir, "terms-fingerprint-key"),
 			// Reason: every file of a gh profile, whose login it holds; gh
 			// reads them itself, an agent never needs to. The directory
 			// itself stays nameable, as GH_CONFIG_DIR=<dir> gh ... does.

@@ -46,6 +46,7 @@ func weakeningRPCs(t *testing.T) map[string]map[string]any {
 		"unknown layer":     {orchdv1.Orchd_SetEnforcement_FullMethodName: &orchdv1.SetEnforcementRequest{Layer: "nope", State: "on"}},
 		"sandbox":           {orchdv1.Orchd_SetSandboxSetting_FullMethodName: &orchdv1.SetSandboxSettingRequest{}},
 		"outbound":          {orchdv1.Orchd_ChangeOutboundRule_FullMethodName: &orchdv1.ChangeOutboundRuleRequest{Action: "disable", Id: "x"}},
+		"terms (SP-053)":    {orchdv1.Orchd_SetSpaceTerms_FullMethodName: &orchdv1.SetSpaceTermsRequest{Space: "x"}},
 		"settings (SP-078)": settingsRPCs(t),
 	}
 }

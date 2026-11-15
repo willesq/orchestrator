@@ -15,6 +15,8 @@ struct SpacesView: View {
     @State private var page: SpacesPage = .overview
     /// "Relabel now" (SP-079); absent where none is given.
     @Environment(SpacesRelabelModel.self) private var relabel: SpacesRelabelModel?
+    /// The advanced editors (SP-053); absent where none is given.
+    @Environment(SpacesEditorModel.self) private var editor: SpacesEditorModel?
     /// The setup wizard while its sheet is open (SP-052).
     @State private var setup: SpacesSetupModel?
     /// What the wizard left to know after it closed, such as a saved draft.
@@ -33,6 +35,10 @@ struct SpacesView: View {
                 if let activity { SpacesActivityView(model: activity) }
             case .review:
                 if let review { SpacesReviewView(model: review, onApplied: { Task { await model.load() } }) }
+            case .edit:
+                if let editor {
+                    SpacesEditorView(model: editor, enforcement: enforcement, navigator: navigator, openReview: { page = .review })
+                }
             case .overview:
                 SpacesHeader(model: model, runSetup: openSetup)
                 Divider()

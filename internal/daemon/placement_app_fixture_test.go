@@ -47,9 +47,45 @@ type appPlacementCase struct {
 // its validator with the daemon and not with a stale copy. Run with
 // ORCH_UPDATE_APP_FIXTURE=1 to rewrite it after a deliberate change.
 func TestAppPlacementFixtureMatchesExplainPlacement(t *testing.T) {
+	checkAppPlacementFixture(t, appPlacementFixture, appPlacementPaths)
+}
+
+// appTesterFixture is what the app's "where would this go?" tester test
+// (PlacementTesterTests, SP-053.1.a3) replays besides appPlacementFixture:
+// ExplainPlacement's answers for web pages, repos and chat tenants.
+const appTesterFixture = "../../macos/Tests/Fixtures/placement-tester.json"
+
+// appTesterTargets covers the SP-022 cases that are not local paths: a
+// bound web prefix, an unbound page, a bound, a transferred and an unbound
+// repo, a bound Slack and Teams tenant and an unbound one.
+var appTesterTargets = []string{
+	"https://docs.oss.dev/guide/start",
+	"https://example.com/page",
+	"acme/app",
+	"oss-org/lib",
+	"oss-org/moved",
+	"stranger/pub",
+	"willesq/notes",
+	"slack:TACME",
+	"teams:globex-tenant",
+	"slack:TUNKNOWN",
+}
+
+// TestAppTesterFixtureMatchesExplainPlacement keeps the tester's fixture
+// equal to what ExplainPlacement answers; ORCH_UPDATE_APP_FIXTURE=1
+// rewrites it.
+func TestAppTesterFixtureMatchesExplainPlacement(t *testing.T) {
+	checkAppPlacementFixture(t, appTesterFixture, appTesterTargets)
+}
+
+// checkAppPlacementFixture compares fixture with ExplainPlacement's answers
+// for targets on the nested-root fixture, rewriting it first when
+// ORCH_UPDATE_APP_FIXTURE is set.
+func checkAppPlacementFixture(t *testing.T, fixture string, targets []string) {
+	t.Helper()
 	s, code, _ := placementServer(t)
 	var live []appPlacementCase
-	for _, p := range appPlacementPaths {
+	for _, p := range targets {
 		e, err := s.ExplainPlacement(operatorCtx, &orchdv1.ExplainPlacementRequest{Target: strings.ReplaceAll(p, "$CODE", code)})
 		if err != nil {
 			t.Fatalf("%s: %v", p, err)
@@ -75,11 +111,11 @@ func TestAppPlacementFixtureMatchesExplainPlacement(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.FromSlash(appPlacementFixture), append(out, '\n'), 0o644); err != nil {
+		if err := os.WriteFile(filepath.FromSlash(fixture), append(out, '\n'), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
-	data, err := os.ReadFile(filepath.FromSlash(appPlacementFixture))
+	data, err := os.ReadFile(filepath.FromSlash(fixture))
 	if err != nil {
 		t.Fatalf("%v (run with ORCH_UPDATE_APP_FIXTURE=1 to write it)", err)
 	}

@@ -1,0 +1,12 @@
+{
+  "id": "RC-1753",
+  "kind": "decision",
+  "topic": "Should the Spaces pane's Edit page stay reachable while memory spaces are off?",
+  "detail": "Since #209 the sidebar hides the Spaces pane while spaces are off. SP-053's Edit page says why nothing is enforced and links to the switch, but that notice shows only when the state changes under an open page. Options: (a) keep hiding the pane (today); (b) show the pane with only the Edit page while off, so a policy can be prepared before switching spaces on. Recommendation: (a) until someone asks to prepare a policy while off; setup already works once spaces are on and enforces nothing before Apply.",
+  "source": "https://github.com/willesq/orchestrator/pull/214",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-053"
+  ],
+  "status": "open"
+}

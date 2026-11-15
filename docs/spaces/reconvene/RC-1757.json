@@ -1,0 +1,12 @@
+{
+  "id": "RC-1757",
+  "kind": "follow-up",
+  "topic": "A terms folder's parent swapped during SetSpaceTerms is not caught",
+  "detail": "WriteTerms (SP-053) refuses a terms folder reached through a symbolic link below home, one others may write, and a folder swapped between its check and its opening (os.SameFile on the opened handle). A parent folder swapped in the short window between the ancestor check and that last check is still followed. Closing it fully means opening each folder from home down without following links. Low: SetSpaceTerms is Orch.app's alone and terms files are read-protected by the guard. Raised by the SP-053 verifier.",
+  "source": "https://github.com/willesq/orchestrator/pull/214",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-053"
+  ],
+  "status": "open"
+}

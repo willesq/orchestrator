@@ -1,0 +1,12 @@
+{
+  "id": "RC-1754",
+  "kind": "follow-up",
+  "topic": "Terms of a new space can be written only after its terms_file is applied",
+  "detail": "SetSpaceTerms writes only the applied revision's terms_file of an applied space, so a draft (which an agent session may save) can never point orchd at a file to write. A new space, or a changed terms_file path, therefore needs Save Draft and Apply before Replace Terms works; the editor disables the button and orchd's FailedPrecondition says so. If the two steps prove awkward, Apply could offer to write terms for spaces whose terms_file it just applied.",
+  "source": "https://github.com/willesq/orchestrator/pull/214",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-053"
+  ],
+  "status": "open"
+}
