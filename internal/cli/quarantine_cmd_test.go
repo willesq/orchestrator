@@ -23,6 +23,7 @@ type quarantineClient struct {
 	held      map[string]int32
 	refuse    bool // answer as orchd answers a non-operator
 	purgeReqs []*orchdv1.PurgeQuarantineRequest
+	retagReqs []*orchdv1.RetagSourceRequest
 }
 
 var errNotOperator = grpcstatus.Error(codes.PermissionDenied, "only the operator can list quarantine")
@@ -69,16 +70,16 @@ func (q *quarantineClient) PurgeQuarantine(_ context.Context, req *orchdv1.Purge
 	return resp, nil
 }
 
-// fakeRetag stands in for SP-071's RetagSource: it moves the source out of
-// the client's quarantine and records the sticky override.
-type fakeRetag struct {
+// quarantineRetag is a Retagger that moves the source out of the client's
+// quarantine and records the sticky override, as orchd's RetagSource does.
+type quarantineRetag struct {
 	q         *quarantineClient
 	reqs      []RetagRequest
 	overrides map[string]string // source_uri -> space
 	err       error
 }
 
-func (f *fakeRetag) Retag(_ context.Context, req RetagRequest) (RetagResult, error) {
+func (f *quarantineRetag) Retag(_ context.Context, req RetagRequest) (RetagResult, error) {
 	f.reqs = append(f.reqs, req)
 	if f.err != nil {
 		return RetagResult{}, f.err
@@ -139,7 +140,7 @@ func TestWriteQuarantineListMarksACutList(t *testing.T) {
 func TestQuarantineAssignMovesAndRecordsOverride(t *testing.T) {
 	t.Setenv(agentrun.TaskIDEnv, "")
 	q := &quarantineClient{held: map[string]int32{"file:///q1": 2, "file:///q2": 1}}
-	retag := &fakeRetag{q: q}
+	retag := &quarantineRetag{q: q}
 	out, err := runQuarantine(q, retag, "assign", "file:///q1", "personal")
 	if err != nil || !strings.Contains(out, "moved 2 chunk(s) of file:///q1 to personal") {
 		t.Fatalf("assign = %q, %v", out, err)
@@ -163,7 +164,7 @@ func TestQuarantineAssignMovesAndRecordsOverride(t *testing.T) {
 func TestQuarantineAssignRefusals(t *testing.T) {
 	t.Setenv(agentrun.TaskIDEnv, "")
 	q := &quarantineClient{held: map[string]int32{"file:///q1": 2}}
-	retag := &fakeRetag{q: q}
+	retag := &quarantineRetag{q: q}
 	if _, err := runQuarantine(q, retag, "assign", "file:///elsewhere", "personal"); err == nil || !strings.Contains(err.Error(), "not in quarantine") {
 		t.Fatalf("not quarantined: %v", err)
 	}
@@ -176,10 +177,6 @@ func TestQuarantineAssignRefusals(t *testing.T) {
 	retag.err = errors.New("retag refused\x1b[2J")
 	if _, err := runQuarantine(q, retag, "assign", "file:///q1", "personal"); err == nil || strings.ContainsRune(err.Error(), 0x1b) {
 		t.Fatalf("retag error = %q", err)
-	}
-	// Until SP-071 lands, the build's assign says so and moves nothing.
-	if _, err := runQuarantine(q, nil, "assign", "file:///q1", "personal"); !errors.Is(err, errRetagUnavailable) && (err == nil || err.Error() != errRetagUnavailable.Error()) {
-		t.Fatalf("default retagger: %v", err)
 	}
 	if q.held["file:///q1"] != 2 {
 		t.Fatal("a failed assign moved the source")
@@ -214,7 +211,7 @@ func TestQuarantinePurgeIsDryRunUnlessConfirmed(t *testing.T) {
 // orchd's refusal, and assign asks for no retag.
 func TestQuarantineCommandsRefusedForAgentCallers(t *testing.T) {
 	q := &quarantineClient{held: map[string]int32{"file:///q1": 2}}
-	retag := &fakeRetag{q: q}
+	retag := &quarantineRetag{q: q}
 	cmds := [][]string{{"list"}, {"assign", "file:///q1", "personal"}, {"purge", "--all", "--confirm"}}
 	t.Setenv(agentrun.TaskIDEnv, "task-1")
 	for _, args := range cmds {
@@ -249,5 +246,41 @@ func TestRootHasQuarantine(t *testing.T) {
 	cmd, _, err := NewRootCmd(factory(&quarantineClient{}, nil)).Find([]string{"quarantine", "purge"})
 	if err != nil || cmd.Name() != "purge" {
 		t.Fatalf("find = %v, %v", cmd, err)
+	}
+}
+
+// RetagSource answers as orchd does for the fields assign sends: it refuses
+// without confirm or when the source is not in expect_from, else moves it.
+func (q *quarantineClient) RetagSource(_ context.Context, req *orchdv1.RetagSourceRequest, _ ...grpc.CallOption) (*orchdv1.RetagSourceResponse, error) {
+	q.retagReqs = append(q.retagReqs, req)
+	n, ok := q.held[req.GetSourceUri()]
+	switch {
+	case !req.GetConfirm():
+		return nil, grpcstatus.Error(codes.FailedPrecondition, "moving a source out of quarantine needs confirm")
+	case req.GetExpectFrom() != "quarantine" || !ok:
+		return nil, grpcstatus.Error(codes.FailedPrecondition, "the source is not in quarantine")
+	}
+	delete(q.held, req.GetSourceUri())
+	return &orchdv1.RetagSourceResponse{From: []string{"quarantine"}, Chunks: int64(n), Moved: true}, nil
+}
+
+// TestQuarantineAssignUsesRetagSource: the build's assign asks orchd's
+// RetagSource (SP-071) for a retag from quarantine, passing --confirm.
+func TestQuarantineAssignUsesRetagSource(t *testing.T) {
+	t.Setenv(agentrun.TaskIDEnv, "")
+	q := &quarantineClient{held: map[string]int32{"file:///q1": 2}}
+	if _, err := runQuarantine(q, nil, "assign", "file:///q1", "personal"); err == nil || !strings.Contains(err.Error(), "needs confirm") {
+		t.Fatalf("without --confirm: %v", err)
+	}
+	out, err := runQuarantine(q, nil, "assign", "--confirm", "file:///q1", "personal")
+	if err != nil || !strings.Contains(out, "moved 2 chunk(s) of file:///q1 to personal") {
+		t.Fatalf("assign = %q, %v", out, err)
+	}
+	last := q.retagReqs[len(q.retagReqs)-1]
+	if last.GetSourceUri() != "file:///q1" || last.GetSpace() != "personal" || !last.GetConfirm() || last.GetExpectFrom() != "quarantine" {
+		t.Fatalf("request = %v", last)
+	}
+	if _, ok := q.held["file:///q1"]; ok {
+		t.Fatal("source still in quarantine")
 	}
 }

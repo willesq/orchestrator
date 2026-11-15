@@ -35,22 +35,23 @@ type RetagResult struct {
 }
 
 // Retagger moves a source to a space and records the sticky override that
-// later refreshes honor. orchd's RetagSource (SP-071) implements it; assign
-// does not move data itself.
+// later refreshes honor. rpcRetagger implements it with orchd's RetagSource
+// (SP-071); assign does not move data itself.
 type Retagger interface {
 	Retag(ctx context.Context, req RetagRequest) (RetagResult, error)
 }
 
-// errRetagUnavailable is the assign answer until orchd has RetagSource.
-var errRetagUnavailable = errors.New("assign needs orchd's RetagSource (SP-071), which this build does not have yet")
+// rpcRetagger is the Retagger through orchd's RetagSource (SP-071), which
+// moves the chunks without re-embedding them and records the override.
+type rpcRetagger struct{ client orchdv1.OrchdClient }
 
-// unavailableRetagger is the Retagger before SP-071: it refuses every retag.
-// Reason: SP-071 builds the move and its override rule; assign is only the
-// quarantine front end to it, so it waits rather than duplicating the move.
-type unavailableRetagger struct{}
-
-func (unavailableRetagger) Retag(context.Context, RetagRequest) (RetagResult, error) {
-	return RetagResult{}, errRetagUnavailable
+func (r rpcRetagger) Retag(ctx context.Context, req RetagRequest) (RetagResult, error) {
+	resp, err := r.client.RetagSource(ctx, &orchdv1.RetagSourceRequest{SourceUri: req.SourceURI, Space: req.Space,
+		Confirm: req.Confirm, ExpectFrom: req.ExpectFrom})
+	if err != nil {
+		return RetagResult{}, err
+	}
+	return RetagResult{Chunks: int(resp.GetChunks())}, nil
 }
 
 // retaggerFactory makes the Retagger for a connected client.
@@ -61,7 +62,7 @@ type retaggerFactory func(orchdv1.OrchdClient) Retagger
 // operator.
 func newQuarantineCmd(cf clientFactory, rf retaggerFactory) *cobra.Command {
 	if rf == nil {
-		rf = func(orchdv1.OrchdClient) Retagger { return unavailableRetagger{} }
+		rf = func(c orchdv1.OrchdClient) Retagger { return rpcRetagger{client: c} }
 	}
 	cmd := &cobra.Command{
 		Use:   "quarantine",
@@ -122,8 +123,11 @@ func newQuarantineAssignCmd(cf clientFactory, rf retaggerFactory) *cobra.Command
 		Short: "Move a quarantined source to a space, and keep it there on later refreshes",
 		Long: `Moves every chunk of a quarantined source to the space's collection without
 re-embedding it, and records an override so later refreshes and re-ingests of the same
-source land in that space. This is a retag (SP-071) of a source that is in quarantine;
-assigning to the public space needs --confirm.`,
+source land in that space. It is a retag (orch spaces retag) of a source that is in
+quarantine now: orchd refuses it if the source left quarantine since it was listed.
+
+Moving content out of quarantine makes it readable by that space's sessions, so orchd
+needs --confirm for every assign; without it nothing moves.`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error {
 			uri, space := args[0], args[1]
@@ -150,7 +154,7 @@ assigning to the public space needs --confirm.`,
 			})
 		},
 	})
-	cmd.Flags().BoolVar(&confirm, "confirm", false, "confirm a move that needs it, such as into the public space")
+	cmd.Flags().BoolVar(&confirm, "confirm", false, "confirm moving the source out of quarantine (orchd requires it)")
 	return cmd
 }
 
