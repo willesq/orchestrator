@@ -75,7 +75,7 @@ func (w *writePlacer) placeMeta(ctx context.Context, m *rag.Meta) (spaces.Placem
 		return spaces.Placement{}, fmt.Errorf("place %s: %w", m.SourceURI, err)
 	}
 	if p, err = w.withRetag(ctx, res, m, p); err != nil {
-		return err
+		return spaces.Placement{}, err
 	}
 	if remoteSteered(m, p) {
 		// Reason: an agent can write a .git naming any org beside a file it

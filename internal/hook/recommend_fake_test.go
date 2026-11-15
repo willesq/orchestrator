@@ -267,7 +267,3 @@ func (f *fakeClient) ListSpaces(context.Context, *orchdv1.ListSpacesRequest, ...
 func (f *fakeClient) ScanSpaces(context.Context, *orchdv1.ScanSpacesRequest, ...grpc.CallOption) (*orchdv1.ScanSpacesResponse, error) {
 	return &orchdv1.ScanSpacesResponse{}, nil
 }
-
-func (f *fakeClient) RetagSource(context.Context, *orchdv1.RetagSourceRequest, ...grpc.CallOption) (*orchdv1.RetagSourceResponse, error) {
-	return &orchdv1.RetagSourceResponse{}, nil
-}

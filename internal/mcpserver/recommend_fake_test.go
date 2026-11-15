@@ -315,7 +315,3 @@ func (f *fakeClient) ListOutboundRules(context.Context, *orchdv1.ListOutboundRul
 func (f *fakeClient) ChangeOutboundRule(context.Context, *orchdv1.ChangeOutboundRuleRequest, ...grpc.CallOption) (*orchdv1.ChangeOutboundRuleResponse, error) {
 	return &orchdv1.ChangeOutboundRuleResponse{}, nil
 }
-
-func (f *fakeClient) RetagSource(context.Context, *orchdv1.RetagSourceRequest, ...grpc.CallOption) (*orchdv1.RetagSourceResponse, error) {
-	return &orchdv1.RetagSourceResponse{}, nil
-}
