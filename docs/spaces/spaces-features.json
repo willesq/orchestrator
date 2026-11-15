@@ -6492,7 +6492,7 @@
       "attempts": 1,
       "criteria_sha256": "f334012d02c2c9c118e211015950a80e0234c453ca65ed1894ac756872e8c3be",
       "branch": "feat/sp-031-status-visibility",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/197"
     },
     {
       "id": "SP-044",
