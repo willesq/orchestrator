@@ -7526,6 +7526,63 @@
       "criteria_sha256": "f8afd77c35f69708b328a563d6ffe56f236a5b995bab7cf38f88735dbc4a4985",
       "branch": null,
       "pr": null
+    },
+    {
+      "id": "SP-078",
+      "phase": "P2",
+      "priority": 26.6,
+      "title": "Settings RPCs are operator-only under a policy (D-74)",
+      "summary": "Under a spaces policy, the settings RPCs that queued tasks are already refused (SetConfig with Sensitive keys, harness and cc-safety-net settings, Restart, PR landing) are also refused to interactive sessions; only Orch.app may call them. Ingest, Dispatch and the task RPCs stay available to sessions.",
+      "why": "RC-710 (raised by SP-025): an agent session could change sensitive settings or restart orchd under a policy.",
+      "depends_on": [
+        "SP-025"
+      ],
+      "touches": [
+        "internal/daemon/callers.go",
+        "internal/daemon/ (settings RPCs)"
+      ],
+      "docs_to_update": [
+        "docs/internals/daemon.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-078.1",
+          "title": "Settings calls are the operator's",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "While a spaces policy is applied, SetConfig with Sensitive keys, the harness and cc-safety-net settings RPCs, Restart and PR landing are refused to every caller except Orch.app (D-71), including interactive harness sessions, and each refusal is logged.",
+              "measure": "test per RPC",
+              "threshold": "all pass"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "Under a policy, interactive sessions can still call Ingest, Dispatch and the task RPCs they use today; with no policy applied, every RPC behaves as before (INV-10).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "doc",
+              "check": "docs/internals/daemon.md lists which RPCs are operator-only under a policy.",
+              "measure": "file changed in the diff",
+              "threshold": "true"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "901473b12fe5cd0035785d2271433e5396c60ed79717edc54f187b4072c72bdc",
+      "branch": null,
+      "pr": null
     }
   ],
   "criteria_hash_recipe": "criteria_sha256 = sha256 of json.dumps([{id, title, acceptance} for each checkpoint], sort_keys=True, separators=(',', ':'), ensure_ascii=False) encoded as UTF-8. 'evidence' is excluded so recording evidence does not change the hash.",
@@ -7649,6 +7706,10 @@
     {
       "date": "2026-11-14",
       "change": "SP-051 done: Spaces pane Overview, badge (conflicts > quarantine > drift > relabel), Basic/Advanced and screen-share-safe mode; a1 confirmed by the user (D-70); verified at b2972ab. RC-500 to RC-504 added."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "SP-078 added for RC-710 (D-74, recorded on #188): settings RPCs become operator-only under a policy."
     }
   ],
   "plan_location": {
@@ -7720,28 +7781,42 @@
       {
         "feature": "SP-025",
         "rc_range": "RC-700..RC-749",
-        "note": "PR #188; RC-705/706/707 settled by D-71; resumed to make Orch.app the only operator under a policy"
+        "note": "PR #188; D-71 done; finishing on D-74"
       },
       {
-        "feature": "SP-076",
-        "rc_range": "RC-800..RC-849",
-        "note": "PR #189; waiting on the user's RC-801 decision"
+        "feature": "SP-028",
+        "rc_range": "RC-900..RC-949",
+        "note": "PR #192; wiring assign to RetagSource after #191 merged"
       },
       {
-        "feature": "SP-051",
-        "rc_range": "RC-500..RC-549",
-        "note": "done; PR #181 gets placeholder commits (D-72) before merging"
+        "feature": "SP-052",
+        "rc_range": "RC-1000..RC-1049",
+        "note": "PR #193; waiting on the user's a1 snapshot review"
+      },
+      {
+        "feature": "SP-054",
+        "rc_range": "RC-1050..RC-1099",
+        "note": "PR #194; waiting on the user's a2 hands-on check"
       }
     ],
-    "next_rc_block": "RC-850",
+    "next_rc_block": "RC-1100",
     "queued": [
-      "SP-026, SP-029, SP-064 after SP-025",
-      "SP-077 after SP-025",
-      "SP-071, SP-028, SP-031 (SP-027 is done)",
-      "SP-052, SP-054 after #181"
+      "SP-031, SP-077, SP-078, SP-026, SP-029, SP-064 after SP-025",
+      "SP-053 after SP-071 and SP-072 (a1 needs the user)"
     ],
-    "d_ids_reserved": [],
-    "next_d_id": "D-73",
+    "d_ids_reserved": [
+      {
+        "id": "D-73",
+        "for": "SP-076",
+        "topic": "RC-801 accepted (recorded in #189)"
+      },
+      {
+        "id": "D-74",
+        "for": "SP-025",
+        "topic": "RC-710 accepted until SP-078 (recorded on #188)"
+      }
+    ],
+    "next_d_id": "D-75",
     "proto_slot": {
       "holder": "none",
       "next": "SP-025 if D-71 needs it, then SP-077"
@@ -7757,7 +7832,10 @@
       "SP-048 (#179)",
       "SP-074 (#182)",
       "SP-075 (#185)",
-      "SP-027 (#187)"
+      "SP-027 (#187)",
+      "SP-076 (#189)",
+      "SP-051 (#181)",
+      "SP-071 (#191)"
     ]
   }
 }
