@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 	"github.com/willesq/orchestrator/internal/spaces"
 	"github.com/willesq/orchestrator/internal/toollog"
@@ -151,12 +152,27 @@ func (s *server) replayPolicies(ctx context.Context, req *orchdv1.ReplaySpacesRe
 }
 
 // replayPin is the owner's pin as the guard reads it: a session's recorded
-// pin; tasks and harness processes hold none.
+// pin, or the pin of a task's agent session, which orchd takes for it as
+// the task runs (SP-029); harness processes hold none.
 func (s *server) replayPin(ctx context.Context, owner toollog.Owner) (spaces.GuardPin, error) {
-	if owner.Kind != toollog.OwnerSession || s.pins == nil {
+	id := owner.ID
+	switch {
+	case s.pins == nil:
+		return spaces.GuardPin{}, nil
+	case owner.Kind == toollog.OwnerTask:
+		// Reason: the guard reads the pin file of the session the hook
+		// names, which for a task is its agent session (a Codex task's
+		// thread is known only after it ends, so it has none).
+		id = agentrun.SessionID(owner.ID)
+	case owner.Kind != toollog.OwnerSession:
 		return spaces.GuardPin{}, nil
 	}
-	p, ok, err := s.pins.get(ctx, owner.ID)
+	p, ok, err := s.pins.get(ctx, id)
+	if ok && owner.Kind == toollog.OwnerTask && p.InheritedFrom != taskPinOwner(owner.ID) {
+		// Reason: only the pin orchd took for this task judges its calls;
+		// another under that ID (a Codex task's, which has none) does not.
+		ok, p = false, sessionPin{}
+	}
 	if err != nil {
 		if ctx.Err() != nil {
 			return spaces.GuardPin{}, grpcstatus.FromContextError(ctx.Err()).Err()

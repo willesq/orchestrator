@@ -176,7 +176,10 @@ switches them back, `--drop-backup` deletes the backup's space collections with 
 
 Content stored before memory spaces, before each space had its own collection, or under an older
 spaces policy revision is not read by the spaces it belongs to until it is relabelled. After you
-apply a policy (and after each later revision), run, in a terminal outside any agent session:
+apply a policy (and after each later revision), relabel it from Orch.app. While a policy is
+applied only Orch.app is the operator (D-71), so the same commands from a terminal are refused
+until a terminal can be unlocked from the app (planned); with no policy they run in a terminal
+outside any agent session:
 
 ```sh
 orch rag relabel --dry-run   # counts per space it would move or stamp; changes nothing
@@ -187,3 +190,31 @@ Nothing is re-embedded. Content that cannot be placed (notes stored before write
 client notes with no session space, sessions whose transcript is gone, conflicts) goes to
 quarantine, never to public or another space; retag what you want. Chunks reported as left stale
 (for example, GitHub could not be asked about a repo) are retried by the next run.
+
+To see and clear quarantine (operator only):
+
+```sh
+orch quarantine list                              # quarantined sources and their chunk counts
+orch quarantine assign <source_uri> <space> --confirm   # move one to a space and keep it there
+orch quarantine purge <source_uri>... | --all     # counts only; add --confirm to delete
+```
+
+`orch status` shows how many sources and chunks quarantine holds. `assign` is a retag of a
+quarantined source (see below), so it needs `--confirm` like any move out of quarantine.
+
+## Retagging a source
+
+To move one source to another space (for example a note left in quarantine), run, in a terminal
+outside any agent session:
+
+```sh
+orch spaces retag <source_uri> <space>             # a space of the applied policy, or quarantine
+orch spaces retag <source_uri> oss --confirm       # into public, out of an isolated space or out of quarantine
+```
+
+Its chunks move with their vectors (nothing is re-embedded) and the source stays in that space:
+later docs syncs, sources refreshes and your own re-ingests of it go there. A session's note
+under that source_uri goes there only if the session's space is the one you chose; otherwise
+the write is refused. Session records and hand-offs that orch cannot tie to a pinned session or
+a bound folder stay in quarantine. An interrupted retag can be run again, and orchd also finishes it when it
+next starts.

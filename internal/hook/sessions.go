@@ -143,11 +143,21 @@ func sessionStartWith(p Payload, out io.Writer, notice []string) error {
 		// as its own; the spaces stream is the operator's.
 		own = ""
 	}
+	var shows func(events.Event) bool
 	for _, stream := range []string{own, "pr-babysitter", "routing", taskEventStream} {
 		if stream == "" {
 			continue
 		}
 		evs, _ := events.Read(paths.EventsDir(), stream)
+		if stream != own && !spaceFreeStreams[stream] && len(evs) > 0 {
+			if shows == nil {
+				shows = eventFilter(p.SessionID)
+			}
+			// Reason: a shared stream holds every space's PRs and tasks;
+			// the digest shows the latest the session's spaces hold
+			// (SP-026).
+			evs = sharedEvents(stream, own, evs, shows)
+		}
 		for i := max(0, len(evs)-5); i < len(evs); i++ {
 			lines = append(lines, eventLine(evs[i]))
 		}

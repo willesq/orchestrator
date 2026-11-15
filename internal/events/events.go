@@ -33,6 +33,11 @@ type Event struct {
 	Timestamp string `json:"timestamp"` // RFC3339
 	// Refusal is set on a refusal event (KindRefusal) only.
 	Refusal *Refusal `json:"refusal,omitempty"`
+	// Space is the space of what the event reports, set by orchd when the
+	// event is derived from content placed in one (INV-09): a finished
+	// queued task carries the space its dispatch recorded. Empty with no
+	// spaces policy, and on events that predate spaces.
+	Space string `json:"space,omitempty"`
 }
 
 // Append writes one event to <dir>/<stream>.jsonl, creating the dir/file as needed.

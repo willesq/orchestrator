@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -590,9 +591,20 @@ func buildFilter(must map[string]string, anyTags, allTags []string, tr TimeRange
 		if val == "" {
 			continue
 		}
+		var v any = val
+		if k == fieldLabelsV {
+			// Reason: labels_v is stored as a number, which a string never
+			// matches; an unparsable value matches nothing rather than
+			// dropping the condition.
+			n, err := strconv.ParseInt(val, 10, 64)
+			if err != nil {
+				n = -1
+			}
+			v = n
+		}
 		conds = append(conds, map[string]any{
 			"key":   k,
-			"match": map[string]any{"value": val},
+			"match": map[string]any{"value": v},
 		})
 	}
 	if len(anyTags) > 0 {

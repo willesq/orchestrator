@@ -86,6 +86,9 @@ type deps struct {
 	live    *liveRunner
 	// taskHub receives the runner's liveness changes; nil drops them.
 	taskHub *taskHub
+	// taskPins pins each task's agent session to its task's space as its
+	// process starts (SP-029); nil pins none.
+	taskPins *taskPinner
 	// reviews is the PR review watcher shared with its RPCs; nil drops its unit.
 	reviews *reviews.Watcher
 	// ghProfiles picks the gh login of each space's GitHub calls; nil runs
@@ -112,7 +115,7 @@ func subsystems(d deps) []supervisor.Unit {
 		if d.store != nil {
 			reg = models.NewRegistry(d.store)
 		}
-		out = append(out, workerUnit(d.backend, d.settings.Queue.Worker, secretEnv(d.settings), reg, d.taskCtl, d.live, d.taskHub))
+		out = append(out, workerUnit(d.backend, d.settings.Queue.Worker, secretEnv(d.settings), reg, d.taskCtl, d.live, d.taskHub, d.taskPins))
 	}
 	sched := d.docs
 	if sched == nil {
@@ -236,7 +239,7 @@ func qdrantUnit(s config.Settings, apiKey string, sys *systemProbe) (supervisor.
 // started over (see workflows.AgentTask), and once the worker is up, ctl
 // settles any task a stopped worker left without an active run.
 func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []string, reg *models.Registry,
-	ctl *queue.Control, live *liveRunner, hub *taskHub) supervisor.Unit {
+	ctl *queue.Control, live *liveRunner, hub *taskHub, pins *taskPinner) supervisor.Unit {
 	// Held across Run/Stop so the unit can join the worker it started: without
 	// that, a restart would leave the previous worker draining the same backend.
 	var current *worker.Worker
@@ -248,7 +251,12 @@ func workerUnit(b backend.Backend, cfg config.QueueWorkerSettings, dropEnv []str
 			// restart ends in-flight sessions instead of waiting them out.
 			tr := newTaskRunner(cfg, ctx, dropEnv)
 			tr.models = reg
-			tr.r.OnLive = hub.publish
+			tr.r.OnLive = func(id string) {
+				// Pinned first, so the session's pin exists before anyone
+				// told of the change looks for it.
+				pins.changed(id)
+				hub.publish(id)
+			}
 			workflows.SetRunner(tr)
 			opts := worker.DefaultOptions
 			opts.MaxParallelActivityTasks = maxConcurrent(cfg)
@@ -568,7 +576,7 @@ func (t taskRunner) task(ctx context.Context, in workflows.AgentTaskInput) agent
 // agentTask converts a durable task input for the runner. Only providers the
 // worker runs carry their model through; any other route runs unrouted.
 func agentTask(in workflows.AgentTaskInput) agentrun.Task {
-	t := agentrun.Task{ID: in.ID, Agent: in.Agent, Body: in.Body, Cwd: in.Cwd, Heads: in.Heads}
+	t := agentrun.Task{ID: in.ID, Agent: in.Agent, Body: in.Body, Cwd: in.Cwd, Heads: in.Heads, Space: in.Space}
 	switch in.Route.Provider {
 	case models.ProviderClaude:
 		t.Model = in.Route.Model
@@ -589,8 +597,11 @@ const taskEventStream = "queue"
 // fetch the result deliberately with queue_read.
 func notifyTaskDone(in workflows.AgentTaskInput, o workflows.Outcome) {
 	summary := in.ID + " finished " + o.Status + "; read the result with queue_read or `orch task " + in.ID + "`"
+	// Reason (INV-09): the event is derived from the task, so it carries
+	// the space the task reads and writes, for readers to filter by.
 	if err := events.Append(paths.EventsDir(), taskEventStream, events.Event{
-		Kind: o.Status, Source: in.Agent, Summary: summary, Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Kind: o.Status, Source: in.Agent, TaskID: in.ID, Summary: summary, Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Space: in.Space,
 	}); err != nil {
 		log.Printf("queue: record completion of %s: %v", in.ID, err)
 	}

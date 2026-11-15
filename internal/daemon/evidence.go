@@ -33,6 +33,9 @@ func (s *server) RateTask(ctx context.Context, req *orchdv1.RateTaskRequest) (*o
 	if s.rater == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "task ratings are unavailable")
 	}
+	if !s.changesTask(ctx, s.recordScope(ctx, orchdv1.Orchd_RateTask_FullMethodName), req.GetId()) {
+		return nil, grpcstatus.Errorf(codes.NotFound, "%v: %s", evidence.ErrNoTask, req.GetId())
+	}
 	err := s.rater.Rate(ctx, req.GetId(), req.GetRating())
 	if errors.Is(err, evidence.ErrNoTask) {
 		return nil, grpcstatus.Error(codes.NotFound, err.Error())

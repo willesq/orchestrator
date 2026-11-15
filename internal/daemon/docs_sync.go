@@ -29,12 +29,18 @@ func (s *server) SyncDocs(ctx context.Context, req *orchdv1.SyncDocsRequest) (*o
 		return nil, grpcstatus.Error(codes.Unavailable, "docs sync unavailable")
 	}
 	owner := req.GetOwner()
+	scope := s.recordScope(ctx, orchdv1.Orchd_SyncDocs_FullMethodName)
 	if req.GetConfirmPrune() && owner == "" {
 		return nil, grpcstatus.Error(codes.InvalidArgument, "confirm_prune needs an owner")
 	}
 	if owner != "" {
 		if !github.ValidLogin(owner) {
 			return nil, grpcstatus.Errorf(codes.InvalidArgument, "invalid GitHub login %q", owner)
+		}
+		// Reason: another space's owner reads as one not registered
+		// (SP-026), whether or not it is, or is turned off.
+		if !scope.seesOwner(owner) {
+			return nil, notDocsOwner(owner)
 		}
 		if err := s.requireDocsOwner(ctx, owner); err != nil {
 			return nil, err
@@ -77,6 +83,10 @@ func (s *server) SyncDocs(ctx context.Context, req *orchdv1.SyncDocsRequest) (*o
 		p := s.docsSync.Progress()
 		what := "looking up due owners"
 		switch {
+		case p.Owner != "" && !scope.seesOwner(p.Owner):
+			// Reason: another space's sync is named by neither owner nor
+			// counts (SP-026).
+			what = "another owner"
 		case p.Owner != "" && p.Total > 0:
 			what = fmt.Sprintf("%s, %d of %d repos", p.Owner, p.Done, p.Total)
 		case p.Owner != "":
@@ -90,14 +100,24 @@ func (s *server) SyncDocs(ctx context.Context, req *orchdv1.SyncDocsRequest) (*o
 		return nil, err
 	}
 	log.Printf("docs: sync requested (owner %q, force %v)", owner, req.GetForce())
-	return docsSyncState(s.docsSync.Progress()), nil
+	return syncFor(scope, s.docsSync.Progress()), nil
 }
 
-func (s *server) GetDocsSync(context.Context, *orchdv1.GetDocsSyncRequest) (*orchdv1.DocsSyncState, error) {
+// syncFor is the docs sync's progress as scope may see it: a sync of an
+// owner of a space it does not read reads as none running (SP-026); its
+// owner, repo and counts are that space's.
+func syncFor(scope readScope, p docs.Progress) *orchdv1.DocsSyncState {
+	if p.Owner != "" && !scope.seesOwner(p.Owner) {
+		return &orchdv1.DocsSyncState{}
+	}
+	return docsSyncState(p)
+}
+
+func (s *server) GetDocsSync(ctx context.Context, _ *orchdv1.GetDocsSyncRequest) (*orchdv1.DocsSyncState, error) {
 	if s.docsSync == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "docs sync unavailable")
 	}
-	return docsSyncState(s.docsSync.Progress()), nil
+	return syncFor(s.recordScope(ctx, orchdv1.Orchd_GetDocsSync_FullMethodName), s.docsSync.Progress()), nil
 }
 
 func (s *server) requireDocsOwner(ctx context.Context, owner string) error {
@@ -113,6 +133,11 @@ func (s *server) requireDocsOwner(ctx context.Context, owner string) error {
 			return nil
 		}
 	}
+	return notDocsOwner(owner)
+}
+
+// notDocsOwner is the answer for an owner that is not registered.
+func notDocsOwner(owner string) error {
 	return grpcstatus.Errorf(codes.NotFound, "%s is not a docs owner; add it with: orch docs add %s", owner, owner)
 }
 

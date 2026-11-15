@@ -28,6 +28,24 @@ type documentReader interface {
 	Document(ctx context.Context, uri string) (rag.Document, error)
 }
 
+// spacedDocumentReader rebuilds a source read only from the given spaces
+// (implemented by *rag.Service).
+type spacedDocumentReader interface {
+	DocumentIn(ctx context.Context, uri string, spaces []string, labelsV int64) (rag.Document, error)
+}
+
+// document reads uri for scope. A reader that cannot read by space finds
+// nothing for a filtered scope rather than reading every space.
+func (s *server) document(ctx context.Context, uri string, scope readScope) (rag.Document, error) {
+	if sr, ok := s.documents.(spacedDocumentReader); ok {
+		return sr.DocumentIn(ctx, uri, scope.spaces, scope.labelsV)
+	}
+	if scope.filtered() {
+		return rag.Document{}, rag.ErrSourceNotFound
+	}
+	return s.documents.Document(ctx, uri)
+}
+
 const (
 	maxSourceURI = 4096
 	// maxDocumentBytes keeps a GetDocument reply under the 4 MiB clients
@@ -81,9 +99,11 @@ func (s *server) ListDocs(ctx context.Context, _ *orchdv1.ListDocsRequest) (*orc
 	}
 	// The catalog is what the store holds, not what the registry recorded:
 	// a doc whose ingest failed, or whose content was deleted, is not listed.
-	stored, _, _, err := s.rag.ListSources(ctx, rag.ListSourcesOpts{SourceType: "repo_doc", URIPrefix: "repo://"})
+	// It holds only docs in spaces the caller reads (SP-025).
+	scope := s.readScope(ctx, orchdv1.Orchd_ListDocs_FullMethodName)
+	stored, _, _, err := s.rag.ListSources(ctx, rag.ListSourcesOpts{SourceType: "repo_doc", URIPrefix: "repo://", Spaces: scope.spaces, LabelsV: scope.labelsV})
 	if err != nil {
-		return nil, err
+		return nil, scope.storeError("ListDocs", err)
 	}
 	recorded, err := s.docsReg.ListDocs(ctx)
 	if err != nil {
@@ -124,6 +144,9 @@ func (s *server) ListDocs(ctx context.Context, _ *orchdv1.ListDocsRequest) (*orc
 		size += proto.Size(f)
 		out.Files = append(out.Files, f)
 	}
+	if scope.filtered() {
+		narrowDocs(out, scope)
+	}
 	return out, nil
 }
 
@@ -135,12 +158,15 @@ func (s *server) GetDocument(ctx context.Context, req *orchdv1.GetDocumentReques
 	if uri == "" || len(uri) > maxSourceURI {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "source_uri must be 1 to %d characters", maxSourceURI)
 	}
-	doc, err := s.documents.Document(ctx, uri)
+	scope := s.readScope(ctx, orchdv1.Orchd_GetDocument_FullMethodName)
+	doc, err := s.document(ctx, uri, scope)
 	if errors.Is(err, rag.ErrSourceNotFound) {
+		// The same answer for a source held in a space the caller cannot
+		// read, so the reply does not say it exists (INV-01).
 		return nil, grpcstatus.Errorf(codes.NotFound, "nothing is indexed under %q", uri)
 	}
 	if err != nil {
-		return nil, err
+		return nil, scope.storeError("GetDocument", err)
 	}
 	if len(doc.Text) > maxDocumentBytes {
 		doc.Text, doc.Oversize = "", true
@@ -191,6 +217,12 @@ func (s *server) ListRegisteredSources(ctx context.Context, _ *orchdv1.ListRegis
 		return nil, err
 	}
 	out := &orchdv1.ListRegisteredSourcesResponse{}
+	// Reason: a registered source records no space, and its URI and folder
+	// may be any space's, so under a policy only the operator lists them
+	// (SP-026, RC-700).
+	if s.recordScope(ctx, orchdv1.Orchd_ListRegisteredSources_FullMethodName).filtered() {
+		return out, nil
+	}
 	for _, src := range list {
 		out.Sources = append(out.Sources, registeredSource(src))
 	}

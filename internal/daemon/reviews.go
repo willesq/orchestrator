@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -33,8 +34,10 @@ func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, c
 		GH:    ghp.Routed(),
 		Post:  reviews.NewGHPoster(ghp.Env),
 		// Unrouted, so the agent's own model runs: the review fans out to
-		// subagents, which only Claude Code sessions have.
-		Dispatch: func(ctx context.Context, body string) (string, error) {
+		// subagents, which only Claude Code sessions have. The task reads
+		// the memory of the space the PR's owner is bound to (SP-026).
+		Dispatch: func(ctx context.Context, repo, body string) (string, error) {
+			ctx = queue.WithReadSpace(ctx, reviewSpace(ghp, repo))
 			return disp.Dispatch(ctx, reviews.Agent, body, "", workflows.Route{})
 		},
 		Task: func(ctx context.Context, id string) (string, string, bool, error) {
@@ -56,6 +59,31 @@ func newReviewWatcher(store *reviews.Store, disp dispatcher, tasks taskReader, c
 		}
 	}
 	return w
+}
+
+// reviewSpace is the space a review task of repo's PR ("owner/name") reads
+// and is recorded in: its owner's space (watchedOwnerSpace).
+func reviewSpace(ghp *ghProfiles, repo string) string {
+	owner, _, _ := strings.Cut(repo, "/")
+	return watchedOwnerSpace(ghp, owner)
+}
+
+// watchedOwnerSpace is the space GitHub owner's watched items and review
+// tasks belong to: the space its org is bound to, Quarantine (public
+// memory only) for an owner no space binds, and "" with no policy applied
+// or the policy unreadable, as a dispatch records then (SP-026).
+func watchedOwnerSpace(ghp *ghProfiles, owner string) string {
+	if ghp == nil || ghp.spaces == nil {
+		return ""
+	}
+	res, err := ghp.spaces.Current()
+	if err != nil {
+		// Reason: with the policy unreadable the task records no space,
+		// so it reads public memory only, and an event shows only in the
+		// operator's views.
+		return ""
+	}
+	return orgSpaceOf(res, owner)
 }
 
 // reviewsPoll is pr_reviews.poll_interval, never below the unit's tick, which
@@ -90,7 +118,13 @@ func (s *server) ListPRReviews(ctx context.Context, _ *orchdv1.ListPRReviewsRequ
 		return nil, err
 	}
 	out := &orchdv1.ListPRReviewsResponse{Reviews: make([]*orchdv1.PRReview, 0, len(list))}
+	scope := s.recordScope(ctx, orchdv1.Orchd_ListPRReviews_FullMethodName)
 	for _, r := range list {
+		// Reason: a review, its verdict and report are its PR's space's
+		// (SP-026).
+		if !scope.seesRepo(r.Repo) {
+			continue
+		}
 		pb := reviewPB(r)
 		checked, next := w.Schedule(r)
 		pb.CheckedAt, pb.NextCheckAt = unixOrZero(checked), unixOrZero(next)
@@ -104,8 +138,16 @@ func (s *server) WatchPRReview(ctx context.Context, req *orchdv1.WatchPRReviewRe
 	if err != nil {
 		return nil, err
 	}
-	if _, _, err := reviews.ParseURL(req.GetUrl()); err != nil {
+	repo, _, err := reviews.ParseURL(req.GetUrl())
+	if err != nil {
 		return nil, grpcstatus.Error(codes.InvalidArgument, err.Error())
+	}
+	// Reason: a watch dispatches a review task that reads the PR owner's
+	// space with the caller's instructions, and its answer carries the
+	// review's report, so only that space's callers start or change one
+	// (SP-026).
+	if !changesRepo(ctx, s.recordScope(ctx, orchdv1.Orchd_WatchPRReview_FullMethodName), repo) {
+		return nil, errNoPR
 	}
 	if !reviews.ValidMode(req.GetMode()) {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "mode must be %s, %s, %s, %s or %s",
@@ -144,6 +186,10 @@ func (s *server) SetPRReviewUpdateInPlace(ctx context.Context, req *orchdv1.SetP
 	if err != nil {
 		return nil, err
 	}
+	if repo, _, err := reviews.ParseURL(req.GetUrl()); err == nil &&
+		!changesRepo(ctx, s.recordScope(ctx, orchdv1.Orchd_SetPRReviewUpdateInPlace_FullMethodName), repo) {
+		return nil, errNoPR
+	}
 	r, err := w.SetUpdateInPlace(ctx, req.GetUrl(), req.GetUpdateInPlace())
 	switch {
 	case errors.Is(err, reviews.ErrNotFound):
@@ -161,6 +207,10 @@ func (s *server) StopPRReview(ctx context.Context, req *orchdv1.StopPRReviewRequ
 	if err != nil {
 		return nil, err
 	}
+	if repo, _, err := reviews.ParseURL(req.GetUrl()); err == nil &&
+		!changesRepo(ctx, s.recordScope(ctx, orchdv1.Orchd_StopPRReview_FullMethodName), repo) {
+		return nil, errNoPR
+	}
 	if err := w.Stop(ctx, req.GetUrl(), req.GetForget()); errors.Is(err, reviews.ErrNotFound) {
 		return nil, grpcstatus.Error(codes.NotFound, err.Error())
 	} else if errors.Is(err, reviews.ErrPosting) {
@@ -172,8 +222,16 @@ func (s *server) StopPRReview(ctx context.Context, req *orchdv1.StopPRReviewRequ
 }
 
 func (s *server) GetPRDetail(ctx context.Context, req *orchdv1.GetPRDetailRequest) (*orchdv1.PRDetail, error) {
-	if _, _, err := reviews.ParseURL(req.GetUrl()); err != nil {
+	repo, _, err := reviews.ParseURL(req.GetUrl())
+	if err != nil {
 		return nil, grpcstatus.Error(codes.InvalidArgument, err.Error())
+	}
+	// Reason: checked before the detail cache, which is keyed by URL alone
+	// (RC-351), so a PR of another space is neither served from it nor
+	// fetched into it for this caller (SP-026). It reads as a PR GitHub
+	// does not show this caller.
+	if !s.recordScope(ctx, orchdv1.Orchd_GetPRDetail_FullMethodName).seesRepo(repo) {
+		return nil, errNoPR
 	}
 	if s.details == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "PR details unavailable")

@@ -460,3 +460,13 @@ func TestWirePointDecode(t *testing.T) {
 		t.Error("num misreads a stored number")
 	}
 }
+
+// TestMetaOfKeepsContentHash: a relabel places a source with the hash of
+// its stored text, so an edited file placed by the session that wrote that
+// text (spaces SP-029) is placed the same way again.
+func TestMetaOfKeepsContentHash(t *testing.T) {
+	m := metaOf("file:///scratch/a.md", map[string]any{fieldContentHash: "abc", fieldWriter: WriterFile})
+	if m.ContentHash != "abc" || m.Writer != WriterFile {
+		t.Fatalf("metaOf = %+v", m)
+	}
+}

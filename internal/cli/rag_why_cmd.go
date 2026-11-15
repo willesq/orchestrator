@@ -94,6 +94,7 @@ func writeWhy(out io.Writer, ex hook.Explanation, took time.Duration) {
 		return
 	}
 	fmt.Fprintf(out, "searched in %s; score floor %.2f; topic terms: %s\n", took.Round(time.Millisecond), ex.Floor, termList(ex.Terms))
+	writeSearched(out, ex.Searched)
 	for _, e := range ex.Errors {
 		fmt.Fprintf(out, "search failed: %s\n", logs.Clean(e))
 	}
@@ -113,6 +114,29 @@ func writeWhy(out io.Writer, ex hook.Explanation, took time.Duration) {
 	fmt.Fprintf(out, "\ninjected: %d pointer(s), about %d tokens\n\n%s", ex.Written, len(ex.Block)/4, ex.Block)
 }
 
+// writeSearched shows the boundary the search ran inside (SP-031): the
+// caller's space as orchd decided it, and the collections it read. --cwd
+// never changes either: orchd decides them from the calling process.
+func writeSearched(out io.Writer, s *hook.Searched) {
+	if s == nil {
+		return
+	}
+	space := "none (not a session or a queued task)"
+	if s.CallerSpace != "" {
+		space = logs.Clean(s.CallerSpace)
+	}
+	scope := "every collection (no spaces policy, the operator, or memory filtering switched off)"
+	if s.Scoped {
+		scope = "only the spaces this caller reads"
+	}
+	fmt.Fprintf(out, "caller space: %s; searched %s\n", space, scope)
+	cols := "none"
+	if len(s.Collections) > 0 {
+		cols = logs.Clean(strings.Join(s.Collections, ", "))
+	}
+	fmt.Fprintf(out, "collections: %s\n", cols)
+}
+
 func trustOf(d hook.Decision) memctx.Trust {
 	return memctx.TrustOf(d.Hit.GetTrust(), d.Hit.GetSourceType(), d.Hit.GetSourceUri())
 }
@@ -127,6 +151,13 @@ func termList(terms []string) string {
 		return logs.Clean(strings.Join(sorted[:12], ", ")) + fmt.Sprintf(", +%d more", len(sorted)-12)
 	}
 	return logs.Clean(strings.Join(sorted, ", "))
+}
+
+// searched is hook.Searched as rag why's JSON spells it.
+type searched struct {
+	CallerSpace string   `json:"caller_space"`
+	Scoped      bool     `json:"scoped"`
+	Collections []string `json:"collections"`
 }
 
 func writeWhyJSON(out io.Writer, ex hook.Explanation) error {
@@ -152,7 +183,12 @@ func writeWhyJSON(out io.Writer, ex hook.Explanation) error {
 		Candidates []candidate `json:"candidates"`
 		Errors     []string    `json:"errors,omitempty"`
 		Block      string      `json:"block"`
+		// Searched is the boundary the search ran inside (SP-031).
+		Searched *searched `json:"searched,omitempty"`
 	}{Gated: ex.Gated, Disabled: ex.Disabled, Skipped: ex.Skipped, Terms: ex.Terms, Floor: ex.Floor, Errors: ex.Errors, Block: ex.Block}
+	if s := ex.Searched; s != nil {
+		v.Searched = &searched{CallerSpace: s.CallerSpace, Scoped: s.Scoped, Collections: s.Collections}
+	}
 	for _, d := range ex.Decisions {
 		v.Candidates = append(v.Candidates, candidate{
 			URI: d.Hit.GetSourceUri(), Type: d.Hit.GetSourceType(), Score: d.Hit.GetScore(), Exact: d.Hit.GetExact(),

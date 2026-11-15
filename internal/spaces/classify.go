@@ -194,16 +194,22 @@ func Classify(o Origin, res *Resolved, opt Options) Placement {
 	}
 	p := classify(o, res, opt)
 	if opt.Override != "" {
-		over := opt.Override
-		if _, ok := res.Space(over); ok || over == Quarantine {
-			p.Space, p.Rule, p.Reason = over, PlaceOverride, "the source was retagged to "+over
-		} else {
-			p.Space, p.Rule, p.Reason = Quarantine, PlaceOverrideUnknown, "the source was retagged to a space the policy no longer has"
-		}
-		p.Outcome = Placed
-		if p.Space == Quarantine {
-			p.Outcome = Quarantined
-		}
+		p = ApplyOverride(p, res, opt.Override)
+	}
+	return p
+}
+
+// ApplyOverride is p with a sticky retag to over applied: over wins, unless
+// the policy no longer has that space, when the content is quarantined.
+func ApplyOverride(p Placement, res *Resolved, over string) Placement {
+	if _, ok := res.Space(over); ok || over == Quarantine {
+		p.Space, p.Rule, p.Reason = over, PlaceOverride, "the source was retagged to "+over
+	} else {
+		p.Space, p.Rule, p.Reason = Quarantine, PlaceOverrideUnknown, "the source was retagged to a space the policy no longer has"
+	}
+	p.Outcome = Placed
+	if p.Space == Quarantine {
+		p.Outcome = Quarantined
 	}
 	return p
 }

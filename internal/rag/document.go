@@ -26,12 +26,22 @@ type Document struct {
 // chunks trimmed. It is read from the first collection holding it, the base
 // first and then each space's.
 func (s *Service) Document(ctx context.Context, uri string) (Document, error) {
-	stores, err := s.allStores(ctx, s.active(), false)
+	return s.DocumentIn(ctx, uri, nil, 0)
+}
+
+// DocumentIn is Document read only from the given spaces, as
+// SearchOpts.Spaces chooses them (SP-025): nil reads every collection, and
+// a space's collection is read only where the payload names that space and,
+// when labelsV is set, that revision (SearchOpts.LabelsV). A source held
+// only elsewhere is ErrSourceNotFound, as if it did not exist.
+func (s *Service) DocumentIn(ctx context.Context, uri string, spaces []string, labelsV int64) (Document, error) {
+	stores, err := s.listStores(ctx, spaces)
 	if err != nil {
 		return Document{}, err
 	}
+	stores = withLabels(stores, labelsV)
 	for _, ss := range stores {
-		sr, err := s.readSource(ctx, ss.st, uri)
+		sr, err := s.readSourceWhere(ctx, ss.st, uri, ss.must(map[string]string{"source_uri": uri}))
 		if err != nil {
 			return Document{}, err
 		}

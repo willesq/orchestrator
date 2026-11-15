@@ -69,3 +69,20 @@ func TestTaskReadsVerdicts(t *testing.T) {
 		t.Fatalf("task = %+v, %v", got, err)
 	}
 }
+
+// TestDispatchRecordsReadSpace: the space orchd puts on the dispatch's
+// context is kept in the task's durable input (D-46); none records "".
+func TestDispatchRecordsReadSpace(t *testing.T) {
+	if got := ReadSpaceOf(context.Background()); got != "" {
+		t.Fatalf("a bare context records %q", got)
+	}
+	ctx := WithReadSpace(context.Background(), "acme")
+	if got := ReadSpaceOf(ctx); got != "acme" {
+		t.Fatalf("ReadSpaceOf = %q, want acme", got)
+	}
+	in := taskInput("t", "dev", "b", "", nil, workflows.Route{})
+	in.Space = ReadSpaceOf(ctx)
+	if in.Space != "acme" {
+		t.Fatalf("input space = %q", in.Space)
+	}
+}

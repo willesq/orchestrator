@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/peer"
 	grpcstatus "google.golang.org/grpc/status"
 
+	"github.com/willesq/orchestrator/internal/agentrun"
 	"github.com/willesq/orchestrator/internal/handoff"
 	"github.com/willesq/orchestrator/internal/procstat"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
@@ -440,6 +441,9 @@ func (s *server) PinSession(ctx context.Context, req *orchdv1.PinSessionRequest)
 		log.Printf("orchd: PinSession %s refused: %v", id, err)
 		return nil, grpcstatus.Error(codes.PermissionDenied, "only a hook inside a claude or codex session can pin it")
 	}
+	if err := s.refuseTaskSession(ctx, id); err != nil {
+		return nil, err
+	}
 	// Reason: a hook that gives up waiting must not cost the session its
 	// pin, so placement runs to its own deadline.
 	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), pinPlaceTimeout)
@@ -516,4 +520,28 @@ func (s *server) placeSession(ctx context.Context, cwd string) (string, int64, e
 		return "", 0, err
 	}
 	return p.Space, rev, nil
+}
+
+// refuseTaskSession refuses a new pin under a queued task's session ID
+// while spaces are configured: orchd pins a task's session itself, in the
+// space its dispatch recorded (task_pins.go). Reason (SP-029 security
+// review): any harness may call PinSession with any ID, and the task's ID
+// can be learned, so a pin taken under it before the task starts would
+// place the task's records, and judge its tool calls, in the caller's
+// space. A pin that exists already (the task's, which an interactive
+// session may resume in the same space) goes through pin as before.
+func (s *server) refuseTaskSession(ctx context.Context, id string) error {
+	if !agentrun.IsTaskSessionID(id) || !s.spacesConfigured() {
+		return nil
+	}
+	_, found, err := s.pins.get(ctx, id)
+	switch {
+	case err != nil:
+		log.Printf("orchd: PinSession %s: %v", id, err)
+		return grpcstatus.Error(codes.Internal, "the session pin could not be recorded")
+	case !found:
+		log.Printf("orchd: PinSession %s refused: a queued task's session, which orchd pins itself", id)
+		return grpcstatus.Error(codes.PermissionDenied, "this session ID is a queued task's; orchd pins it when the task runs")
+	}
+	return nil
 }

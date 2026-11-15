@@ -611,6 +611,26 @@
         "id": "D-73",
         "decision": "Sessions can write files into folders listed in a public space's public_paths, or create new folders that a '*' or '**' pattern matches, and the sources refresh indexes that content into public. The user accepts this as an extension of RC-404's accepted risk (SP-076). Later, SP-046's per-checkout sandbox rules will also deny job sessions writes to listed folders (RC-805) (was RC-801).",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-74",
+        "decision": "RC-710: SP-025 merges with RC-710 accepted until a follow-up feature refuses, under a spaces policy, the task-refused settings RPCs (SetConfig with Sensitive keys, the harness and cc-safety-net settings, Restart, PR landing) to every caller except Orch.app, keeping Ingest, Dispatch and the task RPCs sessions use. The follow-up touches SP-070 and SP-050 and is added to the plan by the coordinator as SP-078.",
+        "date": "2026-11-14"
+      },
+      {
+        "id": "D-75",
+        "decision": "SP-064 (optional OpenAPPA label source) is deferred: build it only once OpenAPPA has a stable wire format (1.0 or authenticated /hook callers). Chunk labels stay shaped as space x trust so the option stays open. This counts as the explicit deferral P5's exit criteria allow.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-76",
+        "decision": "RC-229: under a policy, relabelling is run from a 'Relabel now' button in Orch.app's Spaces pane, which shows its progress; orchd does not relabel automatically after an apply. Built as SP-079.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-77",
+        "decision": "RC-1200: under a spaces policy, DeleteSource is limited to sources in the calling session's own space (Orch.app may delete any), and PurgeDocs is Orch.app-only. Built by SP-026.",
+        "date": "2026-11-15"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -2738,7 +2758,8 @@
           "SP-025",
           "SP-030"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "SP-026 (#200) checks the caller's spaces before GetPRDetail reads or fills the URL-keyed detail cache, so read enforcement already keeps it within spaces; recommended: settle RC-351 as 'read enforcement is the rule for caches outside internal/rag'."
       },
       {
         "id": "RC-352",
@@ -2827,7 +2848,8 @@
           "SP-074",
           "SP-063"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "SP-026 (#200) filters the docs registry RPCs (ListDocsOwners, ListDocsOwnerRepos, GetDocsSync) and the PR RPCs by space for agents, and the CLI lists come from orchd under a policy. The cache file's readability is RC-1252."
       },
       {
         "id": "RC-303",
@@ -3154,7 +3176,7 @@
           "SP-027"
         ],
         "status": "open",
-        "note": "Covered by SP-025 (in progress): the SP-025 lane was asked to filter reads on labels_v (2026-11-14)."
+        "note": "Covered by SP-025 (in progress): the SP-025 lane was asked to filter reads on labels_v (2026-11-14). SP-025 (PR #188) implements it: every filtered read (Search, ListSources, GetDocument, ListDocs) matches labels_v against the applied revision in each named space's second layer, as an integer; chunks with another or no labels_v are unreadable until relabelled (TestStaleLabelsAreUnreadable; the real-engine run TestIntegrationReadPathsRealQdrant)."
       },
       {
         "id": "RC-751",
@@ -3367,6 +3389,509 @@
         "affects": [
           "SP-046",
           "SP-076"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-850",
+        "kind": "decision",
+        "topic": "A sticky retag lets any writer of that URI write into the retag target",
+        "detail": "SP-071.2.a1 asks that a later client re-ingest of a retagged source_uri lands in the retagged space, and spaces.Classify lets an override win over every rule. A session pinned to another job's space could then write its own text under that URI into the target space (or into public), which is a cross-space write. Options: (a) honor the override for orchd's own writers (docs sync, sources refresh) and for client writes from the operator or from a session whose space is the target, and refuse other client writes of that URI; (b) honor it for every writer as written. Recommendation: (a); the lane implements (a) unless the user picks (b).",
+        "source": "https://github.com/willesq/orchestrator/pull/191",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-071",
+          "SP-023"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-851",
+        "kind": "follow-up",
+        "topic": "Retag low findings left open: whole source in memory, and a failed copy lookup skipping the replace check",
+        "detail": "Security audit of SP-071, low: (L3) rag.Service.Retag reads every chunk of the source with its vectors into memory while holding the migration lock; the RPC is operator-only and a 2,000-chunk source moves in under 3 s, but a very large source is unbounded. (L5, pre-existing) in the Ingest RPC, when reading the stored copy fails, the mayReplace check is skipped and the write goes on, so its removeElsewhere can delete a retagged copy in another space; failing closed when the copy cannot be read would close it. Options: page the move in batches; return Unavailable from Ingest when Copy errors.",
+        "source": "https://github.com/willesq/orchestrator/pull/191",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-071",
+          "SP-023"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-852",
+        "kind": "follow-up",
+        "topic": "Retag has no Orch.app control, no way to clear a retag, and its row outlives a deleted source",
+        "detail": "SP-071's summary mentions the UI; this lane added the RPC and 'orch spaces retag' only. A retag cannot be cleared (the operator can only retag the source again), and deleting a source (DeleteSource, a docs purge or a prune) leaves its spaces_retags row, so a later write of the same URI follows the old retag under the rules in docs/internals/memory.md 'Retag'. Proposed: a retag control in Orch.app's Spaces pane (SP-028's quarantine view can call RetagSource with expect_from), 'orch spaces retag --clear', and removing the row when its source is deleted.",
+        "source": "https://github.com/willesq/orchestrator/pull/191",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-071",
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-853",
+        "kind": "follow-up",
+        "topic": "The coverage gate passes without measuring a package whose tests fail",
+        "detail": "scripts/cover.sh drops a package's profile when its tests fail and prints nothing about it, so 'make cover' can report every file at 80% or more while internal/daemon was never measured. SP-071's verifier hit this when TestResolveCost (a p99 per-connection latency test in internal/daemon) failed under load. Options: make cover.sh fail, or at least name the package, when a package's tests fail; loosen or isolate the latency test.",
+        "source": "https://github.com/willesq/orchestrator/pull/191",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-700",
+        "kind": "follow-up",
+        "topic": "Session-callable RPCs outside memory that name other spaces' orgs, repos, sources or URIs",
+        "detail": "SP-025's registry (internal/daemon/readspaces_registry.go) classes these as 'records' with no filter yet, and SP-026's list does not name them: GetGitHubIdentity, ListGitHubScopes, ListGitHubRepos, GetDocsSync, ListDocsOwners, ListDocsOwnerRepos, ListRegisteredSources, TailLogs (orchd's log lines name source URIs), GetConfig and ListSettings. Interactive sessions may call all of them (only queued tasks are refused some). Proposed: add them to SP-026's scope (filter for agent callers, or make them operator-only), or a new feature. The SP-025 security review adds that TailLogs also undoes the read paths' error redaction: a filtered reader's store failure keeps the collection (and so space) names in orchd's log, which TailLogs serves to sessions and tasks.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-026"
+        ],
+        "status": "resolved",
+        "note": "SP-026 (#200) filters GetGitHubIdentity (orgs and teams), ListGitHubScopes, ListGitHubRepos, GetDocsSync, ListDocsOwners and ListDocsOwnerRepos by each owner's space for agent callers; ListRegisteredSources is empty and TailLogs refused to everyone but the operator under a policy. GetConfig and ListSettings moved to RC-1250."
+      },
+      {
+        "id": "RC-701",
+        "kind": "follow-up",
+        "topic": "Write paths still tell a session that another space holds a URI (RC-350 items 2 and 4)",
+        "detail": "DeleteSource, which sessions may call (rag_delete_source), deletes a URI from every space's collection and returns the count, so a session can both learn that another space holds a URI and delete it. Ingest answers 'is kept by the docs sync' or 'cannot be written by this caller' for a URI another space holds, and still ignores a failed Copy (fail-open). handoff.go canonicalStored matches synced copies in any space. SP-025 changed only read paths. Proposed: for non-operator callers scope DeleteSource and the Ingest checks to the writer's space, give one answer whether or not another space holds the URI, and fail closed when the store cannot be read.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-023",
+          "SP-025",
+          "SP-071"
+        ],
+        "status": "open",
+        "note": "Mostly addressed by SP-026 (#200): Ingest no longer says which sync keeps a copy in a space the caller does not read (it gets the other-space refusal), and under a policy DeleteSource deletes only from a session's own space and counts only that (D-77, rag.Service.DeleteSourceIn). Still open: Ingest ignores a failed Copy (fail-open; a fresh store's missing-collection error is not told apart outside internal/rag), and handoff.go canonicalStored matches synced copies in any space (derived content, SP-029)."
+      },
+      {
+        "id": "RC-702",
+        "kind": "decision",
+        "topic": "A harness started past the guard can still take a pin in another job's folder (D-38 residual)",
+        "detail": "SP-025 widens memory reads by a session pin's space, relying on SP-041 to stop a session from starting a harness outside its tree (D-38). The guard refuses that only when the command names another job's folder: a launch hidden in an opaque command under block-other-jobs, or in a folder of no space, still runs (RC-101), and a detached shell kept alive under launchd can start a fake harness that pins in the folder it chose (D-26), which then reads that folder's space. An orphaned harness gets no pin and reads public only (tested in SP-025.1.a6). Options: (a) accept as documented; (b) refuse a new pin whose harness runs in a process group led by another harness (an agent's background commands stay in the harness's group unless they call setsid; a user's shell gives each harness its own group); (c) widen reads by pin only while the guard is strict, and read public only while it is off or logging. Recommendation: (b), with (a) for the setsid case.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-041",
+          "SP-010"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-703",
+        "kind": "decision",
+        "topic": "What D-39's evidence leaves out for the user (usability)",
+        "detail": "Operator-scope memory reads under a policy need evidence of the user (SP-025): a caller in its terminal's foreground process group, reached from that group's leader (or the shell that started it) without passing launchd, whose leader is no harness; or Orch.app at /Applications or ~/Applications. The user's own scripts run from launchd or cron, a development build of Orch.app outside those folders, a command in a pipeline whose first command already exited, and any call whose process group leader cannot be read get public memory only. Accept as documented, or widen once RC-705 and RC-706 settle what counts as evidence. The security limits of the evidence are RC-705 and RC-706.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025"
+        ],
+        "status": "resolved",
+        "note": "Superseded by D-71 (2026-11-14): terminals are no longer evidence under a policy, so the usability limits listed here no longer apply; terminal access returns with SP-077's unlock."
+      },
+      {
+        "id": "RC-704",
+        "kind": "follow-up",
+        "topic": "A task's read space lives only in its durable workflow input",
+        "detail": "D-46 needs each task's dispatching space; SP-025 records it in AgentTaskInput.Space (no migration, no proto change) and carries it to the live run. The task ledger (queue.Task, ListTasks, GetTask) does not show it, PR-review tasks orchd dispatches itself record none, and tasks dispatched before SP-025 record none, so under a policy those read public memory only. SP-029 (task records carry the dispatching session's space) should add it to the ledger and decide what orchd's own review tasks read; RC-100's task pin file can use the same value. The SP-025 security review notes that a session may dispatch with a cwd in another space's folder: the task then runs there but reads, and would write, as the dispatcher's space, so content from that folder could be stored in the dispatcher's space unless the guard stops the task's file reads.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-029",
+          "SP-026"
+        ],
+        "status": "open",
+        "note": "SP-026 (#200) reads each task's space from its durable input, including a waiting task's pending start event (queue.Runs.RecordedInput), to filter the task RPCs, and orchd's PR review tasks now record their PR owner's space. Still open for SP-029: the ledger row and the Task message do not carry the space; the dispatch-cwd note stands."
+      },
+      {
+        "id": "RC-705",
+        "kind": "decision",
+        "topic": "Critical: an agent can forge D-39's terminal evidence with a terminal of its own",
+        "detail": "SP-025 security review, critical. D-39 grants operator-scope memory reads (every space) to a caller with a controlling terminal. Any process can open a pseudo-terminal: '( script -q /dev/null orch search <topic> > out & )' leaves script(1) under launchd and the CLI as session leader, group leader and foreground process of a new pty, so it passes (verified with ps: PGID == TPGID == PID, script's parent PID 1). Python's pty module, expect and 'tmux new -d' do the same, and 'open x.command' runs a script in a real Terminal window. No ancestry heuristic separates these from a user in Terminal, iTerm or tmux. SP-025 hardened what it could without changing D-39 (the caller's parents must reach the foreground group's leader or the shell that started it without passing launchd; the leader must be no harness), which stops processes left behind in a group, but not a new pty. Options: (a) only Orch.app is evidence: under a policy, CLI reads at a terminal are public-only unless (b); (b) an operator unlock confirmed in Orch.app ('orch spaces unlock --for 15m' asks the app; the app shows which terminal asked) that gives that terminal's callers operator scope for a while; (c) accept the heuristic as documented. Recommendation: (b), with (a) until it exists. The same evidence should gate operator-only RPCs (RC-707). Lows from the second review, for the same decision: on Linux a non-exec wrapper that is a child subreaper (tini, PR_SET_CHILD_SUBREAPER) adopts a process an agent orphans, so the unbroken-parents check passes (macOS has no subreapers; orch runs on macOS, D-49); and the group leader and its parent are read after the terminal, so a PID reused in between could be read in their place (comparing start times would close it).",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-050",
+          "SP-070"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14 as D-71: under a policy a terminal is not the operator; only Orch.app is, until the app-confirmed unlock (SP-077). Implemented in SP-025 (2f39200): an operator result without Orch.app's evidence reads public memory only (TestOnlyOrchAppIsTheOperator, including a process with a pty of its own)."
+      },
+      {
+        "id": "RC-706",
+        "kind": "decision",
+        "topic": "High: Orch.app evidence is by path and the default build can be injected",
+        "detail": "SP-025 security review, high (two findings). Orch.app is recognized by its executable's path: /Applications/Orch.app/Contents/MacOS/Orch or ~/Applications/Orch.app/... A process that copies any binary to an accepted path where no app is installed (~/Applications is user-writable; /Applications is group-admin-writable) passes, and so does the genuine app started detached with DYLD_INSERT_LIBRARIES, because build-app.sh signs ad-hoc builds without the hardened runtime. Options: (a) check the peer's code signature through the socket's audit token (SecCodeCopyGuestWithAttributes, SecCodeCheckValidity) against a requirement recorded at install (Team ID, or the cdhash for ad-hoc builds), and always sign with the hardened runtime and library validation; (b) accept only the one path the install recorded, in a folder the user cannot write, plus the hardened runtime; (c) accept as documented. Recommendation: (a).",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-072"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14 as D-71: Orch.app is recognized by its code signature, not its path. Implemented in SP-025 (2f39200, internal/daemon/appsig_darwin.go): through the socket's audit token the running code must meet identifier \"com.willesq.orch\", carry the hardened runtime, run from the one installed bundle and have that bundle's code directory hash; ad-hoc builds are now signed with the hardened runtime (TestAppSignatureOfARealProcess, with real signed processes). Remaining accepted risk: an ad-hoc signature names no signer, so writing the install folder is replacing the app (RC-711 proposes a Team ID requirement for Developer ID builds)."
+      },
+      {
+        "id": "RC-707",
+        "kind": "follow-up",
+        "topic": "High (existing code): operator-only RPCs do not ask for D-39's evidence",
+        "detail": "SP-025 security review, high. refuseNonOperator (internal/daemon/callers.go operator()) accepts any identified caller with no harness above it, so a process an agent detaches (setsid, no terminal) can call SetEnforcement to switch memory filtering off for everyone, SetSpacesDraft then ApplySpaces with accept_agent_draft to rewrite the policy, DiffSpaces and ListSpaces (every space's orgs and roots), ListToolEvents (every session's command log) and ExplainPlacement (full answers). That bypasses SP-025's filtering. Proposed: once a policy is applied, require the same evidence of the user that memory reads need (operatorBy, per RC-705's decision) in operator(), with tests. Not done in SP-025: it changes SP-020, SP-050 and SP-070's RPCs and their tests, and its strength depends on RC-705.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-020",
+          "SP-050",
+          "SP-070",
+          "SP-025"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14 as D-71: operator-only RPCs need the same evidence. Implemented in SP-025 (2f39200): operator() refuses an operator result without Orch.app's evidence while a policy is applied, and the resolver interceptor gives such a caller a queued task's limits for every RPC in operatorActions (TestOperatorOnlyRPCsNeedOrchApp, TestUnprovenOperatorGetsTaskLimits). With no policy nothing changes (INV-10)."
+      },
+      {
+        "id": "RC-708",
+        "kind": "follow-up",
+        "topic": "Low: a session can retry a task another space dispatched",
+        "detail": "SP-025 security review, low. RetryTask is open to interactive sessions and reruns a task with its durable input, including the space recorded at dispatch (D-46), so a session in one space can rerun a task of an isolated space, which reads that space's memory; its result is then readable through GetTask (SP-026). The body is fixed. Proposed: allow a retry only from a session of the recorded space or the operator.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-026",
+          "SP-029"
+        ],
+        "status": "resolved",
+        "note": "SP-026 (#200): RetryTask, CancelTask and RateTask need the caller to act in the task's recorded space (a session's pin or a task's own space) or be the operator; others get the answer a missing task gets."
+      },
+      {
+        "id": "RC-709",
+        "kind": "follow-up",
+        "topic": "Low: labels_v has no payload index",
+        "detail": "SP-025 filters every named space's reads on labels_v (INV-08) as an integer match, but collections index only source_uri, writer, space and the search fields, so Qdrant scans for that condition, and a server with unindexed filtering disabled (strict mode) would refuse every filtered read (it fails closed: sessions read nothing). Proposed: create an integer payload index on labels_v with the others when a collection is made, and add it to existing collections with the reindex or relabel tooling (SP-027).",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-027",
+          "SP-024"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-710",
+        "kind": "follow-up",
+        "topic": "Interactive sessions can still call task-refused settings RPCs under a policy",
+        "detail": "SP-025's D-71 review (medium, pre-existing): operatorActions RPCs are refused to queued tasks and, since D-71, to a caller that is the operator only by process tree while a policy is applied; interactive harness sessions still reach them as before, including SetConfig with Sensitive keys (command log retention and size caps, queue.worker.permission_mode, claude_bin, codex.sandbox: confirm_sensitive is the client's own flag), SetSettingEnabled, AddSetting and RemoveSetting (cc-safety-net), Restart, InstallSafetyNet, PurgeDocs, DeleteSource and LandPR. Proposed: decide which of these are the operator's alone and send them through refuseNonOperator (Orch.app under a policy), keeping Ingest, Dispatch and the task RPCs sessions use.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-070",
+          "SP-050",
+          "SP-025"
+        ],
+        "status": "resolved",
+        "note": "Accepted risk until SP-078 (D-74, 2026-11-14): SP-025 merges with it open; SP-078 refuses these RPCs to every caller except Orch.app under a policy. Resolved by SP-078 (https://github.com/willesq/orchestrator/pull/199): under a policy, SetConfig with Sensitive keys, SetSettingEnabled, AddSetting, RemoveSetting, InstallSafetyNet, Restart, LandPR, UndoPRLanding and DiscardPRLanding are refused to every caller except Orch.app (refuseSettings, internal/daemon/policy_operator.go); Ingest, Dispatch and the task RPCs stay open to sessions. DeleteSource and PurgeDocs, also named in the detail, are outside SP-078 and stay open to sessions: see RC-1200."
+      },
+      {
+        "id": "RC-711",
+        "kind": "follow-up",
+        "topic": "Narrow Orch.app's recognition further",
+        "detail": "SP-025's D-71 review (low, informational): (1) a Developer ID build could also require 'anchor apple generic and certificate leaf[subject.OU] = <team>', so a planted ad-hoc bundle fails where the real app is Developer ID signed; (2) the genuine app can be started by an agent with ORCH_SOCKET or ORCH_DATA_DIR aimed at its own fake daemon (open --env, launchctl setenv), showing the user an agent's data to approve: release builds could ignore those variables or check orchd's signature on the socket; (3) a terminal with Accessibility permission can drive the app's buttons through System Events (SP-077's confirmation should show which terminal asked); (4) builds without cgo, and Linux, recognize no Orch.app, so under a policy no caller is the operator there and the policy can be changed only by editing orch.db with orchd stopped.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-077",
+          "SP-072"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-712",
+        "kind": "follow-up",
+        "topic": "'orch docs list' reads orch.db directly and lists every space's doc URIs",
+        "detail": "Found by SP-025's independent verifier (pre-existing): internal/cli/docs_cmd.go opens orch.db itself rather than asking orchd, so it lists every synced doc URI of every space whatever the caller's space, bypassing SP-025's read filtering (ListDocs). Whether an agent can use it depends on whether the sandbox lets it read orch.db. Proposed: have the command ask orchd (ListDocs), or refuse it when it runs inside a session under a policy.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-026"
+        ],
+        "status": "resolved",
+        "note": "SP-026 (#200): under an applied policy 'orch docs list', 'orch docs owners list', 'orch docs status' and 'orch prs' show only what orchd's ListDocs and ListPRs list for the caller, and fail when orchd does not answer; with no policy they read the files as before. Reading orch.db directly is RC-1252."
+      },
+      {
+        "id": "RC-900",
+        "kind": "follow-up",
+        "topic": "Wire quarantine assign to SP-071's RetagSource",
+        "detail": "'orch quarantine assign' calls a Retagger interface (source_uri, space, confirm, expect_from=quarantine). Until SP-071 merges, the build's Retagger refuses and moves nothing, and SP-028.1.a1's assign part is tested against a fake retag that records the override. After SP-071 merges: implement the Retagger with the RetagSource RPC and add a test through orchd showing the source leaves quarantine and the override is recorded.",
+        "source": "https://github.com/willesq/orchestrator/pull/192",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-028",
+          "SP-071"
+        ],
+        "status": "resolved",
+        "note": "Resolved in https://github.com/willesq/orchestrator/pull/192 after SP-071 merged: assign uses RetagSource (expect_from quarantine, --confirm), tested end to end through orchd by TestQuarantineAssignThroughOrchd."
+      },
+      {
+        "id": "RC-901",
+        "kind": "follow-up",
+        "topic": "Quarantine list is capped at 5,000 sources per answer",
+        "detail": "ListQuarantine names at most 5,000 sources (by URI) so one answer stays under gRPC's message size; totals count all. The proto has no paging, so 'orch quarantine list' shows the first 5,000 and 'assign' refuses a source beyond them. Options: (a) accept; (b) add paging (a proto change) if quarantine ever grows that large. Recommendation: (a).",
+        "source": "https://github.com/willesq/orchestrator/pull/192",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-902",
+        "kind": "follow-up",
+        "topic": "SP-028 security review lows accepted",
+        "detail": "(1) A failed quarantine scan or purge logs the store's error in orchd's local log, which may include a source URI (a local path); orchd's log already names source URIs elsewhere. (2) Quarantine totals are int32 on the wire; only displayed counts would overflow past 2^31. (3) Chunks marked quarantine but still outside the quarantine collection (not yet relabelled) are not listed, counted or purged until 'orch rag relabel' moves them. (4) After an assign (a retag), 'orch status' may show the old quarantine counts for up to 30 s: the count cache is cleared after a purge only, and clearing it on a retag would touch SP-071's code. (5) Fixed in the PR: failed counts are cached for the TTL, and refusal text drops format characters.",
+        "source": "https://github.com/willesq/orchestrator/pull/192",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1200",
+        "kind": "decision",
+        "topic": "DeleteSource and PurgeDocs stay open to interactive sessions under a policy",
+        "detail": "RC-710 named DeleteSource and PurgeDocs alongside the settings RPCs, but D-74 and SP-078 cover only SetConfig with Sensitive keys, the harness and cc-safety-net settings, Restart and PR landing. Under a policy an interactive session can still delete a RAG source or purge a docs owner's chunks, which are not settings but remove memory other spaces may rely on. Options: (a) add both to policyOperatorOnly (Orch.app only under a policy), (b) let a session delete only sources in its own space, (c) keep them open. Recommended: (b) for DeleteSource, which agents use to clean up their own ingests, and (a) for PurgeDocs.",
+        "source": "https://github.com/willesq/orchestrator/pull/199",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-078",
+          "SP-025"
+        ],
+        "status": "resolved",
+        "resolution": "Settled as D-77; built by SP-026."
+      },
+      {
+        "id": "RC-1201",
+        "kind": "decision",
+        "topic": "Non-Sensitive settings that weaken safeguards stay open to sessions under a policy",
+        "detail": "SP-078 refuses SetConfig under a policy only when it sets a key marked Sensitive in internal/config/schema.go (D-74). Some keys that are not Sensitive still weaken a safeguard or change what is ingested: queue.worker.verify.enabled (turns off verification of a task's changes), sources.known_roots and ingest.exclude_dirs (which folders are scanned and ingested) and routing.providers. RemoveLegacyConfig (moves the old config.yaml into backups, fixed path, only after the import) is also left open. Low (security review of SP-078). Options: mark these keys Sensitive (which also makes the app ask for confirmation), add a separate policy-only list, or keep them open.",
+        "source": "https://github.com/willesq/orchestrator/pull/199",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-078"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1202",
+        "kind": "follow-up",
+        "topic": "Settings refusals under a policy are logged without a rate limit",
+        "detail": "SP-078.1.a1 asks that each refusal be logged, so refuseSettings (internal/daemon/policy_operator.go) logs every one, as refuseNonOperator does, unlike refuseUnproven, which logs at most one a second. A session or local process calling a refused RPC in a loop can fill orchd's log, which Orch.app shows. Low (security review of SP-078). Proposed: log the first refusal per caller and RPC in full and count repeats.",
+        "source": "https://github.com/willesq/orchestrator/pull/199",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-078"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-229",
+        "kind": "decision",
+        "topic": "Under a policy nobody can run a relabel",
+        "detail": "After #188 (D-71), 'orch rag relabel' is refused from a terminal under a policy and Orch.app showed relabel progress without a way to start one, so content stored before an apply stayed hidden until SP-077.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-027",
+          "SP-077"
+        ],
+        "status": "resolved",
+        "resolution": "Settled as D-76; built by SP-079."
+      },
+      {
+        "id": "RC-1100",
+        "kind": "decision",
+        "topic": "Quarantine counts in orch status are shown to every caller",
+        "detail": "SP-031.1.a1 says agent callers see counts only for their own space and public ones. SP-031 narrows its own counts (chunks per space, relabel totals, conflicts) that way, but SP-028's quarantine totals (SpacesStatus.quarantine: sources and chunks, never a source) stay open to every caller, as SP-028 designed and tested (TestStatusCountsQuarantine). SP-031 reads a1's counts as per-space counts, which a quarantine total is not. Options: (a) keep: a quarantine total names no space; (b) send quarantine totals to Orch.app only, as SP-031 does for conflicts. Recommendation: (a), unless the user wants status to say nothing about content a session cannot read.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-031",
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1101",
+        "kind": "follow-up",
+        "topic": "Orch.app can show SP-031's counts (rest of RC-501)",
+        "detail": "Status now carries SpacesStatus.counts: chunks and not-yet-relabelled chunks per space, relabel totals and live sessions in a conflict, all of them for Orch.app. With SP-028's quarantine counts this supplies every count RC-501 lists. The Spaces pane does not read them yet (SpacesOverviewModel's relabel source, chunk counts, and conflicts from ExplainPlacement per quarantined session, RC-502). That is a macOS change for a later lane.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-051",
+          "SP-031"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1102",
+        "kind": "follow-up",
+        "topic": "SP-031 security review lows accepted",
+        "detail": "(1) The counts are taken under the cache's lock, so a slow count (up to the 3 s limit, plus any file or git read on a hung mount that does not honor it) holds up other Status calls; any caller can trigger it at most once per 30 s. A single-flight refresh that serves the last counts would remove the wait. (2) Conflicts are counted by placing each live quarantined session's first folder again under the policy applied now, not the one at pin time (as RC-502 describes for the app); recording the outcome on the pin needs a migration. Fixed in the PR: the count is detached from the caller's cancellation, a partial conflict count is a failure, and an unscoped search under a policy (memory filtering off) names collections to Orch.app only.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-031"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1103",
+        "kind": "follow-up",
+        "topic": "rag_search does not show the search boundary",
+        "detail": "SearchResponse now says the caller's space, whether the search was scoped and the collections read; orch rag why prints them. The MCP rag_search tool and auto-RAG ignore them. Adding a one-line footer to rag_search would show agents the boundary too; not required by SP-031.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-031"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1250",
+        "kind": "follow-up",
+        "topic": "GetConfig and ListSettings are still unfiltered for agent callers (rest of RC-700)",
+        "detail": "SP-026 filters every RPC RC-700 named except GetConfig (orch's settings) and ListSettings (managed harness settings), which sessions may still call under a policy. Settings can name folders, collections and profile directories of every space. Proposed: under a policy refuse both to all but Orch.app (refuseNonOperator, as SP-078 did for the setters) or return only keys that name no space; SP-078's owner should decide, since it changed the setters.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026",
+          "SP-078"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1251",
+        "kind": "decision",
+        "topic": "The operator's views are not labelled with each record's space",
+        "detail": "SP-026's summary says the operator still sees everything, labelled. orchd now decides each record's space (a PR's owner's space, a task's recorded space), but PullRequest, GitHubItem, PRReview, Task and DocOwner have no field to carry it, and adding fields to existing orchd.proto messages needs the coordinator's field block. The acceptance items do not require labels, so SP-026 ships without them. Options: (a) add an optional 'space' field to those messages and show it in Orch.app and the CLI (a follow-up feature, with a field block); (b) leave records unlabelled.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1252",
+        "kind": "follow-up",
+        "topic": "Record files on disk still hold every space (event streams, PR cache, orch.db)",
+        "detail": "SP-026 filters what orchd returns and what the hook puts in a session's context, and the CLI lists under a policy now come from orchd, but the event streams (<data>/events/*.jsonl), the PR cache (pr_babysitter_state.json) and orch.db (task ledger, docs registry) stay readable by any process of the user, so an agent can read them directly. This is RC-302 option (a)'s file half: deny orch's data directory (except what a session needs) in each job's OS sandbox profile (SP-046), or split the files per space. Also: an event keeps the space it was written with, so after the operator binds an org to another space its earlier events still show to the first space's sessions until they age out of the digest.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-046",
+          "SP-026"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1253",
+        "kind": "follow-up",
+        "topic": "Low: some refusals tell an agent that another space owns a GitHub org",
+        "detail": "From SP-026's design: GetPRDetail and ListDocsOwnerRepos answer NotFound for another space's owner where an unknown PR or owner would get GitHub's own error, so an agent can tell that an org is bound to a space it does not read (the org list is policy, not content); review watch changes answer NotFound for another space's PR where an unwatched PR of the caller's own space gets the watcher's own not-found text. Tasks and landings give the answer a missing task gets. Accepted as low; closing it would need orchd to fetch and discard, which spends the other space's account.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1300",
+        "kind": "follow-up",
+        "topic": "A fresh Codex task's session gets no pin",
+        "detail": "SP-029 pins a queued task's agent session to its dispatch space when the agent process starts. A Claude Code task's session ID is known in advance (agentrun.SessionID) and a resumed Codex run's thread is stored, but a fresh Codex run learns its thread ID only when it ends, so it gets no pin: its transcript, record and summary are quarantined under a policy, and while the guard enforces its tool calls are refused as pin_missing (RC-100 stays open for it). Proposed: have the Codex runner report the thread ID as soon as thread.started arrives (update LiveRun.SessionID and call OnLive), so orchd can pin it like a Claude task.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1301",
+        "kind": "follow-up",
+        "topic": "SP-029 security review lows and accepted limits",
+        "detail": "From two security-audit rounds on PR #196 (mediums fixed: PinSession now refuses a new pin under a task's session ID while spaces are configured, an untrusted pin under such an ID places nothing and gets no guard file, the guard pin file is written under the pin registry's lock and removed when it cannot be written). Remaining: (1) a resumed Codex task replaces any pin under its stored thread ID; thread IDs come from the codex CLI's own event stream, so this is accepted. (2) The hook's guard reads the pin file named by the payload's session_id without checking the process, so a nested harness an agent starts with --session-id or --resume of another session's ID (a task's ID is derivable from its task ID) borrows that pin file for guard decisions; orchd's memory enforcement resolves by process and is unaffected, and the OS sandbox still applies. This predates SP-029 for interactive session IDs. (3) Resuming by hand the session of a task that ran before spaces were configured is refused, since that task never got a pin.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1302",
+        "kind": "decision",
+        "topic": "Taint of a session that read across spaces",
+        "detail": "SP-029's summary says the operator's explicit cross-space reads taint that session, but no acceptance item covers it and today no session reads across spaces except while memory filtering is switched off (SP-070, SP-025.1.a4); only Orch.app reads every space, and it has no session records. Proposed: when a session receives results from a space it may not read (filtering off), mark its pin tainted so its later records, summaries and client notes go to quarantine for the operator to retag. Needs a decision and probably a pin column (migration).",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029",
+          "SP-070",
+          "SP-025"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1303",
+        "kind": "follow-up",
+        "topic": "Task ledger and queue events filtered by space (left to SP-026)",
+        "detail": "RC-704 asked SP-029 to add a task's dispatch space to the ledger. SP-026 (events, digest, ListTasks, GetTask carry a space set at creation and are filtered) owns the ledger and the readers, so SP-029 only sets the space at creation where it derives content: the queue completion event now carries 'space' (and 'task_id'), and a task's session pin carries the dispatch space. The ledger column (a migration), filtering the queue stream for sessions, and what orchd's own PR-review tasks read remain for SP-026.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026",
+          "SP-029"
+        ],
+        "status": "open",
+        "note": "SP-026 (PR #200, merged) filters the queue stream and the task ledger by the space set at creation (events.Event.Space, set by notifyTaskDone); this covers the follow-up. Recorded 2026-11-15 when #200 was merged into #196."
+      },
+      {
+        "id": "RC-1304",
+        "kind": "follow-up",
+        "topic": "TestRunMeasuresFailedRuns is flaky under load",
+        "detail": "internal/agentrun TestRunMeasuresFailedRuns expects a run that timed out after 200 ms to record DurationMS >= 200; under heavy load on the developer machine it records 199 (seen on origin/main without SP-029's changes too). It passes alone and in CI. Proposed: compare against the timeout minus a tolerance, or measure the duration from before the timeout's context is created.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1305",
+        "kind": "follow-up",
+        "topic": "SP-029 a3 (files outside roots) limits and security lows",
+        "detail": "From two security-audit rounds on PR #196 (the path-claim and eviction highs and both mediums were fixed by matching the hash of the text a Write call carried against the text ingested, applying it only to edit hand-offs, and re-checking the recorded space against the applied policy). Remaining: (1) only a Write call carries the whole text, so a file written or changed by Edit, a shell command or a program stays in quarantine; registered folders (sources refresh) and client Ingest are not placed by the record; with the command log off nothing is recorded. (2) Low: a guess-confirmation oracle: a session can send Write claims with guessed whole texts for a path under no root and hand the path off; on a match the file lands in its space, confirming the guess (only for files short enough to guess whole, and only when no other space recorded the same text). Fix: tie the record to the hand-off's session, or record successful PostToolUse events. (3) Low: a row records a space by name, so a later policy reusing that name for another job honours it within 30 days; store a space identity or revision. (4) Low: paths are compared in lower case, also on case-sensitive volumes; harmless with the hash match. (5) After the 30-day expiry a relabel quarantines such a file.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029"
         ],
         "status": "open"
       },
@@ -5823,7 +6348,21 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestReadPathsKeepSpacesApart (internal/daemon/readscope_test.go): acme, globex, oss (public) and personal hold 200 chunks each, plus quarantine and pre-spaces chunks. From a session in acme, each of globex's 200 chunks is queried with its verbatim text and URI on every read path: Search (6 request shapes: hybrid, dense, plain ranking, source_uri, tags, scope with all_tags), ListSources (3), GetDocument, ListDocs, and auto-RAG, session recall and 'orch rag why' through hook.Explain over a gRPC connection with a globex cwd. Cross-space results: 0; requests to globex's, quarantine's and the base collection: 0.",
+            "a1 (real engine): TestIntegrationReadPathsRealQdrant (internal/daemon/readscope_it_test.go, gated by ORCH_QDRANT_IT=1): the same 4 x 200 chunks written through rag.Service.IngestText into hybrid collections on the native qdrant engine v1.17.1 (own ports and storage, collections prefixed sp-025-it). Cross-space results across all read paths: 0 for the 200 globex chunks; a session in globex finds its own chunk 20 of 20 times. Run 2026-11-14, 106 s, pass.",
+            "a2: TestPublicReadEverywhere: oss's chunk is returned by Search and GetDocument to sessions in acme, globex and personal, to a session with no space, a quarantined pin, an unidentified caller and an operator with no evidence; the last four read nothing beyond public.",
+            "a3: TestCallerFiltersOnlyNarrow: from acme, source_uri, tags, all_tags, scope and source_type naming globex's content return 0 hits, a URI prefix lists 0 sources, GetDocument is NotFound; a tag filter on acme's own content returns only acme's.",
+            "a4: TestMemoryFilterOffIsLogged: with memory filtering switched off (SP-070), globex's chunk is returned to acme and 11 of 11 read responses are logged 'Search for session sess-acme: not enforced (memory filtering is switched off)' (and likewise per RPC); switched on again, nothing leaks.",
+            "a5: TestJobReadsPersonalOnlyWhenOptedIn (acme, which lists personal, reads it; globex does not) and TestJobNeverReadsAnotherJob (acme and globex never read each other, personal reads neither): 2 pass.",
+            "a7 (as amended by D-71, 2026-11-14): TestOnlyOrchAppIsTheOperator: under a policy, Orch.app recognized by its code signature reads every collection; a command typed at a terminal, a process with a pty of its own (RC-705), a setsid double fork, a signed copy outside the installed folder, the app without the hardened runtime, running other code than its bundle's, with no code hash, installed in both folders, not installed, or in a build that cannot check signatures read public only. TestAppSignatureOfARealProcess checks real ad-hoc-signed processes over a socket: the hardened app in the installed folder passes; without the runtime, with another identifier, run from a copy, or re-signed on disk after starting it fails. TestOperatorOnlyRPCsNeedOrchApp and TestUnprovenOperatorGetsTaskLimits: SetEnforcement, DiffSpaces, ApplySpaces and every operatorActions RPC (unary and stream) are refused to those callers and allowed to Orch.app; with no policy a terminal is the operator as before.",
+            "a6: TestDetachedHarnessReadsNoMore: the SP-041 guard (spaces.Decide, block-other-jobs) refuses 'cd <globex>/repo && nohup claude ... &' and '(cd <globex>/repo; setsid claude &)' from a session in acme; a fake claude detached under launchd in globex's folder gets no pin and reads public only; a claude nested in the session copies acme's pin and reads acme's set only. Residual D-38 cases are RC-702.",
+            "a8: TestTasksReadTheirDispatchersSpaces: Dispatch records the dispatching session's space (acme, globex), the operator's working-directory placement (acme, personal; quarantine with no directory), and nothing for an operator with no evidence or an unpinned harness; the space reaches the runner (agentTask) and a task reads what that space reads (acme's task reads personal, never globex), writes there (placed in acme), and an untracked task or one with no space reads public only. Also TestDispatchRecordsReadSpace (internal/queue).",
+            "Also: TestStaleLabelsAreUnreadable (INV-08: chunks with an earlier, later or missing labels_v are unreadable on every read path until relabelled; the operator still sees them), TestNoPolicyReadsAsBefore (INV-10), TestPayloadLayerAndFailures (second layer; store errors without collection names), TestReadScopeFailsClosed (broken policy reads nothing). go test ./..., go vet ./... and make cover (all files >= 80%) pass.",
+            "Independent verifier, 2026-11-14, at 2719d51: a1 to a8 and SP-025.2 a1 pass, including the real-engine run (0 cross-space results, 106 s); four deliberate breakages each failed the matching tests; go test, go vet, make cover (59 daemon files listed), gofmt pass; INV-10 holds.",
+            "DOD-6: security reviews of the diff leave no open critical or high finding; the one open medium, RC-710 (pre-existing code outside this diff), is an accepted risk until SP-078 (D-74), so DOD-6 passes on that accepted risk.",
+            "After merging origin/main at cd1c2bb (SP-071 retag, proto and migration 0031): the merge changed no SP-025 read-path code (it touched write paths: placing.go, Ingest's mayReplace, rag write generations); the registry test caught the new RetagSource RPC, now classed operator-only. go test ./..., go vet ./..., gofmt and make cover (all files >= 80%, 60 daemon files listed) pass, so the verifier was not re-run."
+          ]
         },
         {
           "id": "SP-025.2",
@@ -5837,18 +6376,20 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestEveryRPCHasASpaceDecision (internal/daemon/readspaces_registry_test.go): every RPC in Orchd_ServiceDesc must have an entry in readSpaceDecisions (filtered, operator, own, records or none) with a reason; entries must name served RPCs; operator-only entries must be refused to queued tasks; exactly Search, ListSources, GetDocument and ListDocs are filtered. TestRegistryCatchesAMissingRPC shows an added RPC with no entry is caught."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "2719d5124f3a0303f20df72621dfd4ae2097ebdc",
+      "verified_at": "2026-11-15T04:35:18Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "b1af57cfe7ce23368c77882ead3d99ad6081ed3e2eb32334e37edc4dccd2ca93",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-025-read-path-spaces",
+      "pr": "https://github.com/willesq/orchestrator/pull/188"
     },
     {
       "id": "SP-026",
@@ -5893,18 +6434,23 @@
               "threshold": "pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (9 of 9 paths; a session in one space sees no item of another): events: internal/daemon TestTaskEventsCarryTheTasksSpace, internal/prs TestSweepStampsItemsWithTheirOwnersSpace, internal/spaces TestSessionReadsFromGuardFiles; SessionStart digest: internal/hook TestDigestShowsOnlyTheSessionsSpaces, TestEventsFailClosedUnderAnUnreadablePolicy; per-prompt updates: internal/hook TestUpdatesShowOnlyTheSessionsSpaces; ListPRs and ListGitHubItems: internal/daemon TestCachedPRsKeepSpacesApart; GetPRDetail: TestPRDetailKeepsSpacesApart; ListTasks and GetTask (with WatchTasks and GetTaskActivity): TestTaskLedgerKeepsSpacesApart; PR reviews: TestPRReviewsKeepSpacesApart, TestReviewWatchesOnlyFromTheirSpace. All pass (go test ./internal/... at 1d47411).",
+            "a1 related paths: TestRetryOnlyFromTheTasksSpace (RC-708), TestGitHubRecordsKeepSpacesApart and TestDocsAndLogRecordsKeepSpacesApart (RC-700), TestSyncDocsSaysNothingOfAnotherSpace, TestOwnerSettingsOnlyFromTheirSpace, TestIngestSaysNothingOfAnotherSpacesSync (RC-701), TestDeleteSourceOnlyInTheSessionsSpace and internal/rag TestDeleteSourceInOneSpace (D-77), internal/cli TestListsUnderAPolicyComeFromOrchd (RC-712), internal/queue TestRecordedInputOfAWaitingTask; with no policy every caller sees every record (INV-10) in each.",
+            "a2: a cached PR's space is its repo owner's, matched case-insensitively, quarantine for an owner no space binds (internal/daemon TestCachedPRsKeepSpacesApart; internal/prs TestSweepStampsItemsWithTheirOwnersSpace stamps cached items and their events, restamped each sweep); a review task orchd dispatches records and reads its PR owner's space, public only for an unbound owner, nothing with no policy (internal/daemon TestReviewTaskRunsInItsPRsSpace). Pass.",
+            "Checks at 1d47411: go test ./... pass (TestToolHookCost and TestResolveCost are timing tests that failed once each under full-suite load and pass alone), go vet ./... clean, gofmt -l empty, make cover 'All files >= 80%'. Security audit (two rounds): high and medium findings fixed; lows recorded (RC-1252, RC-1253) or documented."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "62c681e9c123313032cc8857a1297740221685de",
+      "verified_at": "2026-11-15T06:09:50Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "a5da712089124df4e4493329f043ceaecffb3bbd075e5295d27a80fa098ec58f",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-026-non-memory-bleed",
+      "pr": "https://github.com/willesq/orchestrator/pull/200"
     },
     {
       "id": "SP-027",
@@ -6050,7 +6596,12 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestRetagMovesEveryChunk (internal/rag): rag.Service.Retag moves a 3-chunk source from acme's collection to globex's; globex holds 3 of its chunks, acme 0, the store's total is unchanged, and every moved chunk keeps its point ID and vector and is labelled with the new space and the applied revision. The move reuses SP-027's copyInto (copy with vectors, count, then delete). The RPC and command that call it wait for the proto slot (see SP-071.2).",
+            "a2: TestRetagEmbedsNothing: a counting embedder records 0 calls across retags into a collection that does not exist yet, back, and into shared. TestIntegrationRetag2000 also asserts 0 embed calls on a real engine.",
+            "a3: TestRetagSearchFollowsTheSource/new_space_finds_it and /old_space_does_not: after the retag a search scoped to globex finds the source and a search scoped to acme does not (2 pass).",
+            "a4: TestRetagResumesAfterInterruption: a delete in the old collection fails after the copy, leaving the source in both; the error names no space or collection; a second retag ends with one copy in globex, 0 in acme, the total unchanged and no embedding. TestRetagEdgeCases covers refusals (no URI, no policy, bad or traversal space names, not stored, during a migration), a retag in place (stamp only), two old copies of one write ending as one, copies of different writes refused with nothing changed, a chunk with no vector kept, and a failed copy keeping the old copy. Security audit: the migration check now runs under the source lock; copies of different writes are refused rather than guessed (both fixed)."
+          ]
         },
         {
           "id": "SP-071.2",
@@ -6078,18 +6629,24 @@
               "threshold": "<= 20 s"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a3: TestIntegrationRetag2000 (ORCH_QDRANT_BENCH=1, its own Qdrant 1.17.1 on 127.0.0.1:6481, temporary storage, collections sp-071-*): a 2,000-chunk source (384 dimensions, hybrid) moved from one space collection to another with its vectors in 2.63 s, and 2.74 s after the security-audit fixes; 0 embed calls. Threshold <= 20 s met.",
+            "a1: TestRetaggedSourceStaysForLaterWrites (internal/daemon), 3 subtests over the example policy: docs_sync (a repo doc synced into acme, retagged to personal, synced again at a new head: lands in personal, none back in acme), sources_refresh (a checkout file refreshed into acme, retagged to globex, refreshed with new content: lands in globex; a web page quarantined, retagged to personal with --confirm, refreshed: lands in personal), client_re-ingest (the operator's note, quarantined, retagged to personal: the operator's re-ingest and a personal session's re-ingest land in personal). The override is stored in orch.db (spaces_retags, migration 0031) before anything moves and applied in writePlacer.place (withRetag, spaces.ApplyOverride). RC-850 option (a): TestRetagDoesNotLetAnotherSpaceWriteIn refuses re-ingests of a retagged URI from the space it came from, another space and an unidentified caller; TestRetagIsNotBorrowedByUnplacedSessionOrFileWrites keeps quarantined session and file writes in quarantine; TestWritePlacedBeforeARetagIsRefused (internal/rag) refuses a write placed before a concurrent retag finished.",
+            "a2: TestRetagSourceRefusals (internal/daemon): agent_callers (harness session, queued task, process started by orchd, unidentified caller all get PermissionDenied through refuseNonOperator; RetagSource is also on the operator-only list in callers.go), into_public_without_confirm (refused, nothing moved, no override recorded; with confirm it moves), out_of_isolated_without_confirm (acme to personal, quarantine or globex refused; a retag in place needs nothing). TestRetagSourceRequestChecks covers bad requests, NotFound, expect_from (refused when the source is elsewhere, honored when it is there), a running migration and no policy. TestRetagResumesAtStart and TestRetagResumeFollowsTheCurrentPolicy cover resuming after an exit. TestSpacesRetagSendsTheRequestAndPrintsCounts (internal/cli) covers 'orch spaces retag'. Under D-71 the operator check is SP-025's refuseNonOperator, which this RPC calls.",
+            "Security audit of the wiring: no critical or high findings; four mediums fixed with tests: a write placed before a retag could undo it; quarantined session or file writes could borrow the override; a relabel bypassed RC-850; resume ignored the current policy. Lows L1 (policy changed mid-check), L2 (confirmation out of quarantine) and L4 (raw store error) also fixed; L3 and L5 recorded as RC-851.",
+            "Independent verifier at 3c1d857: every acceptance item and DOD check passes. It reran the named tests (SP-071.1 a1-a4, SP-071.2 a1 3 pass, a2 3 pass) and TestIntegrationRetag2000 on its own engine (2,000 chunks moved in 2.46 s, 0 embed calls). go test ./... failed once on TestResolveCost (a p99 latency test outside the diff, under load) and passed on rerun. go vet passes. make cover passes with the daemon files measured separately (retag.go 83.8%). gofmt is clean. The commits are SSH-signed. CI (app, build, test) is green. Its security read found no critical, high or medium issues."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "3c1d857bd71c2944e8e93106f22cedd0e7335e4e",
+      "verified_at": "2026-11-15T02:15:03Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "29cdb8a3de681a76e509c5f246f6f5bf4dc36223c5feab836393e4dd133f5c8e",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-071-retag",
+      "pr": "https://github.com/willesq/orchestrator/pull/191"
     },
     {
       "id": "SP-028",
@@ -6128,18 +6685,21 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: List: TestListQuarantineRPC (internal/daemon; the operator sees each quarantined source with its chunk count, only quarantine's), TestListQuarantineShowsSourcesAndCounts (internal/rag), TestQuarantineListShowsSourcesAndCounts (internal/cli); counts in orch status: TestStatusCountsQuarantine (internal/daemon), TestSpacesSectionCountsQuarantine (internal/status). Assign: TestQuarantineAssignThroughOrchd (internal/daemon) runs the real 'orch quarantine assign --confirm' against orchd's handlers and store over a socket: the source moves from quarantine to personal through RetagSource (SP-071, expect_from quarantine), quarantine no longer holds it, and the next write of the same source_uri lands in personal (the override rule); without --confirm nothing moves, and a source outside quarantine is refused. TestQuarantineAssignUsesRetagSource (internal/cli) checks the request. Purge: TestPurgeQuarantineRPC (internal/daemon; no confirm only counts and deletes nothing, confirm deletes from quarantine only, a source in another space or nowhere is refused alike), TestPurgeQuarantineCountsUnlessApplied, TestPurgeQuarantineNamedDeletesOnlyThere, TestPurgeQuarantineReachesTheShadow (internal/rag), TestQuarantinePurgeIsDryRunUnlessConfirmed (internal/cli). Result: 3 of 3 pass.",
+            "a2: TestQuarantineRPCsRefuseAgentCallers (internal/daemon): ListQuarantine and PurgeQuarantine return PermissionDenied for a harness session, a queued task, a harness process and a process orchd started; a refused purge with confirm deletes nothing. TestQuarantineCommandsRefusedThroughOrchd (internal/daemon): the real CLI from a harness process gets orchd's refusal for list, assign and purge, and the source stays in quarantine. TestQuarantineCommandsRefusedForAgentCallers (internal/cli): all three refused inside a queued task before orchd is asked. Result: pass."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "c0c4099",
+      "verified_at": "2026-11-15T04:43:06Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "8b78deb05b7ee728821d2452d6e11460f796408e9822bf1d03d2e68805efc1c7",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-028-quarantine",
+      "pr": "https://github.com/willesq/orchestrator/pull/192"
     },
     {
       "id": "SP-029",
@@ -6188,18 +6748,24 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestSummaryHasItsSessionsSpace (internal/daemon/derived_test.go): sessions pinned in acme and globex (isolated) are queued together and drained by the session-summarizer unit; the summarizer is called twice, each call holding the messages of one session only (no call holds the other session's marker text), and each summary is stored as session://<id>/record with that session's origin and placed by writePlacer in that session's space (acme, globex). A summary asked for by another session (Foreign) is placed in quarantine.",
+            "a2: TestTaskRunsPinnedToItsDispatchersSpace (internal/daemon/derived_test.go): a task dispatched from a session in acme with its directory in globex's folder records acme (D-46); once its agent process starts orchd pins its session (agentrun.SessionID) to acme and writes the guard pin file with acme; the guard refuses a Read in globex's folder (not as pin_missing) and allows one in acme's; ReplaySpaces judges the task's command-log events under the acme pin; the task's Search/GetDocument/ListSources/ListDocs/auto-RAG reads return acme's chunk and nothing from globex; its queue completion event carries space acme; its session transcript and record are placed in acme. Supporting: TestTaskPinReplacesASquatter, TestTaskPinEdges (no space or a dropped space -> quarantine; fresh Codex run and unstarted process -> no pin; no policy -> no pin, INV-10), TestTaskPinFailures (broken policy -> quarantine), TestTaskSessionIDsArePinnedByOrchdOnly (security review: PinSession refuses a new pin under a task's session ID under a policy; an untrusted pin under such an ID is quarantined and gets no guard file).",
+            "a3: TestFileWrittenOutsideRootsKeepsItsSpace (internal/daemon/session_files_test.go): a session pinned in acme sends the Write tool event for notes.md in a temporary folder no root holds and writes it; the edit hand-off (storeFile) stores it and orchd's placer puts it in acme. Another space naming the same path with other text, or claiming a path before a program wrote it, does not move it (quarantine); a file changed since its recorded Write, the same text written by acme and a globex task, and a record naming a space the policy makes public go to quarantine; a refused call, callers with no space (operator, untracked task, unidentified, public or quarantine pin, untrusted pin) and a write under a root record nothing; a file in globex's folder is placed in globex. TestSessionFilesExpire: 30-day expiry, the 100,000-row cap (newest kept), case-insensitive lookup, nil/no policy/failing store. Migration 0032_session_files.",
+            "Verification (2026-11-15T06:18:22Z): an independent verifier given only the diff, this feature, INV-02/03/09/10 and definition_of_done re-ran everything at 65c0f44 and, after the origin/main merge, at 4fb4526: a1, a2, a3 pass; DOD-1 go test ./... exit 0; DOD-2 go vet exit 0; DOD-3 make cover exit 0 (lowest changed files tasks.go 84.7%, task_pins.go 87.5%, liveness.go 87.6%, session_files.go 96.4%); DOD-4 gofmt clean; DOD-5 8 named tests pass; DOD-6 no open critical/high/medium (four security-audit rounds, lows in RC-1301 and RC-1305); DOD-7 memory.md and tasks.md changed; DOD-8 signed commits, no co-author lines, draft PR #196 registered; DOD-9 CI on PR #196 green (test, build) at 4fb4526.",
+            "Merge of origin/main with SP-026 (#200) at 310b35a (2026-11-15): SP-026 added the same events.Event Space/TaskID fields and notifyTaskDone, identical to SP-029's, so one copy of each is kept; only docs/internals/tasks.md (one sentence combined) and the plan JSON conflicted. No SP-029 logic file changed in the resolution (task_pins.go, session_files.go, placing.go, toollog.go, handoff.go, pins.go, guardfiles.go, events.go, subsystems.go), so the verification at 4fb4526 stands. At 310b35a: go build, go vet ./... and go test ./... exit 0, make cover exit 0 (all files >= 80%), gofmt clean."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "4fb45265bce367072d262e0f2a41cb08a6766459",
+      "verified_at": "2026-11-15T06:18:22Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "71a615214415759a2f0b2418e12a1cd758edf2fb0102aea3fd81406bd5d03374",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-029-derived-content",
+      "pr": "https://github.com/willesq/orchestrator/pull/196"
     },
     {
       "id": "SP-030",
@@ -6311,18 +6877,20 @@
               "threshold": "pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: Six fields in orch status: TestSpacesSectionShowsCounts (internal/status) renders, for the operator, the spaces, each space's chunks (and not-yet-relabelled chunks), quarantine (SP-028's counts), conflicts, drift ('none' when none) and relabel progress; for a session only the spaces orchd counted for it, and conflicts marked as the operator's. TestSpacesSectionCountEdges (internal/status): no counts, a failed count, an empty store, a control character in a space name. Narrowing in orchd: TestStatusCountsOnlyWhatTheCallerReads (internal/daemon) over the SP-025 read fixture: Orch.app gets every space, totals over every collection (unplaced and quarantine included, 12 stale) and 1 conflict (a live quarantined session whose folder acme's root and globex's remote both claim; an ended one and a scratch folder are not counted); a session in acme gets acme, oss and personal; in globex, globex and oss; in quarantine, a task from globex, the operator when not Orch.app and an unidentified caller get only their readable spaces, totals over those, and no conflicts. TestStatusCountsAreCached, TestStatusCountsNeedAPolicy, TestConflictCountFailureIsNotAnAnswer (internal/daemon); TestCountSpacesCountsEachCollection, TestCountSpacesStoreFailure (internal/rag). rag why: TestSearchReportsWhatWasSearched, TestSearchWithoutCollections, TestSearchUnscopedHidesCollections (internal/daemon), TestSearchCollectionsNamesWhatSearchReads (internal/rag), TestExplainRecordsWhatWasSearched (internal/hook), TestRAGWhyShowsTheSearchBoundary (internal/cli). Result: all pass; go test ./... and go vet ./... exit 0; make cover: all files >= 80% (internal/daemon/spacecounts.go 90.7%, searchscope.go 100%, internal/rag/spacecounts.go 86.4%, internal/status/spacecounts.go 100%)."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "e1813d3b6fd0dc40f52d79b2cb0ff7b815d79258",
+      "verified_at": "2026-11-15T05:42:19Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f334012d02c2c9c118e211015950a80e0234c453ca65ed1894ac756872e8c3be",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-031-status-visibility",
+      "pr": "https://github.com/willesq/orchestrator/pull/197"
     },
     {
       "id": "SP-044",
@@ -7232,14 +7800,16 @@
               "threshold": "yes or deferred"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "Deferred by user on 2026-11-15 (D-75): OpenAPPA's wire format could not be confirmed stable; revisit at OpenAPPA 1.0 or when /hook callers are authenticated."
+          ]
         }
       ],
-      "status": "todo",
+      "status": "blocked",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": null,
+      "blocked_reason": "Deferred by the user on 2026-11-15 (D-75) until OpenAPPA has a stable wire format.",
       "attempts": 0,
       "criteria_sha256": "76e46f65ccb892bb47cd64a8a241bcc9d35a9fdc312f8dc97e2a638652055d15",
       "branch": null,
@@ -7563,6 +8133,128 @@
       "criteria_sha256": "f8afd77c35f69708b328a563d6ffe56f236a5b995bab7cf38f88735dbc4a4985",
       "branch": null,
       "pr": null
+    },
+    {
+      "id": "SP-078",
+      "phase": "P2",
+      "priority": 26.6,
+      "title": "Settings RPCs are operator-only under a policy (D-74)",
+      "summary": "Under a spaces policy, the settings RPCs that queued tasks are already refused (SetConfig with Sensitive keys, harness and cc-safety-net settings, Restart, PR landing) are also refused to interactive sessions; only Orch.app may call them. Ingest, Dispatch and the task RPCs stay available to sessions.",
+      "why": "RC-710 (raised by SP-025): an agent session could change sensitive settings or restart orchd under a policy.",
+      "depends_on": [
+        "SP-025"
+      ],
+      "touches": [
+        "internal/daemon/callers.go",
+        "internal/daemon/ (settings RPCs)"
+      ],
+      "docs_to_update": [
+        "docs/internals/daemon.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-078.1",
+          "title": "Settings calls are the operator's",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "While a spaces policy is applied, SetConfig with Sensitive keys, the harness and cc-safety-net settings RPCs, Restart and PR landing are refused to every caller except Orch.app (D-71), including interactive harness sessions, and each refusal is logged.",
+              "measure": "test per RPC",
+              "threshold": "all pass"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "Under a policy, interactive sessions can still call Ingest, Dispatch and the task RPCs they use today; with no policy applied, every RPC behaves as before (INV-10).",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "doc",
+              "check": "docs/internals/daemon.md lists which RPCs are operator-only under a policy.",
+              "measure": "file changed in the diff",
+              "threshold": "true"
+            }
+          ],
+          "evidence": [
+            "a1: TestSettingsAreTheOperatorsUnderAPolicy (internal/daemon/policy_operator_test.go), one subtest per RPC (SetConfig with a Sensitive key, SetSettingEnabled, AddSetting, RemoveSetting, InstallSafetyNet, Restart, LandPR, UndoPRLanding, DiscardPRLanding): under a policy each is refused with PermissionDenied before its handler runs to a pinned session, an unpinned harness session, a queued task, a terminal and a detached process, each refusal is logged (the session's names it: refused <RPC> from session sess-a), and Orch.app is served; also the stream path, an unreadable SetConfig, and a real applied policy (policyApplied). Passes.",
+            "a2: TestSessionsKeepTheirRPCsUnderAPolicy: under a policy pinned and unpinned sessions still call Ingest, Dispatch, ListTasks, GetTask, RateTask, RetryTask, CancelTask, WatchTasks, Search and SetConfig with a non-Sensitive key, without the policy being read; with no policy every listed settings RPC runs for sessions, terminals, detached processes and Orch.app (INV-10). Existing TestUnprovenOperatorGetsTaskLimits and TestOperatorOnlyRPCsNeedOrchApp still pass. Passes.",
+            "a3: docs/internals/daemon.md, Operator evidence, lists the RPCs operator-only under a policy (table) and corrects the recovery server line.",
+            "go test ./... passes except a timing flake in internal/agentrun TestRunMeasuresFailedRuns (199ms against a 200ms timeout under load; passes on rerun -count=3, untouched package); go vet ./... exit 0; make cover: All files >= 80% (policy_operator.go 100.0%, caller_session.go 99.0%); gofmt -l clean.",
+            "Security review of the diff: no critical, high or medium findings; lows recorded as RC-1201 and RC-1202.",
+            "Independent verification at 07bbf7d: a1, a2, a3 and DOD-1 to DOD-8 pass (go test ./... exit 0, go vet exit 0, make cover all files >= 80%, gofmt clean, signed commits, draft PR); DOD-9: CI test and build pass on PR #199 (run 43680018621)."
+          ]
+        }
+      ],
+      "status": "done",
+      "passes": true,
+      "verified_sha": "07bbf7d6ebdef8bf92969e3c99ef89b134846f40",
+      "verified_at": "2026-11-15T05:18:05Z",
+      "blocked_reason": null,
+      "attempts": 1,
+      "criteria_sha256": "901473b12fe5cd0035785d2271433e5396c60ed79717edc54f187b4072c72bdc",
+      "branch": "feat/sp-078-settings-operator-only",
+      "pr": "https://github.com/willesq/orchestrator/pull/199"
+    },
+    {
+      "id": "SP-079",
+      "phase": "P4",
+      "priority": 39.5,
+      "title": "Relabel now button in Orch.app (D-76)",
+      "summary": "A 'Relabel now' control in the Spaces pane runs orchd's Relabel RPC as the operator and shows its progress, so content stored before a policy apply can be made readable without a terminal.",
+      "why": "RC-229: under a policy the terminal cannot relabel (D-71) and the app had no control to start one.",
+      "depends_on": [
+        "SP-027",
+        "SP-051",
+        "SP-025"
+      ],
+      "touches": [
+        "macos/Sources (new Swift files, minimal SpacesView wiring)"
+      ],
+      "docs_to_update": [
+        "docs/internals/app.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-079.1",
+          "title": "Relabel now",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "The Spaces pane shows a 'Relabel now' control whenever chunks are stale (labels_v not the applied revision); it calls orchd's Relabel RPC as the operator and shows progress until no stale chunks remain.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "The control is absent or disabled with nothing stale, and a refused or failed relabel shows why without retrying on its own.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "manual",
+              "check": "Light and dark snapshots of the pane with stale chunks, during a relabel, and after it.",
+              "measure": "snapshots",
+              "threshold": "reviewed by the user"
+            }
+          ],
+          "evidence": []
+        }
+      ],
+      "status": "todo",
+      "passes": false,
+      "verified_sha": null,
+      "verified_at": null,
+      "blocked_reason": null,
+      "attempts": 0,
+      "criteria_sha256": "c8e57b33d517a6ceaa90763c200296bda10486c6197b9f1877423620bb93b07f",
+      "branch": null,
+      "pr": null
     }
   ],
   "criteria_hash_recipe": "criteria_sha256 = sha256 of json.dumps([{id, title, acceptance} for each checkpoint], sort_keys=True, separators=(',', ':'), ensure_ascii=False) encoded as UTF-8. 'evidence' is excluded so recording evidence does not change the hash.",
@@ -7686,6 +8378,14 @@
     {
       "date": "2026-11-14",
       "change": "SP-051 done: Spaces pane Overview, badge (conflicts > quarantine > drift > relabel), Basic/Advanced and screen-share-safe mode; a1 confirmed by the user (D-70); verified at b2972ab. RC-500 to RC-504 added."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "SP-078 added for RC-710 (D-74, recorded on #188): settings RPCs become operator-only under a policy."
+    },
+    {
+      "date": "2026-11-15",
+      "change": "D-75 defers SP-064; D-76 adds SP-079 (Relabel now in Orch.app) for RC-229; D-77 scopes DeleteSource and makes PurgeDocs operator-only (SP-026)."
     }
   ],
   "plan_location": {
@@ -7757,28 +8457,42 @@
       {
         "feature": "SP-025",
         "rc_range": "RC-700..RC-749",
-        "note": "PR #188; RC-705/706/707 settled by D-71; resumed to make Orch.app the only operator under a policy"
+        "note": "PR #188; D-71 done; finishing on D-74"
       },
       {
-        "feature": "SP-076",
-        "rc_range": "RC-800..RC-849",
-        "note": "PR #189; waiting on the user's RC-801 decision"
+        "feature": "SP-028",
+        "rc_range": "RC-900..RC-949",
+        "note": "PR #192; wiring assign to RetagSource after #191 merged"
       },
       {
-        "feature": "SP-051",
-        "rc_range": "RC-500..RC-549",
-        "note": "done; PR #181 gets placeholder commits (D-72) before merging"
+        "feature": "SP-052",
+        "rc_range": "RC-1000..RC-1049",
+        "note": "PR #193; waiting on the user's a1 snapshot review"
+      },
+      {
+        "feature": "SP-054",
+        "rc_range": "RC-1050..RC-1099",
+        "note": "PR #194; waiting on the user's a2 hands-on check"
       }
     ],
-    "next_rc_block": "RC-850",
+    "next_rc_block": "RC-1100",
     "queued": [
-      "SP-026, SP-029, SP-064 after SP-025",
-      "SP-077 after SP-025",
-      "SP-071, SP-028, SP-031 (SP-027 is done)",
-      "SP-052, SP-054 after #181"
+      "SP-031, SP-077, SP-078, SP-026, SP-029, SP-064 after SP-025",
+      "SP-053 after SP-071 and SP-072 (a1 needs the user)"
     ],
-    "d_ids_reserved": [],
-    "next_d_id": "D-73",
+    "d_ids_reserved": [
+      {
+        "id": "D-73",
+        "for": "SP-076",
+        "topic": "RC-801 accepted (recorded in #189)"
+      },
+      {
+        "id": "D-74",
+        "for": "SP-025",
+        "topic": "RC-710 accepted until SP-078 (recorded on #188)"
+      }
+    ],
+    "next_d_id": "D-78",
     "proto_slot": {
       "holder": "none",
       "next": "SP-025 if D-71 needs it, then SP-077"
@@ -7794,7 +8508,10 @@
       "SP-048 (#179)",
       "SP-074 (#182)",
       "SP-075 (#185)",
-      "SP-027 (#187)"
+      "SP-027 (#187)",
+      "SP-076 (#189)",
+      "SP-051 (#181)",
+      "SP-071 (#191)"
     ]
   }
 }
