@@ -129,6 +129,14 @@ public struct RelabelProgress: Sendable, Equatable {
 
     public var isRunning: Bool { total > 0 && done < total }
     public var percent: Int { total > 0 ? Int(min(done, total) * 100 / total) : 0 }
+
+    /// "40%", or the chunks to relabel while none is known done: Relabel
+    /// answers only when it ends, so a run from the pane (SP-079) has no
+    /// percentage to show.
+    public var summary: String {
+        if done > 0 { return "\(percent)%" }
+        return total == 1 ? "1 chunk" : "\(total.formatted()) chunks"
+    }
 }
 
 /// The reads the Spaces pane's Overview needs, beyond the switches and the
@@ -173,7 +181,7 @@ public enum SpacesBadge: Sendable, Equatable {
         case .conflicts(let n): n == 1 ? "1 conflict" : "\(n) conflicts"
         case .quarantine(let n): n == 1 ? "1 item in quarantine" : "\(n) items in quarantine"
         case .drift(let kinds): kinds.map(SpacesOverview.driftText).joined(separator: "; ")
-        case .relabel(let p): "Relabelling: \(p.percent)%"
+        case .relabel(let p): "Relabelling: \(p.summary)"
         }
     }
 }
@@ -345,7 +353,7 @@ public struct SpacesOverview: Sendable, Equatable {
             needs.append(NeedsYouItem(kind: .drift, title: "The policy has drifted", details: drift.map(driftText)))
         }
         if let relabel, relabel.isRunning {
-            needs.append(NeedsYouItem(kind: .relabel, title: "Relabelling stored content: \(relabel.percent)%", details: []))
+            needs.append(NeedsYouItem(kind: .relabel, title: "Relabelling stored content: \(relabel.summary)", details: []))
         }
         let refusals = activity.reduce(Int64(0)) { $0 + $1.refusals }
         if refusals > 0 {

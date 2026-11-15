@@ -9,6 +9,12 @@ struct SpacesView: View {
     let model: SpacesOverviewModel
     let enforcement: EnforcementModel
     let navigator: Navigator
+    /// Activity and Review (SP-054); without them the pane is the Overview.
+    var activity: SpacesActivityModel?
+    var review: SpacesReviewModel?
+    @State private var page: SpacesPage = .overview
+    /// "Relabel now" (SP-079); absent where none is given.
+    @Environment(SpacesRelabelModel.self) private var relabel: SpacesRelabelModel?
     /// The setup wizard while its sheet is open (SP-052).
     @State private var setup: SpacesSetupModel?
     /// What the wizard left to know after it closed, such as a saved draft.
@@ -16,13 +22,26 @@ struct SpacesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SpacesHeader(model: model, runSetup: openSetup)
-            Divider()
-            if let note = setupNote {
-                Text(verbatim: note).textStyle(.caption).padding(.horizontal, 12).padding(.vertical, 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            // Screen-share-safe mode keeps to the Overview.
+            let pages = model.shareSafe == nil && activity != nil && review != nil
+            if pages {
+                SpacesPagePicker(page: $page)
+                Divider()
             }
-            content
+            switch pages ? page : .overview {
+            case .activity:
+                if let activity { SpacesActivityView(model: activity) }
+            case .review:
+                if let review { SpacesReviewView(model: review, onApplied: { Task { await model.load() } }) }
+            case .overview:
+                SpacesHeader(model: model, runSetup: openSetup)
+                Divider()
+                if let note = setupNote {
+                    Text(verbatim: note).textStyle(.caption).padding(.horizontal, 12).padding(.vertical, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                content
+            }
         }
         .navigationTitle("Spaces")
         .task { await model.load() }
@@ -63,6 +82,7 @@ struct SpacesView: View {
                             EnforcementBanner(model: enforcement,
                                               show: overview.shareSafe == nil ? { navigator.showSettings(.spaces) } : nil)
                             NeedsYouStrip(items: overview.needsYou, problems: overview.problems)
+                            if let relabel, overview.shareSafe == nil { SpacesRelabelControl(model: relabel) }
                             SpaceCards(cards: overview.cards, shareSafe: overview.shareSafe)
                             if overview.shareSafe == nil {
                                 Button("Where would this go?") { navigator.showSettings(.spaces) }
@@ -71,6 +91,10 @@ struct SpacesView: View {
                         }
                         .padding(Metrics.pagePadding)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    // Counts stale chunks when the pane shows and after each apply.
+                    .task(id: overview.shareSafe == nil ? overview.appliedRevision : -1) {
+                        if overview.shareSafe == nil { await relabel?.check() }
                     }
                 } secondary: {
                     SessionList(sessions: overview.sessions, detail: model.detail, shareSafe: overview.shareSafe)

@@ -142,8 +142,25 @@ orgs). All four are operator-only in orchd, so the pane works in an app the user
   most 20 asked per refresh; the rest count as quarantine); otherwise it is quarantine, as is every
   applied GitHub org whose new content goes to quarantine until confirmed. Drift is a saved draft
   not applied, an applied revision changed outside orchd, or a policy orchd cannot read. Relabel
-  progress has no RPC yet (SP-027), so it never shows today. Refusals are the guard's refused
-  calls over 7 days.
+  progress shows while a relabel started from the pane runs (see **Relabel now** below); Relabel
+  answers only when it ends, so it names the chunks being relabelled rather than a percentage.
+  Refusals are the guard's refused calls over 7 days.
+- **Relabel now (SP-079, D-76):** under a policy, content stored before an apply is labelled for an
+  older revision and sessions cannot read it until it is relabelled; orchd never relabels on its
+  own after an apply, and a terminal is not the operator (D-71). `SpacesRelabelControl` (driven by
+  `SpacesRelabelModel`, given to the window through the SwiftUI environment) counts stale chunks with
+  `Relabel` without `apply` when the pane shows and whenever the applied revision changes, and shows
+  "N stored chunks are labelled for an older policy" with **Relabel Now** only while some are. The
+  button calls `Relabel` with `apply` as Orch.app, the operator; while it runs the control shows a
+  spinner and the chunk count, and the Overview's needs-you strip and the sidebar badge show the
+  run (the model's `progress` feeds `SpacesOverviewModel`'s relabel progress). Leaving the pane does
+  not stop it. When it ends the model counts again: with nothing stale the control says what the run
+  updated and moved; otherwise it shows the chunks still stale with the button. A refused call,
+  a run that stopped early (`error`) or left chunks stale (`failed`) shows why, and nothing is
+  tried again until the user presses the button; a failed count shows why with **Check Again**.
+  With nothing stale and no run this session, the control is absent. It is hidden in
+  screen-share-safe mode, since the counts cover every space; it shows counts only, never the
+  run's per-space transitions.
 - **Space cards:** kind ("Isolated · job", "Private · personal", "Public · readable everywhere"),
   GitHub orgs and folders, and live sessions, tool calls, directory moves (with moves into another
   space) and refusals over 7 days. Advanced adds web prefixes, chat tenants, the gh profile folder,
@@ -173,7 +190,72 @@ orgs). All four are operator-only in orchd, so the pane works in an app the user
   checks the cards, sessions and needs-you strip in both modes, and that in screen-share-safe mode
   nothing the model holds names, paths or counts of another space
   (`screenShareSafeModeHoldsNothingOfAnotherSpace`). `SpacesPaneSnapshots` renders the pane at both
-  widths in light and dark (see [Snapshots](#snapshots)).
+  widths in light and dark (see [Snapshots](#snapshots)). `SpacesRelabelModelTests` checks the
+  control's states, the run's progress in the Overview and badge, and that a refused or failed run
+  is not retried; `SpacesRelabelClientTests` checks the RPC through the fake orchd;
+  `SpacesRelabelSnapshots` renders the control with stale chunks, during a run and after it
+  (`spaces-relabel-{stale,running,done}-{default,companion}-{light,dark}.png`).
+
+### Spaces pane: Activity and Review (SP-054)
+
+An **Overview / Activity / Review** switch above the pane picks the page. Screen-share-safe mode
+hides the switch and shows only the Overview, since the other two name every space's sessions and
+bindings.
+
+- **Activity** (`SpacesActivityView`, `SpacesActivityModel`, `ActivityRow`): the pinned sessions from
+  `ListSessions` (ended ones included, most recent first) beside the chosen session's command log
+  from `ListToolEvents`, newest record first. Each row shows the time, the tool (or "Directory
+  move", "Events lost", "Session ended"), the folder it ran in, the command or its targets, and
+  orchd's decision with its rule: refused (red), "would refuse" or not enforced (orange), logged.
+  A directory move shows its two folders. **All / Directory Moves / Refusals** filters the rows.
+  The log is read 5 pages of 1,000 records at a time; **Load More** reads the next; at most
+  20,000 rows are kept, the oldest dropped first. Moves are the
+  hook's cwd-changed events only; a Bash `cd` is a call, not a move (RC-62). A harness process with
+  no pin has no row: `ListSessions` does not name its process chain (RC-70). The text shown is what
+  orchd stored, already credential-redacted and capped.
+- **Review** (`SpacesReviewView`, `SpacesReviewModel`, `SpacesReview`, `PolicyDoc`): `DiffSpaces`'
+  newest draft against the applied revision, one line per space, binding and setting: `+` added,
+  `−` removed, unchanged lines dimmed. A banner says the draft is pending, when and by whom it was
+  saved (you, or an agent session), and that nothing in it is enforced; drift from `ListSpaces`
+  (an applied revision changed outside orchd, a policy orchd cannot read) shows as a red banner.
+- **Per-line validation:** each problem orchd reports is put on its line from its rule, its space
+  and the value its message quotes (Go `%q`; roots compared after expanding `~` as orchd does), or,
+  for `public_paths`, the entry number the message gives (a non-public space listing any has no
+  single line). A
+  space-level problem (bad or duplicate name) marks the space's line; `unknown_kind` its kind; a
+  problem whose line cannot be found is listed under **Other problems**. Every problem blocks
+  Apply, as orchd refuses to apply a draft with any.
+- **Excluding invalid lines:** **Drop N Invalid Lines** reverts each marked line to the applied
+  revision (an added value or space is removed, a changed setting gets its applied value back) and
+  saves the result with `SetSpacesDraft` as a new revision, which the page then shows for review.
+  Everything else in the draft, including fields this app does not know, is kept. A marked line
+  the applied revision already has (for example a root that a newly added root now contains) is
+  not dropped for the user, since removing it could move content to a less strict space; nor is a
+  line in a conflict between two spaces (a duplicate name, an org, prefix, tenant or root bound
+  twice, an isolated root inside another isolated space's root), since dropping a side picks which space wins; nor
+  is a binding the applied revision has in any space, or a new space carrying one (a binding
+  moved or a space renamed), since dropping it would leave that binding unbound rather than back
+  where it was. Such lines say to fix the draft instead.
+- **Effect counts:** spaces added, removed and changed, bindings and settings added and removed,
+  and invalid lines. Live sessions keep their pins. Chunk, PR and task counts would need an RPC
+  (RC-1050).
+- **Apply:** enabled only with no problems. It names the revision shown (`reviewed_revision`), so a
+  newer draft saved meanwhile is refused by orchd, not applied in its place. A draft an agent
+  session saved needs **I reviewed this draft**, sent as `accept_agent_draft`. Dropping lines from
+  an agent's draft needs that tick first: the saved revision is the user's own, and orchd records it
+  as the operator's (RC-1052). Unconfirmed GitHub orgs can be confirmed (`confirm_github_orgs`). Before calling
+  orchd, Apply asks for Touch ID or the login password through the system sheet
+  (`SystemAuthentication`, LocalAuthentication's `deviceOwnerAuthentication`); cancelling sends
+  nothing. That prompt is a speed bump against an unattended screen; orchd's operator check (only
+  Orch.app under a policy, D-71) is the gate. After an apply the Overview reads again.
+- **Not yet:** discarding a draft (no RPC: save the applied policy again as a draft with
+  `orch spaces draft`), and process-chain logs.
+- **Tests:** `SpacesReviewTests` (lines, every rule's line, exclusion, unchanged lines not dropped,
+  unknown fields kept), `SpacesReviewModelTests` (drop then apply sends the reviewed revision, a
+  stale review is refused, authentication runs first and a cancel calls nothing, agent drafts need
+  acceptance), `SpacesReviewClientTests` (the four RPCs over a fake orchd) and
+  `SpacesActivityTests`. `SpacesActivityReviewSnapshots` renders both pages, plus the review after
+  dropping, at both widths in light and dark.
 
 ### Spaces pane: basic setup (SP-052)
 
@@ -734,8 +816,10 @@ rebuild.
   to `OrchKit` (generated code excluded).
 - <a id="snapshots"></a>**Snapshots:** `ORCH_SNAPSHOT_DIR=<folder> swift test --package-path macos
   --filter OrchAppSnapshots` renders the Spaces section, the "enforcement off" banner, the menu
-  bar panel's switches, the Spaces pane (at 790 pt and the 320 pt companion width, and in
-  screen-share-safe mode) and each step of its setup wizard in light and dark from sample data, writing one PNG each. It draws offscreen
+  bar panel's switches, the Spaces pane (at 790 pt and the 320 pt companion width, in
+  screen-share-safe mode, and with its Relabel now control before, during and after a run), its
+  Activity and Review pages, and each step of its setup wizard in light and dark from sample data,
+  writing one PNG each. It draws offscreen
   (`cacheDisplay`), so no window appears, the installed app and orchd are not involved, and no
   Screen Recording permission is needed. Without `ORCH_SNAPSHOT_DIR` the suite is skipped.
 - **CI:** `app.yml` runs on pull requests to `main` that touch `macos/**`, `orchd.proto` or the
