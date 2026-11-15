@@ -50,6 +50,38 @@ machine. See [internals/settings.md](internals/settings.md).
 
 ## Spaces
 
+Memory spaces are **off by default**. While they are off, orch works as it did before spaces:
+
+- no tool hooks before every tool call;
+- no command log or session pins;
+- no guard, outbound terms or sandbox rules;
+- one memory store that every session reads.
+
+Turn them on or off yourself, in Orch.app (Settings → Spaces) or from a terminal outside any agent
+session:
+
+```sh
+orch spaces on                        # move memory back into its spaces, then enforce the policy
+orch spaces off --confirm             # stop enforcing; the policy and its records are kept
+orch install --apply                  # then add (on) or remove (off) the tool hooks
+```
+
+While a policy is applied, only Orch.app can switch spaces. An install that applied a policy
+before the switch existed comes up with spaces on, so upgrading changes nothing it enforces.
+
+**Turning spaces off** stops every layer at once. orchd then moves every space's memory back into
+one store in the background, and `orch status` shows the move. **Quarantined content becomes
+readable again**, as it was before spaces; it keeps its quarantine label.
+
+**Turning spaces on** moves memory back into each space's collection first. Nothing is enforced
+until that move finishes, and `orch status` shows `switch: turning on`. orchd then enforces the
+applied policy and relabels anything written while spaces were off. Restart sessions that were
+running, so they get a pin.
+
+While spaces are off, `orch spaces apply`, `enforce`, `sandbox`, rule changes, `retag`,
+quarantine purges, `orch rag relabel`, `orch run` and `orch guard git-hook --install` are
+refused. Reading commands still answer from the kept records.
+
 ```sh
 orch spaces draft < policy.json       # save a draft revision; changes nothing
 orch spaces diff [--full]             # what the newest draft changes, and its problems

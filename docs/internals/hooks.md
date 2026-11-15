@@ -28,6 +28,19 @@ they name a file.
 | `cwd-changed` | Hands the directory change (`old_cwd`, `new_cwd`) to orchd with the verdict the guard would give, and prints nothing. See [tool hooks](#tool-hooks). Claude Code only; Codex has no such event. |
 | `post-tool-use` | After `gh pr create\|ready\|close\|merge\|reopen\|edit`, requests a PR refresh, and after `gh pr create` (also `rtk gh pr create`) registers the PR with PR Watch (below). After `Edit`/`Write`/`MultiEdit` of markdown or a file under `~/.claude/`, hands the file off to be stored again. |
 
+While memory spaces are off ([spaces switch](daemon.md#spaces-switch)), the hooks do what they did
+before spaces (`internal/hook/spaces_off.go`):
+
+- `pre-tool-use` and `cwd-changed` return at once. There is no decision, no deny, no
+  `RecordToolEvent` and no refusal event.
+- `session-start` makes no `PinSession` or `GetEnforcement` call and prints the plain digest.
+- `session-end` makes no `EndSession` call.
+
+The hook reads the switch from the guard snapshot's `spaces_off`. Only when the snapshot cannot be
+read does it read `orch.db`. A snapshot from an orchd that predates the switch, or a store that
+cannot be read, counts as on, so the guard keeps deciding (fail closed). `orch install` writes no
+tool hooks while spaces are off ([install.md](install.md)).
+
 ## Tool hooks
 
 `pre-tool-use` (before every tool call) and `cwd-changed` record what an agent does for the spaces

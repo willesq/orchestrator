@@ -75,7 +75,7 @@ and records the outcome. Routing picks the model per task kind from the models y
 |---|---|
 | `~/.config/orch/AGENTS.md`, `policy/` | Shared agent policy installed from this repo |
 | `~/.local/share/orch/orch.db` | SQLite: settings (changed in the app's Settings pane; an older release's `~/.config/orch/config.yaml` is imported once, then ignored), tasks, sources, model registry, routing |
-| `~/.local/share/orch/toollog.db` | SQLite, mode 0600: the command log of sessions' tool calls, hash-chained per session; never indexed ([daemon.md](internals/daemon.md#command-log)) |
+| `~/.local/share/orch/toollog.db` | SQLite, mode 0600: the command log of sessions' tool calls, hash-chained per session, written only while memory spaces are on; never indexed ([daemon.md](internals/daemon.md#command-log)) |
 | `~/.local/share/orch/workflows.db` | Durable workflow state for the task queue |
 | `~/.local/share/orch/qdrant/` | Vector store (Qdrant runs natively, no Docker) |
 | `~/.local/share/orch/models/` | Embedding model (MiniLM, ONNX) |

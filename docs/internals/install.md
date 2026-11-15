@@ -238,6 +238,24 @@ is written; Gemini does not wait for `SessionEnd` hooks at all (best effort), so
 bounds the process. Gemini's payload schema is assumed to match Claude Code's; this is not
 verified.
 
+## Tool hooks and the spaces switch
+
+While memory spaces are off ([spaces switch](daemon.md#spaces-switch)), the default, install
+writes the hooks orch wrote before spaces and nothing more (`internal/install/spaces_off.go`):
+
+- Claude Code gets no `PreToolUse` or `CwdChanged`, and Codex gets no `PreToolUse`.
+- orch's own entries for those events, left by an install made while spaces were on, are removed.
+  An entry counts as orch's only when its command is exactly `<bin>/orch-hook <slug>`.
+- Third-party entries for those events, and every other orch hook, are kept.
+- The dry run says what it removes, and a second run changes nothing.
+- A switch that cannot be read counts as on, so install keeps the tool hooks (fail closed).
+
+`orch status` then prints no tool hooks line.
+
+Turning spaces on or off changes the harness files only at the next `orch install --apply`. Until
+then, `orch status` shows the harness as drifted. Hooks left installed while spaces are off do
+nothing ([hooks.md](hooks.md#tool-hooks)).
+
 ## Tool hook coverage
 
 Spaces (the command log and the tool guard) see a harness's tool calls only through its
@@ -272,6 +290,9 @@ missing.
   Homebrew's `Cellar`, since `brew services` supervises it.
 
 ## Git hooks for outbound terms
+
+While memory spaces are off, `--install` is refused, `--uninstall` still works, and hooks
+installed earlier let every commit and push through: `orch guard git-hook run` returns at once.
 
 `orch guard git-hook (--install|--uninstall) [--apply] [--repo DIR] [--hooks-dir DIR] [--orch BIN]`
 (SP-045, `internal/install/githook.go`, `internal/cli/guard_githook_cmd.go`) puts a `commit-msg`
