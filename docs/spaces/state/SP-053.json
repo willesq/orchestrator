@@ -7,7 +7,7 @@
   "blocked_reason": null,
   "attempts": 1,
   "branch": "feat/sp-053-advanced-editors",
-  "pr": null,
+  "pr": "https://github.com/willesq/orchestrator/pull/214",
   "evidence": {
     "SP-053.1": []
   }
