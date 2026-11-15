@@ -1,14 +1,18 @@
 {
   "id": "SP-052",
-  "status": "todo",
+  "status": "in_progress",
   "passes": false,
   "verified_sha": null,
   "verified_at": null,
   "blocked_reason": null,
-  "attempts": 0,
-  "branch": null,
-  "pr": null,
+  "attempts": 1,
+  "branch": "feat/sp-052-setup-wizard",
+  "pr": "https://github.com/willesq/orchestrator/pull/193",
   "evidence": {
-    "SP-052.1": []
+    "SP-052.1": [
+      "a1: NOT YET CONFIRMED BY THE USER (manual). Supporting test at 1a47011: SpacesSetupPlanTests.fixtureMachineProposesFourSpacesAndQuarantine passes: on the fixture scan (acme and globex private with membership, oss-org 2 public + 1 private, the user's own login 'me') the planner proposes acme (Job/isolated), globex (Job/isolated), personal (private, org me) and public (open, org oss-org): 4 spaces, the private oss-org/oss-secret checkout placed in quarantine (not_verified_public), no conflicts. Snapshots for review rendered with `ORCH_SNAPSHOT_DIR=<scratch>/sp-052/shots swift test --package-path macos --filter SpacesSetupSnapshots`: <scratch>/sp-052/shots/spaces-setup-{1-scan,2-spaces,3-recall,4-guard,5-review,6-done}-{light,dark}.png and spaces-pane-not-set-up-{light,dark}.png.",
+      "a2: SpacesSetupModelTests.cancellingAtAnyStepChangesNothingApplied (parameterized over Scan, Spaces, Recall, Guard, Review) passes at 1a47011: against a fake orchd that keeps revisions like orch.db, cancelling at each step leaves the applied document identical, makes no ApplySpaces, SetEnforcement or retention call, and leaves no drift. Also cancellingTheFirstSetupKeepsItsDraftUnapplied, cancellingOverAPendingDraftSaysSo, cancelNeverHidesANewerDraftOrRevivesAnOldPolicy, applyNeedsTheDeviceOwner and aRefusedPolicyChangesNothingElse.",
+      "a3: 8 clicks (threshold <= 10), measured on the model flow by SpacesSetupModelTests.fixtureSetupTakesAtMostTenClicks at 1a47011: Set Up Spaces (the scan starts by itself), Continue x4, Apply, the Touch ID prompt, Done; the defaults proposed for the fixture need no change. Not timed by the user on a real machine."
+    ]
   }
 }

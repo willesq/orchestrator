@@ -83,6 +83,10 @@ public final class SpacesOverviewModel {
         await load()
     }
 
+    /// A fresh setup wizard (SP-052) on the pane's own source, so the app
+    /// wires nothing more for it.
+    public func makeSetup() -> SpacesSetupModel { SpacesSetupModel(api: api, home: home) }
+
     public func setDetail(_ detail: SpacesDetail) async {
         guard detail != self.detail else { return }
         self.detail = detail
