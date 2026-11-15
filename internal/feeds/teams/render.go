@@ -82,7 +82,7 @@ func conversation(base feeds.Record, msgs []message) (feeds.Record, bool) {
 	var parts []string
 	for _, m := range msgs {
 		id, name := sender(m)
-		if id != "" && idPattern.MatchString(id) {
+		if id != "" && validID(id) {
 			parts = append(parts, id)
 		}
 		// Reason: a name or a message with line breaks could otherwise
