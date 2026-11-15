@@ -15,7 +15,7 @@ import (
 // Trust is how far a memory's origin can be trusted.
 type Trust string
 
-// Trust tiers. The first five are assigned by orchd's writer and stored with
+// Trust tiers. The first five, and chat, are assigned by orchd's writer and stored with
 // each chunk (see rag.TrustFor); a client cannot choose them.
 const (
 	// TrustRepo is a registered repo's docs, stored by the docs or sources sync.
@@ -32,6 +32,9 @@ const (
 	TrustWeb Trust = "web"
 	// TrustTool is captured tool output (only derived, for older content).
 	TrustTool Trust = "tool"
+	// TrustChat is what people wrote in a chat a chat feed stored (SP-060):
+	// third-party text, guests' included.
+	TrustChat Trust = "chat"
 	// TrustUnverified is content stored before writers were recorded, whose
 	// tier cannot be known.
 	TrustUnverified Trust = "unverified"
@@ -52,7 +55,7 @@ var (
 func TrustOf(stored, sourceType, uri string) Trust {
 	derived := derivedTrust(sourceType, uri)
 	switch t := Trust(strings.TrimSpace(stored)); t {
-	case TrustRepo, TrustWeb:
+	case TrustRepo, TrustWeb, TrustChat:
 		return t
 	case TrustTool:
 		return TrustTool
@@ -101,7 +104,7 @@ func derivedTrust(sourceType, uri string) Trust {
 
 // Untrusted reports whether content of this tier is third-party text: it is
 // labelled untrusted, and prompt context can leave it out.
-func (t Trust) Untrusted() bool { return t == TrustWeb || t == TrustTool }
+func (t Trust) Untrusted() bool { return t == TrustWeb || t == TrustTool || t == TrustChat }
 
 // Label names the tier for a reader.
 func (t Trust) Label() string {
@@ -118,6 +121,8 @@ func (t Trust) Label() string {
 		return "web page, untrusted"
 	case TrustTool:
 		return "tool output, untrusted"
+	case TrustChat:
+		return "chat message, untrusted"
 	}
 	return "unverified"
 }

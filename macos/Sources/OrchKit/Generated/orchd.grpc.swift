@@ -59,6 +59,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "SearchDirectMessages" metadata.
+        public enum SearchDirectMessages: Sendable {
+            /// Request type for "SearchDirectMessages".
+            public typealias Input = Orchd_V1_SearchDirectMessagesRequest
+            /// Response type for "SearchDirectMessages".
+            public typealias Output = Orchd_V1_SearchResponse
+            /// Descriptor for "SearchDirectMessages".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "SearchDirectMessages",
+                type: .unary
+            )
+        }
         /// Namespace for "ListSources" metadata.
         public enum ListSources: Sendable {
             /// Request type for "ListSources".
@@ -1195,6 +1208,7 @@ public enum Orchd_V1_Orchd: Sendable {
             Ping.descriptor,
             Ingest.descriptor,
             Search.descriptor,
+            SearchDirectMessages.descriptor,
             ListSources.descriptor,
             DeleteSource.descriptor,
             Dispatch.descriptor,
@@ -1370,6 +1384,31 @@ extension Orchd_V1_Orchd {
         func search<Result>(
             request: GRPCCore.ClientRequest<Orchd_V1_SearchRequest>,
             serializer: some GRPCCore.MessageSerializer<Orchd_V1_SearchRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SearchResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SearchResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "SearchDirectMessages" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SearchDirectMessages is Search with chat direct messages kept in: an
+        /// > explicit interactive search (SP-060). Every other read leaves DMs out,
+        /// > and queued tasks are refused it (D-19).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SearchDirectMessagesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SearchDirectMessagesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SearchResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func searchDirectMessages<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SearchDirectMessagesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SearchDirectMessagesRequest>,
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SearchResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SearchResponse>) async throws -> Result
@@ -3617,6 +3656,42 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.Search.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "SearchDirectMessages" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > SearchDirectMessages is Search with chat direct messages kept in: an
+        /// > explicit interactive search (SP-060). Every other read leaves DMs out,
+        /// > and queued tasks are refused it (D-19).
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_SearchDirectMessagesRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_SearchDirectMessagesRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_SearchResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func searchDirectMessages<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_SearchDirectMessagesRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_SearchDirectMessagesRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_SearchResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SearchResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.SearchDirectMessages.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -6796,6 +6871,37 @@ extension Orchd_V1_Orchd.ClientProtocol {
         )
     }
 
+    /// Call the "SearchDirectMessages" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SearchDirectMessages is Search with chat direct messages kept in: an
+    /// > explicit interactive search (SP-060). Every other read leaves DMs out,
+    /// > and queued tasks are refused it (D-19).
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_SearchDirectMessagesRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func searchDirectMessages<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_SearchDirectMessagesRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SearchResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.searchDirectMessages(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_SearchDirectMessagesRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_SearchResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "ListSources" method.
     ///
     /// > Source IDL Documentation:
@@ -9538,6 +9644,41 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.search(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "SearchDirectMessages" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > SearchDirectMessages is Search with chat direct messages kept in: an
+    /// > explicit interactive search (SP-060). Every other read leaves DMs out,
+    /// > and queued tasks are refused it (D-19).
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func searchDirectMessages<Result>(
+        _ message: Orchd_V1_SearchDirectMessagesRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_SearchResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_SearchDirectMessagesRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.searchDirectMessages(
             request: request,
             options: options,
             onResponse: handleResponse
