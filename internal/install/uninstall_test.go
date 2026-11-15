@@ -173,6 +173,8 @@ func TestValidateUnitsRefusesUnpaired(t *testing.T) {
 		{"installs nothing, says nothing", Unit{Name: "c", Leftovers: func() []string { return nil }}},
 		{"no uninstall", Unit{Name: "d", InstalledBy: "someone"}},
 		{"no name", Unit{InstalledBy: "x", Leftovers: func() []string { return nil }}},
+		{"past edit without reverse", Unit{Name: "e", InstalledBy: "x", Past: []Edit{{Path: "/p"}}}},
+		{"past edit, says nothing", Unit{Name: "f", Past: []Edit{{Path: "/p", Reverse: cutAliasBlock}}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -556,7 +558,7 @@ func TestMachineAppAndNotes(t *testing.T) {
 	if err := UninstallPlan("all", FullUnits(m, nil), true).Print(&out); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Left for you", "Orch.app", "--purge-data", "orch guard git-hook --uninstall"} {
+	for _, want := range []string{"Left for you", "Orch.app", "--purge-data", "orch uninstall --scan"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("uninstall notes lack %q:\n%s", want, out.String())
 		}

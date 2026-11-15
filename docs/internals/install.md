@@ -10,7 +10,7 @@ Everything orch puts on a machine is a **unit** (`internal/install/unit.go`): on
 its install and its uninstall defined together, in the same place.
 
 ```go
-Unit{Name, Shared, Edits []Edit, Steps, UndoSteps func() []Step, Dirs, InstalledBy, Manual, Leftovers}
+Unit{Name, Shared, Edits []Edit, Past []Edit, Steps, UndoSteps func() []Step, Dirs, InstalledBy, Manual, Leftovers}
 Edit{Path, Compute(old) → new, Reverse(cur) → Undo{Data | Remove}, Normalize, Unlink}
 ```
 
@@ -21,6 +21,13 @@ and still has an uninstall. `ValidateUnits` enforces this; a plan built from a u
 fails before printing or writing anything, and `TestEveryRegisteredUnitIsPaired` checks every
 registered unit. To add an install step, add it to a unit together with its reverse, and extend
 the round-trip test (`TestInstallUninstallRoundTrip`) if it touches a new file.
+
+**Past installs.** When install stops putting something in place, its reverse stays, as a `Past`
+edit: an uninstall-only edit with a `Reverse` and no `Compute`, in a unit whose `InstalledBy` names
+the releases that installed it. `InstallPlan` ignores `Past`; `UninstallPlan` reverses it like any
+edit (backed up, never through a symlink). A past edit of a path a current edit covers is dropped.
+Things installed outside install itself (git hooks before the registry) get a discovery unit: its
+`UndoSteps` find them by exact identity and its `Leftovers` name what only looks like orch's.
 
 **One registered list.** `install.FullUnits` is the list, in install order: prerequisites (gh
 login, which only the user can do), data, checkout settings, the embedding model, then each
@@ -770,7 +777,7 @@ The machine units (`internal/install/machine.go`), each skipped by its flag:
 ## Uninstall
 
 `orch uninstall [--apply|--yes] [--target all|claude-code|codex|gemini] [--home DIR] [--bin-dir DIR]
-[--no-git-hooks] [--purge-data]` (`internal/cli/uninstall_cmd.go`) builds `UninstallPlan`.
+[--no-git-hooks] [--purge-data] [--scan DIR]...` (`internal/cli/uninstall_cmd.go`) builds `UninstallPlan`.
 
 - **Target.** `all` (the default) walks every registered unit. One harness walks only its
   adapter's units, less the shared ones, so the other harnesses keep the shared policy, alias and
@@ -784,7 +791,8 @@ The machine units (`internal/install/machine.go`), each skipped by its flag:
   re-checks with `Lstat` that the path is still a regular file, and `os.Remove` never follows a
   final symlink; a symlink is never removed (when only orch's part was in the file behind it, that
   file is emptied). Directories in `Dirs` are removed only when empty and not symlinks.
-- **Steps, in order:** stop orchd (daemon unit), remove git hooks, `claude plugin uninstall
+- **Steps, in order:** stop orchd (daemon unit), remove git hooks found without a record, then
+  those in the registry, `claude plugin uninstall
   cc-safety-net@orch-pinned --scope user` and `claude plugin marketplace remove orch-pinned` (only
   what `Detect` finds; skipped with the command named when there is no `claude` CLI), then the
   spaces checkout settings: a `spacesettings.Syncer` over `<data>/spaces/.orch/checkouts.json`,
@@ -802,9 +810,45 @@ The machine units (`internal/install/machine.go`), each skipped by its flag:
   `<home>/.local/share/orch` or hold `orch.db` (`ORCH_DATA_DIR` can point anywhere). Each path is
   removed through `os.Root` opened on its parent, so a symlink inside is removed as a link and
   never followed.
+- **Git hooks found without a record** (`githookfind.go`, `githookplaces.go`; unit `git hooks
+  found without a record`, after the registry unit). Candidates: `git config --global` (and
+  `--system`, unless `--home` is relocated) `--type=path core.hooksPath`; for each repository
+  `<repo>/.git/hooks` plus `git -c core.fsmonitor=false -C <repo> rev-parse --path-format=absolute
+  --git-common-dir --git-path hooks`. Repositories come from orch.db opened read-only (never
+  created or migrated): `sources` of kind `repo`, `queue.worker.verify.repos`, and the spaces sync
+  record (`<data>/spaces/.orch/checkouts.json`). Roots, searched 3 folders down for checkouts
+  (hidden and build folders skipped, a checkout not searched for another): `sources.known_roots`,
+  `docs.repo_cache` (or `<data>/repos`), and the roots of every saved spaces revision (newest 500).
+  `--scan <dir>` walks 8 folders down and also takes any folder named `hooks` holding a
+  `commit-msg` or `pre-push`; a copy of orch's hook in a folder of another name (a dotfiles
+  repository) is reported, not removed. One search reads at most 200,000 entries and asks git
+  about at most 2,000 repositories, and says where it stopped; no symlink is followed, a root that
+  is one included. git's answer is used only when it is exactly two absolute paths. A folder already in the registry is left to the
+  registry unit. Removal is `PlanGitHooks(dir, "", true)`: only a regular file with orch's exact
+  marker goes, and its `<name>.orch-prev` comes back. Reported, not changed: a link to orch's hook,
+  a hook running `orch guard git-hook` without the marker, an orphaned `.orch-prev`, a symlinked
+  hooks folder, a repository git could not name a hooks folder for. Each removal re-checks that
+  the folder is still not a link. git runs with every `GIT_` variable but `GIT_EXEC_PATH`
+  removed; under `--home` also with that `HOME` and no system config. Tests inject the git runner.
+- **Earlier releases** (`past.go`), from the history of `internal/install`, and how each is found:
+
+  | Artifact | Releases | Recognised by | Reversed by |
+  |---|---|---|---|
+  | `~/.config/orch/bin/gittree` and `alias gittree=` | until gittree shipped separately | `managed-by: orch` marker; alias inside orch's `.zprofile` block | `gittree helper (earlier releases)` past edit; the alias unit removes the whole block |
+  | orch's block in the Codex entry file not used now | any, when `AGENTS.override.md` appeared or emptied since | `<!-- BEGIN/END orchestrator-managed -->` | `codex instructions (earlier entry file)` past edit |
+  | `rag`/`queue` MCP servers in `~/.claude/settings.json` and `~/.claude.json`, `orch_rag`/`orch_queue` in Codex, from another bin dir | first Go releases on | command named `orch`, args `mcp <server>` | the current settings edits |
+  | `orch-hook <event>` from another bin dir; `<python> ~/.claude/orchestrator/hooks/<x>.py` | first Go releases; the retired Python orchestrator | binary named `orch-hook`; a script under the retired checkout's `hooks/` | the current settings edits |
+  | `com.orchestrator.orchd.plist` for a moved orchd | every release (the only label orch used) | the label | the launchd unit |
+  | git hooks before the registry | git hooks before SP-045's registry | marker line | the discovery unit above |
+
+  Homebrew's own `homebrew.mxcl.orch.plist`, when orchd is no longer Homebrew-managed, is named
+  (`brew services stop orch`), not removed. `~/.claude/orchestrator/` is the user's: an agent or
+  skill path that leads into it (its own link, a linked parent such as `~/.claude/agents`, or a
+  path that cannot be resolved) is kept and named (`left in place`), whatever the file holds.
 - **Left for you:** Homebrew (`brew uninstall orch`) or the source-built binaries, Orch.app and its
-  login item (`SMAppService.mainApp`, which only the app can unregister), git hooks installed before
-  the registry existed, the kept data directory, and the backups.
+  login item (`SMAppService.mainApp`, which only the app can unregister), git hooks in a
+  repository orch has no record of outside the searched roots (`--scan` finds them), what only
+  looks like orch's (above), the kept data directory, and the backups.
 - **Not exact:** files are written back in orch's encoding, so a harness's own formatting or a TOML
   comment is not restored; a rule, wrapper or `attribution.commit: ""` the user had before install
   is removed with orch's (install did not record it); a missing final newline before orch's block

@@ -25,6 +25,7 @@ func (c Codex) Units(bins Bins, home string) []Unit {
 	return append(instructionUnits(home, c.Name()),
 		Unit{Name: "codex mcp", Edits: []Edit{codexTOMLEdit(bins, home)}},
 		Unit{Name: "codex hooks", Edits: []Edit{codexHooksEdit(bins, home)}},
+		codexPastEntryUnit(home),
 		aliasUnit(bins.Orch, home),
 		launchdUnit(bins.Orchd, home),
 	)
