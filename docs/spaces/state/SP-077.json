@@ -1,14 +1,21 @@
 {
   "id": "SP-077",
-  "status": "todo",
+  "status": "in_progress",
   "passes": false,
   "verified_sha": null,
   "verified_at": null,
   "blocked_reason": null,
-  "attempts": 0,
-  "branch": null,
-  "pr": null,
+  "attempts": 1,
+  "branch": "feat/sp-077-operator-unlock",
+  "pr": "https://github.com/willesq/orchestrator/pull/198",
   "evidence": {
-    "SP-077.1": []
+    "SP-077.1": [
+      "a1: TestUnlockGrantsScopeOnlyOnceConfirmed (internal/daemon/unlock_test.go) passes at 63b6d21: a pending request grants nothing (DiffSpaces refused, public reads only for the requester and its descendants); Orch.app's confirmation grants nothing either until the requester sends the code orchd shows only to Orch.app (ProveUnlock; a descendant or a wrong code is refused); then the requester and its descendants (32, 33, 34) are the operator and its parent, sibling, another terminal, a pty of its own and a detached process are not; it ends at its duration (15m), with 'orch spaces lock' from the unlocked shell (a sibling's lock ends nothing), with Orch.app's Lock, and when the requester exits (a PID reused with another start time is not covered); 0s, -1s and 3601s are refused (at most 60 minutes). Also TestUnlockRequestEndsUnconfirmed (denied, lapsed, withdrawn, locked, confirmed without a code in time, three wrong codes; limits of 4 pending, 6 a minute), TestUnlockFollowsTheConnectionsProcess and TestUnlockWithoutPolicy; CLI: TestSpacesUnlockRunsTheShellThenLocks, TestSpacesUnlockFailures, TestRunUnlockedReportsTheExitStatus, TestSpacesLock (internal/cli/spaces_unlock_test.go); app: UnlocksModelTests and UnlocksClientTests (macos/Tests/OrchKitTests/UnlocksTests.swift).",
+      "a2: TestUnlockRefusedToAgentsAndNonApp (internal/daemon/unlock_refusal_test.go) passes at 63b6d21: RequestUnlock, ProveUnlock and Lock are refused (PermissionDenied) to an agent harness, a shell inside one and a task orchd started, and RequestUnlock and Lock to a pinned session; ConfirmUnlock and ListUnlocks are refused to the requester, another terminal, a pty of its own, a detached process, an agent, a task, an unsigned program named Orch and an Orch.app elsewhere, and to a terminal under a confirmed unlock (it cannot confirm or list another). TestUnlockFollowsTheConnectionsProcess: an agent started in the unlocked shell is not the operator and its first call ends the unlock; a connection handed on by a process that exited does not inherit the unlock of the process reusing its PID (D-44).",
+      "a3: TestUnlockConfirmationNeedsTheSignedApp (internal/daemon/unlock_refusal_test.go) passes at 63b6d21: ConfirmUnlock and ListUnlocks are refused to a signed copy elsewhere (ad-hoc copy), a binary at the app's path with another code directory hash (another signature), the app without the hardened runtime, one with no code hash and one that fails the requirement, and the installed Orch.app's confirmation is what grants it. The recognition itself is checked against real ad-hoc signatures by TestAppSignatureOfARealProcess (internal/daemon/appsig_darwin_test.go, SP-025; passes at 63b6d21).",
+      "a4 (manual, awaiting the user): not yet observed. Supporting: light and dark snapshots of the menu bar panel's unlocks (pending request, confirmed request with its code, active unlock with its countdown) rendered with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter UnlocksSnapshots` (macos/Tests/OrchAppSnapshots/UnlocksSnapshots.swift) at <scratch>/sp-077/shots/menu-bar-unlocks-light.png and -dark.png. The real check needs the user (RC-1152): with a policy applied, run 'orch spaces unlock --for 5m' in a terminal, see the request in Orch.app's menu bar panel with that command, terminal and duration, Confirm (Touch ID or password), type the code shown into the terminal, see the countdown, run an operator command (e.g. 'orch spaces diff'), then Lock; and Deny a second request.",
+      "a5: docs/internals/daemon.md ('Operator evidence' and the new 'Operator unlock' section) and docs/OPERATIONS.md (unlock and lock commands and how to confirm) changed at 63b6d21; also docs/internals/cli.md and docs/internals/app.md.",
+      "D-78 (RC-1150, 2026-11-15): TestUnlockCannotWeakenProtection (internal/daemon/unlock_scope_test.go) passes: a terminal under a confirmed unlock is refused, before the handler runs, ApplySpaces, SetEnforcement to a relaxing state (memory ' OFF', guard log, an unknown layer), SetSandboxSetting, ChangeOutboundRule and every SP-078 settings RPC (settingsRPCs), each let through from Orch.app; the unlocked terminal keeps reads of every space, Relabel, RetagSource, DiffSpaces, tightening a switch and SetConfig without a Sensitive key; a terminal with no unlock still reaches none of them. The SetEnforcement handler also refuses the unlocked terminal a switch looser than the current state (the guard from strict back to block-other-jobs, or a lasting block-other-jobs over Orch.app's timed off that reverts to strict) while letting it keep or restore strict, and RemoveDocsOwner with purge is refused to it as PurgeDocs is (D-77)."
+    ]
   }
 }

@@ -1,0 +1,12 @@
+{
+  "id": "RC-1152",
+  "kind": "user-action",
+  "topic": "SP-077.1.a4: check the unlock in Orch.app by hand",
+  "detail": "Needs the user with a policy applied and Orch.app built from the PR (make app-install): run 'orch spaces unlock --for 5m' in a terminal; check the menu bar panel shows the request with that command, the terminal (tty) and 5 min; Confirm (Touch ID or password), type the code the panel shows into the terminal; check the panel counts down and 'orch spaces diff' works in that shell; Lock it; ask again and Deny. Touch ID and the password prompt cannot be driven by a unit test (the tests inject a confirmer).",
+  "source": "https://github.com/willesq/orchestrator/pull/198",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-077"
+  ],
+  "status": "open"
+}

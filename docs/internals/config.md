@@ -97,6 +97,8 @@ does not leave its services down until someone notices. When orchd cannot run at
 | `ingest.exclude_dirs` | vendor, node_modules, bower_components, third_party, Pods, .venv, venv, \_\_pycache\_\_, .tox, .terraform, .next, dist, build, target | never walked; `.git` always skipped |
 | `sources.known_roots` | `[~/code]` | where `<owner>/<repo>` checkouts live |
 | `sources.scan_interval` | `5m` | sources scheduler tick |
+| `feeds.chat.direct_messages` | empty | chat tenants (`slack:<id>`, `teams:<id>`) whose DMs and group DMs a chat feed stores; found only by the operator's `orch search --direct-messages` ([memory.md](memory.md#chat-feeds)); sensitive |
+| `feeds.chat.containers` | empty | per tenant, the channel and meeting IDs a chat feed stores; nothing else is stored (DMs follow `direct_messages`); sensitive. Tenant keys are folded to lower case when loaded; tenants match regardless of case |
 | `docs.scan_interval` | `1m` | docs scheduler tick |
 | `docs.repo_cache` | `<data>/repos` | clones of GitHub owners' repos |
 | `docs.default_refresh` | `6h` | per-owner refresh cadence |

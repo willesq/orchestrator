@@ -22,6 +22,7 @@ const (
 	Orchd_Ping_FullMethodName                     = "/orchd.v1.Orchd/Ping"
 	Orchd_Ingest_FullMethodName                   = "/orchd.v1.Orchd/Ingest"
 	Orchd_Search_FullMethodName                   = "/orchd.v1.Orchd/Search"
+	Orchd_SearchDirectMessages_FullMethodName     = "/orchd.v1.Orchd/SearchDirectMessages"
 	Orchd_ListSources_FullMethodName              = "/orchd.v1.Orchd/ListSources"
 	Orchd_DeleteSource_FullMethodName             = "/orchd.v1.Orchd/DeleteSource"
 	Orchd_Dispatch_FullMethodName                 = "/orchd.v1.Orchd/Dispatch"
@@ -104,6 +105,11 @@ const (
 	Orchd_LandPR_FullMethodName                   = "/orchd.v1.Orchd/LandPR"
 	Orchd_UndoPRLanding_FullMethodName            = "/orchd.v1.Orchd/UndoPRLanding"
 	Orchd_DiscardPRLanding_FullMethodName         = "/orchd.v1.Orchd/DiscardPRLanding"
+	Orchd_RequestUnlock_FullMethodName            = "/orchd.v1.Orchd/RequestUnlock"
+	Orchd_ListUnlocks_FullMethodName              = "/orchd.v1.Orchd/ListUnlocks"
+	Orchd_ConfirmUnlock_FullMethodName            = "/orchd.v1.Orchd/ConfirmUnlock"
+	Orchd_ProveUnlock_FullMethodName              = "/orchd.v1.Orchd/ProveUnlock"
+	Orchd_Lock_FullMethodName                     = "/orchd.v1.Orchd/Lock"
 )
 
 // OrchdClient is the client API for Orchd service.
@@ -119,6 +125,10 @@ type OrchdClient interface {
 	Ingest(ctx context.Context, in *IngestRequest, opts ...grpc.CallOption) (*IngestResponse, error)
 	// Search embeds the query and returns the top matching chunks.
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
+	// SearchDirectMessages is Search with chat direct messages kept in: an
+	// explicit interactive search (SP-060). Every other read leaves DMs out,
+	// and queued tasks are refused it (D-19).
+	SearchDirectMessages(ctx context.Context, in *SearchDirectMessagesRequest, opts ...grpc.CallOption) (*SearchResponse, error)
 	// ListSources enumerates the distinct sources held in the vector store, with
 	// per-source chunk counts. This is the store's inventory, as opposed to the
 	// cadence-refresh registry that `orch source list` reports.
@@ -399,6 +409,24 @@ type OrchdClient interface {
 	UndoPRLanding(ctx context.Context, in *PRLandingRequest, opts ...grpc.CallOption) (*PRLanding, error)
 	// DiscardPRLanding sets a proposal aside, or with restore brings it back.
 	DiscardPRLanding(ctx context.Context, in *DiscardPRLandingRequest, opts ...grpc.CallOption) (*PRLanding, error)
+	// RequestUnlock asks Orch.app to confirm operator scope for the calling
+	// process and what it starts, for at most 60 minutes, while a spaces
+	// policy is applied (SP-077, D-71). It waits until Orch.app confirms or
+	// denies, the request lapses, or the caller gives up. Refused inside an
+	// agent session and inside tasks orchd runs.
+	RequestUnlock(ctx context.Context, in *RequestUnlockRequest, opts ...grpc.CallOption) (*RequestUnlockResponse, error)
+	// ListUnlocks lists pending and active unlocks. Orch.app only.
+	ListUnlocks(ctx context.Context, in *ListUnlocksRequest, opts ...grpc.CallOption) (*ListUnlocksResponse, error)
+	// ConfirmUnlock confirms or denies a pending unlock. Orch.app only. A
+	// confirmed unlock shows a code in Orch.app, which the user types in the
+	// requesting terminal (ProveUnlock) before anything is granted.
+	ConfirmUnlock(ctx context.Context, in *ConfirmUnlockRequest, opts ...grpc.CallOption) (*ConfirmUnlockResponse, error)
+	// ProveUnlock sends the code Orch.app showed for a confirmed unlock, from
+	// the process that asked for it; a match grants the unlock.
+	ProveUnlock(ctx context.Context, in *ProveUnlockRequest, opts ...grpc.CallOption) (*ProveUnlockResponse, error)
+	// Lock ends unlocks: from Orch.app the one named, or all; from a
+	// terminal the ones that cover the caller.
+	Lock(ctx context.Context, in *LockRequest, opts ...grpc.CallOption) (*LockResponse, error)
 }
 
 type orchdClient struct {
@@ -433,6 +461,16 @@ func (c *orchdClient) Search(ctx context.Context, in *SearchRequest, opts ...grp
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SearchResponse)
 	err := c.cc.Invoke(ctx, Orchd_Search_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) SearchDirectMessages(ctx context.Context, in *SearchDirectMessagesRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchResponse)
+	err := c.cc.Invoke(ctx, Orchd_SearchDirectMessages_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1268,6 +1306,56 @@ func (c *orchdClient) DiscardPRLanding(ctx context.Context, in *DiscardPRLanding
 	return out, nil
 }
 
+func (c *orchdClient) RequestUnlock(ctx context.Context, in *RequestUnlockRequest, opts ...grpc.CallOption) (*RequestUnlockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RequestUnlockResponse)
+	err := c.cc.Invoke(ctx, Orchd_RequestUnlock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ListUnlocks(ctx context.Context, in *ListUnlocksRequest, opts ...grpc.CallOption) (*ListUnlocksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListUnlocksResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListUnlocks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ConfirmUnlock(ctx context.Context, in *ConfirmUnlockRequest, opts ...grpc.CallOption) (*ConfirmUnlockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmUnlockResponse)
+	err := c.cc.Invoke(ctx, Orchd_ConfirmUnlock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ProveUnlock(ctx context.Context, in *ProveUnlockRequest, opts ...grpc.CallOption) (*ProveUnlockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProveUnlockResponse)
+	err := c.cc.Invoke(ctx, Orchd_ProveUnlock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) Lock(ctx context.Context, in *LockRequest, opts ...grpc.CallOption) (*LockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LockResponse)
+	err := c.cc.Invoke(ctx, Orchd_Lock_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // OrchdServer is the server API for Orchd service.
 // All implementations must embed UnimplementedOrchdServer
 // for forward compatibility.
@@ -1281,6 +1369,10 @@ type OrchdServer interface {
 	Ingest(context.Context, *IngestRequest) (*IngestResponse, error)
 	// Search embeds the query and returns the top matching chunks.
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
+	// SearchDirectMessages is Search with chat direct messages kept in: an
+	// explicit interactive search (SP-060). Every other read leaves DMs out,
+	// and queued tasks are refused it (D-19).
+	SearchDirectMessages(context.Context, *SearchDirectMessagesRequest) (*SearchResponse, error)
 	// ListSources enumerates the distinct sources held in the vector store, with
 	// per-source chunk counts. This is the store's inventory, as opposed to the
 	// cadence-refresh registry that `orch source list` reports.
@@ -1561,6 +1653,24 @@ type OrchdServer interface {
 	UndoPRLanding(context.Context, *PRLandingRequest) (*PRLanding, error)
 	// DiscardPRLanding sets a proposal aside, or with restore brings it back.
 	DiscardPRLanding(context.Context, *DiscardPRLandingRequest) (*PRLanding, error)
+	// RequestUnlock asks Orch.app to confirm operator scope for the calling
+	// process and what it starts, for at most 60 minutes, while a spaces
+	// policy is applied (SP-077, D-71). It waits until Orch.app confirms or
+	// denies, the request lapses, or the caller gives up. Refused inside an
+	// agent session and inside tasks orchd runs.
+	RequestUnlock(context.Context, *RequestUnlockRequest) (*RequestUnlockResponse, error)
+	// ListUnlocks lists pending and active unlocks. Orch.app only.
+	ListUnlocks(context.Context, *ListUnlocksRequest) (*ListUnlocksResponse, error)
+	// ConfirmUnlock confirms or denies a pending unlock. Orch.app only. A
+	// confirmed unlock shows a code in Orch.app, which the user types in the
+	// requesting terminal (ProveUnlock) before anything is granted.
+	ConfirmUnlock(context.Context, *ConfirmUnlockRequest) (*ConfirmUnlockResponse, error)
+	// ProveUnlock sends the code Orch.app showed for a confirmed unlock, from
+	// the process that asked for it; a match grants the unlock.
+	ProveUnlock(context.Context, *ProveUnlockRequest) (*ProveUnlockResponse, error)
+	// Lock ends unlocks: from Orch.app the one named, or all; from a
+	// terminal the ones that cover the caller.
+	Lock(context.Context, *LockRequest) (*LockResponse, error)
 	mustEmbedUnimplementedOrchdServer()
 }
 
@@ -1579,6 +1689,9 @@ func (UnimplementedOrchdServer) Ingest(context.Context, *IngestRequest) (*Ingest
 }
 func (UnimplementedOrchdServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Search not implemented")
+}
+func (UnimplementedOrchdServer) SearchDirectMessages(context.Context, *SearchDirectMessagesRequest) (*SearchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchDirectMessages not implemented")
 }
 func (UnimplementedOrchdServer) ListSources(context.Context, *ListSourcesRequest) (*ListSourcesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListSources not implemented")
@@ -1826,6 +1939,21 @@ func (UnimplementedOrchdServer) UndoPRLanding(context.Context, *PRLandingRequest
 func (UnimplementedOrchdServer) DiscardPRLanding(context.Context, *DiscardPRLandingRequest) (*PRLanding, error) {
 	return nil, status.Error(codes.Unimplemented, "method DiscardPRLanding not implemented")
 }
+func (UnimplementedOrchdServer) RequestUnlock(context.Context, *RequestUnlockRequest) (*RequestUnlockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RequestUnlock not implemented")
+}
+func (UnimplementedOrchdServer) ListUnlocks(context.Context, *ListUnlocksRequest) (*ListUnlocksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListUnlocks not implemented")
+}
+func (UnimplementedOrchdServer) ConfirmUnlock(context.Context, *ConfirmUnlockRequest) (*ConfirmUnlockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmUnlock not implemented")
+}
+func (UnimplementedOrchdServer) ProveUnlock(context.Context, *ProveUnlockRequest) (*ProveUnlockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProveUnlock not implemented")
+}
+func (UnimplementedOrchdServer) Lock(context.Context, *LockRequest) (*LockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Lock not implemented")
+}
 func (UnimplementedOrchdServer) mustEmbedUnimplementedOrchdServer() {}
 func (UnimplementedOrchdServer) testEmbeddedByValue()               {}
 
@@ -1897,6 +2025,24 @@ func _Orchd_Search_Handler(srv interface{}, ctx context.Context, dec func(interf
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).Search(ctx, req.(*SearchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_SearchDirectMessages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchDirectMessagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).SearchDirectMessages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_SearchDirectMessages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).SearchDirectMessages(ctx, req.(*SearchDirectMessagesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3370,6 +3516,96 @@ func _Orchd_DiscardPRLanding_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Orchd_RequestUnlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestUnlockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).RequestUnlock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_RequestUnlock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).RequestUnlock(ctx, req.(*RequestUnlockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ListUnlocks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListUnlocksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListUnlocks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListUnlocks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListUnlocks(ctx, req.(*ListUnlocksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ConfirmUnlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmUnlockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ConfirmUnlock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ConfirmUnlock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ConfirmUnlock(ctx, req.(*ConfirmUnlockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ProveUnlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProveUnlockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ProveUnlock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ProveUnlock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ProveUnlock(ctx, req.(*ProveUnlockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_Lock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).Lock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_Lock_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).Lock(ctx, req.(*LockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Orchd_ServiceDesc is the grpc.ServiceDesc for Orchd service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -3388,6 +3624,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Search",
 			Handler:    _Orchd_Search_Handler,
+		},
+		{
+			MethodName: "SearchDirectMessages",
+			Handler:    _Orchd_SearchDirectMessages_Handler,
 		},
 		{
 			MethodName: "ListSources",
@@ -3712,6 +3952,26 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DiscardPRLanding",
 			Handler:    _Orchd_DiscardPRLanding_Handler,
+		},
+		{
+			MethodName: "RequestUnlock",
+			Handler:    _Orchd_RequestUnlock_Handler,
+		},
+		{
+			MethodName: "ListUnlocks",
+			Handler:    _Orchd_ListUnlocks_Handler,
+		},
+		{
+			MethodName: "ConfirmUnlock",
+			Handler:    _Orchd_ConfirmUnlock_Handler,
+		},
+		{
+			MethodName: "ProveUnlock",
+			Handler:    _Orchd_ProveUnlock_Handler,
+		},
+		{
+			MethodName: "Lock",
+			Handler:    _Orchd_Lock_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

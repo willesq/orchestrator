@@ -160,7 +160,7 @@ func (s *server) RemoveDocsOwner(ctx context.Context, req *orchdv1.RemoveDocsOwn
 	}
 	// Reason: a purge deletes synced docs, which under a policy only
 	// Orch.app may do, as for PurgeDocs (D-77).
-	if c := callerOf(ctx); req.GetPurge() && s.spacesConfigured() && (c.kind != callerOperator || c.operatorBy == "") {
+	if c := callerOf(ctx); req.GetPurge() && s.spacesConfigured() && (c.kind != callerOperator || c.operatorBy != operatorApp) {
 		return nil, grpcstatus.Error(codes.PermissionDenied,
 			"only Orch.app can purge synced docs while a spaces policy is applied (D-77); remove the owner without purging, or ask the user")
 	}

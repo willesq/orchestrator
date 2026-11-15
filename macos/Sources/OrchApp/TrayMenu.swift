@@ -8,6 +8,8 @@ struct TrayMenu: View {
     let loginItem: LoginItem
     let control: DaemonControl
     let enforcement: EnforcementModel
+    /// Operator unlocks to confirm, deny or lock (SP-077).
+    var unlocks: UnlocksModel?
     let openMainWindow: () -> Void
     /// Opens the main window on Settings → Spaces.
     var openSpaces: () -> Void = {}
@@ -20,6 +22,7 @@ struct TrayMenu: View {
             header
             Divider()
             EnforcementBanner(model: enforcement, show: nil)
+            if let unlocks { UnlocksSection(model: unlocks) }
             NeedsYouSection(monitor: prMonitor)
             if let switches = enforcement.state?.switches, !switches.isEmpty {
                 Divider()

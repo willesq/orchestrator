@@ -97,6 +97,7 @@ orch search --mode dense "where is sync_meta kept"
 orch search --require-tag owner:willesq --require-tag repo:orchestrator "install"   # one repo's docs
 orch search --uri repo://willesq/orchestrator/README.md "install"                   # one doc
 orch search --ranking plain --per-source -1 "install"  # fusion order, no cap
+orch search --direct-messages "review my patch"       # chat DMs too (operator only); no other search returns them
 orch rag show repo://willesq/orchestrator/README.md   # the doc as memory holds it
 ```
 
@@ -180,7 +181,8 @@ apply a policy (and after each later revision), relabel it from Orch.app: the Sp
 how many stored chunks are labelled for an older policy and a **Relabel Now** button, with the run's
 progress and result. orchd does not relabel on its own after an apply (D-76). While a policy is
 applied only Orch.app is the operator (D-71), so the same commands from a terminal are refused
-until a terminal can be unlocked from the app (planned); with no policy they run in a terminal
+unless the terminal is unlocked ('orch spaces unlock', confirmed in Orch.app; see
+OPERATIONS.md); with no policy they run in a terminal
 outside any agent session:
 
 ```sh

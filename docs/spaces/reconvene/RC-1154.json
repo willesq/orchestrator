@@ -1,0 +1,13 @@
+{
+  "id": "RC-1154",
+  "kind": "follow-up",
+  "topic": "Changes made under an unlock do not say so",
+  "detail": "Low. A change made from an unlocked terminal (SetEnforcement, outbound rules, policy apply) is recorded with callerLabel's 'operator (process N)', the same as before spaces; the record does not name the unlock (its id) or that Orch.app confirmed it. Proposed: label such changes 'operator (process N, unlock <id>)' and keep the unlock log lines with them.",
+  "source": "https://github.com/willesq/orchestrator/pull/198",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-077",
+    "SP-070"
+  ],
+  "status": "open"
+}

@@ -41,7 +41,10 @@ var readSpaceDecisions = map[string]spaceDecision{
 	orchdv1.Orchd_Search_FullMethodName:      {spaceFiltered, "memory search, read only from the caller's readable spaces' collections"},
 	orchdv1.Orchd_ListSources_FullMethodName: {spaceFiltered, "memory inventory, listed only from the caller's readable spaces"},
 	orchdv1.Orchd_GetDocument_FullMethodName: {spaceFiltered, "one stored source, read only from the caller's readable spaces; NotFound otherwise"},
-	orchdv1.Orchd_ListDocs_FullMethodName:    {spaceFiltered, "synced docs in the caller's readable spaces, with only their owners and repos"},
+	// SP-060: the only read that keeps chat direct messages in; refused to
+	// queued tasks (D-19).
+	orchdv1.Orchd_SearchDirectMessages_FullMethodName: {spaceFiltered, "memory search with chat DMs kept in, read only from the caller's readable spaces' collections"},
+	orchdv1.Orchd_ListDocs_FullMethodName:             {spaceFiltered, "synced docs in the caller's readable spaces, with only their owners and repos"},
 
 	orchdv1.Orchd_DiffSpaces_FullMethodName:         {spaceOperator, "the whole spaces policy"},
 	orchdv1.Orchd_ApplySpaces_FullMethodName:        {spaceOperator, "applies the policy"},
@@ -55,6 +58,11 @@ var readSpaceDecisions = map[string]spaceDecision{
 	orchdv1.Orchd_ChangeOutboundRule_FullMethodName: {spaceOperator, "changes an outbound rule"},
 	orchdv1.Orchd_Relabel_FullMethodName:            {spaceOperator, "relabels the RAG store; its report counts chunks per space"},
 	orchdv1.Orchd_RetagSource_FullMethodName:        {spaceOperator, "moves a source between spaces; its answer names the space that held it"},
+	orchdv1.Orchd_ListUnlocks_FullMethodName:        {spaceOperator, "pending and active unlocks with their command lines; Orch.app only (SP-077)"},
+	orchdv1.Orchd_ConfirmUnlock_FullMethodName:      {spaceOperator, "confirms or denies an unlock; Orch.app only (SP-077)"},
+	orchdv1.Orchd_RequestUnlock_FullMethodName:      {spaceOwn, "the caller's own unlock request (SP-077)"},
+	orchdv1.Orchd_ProveUnlock_FullMethodName:        {spaceOwn, "the caller's own unlock, without its code (SP-077)"},
+	orchdv1.Orchd_Lock_FullMethodName:               {spaceNone, "ends unlocks; answers a count (SP-077)"},
 	orchdv1.Orchd_ListQuarantine_FullMethodName:     {spaceOperator, "names every quarantined source, which no session may read"},
 	orchdv1.Orchd_PurgeQuarantine_FullMethodName:    {spaceOperator, "deletes quarantined sources; its answer counts them"},
 
