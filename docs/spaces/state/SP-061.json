@@ -1,12 +1,12 @@
 {
   "id": "SP-061",
-  "status": "todo",
+  "status": "in_progress",
   "passes": false,
   "verified_sha": null,
   "verified_at": null,
   "blocked_reason": null,
-  "attempts": 0,
-  "branch": null,
+  "attempts": 1,
+  "branch": "feat/sp-061-slack-connector",
   "pr": null,
   "evidence": {
     "SP-061.1": []
