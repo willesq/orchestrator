@@ -31,6 +31,7 @@ final class AppModel {
     let monitor: DaemonMonitor
     let prMonitor: PRMonitor
     let notifier = Notifier()
+    let refusals = RefusalMonitor()
     let loginItem = LoginItem()
     let control = DaemonControl()
     let restart: RestartModel
@@ -128,6 +129,15 @@ final class AppModel {
         notifier.onOpenNeedsYou = { [weak self] in
             guard let self else { return }
             navigator.showNeedsAction(in: prs)
+            showWindow?()
+        }
+        // Each tool call the spaces guard refuses is announced (SP-048).
+        refusals.onNewRefusals = { [notifier] found in notifier.post(refusals: found) }
+        refusals.start()
+        notifier.onOpenRefusals = { [weak self] in
+            guard let self else { return }
+            navigator.pane = .settings
+            navigator.settingsSection = .spaces
             showWindow?()
         }
         system.startSampling()

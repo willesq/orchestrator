@@ -63,6 +63,12 @@ type Outbound struct {
 	// ExcludeAll is set for a push to a URL: no remote's tracking refs
 	// are known to be its destination's.
 	ExcludeAll bool
+	// Have are commits the destination already holds, which a push does
+	// not send again: the remote objects a pre-push hook is given (SP-045).
+	Have []string
+	// HaveRemotes are remotes whose tracking refs a push need not send
+	// again, read with ExcludeAll (SP-045's pre-push hook).
+	HaveRemotes []string
 }
 
 // OutboundActions lists the outbound actions of a tool call. unknown is set
@@ -83,15 +89,22 @@ func OutboundActionsIn(tool string, input []byte, cwd, home string) (acts []Outb
 // every command, decoded as the shell would pass them, for matching terms
 // split by quoting.
 func OutboundRead(tool string, input []byte, cwd, home string) (acts []Outbound, unknown bool, words []string) {
+	return readOutbound(tool, input, cwd, home, nil)
+}
+
+// readOutbound is OutboundRead under the operator's rules (SP-075); nil
+// is the baseline.
+func readOutbound(tool string, input []byte, cwd, home string, rules *ruleSet) (acts []Outbound, unknown bool, words []string) {
 	cmd, workdir, ok := shellCommand(tool, input)
-	if !ok || !mayBeOutbound(cmd) {
+	if !ok || !mayBeOutbound(cmd) && !rules.mentionsCommand(cmd) {
 		return nil, false, nil
 	}
 	f, err := syntax.NewParser(syntax.Variant(syntax.LangBash)).Parse(strings.NewReader(cmd), "")
 	if err != nil {
 		return nil, true, nil
 	}
-	w := &outboundWalker{home: home, user: os.Getenv("USER"), env: map[string]string{}, vars: map[string]string{}}
+	w := &outboundWalker{home: home, user: os.Getenv("USER"), env: map[string]string{}, vars: map[string]string{},
+		rules: rules}
 	dir := cwd
 	if workdir != "" {
 		// Reason: Codex runs the command in its workdir field.

@@ -79,7 +79,11 @@ type Attributor struct {
 	Recheck time.Duration
 	// Batch caps how many tasks one sweep checks.
 	Batch int
-	now   func() time.Time
+	// LoginFor, when set, names the GitHub account whose PRs count for a PR
+	// under owner: the login of the gh account that owner's space uses
+	// (SP-074). nil counts the default login's PRs ('gh api user').
+	LoginFor func(ctx context.Context, owner string) (string, error)
+	now      func() time.Time
 }
 
 // NewAttributor builds an attributor over orch.db using the gh CLI.
@@ -93,11 +97,44 @@ type pending struct {
 	finished time.Time
 }
 
-// sweep is one pass's shared state: who the user is, and the calls left.
+// sweep is one pass's shared state: who the user is for each PR owner, and
+// the calls left.
 type sweep struct {
 	a      *Attributor
-	login  string
+	logins map[string]string
 	budget int
+}
+
+// login returns the account whose PRs count under owner, asking once per
+// owner each sweep.
+func (w *sweep) login(ctx context.Context, owner string) (string, error) {
+	key := strings.ToLower(owner)
+	if w.a.LoginFor == nil {
+		key = ""
+	}
+	if l, ok := w.logins[key]; ok {
+		return l, nil
+	}
+	var l string
+	if w.a.LoginFor != nil {
+		var err error
+		if l, err = w.a.LoginFor(ctx, owner); err != nil {
+			return "", err
+		}
+	} else {
+		out, err := w.gh(ctx, "api", "user", "--jq", ".login")
+		if err != nil {
+			return "", fmt.Errorf("gh api user: %w", err)
+		}
+		if l = strings.TrimSpace(string(out)); l == "" {
+			return "", errors.New("gh api user: no login")
+		}
+	}
+	if l == "" {
+		return "", errors.New("no GitHub login")
+	}
+	w.logins[key] = l
+	return l, nil
 }
 
 func (w *sweep) gh(ctx context.Context, args ...string) ([]byte, error) {
@@ -151,13 +188,13 @@ func (a *Attributor) Sweep(ctx context.Context) error {
 	if len(todo) == 0 {
 		return nil
 	}
-	w := &sweep{a: a, budget: callBudget}
-	out, err := w.gh(ctx, "api", "user", "--jq", ".login")
-	if err != nil {
-		return fmt.Errorf("gh api user: %w", err)
-	}
-	if w.login = strings.TrimSpace(string(out)); w.login == "" {
-		return errors.New("gh api user: no login")
+	w := &sweep{a: a, budget: callBudget, logins: map[string]string{}}
+	if a.LoginFor == nil {
+		// Reason: one account for every PR; failing here leaves every task
+		// unchecked rather than recorded as checked.
+		if _, err := w.login(ctx, ""); err != nil {
+			return err
+		}
 	}
 	var errs []error
 	for _, p := range todo {
@@ -243,7 +280,14 @@ func (w *sweep) prOutcome(ctx context.Context, url string, p pending) (outcome s
 	if err := json.Unmarshal(out, &v); err != nil {
 		return "", false, fmt.Errorf("gh pr view %s: unreadable output", url)
 	}
-	if !strings.EqualFold(v.Author.Login, w.login) || v.CreatedAt.Before(p.created) {
+	// The PR counts only as the account its owner's space uses; a profile
+	// it cannot reach is an error, never another login's answer.
+	owner, _, _ := strings.Cut(strings.TrimPrefix(url, "https://github.com/"), "/")
+	login, err := w.login(ctx, owner)
+	if err != nil {
+		return "", false, fmt.Errorf("the GitHub login for %s: %w", url, err)
+	}
+	if !strings.EqualFold(v.Author.Login, login) || v.CreatedAt.Before(p.created) {
 		return "", false, nil
 	}
 	switch v.State {

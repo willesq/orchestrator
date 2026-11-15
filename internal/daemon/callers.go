@@ -68,6 +68,9 @@ var taskCallable = map[string]bool{
 	// Reason: every session's start digest names a switched-off layer,
 	// queued tasks' included (INV-16).
 	orchdv1.Orchd_GetEnforcement_FullMethodName: true,
+	// Reason: rules are listed by id and kind only, never a value
+	// (INV-07); the history and who changed them go to the operator only.
+	orchdv1.Orchd_ListOutboundRules_FullMethodName: true,
 }
 
 // operatorActions says what each operator-only RPC would do, for the refusal.
@@ -142,6 +145,12 @@ var operatorActions = map[string]string{
 	// rules; it is also refused to interactive harness sessions
 	// (refuseNonOperator).
 	orchdv1.Orchd_SetSandboxSetting_FullMethodName: "change the sandbox setting",
+	// Reason (SP-075): the rules decide what the outbound terms check
+	// refuses; also refused to interactive harness sessions.
+	orchdv1.Orchd_ChangeOutboundRule_FullMethodName: "change the outbound rules",
+	// Reason (SP-027): a relabel moves every space's content and its report
+	// names spaces; it is also refused to interactive harness sessions.
+	orchdv1.Orchd_Relabel_FullMethodName: "relabel the RAG store",
 	// Reason: a queued task's identity comes from its task record, so a pin
 	// would only give it a second, self-reported one. Interactive sessions'
 	// hooks still pin (PinSession checks the harness process itself).

@@ -90,6 +90,19 @@ func statusDeps(cf clientFactory, s config.Settings) status.Deps {
 		SafetyNet:              safetyNetLines,
 		RepositoryInstructions: repositoryInstructions,
 		InstructionLoad:        instructionLoad,
+		SpaceLogins: func(ctx context.Context) ([]*orchdv1.SpaceLogin, error) {
+			client, cleanup, err := cf()
+			if err != nil {
+				return nil, err
+			}
+			defer cleanup()
+			// Reason: the first check of each login runs gh and claude,
+			// which can take a few seconds.
+			ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			defer cancel()
+			r, err := client.ListSpaces(ctx, &orchdv1.ListSpacesRequest{})
+			return r.GetLogins(), err
+		},
 	}
 }
 

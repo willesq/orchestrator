@@ -64,14 +64,19 @@ var ErrNoCollection = errors.New("collection does not exist")
 // DropReport describes a backup collection that is, or would be, dropped.
 type DropReport struct {
 	Collection string
-	Points     int
-	Dropped    bool
+	// Points counts the points of the collection and of every space
+	// collection under it.
+	Points  int
+	Dropped bool
+	// Spaces names the spaces whose collections under it are, or would be,
+	// dropped with it.
+	Spaces []string
 }
 
 // DropCollection deletes a collection this service is not using, such as the
-// backup a migration kept. Without apply it only reports what would go. It
-// refuses the active or shadow collection, and one a migration has not
-// finished copying into.
+// backup a migration kept, and every space's collection under it (SP-024).
+// Without apply it only reports what would go. It refuses the active or
+// shadow collection, and one a migration has not finished copying into.
 func (s *Service) DropCollection(ctx context.Context, name string, apply bool) (DropReport, error) {
 	rep := DropReport{Collection: name}
 	if !ValidCollectionName(name) {
@@ -80,6 +85,21 @@ func (s *Service) DropCollection(ctx context.Context, name string, apply bool) (
 	active, shadow := s.stores()
 	if name == active.Collection() || (shadow != nil && name == shadow.Collection()) {
 		return rep, fmt.Errorf("orchd is using %q; restart orchd after a rollback before dropping anything", name)
+	}
+	// Reason: a name under the active (or shadow) base is one of its space
+	// collections, which a backup drop must never reach.
+	for _, b := range []*QdrantStore{active, shadow} {
+		if b == nil {
+			continue
+		}
+		if sp, ok := spaceOf(b.Collection(), name); ok && sp != "" {
+			return rep, fmt.Errorf("orchd is using %q; restart orchd after a rollback before dropping anything", name)
+		}
+		// Reason: the reverse also holds when names contain "__": with the
+		// active base x__y, dropping x would read x__y as x's space y.
+		if sp, ok := spaceOf(name, b.Collection()); ok && sp != "" {
+			return rep, fmt.Errorf("orchd is using %q, which reads as one of %q's space collections; not dropping it", b.Collection(), name)
+		}
 	}
 	// Without a state directory an unfinished migration cannot be ruled out.
 	marker := s.markerPath(name)
@@ -91,22 +111,47 @@ func (s *Service) DropCollection(ctx context.Context, name string, apply bool) (
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return rep, err
 	}
-	st := active.WithCollection(name)
-	l, err := st.Layout(ctx)
+	base := active.WithCollection(name)
+	names, err := s.spaceCollections(ctx, base, true)
 	if err != nil {
 		return rep, err
 	}
-	if l == LayoutUnknown {
-		return rep, fmt.Errorf("%w: %q", ErrNoCollection, name)
+	var stores []*QdrantStore
+	for _, sp := range names {
+		st := base
+		if sp != "" {
+			st = base.WithCollection(SpaceCollection(name, sp))
+		}
+		l, err := st.Layout(ctx)
+		if err != nil {
+			return rep, err
+		}
+		if l == LayoutUnknown {
+			continue
+		}
+		n, err := st.Count(ctx, nil)
+		if err != nil {
+			return rep, err
+		}
+		rep.Points += n
+		if sp != "" {
+			rep.Spaces = append(rep.Spaces, sp)
+		}
+		stores = append(stores, st)
 	}
-	if rep.Points, err = st.Count(ctx, nil); err != nil {
-		return rep, err
+	if len(stores) == 0 {
+		return rep, fmt.Errorf("%w: %q", ErrNoCollection, name)
 	}
 	if !apply {
 		return rep, nil
 	}
-	if err := st.DeleteCollection(ctx); err != nil {
-		return rep, err
+	defer s.forgetCollections(name)
+	// The space collections go first, so a drop that fails part-way still
+	// leaves the base, and running it again finds what is left.
+	for i := len(stores) - 1; i >= 0; i-- {
+		if err := stores[i].DeleteCollection(ctx); err != nil {
+			return rep, err
+		}
 	}
 	rep.Dropped = true
 	return rep, nil

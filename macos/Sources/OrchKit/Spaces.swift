@@ -234,4 +234,15 @@ public protocol SpacesAPI: Sendable {
     func enforcement() async throws -> EnforcementState
     func setEnforcement(layer: String, state: String, forSeconds: Int64) async throws -> EnforcementChangeResult
     func explainPlacement(target: String) async throws -> PlacementExplanation
+    /// Each space's gh login and Claude Code configuration (SP-074).
+    func spaceLogins() async throws -> [SpaceLogin]
+    /// The outbound terms check's rules, by id and kind only (SP-075).
+    func outboundRules() async throws -> OutboundRulesState
+    /// Enables, disables, adds or removes one outbound rule (operator only).
+    func changeOutboundRule(action: String, id: String, kind: String, value: String) async throws -> OutboundRuleChangeResult
+}
+
+extension SpacesAPI {
+    /// A source without login reports, such as a daemon that cannot be reached.
+    public func spaceLogins() async throws -> [SpaceLogin] { [] }
 }

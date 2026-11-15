@@ -68,10 +68,46 @@ PUT /collections/<name>
  "sparse_vectors": {"bm25": {"modifier": "idf"}}}
 ```
 
-plus keyword payload indexes on `source_uri`, `writer`, `tags` and `source_type`. A collection made
+plus keyword payload indexes on `source_uri`, `writer`, `space`, `tags` and `source_type`. A collection made
 before the last two is asked for them at the first search that filters on them, once per process:
 this changes no stored data, and searches carry on, slower, until Qdrant has built them. A 409 "already exists" (a concurrent first write) is
 treated as success. A legacy collection with one unnamed dense vector is the `dense` layout.
+
+**A collection per space (SP-024, D-10).** The configured collection (`rag.qdrant.collection`)
+is the *base*. Content placed in a space lives in its own collection, `<base>__<space>`
+(`rag.SpaceCollection`), Quarantine included as `<base>__quarantine`; unplaced content and
+`shared` (no policy applied) stay in the base itself, so with no policy orch uses one collection
+exactly as before (INV-10). Space names (`[a-z][a-z0-9_-]{0,31}`) never start with `_`, and a
+migration target containing `__` is refused; a base that itself contains `__` (set by hand) can
+still read as another base's space, so a backup drop refuses a name under which the active
+collection would read as a space. The space collections are found by listing Qdrant's collections
+(`GET /collections`) and keeping the base's; the list is cached for a minute per base, and every
+listing also includes the collections this orchd created (kept until the base is dropped), so a
+listing answered while a write created one never hides it. Physical separation means a
+read that forgets a filter still cannot reach another space, and each space's BM25 IDF comes from
+its own chunks.
+
+- **Writes** go to the collection of the space the write was placed in, and nowhere else: the
+  collection is created there, the points are written there, and the older version's surplus
+  chunks are pruned there. A source lives in one space, so before writing, a write placed in a
+  space deletes the same source URI from every other collection of the base (one count by
+  `source_uri` each, and a delete where it is found); if that fails, nothing is written and the
+  next write tries again. A Shared or unplaced write (no policy, or a policy removed) does the
+  same for space collections, but a failed listing does not fail it, and a store that never had
+  a policy has none to look in, so it makes the requests it always made plus the cached listing.
+  A client's write never moves a source out of another space: the Ingest RPC refuses to replace
+  a source another space holds before it gets here ([Placement of writes](#placement-of-writes)),
+  and should that check fail to read the store, the write itself is refused
+  (`ErrStoredInAnotherSpace`) rather than delete the other space's copy, reading the collections
+  afresh: a copy in another space's collection, or a base chunk whose payload names another
+  space. A client may still replace base content no space claims. So moves are orchd's own
+  writers' (a re-placed doc, a repo whose visibility changed).
+- **Reads of one source** (`Copy`, `Document`, `HasSource`) look in the base and then each space
+  collection (should a source be in several, `Copy` reports the copy that refuses most: a sync
+  writer's, then one placed in a space, then the base's, and logs it), and `ListSources`, `SourcesWrittenBy` and `DeleteSource` cover every collection;
+  a forget lists the collections afresh. A failed listing fails these (and a write to a space),
+  rather than act on part of the store; a collection Qdrant reports missing holds nothing.
+- **Searches** read the collections of `SearchOpts.Spaces` ([Search](#search)).
 
 **Points:** ID = UUIDv5(URL namespace, `<source_uri>#<chunk_index>`), so re-ingesting a source
 overwrites its chunks; afterwards chunks with `chunk_index >= new count` are deleted. Upserts go 256
@@ -183,9 +219,9 @@ no origin, or that the placer leaves without a space, stores nothing.
 | Writer | Origin it reports | Placed by |
 |---|---|---|
 | docs sync | `github`: owner, repo, visibility (`private`/`public`; unknown when GitHub listed no owner node ID) and the owner's node ID, from the `gh api graphql` repo listing (`isPrivate`, `owner{id}`) | the owner's binding; public only when GitHub said the repo is public |
-| sources refresh | `fs` with the file's path (repo and owner sources); `web` with the URL | the deepest root and the checkout's remote, never the remote alone; the bound web prefix |
+| sources refresh | `fs` with the file's path (repo and owner sources); `web` with the URL the page was fetched from, after redirects | the deepest root; a checkout's remote can only keep it out, never place it (D-65), and nothing under a public root is public; the bound web prefix of the URL the content came from |
 | session hand-off, summaries | `session` with its first directory, from its record, and the session ID when the transcript is that session's, where its harness keeps it | the session's pin only; quarantine with no pin or no tied session |
-| edit hand-off | `fs` with the resolved file path | the deepest root and the checkout's remote; never the remote alone |
+| edit hand-off | `fs` with the resolved file path | the deepest root and the checkout's remote; never the remote alone; never public (goes to `public_root_sessions` instead) |
 | Ingest RPC | `client` with the caller kind (`session`, `task`, `operator`, `none`), the space the caller's pin writes to, and the URL when the URI is one | the caller's pinned space; quarantine for any other caller |
 | migration copy (`rag`) | carried over from the stored chunk | not placed again: `origin`, `space` and `labels_v` are copied as stored |
 
@@ -208,14 +244,50 @@ no origin, or that the placer leaves without a space, stores nothing.
   space's transcript into its own space nor push a file it named after another session into that
   session's space, short of writing into the harness's own transcript folders, which the OS
   sandbox can deny (SP-046). Recording the transcript path at the pin would close that too.
+- **A local file is not placed by its remote.** A remote that would place a file in a stricter
+  space than its root (`remote_stricter`) quarantines it for every writer (SP-030, D-65): a session
+  can write a `.git` naming another job's org beside files it registers as a source. Sessions are
+  still pinned by a stricter remote (SP-022).
 - **A local file is not placed by its remote alone.** An agent can write a `.git` naming any org
   beside a file it edits, or register such a folder as a repo source (any session may), so a file
   under no root that only its checkout's remote would place goes to quarantine. An edited file is
   also quarantined when its remote is stricter than the root it is under, until hand-offs carry the
-  editing session's space (SP-029); a registered source there is placed by the stricter remote, as
-  a session started there is. So a `.git` an agent writes under a root can still move a source it
-  registers into a stricter space, never into public; that risk is accepted, as for pins. Edit hand-offs use cached repo lookups only, so files an agent picks
-  spend none of GitHub's budget.
+  editing session's space (SP-029), and since SP-030 so is a registered source there (above).
+  Edit hand-offs use cached repo lookups only, so files an agent picks spend none of GitHub's
+  budget.
+- **The public-space write gate (SP-030, D-64, D-65).** Only the docs sync and the sources
+  refresh may place content in a public space, and only by what verifies it public: a repo GitHub
+  reports public (docs sync) or a bound web prefix. Local content under a public root such as
+  `~/code` is quarantined, whatever its remote ([Placement](#placement)), because any job's session
+  can write there, create a `.git` there or register a folder there as a source. Local folders
+  will reach public only through the applied policy's explicit `public_paths` list (SP-076). Session
+  records, summaries, edit hand-offs and client notes never land in public: sessions and client
+  notes from a session pinned to a public space go to quarantine, and an edit hand-off that would
+  be public (a file in a verified public repo under a public root) goes to `public_root_sessions`,
+  where sessions under a public root write (D-22). Only an operator retag (SP-071) moves other
+  content into public.
+- **Content that is no longer public leaves first.** Visibility is re-checked on every docs sync
+  from the repo listing. Before any repo is cloned or written, the sync asks the placer about each
+  stored doc of every listed repo that GitHub does not report public (private, or listed without
+  its owner's node ID, which counts as private): a doc stored in a public space that would not be
+  public if written now is deleted, its hash and the repo's HEAD are forgotten, and the repo is
+  synced first, so its docs are written again where they belong now in the same sync. A clone
+  that fails leaves them out of public and the repo is tried again next sync. A listing GitHub refuses
+  (the owner is gone, or this login lost access) takes every recorded repo's public docs out; a
+  listing that fails for another reason (network, credentials) keeps them until one succeeds. A repo or owner
+  source does the same for its stored docs before it walks anything, so a checkout left as last
+  indexed (off its default branch, or its org binding not checking out) does not keep a public
+  copy. A doc whose placement cannot be decided now (a conflict, a repo GitHub says it cannot
+  find) is not proven public, so it leaves too. Since no local content is public now, a public
+  copy of a checkout leaves whatever GitHub answers. These deletions are not capped by the prune
+  guard: a cap would keep content that is not public readable by every session. With no policy, or one that does not verify,
+  nothing is moved.
+  The docs sync does the same for recorded repos missing from a successful listing (deleted,
+  transferred out, no longer visible) and for every recorded repo of an owner whose org binding
+  no longer checks out. Once an hour a sources scan also checks every doc the sources refresh ever
+  stored, registered or not, so a removed source or a deleted folder keeps no public copy.
+  `TestRepoTurnedPrivateLeavesPublicInTheSameSync`, `TestCheckoutNoLongerPublicLeavesFirst`,
+  `TestUnlistedReposLeavePublic`, `TestScanSweepsOrphansOutOfPublic`.
 - **A client cannot replace another space's source.** A write replaces and prunes every chunk under
   its URI, so the Ingest RPC refuses (`FailedPrecondition`, naming no space) a write over a source
   placed in another space than the one the write would go to. Sources stored before placement are
@@ -229,10 +301,15 @@ no origin, or that the placer leaves without a space, stores nothing.
 - **A placement change is a new write.** The write hash includes the origin, space and
   `labels_v`, so the same text placed elsewhere or under a new revision is stored again rather
   than skipped as unchanged. Writes made without a placer (tools, tests) keep the hash they had.
-- **What is not done yet.** Chunks still go to one collection (a collection per space is SP-024),
-  and no read path filters by `space` or `labels_v` yet (SP-025). Chunks stored before SP-023 have
-  no placement; `orch rag relabel` (SP-027) places them. A docs file whose content and repo HEAD
-  did not change is not stored again, so it keeps its earlier placement until relabelled.
+- **What is not done yet.** Each space's chunks go to its own collection (SP-024, see
+  [Storage](#storage-qdrant)), but no read path passes the caller's spaces or filters by
+  `labels_v` yet (SP-025): a search without `SearchOpts.Spaces` reads every collection. Chunks stored before SP-023 have
+  no placement, and chunks stored before SP-024 sit in the base collection whatever their space;
+  a [relabel](#relabel) (SP-027) places and moves them. A docs file whose content and repo HEAD
+  did not change is not stored again, so it keeps its earlier placement until relabelled, except
+  that a public copy of a repo no longer public leaves (above). When the repo listing fails
+  other than by GitHub refusing the owner, every repo keeps its docs as last indexed, public ones
+  included, until a listing succeeds.
 
 Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<path>`,
 `file://<path>`, `claude://<path under ~/.claude>`, web URLs, and anything given to `orch ingest`.
@@ -261,6 +338,16 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
 
 ## Search
 
+0. **Collections.** `SearchOpts.Spaces` names the spaces whose collections are read (SP-024). Each
+   named space is read only from `<base>__<space>`, and, as the second layer, every request to
+   it also filters on payload `space` = that space, so a chunk misfiled in another space's
+   collection is still not returned. `shared` reads the base with no `space` filter: it is the
+   store as it was before spaces, whose older chunks carry no space. A name that is not a space
+   name is skipped; an empty, non-nil list reads nothing and embeds nothing. `nil` reads every
+   collection of the base (the base and each space's), as search did before SP-024; deciding
+   each caller's readable spaces is SP-025. If the listing fails, a `nil` search reads the base
+   alone. Collections not created yet are left out when there are several; hybrid search runs
+   only when every remaining one is hybrid.
 1. TopK 1–100 (0 → 5). Embed the query once. Filters: `scope` and `source_type` (exact), `tags`
    (any), and a time range: `ended_at ≥ since` and `started_at ≤ until` (overlap; undated content
    never matches a range).
@@ -271,7 +358,19 @@ Source URIs in use: `session://<id>/record|transcript`, `repo://<owner>/<repo>/<
    `min(2n, 400)`, returning each hit's dense vector). Keyword hits are capped at 2 per source. A
    query with no BM25 terms (only stopwords or single characters) skips keyword search silently.
 3. **Fuse** by reciprocal rank: each hit's score is `Σ weight/(k + rank)` with k = 60, weight 1 for
-   dense and 0.5 for keyword (`rag.search.keyword_weight`).
+   dense and 0.5 for keyword (`rag.search.keyword_weight`). Across several collections each side
+   runs once per collection, in parallel, and each side's lists are first merged into one by
+   score (cut to `n` and `2n`): cosine means the same in every collection, and each keyword score
+   is ranked by its own space's statistics, as the plan intends. Hits are told apart by
+   collection and point ID, since two spaces may hold the same URI's points for a moment. With
+   one collection nothing is merged, so the search is exactly the one it was before spaces.
+   Across several collections the keyword requests return no vectors (most of their cost,
+   SP-002); after weighting, the dense vectors of keyword-only hits are fetched, one request per
+   collection, only for those whose cosine matters: hits whose weighted score ties another's
+   (the cosine orders ties) and the hits returned (the cosine is their score). Every other
+   candidate's place is fixed by its score alone, so the result equals a search with every
+   vector read (`TestSearchAcrossCollectionsMatchesOneCollection`). If that fetch fails, the
+   search answers by meaning, as when keyword search fails (step 7).
 4. **Weight** (ranking `weighted`, the default; `plain` skips it): multiply each candidate's fused
    score by its source type's weight and by recency, `floor + (1 − floor) · 2^(−age / half-life)`.
    Age is from `ended_at`, else `started_at`, else `ingested_at`; undated content counts as one
@@ -551,7 +650,12 @@ files and says it was truncated.
 ## Migration to the hybrid layout
 
 Qdrant 1.17 cannot add a sparse vector to an existing collection, so `orch rag migrate-hybrid`
-copies into a new one:
+copies into a new one. Space collections are named after the base, so they move with it: each
+`<base>__<space>` is copied to `<target>__<space>` in the same run (re-chunked and re-embedded like
+the base, though space collections are hybrid already), under the one marker, the
+shadow writes reach the same space under the target, and the switch moves them together.
+Rollback switches them back with the base. Each target collection is checked like the base's
+(not dense; points without a marker refuse). The report sums every collection.
 
 1. The target defaults to `<collection>-hybrid`. Refuse unless the active collection is dense and
    the target is new or holds an unfinished migration (a hybrid target with points but no marker
@@ -565,8 +669,14 @@ copies into a new one:
 4. Remove target sources deleted since; refuse to switch if any source exceeded 16 MiB.
 5. Re-copy dirty sources until none remain under the exclusive gate (at most 5 rounds).
 6. Remove the marker, record `collection` and `backup_collection` in config in one write, then
-   switch. Rollback swaps them back; `--drop-backup` deletes the backup recorded in config, never
-   one named by the caller, and refuses the collection in use or with an unfinished marker.
+   switch. Rollback swaps them back; `--drop-backup` deletes the backup recorded in config and every
+   `<backup>__<space>` collection with it (space collections first, so a failed drop can be run
+   again), never one named by the caller, and refuses the collection in use, any space collection
+   of the active base, or one with an unfinished marker. Its point count sums them.
+
+A source written during the copy is tracked per space (`touched` and `dirty` hold the space and
+URI), and a write into a space that had no collection when the copy started reaches that space
+under both bases, so it is not lost at the switch (`TestMigrateHybridLiveWriteToANewSpace`).
 
 Lock order: write gate (shared for writes) → source stripe → state mutex.
 
@@ -575,8 +685,9 @@ Lock order: write gate (shared for writes) → source stripe → state mutex.
 `orch rag reindex-keywords` (RPC `ReindexKeywords`, operator-only, under the migration lock)
 brings keyword vectors up to the current `TokenizerVersion` in place, without re-embedding:
 
-1. Refuse unless the collection is hybrid and no migration shadow is installed. Count all chunks
-   and the stale ones (`must_not bm25_v = TokenizerVersion`, which also matches chunks with no
+1. Refuse unless the base and every space collection are hybrid and no migration shadow is
+   installed. Count all chunks and the stale ones, in every collection of the base, summed in the
+   report (`must_not bm25_v = TokenizerVersion`, which also matches chunks with no
    stamp). Without `--apply`, stop there.
 2. Scroll stale chunks 256 at a time (payload `source_uri` only; the offset is a point id, so the
    shrinking filter does not skip any). Group the page by source; for each, under that source's
@@ -601,6 +712,84 @@ and breaks reuse only past about 256 KiB left unread. The store now defends anyw
   run finishes instead of stopping. Nothing reached Qdrant, so this is safe for writes.
 - **Counts connections:** the progress line every 10 s reports how many Qdrant connections the
   store has opened. A few means reuse; thousands is the #98 symptom, and the next place to look.
+
+## Relabel
+
+A relabel (SP-027, INV-08, INV-03) brings every stored chunk up to the applied spaces policy:
+`rag.Service.Relabel` in `internal/rag/relabel.go`, run by orchd with its relabel placer
+(`internal/daemon/relabel.go`) under the migration lock. A chunk is **stale** when its `labels_v`
+is not the applied revision, which includes chunks stored before placement (no `labels_v`) and
+every chunk after the operator applies a new revision.
+
+1. Refuse with no applied revision, with an applied revision that no longer verifies (everything
+   would be quarantined; content stays stale and unreadable until a revision is applied again),
+   while a migration shadow is installed, or while a migration, backup drop or keyword re-index
+   holds the lock.
+2. Count every chunk of the base and each space collection, and list each collection's stale
+   chunks by source (`must_not labels_v = <rev>`, payload `source_uri` only). Every collection is
+   listed before any is changed, so a chunk moved into a collection not yet read is counted once.
+3. For each stale source, under its write lock, re-read its chunks in that collection and place
+   it again from its first chunk's stored origin, type, tags and writer. A source a live write
+   replaced since it was listed is current and skipped.
+4. Where the new space's collection is the one it is in, stamp the stale chunks' `space` and
+   `labels_v` (`POST /points/payload`). Otherwise move the whole source: read its points with
+   their vectors, upsert them into the new collection (created hybrid when missing; a dense
+   chunk gets its keyword vector from its stored text, nothing is re-embedded) with the new
+   `space`, `labels_v` and any reconstructed origin, prune surplus chunks of an older, longer copy
+   there, check the new collection holds at least as many chunks, then delete the source from the
+   old collection. A newer copy already in the new collection (a live write placed it there under
+   the applied revision, with another write hash) is kept, and the stale copy is only deleted.
+   Either way the source is then deleted from every other collection, so a copy an earlier,
+   stopped run left where the source no longer belongs never stays readable there.
+5. Without apply, steps 3 and 4 place and count only. The report gives totals, chunks changed and
+   moved, chunks left stale, and counts per transition (`unplaced` for chunks stored with no
+   space): counts and space names only, never a source, its text or a collection name.
+
+**Resumable.** A source is copied before its old copy is deleted, and point IDs are
+deterministic, so a run stopped between the two leaves a stale copy that the next run copies
+again over the same points and deletes: the chunk count is unchanged and no source ends in two
+collections, even when the next run places the source elsewhere. A source that cannot be placed
+now (the policy changed mid-run, or GitHub could not be asked about a docs repo) or whose chunks
+cannot be moved as they are (no dense vector) stays stale, is counted as left stale, and is retried
+by the next run; the run goes on with the other sources. A failed store request stops the run with
+a generic error, since Qdrant's errors name collections and so spaces (RC-350); the detail goes
+to orchd's log.
+
+**Placing stored content.** A chunk with a stored origin is placed from it, exactly as a write
+would be ([Placement of writes](#placement-of-writes)). A chunk stored before SP-023 has none, so
+its origin is reconstructed from the writer orchd stored with it and the URI that writer makes;
+the reconstructed origin is stored with the chunks. A URI is read only for its own writer, so a
+client's note named like another space's source is not placed by its name:
+
+| Writer | URI | Origin |
+|---|---|---|
+| docs sync | `repo://<owner>/<repo>/<path>` | `github`, with the repo's visibility asked of GitHub again; when it cannot be asked (budget, error), the source stays stale |
+| sources refresh | `checkout://<absolute path>`; a web URL | `fs` with the path; `web` with the URL |
+| edit hand-off | `file://<absolute path>`; `claude://<path>` | `fs` with the path (under `~/.claude` for `claude://`), only while it resolves to itself: the live write placed what the path resolved to then, so a link, or a file that is gone, gets none |
+| session hand-off, summaries | `session://<id>/record\|transcript` (a valid session ID) | `session`, tied to the session only when its record names a transcript that is that session's own, where its harness keeps it (the live write's check); placed by its pin |
+| Ingest RPC | any | `client` with no writer space: quarantined |
+| none recorded (before writers were, 2026-10-28) | any | none: quarantined |
+
+Content that cannot be placed (no origin, a conflict between two equally strict spaces) goes to
+`quarantine`, never to public or another space (INV-03); the operator can retag it (SP-071).
+Accepted risk: a hand-off chunk stored without an origin (written between 2026-10-20, when
+hand-offs began resolving links, and SP-023) is placed by the path it was edited at. A process
+that can write there could replace a link with a regular file before the relabel, so content read
+through the link is placed by the link's folder. It needs write access at that path and timing.
+
+**Running it.** `orch rag relabel [--dry-run]` calls the `Relabel` RPC, which only the operator
+may call (refused to queued tasks and harness sessions, since the report names spaces). A run
+that stops part-way still reports what it did, with a generic error.
+
+**Not done yet.** Reads do not filter on `labels_v` yet (SP-025): a
+stale chunk left in its own space's collection by a revision change is readable there until
+relabelled; one stored in the base or another space's collection is not read by a search of the
+spaces it belongs to. A relabelled source's write hash still names its old placement, so its next
+write is stored again (embedded once) rather than skipped as unchanged.
+
+**Cost.** On the SP-002 corpus (40,000 chunks of 384 dimensions stored unplaced in one base
+collection, every chunk moved to one of four space collections, Qdrant 1.17.1 on this Mac), a
+relabel took 35.7 s (`TestIntegrationRelabel40k`, `ORCH_QDRANT_BENCH=1`).
 
 ## Duplicate clean-up
 
@@ -665,9 +854,10 @@ Memory spaces separate what each job's sessions can read ([the spaces plan](../s
 The policy that defines them, the operator-only apply, and drift are described in
 [config.md](config.md#spaces-policy). `spaces.Resolved.CanRead(reader, target)` is the rule read
 paths will use: a space reads itself, every public space and the private spaces it lists, and
-never another isolated space or quarantine. Nothing in memory uses it yet. Every write is
-stamped with its origin, space and `labels_v` ([Placement of writes](#placement-of-writes)), but
-search is not yet filtered by space; later features in the plan add that. Until a policy with spaces is applied, everything is in the one implicit `shared` space
+never another isolated space or quarantine. Every write is stamped with its origin, space and
+`labels_v` ([Placement of writes](#placement-of-writes)) and stored in its space's own collection
+([Storage](#storage-qdrant)); search reads the collections of the spaces it is given. Which spaces
+each caller is given is SP-025; until then searches read every collection. Until a policy with spaces is applied, everything is in the one implicit `shared` space
 and search behaves as it always has.
 
 ## Placement
@@ -692,8 +882,16 @@ matching root and the remote's effect.
   candidate the origin is `unmatched`. A docs sync has no path, so only its remote counts.
 - **Public needs proof.** A result that would be public is quarantined (`not_verified_public`)
   whenever the checkout has a remote that GitHub has not confirmed is public, whoever owns it. That
-  includes the times GitHub cannot be reached. A folder with no remote under a public root is
-  public, as the operator declared.
+  includes the times GitHub cannot be reached. A public root is never proof for local content
+  (D-50, D-65, SP-030): every file whose deepest root is public and that would be placed public
+  is quarantined (`no_public_proof`), whatever its checkout or remote (GitHub, another host, none,
+  an anonymous or symlinked `.git`), and so is one GitHub has not confirmed public. Nothing on
+  disk, not even a public root bound exactly at the folder, declares it: a session can create any
+  of it. Local folders will reach public only through the policy's `public_paths` (SP-076) or an
+  operator retag; public repos reach public through the docs sync. A stricter root nested in the
+  public one still decides first; a stricter remote does not (it is quarantined too). Sessions keep D-22 (below), an edit hand-off of such a file goes to
+  `public_root_sessions` unless its repo is not verified public, and a checkout's harness
+  settings still follow its root.
 - **Org bindings must hold.** A remote whose owner's binding is suspended or unconfirmed
   (SP-021) sends the content to quarantine (`org_unconfirmed`). `Engine.Place` reads the binding
   from `orch.db`. A nil `Options.Confirmed` confirms nothing.
@@ -780,3 +978,48 @@ collections, keyword requests that don't return vectors, or one request per coll
 Qdrant's server-side fusion. None of these was measured as a full layout.
 
 Relabelling is cheap either way: at most 10.3 s for 40,000 chunks, well under the 120 s threshold.
+
+**As shipped (SP-024.3).** `TestIntegrationSpaceCollectionsSearch`
+(`internal/rag/spacestore_bench_it_test.go`, gated like the above; its own engine on
+127.0.0.1:6431, collections `sp-024-*`) loads the same corpus into one collection and into
+`sp-024-bench__s0..s3`, and times 200 queries (after 20 warm-up) three ways, interleaved: the
+SP-002 baseline (`Service.Search` on the one collection filtered to 2 spaces, as it runs today),
+the shipped search (`Service.Search` with `Spaces: [s0 s1]`), and the one collection searched
+with the shipped search's request pattern (keyword requests without vectors, vectors fetched
+afterwards), which separates the layout's cost from the request's. Qdrant v1.17.1, Apple M3 Max,
+2026-11-14:
+
+| | default segments | 2 segments |
+|---|---|---|
+| SP-002 baseline p50 / p95 | 16.9–17.1 / 18.0–18.1 ms | 12.0 / 12.6–12.7 ms |
+| 2 space collections p50 / p95 | 17.0–18.7 / 19.5–20.2 ms | 4.8–5.0 / 5.6–5.7 ms |
+| p95 ratio to the baseline | 1.08–1.12x | 0.44–0.45x |
+| one collection, same requests, p95 | 8.3–8.4 ms | 2.7–2.8 ms |
+| space collections vs that, p95 | 2.34–2.40x | 2.01–2.07x |
+
+A third default-segment run on a loaded machine measured 0.80x (baseline p95 32.6 ms, spaces
+26.2 ms). The shipped search returns the baseline's top 10 for 99.7% of hits (85.5% with SP-002's
+fusion of final lists): lists are merged by score before fusion.
+
+So against the search users had, reading two space collections is within the plan's 1.3x, but
+only because the multi-collection path asks for fewer vectors; the layout itself still costs
+about 2x what one collection costs with the same requests, as SP-002 found and D-24 accepted.
+A search of one collection keeps the request it always made (INV-10); giving it the same request
+pattern would halve its latency (8.4 against 18.0 ms at p95) and is left as a follow-up.
+
+## Caches keyed by space (INV-11)
+
+Every cache in `internal/rag` that holds content, embeddings or what decides whether content is
+stored is keyed by space:
+
+- **The unchanged-write check** (`ingest_hash` on a source's first and last chunks) is read in the
+  write's own space's collection only, and the hash includes the space, so a write found stored
+  for one space is never skipped for another (`TestWriteCacheIsKeyedBySpace`).
+- **Store objects and their cached layout** are kept per collection name, so one space's known
+  layout is never used for another's (`TestStoreCachesAreKeyedByCollection`).
+- **The list of space collections** is cached per base collection.
+
+There is no query, embedding or result cache in `internal/rag`. Caches elsewhere in orch that hold
+content are not keyed by space yet: the PR detail cache in orchd (keyed by PR URL, whose owner
+decides the space) and the docs sync's per-file hash cache (keyed by URI; RC-124 covers its
+placement). The space a read may see there is SP-025's to enforce.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -27,12 +28,20 @@ import (
 // loosenKeys are the sandbox lists whose entries re-open a deny.
 var loosenKeys = []string{keyAllowRead, keyAllowWrite}
 
+// hookEnvKeys are environment variables that move where orch-hook finds the
+// guard's files and orchd. Measured with Claude Code 2.1.309 (D-67 re-audit):
+// a project settings.json's env reaches the hooks, over the environment
+// Claude Code started with, and a settings.local.json's wins over it.
+var hookEnvKeys = []string{envOrchData, "ORCH_CONFIG_DIR", "ORCH_SOCKET"}
+
 // Loosening lists the entries of a checkout's .claude/settings.json and
-// settings.local.json that would re-open a folder in deny, each as a
-// sentence naming the file, key and entry. Entries orch wrote (owned) are
-// not counted. A file, or a .claude folder, that exists but cannot be
-// checked (a link, not a regular file, too large, not JSON) is named too:
-// Claude Code may still load it, so it must not pass silently.
+// settings.local.json that would re-open a folder in deny, or turn off or
+// redirect the hooks that refuse calls there (disableAllHooks, or an env
+// entry of hookEnvKeys), each as a sentence naming the file, key and entry.
+// Entries orch wrote (owned) are not counted. A file, or a .claude folder,
+// that exists but cannot be checked (a link, not a regular file, too
+// large, not JSON) is named too: Claude Code may still load it, so it must
+// not pass silently.
 func Loosening(checkout string, deny []string, owned Owned) []string {
 	dir, err := claudeDirFD(checkout, false)
 	if err != nil {
@@ -45,18 +54,38 @@ func Loosening(checkout string, deny []string, owned Owned) []string {
 	var out []string
 	for _, name := range []string{"settings.json", localFile} {
 		rel := filepath.Join(claudeDir, name)
-		lists, err := sandboxLists(dir, name)
+		root, err := settingsRoot(dir, name)
 		if err != nil {
 			out = append(out, fmt.Sprintf("%s: orch cannot check whether it re-opens denied folders: %v", rel, err))
 			continue
 		}
+		mine := Owned{}
+		if name == localFile {
+			mine = owned
+		}
 		for _, key := range loosenKeys {
-			for _, e := range lists[key] {
-				if name == localFile && slices.Contains(owned.Lists[key], e) {
+			v, _ := lookup(root, key).([]any)
+			for _, e := range v {
+				s, ok := e.(string)
+				if !ok || slices.Contains(mine.Lists[key], s) {
 					continue
 				}
-				if d, ok := reopens(e, checkout, deny); ok {
-					out = append(out, fmt.Sprintf("%s: %s entry %q re-opens %s, which orch's sandbox rules deny", rel, key, e, d))
+				if d, ok := reopens(s, checkout, deny); ok {
+					out = append(out, fmt.Sprintf("%s: %s entry %q re-opens %s, which orch's sandbox rules deny", rel, key, s, d))
+				}
+			}
+		}
+		if v, ok := lookup(root, keyNoHooks).(bool); ok && v {
+			out = append(out, fmt.Sprintf("%s: %s true turns off orch's tool guard", rel, keyNoHooks))
+		}
+		for _, k := range hookEnvKeys {
+			key := "env." + k
+			if raw := lookup(root, key); raw != nil {
+				v, str := raw.(string)
+				// Reason: orch's own pin counts only while it holds the
+				// value orch wrote; any other value, of any type, counts.
+				if pr, orchs := mine.Scalars[key]; !orchs || !str || !isString(pr.Set, v) {
+					out = append(out, fmt.Sprintf("%s: %s moves where orch's tool guard reads its files", rel, key))
 				}
 			}
 		}
@@ -64,9 +93,9 @@ func Loosening(checkout string, deny []string, owned Owned) []string {
 	return out
 }
 
-// sandboxLists reads the loosening lists of file name in the open .claude
-// folder dir; none when the file is missing.
-func sandboxLists(dir int, name string) (map[string][]string, error) {
+// settingsRoot reads file name in the open .claude folder dir as a JSON
+// object; nil when the file is missing.
+func settingsRoot(dir int, name string) (map[string]any, error) {
 	b, ok, err := readNamed(dir, name)
 	if err != nil || !ok {
 		return nil, err
@@ -75,16 +104,7 @@ func sandboxLists(dir int, name string) (map[string][]string, error) {
 	if err := json.Unmarshal(b, &root); err != nil {
 		return nil, fmt.Errorf("not a JSON object: %w", err)
 	}
-	out := map[string][]string{}
-	for _, key := range loosenKeys {
-		v, _ := lookup(root, key).([]any)
-		for _, e := range v {
-			if s, ok := e.(string); ok {
-				out[key] = append(out[key], s)
-			}
-		}
-	}
-	return out, nil
+	return root, nil
 }
 
 // lookup returns the value at a dotted key path in root, nil when absent.
@@ -108,22 +128,27 @@ func reopens(entry, checkout string, deny []string) (string, bool) {
 	if i := strings.IndexAny(p, globMeta); i >= 0 {
 		p = filepath.Dir(p[:i] + "x")
 	}
+	var bases []string
 	switch {
 	case p == "~" || strings.HasPrefix(p, "~/"):
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", false
+		// Reason: a settings env can change HOME for the hook, while
+		// Claude Code may resolve "~" with the home it started with; both
+		// are checked.
+		for _, home := range homes() {
+			bases = append(bases, filepath.Join(home, strings.TrimPrefix(p, "~")))
 		}
-		p = filepath.Join(home, strings.TrimPrefix(p, "~"))
 	case strings.HasPrefix(p, "/"):
-		p = "/" + strings.TrimLeft(p, "/")
+		bases = []string{"/" + strings.TrimLeft(p, "/")}
 	default:
-		p = filepath.Join(checkout, p)
+		bases = []string{filepath.Join(checkout, p)}
 	}
-	p = filepath.Clean(p)
-	forms := []string{p}
-	if r, ok := realPath(p); ok && r != p {
-		forms = append(forms, r)
+	var forms []string
+	for _, b := range bases {
+		b = filepath.Clean(b)
+		forms = append(forms, b)
+		if r, ok := realPath(b); ok && r != b {
+			forms = append(forms, r)
+		}
 	}
 	for _, d := range deny {
 		for _, f := range forms {
@@ -133,4 +158,22 @@ func reopens(entry, checkout string, deny []string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// homes are the user's home folders: $HOME and the account's own.
+func homes() []string {
+	var out []string
+	if h, err := os.UserHomeDir(); err == nil && h != "" {
+		out = append(out, h)
+	}
+	if u, err := user.Current(); err == nil && u.HomeDir != "" && !slices.Contains(out, u.HomeDir) {
+		out = append(out, u.HomeDir)
+	}
+	return out
+}
+
+// isString reports whether raw, a JSON value orch wrote, is the string v.
+func isString(raw json.RawMessage, v string) bool {
+	var s string
+	return json.Unmarshal(raw, &s) == nil && s == v
 }

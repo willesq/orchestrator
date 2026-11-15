@@ -49,6 +49,10 @@ func (f *fakeClient) ReindexKeywords(context.Context, *orchdv1.ReindexKeywordsRe
 	return &orchdv1.ReindexKeywordsResponse{}, nil
 }
 
+func (f *fakeClient) Relabel(context.Context, *orchdv1.RelabelRequest, ...grpc.CallOption) (*orchdv1.RelabelResponse, error) {
+	return &orchdv1.RelabelResponse{}, nil
+}
+
 func (f *fakeClient) ListPRs(context.Context, *orchdv1.ListPRsRequest, ...grpc.CallOption) (*orchdv1.ListPRsResponse, error) {
 	return &orchdv1.ListPRsResponse{}, nil
 }
@@ -302,4 +306,12 @@ func (f *fakeClient) ListSpaces(context.Context, *orchdv1.ListSpacesRequest, ...
 
 func (f *fakeClient) ScanSpaces(context.Context, *orchdv1.ScanSpacesRequest, ...grpc.CallOption) (*orchdv1.ScanSpacesResponse, error) {
 	return &orchdv1.ScanSpacesResponse{}, nil
+}
+
+func (f *fakeClient) ListOutboundRules(context.Context, *orchdv1.ListOutboundRulesRequest, ...grpc.CallOption) (*orchdv1.OutboundRules, error) {
+	return &orchdv1.OutboundRules{}, nil
+}
+
+func (f *fakeClient) ChangeOutboundRule(context.Context, *orchdv1.ChangeOutboundRuleRequest, ...grpc.CallOption) (*orchdv1.ChangeOutboundRuleResponse, error) {
+	return &orchdv1.ChangeOutboundRuleResponse{}, nil
 }

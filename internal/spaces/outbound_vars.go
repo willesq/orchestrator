@@ -51,8 +51,12 @@ func (w *outboundWalker) lookup(name, dir string) (string, bool) {
 		return "", false
 	}
 	if v, ok := w.vars[name]; ok {
-		// Baseline rule command_assignments.
-		return v, v != unknownValue
+		// Baseline rule command_assignments. Reason: switched off, a
+		// name the command set is unknown, not the hook's value of it.
+		return v, v != unknownValue && w.rules.on(OutboundCommandAssignments)
+	}
+	if !w.rules.on(OutboundPlainVariables) {
+		return "", false
 	}
 	// Baseline rule plain_variables.
 	switch name {

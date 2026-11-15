@@ -9,7 +9,7 @@ lives in [`macos/`](../../macos/), a Swift package.
 
 | Target | Contents |
 |---|---|
-| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches and the directory validator (`Spaces`, `SpacesModel`), the Spaces pane's Overview and badge (`SpacesOverview`, `SpacesOverviewModel`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
+| `OrchKit` | Everything testable: the generated orchd client (`Generated/`), the Dashboard timeline (`Activity`), the connection (`DaemonClient`), health classification (`Health`), polling (`DaemonMonitor`, `PRMonitor`), PRs, attention and the tray icon (`PullRequest`), memory search and sources (`Memory`, `MemoryModels`), tasks and dispatch (`Tasks`, `TaskModels`), GitHub scopes and activity (`GitHub`, `GitHubModel`), the PRs board lanes (`PRBoard`), handing PRs to agents (`PRHandoff`, `PRHandoffModel`), system metrics, logs and the status report (`System`, `SystemModel`), docs and registered sources (`Catalog`, `CatalogModels`), orch's settings (`Config`), the docs opt-in (`DocsOwners`), the safety net (`SafetyNet`), the enforcement switches, the directory validator and the spaces' logins (`Spaces`, `SpacesModel`, `SpaceLogins`), the Spaces pane's Overview and badge (`SpacesOverview`, `SpacesOverviewModel`), command palette matching (`CommandPalette`), companion window geometry (`CompanionLayout`), fitting panes to the window (`AdaptiveLayout`), markdown rendering (`MarkdownRenderer`), the login item (`LoginItem`), daemon control (`DaemonControl`), and socket path resolution (`OrchPaths`) |
 | `OrchApp` | The SwiftUI `MenuBarExtra`, the main window (`MainWindow`, `DashboardView`, `ActivityTimeline`, `SystemView`, `LogsView`, `MemoryView`, `DocsView`, `SourcesView`, `TasksView`, `GitHubView`, `PRsView`, `PRBoardView`, `PRHandoffCard`, `SettingsView`, `DocsOwnersSection`, `GitHubScopesView`, `ClaudeView`, `SafetyNetView`, `SpacesSection`, `SpacesView`), the ⌘K command palette (`CommandPaletteView`, `PalettePanel`), the companion column (`CompanionView`, `WindowControl`), panes that fit any width (`AdaptiveSplit`, `FlowLayout`), and notifications (`Notifier`) |
 | `OrchKitTests` | Swift Testing suites, including a round trip against a fake orchd on a temporary socket |
 | `OrchAppSnapshots` | Renders app views to PNGs in light and dark from sample data, with no orchd; runs only when `ORCH_SNAPSHOT_DIR` is set (see [Snapshots](#snapshots)) |
@@ -58,6 +58,17 @@ first, each with its reason (see the PR babysitter in [tasks.md](tasks.md)). Cli
   characters), polled by `ReviewMonitor` from `ListPRReviews` every 20 s for the whole app; none is
   posted for verdicts that already existed at launch. A failed poll keeps the
   last good list, so a briefly unreadable cache cannot make every PR look new. Notifications need the app bundle, so a bare `swift run` binary skips them.
+- **Refusals** (spaces SP-048): `RefusalMonitor` reads the operator's `spaces` event stream
+  (`<data dir>/events/spaces.jsonl`, the data dir as `OrchPaths` finds it) every 5 s from where it
+  ended when the app started, so only refusals made while the app runs are announced. Each tool
+  call the spaces guard or the outbound terms check refused posts "Tool call refused", with the
+  space and tool as the subtitle and the rule, session and (for a term) the term's space, line and
+  hash as the body ([hooks.md](hooks.md#refusal-events)); more than three in one poll become one
+  "N tool calls refused" summary naming their spaces. Clicking one opens Settings > Spaces. The
+  stream is a file any process running as the user can append to, so `RefusalStream` takes only
+  whole lines whose every field has the shape orch writes, and reads at most 1 MiB per poll. The
+  monitor keeps the latest 20 (`recent`) for a future list; the menu's Needs you list still shows
+  PRs only.
 
 ## Spaces
 
@@ -81,6 +92,27 @@ and asks.
   and time left. It sits above every Settings section (with **Show Switches**) and at the top of the
   menu bar panel, and the Spaces section in the Settings list gets a warning dot.
 - **Menu bar panel:** the switches in compact form, with **Spaces Settings…** to open the section.
+- **Outbound rules** (SP-075): Settings → Spaces lists the [outbound terms check's
+  rules](hooks.md#outbound-rules) from `ListOutboundRules`: every baseline rule with a switch and what
+  it does (marked when switching it off reads commands strictly), then the rules the operator added
+  by id and kind, each with a switch and a remove button, and a form to add one (kind, and a secure
+  field for its value, cleared once orchd took it; the new rule's id is shown, never its value).
+  Switching a baseline rule off relaxes the check, so it is confirmed first; anything else is sent
+  at once through `ChangeOutboundRule`. orchd's refusal (operator-only) shows under the rule or the
+  form. A warning says when the terms layer is off (from the switches above, so no rule applies) or
+  when orch.db's rules cannot be read. `OutboundRulesModel` (held by `EnforcementModel`) reads the
+  rules when the section opens and takes each change's answer. `SpacesAPI.outboundRules` defaults to
+  unavailable, shown in place of the list. Tests: `OutboundRulesModelTests`; snapshot
+  `outbound-rules-{light,dark}.png` (`SpacesSnapshots`).
+- **Logins** (SP-074.3, D-59): Settings → Spaces lists each space of the applied policy with the gh
+  login and Claude Code configuration it uses: the default one or its own (with the folder), the
+  state orchd read (logged in, not logged in, refused, unknown), the gh account and where its token
+  is stored (keyring or file), Claude Code's sign-in method, and what to fix. A space with a login
+  that is not working gets a warning mark. `SpaceLoginsModel` (held by `EnforcementModel`) reads
+  `ListSpaces`'s `logins` when the section opens; `ListSpaces` is operator-only, so a refusal shows
+  in its place. Values are status metadata only, never a token, and go through `displaySafe`.
+  `SpacesAPI.spaceLogins` defaults to none, so sources without it show no section. Tests:
+  `SpaceLoginsTests` (one-login and two-login layouts).
 - **Check a folder:** type a path (`~` expands to the home folder) or **Choose…** a folder or
   file, and the app asks `ExplainPlacement`. It shows every root holding it from shallowest to
   deepest with its space and kind (the deepest marked), the git remote with its effect (marked

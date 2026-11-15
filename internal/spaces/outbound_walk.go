@@ -41,6 +41,9 @@ type outboundWalker struct {
 	staged, redirected bool
 	// written are files earlier commands wrote ("" for a name not known).
 	written []string
+	// rules are the operator's outbound rules (SP-075); nil is the
+	// baseline.
+	rules *ruleSet
 }
 
 func (w *outboundWalker) script(f *syntax.File, dir string) {
@@ -258,7 +261,7 @@ func (w *outboundWalker) call(s *syntax.Stmt, c *syntax.CallExpr, dir string, pi
 	unknown := extglob
 	switch {
 	case name == "git":
-		act, unknown = gitOutbound(argv[1:], dir, env)
+		act, unknown = gitOutbound(argv[1:], dir, env, w.rules.on(OutboundGitConfigKeys))
 		w.gitState(argv[1:], act)
 	case name == "gh":
 		act, unknown = ghOutbound(argv[1:], dir, env)
@@ -295,6 +298,12 @@ func (w *outboundWalker) call(s *syntax.Stmt, c *syntax.CallExpr, dir string, pi
 			unknown = true
 		}
 		w.writes(s, name, argv[1:], dir)
+		if w.rules.command(name) != "" {
+			// An operator's command rule (SP-075): its words leave for a
+			// destination that holds no space. Reason: the kind names no
+			// program, since the rule's value is the operator's (INV-07).
+			act = &Outbound{Kind: UserCommandKind, Dir: dir, NoRepo: true}
+		}
 	}
 	if !nameStatic {
 		unknown = true
@@ -313,7 +322,7 @@ func (w *outboundWalker) call(s *syntax.Stmt, c *syntax.CallExpr, dir string, pi
 	if !static || act.Dir == "" || w.redirected || w.touched(act) {
 		w.unknown = true
 	}
-	if w.staged && (act.Push || act.Staged) {
+	if w.staged && (act.Push || act.Staged) && w.rules.on(OutboundPendingWork) {
 		act.Pending = true
 		if act.Push {
 			act.Refs = append(act.Refs, "--branches", "HEAD")

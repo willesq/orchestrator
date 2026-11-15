@@ -168,6 +168,8 @@ type server struct {
 	// guard writes the files the enforcing tool guard in orch-hook reads
 	// (SP-041); nil writes none.
 	guard *guardWriter
+	// termsRules are the operator's outbound rules (SP-075).
+	termsRules *termsRules
 	// toolEvents takes the events pre-tool-use and cwd-changed hooks send.
 	toolEvents toolEventIntake
 	// toolLog stores them (SP-014); nil when it could not be opened.
@@ -175,6 +177,9 @@ type server struct {
 	// ghProfiles picks the gh login of each space's GitHub calls; nil runs
 	// every call as the default login.
 	ghProfiles *ghProfiles
+	// claudeLogins checks the spaces' Claude Code configurations' logins
+	// (SP-074.3); nil reports them unchecked.
+	claudeLogins *claudeLogins
 	// repos looks up a repo's owner and visibility for placement.
 	repos      *repoLookups
 	sourcesReg *sources.Registry
@@ -610,7 +615,7 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	cfg := newConfigService(store, configStart)
-	ghp := newGHProfiles()
+	ghp := newGHProfiles(s.GitHub.IsolatedAccountHourlyBudget)
 	sp, err := spaces.Open(ctx, store, spacesEnv(ghp))
 	if err != nil {
 		return err
@@ -644,7 +649,8 @@ func Run(ctx context.Context) error {
 	// starts, so nothing is stored unplaced.
 	pins := newPinRegistry(store)
 	repos := newRepoLookups(ghp.Routed())
-	svc.Place = (&writePlacer{spaces: sp, pins: pins, repos: repos}).place
+	placer := &writePlacer{spaces: sp, pins: pins, repos: repos}
+	svc.Place = placer.place
 
 	// Durable workflow engine: the worker unit drains AgentTask instances; the
 	// dispatcher (used by the RPC handler, not a subsystem) enqueues them.
@@ -700,17 +706,18 @@ func Run(ctx context.Context) error {
 	// One GitHub service, so the server and the PR watcher share the identity
 	// cache.
 	ghService := github.NewService(github.NewStore(store), ghp.Routed())
+	ghService.Accounts = ghp
 	reviewWatcher := newReviewWatcher(reviews.NewStore(store), disp, tasks, ctl, ghService, ghp)
 	reviewWatcher.Poll = reviewsPoll(s.PRReviews.PollInterval)
 
-	docsSched := newDocsScheduler(s, store, svc, sp, ghp)
+	docsSched := newDocsScheduler(s, store, svc, sp, ghp, placer)
 	settingsSvc := settingsFor(store)
 	sup := supervisor.New(runCtx)
 	for _, u := range subsystems(deps{
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
 		summaries: summaries, github: ghService, ghProfiles: ghp, system: system, docs: docsSched,
-		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub, reviews: reviewWatcher, spaces: sp,
+		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub, reviews: reviewWatcher, spaces: sp, placer: placer,
 	}) {
 		if err := sup.Add(u); err != nil {
 			return recovery(err)
@@ -770,6 +777,7 @@ func Run(ctx context.Context) error {
 		pins:         pins,
 		repos:        repos,
 		ghProfiles:   ghp,
+		claudeLogins: newClaudeLogins(),
 		prune:        newPruneGuard(store),
 		sourcesReg:   sources.NewRegistry(store),
 		documents:    svc,
@@ -778,6 +786,7 @@ func Run(ctx context.Context) error {
 		settings:     settingsSvc,
 		toolLog:      tlog,
 		enforcement:  newEnforcement(ctx, store, settingsSvc),
+		termsRules:   newTermsRules(ctx, store),
 		guard:        defaultGuardWriter(),
 	}
 	srv.startGuardFiles(runCtx)

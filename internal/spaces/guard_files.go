@@ -44,6 +44,10 @@ const (
 	// RuleGuardTimeout: the decision did not finish in time; enforcing
 	// modes refuse (INV-13).
 	RuleGuardTimeout GuardRule = "guard_timeout"
+	// RuleSettingsReopen: the checkout the call runs in holds orch's
+	// sandbox denies, and its own Claude Code settings re-open a denied
+	// folder, or cannot be checked (D-67); enforcing modes refuse.
+	RuleSettingsReopen GuardRule = "settings_reopen"
 )
 
 // GuardSwitch is the guard layer's switch as the snapshot carries it. A
@@ -77,8 +81,15 @@ type GuardSnapshot struct {
 	// Terms is the outbound terms layer's switch (SP-044, RC-116), which
 	// the hook's terms check reads from here rather than from orch.db.
 	// A snapshot without it holds the layer's default.
-	Terms     GuardSwitch `json:"terms,omitzero"`
-	WrittenAt time.Time   `json:"written_at"`
+	Terms GuardSwitch `json:"terms,omitzero"`
+	// Rules are the operator's outbound rules (SP-075) as of revision
+	// RulesRev; nil is the baseline. RulesBroken marks rules orchd could
+	// not read, which the terms check cannot vouch for: it refuses
+	// outbound calls.
+	Rules       *OutboundRules `json:"rules,omitempty"`
+	RulesRev    int64          `json:"rules_rev,omitempty"`
+	RulesBroken bool           `json:"rules_broken,omitempty"`
+	WrittenAt   time.Time      `json:"written_at"`
 }
 
 // Mode is the guard's mode at now, after a timed switch's end.
@@ -305,6 +316,10 @@ type GuardFiles struct {
 type GuardResult struct {
 	GuardDecision
 	Revision int64
+	// Space is the space of the session's pin; "" when no pin was read
+	// (none configured or found, or the decision ended before reading it).
+	// Refusal events name it (SP-048).
+	Space string
 	// Terms is what the outbound terms check needs from the same files.
 	Terms GuardTerms
 }
@@ -324,6 +339,14 @@ type GuardTerms struct {
 	// its terms files.
 	Policy *Resolved
 	Home   string
+	// Rules are the operator's outbound rules (SP-075); nil is the
+	// baseline. RulesBroken is set when orchd could not read them: the
+	// check then refuses every call they may have covered.
+	Rules       *OutboundRules
+	RulesBroken bool
+	// RulesRev is the rules' revision, which the hook hands to orchd with
+	// the call (guard_rules_rev, D-66).
+	RulesRev int64
 }
 
 // Decide decides in from the files. It never fails: what it cannot read
@@ -350,7 +373,7 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 	if f.OnMode != nil {
 		f.OnMode(mode)
 	}
-	terms := GuardTerms{State: snap.TermsState(now()), Home: snap.Home}
+	terms := GuardTerms{State: snap.TermsState(now()), Home: snap.Home, Rules: snap.Rules}
 	if snap.Broken {
 		return withTerms(fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision), terms)
 	}
@@ -364,7 +387,7 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 		}
 		res = r
 	}
-	terms.Known, terms.Policy = true, res
+	terms.Known, terms.Policy, terms.RulesBroken, terms.RulesRev = true, res, snap.RulesBroken, snap.RulesRev
 	prot := snap.Protection
 	switch {
 	case !res.Configured():
@@ -397,7 +420,7 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 		ev.Targets = Targets(in.Tool, in.Input, in.Cwd)
 	}
 	d := Decide(pol, pin, GuardEnforcement{Guard: mode}, ev)
-	return GuardResult{GuardDecision: d, Revision: snap.Revision, Terms: terms}
+	return GuardResult{GuardDecision: d, Revision: snap.Revision, Space: pin.Space, Terms: terms}
 }
 
 // withTerms is r with the terms check's inputs.
@@ -446,6 +469,15 @@ func fixed(mode GuardMode, would Verdict, rule GuardRule, rev int64) GuardResult
 		d.Verdict, d.Enforced = would, true
 	}
 	return GuardResult{GuardDecision: d, Revision: rev}
+}
+
+// SettingsReopened is r refused by the check of the checkout's own settings
+// (RuleSettingsReopen), in r's mode: it takes effect only when the guard
+// enforces, as the guard's own rules do.
+func SettingsReopened(r GuardResult) GuardResult {
+	out := fixed(r.Mode, Refuse, RuleSettingsReopen, r.Revision)
+	out.Terms = r.Terms
+	return out
 }
 
 // TimedOut is the decision when deciding took too long; mode is the

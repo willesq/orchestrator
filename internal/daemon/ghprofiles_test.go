@@ -34,9 +34,12 @@ d='` + f.dir + `'
 cat >/dev/null
 p=$(basename "${GH_CONFIG_DIR:-default}")
 case "$*" in
+  *nosuch*) echo 'HTTP 404: Not Found (https://api.github.com/repos/acme/nosuch)' >&2; exit 1 ;;
+esac
+case "$*" in
   "auth status"*)
     if [ -f "$d/$p.login" ]; then
-      printf '{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"%s"}]}}' "$(cat "$d/$p.login")"
+      printf '{"hosts":{"github.com":[{"state":"success","active":true,"host":"github.com","login":"%s","tokenSource":"%s"}]}}' "$(cat "$d/$p.login")" "$(cat "$d/$p.storage" 2>/dev/null || echo keyring)"
     else
       echo '{"hosts":{}}'
     fi ;;
@@ -44,7 +47,9 @@ case "$*" in
   "api users/"*) l=${2#users/}; printf '{"login":"%s","node_id":"N_%s"}' "$l" "$l" ;;
   "api repos/"*) printf '{"owner":"%s","name":"api","private":true}' "$(echo "$2" | cut -d/ -f2)" ;;
   "api graphql"*) echo '{"data":{"repositoryOwner":{"repositories":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}}' ;;
+  "search prs"*) cat "$d/$p.search" 2>/dev/null || echo '[]' ;;
   search*) echo '[]' ;;
+  "pr view"*"state,createdAt"*) cat "$d/$p.prview" 2>/dev/null || echo '{}' ;;
   "api user"*) echo default-me ;;
   *) echo '{}' ;;
 esac
@@ -121,8 +126,11 @@ func profilesServer(t *testing.T, doc string) (*server, *ghProfiles) {
 	if _, err := s.ApplySpaces(operatorCtx, &orchdv1.ApplySpacesRequest{ReviewedRevision: d.GetRevision()}); err != nil {
 		t.Fatal(err)
 	}
-	ghp := newGHProfiles()
+	ghp := newGHProfiles(0)
 	ghp.spaces = s.spaces
+	// Reason: these profiles are fake paths; TestGHProfileDirIsChecked
+	// covers the directory check.
+	ghp.checkDir = nil
 	s.ghProfiles = ghp
 	return s, ghp
 }
@@ -147,8 +155,8 @@ func callAccount(args string) string {
 // makes about a space's org (repo and PR lookups, review posting, docs
 // listing, org identity checks, PR searches) runs with that space's
 // GH_CONFIG_DIR and without token variables that would override it; calls
-// about orgs of spaces without a profile, or about nobody's org, run as the
-// default login; and every run is checked.
+// about orgs of spaces without a profile (an isolated one included, D-59), or
+// about nobody's org, run as the default login; and every run is checked.
 func TestGHProfilesRunEveryCallAsItsSpace(t *testing.T) {
 	const secret = "fake-token-value-123"
 	f := newProfileGH(t)
@@ -165,6 +173,7 @@ func TestGHProfilesRunEveryCallAsItsSpace(t *testing.T) {
 		{"api", "repos/acme/api/pulls/1", "--jq", ".author_association"},
 		{"api", "orgs/acme/repos?per_page=100"},
 		{"pr", "view", "https://github.com/me/notes/pull/2", "--json", "state"},
+		{"pr", "view", "https://github.com/globex/web/pull/5", "--json", "state"},
 		{"api", "repos/oss-org/lib"},
 		{"api", "repos/unbound/x"},
 		{"api", "user", "--jq", ".login"},
@@ -234,11 +243,11 @@ func TestGHProfilesRunEveryCallAsItsSpace(t *testing.T) {
 			if c.dir != acmeProfile || hasToken {
 				t.Errorf("%q ran with GH_CONFIG_DIR %q (GH_TOKEN set: %v), want %q and none", c.args, c.dir, hasToken, acmeProfile)
 			}
-		case account == "globex" || account == "initech":
-			t.Errorf("%q ran for a space without a working profile", c.args)
+		case account == "initech":
+			t.Errorf("%q ran for a space whose profile is not logged in", c.args)
 		default:
-			// Reason: personal and oss have no profile and unbound accounts
-			// no space; their calls keep the default login.
+			// Reason: globex, personal and oss name no profile and unbound
+			// accounts no space; their calls keep the default login (D-59).
 			if c.dir != "" {
 				t.Errorf("%q ran with GH_CONFIG_DIR %q, want the default login", c.args, c.dir)
 			}
@@ -254,29 +263,33 @@ func TestGHProfilesRunEveryCallAsItsSpace(t *testing.T) {
 	}
 }
 
-// TestGHProfilesIsolatedSpaceWithoutLoginIsNotSynced is SP-063.1.a2: an
-// isolated space with no profile, or one not logged in, gets no gh call: its
-// docs are not synced, its PRs are dropped, its calls are refused; the
-// operator's status names the space and the login command, and other callers
-// see only a count.
+// TestGHProfilesIsolatedSpaceWithoutLoginIsNotSynced is SP-063.1.a2 as D-59
+// amends it (SP-074.3.a1): a space whose profile is not logged in gets no gh
+// call (its docs are not synced, its PRs are dropped, its calls are refused)
+// and the operator's status names it with the login command, while other
+// callers see only a count. An isolated space naming no profile uses the
+// default login and is no problem.
 func TestGHProfilesIsolatedSpaceWithoutLoginIsNotSynced(t *testing.T) {
 	f := newProfileGH(t)
 	f.login(t, "acme", "work-acme", "acme")
 	s, ghp := profilesServer(t, profilesDoc)
 	ctx := context.Background()
 
-	for owner, want := range map[string]error{"globex": errNoGHProfile, "initech": errGHProfileLogin} {
-		// A refused owner returns before the registry is read.
-		res := docs.SyncOwner(ctx, nil, docs.Owner{Owner: owner}, nil, docs.SyncOpts{RepoCache: t.TempDir(), Clients: ghp.docsClients})
-		if res.Status != "error" || !strings.Contains(res.Reason, want.Error()) || strings.Contains(res.Reason, owner) {
-			t.Errorf("%s docs sync = %+v", owner, res)
-		}
-		if _, err := ghp.Routed()(ctx, "pr", "view", "https://github.com/"+owner+"/x/pull/1"); !errors.Is(err, want) {
-			t.Errorf("%s routed call: err = %v, want %v", owner, err, want)
-		}
-		if err := reviews.NewGHPoster(ghp.Env)(ctx, owner+"/x", 1, "APPROVE", strings.Repeat("a", 40), "ok"); !errors.Is(err, want) {
-			t.Errorf("%s review post: err = %v, want %v", owner, err, want)
-		}
+	const owner = "initech"
+	// A refused owner returns before the registry is read.
+	res := docs.SyncOwner(ctx, nil, docs.Owner{Owner: owner}, nil, docs.SyncOpts{RepoCache: t.TempDir(), Clients: ghp.docsClients})
+	if res.Status != "error" || !strings.Contains(res.Reason, errGHProfileLogin.Error()) || strings.Contains(res.Reason, owner) {
+		t.Errorf("%s docs sync = %+v", owner, res)
+	}
+	if _, err := ghp.Routed()(ctx, "pr", "view", "https://github.com/"+owner+"/x/pull/1"); !errors.Is(err, errGHProfileLogin) {
+		t.Errorf("%s routed call: err = %v", owner, err)
+	}
+	if err := reviews.NewGHPoster(ghp.Env)(ctx, owner+"/x", 1, "APPROVE", strings.Repeat("a", 40), "ok"); !errors.Is(err, errGHProfileLogin) {
+		t.Errorf("%s review post: err = %v", owner, err)
+	}
+	// globex names no profile: the default login.
+	if env, err := ghp.Env(ctx, "globex"); env != nil || err != nil {
+		t.Errorf("globex Env = %v, %v; want the default login", env, err)
 	}
 	_, route, err := ghp.watchAccounts(ctx)
 	if err != nil {
@@ -285,7 +298,7 @@ func TestGHProfilesIsolatedSpaceWithoutLoginIsNotSynced(t *testing.T) {
 	for owner, want := range map[string]struct {
 		account string
 		ok      bool
-	}{"acme": {acmeProfile, true}, "globex": {"", false}, "initech": {"", false}, "me": {"", true}, "unbound": {"", true}} {
+	}{"acme": {acmeProfile, true}, "globex": {"", true}, "initech": {"", false}, "me": {"", true}, "unbound": {"", true}} {
 		if a, ok := route(owner); a != want.account || ok != want.ok {
 			t.Errorf("route(%s) = %q, %v; want %q, %v", owner, a, ok, want.account, want.ok)
 		}
@@ -294,32 +307,37 @@ func TestGHProfilesIsolatedSpaceWithoutLoginIsNotSynced(t *testing.T) {
 		if c.dir == initechProfile && !strings.HasPrefix(c.args, "auth status") {
 			t.Errorf("ran %q as initech's profile, which is not logged in", c.args)
 		}
-		if a := strings.ToLower(callAccount(c.args)); a == "globex" || a == "initech" {
+		if a := strings.ToLower(callAccount(c.args)); a == "initech" {
 			t.Errorf("ran %q for a space without a working profile", c.args)
 		}
 	}
 
 	op := s.spacesStatus(operatorCtx).GetError()
 	for _, want := range []string{
-		`space "globex" has no gh profile`, "run: GH_CONFIG_DIR=<that directory> gh auth login",
 		`space "initech"'s gh profile is not logged in`, "run: GH_CONFIG_DIR='/profiles/initech' gh auth login",
 	} {
 		if !strings.Contains(op, want) {
 			t.Errorf("operator status %q lacks %q", op, want)
 		}
 	}
-	if strings.Contains(op, `space "acme"`) {
-		t.Errorf("operator status reports acme, whose profile works: %q", op)
+	for _, unwanted := range []string{`space "acme"`, `globex`} {
+		if strings.Contains(op, unwanted) {
+			t.Errorf("operator status reports %s: %q", unwanted, op)
+		}
 	}
 	agent := s.spacesStatus(callerCtx(callerAuth{pid: 7, harness: "claude"})).GetError()
-	if !strings.Contains(agent, "2 problem(s) with the spaces' GitHub accounts") || strings.Contains(agent, "globex") || strings.Contains(agent, "initech") {
+	if !strings.Contains(agent, "1 problem(s) with the spaces' GitHub accounts") || strings.Contains(agent, "initech") {
 		t.Errorf("agent status = %q", agent)
 	}
 
 	// Apply looks orgs up as their space's profile too, so it is refused
-	// for a space that has none, naming it for the operator.
-	prof := spaces.GHProfile{Space: "globex", Kind: spaces.Isolated}
-	if _, err := spacesEnv(ghp).LookupOrg(ctx, "globex", prof); err == nil || !strings.Contains(err.Error(), `space "globex"`) {
+	// for a profile that is not logged in, naming the space for the
+	// operator, and runs as the default login for a space naming none.
+	prof := spaces.GHProfile{Space: "initech", Kind: spaces.Isolated, ConfigDir: initechProfile}
+	if _, err := spacesEnv(ghp).LookupOrg(ctx, "initech", prof); err == nil || !strings.Contains(err.Error(), `space "initech"`) {
+		t.Errorf("LookupOrg with a logged-out profile: err = %v", err)
+	}
+	if _, err := spacesEnv(ghp).LookupOrg(ctx, "globex", spaces.GHProfile{Space: "globex", Kind: spaces.Isolated}); err != nil {
 		t.Errorf("LookupOrg without a profile: err = %v", err)
 	}
 }
@@ -411,7 +429,7 @@ func TestGHProfilesWithoutSpaces(t *testing.T) {
 		t.Errorf("nil watchAccounts = %v, %v", a, err)
 	}
 	s := spacesServer(t)
-	ghp := newGHProfiles()
+	ghp := newGHProfiles(0)
 	ghp.spaces = s.spaces
 	var gotEnv []string
 	ghp.run = func(_ context.Context, env []string, _ ...string) ([]byte, error) {
@@ -456,27 +474,32 @@ func TestGHProfileCheckIgnoresACallersCancellation(t *testing.T) {
 }
 
 // TestGHProfilesWarnAboutTheDefaultLogin: the default login runs every call
-// no profile covers, so status warns when it can see an isolated space's org
-// or is the same account as an isolated space's profile.
+// no profile covers, so status warns when it can see the org of an isolated
+// space that names its own profile, or is the same account as one; an
+// isolated space naming no profile uses the default login by design (D-59).
 func TestGHProfilesWarnAboutTheDefaultLogin(t *testing.T) {
 	f := newProfileGH(t)
-	f.login(t, "default", "work-acme", "globex")
+	f.login(t, "default", "work-acme", "globex", "acme")
 	f.login(t, "acme", "work-acme", "acme")
 	s, _ := profilesServer(t, profilesDoc)
 	e := s.spacesStatus(operatorCtx).GetError()
 	for _, want := range []string{
-		`the default gh login can see GitHub org "globex", bound to isolated space "globex"`,
+		`the default gh login can see GitHub org "acme", bound to isolated space "acme"`,
 		`isolated space "acme"'s gh profile is logged in to the same GitHub account as the default gh login`,
 	} {
 		if !strings.Contains(e, want) {
 			t.Errorf("status %q lacks %q", e, want)
 		}
 	}
+	if strings.Contains(e, `"globex"`) {
+		t.Errorf("status warns about globex, which names no profile: %q", e)
+	}
 }
 
 // TestGHProfilesAccountAndLanding: landing's account is the owner's profile
-// login and environment, the default identity for anyone else, and refused
-// for an isolated space without a working profile.
+// login and environment, the default identity for anyone else (an isolated
+// space naming no profile included, D-59), and refused for a profile that is
+// not logged in.
 func TestGHProfilesAccountAndLanding(t *testing.T) {
 	f := newProfileGH(t)
 	f.login(t, "acme", "work-acme", "acme")
@@ -491,8 +514,11 @@ func TestGHProfilesAccountAndLanding(t *testing.T) {
 	if a, err := svc.AccountFor(ctx, "me"); err != nil || a.Login != "default-me" || a.Env != nil {
 		t.Errorf("personal account = %+v, %v", a, err)
 	}
-	if _, err := svc.AccountFor(ctx, "globex"); !errors.Is(err, errNoGHProfile) {
-		t.Errorf("globex account: err = %v", err)
+	if a, err := svc.AccountFor(ctx, "globex"); err != nil || a.Login != "default-me" || a.Env != nil {
+		t.Errorf("globex account = %+v, %v; want the default login (D-59)", a, err)
+	}
+	if _, err := svc.AccountFor(ctx, "initech"); !errors.Is(err, errGHProfileLogin) {
+		t.Errorf("initech account: err = %v", err)
 	}
 	if svc := newLandingService(nil, nil, nil, nil); svc.AccountFor != nil {
 		t.Error("landing without profiles picks accounts")
@@ -500,8 +526,8 @@ func TestGHProfilesAccountAndLanding(t *testing.T) {
 }
 
 // TestListDocsOwnerReposAsTheSpacesAccount: the docs owner picker lists a
-// space's org as its account, and refuses one whose space has no working
-// profile, rather than list it as the default login.
+// space's org as its account, and refuses one whose profile is not logged
+// in, rather than list it as the default login.
 func TestListDocsOwnerReposAsTheSpacesAccount(t *testing.T) {
 	f := newProfileGH(t)
 	f.login(t, "acme", "work-acme", "acme")
@@ -510,8 +536,8 @@ func TestListDocsOwnerReposAsTheSpacesAccount(t *testing.T) {
 	if _, err := s.ListDocsOwnerRepos(operatorCtx, &orchdv1.ListDocsOwnerReposRequest{Owner: "acme"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ListDocsOwnerRepos(operatorCtx, &orchdv1.ListDocsOwnerReposRequest{Owner: "globex"}); err == nil {
-		t.Error("listed an isolated org without a profile")
+	if _, err := s.ListDocsOwnerRepos(operatorCtx, &orchdv1.ListDocsOwnerReposRequest{Owner: "initech"}); err == nil {
+		t.Error("listed an org whose profile is not logged in")
 	}
 	for _, c := range f.calls(t) {
 		if strings.HasPrefix(c.args, "api graphql") {

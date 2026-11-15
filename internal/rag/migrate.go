@@ -96,6 +96,11 @@ func (s *Service) MigrateHybrid(ctx context.Context, target string, apply bool, 
 	if target == src.Collection() {
 		return rep, errors.New("the target must differ from the active collection")
 	}
+	if strings.Contains(target, spaceSep) {
+		// Reason: base__<name> is how a space's collection is named, so such
+		// a target would read as a space of another collection.
+		return rep, fmt.Errorf("collection name %q must not contain %q", target, spaceSep)
+	}
 	switch l, err := src.Layout(ctx); {
 	case err != nil:
 		return rep, err
@@ -105,40 +110,34 @@ func (s *Service) MigrateHybrid(ctx context.Context, target string, apply bool, 
 		return rep, fmt.Errorf("collection %q is already hybrid", src.Collection())
 	}
 	dst := src.WithCollection(target)
-	dstLayout, err := dst.Layout(ctx)
+	marker := s.markerPath(target)
+	// Every space's collection moves with the base (SP-024): each is copied
+	// to the same space's collection under the target.
+	pairs, err := s.migrationPairs(ctx, src, dst)
 	if err != nil {
 		return rep, err
 	}
-	if dstLayout == LayoutDense {
-		return rep, fmt.Errorf("collection %q already exists and is not hybrid; pick another target", target)
-	}
-	marker := s.markerPath(target)
-	if dstLayout == LayoutHybrid && apply {
-		if marker == "" {
-			return rep, errors.New("no state directory for migration markers")
-		}
-		n, err := dst.Count(ctx, nil)
-		if err != nil {
+	for _, p := range pairs {
+		if err := s.checkTarget(ctx, p.dst, marker, apply); err != nil {
 			return rep, err
-		}
-		if _, statErr := os.Stat(marker); n > 0 && statErr != nil {
-			return rep, fmt.Errorf("collection %q holds a finished migration; copying into it again would revert "+
-				"writes made since, so pick another --target", target)
 		}
 	}
 
 	if !apply {
-		uris, err := s.listURIs(ctx, src, &rep)
-		if err != nil {
-			return rep, err
-		}
-		for _, uri := range uris {
-			sr, err := s.readSource(ctx, src, uri)
+		for _, p := range pairs {
+			uris, err := s.listURIs(ctx, p.src, &rep)
 			if err != nil {
 				return rep, err
 			}
-			rep.OldChunks += sr.chunks
-			s.tally(&rep, uri, sr, func(text string) { rep.NewChunks += len(s.split(text)) })
+			rep.Sources += len(uris)
+			for _, uri := range uris {
+				sr, err := s.readSource(ctx, p.src, uri)
+				if err != nil {
+					return rep, err
+				}
+				rep.OldChunks += sr.chunks
+				s.tally(&rep, uri, sr, func(text string) { rep.NewChunks += len(s.split(text)) })
+			}
 		}
 		return rep, nil
 	}
@@ -156,8 +155,10 @@ func (s *Service) MigrateHybrid(ctx context.Context, target string, apply bool, 
 	if err != nil {
 		return rep, err
 	}
-	if err := dst.EnsureCollection(ctx, dim); err != nil {
-		return rep, err
+	for _, p := range pairs {
+		if err := p.dst.EnsureCollection(ctx, dim); err != nil {
+			return rep, err
+		}
 	}
 
 	s.setShadow(dst)
@@ -168,25 +169,32 @@ func (s *Service) MigrateHybrid(ctx context.Context, target string, apply bool, 
 		}
 	}()
 
-	uris, err := s.listURIs(ctx, src, &rep)
-	if err != nil {
-		return rep, err
-	}
-	live := make(map[string]bool, len(uris))
-	progress := s.trackProgress(target, len(uris))
-	defer progress.finish()
-	for _, uri := range uris {
-		live[uri] = true
-		if err := ctx.Err(); err != nil {
+	lists := make([][]string, len(pairs))
+	total := 0
+	for i, p := range pairs {
+		if lists[i], err = s.listURIs(ctx, p.src, &rep); err != nil {
 			return rep, err
 		}
-		if err := s.copySource(ctx, src, dst, dim, uri, &rep); err != nil {
-			return rep, fmt.Errorf("%s: %w", uri, err)
-		}
-		progress.step(rep.NewChunks)
+		total += len(lists[i])
 	}
-	if err := s.removeStale(ctx, src, dst, live, &rep); err != nil {
-		return rep, err
+	rep.Sources = total
+	progress := s.trackProgress(target, total)
+	defer progress.finish()
+	for i, p := range pairs {
+		live := make(map[string]bool, len(lists[i]))
+		for _, uri := range lists[i] {
+			live[uri] = true
+			if err := ctx.Err(); err != nil {
+				return rep, err
+			}
+			if err := s.copySource(ctx, p.src, p.dst, dim, p.space, uri, &rep); err != nil {
+				return rep, fmt.Errorf("%s: %w", uri, err)
+			}
+			progress.step(rep.NewChunks)
+		}
+		if err := s.removeStale(ctx, p.src, p.dst, p.space, live, &rep); err != nil {
+			return rep, err
+		}
 	}
 	if rep.Oversize > 0 {
 		return rep, fmt.Errorf("%d source(s) are too large to migrate (see the report); forget or re-ingest them, then run again", rep.Oversize)
@@ -195,8 +203,11 @@ func (s *Service) MigrateHybrid(ctx context.Context, target string, apply bool, 
 	// Re-copy what writes left inconsistent, then switch. The last check is
 	// made with every writer drained, so an empty dirty set is final.
 	for attempt := 0; ; attempt++ {
-		for _, uri := range s.takeDirty() {
-			if err := s.copySource(ctx, src, dst, dim, uri, &rep); err != nil {
+		for _, key := range s.takeDirty() {
+			// A space whose collection a live write made during the copy has
+			// no pair yet; its stores are named the same way.
+			space, uri := splitKey(key)
+			if err := s.copySource(ctx, s.derive(src, space), s.derive(dst, space), dim, space, uri, &rep); err != nil {
 				return rep, fmt.Errorf("%s: %w", uri, err)
 			}
 		}
@@ -225,6 +236,7 @@ func (s *Service) MigrateHybrid(ctx context.Context, target string, apply bool, 
 	s.mu.Lock()
 	s.store, s.shadow, s.touched, s.dirty = dst, nil, nil, nil
 	s.mu.Unlock()
+	s.forgetCollections(src.Collection())
 	s.gate.Unlock()
 	switched, rep.Applied = true, true
 	return rep, nil
@@ -273,12 +285,61 @@ func (s *Service) tally(rep *MigrateReport, uri string, sr sourceRead, ok func(s
 	}
 }
 
-// copySource copies one source from src to dst as src holds it now, under the
-// source's write lock.
-func (s *Service) copySource(ctx context.Context, src, dst *QdrantStore, dim int, uri string, rep *MigrateReport) error {
+// migrationPair is one collection a migration copies and its target: the
+// base, or one space's collection under each.
+type migrationPair struct {
+	space    string
+	src, dst *QdrantStore
+}
+
+// migrationPairs lists the base and every space collection under src, each
+// with the same space's collection under dst.
+func (s *Service) migrationPairs(ctx context.Context, src, dst *QdrantStore) ([]migrationPair, error) {
+	names, err := s.spaceCollections(ctx, src, true)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]migrationPair, 0, len(names))
+	for _, sp := range names {
+		out = append(out, migrationPair{space: sp, src: s.derive(src, sp), dst: s.derive(dst, sp)})
+	}
+	return out, nil
+}
+
+// checkTarget refuses a target collection the migration must not copy into:
+// one that is not hybrid, or one holding a finished migration (points and no
+// marker), since copying again would revert writes made since.
+func (s *Service) checkTarget(ctx context.Context, dst *QdrantStore, marker string, apply bool) error {
+	l, err := dst.Layout(ctx)
+	if err != nil {
+		return err
+	}
+	if l == LayoutDense {
+		return fmt.Errorf("collection %q already exists and is not hybrid; pick another target", dst.Collection())
+	}
+	if l != LayoutHybrid || !apply {
+		return nil
+	}
+	if marker == "" {
+		return errors.New("no state directory for migration markers")
+	}
+	n, err := dst.Count(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if _, statErr := os.Stat(marker); n > 0 && statErr != nil {
+		return fmt.Errorf("collection %q holds a finished migration; copying into it again would revert "+
+			"writes made since, so pick another --target", dst.Collection())
+	}
+	return nil
+}
+
+// copySource copies one source of space's collection from src to dst as src
+// holds it now, under the source's write lock.
+func (s *Service) copySource(ctx context.Context, src, dst *QdrantStore, dim int, space, uri string, rep *MigrateReport) error {
 	defer s.lockSource(uri)()
 	s.mu.RLock()
-	done := s.touched[uri]
+	done := s.touched[sourceKey(space, uri)]
 	s.mu.RUnlock()
 	if done {
 		rep.Skipped++
@@ -310,7 +371,7 @@ func (s *Service) copySource(ctx context.Context, src, dst *QdrantStore, dim int
 
 // removeStale deletes sources the target holds that the active store no
 // longer does, and that no live write put there.
-func (s *Service) removeStale(ctx context.Context, src, dst *QdrantStore, live map[string]bool, rep *MigrateReport) error {
+func (s *Service) removeStale(ctx context.Context, src, dst *QdrantStore, space string, live map[string]bool, rep *MigrateReport) error {
 	var ignored MigrateReport
 	held, err := s.listURIs(ctx, dst, &ignored)
 	if err != nil {
@@ -323,7 +384,7 @@ func (s *Service) removeStale(ctx context.Context, src, dst *QdrantStore, live m
 		if err := func() error {
 			defer s.lockSource(uri)()
 			s.mu.RLock()
-			done := s.touched[uri]
+			done := s.touched[sourceKey(space, uri)]
 			s.mu.RUnlock()
 			if done {
 				return nil
@@ -366,7 +427,6 @@ func (s *Service) listURIs(ctx context.Context, st *QdrantStore, rep *MigrateRep
 				uris = append(uris, u)
 			}
 			sort.Strings(uris)
-			rep.Sources = len(uris)
 			return uris, nil
 		}
 		offset = next

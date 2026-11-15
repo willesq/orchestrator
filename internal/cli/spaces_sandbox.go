@@ -20,9 +20,11 @@ func newSpacesSandboxCmd(cf clientFactory) *cobra.Command {
 sandbox rules into checkouts' .claude/settings.local.json and gives them to
 'orch run':
 
-  auto   (default) only for sessions another isolated space's folders
-         are denied to; a policy with one isolated space and nothing else
-         to keep out writes none
+  auto   (default) only for sessions another isolated space's folders,
+         another space's own gh_config_dir or claude_config_dir, or (for
+         a space naming its own gh_config_dir) your default gh login's
+         folder are denied to; a policy with one isolated space on your
+         default logins and nothing else to keep out writes none
   on     for every space's sessions while a policy is applied
   off    never, by choice
 

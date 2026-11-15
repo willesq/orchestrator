@@ -167,4 +167,23 @@ orch rag migrate-hybrid --drop-backup --apply  # delete the backup once you trus
 New ingests reach both collections while the copy runs, and an interrupted run can be repeated.
 `orch status` shows progress. Writes after the switch exist only in the new collection, so a
 rollback loses them. `--drop-backup` deletes only the backup recorded in config and refuses one
-`orchd` is still using.
+`orchd` is still using. With memory spaces each space has its own collection, named after the
+active one (`<collection>__<space>`): migration copies and switches them together, rollback
+switches them back, `--drop-backup` deletes the backup's space collections with it, and
+`orch rag reindex-keywords` covers every one.
+
+## Relabelling after a spaces policy change
+
+Content stored before memory spaces, before each space had its own collection, or under an older
+spaces policy revision is not read by the spaces it belongs to until it is relabelled. After you
+apply a policy (and after each later revision), run, in a terminal outside any agent session:
+
+```sh
+orch rag relabel --dry-run   # counts per space it would move or stamp; changes nothing
+orch rag relabel             # place and move them; resumable, safe to repeat
+```
+
+Nothing is re-embedded. Content that cannot be placed (notes stored before writers were recorded,
+client notes with no session space, sessions whose transcript is gone, conflicts) goes to
+quarantine, never to public or another space; retag what you want. Chunks reported as left stale
+(for example, GitHub could not be asked about a repo) are retried by the next run.

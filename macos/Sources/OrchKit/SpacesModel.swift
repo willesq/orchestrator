@@ -36,10 +36,18 @@ public final class EnforcementModel {
 
     /// `interval` is how often the switches are read while nothing is
     /// timed; a timed switch is read again just after it reverts.
+    /// Each space's logins, read when Settings → Spaces opens (SP-074).
+    public let logins: SpaceLoginsModel
+    /// The outbound terms check's rules (SP-075), read when Settings →
+    /// Spaces opens.
+    public let outboundRules: OutboundRulesModel
+
     public init(api: any SpacesAPI, interval: Duration = .seconds(10), now: @escaping @Sendable () -> Date = Date.init) {
         self.api = api
         self.interval = interval
         self.now = now
+        self.logins = SpaceLoginsModel(api: api)
+        self.outboundRules = OutboundRulesModel(api: api)
     }
 
     /// The layers not enforcing now; empty before the first read.
