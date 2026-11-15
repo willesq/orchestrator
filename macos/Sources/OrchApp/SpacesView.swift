@@ -9,14 +9,31 @@ struct SpacesView: View {
     let model: SpacesOverviewModel
     let enforcement: EnforcementModel
     let navigator: Navigator
+    /// Activity and Review (SP-054); without them the pane is the Overview.
+    var activity: SpacesActivityModel?
+    var review: SpacesReviewModel?
+    @State private var page: SpacesPage = .overview
     /// "Relabel now" (SP-079); absent where none is given.
     @Environment(SpacesRelabelModel.self) private var relabel: SpacesRelabelModel?
 
     var body: some View {
         VStack(spacing: 0) {
-            SpacesHeader(model: model)
-            Divider()
-            content
+            // Screen-share-safe mode keeps to the Overview.
+            let pages = model.shareSafe == nil && activity != nil && review != nil
+            if pages {
+                SpacesPagePicker(page: $page)
+                Divider()
+            }
+            switch pages ? page : .overview {
+            case .activity:
+                if let activity { SpacesActivityView(model: activity) }
+            case .review:
+                if let review { SpacesReviewView(model: review, onApplied: { Task { await model.load() } }) }
+            case .overview:
+                SpacesHeader(model: model)
+                Divider()
+                content
+            }
         }
         .navigationTitle("Spaces")
         .task { await model.load() }

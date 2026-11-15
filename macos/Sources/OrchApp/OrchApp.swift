@@ -11,6 +11,7 @@ struct OrchApp: App {
                 monitor: delegate.model.monitor, prMonitor: delegate.model.prMonitor,
                 loginItem: delegate.model.loginItem, control: delegate.model.control,
                 enforcement: delegate.model.enforcement,
+                unlocks: delegate.model.unlocks,
                 openMainWindow: { delegate.showMainWindow() },
                 openSpaces: {
                     delegate.model.navigator.showSettings(.spaces)
@@ -65,6 +66,10 @@ final class AppModel {
     let enforcement: EnforcementModel
     let placement: PlacementValidator
     let spaces: SpacesOverviewModel
+    /// Operator unlocks waiting for the user or in force (SP-077).
+    let unlocks: UnlocksModel
+    let spacesActivity: SpacesActivityModel
+    let spacesReview: SpacesReviewModel
     let relabel: SpacesRelabelModel
     /// Keeps the sidebar's badges current between visits to their tabs.
     private(set) var badges: PeriodicRefresh?
@@ -103,6 +108,9 @@ final class AppModel {
         relabel.onChange = { await spaces.load() }
         self.relabel = relabel
         self.spaces = spaces
+        unlocks = UnlocksModel(api: api, confirmer: DeviceOwnerConfirmer())
+        spacesActivity = SpacesActivityModel(api: api)
+        spacesReview = SpacesReviewModel(api: api, authenticator: SystemAuthentication())
         docsOwners = DocsOwnersModel(api: api, knownOwners: { [api] in try await api.gitHubScopes(refresh: false).scopes.map(\.owner) })
     }
 
@@ -149,6 +157,13 @@ final class AppModel {
         system.startSampling()
         // The "enforcement off" banner must show without opening anything.
         enforcement.start()
+        // A terminal waits on the user's answer, so its request must show
+        // without opening anything (SP-077).
+        unlocks.onNewRequests = { [spaces] requests in
+            guard spaces.allowsNotifications else { return }
+            postUnlockRequests(requests)
+        }
+        unlocks.start()
         // Docs, Safety Net and Claude change rarely; every few minutes is
         // plenty for a badge, and each tab reloads itself when opened.
         let badges = PeriodicRefresh(interval: .seconds(300), actions: [

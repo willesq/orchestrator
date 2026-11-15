@@ -46,6 +46,10 @@ operator applied.
   orch spaces replay <session> [--policy <rev|file>]
                                      decide recorded tool calls again and list
                                      the verdicts that change (operator only)
+  orch spaces unlock --for 15m [-- <command>]
+                                     ask Orch.app for operator scope in this
+                                     terminal for a while (at most 60m)
+  orch spaces lock                   end the unlocks covering this terminal
 
 Diff, apply, log verify, replay, enforce <layer> <state>, sandbox <mode> and terms rule changes are refused inside an agent session (Claude Code, Codex) and
 inside tasks orchd runs: run them in your own terminal or use Orch.app. An
@@ -53,7 +57,7 @@ agent session may save a draft; applying one needs --accept-agent-draft.`,
 	}
 	cmd.AddCommand(newSpacesDraftCmd(cf), newSpacesDiffCmd(cf), newSpacesApplyCmd(cf), newSpacesWhyCmd(cf),
 		newSpacesLogCmd(cf), newSpacesEnforceCmd(cf), newSpacesSandboxCmd(cf), newSpacesReplayCmd(cf),
-		newSpacesTermsCmd(cf), newSpacesRetagCmd(cf))
+		newSpacesTermsCmd(cf), newSpacesRetagCmd(cf), newSpacesUnlockCmd(cf), newSpacesLockCmd(cf))
 	return cmd
 }
 

@@ -75,11 +75,24 @@ extension UnreachableDaemon: SpacesAPI {
     func explainPlacement(target: String) async throws -> PlacementExplanation { throw failure }
 }
 
+extension UnreachableDaemon: UnlocksAPI {
+    func unlocks() async throws -> [OperatorUnlock] { throw failure }
+    func confirmUnlock(id: String, allow: Bool) async throws { throw failure }
+    func lockUnlock(id: String) async throws -> Int { throw failure }
+}
+
 extension UnreachableDaemon: SpacesOverviewAPI {
     func listSpaces() async throws -> SpacesListing { throw failure }
     func listSessions(includeEnded: Bool) async throws -> [PinnedSession] { throw failure }
     func toolLogSummary() async throws -> [SpaceActivity] { throw failure }
     func unconfirmedGitHubOrgs() async throws -> [String] { throw failure }
+}
+
+extension UnreachableDaemon: SpacesReviewAPI, SpacesActivityAPI {
+    func diffSpaces() async throws -> SpacesPolicyDiff { throw failure }
+    func saveSpacesDraft(policyJSON: String) async throws -> SavedSpacesDraft { throw failure }
+    func applySpaces(reviewedRevision: Int64, acceptAgentDraft: Bool, confirmGitHubOrgs: [String]) async throws -> Int64 { throw failure }
+    func toolEvents(owner: String, afterSeq: Int64, limit: Int32) async throws -> ToolLogPage { throw failure }
 }
 
 extension UnreachableDaemon: SpacesRelabelAPI {

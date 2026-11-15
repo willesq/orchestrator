@@ -37,7 +37,8 @@ enum AppClient: Sendable {
     /// The APIs of the features that predate SP-081. Add none here: a new
     /// feature adds its own accessor (above).
     var core: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & PRReviewAPI & PRLandingAPI & SystemAPI
-        & CatalogAPI & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesOverviewAPI & SpacesRelabelAPI {
+        & CatalogAPI & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesOverviewAPI & SpacesReviewAPI
+        & SpacesActivityAPI & UnlocksAPI & SpacesRelabelAPI {
         switch self {
         case .live(let client): client
         case .unreachable(let standIn): standIn
