@@ -8587,7 +8587,7 @@
       "attempts": 1,
       "criteria_sha256": "534d3126d96ee6923f83bb9f80fffb8c337e4bd11bd5beb82d3426d8223e8847",
       "branch": "feat/sp-082-flaky-tests",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/206"
     },
     {
       "id": "SP-078",

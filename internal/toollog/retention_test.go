@@ -504,23 +504,40 @@ func TestSweepSkipsUnknownState(t *testing.T) {
 // chain while the writer keeps appending to it all succeed (each takes the
 // write lock first, so neither fails its upgrade), the writer loses
 // nothing, and the chain verifies.
+//
+// "Loses nothing" means no batch fails to store: a failed commit counts its
+// events as dropped. A full queue drops events by design (D-30), so the
+// writer below never lets more than inFlight events wait: a fixed rate
+// outran a writer starved of CPU on a loaded CI runner and failed the test
+// with drops that were the queue doing its job (SP-082).
 func TestSweepWhileWriting(t *testing.T) {
 	s, _ := openTemp(t)
 	o := session("sess-busy")
 	w := newWriter(t, s, DefaultQueue)
+	// Half of one quota key's share of the queue, so the queue never fills
+	// while the writer always has a batch's worth waiting.
+	const inFlight = DefaultQueue / ownerShare / 2
 	stop := make(chan struct{})
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
+		var sent int64
 		for i := 0; ; i++ {
 			select {
 			case <-stop:
 				return
 			default:
 			}
+			if sent-w.Stored() >= inFlight {
+				time.Sleep(100 * time.Microsecond)
+				continue
+			}
+			if !w.Enqueue(key(o), 100, bigEvent(i, "logged", 2<<10)) {
+				return
+			}
+			sent++
 			// About 5,000 events a second, more than sessions send; the
 			// race detector slows the writer below that, so 500 there.
-			w.Enqueue(key(o), 100, bigEvent(i, "logged", 2<<10))
 			if every := 5 - 4*boolInt(raceEnabled); i%every == every-1 {
 				time.Sleep(time.Millisecond)
 			}
@@ -528,8 +545,13 @@ func TestSweepWhileWriting(t *testing.T) {
 	}()
 	p := DefaultPolicy()
 	p.SessionCap = 64 << 10
+	// Reason: 30 sweeps take about 150 ms, in which a writer slowed by the
+	// race detector and a loaded machine had not yet filled the chain past
+	// SessionCap, so nothing was trimmed (SP-082). Sweeping goes on until
+	// some sweep has cut the live chain, for at most a minute.
 	var trimmed int
-	for i := range 30 {
+	deadline := time.Now().Add(time.Minute)
+	for i := 0; i < 30 || (trimmed == 0 && time.Now().Before(deadline)); i++ {
 		time.Sleep(5 * time.Millisecond)
 		res, err := s.Sweep(context.Background(), t0, p, states{}.of)
 		if err != nil {
