@@ -58,12 +58,13 @@ final class AppModel {
     let docsOwners: DocsOwnersModel
     let enforcement: EnforcementModel
     let placement: PlacementValidator
+    let spaces: SpacesOverviewModel
     /// Keeps the sidebar's badges current between visits to their tabs.
     private(set) var badges: PeriodicRefresh?
 
     init() {
         let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & PRReviewAPI & PRLandingAPI & SystemAPI & CatalogAPI
-            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesAPI
+            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesOverviewAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -95,6 +96,7 @@ final class AppModel {
         config = ConfigModel(api: api, restartDaemon: { [control] in try await control.perform(.restart) })
         enforcement = EnforcementModel(api: api)
         placement = PlacementValidator(api: api)
+        spaces = SpacesOverviewModel(api: api)
         docsOwners = DocsOwnersModel(api: api, knownOwners: { [api] in try await api.gitHubScopes(refresh: false).scopes.map(\.owner) })
     }
 
@@ -102,10 +104,21 @@ final class AppModel {
     /// at all in a copy that hands off to one already running.
     func start() {
         monitor.start()
-        prMonitor.onNewlyNeedingYou = { [notifier] prs in notifier.post(prs) }
+        // Notifications name every space's PRs, so none is posted while the
+        // Spaces pane's screen-share-safe mode is on.
+        prMonitor.onNewlyNeedingYou = { [notifier, spaces] prs in
+            guard spaces.allowsNotifications else { return }
+            notifier.post(prs)
+        }
         prMonitor.start()
-        reviews.onNewVerdicts = { [notifier] reviews in notifier.post(verdicts: reviews) }
-        reviews.onNewlyHeld = { [notifier] reviews in notifier.post(held: reviews) }
+        reviews.onNewVerdicts = { [notifier, spaces] reviews in
+            guard spaces.allowsNotifications else { return }
+            notifier.post(verdicts: reviews)
+        }
+        reviews.onNewlyHeld = { [notifier, spaces] reviews in
+            guard spaces.allowsNotifications else { return }
+            notifier.post(held: reviews)
+        }
         reviews.start()
         // A click on a notification opens that PR in the app, not the browser.
         notifier.onOpenPR = { [weak self] url in
@@ -251,6 +264,13 @@ extension UnreachableDaemon: SpacesAPI {
     func enforcement() async throws -> EnforcementState { throw failure }
     func setEnforcement(layer: String, state: String, forSeconds: Int64) async throws -> EnforcementChangeResult { throw failure }
     func explainPlacement(target: String) async throws -> PlacementExplanation { throw failure }
+}
+
+extension UnreachableDaemon: SpacesOverviewAPI {
+    func listSpaces() async throws -> SpacesListing { throw failure }
+    func listSessions(includeEnded: Bool) async throws -> [PinnedSession] { throw failure }
+    func toolLogSummary() async throws -> [SpaceActivity] { throw failure }
+    func unconfirmedGitHubOrgs() async throws -> [String] { throw failure }
 }
 
 extension UnreachableDaemon: PRLandingAPI {

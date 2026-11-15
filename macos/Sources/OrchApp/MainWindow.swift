@@ -2,7 +2,7 @@ import OrchKit
 import SwiftUI
 
 enum Pane: String, CaseIterable, Identifiable {
-    case dashboard, system, memory, docs, sources, tasks, github, settings
+    case dashboard, system, memory, spaces, docs, sources, tasks, github, settings
 
     var id: String { rawValue }
 
@@ -11,6 +11,7 @@ enum Pane: String, CaseIterable, Identifiable {
         case .dashboard: "Dashboard"
         case .system: "System"
         case .memory: "Memory"
+        case .spaces: "Spaces"
         case .docs: "Docs"
         case .sources: "Sources"
         case .tasks: "Tasks"
@@ -24,6 +25,7 @@ enum Pane: String, CaseIterable, Identifiable {
         case .dashboard: "gauge.with.dots.needle.33percent"
         case .system: "cpu"
         case .memory: "brain.head.profile"
+        case .spaces: "square.3.layers.3d"
         case .docs: "doc.text.magnifyingglass"
         case .sources: "tray.full"
         case .tasks: "checklist"
@@ -55,6 +57,7 @@ struct MainWindow: View {
     let docsOwners: DocsOwnersModel
     let enforcement: EnforcementModel
     let placement: PlacementValidator
+    let spaces: SpacesOverviewModel
     let loginItem: LoginItem
     @Bindable var navigator: Navigator
     let window: WindowControl
@@ -68,9 +71,16 @@ struct MainWindow: View {
         nonmutating set { navigator.pane = newValue }
     }
 
+    /// The space screen-share-safe mode shows; while it is set the window
+    /// shows the Spaces pane and nothing else, since every other pane mixes
+    /// all spaces' PRs, tasks and memory.
+    private var shareSafe: String? { spaces.shareSafe }
+
     var body: some View {
         Group {
-            if compact {
+            if shareSafe != nil && compact {
+                SpacesView(model: spaces, enforcement: enforcement, navigator: navigator)
+            } else if compact {
                 CompanionView(monitor: monitor, prMonitor: prMonitor, tasks: tasks, window: window,
                               status: sidebarStatus, open: { show($0) },
                               openPR: { url in
@@ -94,9 +104,13 @@ struct MainWindow: View {
         .frame(minWidth: CompanionLayout.minimumSize.width, maxWidth: .infinity,
                minHeight: CompanionLayout.minimumSize.height, maxHeight: .infinity, alignment: .topLeading)
         .onGeometryChange(for: Bool.self) { CompanionLayout.isCompact(width: $0.size.width) } action: { compact = $0 }
+        // Keeps the Spaces badge current while the pane is closed.
+        .task { spaces.start() }
         .background {
             // Hidden buttons, so the shortcuts work from any pane without a menu bar.
             Button("Command palette") {
+                // The palette lists every PR and task, whatever their space.
+                guard shareSafe == nil else { return }
                 PalettePanel.shared.toggle(over: NSApp.keyWindow, commands: paletteCommands)
             }
             .keyboardShortcut("k", modifiers: .command)
@@ -115,7 +129,8 @@ struct MainWindow: View {
 
     private var splitView: some View {
         NavigationSplitView {
-            List(Pane.allCases, selection: Binding(get: { pane }, set: { pane = $0 ?? .dashboard })) { item in
+            List(shareSafe == nil ? Pane.allCases : [.spaces],
+                 selection: Binding(get: { shareSafe == nil ? pane : .spaces }, set: { pane = $0 ?? .dashboard })) { item in
                 SidebarRow(pane: item, status: sidebarStatus(item), selected: item == pane).tag(item)
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 190)
@@ -127,7 +142,7 @@ struct MainWindow: View {
                     .padding(.vertical, 8)
             }
         } detail: {
-            switch pane {
+            switch shareSafe == nil ? pane : .spaces {
             case .dashboard:
                 DashboardView(monitor: monitor, prMonitor: prMonitor, restart: restart, docs: docs, safetyNet: safetyNet,
                               tasks: tasks, reviews: prs.reviews, sources: registeredSources,
@@ -136,6 +151,8 @@ struct MainWindow: View {
                 SystemView(model: system, logs: logs, restart: restart)
             case .memory:
                 MemoryView(search: search, sources: sources)
+            case .spaces:
+                SpacesView(model: spaces, enforcement: enforcement, navigator: navigator)
             case .docs:
                 DocsView(model: docs)
             case .sources:
@@ -274,7 +291,8 @@ struct MainWindow: View {
             async let f: Void = safetyNet.load()
             async let g: Void = claude.load()
             async let h: Void = config.load()
-            _ = await (a, b, c, d, e, f, g, h)
+            async let i: Void = spaces.load()
+            _ = await (a, b, c, d, e, f, g, h, i)
         }
     }
 
@@ -288,6 +306,8 @@ struct MainWindow: View {
         case .github:
             let n = prMonitor.needsYou.count
             return n > 0 ? .count(n, .accent, "\(n) need you") : .none
+        case .spaces:
+            return spaces.badge.sidebarStatus
         case .settings:
             return SettingsView.status(config: config, safetyNet: safetyNet, claude: claude)
         default:

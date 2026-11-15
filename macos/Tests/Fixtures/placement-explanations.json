@@ -3,7 +3,7 @@
     "path": "$CODE",
     "explanation": {
       "outcome": "quarantined",
-      "reason": "it is local content under a public root, which is never proof it is public; the operator can retag it",
+      "reason": "no public_paths pattern of public space oss matches it, and local content under a public root is public only through public_paths or an operator retag",
       "roots": [
         {
           "kind": "public",
@@ -22,7 +22,7 @@
     "path": "$CODE/tools",
     "explanation": {
       "outcome": "quarantined",
-      "reason": "it is local content under a public root, which is never proof it is public; the operator can retag it",
+      "reason": "no public_paths pattern of public space oss matches it, and local content under a public root is public only through public_paths or an operator retag",
       "roots": [
         {
           "kind": "public",
@@ -216,7 +216,7 @@
     "path": "$CODE/lib",
     "explanation": {
       "outcome": "quarantined",
-      "reason": "it is local content under a public root, which is never proof it is public; the operator can retag it",
+      "reason": "no public_paths pattern of public space oss matches it, and local content under a public root is public only through public_paths or an operator retag",
       "remote": {
         "effect": "owner bound to oss (public)",
         "kind": "public",
@@ -243,7 +243,7 @@
     "path": "$CODE/secret",
     "explanation": {
       "outcome": "quarantined",
-      "reason": "it is local content under a public root, which is never proof it is public; the operator can retag it",
+      "reason": "no public_paths pattern of public space oss matches it, and local content under a public root is public only through public_paths or an operator retag",
       "remote": {
         "effect": "owner bound to oss, but the repo is not verified public",
         "kind": "public",
@@ -269,7 +269,7 @@
     "path": "$CODE/moved",
     "explanation": {
       "outcome": "quarantined",
-      "reason": "it is local content under a public root, which is never proof it is public; the operator can retag it",
+      "reason": "no public_paths pattern of public space oss matches it, and local content under a public root is public only through public_paths or an operator retag",
       "remote": {
         "effect": "owner bound to acme (isolated)",
         "kind": "isolated",

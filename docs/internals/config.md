@@ -357,10 +357,40 @@ symlinks); a `gh_config_dir` that is not absolute, is inside a git working tree 
 token in it) or is shared by two spaces (one profile is one account); a `claude_config_dir`
 with the same faults (it holds a Claude Code login and transcripts); a policy over the size
 limits; and a
-`public_root_sessions` that is not a private or isolated space. Roots, terms files and
+`public_root_sessions` that is not a private or isolated space; and a bad `public_paths` entry
+(below). Roots, terms files and
 `gh_config_dir` and `claude_config_dir` may start with `~` and must otherwise be absolute. Roots are compared case-insensitively, since macOS
 volumes usually are. With `public_root_sessions` unset, session content from under a public root
 goes to the only private space when there is exactly one, else to quarantine.
+
+**Public paths** (`public_paths`, SP-076, D-65; `Resolved.PublicPathFor`). A public space lists
+the local folders under its roots whose content may be public; all other local content under a
+public root is quarantined ([memory.md](memory.md#placement)). Nothing on disk, such as a `.git`,
+counts as a declaration. An entry may start with `~` and must otherwise be absolute, and is
+matched case-insensitively against the folder a file is in. Three forms only:
+
+- an exact folder, `~/code/x`: the files directly in it, not those in its subfolders;
+- `*` within one folder name, `~/code/*/docs` or `~/code/oss-*`: one folder name (Go's
+  `path.Match`);
+- `**` as a whole folder name, any depth including none: `~/code/x/**` is everything under
+  `~/code/x`, and `~/code/**/docs` every `docs` folder below `~/code`.
+
+There is no `!` negation and no other glob or gitignore syntax: an entry with `!`, `?`, `[`,
+`]`, `{`, `}` or `\`, with `**` inside a longer name, or that is not a clean path (`.`, `..`,
+`//`, a trailing `/`) is refused (`bad_public_path`), as is `public_paths` on a space that is not
+public. The deepest root holding the folder an entry's literal names lead to (before any
+wildcard) must be one of the space's own roots (`public_path_outside_root`): an entry may not sit
+outside them, above them, or inside a deeper root of another space, which decides first. A
+private or isolated root nested inside a `**` pattern keeps its own space. Entries are checked
+when a draft is saved and at apply, and an apply that fails leaves the applied policy enforced.
+These problems name the space and the entry's position, never the entry, so an error cannot echo
+a term a folder name holds. `orch spaces why <path>` (alias `explain`) shows the rule:
+`public_path` and, to the operator only, the pattern that matched; or `no_public_proof` saying no
+pattern matched. A folder is explained for the files directly in it. `orch spaces diff` shows
+entries added and removed. The app does not edit `public_paths` yet (SP-053). A listed folder
+is trusted as written: any session can write files into it, or create a new folder a `*` or `**`
+pattern matches, and the sources refresh indexes them into public (accepted risk RC-404), so list
+only folders whose contents you would publish.
 
 **Terms files** (`terms_file`, spaces SP-044): one term per line, a literal term or
 `re:<regex>` (Go RE2 syntax). Matching is case-insensitive and on word boundaries (a term is not

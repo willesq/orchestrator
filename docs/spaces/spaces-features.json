@@ -606,6 +606,11 @@
         "id": "D-72",
         "decision": "The repository has been public since 2026-11-14. Private strings already pushed (this Mac's home path, temporary-folder paths with session ids) are replaced with placeholders such as '<main checkout>' and '<scratch>' in new commits, on main's plan file and on open branches; git history is not rewritten.",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-73",
+        "decision": "Sessions can write files into folders listed in a public space's public_paths, or create new folders that a '*' or '**' pattern matches, and the sources refresh indexes that content into public. The user accepts this as an extension of RC-404's accepted risk (SP-076). Later, SP-046's per-checkout sandbox rules will also deny job sessions writes to listed folders (RC-805) (was RC-801).",
+        "date": "2026-11-14"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -3018,7 +3023,7 @@
           "SP-076"
         ],
         "status": "open",
-        "note": "Updated 2026-11-14 under D-65: does not apply until SP-076, since nothing can be declared public now. Review again when public_paths lets the operator list folders: a session can write into a listed folder."
+        "note": "Updated 2026-11-14 under D-65: does not apply until SP-076, since nothing can be declared public now. Review again when public_paths lets the operator list folders: a session can write into a listed folder. Updated 2026-11-14 under D-73: public_paths (SP-076) now lets the operator list folders, so a session can write into a listed folder, or create a folder a '*' or '**' pattern matches, and have it indexed into public; the user accepted this as an extension of this risk. Sandbox mitigation tracked in RC-805."
       },
       {
         "id": "RC-405",
@@ -3214,6 +3219,154 @@
         "raised": "2026-11-14",
         "affects": [
           "SP-027"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-500",
+        "kind": "follow-up",
+        "topic": "Screen-share-safe mode does not cover the menu bar panel",
+        "detail": "SP-051's screen-share-safe mode (D-21) hides every pane but Spaces in the main window, disables the command palette and stops notifications, but the menu bar panel (TrayMenu.swift, outside SP-051's files) still lists every space's PRs and needs-you items when opened. Proposed: while SpacesOverviewModel.shareSafe is set, the panel shows only the enforcement banner and a 'Sharing only <space>' line, or filters PRs by owner using ListSpaces' github_orgs.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-055"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-501",
+        "kind": "follow-up",
+        "topic": "Counts the Overview cannot show yet",
+        "detail": "The Spaces pane shows no chunk counts per space (needs a collection per space, SP-024), counts quarantine as live sessions pinned to quarantine plus unconfirmed GitHub orgs rather than quarantined chunks (SP-028), and never shows relabel progress (SP-027): no RPC reports them. SpacesOverviewModel takes a relabel source and SpacesBadge already orders relabel last. Adding them needs fields in ListSpaces or SpacesStatus, an orchd.proto change for the coordinator to schedule.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-024",
+          "SP-027",
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-502",
+        "kind": "decision",
+        "topic": "How the app tells a conflict from other quarantine",
+        "detail": "SessionInfo has no placement outcome: a session in a conflict and one under no root are both pinned to 'quarantine'. The app asks ExplainPlacement about each live quarantined session's first folder (at most 20 per refresh) and counts 'conflict' answers as conflicts. That reflects the policy applied now, not the one at pin time. Options: (a) keep this; (b) add the pin's placement outcome to SessionInfo (orchd.proto change). Recommendation: (b) when the next proto change is scheduled.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-017"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-503",
+        "kind": "decision",
+        "topic": "What screen-share-safe mode hides beyond the Spaces pane",
+        "detail": "SP-051.1 a3 is tested on the Spaces pane's view models (SpacesOverviewModel and SpacesOverview hold only the chosen space; other spaces' data is dropped before it is stored). For the rest of the app, the window shows only the Spaces pane, the palette is off and notifications are not posted, but the other panes' models (PRs, tasks, docs, memory) keep loading every space's data in memory, undrawn. Options: (a) accept this reading; (b) also pause or clear those models while sharing. Recommendation: (a).",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-504",
+        "kind": "decision",
+        "topic": "'Not set up' dot on the Spaces row",
+        "detail": "As the design says, with no spaces policy applied the Spaces sidebar row shows a grey dot labelled 'Not set up'. Every install that does not use spaces sees it permanently. Options: (a) keep it; (b) show nothing until a draft exists. Recommendation: (a) until the setup wizard (SP-052) ships, then revisit.",
+        "source": "https://github.com/willesq/orchestrator/pull/181",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-051",
+          "SP-052"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-800",
+        "kind": "follow-up",
+        "topic": "orch spaces explain is an alias of why; the matched pattern travels in the reason text",
+        "detail": "SP-076.1.a4 names 'orch spaces explain <path>'; the existing command is 'orch spaces why' (SP-022), so SP-076 adds 'explain' as an alias rather than a second command. PlacementExplanation has no field for the matched public_paths pattern and SP-076 may not change orchd.proto, so orchd appends it to the reason for the operator only (rule public_path), and the no_public_proof reason says no pattern matched. SpaceInfo (ListSpaces, the app) does not carry public_paths either. When the proto slot is free: add a public_path field to PlacementExplanation and public_paths to SpaceInfo, for SP-053's editor.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-053",
+          "SP-022"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-801",
+        "kind": "decision",
+        "topic": "RC-404 is live again: sessions can publish by writing into a listed folder, and wildcards let them create matching folders",
+        "detail": "Security audit of SP-076 (medium M2, design under D-65). A folder a public_paths pattern lists is trusted as written: any job's session can write files there and register it as a source, and the sources refresh places them in public; a listed folder with no .git needs no other proof. With '*' or '**' a session can also create a new folder the pattern matches (e.g. ~/code/new/docs under ~/code/*/docs). This is the risk the user accepted as RC-404 for declared folders, which said to review it when public_paths exists. Documented in docs/internals/config.md. The independent verifier adds: the sources walk follows a .md symlink to any file inside the walked folder, so a link in an exact listed folder can index a file from an unlisted subfolder under the link's path, again only by someone who can write into the listed folder. Possible mitigations: require a GitHub repo verified public (and only git-tracked files) for wildcard matches; accept only operator-registered sources under public_paths; SP-046 sandbox rules denying job sessions writes to listed folders; warn in 'orch spaces diff' when a pattern holds '*' or '**'. Recommendation: keep as accepted risk now, and have SP-046 deny job-session writes to listed folders.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-046",
+          "SP-030"
+        ],
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14 with option (a): see D-73. Accepted as RC-404's accepted risk extended; the sandbox follow-up is RC-805."
+      },
+      {
+        "id": "RC-802",
+        "kind": "decision",
+        "topic": "'*' may sit inside a folder name (oss-*)",
+        "detail": "D-65 says '*' matches one folder name. SP-076 matches each '*'-holding folder name with Go's path.Match, so '~/code/*' and '~/code/oss-*' both work, and '*' never crosses a '/'. '?', '[...]', '{...}', '\\', '!' and '**' inside a longer name are refused. If only a whole-name '*' is wanted, the parser can refuse 'oss-*' in one line.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-803",
+        "kind": "follow-up",
+        "topic": "Limits of keeping a listed folder public while GitHub does not answer (RC-402 item 6)",
+        "detail": "SP-076 implements RC-402(6): a lookup that gets no answer (outage, throttle, spent 30/min budget) does not take a listed folder's stored public copy out, for 6 hours after GitHub last said the repo is public. Security audit M1: any caller can spend the shared budget (ExplainPlacement), so the grace is bounded rather than open-ended; within it a repo that went private keeps its earlier public copy. Limits: the grace is in memory, so after an orchd restart an unanswered repo leaves (fails closed, re-embeds later); a changed file written during an outage goes to quarantine and its public copy moves with it (SP-024's write path). Possible improvement: a lookup budget for the sweep and refresh that RPC callers cannot spend, or cache-only lookups for agent ExplainPlacement.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-030",
+          "SP-024"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-804",
+        "kind": "follow-up",
+        "topic": "Low findings of the SP-076 security audit",
+        "detail": "(1) Paths, roots and patterns compare by Go's strings.ToLower text, not as APFS compares names (Unicode NFC/NFD, full case folding): a source registered under another spelling of a private root's folder could miss that root and, under a '~/code/**' pattern, be placed public. The text comparison predates SP-076 but SP-076 makes it reachable; a fix needs Unicode normalization (golang.org/x/text, a new dependency) or an os.SameFile check against stricter roots. Not tested on disk. (2) An agent's ExplainPlacement answers only for public_path matches, so it can confirm a guessed folder name in a literal pattern even though the pattern is never shown; mitigations: refuse non-existent paths for agents, or rate-limit per caller. (3) Patterns are case-insensitive, so on a case-sensitive volume '~/code/oss' also matches a session-created '~/code/OSS'.",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-076",
+          "SP-020",
+          "SP-022"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-805",
+        "kind": "follow-up",
+        "topic": "Sandbox rules should deny job sessions writes to public_paths folders",
+        "detail": "D-73 accepts that sessions can write into folders public_paths lists (or create folders a '*' or '**' pattern matches) and have them indexed into public. The planned mitigation: SP-046's per-checkout sandbox rules deny writes to every folder a public_paths pattern matches, and to the folders a '*' or '**' pattern could create, for the sessions of job (isolated) spaces. Patterns with wildcards need a rule form the sandbox can express (e.g. denying the pattern's literal prefix, or each existing matching folder refreshed on apply).",
+        "source": "https://github.com/willesq/orchestrator/pull/189",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-046",
+          "SP-076"
         ],
         "status": "open"
       },
@@ -6743,18 +6896,25 @@
               "threshold": "0"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: confirmed by user on 2026-11-14 after reviewing the six spaces-pane snapshots (default, companion, share-safe; light and dark) (D-70). light and dark snapshots of the Spaces pane rendered at fd21259 with `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter SpacesPaneSnapshots` (offscreen, sample data, no orchd) at the default pane width (790 pt, the detail column of the 980 pt window) and at the 320 pt companion width: <scratch>/sp051-shots/spaces-pane-default-light.png, <scratch>/sp051-shots/spaces-pane-default-dark.png, <scratch>/sp051-shots/spaces-pane-companion-light.png, <scratch>/sp051-shots/spaces-pane-companion-dark.png; plus screen-share-safe mode: <scratch>/sp051-shots/spaces-pane-share-safe-light.png, <scratch>/sp051-shots/spaces-pane-share-safe-dark.png. At 320 pt the AdaptiveSplit stacks spaces and sessions behind a Spaces/Sessions picker and the header wraps; nothing was seen clipped in the agent's own look.",
+            "a2: SpacesBadgeTests.badgeFollowsConflictsQuarantineDriftRelabel passes at fd21259: SpacesBadge.pick over all 16 combinations of conflicts, quarantine, drift and relabel picks the first present in that order (plus finished/empty relabel = none, 'Not set up' with no policy, a draft outranking it). SpacesBadgeTests.overviewBadgeFromData builds the badge from orchd-shaped data (sessions pinned to quarantine split by ExplainPlacement's conflict answer, unconfirmed GitHub orgs, drift, relabel) and gets the same order. The sidebar row maps it with SpacesBadge.sidebarStatus (MainWindow).",
+            "a3: SpacesOverviewTests.screenShareSafeModeHoldsNothingOfAnotherSpace passes at fd21259: a fixture of four spaces (acme, globex, personal, opensrc) with sessions, a conflict, quarantine, an unconfirmed org, drift, relabel progress and per-space counts, each name, path, org and count of a space other than acme distinct; in Advanced mode the model shows them all (checked), then after shareOnly(\"acme\") a dump of everything the model exposes (overview, space choices, badge and its label, lastError, shareSafe) contains 0 of 33 needles (other spaces' names, orgs, folders, session IDs, PIDs and counts), acme's own card and two sessions remain, and a reload in safe mode asks ExplainPlacement nothing. Related: screenShareSafeSurvivesARelaunchAndAFailedRead (mode kept across relaunch; a failed read leaves only acme and shows a fixed message), screenShareSafeFiltersOnOrchdNames (filtering uses orchd's names, not display-safe ones). The pane shows no PR titles; app-wide, safe mode shows only the Spaces pane in the window and companion column, turns off the palette and notifications (allowsNotifications); the menu bar panel is not covered (RC-500) and other panes' models keep data undrawn (RC-503).",
+            "DOD at fd21259 (self-check, before the independent verifier): swift test --package-path macos: 428 tests in 87 suites pass; make app-cover exit 0 (SpacesOverview.swift 98.75%, SpacesOverviewModel.swift 99.21%, DaemonClient+SpacesOverview.swift 100%); no Go files changed (gofmt n/a); go vet ./... exit 0; go test ./...: all packages pass except one run of internal/agentrun TestRunMeasuresFailedRuns (timing: 196 ms vs a 200 ms timeout; package untouched, passes 3 of 3 on rerun); git diff --check clean; security-audit subagent: 0 critical/high, 1 medium fixed (notifications posted while sharing; now suppressed via SpacesOverviewModel.allowsNotifications), 3 lows fixed (generic error while sharing, filtering on raw space names, session state through displaySafe); docs/internals/app.md updated.",
+            "DOD-9 (self-check): gh pr checks 181: app pass (8m48s) at b2972ab. The run at 8113355 failed in swift test under make app-cover; the likely cause, SpacesOverviewTests.pollsUntilStopped waiting a fixed 120 ms for two polls, now waits for the polls (passes 3 of 3 locally and in CI). No Go files changed, so only the app workflow runs.",
+            "Independent verifier (fresh subagent given only the diff origin/main...b2972ab, this feature's criteria, INV-02, INV-07 and definition_of_done) at b2972ab: a1 PASS (user-confirmed, D-70), a2 PASS, a3 PASS (0 of 34 other-space needles), DOD-1..DOD-9 PASS: swift test 428 tests pass (Spaces suites 5 more runs pass), make app-cover exit 0 (all 47 OrchKit files >= 80%), go test ./... exit 0 (55 packages), go vet exit 0, git diff --check clean, 5 signed Conventional Commits with no co-author lines, draft PR #181 in ~/.pr-watch.json, app.yml run 43639267665 success at b2972ab; INV-02 and INV-07 PASS. One low gap noted: the menu bar panel during a share (RC-500)."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "b2972abf56697e9a002bfaea39c74fd9069bcc42",
+      "verified_at": "2026-11-14T22:19:26Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "d333c497108cf22c6737d76f183dc518194e710e1181debafe67e5bf07ca670b",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-051-spaces-pane-overview",
+      "pr": "https://github.com/willesq/orchestrator/pull/181"
     },
     {
       "id": "SP-052",
@@ -7383,18 +7543,30 @@
               "threshold": "both"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: internal/spaces TestPublicPathPatterns (27-row table over exact folder, '*' whole and within a name, '**' at end, middle and repeated; case-insensitive), TestPublicPathForFolders, TestPublicPathRejectedSyntax ('!', '?', '[...]', '{...}', backslash, '**' inside a name, '***', trailing '/', '//', '.', '..', relative, '~user'; reasons never repeat the pattern; a '*' in the home folder's own name stays literal) pass at 456cc4a.",
+            "a2: internal/spaces TestValidatePublicPaths (outside every root, above its root, inside a private or isolated root, malformed, '!', glob class, relative, and public_paths on a private space are refused; messages name 'entry N', never the pattern holding a term), TestPublicPathsLimits, TestApplyRefusesBadPublicPaths (three bad revisions refused at apply, the applied policy's pattern still enforced, errors do not echo the term) pass at 456cc4a.",
+            "a3: internal/daemon TestPublicPathsDecideLocalContentUnderPublicRoot passes: with '<code>/oss/**' listed, a plain folder, a verified public checkout, a GitLab checkout and a folder an acme session registered as a source are refreshed into oss; a private repo, a remote naming acme, and an unlisted folder go to quarantine; a .git at, above and inside the public root and in each folder changes no placement (write and explanation); with '<code>/**' the private and isolated roots keep personal and acme; a hand-off in a listed folder goes to public_root_sessions. internal/spaces TestClassifyPublicPaths (rules public_path, not_verified_public, no_public_proof; nested public root decides first; retag still wins). TestListedFolderKeepsPublicCopyWithoutGitHubAnswer covers RC-402(6) with the 6-hour grace.",
+            "a4: internal/daemon TestExplainNamesThePublicPath passes: ExplainPlacement gives rule public_path with '(public_paths pattern \"...\")' for the operator, no_public_proof with 'no public_paths pattern of public space oss matches it' otherwise, folders explained for their direct files, and an agent sees the public answer without the pattern. internal/cli TestSpacesExplainNamesPublicPath runs 'orch spaces explain' (alias of why, RC-800) and prints both reasons.",
+            "a5: docs/internals/memory.md (write gate, 'Public needs proof' now says D-50's declaration is public_paths, RC-402 grace) and docs/internals/config.md ('Public paths' with the three forms, validation rules, explain and diff) changed in the diff; also docs/OPERATIONS.md and docs/internals/cli.md.",
+            "Validation at 456cc4a: go test ./... pass; go vet ./... clean; gofmt clean; make cover All files >= 80% (public_paths.go 100%, classify.go 98.8%, validate.go 98.9%, spaces_why.go 95.1%). App placement fixture regenerated for the new no_public_proof reason.",
+            "DOD-6: security audit of the diff: M1 (any caller could keep the unchecked grace open by spending the lookup budget) fixed with a 6-hour bound, re-audited Low (RC-803); L5 ('**' cost) fixed; M2 (sessions can write into a listed folder, wildcards let them create matching folders) is D-65's design and RC-404's accepted risk extended, recorded as RC-801 for the user's decision; lows in RC-804.",
+            "Independent verifier at 90b9b5f: a1-a5 PASS; DOD-1,2,3,4,5,7,8 PASS (daemon coverage checked directly: placing.go 93.1%, placement_rpc.go 97.3%, checkout_settings.go 88.2%); DOD-6 PASS apart from the recorded RC-801; DOD-9 was blocked by a plan conflict with main; INV-02, INV-03, INV-06, INV-07, INV-10, INV-14 OK; no home paths or IDs in the diff or commits. Its symlink note was added to RC-801.",
+            "After merging origin/main (51b7b25): go test ./... pass, go vet clean, make cover All files >= 80%; CI on PR #189: test (passed on rerun of an unrelated internal/memctx timing flake), build (ORT, macOS) and app pass.",
+            "DOD-6 now passes: the user settled RC-801 on 2026-11-14 with option (a), recorded as D-73 (accepted risk, RC-404 extended); the sandbox follow-up is RC-805. No critical, high or medium findings remain open.",
+            "After merging origin/main at 97fdc74 (#181, #187, #190): this feature's code files are unchanged since the verified 90b9b5f; the merge brought only the plan and other features' files (the one code file both touched, internal/daemon/checkout_settings.go, gained main's unrelated StateFile line). go test ./... pass, go vet clean, make cover All files >= 80% (internal/daemon checked directly too); CI on PR #189 at 97fdc74: test (passed on rerun of an unrelated internal/toollog concurrency flake), build (ORT, macOS) and app pass."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "97fdc74bb981619b0558ba1ce33eee5d99253cf0",
+      "verified_at": "2026-11-15T01:36:55Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "01ef9bae725c1b6ed0ccbd6b3194d8d30de872c6e7cceb59eb24d0db1046735b",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-076-public-paths",
+      "pr": "https://github.com/willesq/orchestrator/pull/189"
     },
     {
       "id": "SP-077",
@@ -7589,6 +7761,10 @@
     {
       "date": "2026-11-14",
       "change": "D-71: only Orch.app is the operator under a policy, unlock to come (new feature SP-077); D-72: private strings already pushed are replaced with placeholders."
+    },
+    {
+      "date": "2026-11-14",
+      "change": "SP-051 done: Spaces pane Overview, badge (conflicts > quarantine > drift > relabel), Basic/Advanced and screen-share-safe mode; a1 confirmed by the user (D-70); verified at b2972ab. RC-500 to RC-504 added."
     }
   ],
   "plan_location": {
