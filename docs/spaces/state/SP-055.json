@@ -1,12 +1,12 @@
 {
   "id": "SP-055",
-  "status": "todo",
+  "status": "in_progress",
   "passes": false,
   "verified_sha": null,
   "verified_at": null,
   "blocked_reason": null,
-  "attempts": 0,
-  "branch": null,
+  "attempts": 1,
+  "branch": "feat/sp-055-palette-cli-parity",
   "pr": null,
   "evidence": {
     "SP-055.1": []
