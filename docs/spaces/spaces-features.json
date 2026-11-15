@@ -7949,14 +7949,14 @@
           "evidence": []
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "c8e57b33d517a6ceaa90763c200296bda10486c6197b9f1877423620bb93b07f",
-      "branch": null,
+      "branch": "feat/sp-079-relabel-now",
       "pr": null
     }
   ],
