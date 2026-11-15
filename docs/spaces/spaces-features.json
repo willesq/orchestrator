@@ -5907,7 +5907,8 @@
             "a7 (as amended by D-71, 2026-11-14): TestOnlyOrchAppIsTheOperator: under a policy, Orch.app recognized by its code signature reads every collection; a command typed at a terminal, a process with a pty of its own (RC-705), a setsid double fork, a signed copy outside the installed folder, the app without the hardened runtime, running other code than its bundle's, with no code hash, installed in both folders, not installed, or in a build that cannot check signatures read public only. TestAppSignatureOfARealProcess checks real ad-hoc-signed processes over a socket: the hardened app in the installed folder passes; without the runtime, with another identifier, run from a copy, or re-signed on disk after starting it fails. TestOperatorOnlyRPCsNeedOrchApp and TestUnprovenOperatorGetsTaskLimits: SetEnforcement, DiffSpaces, ApplySpaces and every operatorActions RPC (unary and stream) are refused to those callers and allowed to Orch.app; with no policy a terminal is the operator as before.",
             "a6: TestDetachedHarnessReadsNoMore: the SP-041 guard (spaces.Decide, block-other-jobs) refuses 'cd <globex>/repo && nohup claude ... &' and '(cd <globex>/repo; setsid claude &)' from a session in acme; a fake claude detached under launchd in globex's folder gets no pin and reads public only; a claude nested in the session copies acme's pin and reads acme's set only. Residual D-38 cases are RC-702.",
             "a8: TestTasksReadTheirDispatchersSpaces: Dispatch records the dispatching session's space (acme, globex), the operator's working-directory placement (acme, personal; quarantine with no directory), and nothing for an operator with no evidence or an unpinned harness; the space reaches the runner (agentTask) and a task reads what that space reads (acme's task reads personal, never globex), writes there (placed in acme), and an untracked task or one with no space reads public only. Also TestDispatchRecordsReadSpace (internal/queue).",
-            "Also: TestStaleLabelsAreUnreadable (INV-08: chunks with an earlier, later or missing labels_v are unreadable on every read path until relabelled; the operator still sees them), TestNoPolicyReadsAsBefore (INV-10), TestPayloadLayerAndFailures (second layer; store errors without collection names), TestReadScopeFailsClosed (broken policy reads nothing). go test ./..., go vet ./... and make cover (all files >= 80%) pass."
+            "Also: TestStaleLabelsAreUnreadable (INV-08: chunks with an earlier, later or missing labels_v are unreadable on every read path until relabelled; the operator still sees them), TestNoPolicyReadsAsBefore (INV-10), TestPayloadLayerAndFailures (second layer; store errors without collection names), TestReadScopeFailsClosed (broken policy reads nothing). go test ./..., go vet ./... and make cover (all files >= 80%) pass.",
+            "Independent verifier, 2026-11-14, at 2719d51: a1 to a8 and SP-025.2 a1 pass, including the real-engine run (0 cross-space results, 106 s); four deliberate breakages each failed the matching tests; go test, go vet, make cover (59 daemon files listed), gofmt pass; INV-10 holds."
           ]
         },
         {
@@ -5927,11 +5928,11 @@
           ]
         }
       ],
-      "status": "in_progress",
+      "status": "blocked",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": null,
+      "blocked_reason": "Independent verifier at 2719d51: every acceptance item and DOD-1 to DOD-5, DOD-7 and DOD-8 pass; INV-10 holds. DOD-6 is not met on a strict reading: RC-710 (medium, pre-existing code outside this diff) stays open because it needs a user decision on which task-refused RPCs (SetConfig with Sensitive keys, harness settings, Restart, PR landing) interactive sessions may still call under a policy. DOD-9 waits for CI on the merged head.",
       "attempts": 1,
       "criteria_sha256": "b1af57cfe7ce23368c77882ead3d99ad6081ed3e2eb32334e37edc4dccd2ca93",
       "branch": "feat/sp-025-read-path-spaces",
