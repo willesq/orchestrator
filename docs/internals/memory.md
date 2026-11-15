@@ -832,8 +832,7 @@ migrations, keyword re-indexes and relabels). Under the source's lock it refuses
 - without `confirm`, a move into a public space, out of an isolated space, or out of quarantine or
   the unplaced base into a space (content of unknown origin may be another job's);
 - with `expect_from`, a source not stored in that space now (any other holder but the target
-  refuses too), so a caller such as `orch quarantine assign` gets an atomic answer.
-
+  refuses too), so a caller such as `orch quarantine assign` gets an atomic answer;
 - a policy revision applied since the request was read.
 
 It then records the retag in orch.db (`spaces_retags`, migration 0031) as `moving`, with whether
