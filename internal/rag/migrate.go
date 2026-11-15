@@ -447,6 +447,17 @@ type sourceRead struct {
 // once the text passes maxSourceBytes, so an enormous source is reported
 // rather than held.
 func (s *Service) readSource(ctx context.Context, st *QdrantStore, uri string) (sourceRead, error) {
+	return s.readSourceWhere(ctx, st, uri, map[string]string{"source_uri": uri})
+}
+
+// readSourceWhere is readSource over the chunks matching must, which names
+// uri and, for a read by space, the space (SP-025).
+func (s *Service) readSourceWhere(ctx context.Context, st *QdrantStore, uri string, must map[string]string) (sourceRead, error) {
+	if uri == "" {
+		// Reason: an empty value drops out of a filter, which would then
+		// match every chunk.
+		return sourceRead{}, nil
+	}
 	fields := []string{"text", "source_uri", "source_type", "scope", "tags", "chunk_index", fieldStartedAt, fieldEndedAt,
 		fieldWriter, fieldContentHash, fieldOrigin, fieldSpace, fieldLabelsV}
 	sr := sourceRead{meta: Meta{SourceURI: uri}}
@@ -454,7 +465,7 @@ func (s *Service) readSource(ctx context.Context, st *QdrantStore, uri string) (
 	var offset any
 	size := 0
 	for page := 0; page < maxScrollPages; page++ {
-		pts, next, err := st.Scroll(ctx, EqFilter("source_uri", uri), fields, 1000, offset)
+		pts, next, err := st.Scroll(ctx, buildFilter(must, nil, nil, TimeRange{}), fields, 1000, offset)
 		if err != nil {
 			return sr, err
 		}

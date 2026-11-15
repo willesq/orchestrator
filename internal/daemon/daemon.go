@@ -283,7 +283,12 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 	if err != nil {
 		return nil, err
 	}
+	// The caller's spaces choose what is searched; the request's filters
+	// only narrow within them (SP-025, INV-02).
+	scope := s.readScope(ctx, orchdv1.Orchd_Search_FullMethodName)
 	hits, fallback, err := s.rag.Search(ctx, req.GetQuery(), rag.SearchOpts{
+		Spaces:     scope.spaces,
+		LabelsV:    scope.labelsV,
 		PerSource:  int(req.GetPerSource()),
 		Ranking:    req.GetRanking(),
 		TopK:       int(req.GetTopK()),
@@ -296,10 +301,16 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 		Range:      tr,
 	})
 	if errors.Is(err, rag.ErrHybridUnavailable) {
+		if scope.filtered() {
+			// Reason: the detail names a collection, and a collection's name
+			// holds its space's (RC-350).
+			log.Printf("orchd: Search: %v", err)
+			return nil, grpcstatus.Error(codes.FailedPrecondition, rag.ErrHybridUnavailable.Error()+" (see orchd log)")
+		}
 		return nil, grpcstatus.Error(codes.FailedPrecondition, err.Error())
 	}
 	if err != nil {
-		return nil, err
+		return nil, scope.storeError("Search", err)
 	}
 	out := &orchdv1.SearchResponse{Hits: make([]*orchdv1.SearchHit, 0, len(hits)), Fallback: fallback}
 	for _, h := range hits {
@@ -327,7 +338,10 @@ func (s *server) ListSources(ctx context.Context, req *orchdv1.ListSourcesReques
 	if err != nil {
 		return nil, err
 	}
+	scope := s.readScope(ctx, orchdv1.Orchd_ListSources_FullMethodName)
 	sources, distinct, chunks, err := s.rag.ListSources(ctx, rag.ListSourcesOpts{
+		Spaces:     scope.spaces,
+		LabelsV:    scope.labelsV,
 		SourceType: req.GetSourceType(),
 		Scope:      req.GetScope(),
 		URIPrefix:  req.GetUriPrefix(),
@@ -335,7 +349,7 @@ func (s *server) ListSources(ctx context.Context, req *orchdv1.ListSourcesReques
 		Range:      tr,
 	})
 	if err != nil {
-		return nil, err
+		return nil, scope.storeError("ListSources", err)
 	}
 	out := &orchdv1.ListSourcesResponse{
 		Sources:      make([]*orchdv1.SourceSummary, 0, len(sources)),
@@ -493,7 +507,8 @@ func (s *server) Dispatch(ctx context.Context, req *orchdv1.DispatchRequest) (*o
 	if err != nil {
 		return nil, err
 	}
-	id, err := s.disp.Dispatch(ctx, agent, req.GetBody(), req.GetCwd(), rt)
+	// The task reads the memory of the space recorded now (D-46).
+	id, err := s.disp.Dispatch(queue.WithReadSpace(ctx, s.dispatchSpace(ctx, req.GetCwd())), agent, req.GetBody(), req.GetCwd(), rt)
 	if errors.Is(err, queue.ErrQueueFull) {
 		return nil, grpcstatus.Error(codes.ResourceExhausted, err.Error())
 	}
@@ -631,7 +646,7 @@ func Run(ctx context.Context) error {
 	// Reason: from here a failure is most often a setting (a model folder, a
 	// port, a storage path), and settings can only be changed through orchd.
 	// Exiting would leave nothing to fix them with, so orchd serves them alone.
-	recovery := func(err error) error { return serveRecovery(ctx, cfg, err) }
+	recovery := func(err error) error { return serveRecovery(ctx, cfg, err, policyApplied(sp)) }
 
 	// Resolve the qdrant API key once (persisted, generated on first run) so the
 	// engine and the client share it independent of any ambient env var.
@@ -754,7 +769,7 @@ func Run(ctx context.Context) error {
 		tlog.policy = logPolicy(s.Sessions.CommandLog)
 		tlog.taskStatus = tasks.Status
 	}
-	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf})
+	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf, needsEvidence: policyApplied(sp)})
 	srv = &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks, ctl: ctl, live: live, home: userHome(), hub: hub,
 		stopping:      runCtx.Done(),

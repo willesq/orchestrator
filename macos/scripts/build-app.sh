@@ -3,8 +3,8 @@
 #
 #   VERSION        bundle version, X.Y.Z (default 0.0.0)
 #   SIGN_IDENTITY  codesign identity; a Developer ID Application identity gets
-#                  the hardened runtime and a secure timestamp, as notarization
-#                  requires. Default "-" (ad-hoc), for local builds.
+#                  a secure timestamp, as notarization requires. Default "-"
+#                  (ad-hoc), for local builds. Both get the hardened runtime.
 #   OUT_DIR        where Orch.app lands (default <repo>/build/app.noindex: the
 #                  .noindex suffix keeps Spotlight, and so "open Orch", from
 #                  finding dev builds instead of the installed app)
@@ -45,7 +45,10 @@ cp "$pkg/Resources/Brand/glyph.svg" "$app/Contents/Resources/MenuBarGlyph.svg"
 plutil -lint "$app/Contents/Info.plist" >/dev/null
 
 if [ "$identity" = "-" ]; then
-  codesign --force --sign - "$app"
+  # The hardened runtime even for ad-hoc builds: orchd recognizes Orch.app by
+  # its signature only with it, since without it a library injected through
+  # DYLD_* variables would run as the app (D-71).
+  codesign --force --options runtime --sign - "$app"
 else
   codesign --force --options runtime --timestamp --sign "$identity" "$app"
 fi

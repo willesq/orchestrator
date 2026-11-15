@@ -72,6 +72,9 @@ type SearchOpts struct {
 	// sets each caller's readable spaces. An empty, non-nil list searches
 	// nothing.
 	Spaces []string
+	// LabelsV, when set, reads in each named space only chunks labelled
+	// under that policy revision (INV-08); 0 reads every chunk.
+	LabelsV int64
 }
 
 // ErrHybridUnavailable means a search asked explicitly for hybrid mode could
@@ -114,6 +117,7 @@ func (s *Service) Search(ctx context.Context, query string, opts SearchOpts) ([]
 	if err != nil {
 		return nil, "", err
 	}
+	targets = withLabels(targets, opts.LabelsV)
 	if len(targets) == 0 {
 		// No space is readable: nothing to search, and nothing to embed.
 		return nil, "", nil

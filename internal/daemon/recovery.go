@@ -53,7 +53,8 @@ func newGRPCServer(res *callerResolver) *grpc.Server {
 		unary, stream = append(unary, res.unary), append(stream, res.stream)
 	}
 	return grpc.NewServer(
-		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent, program: procstat.ReadProgram, started: procstat.StartTime}),
+		grpc.Creds(peerCredentials{self: os.Getpid(), parent: procstat.Parent, program: procstat.ReadProgram, started: procstat.StartTime,
+			app: newAppVerifier(userHome())}),
 		// Reason: gRPC keeps each reply until its client reads it, so a
 		// client that sends calls and never reads would make orchd hold
 		// every reply. orch's clients use a few streams per connection.
@@ -97,7 +98,10 @@ var recoveryRetry = 10 * time.Minute
 // from starting, so Orch.app can change the setting at fault. Restarting orchd
 // (the app's restart, or the Restart RPC, which exits for the service manager
 // to start it again) tries the full start with the new settings.
-func serveRecovery(ctx context.Context, cfg *configService, cause error) error {
+//
+// needsEvidence says whether a spaces policy is applied, so that, as on the
+// full server, only Orch.app is the operator then (D-71); nil never needs it.
+func serveRecovery(ctx context.Context, cfg *configService, cause error, needsEvidence func() bool) error {
 	log.Printf("orchd %s could not start its services: %v — serving settings only, so they can be fixed in Orch.app", version.Version, cause)
 	cfg.startupError = cause.Error()
 	lis, closeSocket, err := listenSocket()
@@ -107,7 +111,11 @@ func serveRecovery(ctx context.Context, cfg *configService, cause error) error {
 	defer closeSocket()
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
-	gs := newGRPCServer(nil)
+	var res *callerResolver
+	if needsEvidence != nil {
+		res = &callerResolver{needsEvidence: needsEvidence}
+	}
+	gs := newGRPCServer(res)
 	orchdv1.RegisterOrchdServer(gs, &recoveryServer{config: cfg, start: time.Now(), restart: stop})
 	retry := time.AfterFunc(recoveryRetry, func() {
 		log.Printf("orchd: exiting to try the full start again")

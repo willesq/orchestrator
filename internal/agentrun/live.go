@@ -23,6 +23,8 @@ type LiveRun struct {
 	Model     string
 	SessionID string
 	Dir       string
+	// Space is the space whose memory the task reads (Task.Space).
+	Space string
 	// PID is the agent CLI's process, 0 until it has started; ProcStarted
 	// is when the kernel says that process started, zero when unread.
 	PID         int

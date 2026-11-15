@@ -237,7 +237,7 @@ func TestRecoveryExitsToRetry(t *testing.T) {
 	recoveryRetry = 50 * time.Millisecond
 	t.Cleanup(func() { recoveryRetry = orig })
 	done := make(chan error, 1)
-	go func() { done <- serveRecovery(context.Background(), svc, errors.New("no network")) }()
+	go func() { done <- serveRecovery(context.Background(), svc, errors.New("no network"), nil) }()
 	select {
 	case err := <-done:
 		if err != nil {
