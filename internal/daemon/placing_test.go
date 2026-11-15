@@ -554,7 +554,7 @@ func TestClientCannotReplaceAnotherSpacesSource(t *testing.T) {
 	e.placedAs(t, "manual://plan", "acme", rag.OriginClient)
 	// A placer that fails refuses rather than replaces.
 	broken := &server{rag: e.svc}
-	if err := broken.mayReplace(ctx, rag.Origin{System: "bogus"}, "acme"); grpcstatus.Code(err) != codes.FailedPrecondition {
+	if err := broken.mayReplace(ctx, "manual://plan", rag.Origin{System: "bogus"}, "acme"); grpcstatus.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("mayReplace = %v", err)
 	}
 }

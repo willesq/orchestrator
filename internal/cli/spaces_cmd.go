@@ -40,6 +40,9 @@ operator applied.
   orch spaces terms rules [list|enable|disable|add|remove]
                                      list or change the outbound terms
                                      check's rules (changing is operator only)
+  orch spaces retag <source_uri> <space> [--confirm]
+                                     move a source's content to another
+                                     space and keep it there (operator only)
   orch spaces replay <session> [--policy <rev|file>]
                                      decide recorded tool calls again and list
                                      the verdicts that change (operator only)
@@ -50,7 +53,7 @@ agent session may save a draft; applying one needs --accept-agent-draft.`,
 	}
 	cmd.AddCommand(newSpacesDraftCmd(cf), newSpacesDiffCmd(cf), newSpacesApplyCmd(cf), newSpacesWhyCmd(cf),
 		newSpacesLogCmd(cf), newSpacesEnforceCmd(cf), newSpacesSandboxCmd(cf), newSpacesReplayCmd(cf),
-		newSpacesTermsCmd(cf))
+		newSpacesTermsCmd(cf), newSpacesRetagCmd(cf))
 	return cmd
 }
 

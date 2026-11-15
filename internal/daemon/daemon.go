@@ -219,7 +219,7 @@ func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchd
 				"%s is kept by the %s sync; store the note under another source_uri", req.GetSourceUri(), cp.Writer)
 		}
 		if err == nil && found && cp.Space != "" {
-			if err := s.mayReplace(ctx, origin, cp.Space); err != nil {
+			if err := s.mayReplace(ctx, req.GetSourceUri(), origin, cp.Space); err != nil {
 				return nil, err
 			}
 		}
@@ -819,6 +819,7 @@ func Run(ctx context.Context) error {
 	}
 	go srv.runCheckoutSettings(runCtx, checkoutSettingsEvery)
 	go srv.runTaskAnchors(runCtx)
+	go srv.resumeRetags(runCtx, resumeRetagsDelay)
 	orchdv1.RegisterOrchdServer(gs, srv)
 	go func() {
 		<-runCtx.Done()

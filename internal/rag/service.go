@@ -124,6 +124,10 @@ type Service struct {
 	searchIndexed atomic.Bool
 
 	fallbackLog rateLog
+	// retagMu guards retagGens, how many retags each source has had (in
+	// this process), so a write placed before a retag is not stored after it.
+	retagMu   sync.Mutex
+	retagGens map[string]uint64
 	// progress is set while a migration copies sources.
 	progress atomic.Pointer[MigrationProgress]
 	// chunkTokens and overlap size chunks in model tokens.
@@ -279,6 +283,7 @@ func (s *Service) split(text string) []chunk {
 // placed elsewhere before) is deleted first; if that fails nothing is
 // written, and the next write tries again.
 func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, error) {
+	gen := s.retagGeneration(m.SourceURI)
 	if err := s.place(ctx, &m); err != nil {
 		return 0, err
 	}
@@ -295,6 +300,12 @@ func (s *Service) IngestText(ctx context.Context, text string, m Meta) (int, err
 		return 0, err
 	}
 	defer s.lockSource(m.SourceURI)()
+	if s.retagGeneration(m.SourceURI) != gen {
+		// Reason: it was placed before a retag of the source finished, so
+		// storing it would move the source back where the retag took it
+		// from (SP-071).
+		return 0, ErrRetaggedMidWrite
+	}
 	if err := s.removeElsewhere(ctx, m); err != nil {
 		return 0, err
 	}

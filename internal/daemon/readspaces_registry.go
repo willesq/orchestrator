@@ -53,6 +53,7 @@ var readSpaceDecisions = map[string]spaceDecision{
 	orchdv1.Orchd_SetSandboxSetting_FullMethodName:  {spaceOperator, "changes the sandbox setting"},
 	orchdv1.Orchd_ChangeOutboundRule_FullMethodName: {spaceOperator, "changes an outbound rule"},
 	orchdv1.Orchd_Relabel_FullMethodName:            {spaceOperator, "relabels the RAG store; its report counts chunks per space"},
+	orchdv1.Orchd_RetagSource_FullMethodName:        {spaceOperator, "moves a source between spaces; its answer names the space that held it"},
 
 	orchdv1.Orchd_ListToolEvents_FullMethodName:    {spaceOwn, "the caller's own command log; the operator's is everyone's (INV-12)"},
 	orchdv1.Orchd_ExplainPlacement_FullMethodName:  {spaceOwn, "answers agents only about public placements"},
