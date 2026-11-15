@@ -244,6 +244,11 @@ func (c *connCaller) keepTask(run agentrun.LiveRun) *agentrun.LiveRun {
 // unary attaches the resolved caller to each unary call's context.
 func (r *callerResolver) unary(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	c := r.resolve(ctx)
+	// Reason: refuseSettings logs every refusal it makes, so it runs
+	// before refuseUnproven, whose log line is rate-limited.
+	if err := r.refuseSettings(c, info.FullMethod, req); err != nil {
+		return nil, err
+	}
 	if err := refuseUnproven(c, info.FullMethod); err != nil {
 		return nil, err
 	}
@@ -254,6 +259,11 @@ func (r *callerResolver) unary(ctx context.Context, req any, info *grpc.UnarySer
 func (r *callerResolver) stream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	ctx := ss.Context()
 	c := r.resolve(ctx)
+	// Reason: refuseSettings logs every refusal it makes, so it runs
+	// before refuseUnproven, whose log line is rate-limited.
+	if err := r.refuseSettings(c, info.FullMethod, nil); err != nil {
+		return err
+	}
 	if err := refuseUnproven(c, info.FullMethod); err != nil {
 		return err
 	}

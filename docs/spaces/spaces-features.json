@@ -616,6 +616,21 @@
         "id": "D-74",
         "decision": "RC-710: SP-025 merges with RC-710 accepted until a follow-up feature refuses, under a spaces policy, the task-refused settings RPCs (SetConfig with Sensitive keys, the harness and cc-safety-net settings, Restart, PR landing) to every caller except Orch.app, keeping Ingest, Dispatch and the task RPCs sessions use. The follow-up touches SP-070 and SP-050 and is added to the plan by the coordinator as SP-078.",
         "date": "2026-11-14"
+      },
+      {
+        "id": "D-75",
+        "decision": "SP-064 (optional OpenAPPA label source) is deferred: build it only once OpenAPPA has a stable wire format (1.0 or authenticated /hook callers). Chunk labels stay shaped as space x trust so the option stays open. This counts as the explicit deferral P5's exit criteria allow.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-76",
+        "decision": "RC-229: under a policy, relabelling is run from a 'Relabel now' button in Orch.app's Spaces pane, which shows its progress; orchd does not relabel automatically after an apply. Built as SP-079.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-77",
+        "decision": "RC-1200: under a spaces policy, DeleteSource is limited to sources in the calling session's own space (Orch.app may delete any), and PurgeDocs is Orch.app-only. Built by SP-026.",
+        "date": "2026-11-15"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -3575,8 +3590,8 @@
           "SP-050",
           "SP-025"
         ],
-        "status": "open",
-        "note": "Accepted risk until SP-078 (D-74, 2026-11-14): SP-025 merges with it open; SP-078 refuses these RPCs to every caller except Orch.app under a policy."
+        "status": "resolved",
+        "note": "Accepted risk until SP-078 (D-74, 2026-11-14): SP-025 merges with it open; SP-078 refuses these RPCs to every caller except Orch.app under a policy. Resolved by SP-078 (https://github.com/willesq/orchestrator/pull/199): under a policy, SetConfig with Sensitive keys, SetSettingEnabled, AddSetting, RemoveSetting, InstallSafetyNet, Restart, LandPR, UndoPRLanding and DiscardPRLanding are refused to every caller except Orch.app (refuseSettings, internal/daemon/policy_operator.go); Ingest, Dispatch and the task RPCs stay open to sessions. DeleteSource and PurgeDocs, also named in the detail, are outside SP-078 and stay open to sessions: see RC-1200."
       },
       {
         "id": "RC-711",
@@ -3641,6 +3656,59 @@
           "SP-028"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-1200",
+        "kind": "decision",
+        "topic": "DeleteSource and PurgeDocs stay open to interactive sessions under a policy",
+        "detail": "RC-710 named DeleteSource and PurgeDocs alongside the settings RPCs, but D-74 and SP-078 cover only SetConfig with Sensitive keys, the harness and cc-safety-net settings, Restart and PR landing. Under a policy an interactive session can still delete a RAG source or purge a docs owner's chunks, which are not settings but remove memory other spaces may rely on. Options: (a) add both to policyOperatorOnly (Orch.app only under a policy), (b) let a session delete only sources in its own space, (c) keep them open. Recommended: (b) for DeleteSource, which agents use to clean up their own ingests, and (a) for PurgeDocs.",
+        "source": "https://github.com/willesq/orchestrator/pull/199",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-078",
+          "SP-025"
+        ],
+        "status": "resolved",
+        "resolution": "Settled as D-77; built by SP-026."
+      },
+      {
+        "id": "RC-1201",
+        "kind": "decision",
+        "topic": "Non-Sensitive settings that weaken safeguards stay open to sessions under a policy",
+        "detail": "SP-078 refuses SetConfig under a policy only when it sets a key marked Sensitive in internal/config/schema.go (D-74). Some keys that are not Sensitive still weaken a safeguard or change what is ingested: queue.worker.verify.enabled (turns off verification of a task's changes), sources.known_roots and ingest.exclude_dirs (which folders are scanned and ingested) and routing.providers. RemoveLegacyConfig (moves the old config.yaml into backups, fixed path, only after the import) is also left open. Low (security review of SP-078). Options: mark these keys Sensitive (which also makes the app ask for confirmation), add a separate policy-only list, or keep them open.",
+        "source": "https://github.com/willesq/orchestrator/pull/199",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-078"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1202",
+        "kind": "follow-up",
+        "topic": "Settings refusals under a policy are logged without a rate limit",
+        "detail": "SP-078.1.a1 asks that each refusal be logged, so refuseSettings (internal/daemon/policy_operator.go) logs every one, as refuseNonOperator does, unlike refuseUnproven, which logs at most one a second. A session or local process calling a refused RPC in a loop can fill orchd's log, which Orch.app shows. Low (security review of SP-078). Proposed: log the first refusal per caller and RPC in full and count repeats.",
+        "source": "https://github.com/willesq/orchestrator/pull/199",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-078"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-229",
+        "kind": "decision",
+        "topic": "Under a policy nobody can run a relabel",
+        "detail": "After #188 (D-71), 'orch rag relabel' is refused from a terminal under a policy and Orch.app showed relabel progress without a way to start one, so content stored before an apply stayed hidden until SP-077.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-027",
+          "SP-077"
+        ],
+        "status": "resolved",
+        "resolution": "Settled as D-76; built by SP-079."
       },
       {
         "id": "RC-1100",
@@ -7487,14 +7555,16 @@
               "threshold": "yes or deferred"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "Deferred by user on 2026-11-15 (D-75): OpenAPPA's wire format could not be confirmed stable; revisit at OpenAPPA 1.0 or when /hook callers are authenticated."
+          ]
         }
       ],
-      "status": "todo",
+      "status": "blocked",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": null,
+      "blocked_reason": "Deferred by the user on 2026-11-15 (D-75) until OpenAPPA has a stable wire format.",
       "attempts": 0,
       "criteria_sha256": "76e46f65ccb892bb47cd64a8a241bcc9d35a9fdc312f8dc97e2a638652055d15",
       "branch": null,
@@ -7863,6 +7933,71 @@
               "threshold": "true"
             }
           ],
+          "evidence": [
+            "a1: TestSettingsAreTheOperatorsUnderAPolicy (internal/daemon/policy_operator_test.go), one subtest per RPC (SetConfig with a Sensitive key, SetSettingEnabled, AddSetting, RemoveSetting, InstallSafetyNet, Restart, LandPR, UndoPRLanding, DiscardPRLanding): under a policy each is refused with PermissionDenied before its handler runs to a pinned session, an unpinned harness session, a queued task, a terminal and a detached process, each refusal is logged (the session's names it: refused <RPC> from session sess-a), and Orch.app is served; also the stream path, an unreadable SetConfig, and a real applied policy (policyApplied). Passes.",
+            "a2: TestSessionsKeepTheirRPCsUnderAPolicy: under a policy pinned and unpinned sessions still call Ingest, Dispatch, ListTasks, GetTask, RateTask, RetryTask, CancelTask, WatchTasks, Search and SetConfig with a non-Sensitive key, without the policy being read; with no policy every listed settings RPC runs for sessions, terminals, detached processes and Orch.app (INV-10). Existing TestUnprovenOperatorGetsTaskLimits and TestOperatorOnlyRPCsNeedOrchApp still pass. Passes.",
+            "a3: docs/internals/daemon.md, Operator evidence, lists the RPCs operator-only under a policy (table) and corrects the recovery server line.",
+            "go test ./... passes except a timing flake in internal/agentrun TestRunMeasuresFailedRuns (199ms against a 200ms timeout under load; passes on rerun -count=3, untouched package); go vet ./... exit 0; make cover: All files >= 80% (policy_operator.go 100.0%, caller_session.go 99.0%); gofmt -l clean.",
+            "Security review of the diff: no critical, high or medium findings; lows recorded as RC-1201 and RC-1202.",
+            "Independent verification at 07bbf7d: a1, a2, a3 and DOD-1 to DOD-8 pass (go test ./... exit 0, go vet exit 0, make cover all files >= 80%, gofmt clean, signed commits, draft PR); DOD-9: CI test and build pass on PR #199 (run 43680018621)."
+          ]
+        }
+      ],
+      "status": "done",
+      "passes": true,
+      "verified_sha": "07bbf7d6ebdef8bf92969e3c99ef89b134846f40",
+      "verified_at": "2026-11-15T05:18:05Z",
+      "blocked_reason": null,
+      "attempts": 1,
+      "criteria_sha256": "901473b12fe5cd0035785d2271433e5396c60ed79717edc54f187b4072c72bdc",
+      "branch": "feat/sp-078-settings-operator-only",
+      "pr": "https://github.com/willesq/orchestrator/pull/199"
+    },
+    {
+      "id": "SP-079",
+      "phase": "P4",
+      "priority": 39.5,
+      "title": "Relabel now button in Orch.app (D-76)",
+      "summary": "A 'Relabel now' control in the Spaces pane runs orchd's Relabel RPC as the operator and shows its progress, so content stored before a policy apply can be made readable without a terminal.",
+      "why": "RC-229: under a policy the terminal cannot relabel (D-71) and the app had no control to start one.",
+      "depends_on": [
+        "SP-027",
+        "SP-051",
+        "SP-025"
+      ],
+      "touches": [
+        "macos/Sources (new Swift files, minimal SpacesView wiring)"
+      ],
+      "docs_to_update": [
+        "docs/internals/app.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-079.1",
+          "title": "Relabel now",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "The Spaces pane shows a 'Relabel now' control whenever chunks are stale (labels_v not the applied revision); it calls orchd's Relabel RPC as the operator and shows progress until no stale chunks remain.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "The control is absent or disabled with nothing stale, and a refused or failed relabel shows why without retrying on its own.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "manual",
+              "check": "Light and dark snapshots of the pane with stale chunks, during a relabel, and after it.",
+              "measure": "snapshots",
+              "threshold": "reviewed by the user"
+            }
+          ],
           "evidence": []
         }
       ],
@@ -7872,7 +8007,7 @@
       "verified_at": null,
       "blocked_reason": null,
       "attempts": 0,
-      "criteria_sha256": "901473b12fe5cd0035785d2271433e5396c60ed79717edc54f187b4072c72bdc",
+      "criteria_sha256": "c8e57b33d517a6ceaa90763c200296bda10486c6197b9f1877423620bb93b07f",
       "branch": null,
       "pr": null
     }
@@ -8002,6 +8137,10 @@
     {
       "date": "2026-11-14",
       "change": "SP-078 added for RC-710 (D-74, recorded on #188): settings RPCs become operator-only under a policy."
+    },
+    {
+      "date": "2026-11-15",
+      "change": "D-75 defers SP-064; D-76 adds SP-079 (Relabel now in Orch.app) for RC-229; D-77 scopes DeleteSource and makes PurgeDocs operator-only (SP-026)."
     }
   ],
   "plan_location": {
@@ -8108,7 +8247,7 @@
         "topic": "RC-710 accepted until SP-078 (recorded on #188)"
       }
     ],
-    "next_d_id": "D-75",
+    "next_d_id": "D-78",
     "proto_slot": {
       "holder": "none",
       "next": "SP-025 if D-71 needs it, then SP-077"
