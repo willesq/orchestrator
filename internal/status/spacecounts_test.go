@@ -32,11 +32,12 @@ func has(lines []string, want string) bool {
 }
 
 // TestSpacesSectionShowsCounts is SP-031.1.a1: the operator's status shows
-// the spaces, chunks per space, conflicts, drift and relabel progress
-// (quarantine is SP-028's line); a session's shows only the spaces orchd
+// the six fields: the spaces, chunks per space, quarantine (SP-028's
+// counts), conflicts, drift and relabel progress; a session's shows only the spaces orchd
 // counted for it and says conflicts are the operator's.
 func TestSpacesSectionShowsCounts(t *testing.T) {
 	op := &orchdv1.StatusResponse{Spaces: &orchdv1.SpacesStatus{Configured: true, AppliedRevision: 4,
+		Quarantine: &orchdv1.QuarantineCounts{Sources: 3, Chunks: 30},
 		Counts: &orchdv1.SpacesCounts{EverySpace: true, Chunks: 400, Stale: 100, Conflicts: 2, ConflictsCounted: true,
 			Spaces: []*orchdv1.SpaceCount{
 				{Space: "acme", Kind: "isolated", Chunks: 250, Stale: 90},
@@ -50,6 +51,7 @@ func TestSpacesSectionShowsCounts(t *testing.T) {
 		"relabel=300 of 400 chunk(s) labelled (75%)/warn",
 		"conflicts=2 session(s)/warn",
 		"drift=none/ok",
+		"quarantine=3 source(s), 30 chunk(s)/ok",
 	} {
 		if !has(got, want) {
 			t.Fatalf("operator lines %v lack %q", got, want)

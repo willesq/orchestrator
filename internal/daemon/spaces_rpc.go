@@ -118,6 +118,7 @@ func (s *server) spacesStatus(ctx context.Context) *orchdv1.SpacesStatus {
 		Sandbox:          s.sandboxProto(ctx),
 	}
 	if st.Configured {
+		out.Quarantine = s.quarantineStatus(ctx)
 		out.Counts = s.spacesCounts(ctx)
 	}
 	if probs := s.ghProfiles.problems(ctx); len(probs) > 0 {

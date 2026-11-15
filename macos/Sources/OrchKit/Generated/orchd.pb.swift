@@ -679,6 +679,17 @@ public nonisolated struct Orchd_V1_SpacesStatus: @unchecked Sendable {
   /// Clears the value of `sandbox`. Subsequent reads from it will return its default value.
   public mutating func clearSandbox() {_uniqueStorage()._sandbox = nil}
 
+  /// What quarantine holds (SP-028); unset when spaces are unavailable or
+  /// the store could not be counted.
+  public var quarantine: Orchd_V1_QuarantineCounts {
+    get {_storage._quarantine ?? Orchd_V1_QuarantineCounts()}
+    set {_uniqueStorage()._quarantine = newValue}
+  }
+  /// Returns true if `quarantine` has been explicitly set.
+  public var hasQuarantine: Bool {_storage._quarantine != nil}
+  /// Clears the value of `quarantine`. Subsequent reads from it will return its default value.
+  public mutating func clearQuarantine() {_uniqueStorage()._quarantine = nil}
+
   /// counts (SP-031) is what the spaces hold, as the caller may see it;
   /// unset with no policy configured.
   public var counts: Orchd_V1_SpacesCounts {
@@ -695,6 +706,22 @@ public nonisolated struct Orchd_V1_SpacesStatus: @unchecked Sendable {
   public init() {}
 
   fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+/// QuarantineCounts is how much content quarantine holds. It never names a
+/// source.
+public nonisolated struct Orchd_V1_QuarantineCounts: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sources: Int32 = 0
+
+  public var chunks: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 /// SpacesCounts is how much content the spaces hold and how far a relabel has
@@ -1279,6 +1306,94 @@ public nonisolated struct Orchd_V1_RelabelResponse: Sendable {
 
   /// why an applied run stopped early; what it did is still reported
   public var error: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListQuarantineRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// QuarantineSource is one source held in quarantine.
+public nonisolated struct Orchd_V1_QuarantineSource: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sourceUri: String = String()
+
+  public var sourceType: String = String()
+
+  public var chunks: Int32 = 0
+
+  /// unix seconds of its latest store; 0 = unknown
+  public var ingestedAt: Int64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_ListQuarantineResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// by source_uri
+  public var sources: [Orchd_V1_QuarantineSource] = []
+
+  public var totalSources: Int32 = 0
+
+  public var totalChunks: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_PurgeQuarantineRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// source_uris names the quarantined sources to delete. A named source
+  /// that is not in quarantine is refused, never deleted elsewhere.
+  public var sourceUris: [String] = []
+
+  /// confirm must be set to delete; without it the purge only counts.
+  public var confirm: Bool = false
+
+  /// all purges every quarantined source. It must be set when source_uris is
+  /// empty and is refused with it, so an empty list sent by mistake never
+  /// purges everything.
+  public var all: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Orchd_V1_PurgeQuarantineResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// sources deleted, or that would be without confirm
+  public var sources: Int32 = 0
+
+  /// their chunks
+  public var chunks: Int32 = 0
+
+  /// false for a dry run
+  public var purged: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -6392,7 +6507,7 @@ nonisolated extension Orchd_V1_StatusResponse: SwiftProtobuf.Message, SwiftProto
 
 nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SpacesStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}configured\0\u{3}applied_revision\0\u{3}draft_revision\0\u{1}drift\0\u{1}error\0\u{1}relaxed\0\u{3}enforcement_error\0\u{1}sandbox\0\u{2}\u{2}counts\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}configured\0\u{3}applied_revision\0\u{3}draft_revision\0\u{1}drift\0\u{1}error\0\u{1}relaxed\0\u{3}enforcement_error\0\u{1}sandbox\0\u{1}quarantine\0\u{1}counts\0")
 
   fileprivate class _StorageClass {
     var _configured: Bool = false
@@ -6403,6 +6518,7 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
     var _relaxed: [Orchd_V1_EnforcementSwitch] = []
     var _enforcementError: String = String()
     var _sandbox: Orchd_V1_SandboxSetting? = nil
+    var _quarantine: Orchd_V1_QuarantineCounts? = nil
     var _counts: Orchd_V1_SpacesCounts? = nil
 
       // This property is used as the initial default value for new instances of the type.
@@ -6422,6 +6538,7 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
       _relaxed = source._relaxed
       _enforcementError = source._enforcementError
       _sandbox = source._sandbox
+      _quarantine = source._quarantine
       _counts = source._counts
     }
   }
@@ -6449,6 +6566,7 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
         case 6: try { try decoder.decodeRepeatedMessageField(value: &_storage._relaxed) }()
         case 7: try { try decoder.decodeSingularStringField(value: &_storage._enforcementError) }()
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._sandbox) }()
+        case 9: try { try decoder.decodeSingularMessageField(value: &_storage._quarantine) }()
         case 10: try { try decoder.decodeSingularMessageField(value: &_storage._counts) }()
         default: break
         }
@@ -6486,6 +6604,9 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
       try { if let v = _storage._sandbox {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
       } }()
+      try { if let v = _storage._quarantine {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 9)
+      } }()
       try { if let v = _storage._counts {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
       } }()
@@ -6506,11 +6627,47 @@ nonisolated extension Orchd_V1_SpacesStatus: SwiftProtobuf.Message, SwiftProtobu
         if _storage._relaxed != rhs_storage._relaxed {return false}
         if _storage._enforcementError != rhs_storage._enforcementError {return false}
         if _storage._sandbox != rhs_storage._sandbox {return false}
+        if _storage._quarantine != rhs_storage._quarantine {return false}
         if _storage._counts != rhs_storage._counts {return false}
         return true
       }
       if !storagesAreEqual {return false}
     }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_QuarantineCounts: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".QuarantineCounts"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sources\0\u{1}chunks\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.sources) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.chunks) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.sources != 0 {
+      try visitor.visitSingularInt32Field(value: self.sources, fieldNumber: 1)
+    }
+    if self.chunks != 0 {
+      try visitor.visitSingularInt32Field(value: self.chunks, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_QuarantineCounts, rhs: Orchd_V1_QuarantineCounts) -> Bool {
+    if lhs.sources != rhs.sources {return false}
+    if lhs.chunks != rhs.chunks {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -7754,6 +7911,190 @@ nonisolated extension Orchd_V1_RelabelResponse: SwiftProtobuf.Message, SwiftProt
     if lhs.transitions != rhs.transitions {return false}
     if lhs.applied != rhs.applied {return false}
     if lhs.error != rhs.error {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListQuarantineRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListQuarantineRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListQuarantineRequest, rhs: Orchd_V1_ListQuarantineRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_QuarantineSource: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".QuarantineSource"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_uri\0\u{3}source_type\0\u{1}chunks\0\u{3}ingested_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sourceUri) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.sourceType) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.chunks) }()
+      case 4: try { try decoder.decodeSingularInt64Field(value: &self.ingestedAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sourceUri.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceUri, fieldNumber: 1)
+    }
+    if !self.sourceType.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceType, fieldNumber: 2)
+    }
+    if self.chunks != 0 {
+      try visitor.visitSingularInt32Field(value: self.chunks, fieldNumber: 3)
+    }
+    if self.ingestedAt != 0 {
+      try visitor.visitSingularInt64Field(value: self.ingestedAt, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_QuarantineSource, rhs: Orchd_V1_QuarantineSource) -> Bool {
+    if lhs.sourceUri != rhs.sourceUri {return false}
+    if lhs.sourceType != rhs.sourceType {return false}
+    if lhs.chunks != rhs.chunks {return false}
+    if lhs.ingestedAt != rhs.ingestedAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_ListQuarantineResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ListQuarantineResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sources\0\u{3}total_sources\0\u{3}total_chunks\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.sources) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.totalSources) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.totalChunks) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sources.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.sources, fieldNumber: 1)
+    }
+    if self.totalSources != 0 {
+      try visitor.visitSingularInt32Field(value: self.totalSources, fieldNumber: 2)
+    }
+    if self.totalChunks != 0 {
+      try visitor.visitSingularInt32Field(value: self.totalChunks, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_ListQuarantineResponse, rhs: Orchd_V1_ListQuarantineResponse) -> Bool {
+    if lhs.sources != rhs.sources {return false}
+    if lhs.totalSources != rhs.totalSources {return false}
+    if lhs.totalChunks != rhs.totalChunks {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_PurgeQuarantineRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PurgeQuarantineRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_uris\0\u{1}confirm\0\u{1}all\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedStringField(value: &self.sourceUris) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.confirm) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.all) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sourceUris.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.sourceUris, fieldNumber: 1)
+    }
+    if self.confirm != false {
+      try visitor.visitSingularBoolField(value: self.confirm, fieldNumber: 2)
+    }
+    if self.all != false {
+      try visitor.visitSingularBoolField(value: self.all, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_PurgeQuarantineRequest, rhs: Orchd_V1_PurgeQuarantineRequest) -> Bool {
+    if lhs.sourceUris != rhs.sourceUris {return false}
+    if lhs.confirm != rhs.confirm {return false}
+    if lhs.all != rhs.all {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Orchd_V1_PurgeQuarantineResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PurgeQuarantineResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sources\0\u{1}chunks\0\u{1}purged\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.sources) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.chunks) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.purged) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.sources != 0 {
+      try visitor.visitSingularInt32Field(value: self.sources, fieldNumber: 1)
+    }
+    if self.chunks != 0 {
+      try visitor.visitSingularInt32Field(value: self.chunks, fieldNumber: 2)
+    }
+    if self.purged != false {
+      try visitor.visitSingularBoolField(value: self.purged, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Orchd_V1_PurgeQuarantineResponse, rhs: Orchd_V1_PurgeQuarantineResponse) -> Bool {
+    if lhs.sources != rhs.sources {return false}
+    if lhs.chunks != rhs.chunks {return false}
+    if lhs.purged != rhs.purged {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -60,6 +60,7 @@ func NewRootCmd(cf clientFactory) *cobra.Command {
 		newRepoCmd(),
 		newSettingsCmd(cf),
 		newSpacesCmd(cf),
+		newQuarantineCmd(cf, nil),
 		newGuardCmd(),
 		newSessionsCmd(cf),
 		newRunCmd(cf),

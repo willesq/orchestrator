@@ -39,6 +39,8 @@ const (
 	Orchd_DropBackup_FullMethodName               = "/orchd.v1.Orchd/DropBackup"
 	Orchd_ReindexKeywords_FullMethodName          = "/orchd.v1.Orchd/ReindexKeywords"
 	Orchd_Relabel_FullMethodName                  = "/orchd.v1.Orchd/Relabel"
+	Orchd_ListQuarantine_FullMethodName           = "/orchd.v1.Orchd/ListQuarantine"
+	Orchd_PurgeQuarantine_FullMethodName          = "/orchd.v1.Orchd/PurgeQuarantine"
 	Orchd_RetagSource_FullMethodName              = "/orchd.v1.Orchd/RetagSource"
 	Orchd_BackfillSessions_FullMethodName         = "/orchd.v1.Orchd/BackfillSessions"
 	Orchd_ListPRs_FullMethodName                  = "/orchd.v1.Orchd/ListPRs"
@@ -166,6 +168,14 @@ type OrchdClient interface {
 	// to its space's collection; counts unless apply. Resumable. Operator only:
 	// the report names spaces.
 	Relabel(ctx context.Context, in *RelabelRequest, opts ...grpc.CallOption) (*RelabelResponse, error)
+	// ListQuarantine (SP-028) lists the sources held in quarantine, the space
+	// of content that could not be placed, with their chunk counts. Operator
+	// only: no session may read quarantine.
+	ListQuarantine(ctx context.Context, in *ListQuarantineRequest, opts ...grpc.CallOption) (*ListQuarantineResponse, error)
+	// PurgeQuarantine (SP-028) deletes quarantined sources, the named ones or
+	// all of them (all). It only counts unless confirm is set; orchd checks confirm,
+	// so every caller opts in deliberately. Operator only.
+	PurgeQuarantine(ctx context.Context, in *PurgeQuarantineRequest, opts ...grpc.CallOption) (*PurgeQuarantineResponse, error)
 	// RetagSource (SP-071) moves one source to the space the operator names,
 	// with its vectors (nothing is re-embedded), and records a sticky
 	// override that later writes of it honor. Resumable. Operator only.
@@ -602,6 +612,26 @@ func (c *orchdClient) Relabel(ctx context.Context, in *RelabelRequest, opts ...g
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RelabelResponse)
 	err := c.cc.Invoke(ctx, Orchd_Relabel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) ListQuarantine(ctx context.Context, in *ListQuarantineRequest, opts ...grpc.CallOption) (*ListQuarantineResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListQuarantineResponse)
+	err := c.cc.Invoke(ctx, Orchd_ListQuarantine_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) PurgeQuarantine(ctx context.Context, in *PurgeQuarantineRequest, opts ...grpc.CallOption) (*PurgeQuarantineResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PurgeQuarantineResponse)
+	err := c.cc.Invoke(ctx, Orchd_PurgeQuarantine_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1300,6 +1330,14 @@ type OrchdServer interface {
 	// to its space's collection; counts unless apply. Resumable. Operator only:
 	// the report names spaces.
 	Relabel(context.Context, *RelabelRequest) (*RelabelResponse, error)
+	// ListQuarantine (SP-028) lists the sources held in quarantine, the space
+	// of content that could not be placed, with their chunk counts. Operator
+	// only: no session may read quarantine.
+	ListQuarantine(context.Context, *ListQuarantineRequest) (*ListQuarantineResponse, error)
+	// PurgeQuarantine (SP-028) deletes quarantined sources, the named ones or
+	// all of them (all). It only counts unless confirm is set; orchd checks confirm,
+	// so every caller opts in deliberately. Operator only.
+	PurgeQuarantine(context.Context, *PurgeQuarantineRequest) (*PurgeQuarantineResponse, error)
 	// RetagSource (SP-071) moves one source to the space the operator names,
 	// with its vectors (nothing is re-embedded), and records a sticky
 	// override that later writes of it honor. Resumable. Operator only.
@@ -1592,6 +1630,12 @@ func (UnimplementedOrchdServer) ReindexKeywords(context.Context, *ReindexKeyword
 }
 func (UnimplementedOrchdServer) Relabel(context.Context, *RelabelRequest) (*RelabelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Relabel not implemented")
+}
+func (UnimplementedOrchdServer) ListQuarantine(context.Context, *ListQuarantineRequest) (*ListQuarantineResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListQuarantine not implemented")
+}
+func (UnimplementedOrchdServer) PurgeQuarantine(context.Context, *PurgeQuarantineRequest) (*PurgeQuarantineResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PurgeQuarantine not implemented")
 }
 func (UnimplementedOrchdServer) RetagSource(context.Context, *RetagSourceRequest) (*RetagSourceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RetagSource not implemented")
@@ -2152,6 +2196,42 @@ func _Orchd_Relabel_Handler(srv interface{}, ctx context.Context, dec func(inter
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).Relabel(ctx, req.(*RelabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_ListQuarantine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListQuarantineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).ListQuarantine(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_ListQuarantine_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).ListQuarantine(ctx, req.(*ListQuarantineRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_PurgeQuarantine_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PurgeQuarantineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).PurgeQuarantine(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_PurgeQuarantine_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).PurgeQuarantine(ctx, req.(*PurgeQuarantineRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3372,6 +3452,14 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Relabel",
 			Handler:    _Orchd_Relabel_Handler,
+		},
+		{
+			MethodName: "ListQuarantine",
+			Handler:    _Orchd_ListQuarantine_Handler,
+		},
+		{
+			MethodName: "PurgeQuarantine",
+			Handler:    _Orchd_PurgeQuarantine_Handler,
 		},
 		{
 			MethodName: "RetagSource",

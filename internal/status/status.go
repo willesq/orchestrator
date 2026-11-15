@@ -421,6 +421,9 @@ func spacesSection(resp *orchdv1.StatusResponse, err error) (sec Section, ok boo
 	if sb := sp.GetSandbox(); sb != nil && (sp.GetConfigured() || sb.GetSetAt() > 0 || sb.GetProblem() != "") {
 		sec.Lines = append(sec.Lines, sandboxLine(sb))
 	}
+	if l, ok := quarantineLine(sp); ok {
+		sec.Lines = append(sec.Lines, l)
+	}
 	sec.Lines = append(sec.Lines, countLines(sp)...)
 	if e := sp.GetEnforcementError(); e != "" {
 		sec.Lines = append(sec.Lines, Line{Name: "enforcement", Value: "switches in orch.db not taken", Level: LevelBad, Detail: printable(e)})
