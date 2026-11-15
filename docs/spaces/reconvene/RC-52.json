@@ -1,0 +1,13 @@
+{
+  "id": "RC-52",
+  "kind": "follow-up",
+  "topic": "Re-run CI for SP-017 once GitHub Actions runs jobs",
+  "detail": "SP-017's DOD-9 (CI green including the macOS ORT build) depends on RC-46. Locally: go test/vet/gofmt pass, make cover passes but omitted internal/daemon because of the RC-39 flake (daemon files measured directly at 87.8-97.4%), and 'swift build --package-path macos --target OrchKit' compiles the regenerated Swift stubs.",
+  "source": "https://github.com/willesq/orchestrator/pull/154",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-017"
+  ],
+  "status": "resolved",
+  "note": "2026-11-09: CI ran green on 0691cb7 including the macOS ORT build (https://github.com/willesq/orchestrator/actions/runs/42704166756) and app (https://github.com/willesq/orchestrator/actions/runs/42704166851); the first run at 851310e failed only the Linux coverage gate (procstat/find_other.go), fixed by TestProcessesUnsupported."
+}

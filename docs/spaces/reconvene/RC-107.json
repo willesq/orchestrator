@@ -1,0 +1,12 @@
+{
+  "id": "RC-107",
+  "kind": "follow-up",
+  "topic": "Snapshot window after an apply when orchd crashes",
+  "detail": "From SP-041's independent verifier (low): ApplySpaces commits the policy, then orchd rewrites the guard snapshot. If orchd crashes between the two, the old snapshot (for example 'no policy') stays readable and the hook decides by it until orchd restarts and rewrites it at startup. Options: remove the snapshot before an apply and rewrite it after (calls during the apply then fall back to orch.db), or accept the window.",
+  "source": "https://github.com/willesq/orchestrator/pull/172",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041"
+  ],
+  "status": "open"
+}

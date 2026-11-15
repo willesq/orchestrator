@@ -1,0 +1,14 @@
+{
+  "id": "RC-702",
+  "kind": "decision",
+  "topic": "A harness started past the guard can still take a pin in another job's folder (D-38 residual)",
+  "detail": "SP-025 widens memory reads by a session pin's space, relying on SP-041 to stop a session from starting a harness outside its tree (D-38). The guard refuses that only when the command names another job's folder: a launch hidden in an opaque command under block-other-jobs, or in a folder of no space, still runs (RC-101), and a detached shell kept alive under launchd can start a fake harness that pins in the folder it chose (D-26), which then reads that folder's space. An orphaned harness gets no pin and reads public only (tested in SP-025.1.a6). Options: (a) accept as documented; (b) refuse a new pin whose harness runs in a process group led by another harness (an agent's background commands stay in the harness's group unless they call setsid; a user's shell gives each harness its own group); (c) widen reads by pin only while the guard is strict, and read public only while it is off or logging. Recommendation: (b), with (a) for the setsid case.",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-025",
+    "SP-041",
+    "SP-010"
+  ],
+  "status": "open"
+}

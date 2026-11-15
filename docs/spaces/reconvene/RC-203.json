@@ -1,0 +1,12 @@
+{
+  "id": "RC-203",
+  "kind": "follow-up",
+  "topic": "The CLI's payload replay protects its own environment's paths",
+  "detail": "From the RC-110 security review (low, replay correctness only): orch spaces replay <payloads> --policy <file> builds its protection with spaces.GuardProtection from the CLI's own ORCH_CONFIG_DIR/ORCH_DATA_DIR/HOME and its executable's directory, which can differ from the running orchd's (brew bin vs opt path, --bin-dir, a shell that sets XDG_*). orchd's ReplaySpaces uses orchd's own, the same as the live snapshot. Proposed: document, or have the CLI ask orchd for the protection it applies.",
+  "source": "https://github.com/willesq/orchestrator/pull/175",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-047"
+  ],
+  "status": "open"
+}

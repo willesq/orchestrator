@@ -1,0 +1,14 @@
+{
+  "id": "RC-37",
+  "kind": "follow-up",
+  "topic": "Known limits of tool-call target extraction",
+  "detail": "Accepted for SP-013 under D-28 and documented in docs/internals/hooks.md: paths a program computes at run time (compiled tools, interpreter logic beyond literal paths, commands found on PATH whose scripts are not read) are not seen; string arguments of unknown programs and commands inside unknown wrappers are walked only as a guess, so what cannot be read there does not make the call opaque; a single-component link created by archive extraction, cp or mv and used by bare name in the same call is not flagged; the parser follows bash, and of zsh only two-operand cd, $var[...] subscripts, cdpath and running the last pipeline stage in the current shell are handled; ssh host aliases count as GitHub only when the alias contains 'github' (~/.ssh/config is not read), and ssh commands are walked as if run in this machine's $HOME; whether Codex fires PreToolUse for write_stdin is unverified (Targets flags it opaque). See RC-38 for what cannot be verified at all.",
+  "source": "https://github.com/willesq/orchestrator/pull/151",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-040",
+    "SP-041",
+    "SP-046"
+  ],
+  "status": "open"
+}

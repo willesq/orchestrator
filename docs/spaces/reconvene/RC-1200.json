@@ -1,0 +1,14 @@
+{
+  "id": "RC-1200",
+  "kind": "decision",
+  "topic": "DeleteSource and PurgeDocs stay open to interactive sessions under a policy",
+  "detail": "RC-710 named DeleteSource and PurgeDocs alongside the settings RPCs, but D-74 and SP-078 cover only SetConfig with Sensitive keys, the harness and cc-safety-net settings, Restart and PR landing. Under a policy an interactive session can still delete a RAG source or purge a docs owner's chunks, which are not settings but remove memory other spaces may rely on. Options: (a) add both to policyOperatorOnly (Orch.app only under a policy), (b) let a session delete only sources in its own space, (c) keep them open. Recommended: (b) for DeleteSource, which agents use to clean up their own ingests, and (a) for PurgeDocs.",
+  "source": "https://github.com/willesq/orchestrator/pull/199",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-078",
+    "SP-025"
+  ],
+  "status": "resolved",
+  "resolution": "Settled as D-77; built by SP-026."
+}

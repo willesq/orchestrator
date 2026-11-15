@@ -1,0 +1,13 @@
+{
+  "id": "RC-215",
+  "kind": "decision",
+  "topic": "Settings orch did not write can re-open its sandbox denies (security audit high, measured)",
+  "detail": "2026-11-14 audit of PR #171, measured with Claude Code 2.1.309: with orch's denyRead of a folder in a checkout's settings.local.json, a sandboxed cat of a file in it succeeded when the checkout's own .claude/settings.json (a repository can commit one) or the same settings.local.json held sandbox.filesystem.allowRead of that folder (TestClaudeE2E 'loosening': job B's file read = true); a settings.json excludedCommands ['cat'] did not unsandbox cat; a session started as 'orch run' starts it (denies in --settings) was not re-opened by the same file (read = false). Under auto, an isolated space alone gets no rules, so its unsandboxed sessions could plant such entries before rules arrive (audit medium). orch now reports such entries, and settings files it cannot check, in each sync's problems and as 'orch run' warnings, but cannot remove them: a tracked settings.json is the repository's, and SP-046.1.a2 keeps users' own entries. Options: (a) require 'orch run' for isolated spaces' Claude Code sessions (its denies held); (b) have the guard (SP-041) refuse tool calls in a checkout whose settings re-open a deny; (c) take loosening entries out of settings.local.json (amending SP-046.1.a2) and handle settings.json with (a) or (b); (d) make 'orch run' refuse to launch from a folder whose settings loosen the rules unless --force (re-audit suggestion); (e) accept and document. Blocks SP-046 (DOD-6).",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "resolved",
+  "resolution": "Settled by the user on 2026-11-14 as D-67; implemented by the SP-046 follow-up lane."
+}

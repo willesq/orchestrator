@@ -1,0 +1,12 @@
+{
+  "id": "RC-115",
+  "kind": "follow-up",
+  "topic": "SP-043 verifier lows",
+  "detail": "From the independent verification of SP-043 (2026-11-12), all low: (1) a GitHub search through curl with org: in the URL query (api.github.com/search/code?q=org:X) is not read and not opaque, so it is allowed even in strict; (2) in strict, gh repo list and gh search for the session own org, and git push to a non-GitHub remote, are refused as opaque_strict; (3) for a named remote, pushurl is judged on fetch as well as url (over-inclusive, not a bypass). See also RC-114.",
+  "source": "https://github.com/willesq/orchestrator/pull/176",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-043"
+  ],
+  "status": "open"
+}

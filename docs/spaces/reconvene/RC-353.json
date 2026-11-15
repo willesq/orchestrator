@@ -1,0 +1,13 @@
+{
+  "id": "RC-353",
+  "kind": "decision",
+  "topic": "Collection names can read two ways when names contain \"__\"",
+  "detail": "Space collections are '<base>__<space>'. The policy's name pattern allows '_' (so 'a__b' is a valid space name) and rag.qdrant.collection and backup_collection are not checked for '__'; only a migration target containing '__' is refused. A backup drop therefore also deletes any collection named '<backup>__<lowercase name>' (another tool's, say), and a hand-set base containing '__' could read as another base's space (DropCollection refuses that case for the active and shadow base). Options: forbid '__' in space names (internal/spaces/validate.go) and in the two collection settings, or keep the list of a base's spaces in orch.db instead of parsing names.",
+  "source": "https://github.com/willesq/orchestrator/pull/183",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-020",
+    "SP-024"
+  ],
+  "status": "open"
+}

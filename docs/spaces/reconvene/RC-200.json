@@ -1,0 +1,14 @@
+{
+  "id": "RC-200",
+  "kind": "follow-up",
+  "topic": "Self-protection follows orchd's directories, not the hook's or the harness's",
+  "detail": "From the RC-110 security review (low, accepted 2026-11-12): orchd computes the guard's protection from its own environment, and under launchd or brew services it has no ORCH_*/XDG_* variables, so it protects ~/.config/orch, ~/.claude/settings* and ~/.codex/*. A config directory or harness home that only the user's shell moves (XDG_CONFIG_HOME, ORCH_CONFIG_DIR, CLAUDE_CONFIG_DIR, CODEX_HOME) is not protected, so an agent could edit the installed AGENTS.md or the live harness settings there. Related to RC-102. Proposed: the hook adds its own paths.ConfigDir(), data directory and guard directory to the snapshot's write list (a union only adds protection), and protects $CLAUDE_CONFIG_DIR/settings* and $CODEX_HOME/{hooks.json,config.toml} when set; replay would then need the same union.",
+  "source": "https://github.com/willesq/orchestrator/pull/175",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041",
+    "SP-042",
+    "SP-047"
+  ],
+  "status": "open"
+}

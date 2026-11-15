@@ -1,0 +1,12 @@
+{
+  "id": "RC-452",
+  "kind": "decision",
+  "topic": "Refusal events are written by orch-hook, not orchd",
+  "detail": "SP-048's event needs the term's line and hash, which only the hook knows: RecordToolEventRequest has no field for it, and adding one changes orchd.proto (coordinator-scheduled under D-63). So orch-hook appends the refusal to the spaces stream after printing the deny. Its session is the harness's session_id, the one the guard read the pin for (the space comes from that orchd-written pin); orchd's command log stays the authoritative, caller-resolved record. Upside: refusals stay visible while orchd is down. Confirm, or schedule a proto field (e.g. guard_term_line, guard_term_hash) so orchd writes the event with its resolved identity.",
+  "source": "https://github.com/willesq/orchestrator/pull/179",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-048"
+  ],
+  "status": "open"
+}

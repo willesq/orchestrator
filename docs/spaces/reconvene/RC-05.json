@@ -1,0 +1,15 @@
+{
+  "id": "RC-05",
+  "kind": "decision",
+  "topic": "Proof for non-GitHub or remoteless checkouts under a public root",
+  "detail": "A checkout whose remote is not on GitHub (GitLab, local-only) has no remote fact, so under a public root the root rule places it public. Decide whether such content needs proof before SP-023 writers use the classifier.",
+  "source": "https://github.com/willesq/orchestrator/pull/145",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-022",
+    "SP-023",
+    "SP-030"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: quarantine without proof; see D-50."
+}

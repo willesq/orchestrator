@@ -1,0 +1,14 @@
+{
+  "id": "RC-32",
+  "kind": "decision",
+  "topic": "The tool hooks can be turned off in orch settings",
+  "detail": "pre-tool-use and cwd-changed are Claude Code hooks like the others, so `orch settings` can turn them off (install then leaves them alone and status shows the harness's tool hooks as missing, a warning). That silently stops the command log and, after SP-041, the guard. Decide whether SP-042 (self-protection) or SP-070 (operator-only switches) should stop them from being toggled, or make turning them off operator-only.",
+  "source": "https://github.com/willesq/orchestrator/pull/150",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-042",
+    "SP-070"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: the tool hooks become an operator-only SP-070 switch; see D-40 and SP-070.1.a4."
+}

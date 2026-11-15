@@ -1,0 +1,12 @@
+{
+  "id": "RC-755",
+  "kind": "follow-up",
+  "topic": "SP-027 security audit lows and accepted limits",
+  "detail": "From two security-audit rounds on the relabel (all medium findings fixed): (1) orchd's local log line for a source the placer could not place includes the placer's error, which can name its source URI (orchd's log already names paths elsewhere); (2) the stale-source list per collection is held in memory, one entry per source, and a source is moved whole: fine at 40,000 chunks, unbounded in principle; (3) a hand-off chunk stored without an origin is placed by the path it was edited at; a process that can write there could swap a link for a file before the relabel (documented in docs/internals/memory.md); (4) the report names spaces, so the planned Relabel RPC must be operator-only; (5) chunks with a stored origin reuse the visibility recorded at write time.",
+  "source": "https://github.com/willesq/orchestrator/pull/187",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-027"
+  ],
+  "status": "open"
+}

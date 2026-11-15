@@ -1,0 +1,13 @@
+{
+  "id": "RC-105",
+  "kind": "follow-up",
+  "topic": "Analysis-limit refusals under load",
+  "detail": "Targets has a 100 ms budget; when the machine is loaded it can run out on an ordinary call (RC-93 (2)), and the enforcing guard then refuses it (analysis_limit). Measure how often real sessions hit analysis_limit or guard_timeout once the guard runs (orch spaces log), and raise the budget or retry if it matters. Also seen: TestTargetsAuditRound3Cost (internal/spaces) fails under -race on this Mac (a 2 MB Write took 565 ms), unrelated to SP-041's diff.",
+  "source": "https://github.com/willesq/orchestrator/pull/172",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041",
+    "SP-013"
+  ],
+  "status": "open"
+}

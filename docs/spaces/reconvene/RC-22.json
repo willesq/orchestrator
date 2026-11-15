@@ -1,0 +1,11 @@
+{
+  "id": "RC-22",
+  "kind": "user-action",
+  "topic": "Observability research leftovers",
+  "detail": "Decide whether to save the three drafted RAG entries; verify four reported defects (subagent-stop hook reads the wrong field names, pr-babysitter events have empty timestamps, queue events have an empty task ID, token detail is discarded); try Codex [otel] export live.",
+  "source": "a local session",
+  "raised": "2026-11-08",
+  "affects": [],
+  "status": "resolved",
+  "note": "Resolved by the user on 2026-11-10: all four reported defects verified as real and filed: https://github.com/willesq/orchestrator/issues/158 (subagent-stop field names), https://github.com/willesq/orchestrator/issues/159 (pr-babysitter timestamps), https://github.com/willesq/orchestrator/issues/160 (queue task_id), https://github.com/willesq/orchestrator/issues/161 (token usage discarded). The three drafted RAG entries and the Codex [otel] test are dropped."
+}

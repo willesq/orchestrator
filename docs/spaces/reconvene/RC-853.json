@@ -1,0 +1,12 @@
+{
+  "id": "RC-853",
+  "kind": "follow-up",
+  "topic": "The coverage gate passes without measuring a package whose tests fail",
+  "detail": "scripts/cover.sh drops a package's profile when its tests fail and prints nothing about it, so 'make cover' can report every file at 80% or more while internal/daemon was never measured. SP-071's verifier hit this when TestResolveCost (a p99 per-connection latency test in internal/daemon) failed under load. Options: make cover.sh fail, or at least name the package, when a package's tests fail; loosen or isolate the latency test.",
+  "source": "https://github.com/willesq/orchestrator/pull/191",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-071"
+  ],
+  "status": "open"
+}

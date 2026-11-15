@@ -1,0 +1,13 @@
+{
+  "id": "RC-223",
+  "kind": "follow-up",
+  "topic": "A terms refusal hides the logging guard's own verdict",
+  "detail": "Low (SP-044 review round 1): with the guard off or logging, a call the terms check refuses is recorded as refused with the terms rule, so the command log loses the would-verdict the guard gave the same call (RC-86). Proposed: record both, e.g. the guard's would-rule in a second field.",
+  "source": "https://github.com/willesq/orchestrator/pull/177",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-044",
+    "SP-041"
+  ],
+  "status": "open"
+}

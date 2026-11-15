@@ -1,0 +1,12 @@
+{
+  "id": "RC-551",
+  "kind": "decision",
+  "topic": "Low findings accepted in SP-045's git hooks",
+  "detail": "From the SP-045 security audit (2026-11-14), documented in docs/internals/install.md: (1) the hook finds the guard files from its own environment (ORCH_DATA_DIR, HOME), so git run with another home holding no snapshot and no orch.db reads as nothing configured and allows (INV-10); (2) on systems other than macOS and Linux the no-replace rename used to chain and restore hooks is check-then-rename, not atomic; on Linux filesystems without RENAME_NOREPLACE install fails with that error; (3) installing into a core.hooksPath tracked in the work tree (husky, .githooks) changes tracked files and writes the local orch path into them. Proposed if wanted: record the guard directory in the hook at install and refuse when it holds a snapshot the hook's own environment does not find. (4) Found by the verifier: git push -o <option> sends push options the pre-push hook cannot see, so they are not checked; and backups of an install and an uninstall in the same second share a directory (the user hook is still kept as .orch-prev or restored).",
+  "source": "https://github.com/willesq/orchestrator/pull/184",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-045"
+  ],
+  "status": "open"
+}

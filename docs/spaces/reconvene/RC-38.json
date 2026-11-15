@@ -1,0 +1,15 @@
+{
+  "id": "RC-38",
+  "kind": "follow-up",
+  "topic": "What the tool guard cannot verify today: candidates for more security layers",
+  "detail": "Recorded at the user's request (2026-11-09) to revisit when adding layers. Targets reads only the tool input, so none of these can be verified from it: (1) code a command runs that is not in the input: git hooks, Makefile recipes, npm/package scripts, test runners, compiled tools, and scripts found on PATH; (2) shell state from earlier calls or the user's rc files: functions and aliases Claude Code's shell snapshot loads, exported variables, shopt/setopt options, a cwd changed in a previous call; (3) variables and config that make tools run code or change where they read: PAGER/EDITOR/VISUAL/LESSOPEN/PS4-style variables, ~/.gitconfig and repo .git/config (aliases, hooks, url rewrites), ssh config host aliases; (4) paths computed at run time by interpreters or tools, and files changed by earlier calls or by other processes between check and use; (5) zsh-only syntax, since the parser follows bash; (6) GitHub targets named indirectly: numeric repo IDs, GraphQL, search, org-wide listings, and API calls made by MCP servers or tools themselves; (7) MCP servers' own semantics (relative paths resolve against the server's project, not the cwd); (8) unverified harness facts: whether Codex fires PreToolUse for write_stdin and exec_command's shell field, and whether hook payloads ever omit the tool input. Candidate layers: OS sandbox deny rules per job (SP-046), per-job GitHub accounts (SP-063), outbound-term git hooks (SP-044/SP-045), a guard 'strict' mode that refuses opaque calls (D-12), running jobs under separate macOS users or containers, and auditing the command log for opaque calls.",
+  "source": "https://github.com/willesq/orchestrator/pull/151",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-040",
+    "SP-041",
+    "SP-046",
+    "SP-063"
+  ],
+  "status": "open"
+}

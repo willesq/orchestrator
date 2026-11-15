@@ -1,0 +1,14 @@
+{
+  "id": "RC-07",
+  "kind": "decision",
+  "topic": "Org identity checks on every GitHub ingestion path",
+  "detail": "Only docs sync re-checks org bindings. Sources, the review watcher and PR monitoring should call CheckOrg, and a long sync should re-check between repos. May fit SP-023 or SP-043 rather than a new feature.",
+  "source": "https://github.com/willesq/orchestrator/pull/144",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-023",
+    "SP-043"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: added to SP-023; see D-52."
+}

@@ -1,0 +1,12 @@
+{
+  "id": "RC-69",
+  "kind": "decision",
+  "topic": "Cap on unpinned harness process chains",
+  "detail": "D-36 logs a harness process holding no pin in its own chain. A running chain is never expired nor cut for the total cap, and any process named like a harness counts, so SP-073 allows at most 8 such chains open at once (maxProcessChains, a constant): events of further unpinned processes are dropped and counted, logged as one total per liveness sweep, until one exits or is pinned (a pinned process's chain is ended and its place freed). Worst case the process chains hold 8 x max_session_mb. Confirm 8, or make it a setting, and decide whether the drop log should name the processes.",
+  "source": "https://github.com/willesq/orchestrator/pull/165",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-073"
+  ],
+  "status": "open"
+}

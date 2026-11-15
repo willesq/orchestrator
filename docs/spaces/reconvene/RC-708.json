@@ -1,0 +1,14 @@
+{
+  "id": "RC-708",
+  "kind": "follow-up",
+  "topic": "Low: a session can retry a task another space dispatched",
+  "detail": "SP-025 security review, low. RetryTask is open to interactive sessions and reruns a task with its durable input, including the space recorded at dispatch (D-46), so a session in one space can rerun a task of an isolated space, which reads that space's memory; its result is then readable through GetTask (SP-026). The body is fixed. Proposed: allow a retry only from a session of the recorded space or the operator.",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-026",
+    "SP-029"
+  ],
+  "status": "resolved",
+  "note": "SP-026 (#200): RetryTask, CancelTask and RateTask need the caller to act in the task's recorded space (a session's pin or a task's own space) or be the operator; others get the answer a missing task gets."
+}

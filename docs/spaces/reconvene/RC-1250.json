@@ -1,0 +1,13 @@
+{
+  "id": "RC-1250",
+  "kind": "follow-up",
+  "topic": "GetConfig and ListSettings are still unfiltered for agent callers (rest of RC-700)",
+  "detail": "SP-026 filters every RPC RC-700 named except GetConfig (orch's settings) and ListSettings (managed harness settings), which sessions may still call under a policy. Settings can name folders, collections and profile directories of every space. Proposed: under a policy refuse both to all but Orch.app (refuseNonOperator, as SP-078 did for the setters) or return only keys that name no space; SP-078's owner should decide, since it changed the setters.",
+  "source": "https://github.com/willesq/orchestrator/pull/200",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-026",
+    "SP-078"
+  ],
+  "status": "open"
+}

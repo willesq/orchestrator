@@ -1,0 +1,15 @@
+{
+  "id": "RC-26",
+  "kind": "decision",
+  "topic": "A process that left its session's tree resolves to the operator",
+  "detail": "SP-011 resolves a caller with no harness above it as the operator, the widest result. A session process that double-forks, or starts a process through launchctl submit, open or osascript, before orchd accepts its connection, gets that result without a fake harness or a pin. This is wider than the D-26 detached-harness case. SP-025 must not grant operator-level memory reads by resolution alone until SP-041 (or kernel evidence such as audit tokens) covers it.",
+  "source": "https://github.com/willesq/orchestrator/pull/149 (SP-011 security audit)",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-011",
+    "SP-025",
+    "SP-041"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: operator-scope reads need a terminal or Orch.app; see D-39 and SP-025.1.a7."
+}

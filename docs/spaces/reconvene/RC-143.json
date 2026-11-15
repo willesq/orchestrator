@@ -1,0 +1,13 @@
+{
+  "id": "RC-143",
+  "kind": "follow-up",
+  "topic": "Two open PRs extend orchd.proto",
+  "detail": "SP-050 (https://github.com/willesq/orchestrator/pull/170: ListSpaces, ScanSpaces) and SP-047 (https://github.com/willesq/orchestrator/pull/174: ReplaySpaces) were both branched from origin/main and both add RPCs and messages to orchd.proto, so the generated Go and Swift stubs will conflict when the second merges. Resolve by merging the .proto (both sides are additive) and running make proto, never by editing generated files; also keep both sides' test-fake stubs (internal/{cli,hook,mcpserver} fakeClient) and both callers.go operatorActions entries.",
+  "source": "https://github.com/willesq/orchestrator/pull/174",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-050",
+    "SP-047"
+  ],
+  "status": "open"
+}

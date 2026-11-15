@@ -1,0 +1,15 @@
+{
+  "id": "RC-110",
+  "kind": "follow-up",
+  "topic": "Wire SP-042's protection into the guard at rebase",
+  "detail": "SP-042 adds spaces.ProtectedPaths and NewGuardPolicyProtecting, but on main nothing builds a guard policy yet (the enforcing hook is SP-041, PR #172). When the two meet, orchd's guard snapshot must carry ProtectedPaths(home, config dir, data dir, applied policy) (its Write, Anywhere and Read lists, replacing SP-041's single protected guard directory) and the hook must build its policy with NewGuardPolicyProtecting; replay (SP-047) should use the same function.",
+  "source": "https://github.com/willesq/orchestrator/pull/175",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041",
+    "SP-042",
+    "SP-047"
+  ],
+  "status": "resolved",
+  "note": "Resolved 2026-11-12 in commit f88994eb7c2d5f95de2bf9ba6b1ba83ea0055b9c (PR #175): orchd's guard snapshot (version 2) carries spaces.GuardProtection (ProtectedPaths for the applied policy, the guard directory and orch's binaries), orch-hook builds its policy with NewGuardPolicyProtecting from it, and orchd's ReplaySpaces and the CLI's payload replay compute the same protection. Verified by an independent verifier at 7ffc5bb (TestGuardSelfProtectionLive, TestReplaySpacesReproducesSelfProtection, TestSpacesReplayFixturesSelfProtection). Security-review lows: RC-200..RC-205."
+}

@@ -1,0 +1,12 @@
+{
+  "id": "RC-228",
+  "kind": "follow-up",
+  "topic": "Which remote gh picks, unverified cases",
+  "detail": "Low (SP-044 review rounds 1-2): gh only counts remotes on hosts it is signed in to. When gh is signed in to an Enterprise host only, it skips github.com remotes and may pick a later one; the check assumes github.com is known. The check counts gh api's {owner}/{repo} as the marked repo plus the first remotes, since gh api may ignore gh repo set-default (not checked against gh's source). Whether GitHub resolves dot segments in API paths is unverified; such paths fail closed.",
+  "source": "https://github.com/willesq/orchestrator/pull/177",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-044"
+  ],
+  "status": "open"
+}

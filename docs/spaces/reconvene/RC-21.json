@@ -1,0 +1,11 @@
+{
+  "id": "RC-21",
+  "kind": "user-action",
+  "topic": "Settings screens and config-in-db follow-up",
+  "detail": "The Settings screens moved to orch.db (v0.44.0) were never checked by hand in the running app, and the env-var reset bypass has an accepted-risk follow-up.",
+  "source": "https://github.com/willesq/orchestrator/pull/142",
+  "raised": "2026-11-08",
+  "affects": [],
+  "status": "resolved",
+  "note": "Resolved by the user on 2026-11-10 after a hand check of Orch.app 0.45.1 driven through accessibility: all eight Settings sections (Overview, Tasks, Docs, GitHub, Memory, Claude, Safety Net, App) render with values from orch.db. Found one bug, filed as https://github.com/willesq/orchestrator/issues/162 ('Open at login' disabled for an installed app). The Command log section (SP-015) ships in the next release. The env-var reset bypass stays the accepted risk documented in docs/internals/config.md."
+}

@@ -1,0 +1,13 @@
+{
+  "id": "RC-600",
+  "kind": "follow-up",
+  "topic": "The outbound rules' hash in orch.db finds damage, not a writer who recomputes it",
+  "detail": "2026-11-14, SP-075 security audit (low): each spaces_terms_rules row holds a plain SHA-256 of its rules. A process running as the user can write orch.db while orchd is stopped (or while the guard is off or logging) and insert a correctly hashed row with every baseline rule off, or delete the newest row to roll back to looser rules; the next orchd start takes it. Same limit as the enforcement switches and the sandbox setting (RC-216). Options: (a) accept and document (done in docs/internals/daemon.md); (b) HMAC rows with a key orchd keeps in a 0600 file in its protected data dir and keep orchd's highest revision to detect a rollback. Recommendation: (a) now, (b) together with the switches if they get one. Since D-66 a replay looks rules up by revision, and a row's hash covers only its rules document, not its rev, time or caller, so such a writer could also move a document to another revision; option (b) would cover those columns too.",
+  "source": "https://github.com/willesq/orchestrator/pull/185",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-075",
+    "SP-070"
+  ],
+  "status": "open"
+}

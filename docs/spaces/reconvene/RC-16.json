@@ -1,0 +1,12 @@
+{
+  "id": "RC-16",
+  "kind": "follow-up",
+  "topic": "hook-capture.sh summary on non-object payloads",
+  "detail": "'scripts/hook-capture.sh summary' errors on payloads that are not JSON objects.",
+  "source": "https://github.com/willesq/orchestrator/pull/138",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-001"
+  ],
+  "status": "open"
+}

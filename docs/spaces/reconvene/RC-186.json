@@ -1,0 +1,13 @@
+{
+  "id": "RC-186",
+  "kind": "follow-up",
+  "topic": "Show checkout-settings problems outside orchd's log",
+  "detail": "Tracked files (no rules), entries moved aside, unmergeable files replaced and a truncated walk are logged by orchd only. Surface them in orch status and the app (SP-072), and recheck ignore status periodically (a checkout seen ignored is not checked again until orch changes its file).",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046",
+    "SP-072"
+  ],
+  "status": "open"
+}

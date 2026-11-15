@@ -1,0 +1,13 @@
+{
+  "id": "RC-212",
+  "kind": "follow-up",
+  "topic": "claude_config_dir validation and leftover per-space profiles (security audit lows)",
+  "detail": "2026-11-14 audit lows: (1) validation refuses only an exact (case-insensitive) duplicate claude_config_dir; it does not refuse one nested in another space's, one equal to or inside a gh_config_dir, an isolated root or orch's data folder, ~/.claude itself, or two spellings of one folder through a link. (2) Earlier builds of this branch made <data dir>/spaces/<space>/claude profiles (with a /login and transcripts, and a keychain item); nothing removes them, though they stay denied to other spaces. (3) The launcher's --settings JSON is visible to other local users in ps (paths only; documented).",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open",
+  "note": "2026-11-14: unchanged by D-61. Related: an allowRead that would hold another space's denied folder (by link or real path) or holds a pattern character is now left out (so a gh_config_dir inside the default gh folder leaves default-login spaces without gh in the sandbox, silently); validation still does not refuse a gh_config_dir or claude_config_dir nested in another's, inside the default gh folder, or holding pattern characters."
+}

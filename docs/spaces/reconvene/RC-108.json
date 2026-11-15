@@ -1,0 +1,12 @@
+{
+  "id": "RC-108",
+  "kind": "decision",
+  "topic": "Peer identification on Linux kernels before 6.5",
+  "detail": "SP-041 identifies socket peers by SO_PEERPIDFD on Linux (D-44), which needs kernel 6.5. On older kernels (Debian 12, Ubuntu 22.04) no peer is identified, no session can be pinned, and once spaces are applied with the guard enforcing every tool call is refused (fails closed). Documented in docs/internals/daemon.md; orch targets macOS (D-49). Confirm, or ask for a fallback (for example SO_PEERCRED plus a start-time check) on older kernels.",
+  "source": "https://github.com/willesq/orchestrator/pull/172",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041"
+  ],
+  "status": "open"
+}

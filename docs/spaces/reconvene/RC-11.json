@@ -1,0 +1,13 @@
+{
+  "id": "RC-11",
+  "kind": "follow-up",
+  "topic": "SP-020 audit lows",
+  "detail": "Prune old draft revisions; normalise roots (NFC/NFD, symlinks) and web prefixes the way enforcement will match; clearer refusal when a bare node/bun/deno above 'orch' makes orchd refuse the operator, and don't count doubled '/' toward the depth limit; a session can keep saving drafts so the operator's apply is always stale; 'orch status' should say nothing is readable when the newest apply fails to verify; resolve root symlinks before nesting checks; transient changed_outside_orchd during an apply.",
+  "source": "https://github.com/willesq/orchestrator/pull/143",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-020",
+    "SP-022"
+  ],
+  "status": "open"
+}

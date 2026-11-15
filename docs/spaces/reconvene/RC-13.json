@@ -1,0 +1,15 @@
+{
+  "id": "RC-13",
+  "kind": "follow-up",
+  "topic": "SP-010 lows",
+  "detail": "The PinSession comment in orchd.proto says 'live pin' though the rule also applies to an ended pin; the registry lock is held while placement waits on GitHub (up to 10 s); a harness can claim a not-yet-pinned session ID first (denial of service only); the harness start time is read just after the walk; a session can end its own pin early.",
+  "source": "https://github.com/willesq/orchestrator/pull/147",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-010",
+    "SP-011",
+    "SP-015",
+    "SP-017"
+  ],
+  "status": "open"
+}

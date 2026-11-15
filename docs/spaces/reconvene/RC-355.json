@@ -1,0 +1,13 @@
+{
+  "id": "RC-355",
+  "kind": "user-action",
+  "topic": "After SP-024 merges, existing placed content stays in the base until relabelled",
+  "detail": "Chunks stored before SP-024 (including those SP-023 placed in a space) stay in the base collection; new writes go to space collections. Until SP-027's 'orch rag relabel' moves them, they are found only by searches that read every collection (today's default) or 'shared'. A docs file or source file that did not change is not written again (RC-124), so it is not moved by a sync either. Nothing to do while no policy is applied; with one applied, run the relabel once SP-027 lands.",
+  "source": "https://github.com/willesq/orchestrator/pull/183",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-027",
+    "SP-025"
+  ],
+  "status": "open"
+}

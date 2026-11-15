@@ -1,0 +1,14 @@
+{
+  "id": "RC-1302",
+  "kind": "decision",
+  "topic": "Taint of a session that read across spaces",
+  "detail": "SP-029's summary says the operator's explicit cross-space reads taint that session, but no acceptance item covers it and today no session reads across spaces except while memory filtering is switched off (SP-070, SP-025.1.a4); only Orch.app reads every space, and it has no session records. Proposed: when a session receives results from a space it may not read (filtering off), mark its pin tainted so its later records, summaries and client notes go to quarantine for the operator to retag. Needs a decision and probably a pin column (migration).",
+  "source": "https://github.com/willesq/orchestrator/pull/196",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-029",
+    "SP-070",
+    "SP-025"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "RC-901",
+  "kind": "follow-up",
+  "topic": "Quarantine list is capped at 5,000 sources per answer",
+  "detail": "ListQuarantine names at most 5,000 sources (by URI) so one answer stays under gRPC's message size; totals count all. The proto has no paging, so 'orch quarantine list' shows the first 5,000 and 'assign' refuses a source beyond them. Options: (a) accept; (b) add paging (a proto change) if quarantine ever grows that large. Recommendation: (a).",
+  "source": "https://github.com/willesq/orchestrator/pull/192",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-028"
+  ],
+  "status": "open"
+}

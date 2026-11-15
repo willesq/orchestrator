@@ -1,0 +1,15 @@
+{
+  "id": "RC-80",
+  "kind": "follow-up",
+  "topic": "SP-040 audit lows and design choices",
+  "detail": "(1) In strict mode a private root symlinked into another non-public space is placed by the deepest root only, so unreadable_space can judge by the wrong space (never lets one job reach another; otherJobHolds covers isolated spaces). (2) Self-protection covers file-tool writes (Write, Edit, MultiEdit, NotebookEdit, apply_patch); shell writes to protected paths (>, tee, sed -i, cp, mv) are SP-042's, since Targets does not tell writes from reads. (3) An unknown guard mode is read as strict, so a damaged enforcement state never enforces less. (4) A session under a public root is pinned to public_root_sessions (D-22); strict mode judges its targets by that space's reads, not by 'public only'. (5) A path in no space (/tmp, /usr, /opt) is always allowed; per-space TMPDIRs (D-53, SP-046) are the boundary for temp files.",
+  "source": "https://github.com/willesq/orchestrator/pull/166",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-040",
+    "SP-041",
+    "SP-042",
+    "SP-046"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "SP-080",
+  "status": "in_progress",
+  "passes": false,
+  "verified_sha": null,
+  "verified_at": null,
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-080-state-files",
+  "pr": "https://github.com/willesq/orchestrator/pull/205",
+  "evidence": {
+    "SP-080.1": []
+  }
+}

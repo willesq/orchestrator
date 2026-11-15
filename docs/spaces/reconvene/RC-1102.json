@@ -1,0 +1,12 @@
+{
+  "id": "RC-1102",
+  "kind": "follow-up",
+  "topic": "SP-031 security review lows accepted",
+  "detail": "(1) The counts are taken under the cache's lock, so a slow count (up to the 3 s limit, plus any file or git read on a hung mount that does not honor it) holds up other Status calls; any caller can trigger it at most once per 30 s. A single-flight refresh that serves the last counts would remove the wait. (2) Conflicts are counted by placing each live quarantined session's first folder again under the policy applied now, not the one at pin time (as RC-502 describes for the app); recording the outcome on the pin needs a migration. Fixed in the PR: the count is detached from the caller's cancellation, a partial conflict count is a failure, and an unscoped search under a policy (memory filtering off) names collections to Orch.app only.",
+  "source": "https://github.com/willesq/orchestrator/pull/197",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-031"
+  ],
+  "status": "open"
+}

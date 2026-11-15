@@ -1,0 +1,13 @@
+{
+  "id": "RC-46",
+  "kind": "user-action",
+  "topic": "GitHub Actions stopped starting jobs for willesq/orchestrator",
+  "detail": "Since about 18:14 UTC on 2026-11-09, workflow runs for PR #152 end as 'failure' without starting jobs: first only the macOS jobs (app on macos-26: 'This run likely failed because of a workflow file issue'; the ci build job on macos-latest never created, and the run cannot be re-run), then on 2870cf1 every job including Linux. No workflow file changed and app.yml passed at 9bf3551 (17:59 UTC). Likely an account-side limit such as the Actions spending limit; check the account's Actions billing and settings. SP-014 is blocked on DOD-9 until CI runs green. SP-014 was admin-merged under D-32 with the macOS ORT build not run; re-run CI on main once Actions starts jobs again. Update 2026-11-09 (SP-017 session): Actions started jobs again by about 20:50 UTC; PR #154 ran test, the macOS ORT build and app (https://github.com/willesq/orchestrator/actions/runs/42704166756). SP-014's re-run on main is still outstanding, and the cause was not confirmed.",
+  "source": "https://github.com/willesq/orchestrator/pull/152",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-014"
+  ],
+  "status": "resolved",
+  "note": "Resolved by the user on 2026-11-10: Actions has run full CI again since about 20:50 UTC on 2026-11-09; PRs #154 and #157 ran test, the macOS ORT build and app green on code containing SP-014, which covers SP-014's missing macOS build (CI does not run on main itself). The cause was not confirmed."
+}

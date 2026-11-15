@@ -1,0 +1,13 @@
+{
+  "id": "RC-753",
+  "kind": "follow-up",
+  "topic": "Relabel of docs stored without an origin is paced by GitHub's lookup budget",
+  "detail": "Docs chunks stored before SP-023 carry no visibility, so the relabel asks GitHub about each repo through the shared repo lookups (30 per minute, shared with live placement; a dry run spends them too). A repo it cannot ask about stays stale and is counted as left stale; the operator runs the relabel again. Option: pace or batch relabel lookups separately, or use the docs sync's repo listing.",
+  "source": "https://github.com/willesq/orchestrator/pull/187",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-027",
+    "SP-030"
+  ],
+  "status": "open"
+}

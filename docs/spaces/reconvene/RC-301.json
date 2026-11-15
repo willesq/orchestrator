@@ -1,0 +1,12 @@
+{
+  "id": "RC-301",
+  "kind": "follow-up",
+  "topic": "GitHub budget counts gh calls, not API requests (security audit, low)",
+  "detail": "SP-074.2: a gh api --paginate call counts as one call however many pages it fetches, and counts live in orchd memory, so a restart starts a new hour. Proposed: count pages (or weight paginated calls) and keep the window across restarts if that matters.",
+  "source": "https://github.com/willesq/orchestrator/pull/182",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-074"
+  ],
+  "status": "open"
+}

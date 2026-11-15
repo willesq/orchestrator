@@ -1,0 +1,17 @@
+{
+  "id": "RC-89",
+  "kind": "follow-up",
+  "topic": "Layers that read the switches",
+  "detail": "Today only the guard switch changes behavior (command log records while off; the digest and status for all layers). Memory filtering (SP-025), outbound terms (SP-044, SP-045), generated sandbox rules (SP-046) and the enforcing guard (SP-041, which must fail closed in enforcing states per INV-13 and needs the enforcement state in the read-only file it reads) must read enforcement.state for their layer when they land. The app's switches and banner are SP-072.",
+  "source": "https://github.com/willesq/orchestrator/pull/167",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-025",
+    "SP-041",
+    "SP-044",
+    "SP-045",
+    "SP-046",
+    "SP-072"
+  ],
+  "status": "open"
+}

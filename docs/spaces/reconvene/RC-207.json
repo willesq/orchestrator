@@ -1,0 +1,12 @@
+{
+  "id": "RC-207",
+  "kind": "follow-up",
+  "topic": "Security audit lows on the /tmp temp folders (SP-046)",
+  "detail": "From the 2026-11-12 audit of the temp-folder move (its medium, settings naming a temp folder orch could not make its own, was fixed: such a space gets no TMPDIR, TestSyncFailsClosedOnTmpRoot). Lows left: (1) a temp folder of a deleted or renamed space stays under /tmp/orch-<uid> and is no longer denied, and the root itself is not denied, so any session can list the space names in it; remove or deny entries that belong to no current space. (2) hashed folder names use 48 bits and a collision between two long names is not detected (both spaces would share and deny one folder). (3) EnsurePrivateDir makes an existing root of orch's own owner-only after the fact; entries others made while it was open are not checked. (4) After a reboot clears /tmp, another local user can make /tmp/orch-<uid> before orchd's first sync; orchd then refuses it and reports it, and sessions get no TMPDIR until the user removes it. Re-audit lows: (5) a /tmp/orch-<uid> root another user planted as a link, with space-named entries linking elsewhere, makes the real-path step add those targets to every space's denies (extra denies only, so sessions can break, nothing is exposed); skip denying a space's temp folder by its real path when the root failed its check. (6) Likewise a planted /tmp/claude-<uid> link adds its target to the launcher profile's denies.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

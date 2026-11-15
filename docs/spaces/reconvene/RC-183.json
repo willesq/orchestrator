@@ -1,0 +1,12 @@
+{
+  "id": "RC-183",
+  "kind": "follow-up",
+  "topic": "What the rules reveal and how exactly they match",
+  "detail": "Each checkout's settings name other jobs' root paths (sessions can read which folders are denied; name roots neutrally). Claude Code permission rules match by case while APFS usually is not case sensitive; paths holding glob characters get only the sandbox deny.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

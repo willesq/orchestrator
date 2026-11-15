@@ -1,0 +1,13 @@
+{
+  "id": "RC-603",
+  "kind": "decision",
+  "topic": "orch.db stays readable by agents' tool calls, so the outbound rules' values can be read from it",
+  "detail": "2026-11-14, SP-075 security review (info): rule values are kept like terms (INV-07) and the guard snapshot that carries them is now read-protected, but orch.db is not: the self-protection test TestSelfProtectionAllowsReads (SP-042) deliberately allows reading orch data such as orch.db, and a session can read spaces_terms_rules with sqlite3. Terms files themselves are read-protected. Options: (a) accept: a rule's value is the operator's configuration, not a secret term, and reading it only tells an agent what is refused; (b) read-protect orch.db* in ProtectedPaths, which changes SP-042's accepted behavior. Recommendation: (a), and advise operators to put anything secret in a terms file rather than a rule.",
+  "source": "https://github.com/willesq/orchestrator/pull/185",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-075",
+    "SP-042"
+  ],
+  "status": "open"
+}

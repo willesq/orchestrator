@@ -1,0 +1,14 @@
+{
+  "id": "RC-216",
+  "kind": "decision",
+  "topic": "A forged sandbox setting is taken at restart and never marks a digest (security audit medium)",
+  "detail": "D-61 makes the setting quiet: it shows in orch status and the app, not in start digests. A process running as the user (not a sandboxed shell: orch.db is outside every space's writable folders, and the guard refuses tool calls naming it) can write a matching spaces_enforcement row and log entry for 'off' while orchd is stopped; the next start takes it with no problem, as it would a switch, but no digest says so. An inconsistent edit now makes the setting on and is reported. Options: (a) name the setting in the next digest once after each change or restart where it is off; (b) a keyed MAC over the row and log, with the key outside orch.db; (c) accept as D-61 decided. Blocks SP-046 (DOD-6) until decided.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046",
+    "SP-070"
+  ],
+  "status": "resolved",
+  "resolution": "Settled by the user on 2026-11-14 as D-68; implemented by the SP-046 follow-up lane."
+}

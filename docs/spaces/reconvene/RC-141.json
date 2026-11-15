@@ -1,0 +1,12 @@
+{
+  "id": "RC-141",
+  "kind": "follow-up",
+  "topic": "ScanSpaces accepted lows",
+  "detail": "From the SP-050 security audit (0 critical/high/medium). Accepted: (1) the walk lists folders through an os.Root, but each checkout is read by absolute path with handoff.CheckoutAt, which follows a linked worktree's .git pointer outside the chosen folder by design; a folder swapped for a symlink between listing and reading could make it read one .git outside the folder. Only that remote's owner/repo reaches the operator. (2) The one-scan-at-a-time slot is a package variable, shared by every server in the process (one per orchd). (3) gh profile checks have no single-flight: a scan and a Status call at the same moment can each start a gh auth check for the same profile. (4) A placement or gh error is returned to the operator verbatim (no terms or tokens).",
+  "source": "https://github.com/willesq/orchestrator/pull/170",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-050"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "RC-300",
+  "kind": "follow-up",
+  "topic": "gh_config_dir checks: path race, ACLs and budget key (security audit, low)",
+  "detail": "SP-074 audit of PR #182: github.CheckProfileDir resolves symbolic links to check the directory, but gh is started with the unresolved gh_config_dir, so a link swapped between the check and the run is not caught; macOS ACLs are not checked; the hourly budget is keyed on the gh_config_dir string, so two spellings of one folder would get two budgets (validation only rejects equal expanded paths). Proposed: pass the resolved path as GH_CONFIG_DIR, reject folders with an extended ACL, key the budget on the resolved path.",
+  "source": "https://github.com/willesq/orchestrator/pull/182",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-074",
+    "SP-063"
+  ],
+  "status": "open"
+}

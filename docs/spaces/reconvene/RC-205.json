@@ -1,0 +1,13 @@
+{
+  "id": "RC-205",
+  "kind": "follow-up",
+  "topic": "Self-protection scope notes from the RC-110 review",
+  "detail": "Info-level notes from the three RC-110 security-review rounds: (1) user hook scripts that harness settings point at (~/.claude/hooks/*), shell startup files (~/.zshenv, ~/.zshrc, ~/.bash_profile), Gemini and Codex extension directories and the Homebrew tap formula run code in later sessions and are plain, recognisable writes, but are not protected; (2) ~/Library/LaunchAgents/*orch* also protects unrelated launch agents whose name holds 'orch' (com.pytorch...), and writing the LaunchAgents directory itself is refused; narrow to com.orchestrator.* and homebrew.mxcl.orch*.plist if that matters; (3) the '.pub' exclusion meant for ~/.ssh/id_* also applies to write patterns (com.orchestrator.orchd.plist.pub is writable, harmless); (4) a replay judges older revisions with today's protection, so events recorded before RC-110 can show as changed where they wrote a path protected since (documented in daemon.md).",
+  "source": "https://github.com/willesq/orchestrator/pull/175",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-042",
+    "SP-047"
+  ],
+  "status": "open"
+}

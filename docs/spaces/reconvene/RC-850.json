@@ -1,0 +1,13 @@
+{
+  "id": "RC-850",
+  "kind": "decision",
+  "topic": "A sticky retag lets any writer of that URI write into the retag target",
+  "detail": "SP-071.2.a1 asks that a later client re-ingest of a retagged source_uri lands in the retagged space, and spaces.Classify lets an override win over every rule. A session pinned to another job's space could then write its own text under that URI into the target space (or into public), which is a cross-space write. Options: (a) honor the override for orchd's own writers (docs sync, sources refresh) and for client writes from the operator or from a session whose space is the target, and refuse other client writes of that URI; (b) honor it for every writer as written. Recommendation: (a); the lane implements (a) unless the user picks (b).",
+  "source": "https://github.com/willesq/orchestrator/pull/191",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-071",
+    "SP-023"
+  ],
+  "status": "open"
+}

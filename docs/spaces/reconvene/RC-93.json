@@ -1,0 +1,15 @@
+{
+  "id": "RC-93",
+  "kind": "follow-up",
+  "topic": "Flaky tests after the parallel SP-040/SP-073/SP-070 merges",
+  "detail": "Seen on 2026-11-11 while merging main into SP-070 (coordinator session). (1) TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon) fails 'WatchTasks ended with context canceled' in 2 of 2 package runs on main at faa84d2 (after SP-073) and in 3 of 4 runs on the SP-070 merge on this Mac, but passes 20/20 run alone and passed CI on Linux; more often than RC-66's 'about 1 in 5', so SP-073's task-anchor follower (it holds one task hub watcher slot, RC-67) may make it worse. See RC-66 and RC-92 for the cause and fix. (2) TestDecideCases (internal/spaces, SP-040) failed once under the full parallel suite: Targets hit its time budget ('analysis took too long'), so the case 'session pinned to no space reads a private space' got analysis_limit instead of within_space; it passes alone (3/3). The table test should give Targets a budget that load cannot exhaust, or retry on a limit reason.",
+  "source": "https://github.com/willesq/orchestrator/pull/167",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-040",
+    "SP-073",
+    "SP-070"
+  ],
+  "status": "open",
+  "note": "Part (1) fixed on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction): WatchTasks ends cleanly when the client goes away mid-read; see RC-92. Part (2) remains open: TestDecideCases' 100 ms Targets budget can be exhausted under load."
+}

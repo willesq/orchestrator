@@ -1,0 +1,13 @@
+{
+  "id": "RC-222",
+  "kind": "follow-up",
+  "topic": "Non-github.com hosts in gh repo names",
+  "detail": "Low (SP-044 review round 1): parseRepo drops the host, so gh -R ghe.example.com/acme/x or a PR URL on an Enterprise host is placed by the github.com owner acme, while GH_REPO with a host gives no space. Proposed: treat a repo on another host than github.com as holding no space.",
+  "source": "https://github.com/willesq/orchestrator/pull/177",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-044",
+    "SP-043"
+  ],
+  "status": "open"
+}

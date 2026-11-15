@@ -1,0 +1,13 @@
+{
+  "id": "RC-184",
+  "kind": "follow-up",
+  "topic": "Unverified Claude Code behaviour SP-046 relies on",
+  "detail": "Read from the Claude Code 2.1.309 binary, not measured: sandboxed commands get TMPDIR=$CLAUDE_CODE_TMPDIR (set through settings env), and the sandbox already denies shell writes to .claude/settings*.json. Not known: whether sandbox.filesystem.allowRead in a subfolder's own .claude (which applies to sessions started there, SP-004) or in a project settings.json can re-allow a denied folder; such subfolder files are not managed. RC-180's run checks the first.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "resolved",
+  "note": "2026-11-12, measured with Claude Code 2.1.309 headless haiku sessions: the first part was wrong. A settings file's env CLAUDE_CODE_TMPDIR or TMPDIR (settings.local.json, also with a 12-byte path) does not change the sandboxed TMPDIR, which stayed /tmp/claude-<uid>, nor the CLAUDE_CODE_TMPDIR the shell sees (also /tmp/claude-<uid>); other env entries (GH_CONFIG_DIR, an arbitrary name) do reach the shell. CLAUDE_CODE_TMPDIR in the process environment does: TMPDIR=<it>/claude-<uid>, but only when that path is at most 44 bytes; a 66-byte one fell back to /tmp/claude-<uid> (the binary names the AF_UNIX socket limit). No sandbox setting names a temp folder. SP-046 now keeps temp folders under /tmp/orch-<uid> and sets them through 'orch run' (RC-206 for sessions started without it). The second part held in the 'protect' probe (shell writes to .claude refused). Still not known: whether a subfolder's own .claude settings can re-allow a denied folder. 2026-11-14: RC-208 depends on the remaining question in a related form: whether sandbox.filesystem.allowRead can re-allow a folder that a permissions.deny Read rule (orch's installed Read(~/.config/gh/**)) denies to sandboxed commands. Not measured. 2026-11-14, measured with Claude Code 2.1.309: sandbox.filesystem.allowRead in a checkout's settings.local.json re-opens a folder that a permissions.deny Read rule (the installed Read(~/.config/gh/**)) denies to sandboxed commands; an allowRead in the checkout's own .claude/settings.json, or beside the deny in settings.local.json, re-opens a sandbox.filesystem.denyRead there too (RC-215); a denyRead given through --settings was not re-opened by a project settings.json allowRead. Resolved: the open question is answered."
+}

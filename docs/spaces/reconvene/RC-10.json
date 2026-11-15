@@ -1,0 +1,14 @@
+{
+  "id": "RC-10",
+  "kind": "decision",
+  "topic": "SP-063 follow-ups",
+  "detail": "Proposed: GitHub scopes for profile-only orgs; stricter gh_config_dir checks; refuse calls a space's profile cannot read; a quota cap for isolated accounts. Known gaps: profile-only orgs cannot be PR-watched yet, and the repo picker and PR-outcome tracker still use the default login.",
+  "source": "https://github.com/willesq/orchestrator/pull/146",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-063",
+    "SP-043"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: all four planned in SP-074; see D-54."
+}

@@ -1,0 +1,19 @@
+{
+  "id": "SP-050",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "08cbbcd37f2258fa6709545e59b61779afdbc545",
+  "verified_at": "2026-11-12T15:27:32Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-050-spaces-pane-rpcs",
+  "pr": "https://github.com/willesq/orchestrator/pull/170",
+  "evidence": {
+    "SP-050.1": [
+      "a1 (7 of 7 RPCs tested, at b0019b5): ListSpaces: TestListSpaces, TestListSpacesWithoutPolicy, TestListSpacesBrokenPolicy (internal/daemon/spaces_pane_rpc_test.go). ScanSpaces: TestScanSpaces, TestScanSpacesRequests, TestScanSpacesLimits, TestScanSpacesAccounts, TestScanSpacesReadsCachedAccounts, TestScanSpacesStoreErrors, TestScanSpacesUnreadableFolder, TestScanSpacesOneAtATime, TestScanSpacesLookupBudget, TestScanErr. ExplainPlacement (existing, reused): TestExplainPlacementCases, TestExplainPlacementAgents, TestExplainPlacementNoPolicy, TestExplainPlacementBadTargets, TestExplainPlacementErrorsHidden (placement_rpc_test.go). ListSessionPins is the existing ListSessions RPC (session pins with liveness; RC-140): TestListSessionsCallerScope, TestSessionLivenessStates (liveness_test.go). ListToolEvents (existing): TestListToolEventsCallerScope, TestListToolEventsPages (toollog_read_test.go). DiffSpaces (existing): TestDiffSpacesAndStatus, TestDiffSpacesOperatorOnly (spaces_rpc_test.go). ApplySpaces (existing): TestApplySpacesOperatorOnly, TestApplySpacesErrors. taskCallable/operatorActions: ListSpaces and ScanSpaces added to operatorActions (callers.go); TestEveryRPCIsClassified passes. Operator-only test: TestSpacesPaneRPCsOperatorOnly asserts ApplySpaces, DiffSpaces, ListSpaces and ScanSpaces are classed operator-only and refused (PermissionDenied) to claude and codex sessions, orchd children, queued tasks, unreadable ancestry, unidentified and peerless callers, and allowed for the operator. All pass.",
+      "a2: TestScanSpacesWritesNothing passes: the scanner runs over a read-only fake filesystem (fstest.MapFS behind a recording fs.FS, which has no write method) and a fake spaces store that also offers SaveDraft/Apply and counts calls; the scan reads both (opens > 0, store reads > 0), store writes = 0, and the MapFS is unchanged. TestScanSpacesLeavesDiskAndDBAlone also runs ScanSpaces through the server over a real tree and orch.db: a digest of every path, mode, size, mtime and content, and of every row of every orch.db table, is identical before and after.",
+      "DOD at b0019b5: go test ./... exit 0; go vet ./... exit 0; make cover: All files >= 80% (spaces_list_rpc.go 100.0%, spaces_scan.go 99.2-100.0% across runs, callers.go 96.4%); gofmt -l on changed Go files: 0 lines; git diff --check clean; security-audit subagent: 0 critical/high/medium, 3 lows fixed in the same commit (per-scan GitHub lookup cap of 15, os.Root walk, one scan at a time), the rest accepted (RC-141); docs/internals/daemon.md updated; orchd.proto regenerated with make proto (Go and Swift stubs).",
+      "Independent verifier (fresh subagent given only the diff, this feature, INV-06 and definition_of_done) at 08cbbcd: a1 PASS, a2 PASS, INV-06 PASS, DOD-1..DOD-8 PASS. DOD-9: gh pr checks 170 all passing (app 3m44s, build 42s, test 5m51s) on 08cbbcd."
+    ]
+  }
+}
