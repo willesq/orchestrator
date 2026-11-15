@@ -1,14 +1,20 @@
 {
   "id": "SP-083",
-  "status": "in_progress",
-  "passes": false,
-  "verified_sha": null,
-  "verified_at": null,
+  "status": "done",
+  "passes": true,
+  "verified_sha": "54e544352b31dbad3d8269dd6d02f6edfc60802a",
+  "verified_at": "2026-11-15T20:40:52Z",
   "blocked_reason": null,
   "attempts": 1,
   "branch": "feat/sp-083-dm-search",
   "pr": "https://github.com/willesq/orchestrator/pull/215",
   "evidence": {
-    "SP-083.1": []
+    "SP-083.1": [
+      "a1: TestSearchHitSpaceIsReadable (internal/daemon/search_hit_space_test.go): five non-operator callers (sessions in acme, globex and personal, a task in acme, an unidentified caller) run three search shapes over every space's content, and every hit's space is one the caller reads (INV-01); the operator's hit names its own space. TestDirectMessageHitsNameTenantAndSpace: the operator's SearchDirectMessages returns each chat hit with the tenant and space stored with it (slack:TACME/acme, teams:globex-tenant/globex) although the policy binds no tenant, and non-chat hits have no tenant. TestSearchHitSpaceEmptyWithoutPolicy: with no policy (and so spaces off) space is empty and the tenant kept. TestTenantKey (internal/rag). Swift (macos/Tests/OrchKitTests/DirectMessagesTests.swift): callsSearchDirectMessagesAndKeepsTenantAndSpace (the app's DaemonClient sends SearchDirectMessages to a fake orchd serving only that RPC and keeps tenant and space), searchShowsEachResultsTenantAndSpace, worksWithSpacesOff, screenShareSafeModeShowsNoDirectMessage (no search sent, held results hidden and dropped), resultsArrivingWhileSharingAreDropped, emptyQuerySendsNothing. Mutations: hard-coding or not blanking the space, dropping the tenant, or removing the sharing guard each fail these tests.",
+      "a2: refusedSearchSaysWhy (PermissionDenied: says orchd refused, who may search DMs, and orchd's message), failedSearchSaysWhy (InvalidArgument, FailedPrecondition, Unimplemented, Unavailable, Unauthenticated, and a failure replaced by the next search's results), failureTextIsDisplaySafe, refusalMessageIsDisplaySafe, refusalReachesTheModel (through gRPC).",
+      "a3: waived by user (D-82). Light and dark snapshots at the default and companion widths of the empty, results (one hit stored with spaces off), refused, failed and screen-share-safe states (DirectMessagesSnapshots, 20 images) were rendered locally and reviewed; not committed.",
+      "Validation at 54e5443: go test ./... exit 0; go vet ./... exit 0; make cover: all files >= 80% (daemon.go 90.9%, rag/origin.go 100%, rag/search.go 96.7%); make app-cover: DaemonClient+DirectMessages.swift 100%, DirectMessages.swift 98.9%; swift test pass; gofmt -l empty; make proto leaves no diff. Security audit of the diff: no critical, high or medium; one low (an error path not display-safe) fixed, the other low notes in RC-1800.",
+      "Independent verification at 54e5443 (a fresh agent given only the diff, this feature, INV-01/INV-02/INV-10, D-71/D-81/D-82 and the definition of done): a1 and a2 PASS, a3 waived (D-82) with snapshots checked; DOD-1 to DOD-8 PASS; DOD-9 CI app, build and test green on PR #215."
+    ]
   }
 }
