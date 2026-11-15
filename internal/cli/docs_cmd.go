@@ -23,8 +23,8 @@ func newDocsCmd(cf clientFactory) *cobra.Command {
 		Short: "Ingest GitHub code-repo docs (markdown) for an owner on a cadence",
 	}
 	cmd.AddCommand(
-		docsOperatorOnly(newDocsAddCmd()), newDocsStatusCmd(), newDocsSyncCmd(cf),
-		newDocsRefreshCmd(cf), newDocsListCmd(), newDocsOwnersCmd(), docsOperatorOnly(newDocsRemoveCmd()),
+		docsOperatorOnly(newDocsAddCmd()), newDocsStatusCmd(cf), newDocsSyncCmd(cf),
+		newDocsRefreshCmd(cf), newDocsListCmd(cf), newDocsOwnersCmd(cf), docsOperatorOnly(newDocsRemoveCmd()),
 		docsOperatorOnly(newDocsToggleCmd(cf, "enable", true)), docsOperatorOnly(newDocsToggleCmd(cf, "disable", false)),
 		docsOperatorOnly(newDocsReposCmd(cf)), newDocsPurgeCmd(cf),
 	)
@@ -79,12 +79,15 @@ func newDocsAddCmd() *cobra.Command {
 	return cmd
 }
 
-func newDocsListCmd() *cobra.Command {
+func newDocsListCmd(cf clientFactory) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List ingested documents and how long since each was last ingested",
 		Args:  cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
+			if policyApplied(c.Context()) {
+				return printDocsFromOrchd(c, orchdLists{cf: cf})
+			}
 			reg, closeFn, err := openDocsRegistry()
 			if err != nil {
 				return err
@@ -106,16 +109,54 @@ func newDocsListCmd() *cobra.Command {
 	}
 }
 
-func newDocsOwnersCmd() *cobra.Command {
+// printDocsFromOrchd prints the synced docs orchd lists for the caller.
+func printDocsFromOrchd(c *cobra.Command, l orchdLists) error {
+	rep, err := l.docs(c.Context())
+	if err != nil {
+		return err
+	}
+	if len(rep.GetFiles()) == 0 {
+		fmt.Fprintln(c.OutOrStdout(), "no docs ingested")
+		return nil
+	}
+	for _, f := range rep.GetFiles() {
+		fmt.Fprintf(c.OutOrStdout(), "%-10s %s\n", humanAgo(f.GetUpdatedAt()), f.GetSourceUri())
+	}
+	if rep.GetTruncated() {
+		fmt.Fprintln(c.OutOrStdout(), "(more docs than one reply carries; not all are shown)")
+	}
+	return nil
+}
+
+// docOwnersShown keeps of owners those the caller may see: under a spaces
+// policy the ones orchd lists for it, else all.
+func docOwnersShown(c *cobra.Command, cf clientFactory, owners []docs.Owner) ([]docs.Owner, error) {
+	if !policyApplied(c.Context()) {
+		return owners, nil
+	}
+	shown, err := orchdLists{cf: cf}.docOwners(c.Context())
+	if err != nil {
+		return nil, err
+	}
+	out := owners[:0:0]
+	for _, o := range owners {
+		if shown[o.Owner] {
+			out = append(out, o)
+		}
+	}
+	return out, nil
+}
+
+func newDocsOwnersCmd(cf clientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "owners",
 		Short: "Inspect registered docs owners",
 	}
-	cmd.AddCommand(newDocsOwnersListCmd())
+	cmd.AddCommand(newDocsOwnersListCmd(cf))
 	return cmd
 }
 
-func newDocsOwnersListCmd() *cobra.Command {
+func newDocsOwnersListCmd(cf clientFactory) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List registered docs owners",
@@ -127,6 +168,9 @@ func newDocsOwnersListCmd() *cobra.Command {
 			}
 			defer closeFn()
 			owners, err := reg.ListOwners(c.Context())
+			if err == nil {
+				owners, err = docOwnersShown(c, cf, owners)
+			}
 			if err != nil {
 				return err
 			}
@@ -142,7 +186,7 @@ func newDocsOwnersListCmd() *cobra.Command {
 	}
 }
 
-func newDocsStatusCmd() *cobra.Command {
+func newDocsStatusCmd(cf clientFactory) *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Show per-owner sync status (last run, next due, repos, files)",
@@ -154,6 +198,9 @@ func newDocsStatusCmd() *cobra.Command {
 			}
 			defer closeFn()
 			owners, err := reg.ListOwners(c.Context())
+			if err == nil {
+				owners, err = docOwnersShown(c, cf, owners)
+			}
 			if err != nil {
 				return err
 			}

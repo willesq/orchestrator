@@ -179,6 +179,31 @@ process may call it, and an unknown session is `NotFound`. Session IDs must matc
 `^[A-Za-z0-9_-]{1,128}$` (`InvalidArgument`). Both RPCs are refused to queued tasks, whose
 identity comes from their task record (SP-011).
 
+<a id="task-pins"></a>**Task pins (SP-029, INV-09).** A queued task runs pinned to the space its
+dispatch recorded (D-46), but orchd pins it, not its hooks: the runner tells orchd each time a
+run changes (`agentrun.Runner.OnLive`), and once the run's agent process has started
+(`internal/daemon/task_pins.go`) orchd records a pin for the run's session ID (the task's own,
+`agentrun.SessionID`; a resumed Codex run's thread) with that process, the run's directory, the
+recorded space and the applied revision, with `inherited_from` set to `task:<id>`, and writes its
+guard pin file (or removes a stale one it cannot write). A task with no recorded space, or one the
+applied policy does not have or makes public, is pinned to `quarantine`. While spaces are
+configured, `PinSession` refuses a new pin under an ID shaped like a task's (a version 5 UUID,
+which harnesses never generate) (`PermissionDenied`), since any harness may call it with any ID
+and a pin taken before the task starts would place the task's records, and judge its calls, in
+that harness's space. Once the task holds the pin, `PinSession` from another process is refused as
+pinned elsewhere; a resume follows the usual rule (same space only). The task's pin replaces a
+pin in another space found under its ID (one taken before this check, or a Codex thread resumed by
+hand), and a run of the same task restarted in the same space takes it over. A pin under a task's
+session ID that does not name a task (taken before this check) is not trusted: the session's
+records are quarantined and no guard pin file is written for it (the file sync re-reads each pin
+under the registry's lock, so it never writes back a pin a task replaced). Replay trusts a task's
+pin only when it names that task. One cost: resuming by hand the session of a task that ran
+before spaces were configured is refused, since that task never got a pin. The pin decides where the task's transcript,
+record and summary are placed and the guard's verdicts on its calls; the task's own RPCs still
+resolve to the task (its reads and client writes use the recorded space directly). With no
+policy configured nothing is pinned (INV-10). A fresh Codex run learns its thread only when it
+ends, so it gets no pin: its records are quarantined and the enforcing guard refuses its calls.
+
 Refusals name no process to the caller; orchd logs why.
 
 **Limits.** Harnesses are recognised by name, executable or first arguments, all of which a
@@ -321,6 +346,10 @@ RPC and the caller's kind and ID (`refuseSettings`):
 | `InstallSafetyNet` | always |
 | `Restart` | always |
 | `LandPR`, `UndoPRLanding`, `DiscardPRLanding` | always |
+| `PurgeDocs` | always (D-77) |
+
+`DeleteSource` stays open to sessions, but under a policy a session deletes only from its own
+space ([records by space](#records-by-space), D-77).
 
 The policy is read only for these RPCs, so other calls from sessions cost nothing more. With no
 policy applied every RPC behaves as before (INV-10). Refused to sessions with or without a policy,
@@ -369,8 +398,10 @@ and so every client built on them (`rag_search`, `rag_list_sources`, auto-RAG, s
   session started through the guard reads no more than its original session (D-38).
 - **A queued task:** what the space recorded when it was dispatched reads (D-46). `Dispatch`
   records the dispatching session's pin, or for Orch.app (or, with no policy, the operator) the placement of the
-  task's directory as a session there would get it (quarantine for a scratch directory); any
-  other dispatcher, orchd's own review tasks and tasks dispatched before SP-025 record none. The
+  task's directory as a session there would get it (quarantine for a scratch directory). A PR
+  review task orchd dispatches records its PR owner's space (quarantine, so public memory only,
+  for an owner no space binds; SP-026). Any other dispatcher, and tasks dispatched before SP-025,
+  record none. The
   space travels in the task's durable workflow input (`AgentTaskInput.Space`) to the live run
   the resolver finds, and a task's client writes are placed in it too.
 - **Anyone else** (an unpinned harness, an unidentified process, the operator when it is not Orch.app,
@@ -387,14 +418,93 @@ spaces), and the detail goes to orchd's log; others get the error as before.
 
 Every RPC has an entry in `readSpaceDecisions` (`internal/daemon/readspaces_registry.go`,
 SP-025.2): `filtered` (the four above), `operator` (refused to every caller but the operator),
-`own` (the caller's own data or public content), `records` (orch records other than memory:
-SP-026's, or RC-700's for the registries, settings and logs it lists) or `none`. A test fails for
-an RPC with no entry, as for one missing from `taskCallable` and `operatorActions`.
+`own` (the caller's own data or public content), `records` (orch records other than memory,
+[kept by space](#records-by-space)) or `none`. A test fails for an RPC with no entry, as for one
+missing from `taskCallable` and `operatorActions`.
+
+### Records by space
+
+orch records other than memory are kept within the same readable spaces (SP-026, INV-01;
+`internal/daemon/records_scope.go`). `recordScope` is `readScope` for these RPCs, except that
+Orch.app reads every record without a log line while memory filtering is switched off (the app
+polls them). Each record's space is decided by orchd, never by a request field:
+
+- **PRs and GitHub items** (`ListPRs`, `ListGitHubItems`, `GetPRDetail`, `ListPRReviews`, PR
+  landings): the space the repo's owner is bound to under the applied policy, matched as GitHub
+  matches logins; an owner no space binds is quarantine, the operator's alone. Fork parents play
+  no part. `GetPRDetail` answers `NotFound` before the detail cache (keyed by URL, RC-351) is read
+  or filled. The babysitter also stamps each cached item with that space each sweep (`prs.PR.Space`,
+  `prs.Watch.Space`), and its events carry it.
+- **Tasks** (`ListTasks`, `GetTask`, `WatchTasks`, `GetTaskActivity`, landings): the space the
+  task recorded at dispatch, read from its durable workflow input (`queue.Runs.RecordedInput`,
+  which also reads a waiting task's start event from the backend's pending queue). A task with
+  no space (dispatched before SP-025, or by a caller orchd does not track) is the operator's
+  alone. Another space's task reads as one that does not exist (`GetTask` found false, empty
+  activity). `ListTasks` applies its limit before the filter, so a caller may get fewer.
+  `RetryTask`, `CancelTask` and `RateTask` need the caller to act in the task's own space (a
+  session's pin or a task's recorded space), not just read it (RC-708); others get the
+  `no such task` answer a missing task gets.
+- **GitHub and docs registries** (RC-700): `GetGitHubIdentity` keeps the orgs and teams of the
+  caller's spaces; `ListGitHubScopes`, `ListDocsOwners` keep their owners; `ListGitHubRepos`
+  and `ListDocsOwnerRepos` answer `NotFound` for another space's owner; `GetDocsSync` reads as
+  idle while another space's owner syncs. `ListRegisteredSources` records no space, so under a
+  policy it is empty for everyone but the operator, and `TailLogs` (whose lines name source URIs
+  and filtered readers' store errors) is refused to them.
+- **Review watches** (`WatchPRReview`, `SetPRReviewUpdateInPlace`, `StopPRReview`): a watch
+  dispatches a task that reads the PR owner's space with the caller's instructions, and the
+  answer carries the review's report, so only a caller acting in that space (a session's pin or
+  a task's recorded space) or the operator may start, change or stop one; others are told the PR
+  does not exist. `SyncDocs` answers for another space's owner as for one not registered, and its
+  progress and busy message name no owner, repo or counts of another space's sync.
+  `SaveDocsOwner`, `RemoveDocsOwner` and `SetGitHubScope` change an owner only from its space
+  (others are told it is not registered, or not the user's), and under a policy a
+  `RemoveDocsOwner` purge, like `PurgeDocs`, is Orch.app's alone (D-77).
+- **Ingest** (RC-701): a caller that does not read the space holding a synced copy gets the
+  refusal any other space's copy gets, not which sync keeps it.
+- **DeleteSource** (D-77): under a policy a session deletes a source only from its own space's
+  collection (`rag.Service.DeleteSourceIn`), and is told only that count, so it neither deletes
+  nor learns of another space's copy. A caller with no space of its own, or pinned to quarantine,
+  is refused; Orch.app deletes from every space. `PurgeDocs` is Orch.app's alone.
+
+Quarantine holds what no space could place, so a session pinned to it (one started outside every
+root) reads none of it and cannot retry, cancel, rate, watch or delete in it. A task's space is
+cached for orchd's life once found, since it is fixed at dispatch.
+
+With no policy, or memory filtering switched off, every caller sees every record (INV-10): the
+[memory filtering switch](#enforcement-switches) governs these records too, and has no separate
+layer for them.
+`GetConfig` and `ListSettings` are not filtered (RC-1250). The CLI commands that read orch's
+files directly (`orch docs list`, `orch docs owners list`, `orch docs status`, `orch prs`) show,
+under a policy, only what orchd's `ListDocs` and `ListPRs` list for the caller, and fail when
+orchd does not answer; the files themselves stay readable by any process of the user, which the
+OS sandbox layer bounds (RC-302).
+
+`Search` also says what it searched (SP-031; `internal/daemon/searchscope.go`), for `orch rag
+why`: `caller_space` (the session's pin or the queued task's recorded space; empty for anyone
+else), `scoped` (false when every collection was read) and `collections`, the collections read.
+A filtered reader's collections are only its readable spaces' own; an unscoped search under a
+policy (memory filtering switched off) lists them only for Orch.app, since every collection's
+name holds a space's.
 
 A filtered read sees only chunks labelled under the applied revision (INV-08;
 [memory.md](memory.md#spaces)), so after a new apply sessions and tasks read nothing placed
 earlier until `orch rag relabel` (SP-027) runs. Chunks stored before SP-024 stay in the base,
 which only the operator and unfiltered reads see (RC-355).
+
+### Spaces counts
+
+`Status` carries `SpacesStatus.counts` (SP-031; `internal/daemon/spacecounts.go`) while a policy
+with spaces is applied: each collection's chunks and how many are not labelled by the applied
+revision (`rag.CountSpaces`, two exact Qdrant counts per collection), and the live sessions
+pinned to quarantine whose first folder places as a conflict under the applied policy (at most
+50 are placed again; a pin does not record why it went to quarantine, RC-502). The counts are
+taken at most once per 30 s per revision, with a 3 s limit, and a failed count is not retried
+until that time ends (a count that runs out of time, conflicts included, is a failure, never a
+partial answer); the caller then gets a fixed error, the detail going to orchd's log
+(RC-350). Each caller gets them narrowed by `readableBy`: Orch.app every policy space, the
+totals over every collection (unplaced content and quarantine included) and the conflicts;
+anyone else only the spaces it reads, totals over those, and no conflicts. Quarantine's own
+counts are SP-028's `SpacesStatus.quarantine`.
 
 ### Command log
 
@@ -633,8 +743,8 @@ commands up to 2 hours (migration).
 `ReplaySpaces` (SP-047, `internal/daemon/spaces_replay_rpc.go`) decides one command log's stored
 tool events again and reports where the verdict differs from the recorded one, so a policy
 change can be tried on real behavior first. It reads the chain a page at a time (after flushing
-what is queued), deciding each page before reading the next and keeping only the rows it returns, the owner's pin (a session's; tasks and harness processes have none, so the
-guard judges them `pin_missing`), and stored revisions; it writes nothing. Each event becomes the
+what is queued), deciding each page before reading the next and keeping only the rows it returns, the owner's pin (a session's, or for a task its agent session's [task pin](#task-pins);
+harness processes, and tasks with no pin, have none, so the guard judges them `pin_missing`), and stored revisions; it writes nothing. Each event becomes the
 guard's input with `spaces.GuardEventOf`: a tool call's stored targets JSON (never re-extracted
 from the redacted command; unreadable targets are opaque), and for a cwd-changed event the old
 directory as cwd and the new one as its destination. `spaces.Replay` then calls the live

@@ -18,7 +18,7 @@ they name a file.
 
 | Event | Does |
 |---|---|
-| `session-start` | Asks orchd to pin the session (`PinSession`, 2 s; skipped in queued tasks), sending the session ID, `cwd` and `parent_session_id` for every source: orchd keeps an existing pin, so resume, clear and compact change nothing ([daemon.md](daemon.md#session-pins)). Then prints `## Orchestrator digest`: the last 5 events of this session's stream and of `pr-babysitter`, `routing`, `queue`, plus a count of pending-ingest items. After compaction (`source=compact`) it first prints the [resume brief](#resume-brief). Marks the session and `queue` streams seen, so the next prompt's updates skip them. Before the events, the digest names each [enforcement layer](daemon.md#enforcement-switches) the operator switched off (or the guard set to `log`), with since when and when a timed switch reverts, plus a tool-hooks layer that does not enforce though its switch is on and any drift orchd reports. The [sandbox setting](daemon.md#sandbox-setting) (D-61) is not a switch and is never named among them; after them the digest names the setting once per session as an `[info]` line after each change to it, and after each orchd start while it is off (D-68, orchd's start from `Ping`). It asks orchd (`GetEnforcement`, 0.5 s); when orchd does not answer it reads `orch.db`'s switches read-only and marks the lines "read from orch.db", and says when it cannot read them either. Queued tasks get it too. |
+| `session-start` | Asks orchd to pin the session (`PinSession`, 2 s; skipped in queued tasks), sending the session ID, `cwd` and `parent_session_id` for every source: orchd keeps an existing pin, so resume, clear and compact change nothing ([daemon.md](daemon.md#session-pins)). Then prints `## Orchestrator digest`: the last 5 events of this session's stream and of `pr-babysitter`, `routing`, `queue` that the session may see ([events by space](#events-by-space)), plus a count of pending-ingest items. After compaction (`source=compact`) it first prints the [resume brief](#resume-brief). Marks the session and `queue` streams seen, so the next prompt's updates skip them. Before the events, the digest names each [enforcement layer](daemon.md#enforcement-switches) the operator switched off (or the guard set to `log`), with since when and when a timed switch reverts, plus a tool-hooks layer that does not enforce though its switch is on and any drift orchd reports. The [sandbox setting](daemon.md#sandbox-setting) (D-61) is not a switch and is never named among them; after them the digest names the setting once per session as an `[info]` line after each change to it, and after each orchd start while it is off (D-68, orchd's start from `Ping`). It asks orchd (`GetEnforcement`, 0.5 s); when orchd does not answer it reads `orch.db`'s switches read-only and marks the lines "read from orch.db", and says when it cannot read them either. Queued tasks get it too. |
 | `user-prompt-submit` | Prints the [updates block](#updates-block) (not inside queued tasks), then [prompt context](#prompt-context). |
 | `stop` | Parses the transcript (redacted) and writes `sessions/<id>.yaml`. No orchd call. |
 | `pre-compact` | Writes `sessions/<id>.checkpoint.yaml` with the last request and reply. |
@@ -283,9 +283,11 @@ calls `Decide`. What it cannot read becomes a rule, refused in the enforcing mod
   policy only when `orch.db` has never applied one (or does not exist);
   otherwise the guard's switch is read from `orch.db` read-only and the call refused unless it
   is `off` or `log`, and as `strict` when `orch.db` cannot be read.
-- `pin_missing`: no readable pin file for the payload's `session_id` (from `Decide`). Queued
-  tasks have no session pin, so while spaces are configured and the guard enforces, their calls
-  are refused (RC-100).
+- `pin_missing`: no readable pin file for the payload's `session_id` (from `Decide`). A queued
+  task's agent session gets its pin file from orchd when its process starts, in the space the
+  dispatch recorded (SP-029, [daemon.md](daemon.md#task-pins)), so its calls are judged in that
+  space. A fresh Codex task's thread is known only when it ends, so it has none, and while spaces
+  are configured and the guard enforces its calls are refused (RC-100).
 - `guard_timeout`: the decision did not finish within 250 ms, or panicked. The mode, once the
   snapshot has given it, decides whether that refuses; before that it refuses.
 - `settings_reopen` (D-67, RC-215): a `pre-tool-use` call `Decide` lets through, while spaces
@@ -801,7 +803,9 @@ written atomically and deleted at session end.
 Each prompt shows, once, events added since the last prompt to this session's stream and the
 `queue` stream: `## Orchestrator updates` with `- [kind] source: summary` lines (redacted, 300
 runes, control and format characters replaced by spaces), at most 10 with an "N earlier" note. A stream seen for the
-first time is baselined silently. Task-completion events name the task and status only.
+first time is baselined silently. Task-completion events name the task and status only. Only
+`queue` events the session may see are shown ([events by space](#events-by-space)); the cursor
+still counts every event, so a hidden one is never shown later.
 
 ## Resume brief
 
@@ -898,8 +902,26 @@ the excerpt.
 ## Events
 
 `<data>/events/<stream>.jsonl`, appended one object per line:
-`{"kind", "source", "task_id"?, "summary", "timestamp"}` with kind `complete`, `blocked`, `failed`
-or `info`. Streams: one per session, plus `queue`, `routing`, `pr-babysitter`.
+`{"kind", "source", "task_id"?, "summary", "timestamp", "space"?}` with kind `complete`, `blocked`,
+`failed` or `info`. Streams: one per session, plus `queue`, `routing`, `pr-babysitter`.
+
+### Events by space
+
+An event of a shared stream carries the space of its subject, set when it is written (SP-026):
+a `pr-babysitter` event the space its PR's owner is bound to (quarantine for an owner no space
+binds), a `queue` event the space its task recorded at dispatch. `routing` events are orchd's
+own model routing and belong to no space; a session's own stream holds its own subagents'
+events. The digest and the updates block show a session a shared stream's event only when its
+space is one the session reads, decided from the guard files orchd writes
+(`spaces.GuardFiles.SessionReads`): the pin's space, every public space and the private spaces
+it lists; public spaces only without a readable pin. An event with no space shows only with no
+policy applied. With no policy ever applied every event shows (INV-10); a policy that may be
+applied but whose snapshot cannot be read, or does not verify, shows no shared event. The filter
+applies whatever the memory filtering switch says. An event keeps the space it was written
+with: after the operator binds an org to another space, its earlier events still show to the
+first space's sessions until they fall out of the last five. It keeps other spaces' events out
+of a session's context; the event files stay readable by any process of the user, which the OS
+sandbox layer bounds (RC-1252).
 
 ## PR Watch registration
 

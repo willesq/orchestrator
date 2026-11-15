@@ -79,7 +79,7 @@ func TestProfileOnlyOrgIsWatchedThroughItsProfile(t *testing.T) {
 	s, ghp, _ := profilesServerDB(t, profilesDoc)
 	ctx := context.Background()
 
-	list, err := s.ListGitHubScopes(operatorCtx, &orchdv1.ListGitHubScopesRequest{})
+	list, err := s.ListGitHubScopes(appOperatorCtx, &orchdv1.ListGitHubScopesRequest{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestProfileOnlyOrgIsWatchedThroughItsProfile(t *testing.T) {
 	if acme == nil || acme.GetEnabled() || acme.GetKind() != github.KindOrg {
 		t.Fatalf("acme scope = %v; want a disabled org scope", acme)
 	}
-	if _, err := s.SetGitHubScope(operatorCtx, &orchdv1.SetGitHubScopeRequest{Scope: &orchdv1.GitHubScope{
+	if _, err := s.SetGitHubScope(appOperatorCtx, &orchdv1.SetGitHubScopeRequest{Scope: &orchdv1.GitHubScope{
 		Owner: "acme", Enabled: true, Items: github.ItemsInvolving, RepoMode: github.ReposAll,
 	}}); err != nil {
 		t.Fatalf("turning on the profile-only org: %v", err)
@@ -205,10 +205,10 @@ func TestRepoPickerAndPROutcomesUseTheSpacesProfile(t *testing.T) {
 	s, ghp, conn := profilesServerDB(t, profilesDoc)
 	ctx := context.Background()
 
-	if _, err := s.ListGitHubRepos(operatorCtx, &orchdv1.ListGitHubReposRequest{Owner: "acme"}); err != nil {
+	if _, err := s.ListGitHubRepos(appOperatorCtx, &orchdv1.ListGitHubReposRequest{Owner: "acme"}); err != nil {
 		t.Fatalf("repo picker: %v", err)
 	}
-	if _, err := s.ListGitHubRepos(operatorCtx, &orchdv1.ListGitHubReposRequest{Owner: "initech"}); err == nil {
+	if _, err := s.ListGitHubRepos(appOperatorCtx, &orchdv1.ListGitHubReposRequest{Owner: "initech"}); err == nil {
 		t.Error("repo picker listed an org whose profile is not logged in")
 	}
 
@@ -369,7 +369,7 @@ func TestProfileOwnedGitHubDataIsTheOperators(t *testing.T) {
 		}
 		return out
 	}
-	if got := scopesOf(operatorCtx); !slices.Contains(got, "acme") || !slices.Contains(got, "oss-org") {
+	if got := scopesOf(appOperatorCtx); !slices.Contains(got, "acme") || !slices.Contains(got, "oss-org") {
 		t.Errorf("operator scopes = %v", got)
 	}
 	if got := scopesOf(agent); slices.Contains(got, "acme") || !slices.Contains(got, "oss-org") {
@@ -383,7 +383,7 @@ func TestProfileOwnedGitHubDataIsTheOperators(t *testing.T) {
 	if len(f.calls(t)) != before {
 		t.Error("an agent's repo listing ran gh as another job's account")
 	}
-	if _, err := s.ListGitHubRepos(operatorCtx, &orchdv1.ListGitHubReposRequest{Owner: "acme"}); err != nil {
+	if _, err := s.ListGitHubRepos(appOperatorCtx, &orchdv1.ListGitHubReposRequest{Owner: "acme"}); err != nil {
 		t.Errorf("operator repo listing: %v", err)
 	}
 
@@ -398,7 +398,7 @@ func TestProfileOwnedGitHubDataIsTheOperators(t *testing.T) {
 	for _, c := range []struct {
 		ctx  context.Context
 		want int
-	}{{operatorCtx, 2}, {agent, 1}} {
+	}{{appOperatorCtx, 2}, {agent, 1}} {
 		got, err := s.ListPRs(c.ctx, &orchdv1.ListPRsRequest{})
 		if err != nil || len(got.GetPrs()) != c.want {
 			t.Errorf("ListPRs = %v, %v; want %d", got.GetPrs(), err, c.want)
@@ -417,7 +417,7 @@ func TestProfileOwnedGitHubDataIsTheOperators(t *testing.T) {
 	if _, err := s.github.Store.Set(context.Background(), github.Scope{Owner: "initech", Kind: github.KindOrg, Items: github.ItemsInvolving, RepoMode: github.ReposAll}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.SetGitHubScope(operatorCtx, &orchdv1.SetGitHubScopeRequest{Scope: &orchdv1.GitHubScope{
+	_, err = s.SetGitHubScope(appOperatorCtx, &orchdv1.SetGitHubScopeRequest{Scope: &orchdv1.GitHubScope{
 		Owner: "initech", Enabled: true, Items: github.ItemsInvolving, RepoMode: github.ReposAll}})
 	if grpcstatus.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), "not logged in") {
 		t.Errorf("enabling a scope whose profile is refused: err = %v", err)

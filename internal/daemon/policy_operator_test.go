@@ -84,6 +84,7 @@ func settingsRPCs(t *testing.T) map[string]any {
 		orchdv1.Orchd_LandPR_FullMethodName:            &orchdv1.LandPRRequest{},
 		orchdv1.Orchd_UndoPRLanding_FullMethodName:     &orchdv1.PRLandingRequest{},
 		orchdv1.Orchd_DiscardPRLanding_FullMethodName:  &orchdv1.DiscardPRLandingRequest{},
+		orchdv1.Orchd_PurgeDocs_FullMethodName:         &orchdv1.PurgeDocsRequest{},
 	}
 }
 

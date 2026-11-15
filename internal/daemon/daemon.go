@@ -101,6 +101,8 @@ type server struct {
 	tasks taskReader
 	// quarantineCounts caches what quarantine holds for Status (SP-028).
 	quarantineCounts quarantineCountCache
+	// spaceCounts caches what the spaces hold for Status (SP-031).
+	spaceCounts spaceCountCache
 	// workerEnabled reports whether queued tasks will run, so a caller can say
 	// plainly when a dispatch will sit pending instead.
 	workerEnabled bool
@@ -155,6 +157,9 @@ type server struct {
 	spaces *spaces.Engine
 	// pins records each session's pin; nil when unavailable.
 	pins *pinRegistry
+	// files records the files sessions write outside every root (SP-029);
+	// nil records none.
+	files *sessionFiles
 	// enforcement holds the enforcement switches (SP-070); nil without a
 	// store, when every layer enforces.
 	enforcement *enforcement
@@ -217,6 +222,12 @@ func (s *server) Ingest(ctx context.Context, req *orchdv1.IngestRequest) (*orchd
 	if c, ok := s.rag.(copyReader); ok {
 		cp, found, err := c.Copy(ctx, req.GetSourceUri())
 		if err == nil && found && (cp.Writer == rag.WriterDocs || cp.Writer == rag.WriterSources) {
+			// Reason: under a policy a caller is not told which sync keeps
+			// a copy in a space it does not read: it gets the refusal a
+			// copy of another space gets (SP-026, RC-701).
+			if !s.recordScope(ctx, orchdv1.Orchd_Ingest_FullMethodName).seesSpace(cp.Space) {
+				return nil, errReplaceRefused
+			}
 			return nil, grpcstatus.Errorf(codes.FailedPrecondition,
 				"%s is kept by the %s sync; store the note under another source_uri", req.GetSourceUri(), cp.Writer)
 		}
@@ -330,6 +341,7 @@ func (s *server) Search(ctx context.Context, req *orchdv1.SearchRequest) (*orchd
 			Trust:        h.Trust,
 		})
 	}
+	s.describeSearch(ctx, scope, out)
 	return out, nil
 }
 
@@ -411,6 +423,11 @@ func (s *server) DeleteSource(ctx context.Context, req *orchdv1.DeleteSourceRequ
 		return nil, grpcstatus.Error(codes.FailedPrecondition,
 			"refusing to delete without confirm=true: this is permanent and cannot be undone")
 	}
+	if s.spacesConfigured() {
+		if c := callerOf(ctx); c.kind != callerOperator || c.operatorBy == "" {
+			return s.deleteInOwnSpace(ctx, c, uri)
+		}
+	}
 	log.Printf("orchd: DELETE source %q — permanent, no undo", uri)
 	n, err := s.rag.DeleteSource(ctx, uri)
 	if err != nil {
@@ -433,6 +450,9 @@ func (s *server) ListTasks(ctx context.Context, req *orchdv1.ListTasksRequest) (
 	if err != nil {
 		return nil, err
 	}
+	// Reason: the limit applies before the filter, so a caller sees at
+	// most limit tasks of its spaces, possibly fewer (SP-026).
+	list = s.tasksFor(ctx, s.recordScope(ctx, orchdv1.Orchd_ListTasks_FullMethodName), list)
 	return &orchdv1.ListTasksResponse{Tasks: s.tasksPB(ctx, list)}, nil
 }
 
@@ -444,7 +464,9 @@ func (s *server) GetTask(ctx context.Context, req *orchdv1.GetTaskRequest) (*orc
 	if err != nil {
 		return nil, err
 	}
-	if !found {
+	// Reason: another space's task reads as one that does not exist
+	// (SP-026), so its record and result stay in its space.
+	if !found || !s.seesTask(ctx, s.recordScope(ctx, orchdv1.Orchd_GetTask_FullMethodName), t.ID) {
 		return &orchdv1.GetTaskResponse{Found: false}, nil
 	}
 	pb := taskPB(t)
@@ -666,7 +688,8 @@ func Run(ctx context.Context) error {
 	// starts, so nothing is stored unplaced.
 	pins := newPinRegistry(store)
 	repos := newRepoLookups(ghp.Routed())
-	placer := &writePlacer{spaces: sp, pins: pins, repos: repos}
+	files := newSessionFiles(store)
+	placer := &writePlacer{spaces: sp, pins: pins, repos: repos, files: files}
 	svc.Place = placer.place
 
 	// Durable workflow engine: the worker unit drains AgentTask instances; the
@@ -729,12 +752,14 @@ func Run(ctx context.Context) error {
 
 	docsSched := newDocsScheduler(s, store, svc, sp, ghp, placer)
 	settingsSvc := settingsFor(store)
+	guardFiles := defaultGuardWriter()
 	sup := supervisor.New(runCtx)
 	for _, u := range subsystems(deps{
 		settings: s, apiKey: apiKey, rag: svc, backend: b, store: store,
 		selfUpdate: watcher, supervised: supervised, restart: restart,
 		summaries: summaries, github: ghService, ghProfiles: ghp, system: system, docs: docsSched,
 		settingsSvc: settingsSvc, taskCtl: ctl, live: live, taskHub: hub, reviews: reviewWatcher, spaces: sp, placer: placer,
+		taskPins: &taskPinner{pins: pins, run: live.run, spaces: sp, guard: guardFiles},
 	}) {
 		if err := sup.Add(u); err != nil {
 			return recovery(err)
@@ -792,6 +817,7 @@ func Run(ctx context.Context) error {
 		config:       cfg,
 		spaces:       sp,
 		pins:         pins,
+		files:        files,
 		repos:        repos,
 		ghProfiles:   ghp,
 		claudeLogins: newClaudeLogins(),
@@ -804,7 +830,7 @@ func Run(ctx context.Context) error {
 		toolLog:      tlog,
 		enforcement:  newEnforcement(ctx, store, settingsSvc),
 		termsRules:   newTermsRules(ctx, store),
-		guard:        defaultGuardWriter(),
+		guard:        guardFiles,
 	}
 	srv.startGuardFiles(runCtx)
 	if tlog != nil {

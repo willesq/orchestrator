@@ -2758,7 +2758,8 @@
           "SP-025",
           "SP-030"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "SP-026 (#200) checks the caller's spaces before GetPRDetail reads or fills the URL-keyed detail cache, so read enforcement already keeps it within spaces; recommended: settle RC-351 as 'read enforcement is the rule for caches outside internal/rag'."
       },
       {
         "id": "RC-352",
@@ -2847,7 +2848,8 @@
           "SP-074",
           "SP-063"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "SP-026 (#200) filters the docs registry RPCs (ListDocsOwners, ListDocsOwnerRepos, GetDocsSync) and the PR RPCs by space for agents, and the CLI lists come from orchd under a policy. The cache file's readability is RC-1252."
       },
       {
         "id": "RC-303",
@@ -3451,7 +3453,8 @@
         "affects": [
           "SP-026"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "SP-026 (#200) filters GetGitHubIdentity (orgs and teams), ListGitHubScopes, ListGitHubRepos, GetDocsSync, ListDocsOwners and ListDocsOwnerRepos by each owner's space for agent callers; ListRegisteredSources is empty and TailLogs refused to everyone but the operator under a policy. GetConfig and ListSettings moved to RC-1250."
       },
       {
         "id": "RC-701",
@@ -3465,7 +3468,8 @@
           "SP-025",
           "SP-071"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "Mostly addressed by SP-026 (#200): Ingest no longer says which sync keeps a copy in a space the caller does not read (it gets the other-space refusal), and under a policy DeleteSource deletes only from a session's own space and counts only that (D-77, rag.Service.DeleteSourceIn). Still open: Ingest ignores a failed Copy (fail-open; a fresh store's missing-collection error is not told apart outside internal/rag), and handoff.go canonicalStored matches synced copies in any space (derived content, SP-029)."
       },
       {
         "id": "RC-702",
@@ -3505,7 +3509,8 @@
           "SP-029",
           "SP-026"
         ],
-        "status": "open"
+        "status": "open",
+        "note": "SP-026 (#200) reads each task's space from its durable input, including a waiting task's pending start event (queue.Runs.RecordedInput), to filter the task RPCs, and orchd's PR review tasks now record their PR owner's space. Still open for SP-029: the ledger row and the Task message do not carry the space; the dispatch-cwd note stands."
       },
       {
         "id": "RC-705",
@@ -3563,7 +3568,8 @@
           "SP-026",
           "SP-029"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "SP-026 (#200): RetryTask, CancelTask and RateTask need the caller to act in the task's recorded space (a session's pin or a task's own space) or be the operator; others get the answer a missing task gets."
       },
       {
         "id": "RC-709",
@@ -3617,7 +3623,8 @@
         "affects": [
           "SP-026"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "SP-026 (#200): under an applied policy 'orch docs list', 'orch docs owners list', 'orch docs status' and 'orch prs' show only what orchd's ListDocs and ListPRs list for the caller, and fail when orchd does not answer; with no policy they read the files as before. Reading orch.db directly is RC-1252."
       },
       {
         "id": "RC-900",
@@ -3709,6 +3716,184 @@
         ],
         "status": "resolved",
         "resolution": "Settled as D-76; built by SP-079."
+      },
+      {
+        "id": "RC-1100",
+        "kind": "decision",
+        "topic": "Quarantine counts in orch status are shown to every caller",
+        "detail": "SP-031.1.a1 says agent callers see counts only for their own space and public ones. SP-031 narrows its own counts (chunks per space, relabel totals, conflicts) that way, but SP-028's quarantine totals (SpacesStatus.quarantine: sources and chunks, never a source) stay open to every caller, as SP-028 designed and tested (TestStatusCountsQuarantine). SP-031 reads a1's counts as per-space counts, which a quarantine total is not. Options: (a) keep: a quarantine total names no space; (b) send quarantine totals to Orch.app only, as SP-031 does for conflicts. Recommendation: (a), unless the user wants status to say nothing about content a session cannot read.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-031",
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1101",
+        "kind": "follow-up",
+        "topic": "Orch.app can show SP-031's counts (rest of RC-501)",
+        "detail": "Status now carries SpacesStatus.counts: chunks and not-yet-relabelled chunks per space, relabel totals and live sessions in a conflict, all of them for Orch.app. With SP-028's quarantine counts this supplies every count RC-501 lists. The Spaces pane does not read them yet (SpacesOverviewModel's relabel source, chunk counts, and conflicts from ExplainPlacement per quarantined session, RC-502). That is a macOS change for a later lane.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-051",
+          "SP-031"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1102",
+        "kind": "follow-up",
+        "topic": "SP-031 security review lows accepted",
+        "detail": "(1) The counts are taken under the cache's lock, so a slow count (up to the 3 s limit, plus any file or git read on a hung mount that does not honor it) holds up other Status calls; any caller can trigger it at most once per 30 s. A single-flight refresh that serves the last counts would remove the wait. (2) Conflicts are counted by placing each live quarantined session's first folder again under the policy applied now, not the one at pin time (as RC-502 describes for the app); recording the outcome on the pin needs a migration. Fixed in the PR: the count is detached from the caller's cancellation, a partial conflict count is a failure, and an unscoped search under a policy (memory filtering off) names collections to Orch.app only.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-031"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1103",
+        "kind": "follow-up",
+        "topic": "rag_search does not show the search boundary",
+        "detail": "SearchResponse now says the caller's space, whether the search was scoped and the collections read; orch rag why prints them. The MCP rag_search tool and auto-RAG ignore them. Adding a one-line footer to rag_search would show agents the boundary too; not required by SP-031.",
+        "source": "https://github.com/willesq/orchestrator/pull/197",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-031"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1250",
+        "kind": "follow-up",
+        "topic": "GetConfig and ListSettings are still unfiltered for agent callers (rest of RC-700)",
+        "detail": "SP-026 filters every RPC RC-700 named except GetConfig (orch's settings) and ListSettings (managed harness settings), which sessions may still call under a policy. Settings can name folders, collections and profile directories of every space. Proposed: under a policy refuse both to all but Orch.app (refuseNonOperator, as SP-078 did for the setters) or return only keys that name no space; SP-078's owner should decide, since it changed the setters.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026",
+          "SP-078"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1251",
+        "kind": "decision",
+        "topic": "The operator's views are not labelled with each record's space",
+        "detail": "SP-026's summary says the operator still sees everything, labelled. orchd now decides each record's space (a PR's owner's space, a task's recorded space), but PullRequest, GitHubItem, PRReview, Task and DocOwner have no field to carry it, and adding fields to existing orchd.proto messages needs the coordinator's field block. The acceptance items do not require labels, so SP-026 ships without them. Options: (a) add an optional 'space' field to those messages and show it in Orch.app and the CLI (a follow-up feature, with a field block); (b) leave records unlabelled.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1252",
+        "kind": "follow-up",
+        "topic": "Record files on disk still hold every space (event streams, PR cache, orch.db)",
+        "detail": "SP-026 filters what orchd returns and what the hook puts in a session's context, and the CLI lists under a policy now come from orchd, but the event streams (<data>/events/*.jsonl), the PR cache (pr_babysitter_state.json) and orch.db (task ledger, docs registry) stay readable by any process of the user, so an agent can read them directly. This is RC-302 option (a)'s file half: deny orch's data directory (except what a session needs) in each job's OS sandbox profile (SP-046), or split the files per space. Also: an event keeps the space it was written with, so after the operator binds an org to another space its earlier events still show to the first space's sessions until they age out of the digest.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-046",
+          "SP-026"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1253",
+        "kind": "follow-up",
+        "topic": "Low: some refusals tell an agent that another space owns a GitHub org",
+        "detail": "From SP-026's design: GetPRDetail and ListDocsOwnerRepos answer NotFound for another space's owner where an unknown PR or owner would get GitHub's own error, so an agent can tell that an org is bound to a space it does not read (the org list is policy, not content); review watch changes answer NotFound for another space's PR where an unwatched PR of the caller's own space gets the watcher's own not-found text. Tasks and landings give the answer a missing task gets. Accepted as low; closing it would need orchd to fetch and discard, which spends the other space's account.",
+        "source": "https://github.com/willesq/orchestrator/pull/200",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1300",
+        "kind": "follow-up",
+        "topic": "A fresh Codex task's session gets no pin",
+        "detail": "SP-029 pins a queued task's agent session to its dispatch space when the agent process starts. A Claude Code task's session ID is known in advance (agentrun.SessionID) and a resumed Codex run's thread is stored, but a fresh Codex run learns its thread ID only when it ends, so it gets no pin: its transcript, record and summary are quarantined under a policy, and while the guard enforces its tool calls are refused as pin_missing (RC-100 stays open for it). Proposed: have the Codex runner report the thread ID as soon as thread.started arrives (update LiveRun.SessionID and call OnLive), so orchd can pin it like a Claude task.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1301",
+        "kind": "follow-up",
+        "topic": "SP-029 security review lows and accepted limits",
+        "detail": "From two security-audit rounds on PR #196 (mediums fixed: PinSession now refuses a new pin under a task's session ID while spaces are configured, an untrusted pin under such an ID places nothing and gets no guard file, the guard pin file is written under the pin registry's lock and removed when it cannot be written). Remaining: (1) a resumed Codex task replaces any pin under its stored thread ID; thread IDs come from the codex CLI's own event stream, so this is accepted. (2) The hook's guard reads the pin file named by the payload's session_id without checking the process, so a nested harness an agent starts with --session-id or --resume of another session's ID (a task's ID is derivable from its task ID) borrows that pin file for guard decisions; orchd's memory enforcement resolves by process and is unaffected, and the OS sandbox still applies. This predates SP-029 for interactive session IDs. (3) Resuming by hand the session of a task that ran before spaces were configured is refused, since that task never got a pin.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029",
+          "SP-041"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1302",
+        "kind": "decision",
+        "topic": "Taint of a session that read across spaces",
+        "detail": "SP-029's summary says the operator's explicit cross-space reads taint that session, but no acceptance item covers it and today no session reads across spaces except while memory filtering is switched off (SP-070, SP-025.1.a4); only Orch.app reads every space, and it has no session records. Proposed: when a session receives results from a space it may not read (filtering off), mark its pin tainted so its later records, summaries and client notes go to quarantine for the operator to retag. Needs a decision and probably a pin column (migration).",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029",
+          "SP-070",
+          "SP-025"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1303",
+        "kind": "follow-up",
+        "topic": "Task ledger and queue events filtered by space (left to SP-026)",
+        "detail": "RC-704 asked SP-029 to add a task's dispatch space to the ledger. SP-026 (events, digest, ListTasks, GetTask carry a space set at creation and are filtered) owns the ledger and the readers, so SP-029 only sets the space at creation where it derives content: the queue completion event now carries 'space' (and 'task_id'), and a task's session pin carries the dispatch space. The ledger column (a migration), filtering the queue stream for sessions, and what orchd's own PR-review tasks read remain for SP-026.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-026",
+          "SP-029"
+        ],
+        "status": "open",
+        "note": "SP-026 (PR #200, merged) filters the queue stream and the task ledger by the space set at creation (events.Event.Space, set by notifyTaskDone); this covers the follow-up. Recorded 2026-11-15 when #200 was merged into #196."
+      },
+      {
+        "id": "RC-1304",
+        "kind": "follow-up",
+        "topic": "TestRunMeasuresFailedRuns is flaky under load",
+        "detail": "internal/agentrun TestRunMeasuresFailedRuns expects a run that timed out after 200 ms to record DurationMS >= 200; under heavy load on the developer machine it records 199 (seen on origin/main without SP-029's changes too). It passes alone and in CI. Proposed: compare against the timeout minus a tolerance, or measure the duration from before the timeout's context is created.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1305",
+        "kind": "follow-up",
+        "topic": "SP-029 a3 (files outside roots) limits and security lows",
+        "detail": "From two security-audit rounds on PR #196 (the path-claim and eviction highs and both mediums were fixed by matching the hash of the text a Write call carried against the text ingested, applying it only to edit hand-offs, and re-checking the recorded space against the applied policy). Remaining: (1) only a Write call carries the whole text, so a file written or changed by Edit, a shell command or a program stays in quarantine; registered folders (sources refresh) and client Ingest are not placed by the record; with the command log off nothing is recorded. (2) Low: a guess-confirmation oracle: a session can send Write claims with guessed whole texts for a path under no root and hand the path off; on a match the file lands in its space, confirming the guess (only for files short enough to guess whole, and only when no other space recorded the same text). Fix: tie the record to the hand-off's session, or record successful PostToolUse events. (3) Low: a row records a space by name, so a later policy reusing that name for another job honours it within 30 days; store a space identity or revision. (4) Low: paths are compared in lower case, also on case-sensitive volumes; harmless with the hash match. (5) After the 30-day expiry a relabel quarantines such a file.",
+        "source": "https://github.com/willesq/orchestrator/pull/196",
+        "raised": "2026-11-15",
+        "affects": [
+          "SP-029"
+        ],
+        "status": "open"
       },
       {
         "id": "RC-1400",
@@ -6196,18 +6381,23 @@
               "threshold": "pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1 (9 of 9 paths; a session in one space sees no item of another): events: internal/daemon TestTaskEventsCarryTheTasksSpace, internal/prs TestSweepStampsItemsWithTheirOwnersSpace, internal/spaces TestSessionReadsFromGuardFiles; SessionStart digest: internal/hook TestDigestShowsOnlyTheSessionsSpaces, TestEventsFailClosedUnderAnUnreadablePolicy; per-prompt updates: internal/hook TestUpdatesShowOnlyTheSessionsSpaces; ListPRs and ListGitHubItems: internal/daemon TestCachedPRsKeepSpacesApart; GetPRDetail: TestPRDetailKeepsSpacesApart; ListTasks and GetTask (with WatchTasks and GetTaskActivity): TestTaskLedgerKeepsSpacesApart; PR reviews: TestPRReviewsKeepSpacesApart, TestReviewWatchesOnlyFromTheirSpace. All pass (go test ./internal/... at 1d47411).",
+            "a1 related paths: TestRetryOnlyFromTheTasksSpace (RC-708), TestGitHubRecordsKeepSpacesApart and TestDocsAndLogRecordsKeepSpacesApart (RC-700), TestSyncDocsSaysNothingOfAnotherSpace, TestOwnerSettingsOnlyFromTheirSpace, TestIngestSaysNothingOfAnotherSpacesSync (RC-701), TestDeleteSourceOnlyInTheSessionsSpace and internal/rag TestDeleteSourceInOneSpace (D-77), internal/cli TestListsUnderAPolicyComeFromOrchd (RC-712), internal/queue TestRecordedInputOfAWaitingTask; with no policy every caller sees every record (INV-10) in each.",
+            "a2: a cached PR's space is its repo owner's, matched case-insensitively, quarantine for an owner no space binds (internal/daemon TestCachedPRsKeepSpacesApart; internal/prs TestSweepStampsItemsWithTheirOwnersSpace stamps cached items and their events, restamped each sweep); a review task orchd dispatches records and reads its PR owner's space, public only for an unbound owner, nothing with no policy (internal/daemon TestReviewTaskRunsInItsPRsSpace). Pass.",
+            "Checks at 1d47411: go test ./... pass (TestToolHookCost and TestResolveCost are timing tests that failed once each under full-suite load and pass alone), go vet ./... clean, gofmt -l empty, make cover 'All files >= 80%'. Security audit (two rounds): high and medium findings fixed; lows recorded (RC-1252, RC-1253) or documented."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "62c681e9c123313032cc8857a1297740221685de",
+      "verified_at": "2026-11-15T06:09:50Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "a5da712089124df4e4493329f043ceaecffb3bbd075e5295d27a80fa098ec58f",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-026-non-memory-bleed",
+      "pr": "https://github.com/willesq/orchestrator/pull/200"
     },
     {
       "id": "SP-027",
@@ -6505,18 +6695,24 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestSummaryHasItsSessionsSpace (internal/daemon/derived_test.go): sessions pinned in acme and globex (isolated) are queued together and drained by the session-summarizer unit; the summarizer is called twice, each call holding the messages of one session only (no call holds the other session's marker text), and each summary is stored as session://<id>/record with that session's origin and placed by writePlacer in that session's space (acme, globex). A summary asked for by another session (Foreign) is placed in quarantine.",
+            "a2: TestTaskRunsPinnedToItsDispatchersSpace (internal/daemon/derived_test.go): a task dispatched from a session in acme with its directory in globex's folder records acme (D-46); once its agent process starts orchd pins its session (agentrun.SessionID) to acme and writes the guard pin file with acme; the guard refuses a Read in globex's folder (not as pin_missing) and allows one in acme's; ReplaySpaces judges the task's command-log events under the acme pin; the task's Search/GetDocument/ListSources/ListDocs/auto-RAG reads return acme's chunk and nothing from globex; its queue completion event carries space acme; its session transcript and record are placed in acme. Supporting: TestTaskPinReplacesASquatter, TestTaskPinEdges (no space or a dropped space -> quarantine; fresh Codex run and unstarted process -> no pin; no policy -> no pin, INV-10), TestTaskPinFailures (broken policy -> quarantine), TestTaskSessionIDsArePinnedByOrchdOnly (security review: PinSession refuses a new pin under a task's session ID under a policy; an untrusted pin under such an ID is quarantined and gets no guard file).",
+            "a3: TestFileWrittenOutsideRootsKeepsItsSpace (internal/daemon/session_files_test.go): a session pinned in acme sends the Write tool event for notes.md in a temporary folder no root holds and writes it; the edit hand-off (storeFile) stores it and orchd's placer puts it in acme. Another space naming the same path with other text, or claiming a path before a program wrote it, does not move it (quarantine); a file changed since its recorded Write, the same text written by acme and a globex task, and a record naming a space the policy makes public go to quarantine; a refused call, callers with no space (operator, untracked task, unidentified, public or quarantine pin, untrusted pin) and a write under a root record nothing; a file in globex's folder is placed in globex. TestSessionFilesExpire: 30-day expiry, the 100,000-row cap (newest kept), case-insensitive lookup, nil/no policy/failing store. Migration 0032_session_files.",
+            "Verification (2026-11-15T06:18:22Z): an independent verifier given only the diff, this feature, INV-02/03/09/10 and definition_of_done re-ran everything at 65c0f44 and, after the origin/main merge, at 4fb4526: a1, a2, a3 pass; DOD-1 go test ./... exit 0; DOD-2 go vet exit 0; DOD-3 make cover exit 0 (lowest changed files tasks.go 84.7%, task_pins.go 87.5%, liveness.go 87.6%, session_files.go 96.4%); DOD-4 gofmt clean; DOD-5 8 named tests pass; DOD-6 no open critical/high/medium (four security-audit rounds, lows in RC-1301 and RC-1305); DOD-7 memory.md and tasks.md changed; DOD-8 signed commits, no co-author lines, draft PR #196 registered; DOD-9 CI on PR #196 green (test, build) at 4fb4526.",
+            "Merge of origin/main with SP-026 (#200) at 310b35a (2026-11-15): SP-026 added the same events.Event Space/TaskID fields and notifyTaskDone, identical to SP-029's, so one copy of each is kept; only docs/internals/tasks.md (one sentence combined) and the plan JSON conflicted. No SP-029 logic file changed in the resolution (task_pins.go, session_files.go, placing.go, toollog.go, handoff.go, pins.go, guardfiles.go, events.go, subsystems.go), so the verification at 4fb4526 stands. At 310b35a: go build, go vet ./... and go test ./... exit 0, make cover exit 0 (all files >= 80%), gofmt clean."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "4fb45265bce367072d262e0f2a41cb08a6766459",
+      "verified_at": "2026-11-15T06:18:22Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "71a615214415759a2f0b2418e12a1cd758edf2fb0102aea3fd81406bd5d03374",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-029-derived-content",
+      "pr": "https://github.com/willesq/orchestrator/pull/196"
     },
     {
       "id": "SP-030",
@@ -6628,18 +6824,20 @@
               "threshold": "pass"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: Six fields in orch status: TestSpacesSectionShowsCounts (internal/status) renders, for the operator, the spaces, each space's chunks (and not-yet-relabelled chunks), quarantine (SP-028's counts), conflicts, drift ('none' when none) and relabel progress; for a session only the spaces orchd counted for it, and conflicts marked as the operator's. TestSpacesSectionCountEdges (internal/status): no counts, a failed count, an empty store, a control character in a space name. Narrowing in orchd: TestStatusCountsOnlyWhatTheCallerReads (internal/daemon) over the SP-025 read fixture: Orch.app gets every space, totals over every collection (unplaced and quarantine included, 12 stale) and 1 conflict (a live quarantined session whose folder acme's root and globex's remote both claim; an ended one and a scratch folder are not counted); a session in acme gets acme, oss and personal; in globex, globex and oss; in quarantine, a task from globex, the operator when not Orch.app and an unidentified caller get only their readable spaces, totals over those, and no conflicts. TestStatusCountsAreCached, TestStatusCountsNeedAPolicy, TestConflictCountFailureIsNotAnAnswer (internal/daemon); TestCountSpacesCountsEachCollection, TestCountSpacesStoreFailure (internal/rag). rag why: TestSearchReportsWhatWasSearched, TestSearchWithoutCollections, TestSearchUnscopedHidesCollections (internal/daemon), TestSearchCollectionsNamesWhatSearchReads (internal/rag), TestExplainRecordsWhatWasSearched (internal/hook), TestRAGWhyShowsTheSearchBoundary (internal/cli). Result: all pass; go test ./... and go vet ./... exit 0; make cover: all files >= 80% (internal/daemon/spacecounts.go 90.7%, searchscope.go 100%, internal/rag/spacecounts.go 86.4%, internal/status/spacecounts.go 100%)."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "e1813d3b6fd0dc40f52d79b2cb0ff7b815d79258",
+      "verified_at": "2026-11-15T05:42:19Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "f334012d02c2c9c118e211015950a80e0234c453ca65ed1894ac756872e8c3be",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-031-status-visibility",
+      "pr": "https://github.com/willesq/orchestrator/pull/197"
     },
     {
       "id": "SP-044",

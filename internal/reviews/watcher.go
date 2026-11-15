@@ -28,8 +28,9 @@ const maxWatchDays = 14
 // watch the PR again, so a forgotten PR does not keep polling and reviewing.
 const MaxWatch = maxWatchDays * 24 * time.Hour
 
-// Dispatcher queues a review task with body and returns its ID.
-type Dispatcher func(ctx context.Context, body string) (string, error)
+// Dispatcher queues a review task of repo's PR ("owner/name") with body and
+// returns its ID. The repo decides the space the task reads (SP-026).
+type Dispatcher func(ctx context.Context, repo, body string) (string, error)
 
 // TaskLookup reads a task's status and result from the dispatch ledger.
 type TaskLookup func(ctx context.Context, id string) (status, result string, found bool, err error)
@@ -454,7 +455,7 @@ func (w *Watcher) check(ctx context.Context, url string) {
 				return true
 			}
 			nonce := NewNonce()
-			id, err := w.Dispatch(ctx, Prompt(r.URL, r.Repo, r.Number, st.Head, nonce, st.promptChecks(), r.Instructions))
+			id, err := w.Dispatch(ctx, r.Repo, Prompt(r.URL, r.Repo, r.Number, st.Head, nonce, st.promptChecks(), r.Instructions))
 			if err != nil {
 				r.State, r.Note = StateWaiting, "could not start the review: "+github.Printable(err.Error(), 300)
 				return true

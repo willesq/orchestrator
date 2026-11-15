@@ -167,8 +167,28 @@ func (s *server) writeGuardPin(p sessionPin) {
 	if s.guard == nil {
 		return
 	}
-	if err := spaces.WriteGuardPin(s.guard.dir, guardPinOf(p)); err != nil {
+	writeGuardPinFile(s.guard.dir, p)
+}
+
+// writeGuardPinFile writes p's pin file in guard directory dir, or removes
+// it when p is not to be trusted (trustedPin) or the file cannot be
+// written. Reason: a file left from an earlier pin under the same ID would
+// have the guard judge the session's calls in that pin's space; with none
+// the guard refuses them as pin_missing.
+func writeGuardPinFile(dir string, p sessionPin) {
+	if trustedPin(p) {
+		err := spaces.WriteGuardPin(dir, guardPinOf(p))
+		if err == nil {
+			return
+		}
 		log.Printf("orchd: guard: write the pin file of %s: %v", printableID(p.SessionID), err)
+	}
+	path := spaces.GuardPinPath(dir, p.SessionID)
+	if path == "" {
+		return
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Printf("orchd: guard: remove the pin file of %s: %v", printableID(p.SessionID), err)
 	}
 }
 
@@ -194,7 +214,14 @@ func (s *server) syncGuardPins(ctx context.Context) {
 			continue
 		}
 		keep[p.SessionID+".json"] = true
-		s.writeGuardPin(p)
+		// Reason: written from the pin as it is now, under the registry's
+		// lock, so a pin a task replaced since the list was read is not
+		// written back (SP-029).
+		s.pins.withPin(ctx, p.SessionID, func(cur sessionPin, ok bool) {
+			if ok && cur.ExitedAt.IsZero() {
+				s.writeGuardPin(cur)
+			}
+		})
 	}
 	dir := filepath.Dir(spaces.GuardPinPath(s.guard.dir, "x"))
 	entries, err := os.ReadDir(dir)

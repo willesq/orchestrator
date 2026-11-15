@@ -60,6 +60,23 @@ func (r *Resolved) CanRead(reader, target string) bool {
 	return reader == target || to.Kind == Public || slices.Contains(from.Reads, target)
 }
 
+// ReadableFrom lists every public space and each space reader may read,
+// sorted. A reader the policy does not name (none, Quarantine, or a space a
+// later policy dropped) reads public spaces only.
+func (r *Resolved) ReadableFrom(reader string) []string {
+	out := []string{}
+	if r == nil {
+		return out
+	}
+	for _, sp := range r.Policy.Spaces {
+		if sp.Kind == Public || (reader != "" && r.CanRead(reader, sp.Name)) {
+			out = append(out, sp.Name)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
 // GitHubOrgSpace returns the space GitHub account login is bound to.
 // Logins match case-insensitively, as GitHub treats them.
 func (r *Resolved) GitHubOrgSpace(login string) (string, bool) {

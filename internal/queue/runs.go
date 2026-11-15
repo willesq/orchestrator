@@ -119,6 +119,40 @@ func (r *Runs) Input(ctx context.Context, taskID string) (workflows.AgentTaskInp
 	return in, fmt.Errorf("no run of %s has a recorded input", taskID)
 }
 
+// RecordedInput is the task input as Input reads it, or, for a task no
+// worker has picked up yet, from its first run's start event still in the
+// backend's pending queue. Unlike Input it therefore knows a waiting task's
+// input, such as the space it recorded at dispatch (SP-026).
+func (r *Runs) RecordedInput(ctx context.Context, taskID string) (workflows.AgentTaskInput, error) {
+	in, err := r.Input(ctx, taskID)
+	if err == nil {
+		return in, nil
+	}
+	// Reason: the query reads the pending_events and attributes tables of
+	// the go-workflows version pinned in go.mod, as the instance lookup
+	// reads its instances table; the tests run it against the real
+	// backend.
+	var data []byte
+	qerr := r.db.QueryRowContext(ctx,
+		`SELECT a.data FROM pending_events pe
+		 JOIN attributes a ON a.id = pe.id AND a.instance_id = pe.instance_id AND a.execution_id = pe.execution_id
+		 WHERE pe.instance_id = ? AND pe.event_type = ? LIMIT 1`,
+		taskID, int(history.EventType_WorkflowExecutionStarted)).Scan(&data)
+	if qerr != nil {
+		return in, err
+	}
+	attrs, derr := history.DeserializeAttributes(history.EventType_WorkflowExecutionStarted, data)
+	a, ok := attrs.(*history.ExecutionStartedAttributes)
+	if derr != nil || !ok || len(a.Inputs) == 0 {
+		return in, err
+	}
+	var pending workflows.AgentTaskInput
+	if cerr := converter.DefaultConverter.From(a.Inputs[0], &pending); cerr != nil {
+		return in, fmt.Errorf("decode the pending input of %s: %w", taskID, cerr)
+	}
+	return pending, nil
+}
+
 // startInput decodes the input recorded in inst's start event into in.
 func (r *Runs) startInput(ctx context.Context, inst *workflow.Instance, in *workflows.AgentTaskInput) (bool, error) {
 	events, err := r.backend.GetWorkflowInstanceHistory(ctx, inst, nil)
