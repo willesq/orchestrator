@@ -274,7 +274,7 @@ footer { color: var(--muted); font-size: 0.86rem; border-top: 1px solid var(--li
     var h = Math.round(m / 60); if (h < 48) return h + ' h ago'; return Math.round(h / 24) + ' days ago';
   }
   // Links from the plan's text: https or a relative path only, never javascript: or data:.
-  function safeHref(u) { return typeof u === 'string' && (/^https:\/\//.test(u) || /^[\w.\/-]+(#[\w-]*)?$/.test(u)); }
+  function safeHref(u) { return typeof u === 'string' && (/^https:\/\//.test(u) || (/^[\w.\/-]+(#[\w-]*)?$/.test(u) && u.slice(0, 2) !== '//')); }
   function ghLink(url, text) {
     return (typeof url === 'string' && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/.test(url))
       ? el('a', { text: text || url.replace('https://github.com/', ''), attrs: { href: url } }) : null;

@@ -58,6 +58,9 @@ def read_ref(repo: str, ref: str, spaces: str = SPACES):
         f"{spaces}/{planfiles.STATE_DIR}", f"{spaces}/{planfiles.RC_DIR}",
     ).decode().split("\0")
     names = [n for n in names if n.endswith(".json")]
+    if any("\n" in n for n in names):
+        # cat-file --batch takes one name per line.
+        raise planfiles.PlanError(f"a file name under {spaces} at {ref} contains a newline")
     states, rcs, order = {}, {}, None
     for name, blob in zip(names, _blobs(repo, [f"{sha}:{n}" for n in names])):
         obj = json.loads(blob)

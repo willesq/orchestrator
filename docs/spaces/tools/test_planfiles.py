@@ -186,6 +186,15 @@ class MigrateTest(TempDir):
             planfiles.write_split(self.dir, plan, states, rcs, order)
         with open(target) as fh:
             self.assertEqual(fh.read(), "untouched")
+        # A planted link at a predictable temp name is not written through either.
+        os.remove(link)
+        os.symlink(target, link + ".tmp")
+        planfiles.write_split(self.dir, plan, states, rcs, order)
+        with open(target) as fh:
+            self.assertEqual(fh.read(), "untouched")
+        self.assertFalse(os.path.islink(link))
+        self.assertEqual(planfiles.load_dir(self.dir)[1]["SP-002"]["status"], "blocked")
+        self.assertEqual([n for n in os.listdir(os.path.join(self.dir, "state")) if n.startswith(".plan-")], [])
 
     def test_load_dir_checks_file_names(self):
         self.write_plan(fixture_plan())

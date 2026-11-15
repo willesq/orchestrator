@@ -21,6 +21,7 @@ import copy
 import json
 import os
 import re
+import tempfile
 
 PLAN_NAME = "spaces-features.json"
 STATE_DIR = "state"
@@ -243,10 +244,15 @@ def _write(path, obj):
         with open(path, encoding="utf-8") as fh:
             if fh.read() == text:
                 return
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        fh.write(text)
-    os.replace(tmp, path)
+    # A fresh, exclusively created temp file: a fixed name could itself be a planted link.
+    fd, tmp = tempfile.mkstemp(dir=parent, prefix=".plan-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
 
 
 def write_split(spaces_dir: str, plan, states, rcs, order=None, prune=True) -> None:

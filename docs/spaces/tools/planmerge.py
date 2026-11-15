@@ -54,6 +54,8 @@ def _merge(b, o, t, path, conflicts):
             for x in o:
                 if x["id"] not in ti and x["id"] not in bi:
                     out.append(x)
+                elif x["id"] not in ti and x != bi[x["id"]]:
+                    conflicts.append(f"{path}[{x['id']}]: deleted on one side, changed on the other")
             return out
         if o[: len(bl)] == bl and t[: len(bl)] == bl:
             return t + [x for x in o[len(bl):] if x not in t]

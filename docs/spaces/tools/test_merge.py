@@ -276,6 +276,10 @@ class PlanMergeTest(unittest.TestCase):
         self.assertEqual(merged, {"a": 2, "l": [1, 3, 2], "items": [{"id": "x", "v": 5}, {"id": "y", "v": 1}], "new": 1})
         _, conflicts = planmerge.merge({"a": 1, "b": 1}, {"a": 2}, {"a": 3, "b": 2})
         self.assertEqual(conflicts, ["$.a", "$.b: deleted on one side, changed on the other"])
+        _, conflicts = planmerge.merge({"l": [{"id": "x", "v": 1}]}, {"l": [{"id": "x", "v": 2}]}, {"l": []})
+        self.assertEqual(conflicts, ["$.l[x]: deleted on one side, changed on the other"])
+        merged, conflicts = planmerge.merge({"l": [{"id": "x", "v": 1}]}, {"l": [{"id": "x", "v": 1}]}, {"l": []})
+        self.assertEqual((merged, conflicts), ({"l": []}, []))
 
     def test_cli(self):
         d = tempfile.mkdtemp(prefix="sp-080-pm-")
