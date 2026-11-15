@@ -31,7 +31,7 @@ type Locations struct {
 // register a marketplace in the real data directory.
 func Locate(home string) Locations {
 	real, _ := os.UserHomeDir()
-	relocated := filepath.Clean(home) != filepath.Clean(real)
+	relocated := !SameDir(home, real)
 	loc := Locations{
 		Home:      home,
 		ClaudeDir: filepath.Join(home, ".claude"),
@@ -74,3 +74,18 @@ func (l Locations) pluginsDir() string { return filepath.Join(l.ClaudeDir, "plug
 
 // settingsPath is Claude Code's user settings file.
 func (l Locations) settingsPath() string { return filepath.Join(l.ClaudeDir, "settings.json") }
+
+// SameDir reports whether a and b name the same directory: equal once
+// cleaned, or the same file once links are followed. Reason: a --home that
+// is the real home under another spelling (a symlink to it, another case on
+// a case-insensitive volume) must count as the real home, or a "relocated"
+// run would skip launchd and the real data directory while still editing
+// the real home's files.
+func SameDir(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	ia, errA := os.Stat(a)
+	ib, errB := os.Stat(b)
+	return errA == nil && errB == nil && os.SameFile(ia, ib)
+}

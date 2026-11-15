@@ -42,7 +42,7 @@ flowchart LR
 | Binary | Role |
 |---|---|
 | `orchd` | Daemon. Serves gRPC on a Unix socket and runs every long-lived subsystem. |
-| `orch` | CLI: search, ingest, dispatch, install, status, config. Also runs the MCP servers (`orch mcp`). |
+| `orch` | CLI: search, ingest, dispatch, install and uninstall, status, config. Also runs the MCP servers (`orch mcp`). |
 | `Orch.app` | macOS menu bar app (Swift, in `macos/`): daemon health and control. A client like `orch`; it never opens the databases. See [internals/app.md](internals/app.md). |
 | `orch-hook` | Called by the harness on lifecycle events. Does only local work and hands anything slow (storing transcripts and edited docs, refreshing PRs) to `orchd`. |
 

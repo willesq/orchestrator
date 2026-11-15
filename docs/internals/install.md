@@ -1,11 +1,55 @@
 # Install and harness adapters
 
-`orch install [--apply] [--target claude-code|codex|gemini|all] [--home DIR] [--bin-dir DIR]`
-wires orch into a harness. It previews by default; `--home` relocates everything for testing.
+`orch install [--apply|--yes] [--target auto|all|claude-code|codex|gemini] [--home DIR] [--bin-dir DIR]
+[--no-model] [--no-daemon] [--no-git-hooks] [--no-app]` sets orch up, and `orch uninstall` takes it
+out again ([below](#uninstall)). Both preview by default; `--home` relocates everything for testing.
+
+## Units: install and uninstall are paired
+
+Everything orch puts on a machine is a **unit** (`internal/install/unit.go`): one concern, with
+its install and its uninstall defined together, in the same place.
+
+```go
+Unit{Name, Shared, Edits []Edit, Steps, UndoSteps func() []Step, Dirs, InstalledBy, Manual, Leftovers}
+Edit{Path, Compute(old) → new, Reverse(cur) → Undo{Data | Remove}, Normalize, Unlink}
+```
+
+**The pairing rule.** Every install action has its reverse beside it: each `Edit` has `Compute`
+and `Reverse`, and a unit with `Steps` has `UndoSteps`. A unit that install does not put in place
+itself (the data directory, per-checkout settings orchd writes) names what does in `InstalledBy`
+and still has an uninstall. `ValidateUnits` enforces this; a plan built from a unit that breaks it
+fails before printing or writing anything, and `TestEveryRegisteredUnitIsPaired` checks every
+registered unit. To add an install step, add it to a unit together with its reverse, and extend
+the round-trip test (`TestInstallUninstallRoundTrip`) if it touches a new file.
+
+**One registered list.** `install.FullUnits` is the list, in install order: prerequisites (gh
+login, which only the user can do), data, checkout settings, the embedding model, then each
+harness adapter's units (`Adapter.Units`), then git hooks, the daemon and the app. `InstallPlan`
+walks it in order (every edit, then every step); `UninstallPlan` walks it in reverse (every undo
+step, then every edit's `Reverse`, then each unit's `Dirs` left empty, deepest first). Units shared
+by several harnesses (the shared policy, the modules, the alias, the launchd agent) and repeated
+edits of one path appear once. `Manual` and `Leftovers` are printed at the end of a plan as what
+the user must do by hand.
+
+- **Reverse** gets the file as it is now and returns it with orch's part taken out, or `Remove`
+  when nothing else is in it. Structured files are reversed by meaning: hook entries whose every
+  command runs `orch-hook` (the configured binary or one named `orch-hook`) or a script under the
+  retired `~/.claude/orchestrator/hooks/` (stricter than install, which replaces any entry
+  mentioning `orch-hook`, since uninstall deletes), MCP servers whose command is
+  `<dir>/orch mcp <server>`, orch's allow rules, an empty `attribution.commit`, the `enabledPlugins` entry of orch's plugin, and then
+  any event, list or object left empty; a file left as `{}` is removed (except `~/.claude.json`).
+  The credential-file Read deny rules are kept and named: a deny only narrows, and install did not
+  record whether the user had the same rule before.
+  Text files lose orch's marked block (and the blank line install put before it). Whole files orch
+  owns are removed; an agent or skill file only when it carries `managed-by: orch`, the plist only
+  when it names `com.orchestrator.orchd`. Unparseable files and broken markers refuse, as install
+  does. Toggles are not read: uninstall removes orch's items whether on or off, so it needs no
+  `orch.db`.
 
 ## Edit model
 
-Each adapter returns a plan of edits: `{Path, Compute(old) → new, summary, Normalize, Unlink}`.
+Each adapter returns its units; their edits are `{Path, Compute(old) → new, summary, Reverse,
+Normalize, Unlink}`.
 
 - **Plan:** every edit is computed before anything is written; one error writes nothing. An edit
   counts as a change only if the bytes differ and `Normalize(old) != new`, so drift is judged by
@@ -690,6 +734,81 @@ orch never handles either token. Showing which login each space will use is SP-0
   run by the session that changes tracked files under `.claude/` fails there; the file tools
   still edit them, and the user's own terminal is not sandboxed.
 - Gemini is not covered (D-20).
+
+## One-command install
+
+`orch install` with no `--target` (`auto`) builds `InstallPlan` over `FullUnits` for every harness
+whose folder exists under the home (`~/.claude`, `~/.codex`, `~/.gemini`; Claude Code when none
+does), and `--target all` for all three. It prints one plan, then applies it with `--apply` or
+`--yes`, or on a `y` at a `[y/N]` prompt when stdin is a terminal (a non-terminal never applies
+without a flag). A single `--target claude-code|codex|gemini` builds only that adapter's units,
+with the same output as earlier releases. Backups go to `<data>/backups`, where `<data>` is
+`<home>/.local/share/orch` for a relocated `--home`: one that is not the real home, compared with
+links followed (`safetynet.SameDir`), so a symlink to the real home or another spelling of it is
+not relocated.
+
+The machine units (`internal/install/machine.go`), each skipped by its flag:
+
+- **Model** (`--no-model`): download into `embedder.model_dir` (default `<data>/models/minilm`)
+  when it is not present. Its undo is empty: the model is data (see purge).
+- **Git hooks** (`--no-git-hooks`): `orch guard git-hook --install --apply` records the hooks
+  directory in `<data>/git-hooks.json` (0600, absolute paths only) before writing the hooks, and
+  `--uninstall --apply` drops it after removing them. Install plans `PlanGitHooks` only for a
+  recorded directory that still holds one of orch's hooks, and repairs drift (another orch path, a
+  lost execute bit), so an entry alone never makes install write hooks; uninstall removes orch's
+  hooks there, puts back `<name>.orch-prev`, and drops the entry (also for a directory that is
+  gone).
+- **Daemon** (`--no-daemon`): when orchd does not answer, `brew services start orch` (Homebrew
+  install, orchd under a `Cellar`) or `launchctl load -w <plist>`. Uninstall runs `brew services
+  stop orch` while orchd answers, or `launchctl unload -w <plist>` (`launchctl remove` without a
+  plist) while `launchctl list com.orchestrator.orchd` finds it. A relocated home never runs
+  launchctl or brew. Commands run as argument arrays through `CommandRunner`, with a 2-minute
+  timeout; tests inject a fake.
+- **App:** install only names the cask when no `Orch.app` is in `/Applications` or
+  `~/Applications` (`--no-app` drops it). Uninstall names what to do for an installed app.
+
+## Uninstall
+
+`orch uninstall [--apply|--yes] [--target all|claude-code|codex|gemini] [--home DIR] [--bin-dir DIR]
+[--no-git-hooks] [--purge-data]` (`internal/cli/uninstall_cmd.go`) builds `UninstallPlan`.
+
+- **Target.** `all` (the default) walks every registered unit. One harness walks only its
+  adapter's units, less the shared ones, so the other harnesses keep the shared policy, alias and
+  launchd agent; it takes no machine units and refuses `--purge-data`.
+- **Preview:** `DRY RUN — uninstall`, then each step as `=== RUN ===`, then `=== MODIFY|REMOVE
+  <path> ===`, each empty directory to remove, and `Left for you to do by hand`. Files with
+  nothing of orch's are not listed.
+- **Apply:** run the undo steps, then measure the edits again (a step such as `claude plugin
+  uninstall` edits files the edits read), then for each changed file: re-read and refuse one that
+  changed since it was measured, back it up as install does, and write it or remove it. Removal
+  re-checks with `Lstat` that the path is still a regular file, and `os.Remove` never follows a
+  final symlink; a symlink is never removed (when only orch's part was in the file behind it, that
+  file is emptied). Directories in `Dirs` are removed only when empty and not symlinks.
+- **Steps, in order:** stop orchd (daemon unit), remove git hooks, `claude plugin uninstall
+  cc-safety-net@orch-pinned --scope user` and `claude plugin marketplace remove orch-pinned` (only
+  what `Detect` finds; skipped with the command named when there is no `claude` CLI), then the
+  spaces checkout settings: a `spacesettings.Syncer` over `<data>/spaces/.orch/checkouts.json`,
+  switched off, takes out exactly the entries orch recorded and removes files it created (orchd is
+  stopped first so it does not put them back), then the purge.
+- **`rule.json`:** `safetynet.UnmergeRuleConfig` drops `orch-guards` from `rules` and `rtk` from
+  `transparent_wrappers` (each list removed once empty) and removes a file left as
+  `{"version": 1}`.
+- **Purge** (`--purge-data`, `internal/install/purge.go`): one step per path, listed in the
+  preview: every entry of the data directory except `backups/`, `~/Library/Logs/orchestrator/`,
+  and `config.yaml`/`rag-eval.yaml` in the config directory. The CLI then needs `--yes`, or the
+  word `delete` typed at a terminal; `--apply` alone from a script refuses. Exactly the listed paths
+  are deleted (`Machine.PurgeList`), never one that appears after the confirmation. The data
+  directory must be absolute, not `/`, the home or a folder holding it, not a symlink, and either
+  `<home>/.local/share/orch` or hold `orch.db` (`ORCH_DATA_DIR` can point anywhere). Each path is
+  removed through `os.Root` opened on its parent, so a symlink inside is removed as a link and
+  never followed.
+- **Left for you:** Homebrew (`brew uninstall orch`) or the source-built binaries, Orch.app and its
+  login item (`SMAppService.mainApp`, which only the app can unregister), git hooks installed before
+  the registry existed, the kept data directory, and the backups.
+- **Not exact:** files are written back in orch's encoding, so a harness's own formatting or a TOML
+  comment is not restored; a rule, wrapper or `attribution.commit: ""` the user had before install
+  is removed with orch's (install did not record it); a missing final newline before orch's block
+  comes back as one; the `info/exclude` line for checkout settings stays.
 
 ## Status checks
 

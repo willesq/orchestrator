@@ -74,7 +74,21 @@ func newGitHookCmd() *cobra.Command {
 				plan.Print(c.OutOrStdout())
 				return nil
 			}
-			return plan.Apply(c.OutOrStdout(), filepath.Join(paths.DataDir(), "backups", "git-hooks"))
+			// Recorded so `orch install` keeps these hooks current and
+			// `orch uninstall` removes them: before an install, so a hook
+			// is never left unrecorded; after an uninstall, once gone.
+			if !uninstall {
+				if err := install.RecordGitHookDir(paths.DataDir(), dir, true); err != nil {
+					return fmt.Errorf("record %s for orch uninstall: %w", dir, err)
+				}
+			}
+			if err := plan.Apply(c.OutOrStdout(), filepath.Join(paths.DataDir(), "backups", "git-hooks")); err != nil {
+				return err
+			}
+			if uninstall {
+				return install.RecordGitHookDir(paths.DataDir(), dir, false)
+			}
+			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&installHooks, "install", false, "add orch's commit-msg and pre-push hooks")

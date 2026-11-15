@@ -40,13 +40,13 @@ func geminiHookFields(slug string) map[string]any {
 	return map[string]any{"timeout": s * 1000}
 }
 
-// Edits implements Adapter.
-func (g Gemini) Edits(bins Bins, home string) []Edit {
-	return append(instructionEdits(home, g.Name()), []Edit{
-		geminiSettingsEdit(bins, home),
-		aliasEdit(bins.Orch, home),
-		plistEdit(bins.Orchd, home),
-	}...)
+// Units implements Adapter.
+func (g Gemini) Units(bins Bins, home string) []Unit {
+	return append(instructionUnits(home, g.Name()),
+		Unit{Name: "gemini settings", Edits: []Edit{geminiSettingsEdit(bins, home)}},
+		aliasUnit(bins.Orch, home),
+		launchdUnit(bins.Orchd, home),
+	)
 }
 
 func geminiSettingsEdit(bins Bins, home string) Edit {
@@ -68,6 +68,9 @@ func geminiSettingsEdit(bins Bins, home string) Edit {
 				return nil, "", err
 			}
 			return out, mcpSummary + "\n" + hookSummary, nil
+		},
+		Reverse: func(cur []byte) (Undo, error) {
+			return undoJSON(cur, "gemini settings.json", true, strips(stripMCP("mcpServers", orchMCPNames()), stripHooks(bins.OrchHook)))
 		},
 	}
 }

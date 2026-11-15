@@ -30,14 +30,28 @@ func legacyCheckout(home string) string {
 	return filepath.Join(home, ".claude", "orchestrator")
 }
 
-// claudeAssetEdits installs the orchestrator's Claude Code subagents into
+// claudeAssetsUnit installs the orchestrator's Claude Code subagents into
 // ~/.claude/agents and its skills into ~/.claude/skills: every file of each
 // asset turned on in orch. An asset turned off is left as it is; orchd's
-// settings watcher removes its files.
+// settings watcher removes its files. Uninstall removes every file carrying
+// orch's marker, on or off, and the directories only an asset used.
+func claudeAssetsUnit(home string) Unit {
+	u := Unit{Name: "claude-code agents and skills", Edits: claudeAssetEdits(home)}
+	if list, err := ClaudeAssets(); err == nil {
+		for _, a := range list {
+			for _, d := range a.Dirs {
+				u.Dirs = append(u.Dirs, ClaudeAssetPath(home, d))
+			}
+		}
+	}
+	return u
+}
+
 func claudeAssetEdits(home string) []Edit {
 	list, err := ClaudeAssets()
 	if err != nil {
-		return []Edit{{Path: filepath.Join(home, ".claude"), Compute: func([]byte) ([]byte, string, error) { return nil, "", err }}}
+		return []Edit{{Path: filepath.Join(home, ".claude"), Compute: func([]byte) ([]byte, string, error) { return nil, "", err },
+			Reverse: func([]byte) (Undo, error) { return Undo{}, err }}}
 	}
 	var edits []Edit
 	for _, a := range list {
@@ -106,6 +120,11 @@ func assetEdit(home string, a ClaudeAsset, body []byte, dst string, links []stri
 				return nil, "", fmt.Errorf("refusing to overwrite %s: it lacks the %q marker and differs from the shipped copy, so it is yours; move it aside or turn %s off in orch, and re-run",
 					dst, managedMarker, label)
 			}
+		},
+		// Reason: only a file carrying orch's marker goes. One without it is
+		// the user's (install refused to overwrite it, or they took it over).
+		Reverse: func(cur []byte) (Undo, error) {
+			return undoOwnedFile(cur, label, IsManaged)
 		},
 	}
 }

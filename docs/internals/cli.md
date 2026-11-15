@@ -11,7 +11,8 @@ marked *operator-only* refuse when `ORCH_TASK_ID` is set (inside a queued task).
 | `config get\|set\|list` | settings ([config.md](config.md)) |
 | `daemon status\|start\|stop\|restart` | orchd via `brew services` or launchd |
 | `restart [orchd\|subsystems\|<unit>] [--list]` | bounce orchd, or restart units in place |
-| `install [--apply] [--target] [--home] [--bin-dir]` | wire harnesses, and for Claude Code the pinned cc-safety-net and its guard rules ([install.md](install.md)) |
+| `install [--apply\|--yes] [--target] [--home] [--bin-dir] [--no-model] [--no-daemon] [--no-git-hooks] [--no-app]` | set everything up in one plan: every harness found (or `--target`), and for Claude Code the pinned cc-safety-net and its guard rules, the model, git hooks, orchd ([install.md](install.md)) |
+| `uninstall [--apply\|--yes] [--target] [--home] [--bin-dir] [--no-git-hooks] [--purge-data]` | reverse install, in reverse order; keeps data unless `--purge-data` ([install.md](install.md#uninstall)) |
 | `mcp rag\|queue` | stdio MCP servers |
 | `ingest text --source-uri <uri> [--type] [--scope] [--tag]` | store stdin |
 | `search <query> [--top-k] [--scope] [--type] [--tag] [--require-tag] [--uri] [--mode] [--ranking] [--per-source] [--direct-messages] [--since] [--until]` | search memory; `--direct-messages` also searches chat DMs ([memory.md](memory.md#chat-feeds)), the operator's only (Orch.app's while a spaces policy is applied) |

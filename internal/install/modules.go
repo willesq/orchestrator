@@ -144,13 +144,16 @@ func ModulePath(home, slug string) string { return filepath.Join(ModuleDir(home)
 func moduleEdits(home string) []Edit {
 	mods, err := Modules()
 	if err != nil {
-		return []Edit{{Path: ModuleDir(home), Compute: func([]byte) ([]byte, string, error) { return nil, "", err }}}
+		return []Edit{{Path: ModuleDir(home), Compute: func([]byte) ([]byte, string, error) { return nil, "", err },
+			Reverse: func([]byte) (Undo, error) { return Undo{}, err }}}
 	}
 	edits := make([]Edit, 0, len(mods))
 	for _, m := range mods {
 		body := []byte(m.Body)
 		edits = append(edits, Edit{Path: ModulePath(home, m.Slug), Compute: func([]byte) ([]byte, string, error) {
 			return body, "instructions: install module " + m.Slug, nil
+		}, Reverse: func(cur []byte) (Undo, error) {
+			return undoOwnedFile(cur, "instructions: module "+m.Slug, nil)
 		}})
 	}
 	return edits
