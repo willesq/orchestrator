@@ -1,0 +1,15 @@
+{
+  "id": "RC-229",
+  "kind": "decision",
+  "topic": "Under a policy nobody can run a relabel",
+  "detail": "After #188 (D-71), 'orch rag relabel' is refused from a terminal under a policy and Orch.app showed relabel progress without a way to start one, so content stored before an apply stayed hidden until SP-077.",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-025",
+    "SP-027",
+    "SP-077"
+  ],
+  "status": "resolved",
+  "resolution": "Settled as D-76; built by SP-079."
+}

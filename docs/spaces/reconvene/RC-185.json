@@ -1,0 +1,12 @@
+{
+  "id": "RC-185",
+  "kind": "follow-up",
+  "topic": "Checkout placement spends GitHub lookups",
+  "detail": "Each sync places every checkout through orchd's repo lookups (30 per minute, cached 10 minutes), shared with session pins. With many checkouts some fall back to the remote's owner with unknown visibility until cached; rules can flip between a space's and a checkout with no space's. Consider cache-only lookups or a longer TTL for the sync.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

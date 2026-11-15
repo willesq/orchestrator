@@ -1,0 +1,17 @@
+{
+  "id": "SP-028",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "c0c4099",
+  "verified_at": "2026-11-15T04:43:06Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-028-quarantine",
+  "pr": "https://github.com/willesq/orchestrator/pull/192",
+  "evidence": {
+    "SP-028.1": [
+      "a1: List: TestListQuarantineRPC (internal/daemon; the operator sees each quarantined source with its chunk count, only quarantine's), TestListQuarantineShowsSourcesAndCounts (internal/rag), TestQuarantineListShowsSourcesAndCounts (internal/cli); counts in orch status: TestStatusCountsQuarantine (internal/daemon), TestSpacesSectionCountsQuarantine (internal/status). Assign: TestQuarantineAssignThroughOrchd (internal/daemon) runs the real 'orch quarantine assign --confirm' against orchd's handlers and store over a socket: the source moves from quarantine to personal through RetagSource (SP-071, expect_from quarantine), quarantine no longer holds it, and the next write of the same source_uri lands in personal (the override rule); without --confirm nothing moves, and a source outside quarantine is refused. TestQuarantineAssignUsesRetagSource (internal/cli) checks the request. Purge: TestPurgeQuarantineRPC (internal/daemon; no confirm only counts and deletes nothing, confirm deletes from quarantine only, a source in another space or nowhere is refused alike), TestPurgeQuarantineCountsUnlessApplied, TestPurgeQuarantineNamedDeletesOnlyThere, TestPurgeQuarantineReachesTheShadow (internal/rag), TestQuarantinePurgeIsDryRunUnlessConfirmed (internal/cli). Result: 3 of 3 pass.",
+      "a2: TestQuarantineRPCsRefuseAgentCallers (internal/daemon): ListQuarantine and PurgeQuarantine return PermissionDenied for a harness session, a queued task, a harness process and a process orchd started; a refused purge with confirm deletes nothing. TestQuarantineCommandsRefusedThroughOrchd (internal/daemon): the real CLI from a harness process gets orchd's refusal for list, assign and purge, and the source stays in quarantine. TestQuarantineCommandsRefusedForAgentCallers (internal/cli): all three refused inside a queued task before orchd is asked. Result: pass."
+    ]
+  }
+}

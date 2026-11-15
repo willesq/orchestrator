@@ -1,0 +1,12 @@
+{
+  "id": "RC-214",
+  "kind": "follow-up",
+  "topic": "GitHub Enterprise and other gh hosts are not in allowedDomains",
+  "detail": "orch adds only api.github.com and github.com to sandbox.network.allowedDomains. A space whose gh profile logs in to a GitHub Enterprise host, or gh commands that reach other hosts (release downloads from objects.githubusercontent.com, codeload.github.com), still need an approval a headless session cannot give. orch never reads hosts.yml to learn the host.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

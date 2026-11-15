@@ -1,0 +1,11 @@
+{
+  "id": "RC-20",
+  "kind": "user-action",
+  "topic": "PR #111 (test/landing-sandbox)",
+  "detail": "Still open; close it or keep it.",
+  "source": "https://github.com/willesq/orchestrator/pull/111",
+  "raised": "2026-11-08",
+  "affects": [],
+  "status": "resolved",
+  "note": "Resolved by the user on 2026-11-10: PR #111 closed unmerged (branch kept)."
+}

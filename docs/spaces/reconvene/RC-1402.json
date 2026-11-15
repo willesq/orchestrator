@@ -1,0 +1,13 @@
+{
+  "id": "RC-1402",
+  "kind": "decision",
+  "topic": "A running relabel shows twice in the Spaces pane",
+  "detail": "While a relabel runs, the needs-you strip (SP-051's relabel progress) and the Relabel now control both say so. Keep both (the strip matches the badge and other needs-you items), or drop the relabel line from the strip while the control shows. To settle at the a3 snapshot review.",
+  "source": "https://github.com/willesq/orchestrator/pull/202",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-079",
+    "SP-051"
+  ],
+  "status": "open"
+}

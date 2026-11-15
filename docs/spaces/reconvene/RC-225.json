@@ -1,0 +1,13 @@
+{
+  "id": "RC-225",
+  "kind": "follow-up",
+  "topic": "Outbound calls refused when the guard cannot decide",
+  "detail": "Low, fail-closed (SP-044 review round 1): when the guard's decision times out, or its snapshot cannot be read while the guard is off or logging, the terms check cannot know the terms or the layer's switch from the snapshot and refuses every outbound call (outbound_unchecked), even when no space has terms. While the snapshot is unreadable the switch is read from orch.db, so an operator who switched terms off is not refused.",
+  "source": "https://github.com/willesq/orchestrator/pull/177",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-044",
+    "SP-041"
+  ],
+  "status": "open"
+}

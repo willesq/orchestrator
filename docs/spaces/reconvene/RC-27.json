@@ -1,0 +1,13 @@
+{
+  "id": "RC-27",
+  "kind": "follow-up",
+  "topic": "SP-011 audit lows",
+  "detail": "The resolved session ID is 'a session of this harness process' (subagent and /clear pins share the process), not necessarily the caller's own; SP-016 and SP-017 must not key per-session data on it without telling them apart (documented in docs/internals/daemon.md, Caller sessions). The start time of orchd's child on a task's path is read just after the walk, like the harness's (RC-13).",
+  "source": "https://github.com/willesq/orchestrator/pull/149 (SP-011 security audit)",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-016",
+    "SP-017"
+  ],
+  "status": "open"
+}

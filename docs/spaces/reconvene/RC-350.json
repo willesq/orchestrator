@@ -1,0 +1,13 @@
+{
+  "id": "RC-350",
+  "kind": "follow-up",
+  "topic": "Read paths pass no spaces yet; what SP-025 must cover in the rag layer",
+  "detail": "SP-024 gives Search SearchOpts.Spaces, but orchd passes none, so every search still reads every collection (the base and each space's, Quarantine included), as before; Document, Copy, HasSource, ListSources and SourcesWrittenBy read every collection too. SP-025 must give each read path the caller's readable spaces. Notes for it: (1) 'shared' reads the base without the space filter, and the base still holds chunks SP-023 stored with other spaces and quarantine in their payload until SP-027 moves them, so a policy reader must never be given 'shared' (or the base must be filtered); (2) internal/daemon/handoff.go canonicalStored matches synced copies in any space and DeleteSource removes the path URI from every space: scope both to the writer's space; (3) Qdrant errors returned to clients carry collection names, which contain space names: return generic errors and keep detail in orchd's log; (4) the Ingest RPC ignores a Copy error (fail-open) for its sync-writer refusal, so a client in the same space can replace a synced doc when the store cannot be read (pre-existing; cross-space moves are refused in rag).",
+  "source": "https://github.com/willesq/orchestrator/pull/183",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-025",
+    "SP-027"
+  ],
+  "status": "open"
+}

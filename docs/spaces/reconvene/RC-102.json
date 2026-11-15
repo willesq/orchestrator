@@ -1,0 +1,14 @@
+{
+  "id": "RC-102",
+  "kind": "decision",
+  "topic": "Accepted risk: the hook finds its files through the environment",
+  "detail": "From the SP-041 security audit (medium, accepted 2026-11-12 with reason): orch-hook locates the guard's files and orch.db through ORCH_DATA_DIR, XDG_DATA_HOME and HOME, which a session can change for a harness it starts inside itself; that nested harness's hook can then read an empty or forged directory and allow every call. Accepted because the same nested harness can already drop every hook (CLAUDE_CONFIG_DIR, --settings), so this adds no new way around the guard; the OS sandbox (SP-046) is the boundary. Proposed for SP-042: refuse tool calls that start a harness with ORCH_DATA_DIR, XDG_DATA_HOME, HOME, CLAUDE_CONFIG_DIR or CODEX_HOME set, or a --settings override. Confirm or ask for a fix in SP-041.",
+  "source": "https://github.com/willesq/orchestrator/pull/172",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041",
+    "SP-042",
+    "SP-046"
+  ],
+  "status": "open"
+}

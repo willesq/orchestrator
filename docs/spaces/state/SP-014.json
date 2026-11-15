@@ -1,0 +1,25 @@
+{
+  "id": "SP-014",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "5c004d8235e7132430cf277136b906ea18b7e829",
+  "verified_at": "2026-11-09T19:54:40Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-014-command-log",
+  "pr": "https://github.com/willesq/orchestrator/pull/152",
+  "evidence": {
+    "SP-014.1": [
+      "a1: TestToolEventsLoggedInOrder (internal/daemon/toollog_test.go) sends 20 interleaved Bash events each from a claude and a codex pinned session plus a cwd-changed through RecordToolEvent; every session's records come back in order with seq 1..n, its harness, tool, cwd, targets JSON (the cat target listed), decision 'logged', and toollog.db is mode 0600. TestEventsStoredInOrderOwnerOnly (internal/toollog/toollog_test.go) checks 2x50 interleaved events per chain and that toollog.db, -wal and -shm are all 0600; TestOpenTightensAndRefuses tightens a 0644 file set to 0600 and refuses a symlink or directory. TestToolLogAttribution, TestResolverRoutesClaimsAndGaps and TestToolLogQuotaPerProcess check that events go only to the caller orchd resolved (or a session of the same harness process) and that operator, unresolved and untracked-task events are not stored. All pass (go test ./internal/toollog ./internal/daemon, darwin/arm64, 2026-11-09; daemon tests also under -race).",
+      "a2: TestCredentialFixturesRedacted stores 14 credential fixtures as Bash commands and as another tool's JSON input (gh classic, gh fine-grained, gh in a header, AWS key ID, AWS secret, AWS session token, AWS secret after a space, Anthropic key, JWT in a header and bare, private key, URL password, curl -u, PGPASSWORD) and reads them back: 14/14 redacted (100%), logged by the test. Further forms are covered by TestRedact, TestRedactCommand and TestRedactKeepsJSONEscapes (internal/redact) and TestToolRecordFields (daemon), from five security-review rounds.",
+      "a3: TestLongCommandTruncated: a 5,005-byte command is stored at <= 2,048 bytes ending '…[truncated 5005 bytes]'; short commands are untouched, cuts never split a UTF-8 character. TestCleanLargeAndInvalid: a 1 MiB field is redacted near the cut only and still names its full length. Pass.",
+      "a4: TestCommandLogNeverReachesRAG (internal/toollog/norag_test.go) type-checks every repository package (go/types over `go list -export` data) and follows calls from the 48 functions in the files that take, stores or read tool events (internal/toollog, internal/daemon/toollog.go, toolevents.go) through 173 reachable functions (interface calls reach every repository method of that name): none calls IngestText, Upsert or Ingest; no function both touches the log and calls one; internal/toollog imports only the standard library, modernc.org/sqlite and internal/redact. TestCallGraphFollowsHelpers shows the graph reaches RAG writes behind an interface (server.Ingest) and a helper chain (handoffUnit). Planted violations made it fail: a direct IngestText in logToolEvent, and logToolEvent -> archive -> archiveMore -> IngestText (the independent verifier's round-1 case). Pass.",
+      "Gates on 519f0b4: gofmt clean; go vet ./... exit 0; go test ./... exit 0 (54 packages ok); make cover 'All files >= 80%' (toollog record 97.6%, store 86.7%, writer 92.8%, redact 100%, cli/spaces_log 100%, paths 89.7%); make cover omitted internal/daemon because the RC-39 flake failed it, so a direct go test -coverprofile run measured daemon/toollog.go 93.3%, toolevents.go 96.3%, callers.go 96.4%, pins.go 92.5%, daemon.go 90.8%.",
+      "Security audit (security-audit agent, five rounds, 2026-11-09): round 1 2 high, 3 medium; round 2 1 high, 2 medium; round 3 1 medium; round 4 1 medium; round 5 1 medium; all fixed with regression tests. 0 critical/high/medium open; lows recorded as RC-41, RC-44, RC-45, design limits as RC-42, RC-43."
+    ],
+    "SP-014.2": [
+      "a1: TestSpacesLogVerifyCommand (internal/daemon/toollog_test.go) runs the real 'orch spaces log verify <session>' (cli.NewRootCmd over orchdclient.Dial) against orchd's gRPC server on a unix socket: an untouched chain prints 'chain intact' and exits 0; a modified record ('record 2: content does not match its hash'), a deleted record ('record 3: record 2 before it is missing') and two swapped records (link and hash problems) each print 'chain broken' and exit non-zero: 3/3 tamper cases detected. TestVerifyDetectsTampering (internal/toollog) also detects a modified decision, a deleted run, a deleted anchored head and a reorder with hashes moved; TestVerifyToolLogRPC checks the same through VerifyToolLog and that only the operator may call it. Pass.",
+      "a2: TestToolLogThroughput: RecordToolEvent through stored, targets read for each 'cd … && git -C … && cat … | grep' command, four harness processes: 2,834 events/s on the final run (3,526-3,643 over five earlier runs) on an M3 Max, darwin/arm64, all 3,000 events stored, none dropped. TestAppendThroughput (store alone): 31,486 events/s (37,000-40,000 earlier). Threshold >= 1,000."
+    ]
+  }
+}

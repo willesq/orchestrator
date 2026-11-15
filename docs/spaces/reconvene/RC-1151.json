@@ -1,0 +1,12 @@
+{
+  "id": "RC-1151",
+  "kind": "decision",
+  "topic": "What the operator unlock still relies on the user for",
+  "detail": "Accepted for now and documented (docs/internals/daemon.md, Operator unlock): (1) the user's choice of which request to confirm is the gate: a process an agent detached, or a terminal window it opened through the terminal app's scripting, can ask at the same time; rows show the terminal (tty), process, executable and parents read from the kernel, but two requests from the same terminal tab (an agent's leftover process that kept the tab's terminal) differ only by their parents; if the user confirms the agent's row, the agent can print a fake code prompt into the user's terminal (nothing else reads it while orch waits) and prove its request with what the user types; (2) requests held open or filed six a minute keep the user's own out (denial of service); (3) an unlocked shell is as trusted as anything that can type into it, and the unlock ends on an agent's first call only if that harness connects to orchd; (4) a stream opened while unlocked (WatchTasks) keeps the caller it resolved to; (5) command lines (with any secret in them) show in the panel; (6) only Claude Code and Codex are told apart from a terminal. Proposed hardening: refuse or flag a request whose process group is not its terminal's foreground group (e_pgid vs e_tpgid); keep reading the terminal from before the request so a fake prompt races the CLI; give rate-limit slots only to requesters with a terminal; or run operator commands from Orch.app itself.",
+  "source": "https://github.com/willesq/orchestrator/pull/198",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-077"
+  ],
+  "status": "open"
+}

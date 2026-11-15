@@ -1,0 +1,13 @@
+{
+  "id": "RC-1002",
+  "kind": "follow-up",
+  "topic": "The Recall step only shows defaults",
+  "detail": "SP-052's Recall step shows the design's safe defaults per content kind (store, auto-recall, search, queued tasks) for reading only: the policy has no per-kind rules until the chat connectors (SP-060). The table was not checked against what orch recalls today for each kind (for example whether session transcripts are auto-recalled). Proposed: verify it, and make it editable once SP-060 adds per-kind rules.",
+  "source": "https://github.com/willesq/orchestrator/pull/193",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-052",
+    "SP-060"
+  ],
+  "status": "open"
+}

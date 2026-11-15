@@ -1,0 +1,14 @@
+{
+  "id": "RC-142",
+  "kind": "follow-up",
+  "topic": "Keep the live guard's records replayable (SP-041)",
+  "detail": "Replay (SP-047) reads a recorded verdict from a command log record with spaces.RecordedVerdict: 'would <verdict> (<rule>)' in the rule for a call not enforced (daemon wouldRule), or decision 'refused' / 'allowed' with the bare rule id for one enforced; a record with decision 'logged' and no rule counts as having no recorded verdict. It rebuilds the guard event with spaces.GuardEventOf (stored targets JSON; a cwd-changed event runs in old_cwd and moves to new_cwd) and builds the guard policy with no protected paths. SP-041 (and SP-042's protected paths) should record in one of those forms, build its event with GuardEventOf, and share the protected-path list with replay; otherwise replay reports changes no policy made. The record also does not keep the guard mode it was judged in, so replay judges in the current switch or --mode; consider storing the mode with each decision.",
+  "source": "https://github.com/willesq/orchestrator/pull/174",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041",
+    "SP-042",
+    "SP-047"
+  ],
+  "status": "open"
+}

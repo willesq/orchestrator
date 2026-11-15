@@ -1,0 +1,15 @@
+{
+  "id": "RC-53",
+  "kind": "decision",
+  "topic": "When retention counts a session as ended",
+  "detail": "SP-015 treats a session as ended only when its pin has ended_at and the liveness sweep has seen its harness process gone (new session_pins.exited_at, migration 0027); the clock starts at the latest of ended_at, exited_at and the chain's last record. Reason: docs/internals/daemon.md already promised that ending a pin early (any process in the session can call EndSession) does not expire a running process's log, and the audit showed an early end would otherwise delete a log the moment its process exits. Consequences to confirm: a session ended by /clear keeps its log (cut to 50 MB) until the harness process exits; a normal SessionEnd counts from the exit seen up to a minute later; a session whose exit is not yet seen counts as running; sweeps run every 10 minutes, so 'deleted at day N' happens within 10 minutes after it.",
+  "source": "https://github.com/willesq/orchestrator/pull/157",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-015",
+    "SP-016",
+    "SP-041"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: confirmed as built; see D-33."
+}

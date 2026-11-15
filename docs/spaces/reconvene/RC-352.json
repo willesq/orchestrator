@@ -1,0 +1,12 @@
+{
+  "id": "RC-352",
+  "kind": "follow-up",
+  "topic": "Proposed: fetch keyword hits' vectors lazily for one collection too",
+  "detail": "SP-024.3 meets 1.3x because a search over several collections asks keyword requests for no vectors and fetches the dense vectors only of returned or tied keyword-only hits (same results). A search of one collection keeps the request it always made (INV-10). Measured on the SP-002 corpus, one collection with the lazy pattern is p95 8.3-8.4 ms against 18.0 ms today (default segments; 2.7-2.8 against 12.6 ms with 2 segments), so every search with no policy could be about twice as fast. Like for like, the collection-per-space layout still costs 2.0-2.4x one collection (D-24). Listed under 'Proposed new features' in PR #183.",
+  "source": "https://github.com/willesq/orchestrator/pull/183",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-024"
+  ],
+  "status": "open"
+}

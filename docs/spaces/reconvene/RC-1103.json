@@ -1,0 +1,12 @@
+{
+  "id": "RC-1103",
+  "kind": "follow-up",
+  "topic": "rag_search does not show the search boundary",
+  "detail": "SearchResponse now says the caller's space, whether the search was scoped and the collections read; orch rag why prints them. The MCP rag_search tool and auto-RAG ignore them. Adding a one-line footer to rag_search would show agents the boundary too; not required by SP-031.",
+  "source": "https://github.com/willesq/orchestrator/pull/197",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-031"
+  ],
+  "status": "open"
+}

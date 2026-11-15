@@ -1,0 +1,13 @@
+{
+  "id": "RC-63",
+  "kind": "decision",
+  "topic": "Replies a client never reads (second SP-016 audit, residual)",
+  "detail": "gRPC keeps a unary reply in memory until the client reads it, after the handler returns. SP-016 caps an agent's ListToolEvents page at 512 KiB, allows one read per chain at a time, and caps every orchd connection at 128 open calls (grpc.MaxConcurrentStreams, maxStreamsPerConn). A local process that opens many connections and sends calls without reading replies can still make orchd hold them; this applies to every agent-callable RPC with large replies (GetDocument, ListDocs, Search, ListToolEvents), not only the command log. Options: cap connections per process in peerCredentials, a server-wide budget for unsent replies, or accept it with the OS sandbox and orchd's restart as the bound.",
+  "source": "https://github.com/willesq/orchestrator/pull/164",
+  "raised": "2026-11-10",
+  "affects": [
+    "SP-016",
+    "SP-046"
+  ],
+  "status": "open"
+}

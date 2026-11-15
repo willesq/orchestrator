@@ -1,0 +1,14 @@
+{
+  "id": "RC-49",
+  "kind": "decision",
+  "topic": "Which processes the session list shows as unpinned",
+  "detail": "Unpinned rows are every claude, codex or gemini process of the user with no live pin, by kernel name as procstat.FindByName does (plus node/bun/deno and version-named binaries by program). On this Mac that includes Codex's app-server daemon processes and every claude subprocess that keeps the name, not only interactive sessions. Decide whether to filter (e.g. only processes with a TTY, or skip children of a harness).",
+  "source": "https://github.com/willesq/orchestrator/pull/154",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-017",
+    "SP-051"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: skip harness children and known daemons; see D-48 and RC-59."
+}

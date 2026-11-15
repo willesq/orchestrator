@@ -1,0 +1,13 @@
+{
+  "id": "RC-44",
+  "kind": "decision",
+  "topic": "Review the broader redaction rules shared with RAG ingestion",
+  "detail": "SP-014 added rules to internal/redact used by docs sync, sources, handoffs, summaries and Ingest: AWS secrets after a space or JSON-escaped quote, Authorization with %20, URL user info, *PASSWORD/SECRET/TOKEN/API_KEY* environment assignments, 'password=' or quoted 'password: \"x\"', query secrets, X-Api-Key/Cookie headers, curl/wget -u, mysql -p, docker-style 'login -p', long --token values, npm/GitLab/Google/Slack refresh tokens. More aggressive rules (any 'login -p', any --password, unquoted YAML password, an unterminated private key) apply to the command log only (redact.RedactCommand), because they damaged ordinary docs in review. Residual false positives in docs are possible (e.g. 'password = example', GH_TOKEN_FILE=...), and a page with more than 25 matches is skipped as a keystore (redact.Threshold). Review whether the shared set is right for RAG. Redaction is pattern-based and so best-effort: each of the five SP-014 review rounds found further credential forms, all fixed with regression tests in internal/redact/redact_test.go. Known remaining command-log gaps (Low): a password starting with '-' after -p (kept so the rule does not swallow the next flag), unquoted YAML values containing spaces or a backslash, and targets JSON redacted with the shared rules only (a path-shaped password could survive in targets). Decide whether to keep extending patterns or treat the OS sandbox and per-job accounts as the boundary, as D-28 did for target extraction.",
+  "source": "https://github.com/willesq/orchestrator/pull/152",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-023"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: maintain, with the sandbox and per-job accounts as the boundary; see D-47. Documentation note tracked in RC-60."
+}

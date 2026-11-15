@@ -1,0 +1,13 @@
+{
+  "id": "RC-28",
+  "kind": "decision",
+  "topic": "SP-011.2 cost bound on Linux",
+  "detail": "Resolving a new connection is p99 0.79 ms on the M3 Max but p99 6.5 ms on CI's shared linux/amd64 runner under the parallel suite; almost all of it is SP-010's process walk at accept (the pin lookup is about 0.05 ms). TestResolveCost enforces 5 ms only on macOS (50 ms elsewhere). Confirm the bound applies to the Macs orch runs on, or ask for the walk to be cut (one pass instead of three over the ancestry) so Linux meets it too.",
+  "source": "https://github.com/willesq/orchestrator/pull/149",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-011"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: drop the bound; see D-45 and RC-58."
+}

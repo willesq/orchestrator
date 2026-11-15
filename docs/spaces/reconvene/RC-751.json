@@ -1,0 +1,14 @@
+{
+  "id": "RC-751",
+  "kind": "decision",
+  "topic": "Session content stored before SP-023 whose transcript is gone is quarantined",
+  "detail": "The relabel places a session record or transcript stored without an origin by the session's pin only when the record names a transcript that is that session's own, where its harness keeps it (the check live writes get, against planted hand-off entries). Claude Code deletes old transcripts, so older sessions' records and transcripts go to quarantine. Option: trust the pin alone for writer=session chunks stored before SP-023 (the writer field is orchd's own, but pre-SP-023 hand-offs did not check transcript locations). Recommendation: keep quarantine; the operator retags what is wanted (SP-071).",
+  "source": "https://github.com/willesq/orchestrator/pull/187",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-027",
+    "SP-023",
+    "SP-071"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "RC-503",
+  "kind": "decision",
+  "topic": "What screen-share-safe mode hides beyond the Spaces pane",
+  "detail": "SP-051.1 a3 is tested on the Spaces pane's view models (SpacesOverviewModel and SpacesOverview hold only the chosen space; other spaces' data is dropped before it is stored). For the rest of the app, the window shows only the Spaces pane, the palette is off and notifications are not posted, but the other panes' models (PRs, tasks, docs, memory) keep loading every space's data in memory, undrawn. Options: (a) accept this reading; (b) also pause or clear those models while sharing. Recommendation: (a).",
+  "source": "https://github.com/willesq/orchestrator/pull/181",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-051"
+  ],
+  "status": "open"
+}

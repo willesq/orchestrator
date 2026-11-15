@@ -1,0 +1,13 @@
+{
+  "id": "RC-201",
+  "kind": "follow-up",
+  "topic": "Guard snapshot version 2 refuses calls until orchd restarts after brew upgrade",
+  "detail": "From the RC-110 security review (low, fail closed): RC-110 bumped the guard snapshot to version 2. brew upgrade relinks orch-hook at once but does not restart orchd (the formula's caveat), so with a spaces policy applied and the guard enforcing, every tool call is refused as policy_unreadable until 'brew services restart orch'. Installs with no policy ever applied are allowed (the hook treats another version like a missing snapshot then). Documented in docs/internals/hooks.md. Proposed: name the version mismatch and the restart in the refusal reason, or restart orchd from the formula's post_install.",
+  "source": "https://github.com/willesq/orchestrator/pull/175",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041",
+    "SP-042"
+  ],
+  "status": "open"
+}

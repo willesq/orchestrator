@@ -1,0 +1,19 @@
+{
+  "id": "SP-026",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "62c681e9c123313032cc8857a1297740221685de",
+  "verified_at": "2026-11-15T06:09:50Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-026-non-memory-bleed",
+  "pr": "https://github.com/willesq/orchestrator/pull/200",
+  "evidence": {
+    "SP-026.1": [
+      "a1 (9 of 9 paths; a session in one space sees no item of another): events: internal/daemon TestTaskEventsCarryTheTasksSpace, internal/prs TestSweepStampsItemsWithTheirOwnersSpace, internal/spaces TestSessionReadsFromGuardFiles; SessionStart digest: internal/hook TestDigestShowsOnlyTheSessionsSpaces, TestEventsFailClosedUnderAnUnreadablePolicy; per-prompt updates: internal/hook TestUpdatesShowOnlyTheSessionsSpaces; ListPRs and ListGitHubItems: internal/daemon TestCachedPRsKeepSpacesApart; GetPRDetail: TestPRDetailKeepsSpacesApart; ListTasks and GetTask (with WatchTasks and GetTaskActivity): TestTaskLedgerKeepsSpacesApart; PR reviews: TestPRReviewsKeepSpacesApart, TestReviewWatchesOnlyFromTheirSpace. All pass (go test ./internal/... at 1d47411).",
+      "a1 related paths: TestRetryOnlyFromTheTasksSpace (RC-708), TestGitHubRecordsKeepSpacesApart and TestDocsAndLogRecordsKeepSpacesApart (RC-700), TestSyncDocsSaysNothingOfAnotherSpace, TestOwnerSettingsOnlyFromTheirSpace, TestIngestSaysNothingOfAnotherSpacesSync (RC-701), TestDeleteSourceOnlyInTheSessionsSpace and internal/rag TestDeleteSourceInOneSpace (D-77), internal/cli TestListsUnderAPolicyComeFromOrchd (RC-712), internal/queue TestRecordedInputOfAWaitingTask; with no policy every caller sees every record (INV-10) in each.",
+      "a2: a cached PR's space is its repo owner's, matched case-insensitively, quarantine for an owner no space binds (internal/daemon TestCachedPRsKeepSpacesApart; internal/prs TestSweepStampsItemsWithTheirOwnersSpace stamps cached items and their events, restamped each sweep); a review task orchd dispatches records and reads its PR owner's space, public only for an unbound owner, nothing with no policy (internal/daemon TestReviewTaskRunsInItsPRsSpace). Pass.",
+      "Checks at 1d47411: go test ./... pass (TestToolHookCost and TestResolveCost are timing tests that failed once each under full-suite load and pass alone), go vet ./... clean, gofmt -l empty, make cover 'All files >= 80%'. Security audit (two rounds): high and medium findings fixed; lows recorded (RC-1252, RC-1253) or documented."
+    ]
+  }
+}

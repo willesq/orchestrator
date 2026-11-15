@@ -1,0 +1,15 @@
+{
+  "id": "RC-123",
+  "kind": "follow-up",
+  "topic": "SP-023 security review lows and accepted limits",
+  "detail": "From three security-audit rounds on PR #173 (all critical/high/medium fixed): (1) a session's records are tied to it only when the transcript sits where its harness keeps that session's transcript, so planting another session's content now takes a write into ~/.claude/projects or ~/.codex/sessions (or a symlinked root there), which the OS sandbox should deny (SP-046); recording the transcript path at the pin (PinSession, orchd.proto) would close it fully; a harness whose transcripts live elsewhere (CLAUDE_CONFIG_DIR/CODEX_HOME set for the harness but not for orchd) has its session records quarantined under a policy; (2) the owner's GitHub node ID is recorded in each docs chunk's origin but not compared with the binding at placement, because the REST node_id read at apply and the GraphQL id read at sync may use different ID formats (verify, then compare in Engine.PlaceUnder); (3) the Ingest refusal to replace another space's source is an existence oracle, as the docs-kept refusal already is, and has a small check-then-write window; notes in quarantine can be replaced by any other unplaced caller; (4) DeleteSource still deletes a source in any space (gate deletes by space in SP-025/SP-026); (5) when reading the stored copy fails (Qdrant briefly unavailable), Ingest skips both replace checks, as the docs-kept check already did; (6) a .git an agent writes under a root can still move a source it registers into a stricter space (never public), accepted as for session pins.",
+  "source": "https://github.com/willesq/orchestrator/pull/173",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-025",
+    "SP-026",
+    "SP-029",
+    "SP-042"
+  ],
+  "status": "open"
+}

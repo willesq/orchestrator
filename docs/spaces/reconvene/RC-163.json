@@ -1,0 +1,12 @@
+{
+  "id": "RC-163",
+  "kind": "follow-up",
+  "topic": "App snapshot mode is an offscreen test target",
+  "detail": "The app had no snapshot mode, so SP-072 adds the OrchAppSnapshots test target (Package.swift), which @testable-imports OrchApp and draws views offscreen with cacheDisplay when ORCH_SNAPSHOT_DIR is set; it is skipped otherwise, so CI writes nothing. Offscreen drawing does not show window chrome, focus or vibrancy exactly as on screen. Unverified assumption: GitHub's macos-26 runner keeps building the extra test target (it compiles but is skipped) within the app job's time. The user may want a fuller snapshot mode (every pane) later.",
+  "source": "https://github.com/willesq/orchestrator/pull/169",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-072"
+  ],
+  "status": "open"
+}

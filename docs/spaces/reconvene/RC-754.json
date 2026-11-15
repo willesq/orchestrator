@@ -1,0 +1,14 @@
+{
+  "id": "RC-754",
+  "kind": "user-action",
+  "topic": "Run the relabel on the real store once 'orch rag relabel' lands",
+  "detail": "Agents never run it against the user's store. After the RPC and command land and a policy is applied: run 'orch rag relabel --dry-run', review the per-transition counts, then run it for real (repeat while it reports chunks left stale). Content stored before writers were recorded (2026-10-28), client notes, sessions whose transcripts are gone and conflicts go to quarantine, to be retagged (SP-071). Supersedes the action in RC-355.",
+  "source": "https://github.com/willesq/orchestrator/pull/187",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-027",
+    "SP-025",
+    "SP-071"
+  ],
+  "status": "open"
+}

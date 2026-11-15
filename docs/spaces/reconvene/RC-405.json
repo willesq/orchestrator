@@ -1,0 +1,15 @@
+{
+  "id": "RC-405",
+  "kind": "decision",
+  "topic": "A declaration of a checkout public cannot be told from a .git a session plants (security audit high)",
+  "detail": "D-64 keeps D-50's declaration: a checkout the operator declared public by binding a public root at its folder or inside it. orch can only see a checkout as a .git on disk when content is placed, and any job's session can create one at any time. A .git planted at a broad public root (git init ~/code) or between it and an enclosing root (~/work/.git with ~ bound and ~/work/code public) makes the broad root look declared, so plain content anywhere under it, including folders a session registers as sources, goes to public. SP-030 already rejects a .git above the broad root and a lone root that holds other bound roots, but no rule based on what is on disk closes every case. Options: (a) make the declaration explicit in the operator-applied policy (e.g. a per-public-space list of declared checkout folders, validated at apply, changing the SP-020 policy schema, CLI and app), and until then no folder counts as declared, so all local content under public roots is quarantined; (b) record at apply time which public roots sit exactly at a checkout and count only those (needs storage with the applied revision); (c) accept that a session can turn a public root into a declared one (widens RC-404 to every public root). Recommendation: (a). Blocks SP-030 (DOD-6) until decided.",
+  "source": "https://github.com/willesq/orchestrator/pull/180",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-030",
+    "SP-020",
+    "SP-050"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-14: see D-65. The on-disk declaration was removed in SP-030; a .git anywhere (at, above or inside a public root) no longer matters, because no local content under a public root is placed public."
+}

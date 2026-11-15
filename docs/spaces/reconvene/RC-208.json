@@ -1,0 +1,13 @@
+{
+  "id": "RC-208",
+  "kind": "decision",
+  "topic": "gh in sandboxed agent shells with the default login (SP-046.1.a5)",
+  "detail": "Measured 2026-11-14 (Claude Code 2.1.309, TestClaudeE2E gh and launcher/gh): with the sandbox on, 'gh auth status' in a sandboxed shell fails with 'open ~/.config/gh/config.yml: operation not permitted', in checkout and launched sessions alike. orch's per-space rules do not deny ~/.config/gh; the Read(~/.config/gh/**) credential deny that 'orch install' adds to ~/.claude/settings.json does, since Claude Code applies Read deny rules to sandboxed commands too (SP-004). So under D-59 gh does not work at all in an agent shell of a space without its own gh profile. Options: (a) orch's checkout and launcher settings add the default gh folder ($GH_CONFIG_DIR or ~/.config/gh) to sandbox.filesystem.allowRead for spaces naming no gh profile (unmeasured whether allowRead overrides a permission-rule deny, RC-184; whether gh then reaches the keychain and api.github.com from the sandbox is also unmeasured; sandboxed commands could then read hosts.yml, which with keyring storage names the user but holds no token); (b) sandbox.excludedCommands ['gh'] so gh runs outside the sandbox (gh could then read or upload other jobs' files, weakening the deny); (c) narrow or drop orch's installed Read(~/.config/gh/**) deny (cc-safety-net still guards shell commands that name the files); (d) amend SP-046.1.a5 so the gh part applies only to a space with its own gh profile, documenting that gh does not work in sandboxed shells with the default login.",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "resolved",
+  "note": "Resolved 2026-11-14 as D-61 (option a, plus the sandbox setting auto|on|off). 2026-11-14: implemented as D-61 decided: allowRead of the default gh folder for a space on the default login, its own profile for one naming it; measured that gh also needs sandbox.network.allowedDomains (api.github.com, github.com) and sandbox.enableWeakerNetworkIsolation (Go TLS through trustd), which orch writes too (RC-213). TestClaudeE2E gh and launcher/gh PASS at 6baf911."
+}

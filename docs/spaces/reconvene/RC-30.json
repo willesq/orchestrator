@@ -1,0 +1,14 @@
+{
+  "id": "RC-30",
+  "kind": "decision",
+  "topic": "Tool events lost while orchd is down or slow",
+  "detail": "pre-tool-use gives orchd 20 ms; when orchd is down, refuses or is slower, the event is lost (the tool call still runs). A file spool fallback was not added because a spool cannot carry the caller's process identity, so its events could not be attributed (INV-02). Decide whether SP-014 should record gaps (e.g. orchd counting hook connections it did not finish, or a per-session sequence number) or accept the loss while the guard is off. SP-041 fails closed while enforcing, so this matters only for logging.",
+  "source": "https://github.com/willesq/orchestrator/pull/150",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-014",
+    "SP-041"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-09 in the SP-014 session; see D-30."
+}

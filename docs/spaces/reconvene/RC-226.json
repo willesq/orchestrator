@@ -1,0 +1,12 @@
+{
+  "id": "RC-226",
+  "kind": "follow-up",
+  "topic": "Multi-word literal terms are whitespace-exact",
+  "detail": "Low (SP-044 review round 1): a literal term of two words matches only with the single space written; two spaces, a tab or a newline between the words is not found. Proposed: match any run of blanks between a literal term's words.",
+  "source": "https://github.com/willesq/orchestrator/pull/177",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-044"
+  ],
+  "status": "open"
+}

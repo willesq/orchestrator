@@ -1,0 +1,14 @@
+{
+  "id": "RC-41",
+  "kind": "follow-up",
+  "topic": "SP-014 audit lows for the command log",
+  "detail": "Accepted as Low in the five SP-014 security reviews: (1) Open checks the path with Lstat, then Chmod and SQLite reopen it by name (a same-user process could swap it; use O_NOFOLLOW and Fchmod), and the data directory is 0755; (2) gap records can land slightly out of order relative to an owner's already-queued later events (counts stay right), and drops recorded under a claimed session are not taken by that session's End; (3) the writer's chain-head cache is not pruned for tasks or sessions that never send SessionEnd; (4) every event whose hook names a session other than the caller's pin costs two orch.db reads on the single writer goroutine, so a hook doing that on purpose slows storage for everyone; (5) four flooding harness processes can still fill the whole queue (each may take a quarter); (6) VerifyToolLog loads a whole chain into memory; (7) redaction of a large RAG document costs about 0.3-0.6 s per MiB on adversarial input (linear).",
+  "source": "https://github.com/willesq/orchestrator/pull/152",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-015",
+    "SP-016",
+    "SP-017"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "RC-851",
+  "kind": "follow-up",
+  "topic": "Retag low findings left open: whole source in memory, and a failed copy lookup skipping the replace check",
+  "detail": "Security audit of SP-071, low: (L3) rag.Service.Retag reads every chunk of the source with its vectors into memory while holding the migration lock; the RPC is operator-only and a 2,000-chunk source moves in under 3 s, but a very large source is unbounded. (L5, pre-existing) in the Ingest RPC, when reading the stored copy fails, the mayReplace check is skipped and the write goes on, so its removeElsewhere can delete a retagged copy in another space; failing closed when the copy cannot be read would close it. Options: page the move in batches; return Unavailable from Ingest when Copy errors.",
+  "source": "https://github.com/willesq/orchestrator/pull/191",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-071",
+    "SP-023"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "RC-703",
+  "kind": "decision",
+  "topic": "What D-39's evidence leaves out for the user (usability)",
+  "detail": "Operator-scope memory reads under a policy need evidence of the user (SP-025): a caller in its terminal's foreground process group, reached from that group's leader (or the shell that started it) without passing launchd, whose leader is no harness; or Orch.app at /Applications or ~/Applications. The user's own scripts run from launchd or cron, a development build of Orch.app outside those folders, a command in a pipeline whose first command already exited, and any call whose process group leader cannot be read get public memory only. Accept as documented, or widen once RC-705 and RC-706 settle what counts as evidence. The security limits of the evidence are RC-705 and RC-706.",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-025"
+  ],
+  "status": "resolved",
+  "note": "Superseded by D-71 (2026-11-14): terminals are no longer evidence under a policy, so the usability limits listed here no longer apply; terminal access returns with SP-077's unlock."
+}

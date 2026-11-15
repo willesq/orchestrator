@@ -47,6 +47,8 @@ registry/sources.yaml
 # misc local detritus (not part of the orchestrator)
 research/
 state/
+# The spaces plan's per-feature state files are tracked (SP-080).
+!docs/spaces/state/
 tmp_audit/
 # Literal `~` directory created by a tilde-not-expanded shell command
 /~

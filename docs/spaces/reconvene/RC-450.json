@@ -1,0 +1,13 @@
+{
+  "id": "RC-450",
+  "kind": "follow-up",
+  "topic": "Refusals in the app's Needs-you list",
+  "detail": "SP-048's summary names the app's Needs-you section. This lane kept its Swift changes to the Notifier (SP-051 owns the Spaces pane, SP-074 may edit macos/Sources), so refusals reach the user as macOS notifications only; the menu's Needs you list (NeedsYouSection) still shows PRs. RefusalMonitor.recent (OrchKit) keeps the latest 20 refusals for a list. Proposed: show recent refusals in the Needs-you list or the Spaces pane's needs-you strip once SP-051 merges.",
+  "source": "https://github.com/willesq/orchestrator/pull/179",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-048",
+    "SP-051"
+  ],
+  "status": "open"
+}

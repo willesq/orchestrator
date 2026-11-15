@@ -1,0 +1,15 @@
+{
+  "id": "RC-35",
+  "kind": "decision",
+  "topic": "New dependency mvdan.cc/sh/v3 for parsing shell commands",
+  "detail": "SP-013 parses Bash tool commands with mvdan.cc/sh/v3 v3.14.1 (pure Go, BSD-3-Clause, the standard Go bash parser; used for its syntax and expand packages only, with command substitution, globbing and ~user lookups disabled). A hand-written tokenizer would be easy to bypass with quoting, $(...), subshells, braces or nested bash -c. Confirm the dependency is acceptable, or ask for a hand-written parser instead.",
+  "source": "https://github.com/willesq/orchestrator/pull/151",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-013",
+    "SP-040",
+    "SP-041"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: keep the dependency; see D-42."
+}

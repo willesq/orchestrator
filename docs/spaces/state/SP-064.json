@@ -1,0 +1,16 @@
+{
+  "id": "SP-064",
+  "status": "blocked",
+  "passes": false,
+  "verified_sha": null,
+  "verified_at": null,
+  "blocked_reason": "Deferred by the user on 2026-11-15 (D-75) until OpenAPPA has a stable wire format.",
+  "attempts": 0,
+  "branch": null,
+  "pr": null,
+  "evidence": {
+    "SP-064.1": [
+      "Deferred by user on 2026-11-15 (D-75): OpenAPPA's wire format could not be confirmed stable; revisit at OpenAPPA 1.0 or when /hook callers are authenticated."
+    ]
+  }
+}

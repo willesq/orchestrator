@@ -1,0 +1,14 @@
+{
+  "id": "RC-601",
+  "kind": "decision",
+  "topic": "How replay judges events with the outbound rules: by the event's time, and only fail_closed rules",
+  "detail": "2026-11-14, SP-075.1.a3 says replay judges 'with the rules recorded for the event's policy revision'. Rules change apart from policy revisions, so SP-075 stores every rules change with its time (spaces_terms_rules) and a replay uses the rules in force at each event's recorded time (spaces.RulesTimeline), which is exact and needs no change to the hash-chained command log. Only fail_closed rules are judged again (against the stored, redacted, capped command); command and destination rules and the baseline switches need the text the log never keeps (INV-07) and the checkout as it was, so a recorded terms verdict is carried (RC-116) as before. Alternative: record the rules revision in each command log record (a toollog column plus a RecordToolEvent field), which would also let a replay report which rules a call was judged under. Recommendation: keep the time-based lookup; confirm the interpretation.",
+  "source": "https://github.com/willesq/orchestrator/pull/185",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-075",
+    "SP-047"
+  ],
+  "status": "resolved",
+  "note": "2026-11-14: the user chose the alternative, recorded by the coordinator as D-66 (PR #178): each command log record stores the outbound rules revision it was judged under (toollog column rules_rev, and a RecordToolEvent field once orchd.proto can change), and a replay uses that revision instead of a time lookup. Built on PR #185."
+}

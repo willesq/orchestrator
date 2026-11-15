@@ -1,0 +1,14 @@
+{
+  "id": "RC-401",
+  "kind": "decision",
+  "topic": "What counts as declaring a folder public (D-50)",
+  "detail": "Implemented under D-64: under a public root, local content is public only in a checkout the operator declared by binding a public root at the checkout's folder or inside it (a .git anywhere above the file, symlinked included, makes it a checkout); a remote GitHub does not report public still keeps it out. Content in no checkout is quarantined.",
+  "source": "https://github.com/willesq/orchestrator/pull/180",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-030",
+    "SP-071"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-14: see D-65. Nothing on disk declares a folder public; local folders reach public only through the applied policy's public_paths list (SP-076). Until then all local content under public roots is quarantined."
+}

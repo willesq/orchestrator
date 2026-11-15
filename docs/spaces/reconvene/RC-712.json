@@ -1,0 +1,13 @@
+{
+  "id": "RC-712",
+  "kind": "follow-up",
+  "topic": "'orch docs list' reads orch.db directly and lists every space's doc URIs",
+  "detail": "Found by SP-025's independent verifier (pre-existing): internal/cli/docs_cmd.go opens orch.db itself rather than asking orchd, so it lists every synced doc URI of every space whatever the caller's space, bypassing SP-025's read filtering (ListDocs). Whether an agent can use it depends on whether the sandbox lets it read orch.db. Proposed: have the command ask orchd (ListDocs), or refuse it when it runs inside a session under a policy.",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-026"
+  ],
+  "status": "resolved",
+  "note": "SP-026 (#200): under an applied policy 'orch docs list', 'orch docs owners list', 'orch docs status' and 'orch prs' show only what orchd's ListDocs and ListPRs list for the caller, and fail when orchd does not answer; with no policy they read the files as before. Reading orch.db directly is RC-1252."
+}

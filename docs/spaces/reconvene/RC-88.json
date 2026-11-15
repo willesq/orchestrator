@@ -1,0 +1,13 @@
+{
+  "id": "RC-88",
+  "kind": "decision",
+  "topic": "What counts as a layer being off",
+  "detail": "The digest and orch status name a layer when its switch is off, when the guard is in 'log' (it records but does not enforce), and when the hooks switch is on but Claude Code's tool hooks are turned off, missing or removed in settings.json (or cannot be checked). With a spaces policy applied, a tool hook with no settings row at all also counts, judged by whether orch's session-start hook is in Claude Code's settings. 'strict' is not named. With no policy applied, a never-installed tool hook is not named in the digest (orch status lists it under harness wiring), so orch behaves as before spaces. Confirm.",
+  "source": "https://github.com/willesq/orchestrator/pull/167",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-070",
+    "SP-072"
+  ],
+  "status": "open"
+}

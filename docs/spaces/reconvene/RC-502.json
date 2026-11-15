@@ -1,0 +1,13 @@
+{
+  "id": "RC-502",
+  "kind": "decision",
+  "topic": "How the app tells a conflict from other quarantine",
+  "detail": "SessionInfo has no placement outcome: a session in a conflict and one under no root are both pinned to 'quarantine'. The app asks ExplainPlacement about each live quarantined session's first folder (at most 20 per refresh) and counts 'conflict' answers as conflicts. That reflects the policy applied now, not the one at pin time. Options: (a) keep this; (b) add the pin's placement outcome to SessionInfo (orchd.proto change). Recommendation: (b) when the next proto change is scheduled.",
+  "source": "https://github.com/willesq/orchestrator/pull/181",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-051",
+    "SP-017"
+  ],
+  "status": "open"
+}

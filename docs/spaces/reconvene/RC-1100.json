@@ -1,0 +1,13 @@
+{
+  "id": "RC-1100",
+  "kind": "decision",
+  "topic": "Quarantine counts in orch status are shown to every caller",
+  "detail": "SP-031.1.a1 says agent callers see counts only for their own space and public ones. SP-031 narrows its own counts (chunks per space, relabel totals, conflicts) that way, but SP-028's quarantine totals (SpacesStatus.quarantine: sources and chunks, never a source) stay open to every caller, as SP-028 designed and tested (TestStatusCountsQuarantine). SP-031 reads a1's counts as per-space counts, which a quarantine total is not. Options: (a) keep: a quarantine total names no space; (b) send quarantine totals to Orch.app only, as SP-031 does for conflicts. Recommendation: (a), unless the user wants status to say nothing about content a session cannot read.",
+  "source": "https://github.com/willesq/orchestrator/pull/197",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-031",
+    "SP-028"
+  ],
+  "status": "open"
+}

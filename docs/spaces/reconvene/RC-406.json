@@ -1,0 +1,14 @@
+{
+  "id": "RC-406",
+  "kind": "follow-up",
+  "topic": "Session pins still follow a stricter remote a session can write",
+  "detail": "Security audit of SP-030 (high H1, fixed for writes): a .git naming another job's org beside files under a public or private root moved sources content into that job's isolated space (remote_stricter). SP-030 now quarantines every write placed by a stricter remote (D-65: nothing on disk places content). Session pins are unchanged (SP-022): a session started in a folder whose .git names another job's org is pinned to, and reads, that job's space. Starting a session there is the user's act, but an agent can plant the .git for a later session. Consider pinning sessions under a public or private root by the root alone, as writes now are. Availability effect of the write fix: a checkout whose remote is in a stricter org but which sits under a public or private root (not its job's root) is now quarantined instead of placed in that org's space; the operator binds the job's root over it or retags it.",
+  "source": "https://github.com/willesq/orchestrator/pull/180",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-022",
+    "SP-010",
+    "SP-041"
+  ],
+  "status": "open"
+}

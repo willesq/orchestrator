@@ -1,0 +1,25 @@
+{
+  "id": "SP-017",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "0691cb790fb4dfbf6af0eccb77d646f6b50b6761",
+  "verified_at": "2026-11-09T21:51:36Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-017-session-liveness",
+  "pr": "https://github.com/willesq/orchestrator/pull/154",
+  "evidence": {
+    "SP-017.1": [
+      "a1: TestSessionLivenessStates (internal/daemon/liveness_test.go), fake process table and settable clock, read through ListSessions: alive with a tool event 29 min ago -> active; alive with no event for 30 min (pinned_at the last activity) -> idle; alive with no event for 7 days -> idle, ended_at 0. 3/3 subtests pass; the row also carries tool_events 1 from the command log.",
+      "a2: TestProcessExitEndsSession: claude 400 leaves the fake process table with no SessionEnd; one sweep (sessionSweepEvery = 60 s, asserted <= 1 min) sets ended_at to exactly the clock time of the sweep, a later sweep keeps it, the default list drops the session and --all shows it ended, and the session's command log gets its end record. TestSessionSweepLoop: runSessionSweeps sweeps at start and on every tick and stops with its context. Pass.",
+      "a3: TestReusedPIDEndsSession: PID 400 now has another start time; the sweep ends sess-old (still naming the old identity), currentOf and firstOf find no pin for the new process, PinSession and EndSession from the new process are PermissionDenied, and ListSessions shows sess-old ended and the new process as unpinned. Pass.",
+      "a4: TestResumeRebindsPin (spaces policy applied, session in isolated 'acme'): after claude 400 exits and is swept, SessionStart source=resume from new claude 420 moves the pin to PID 420 and its start time, keeps space acme, first_cwd, policy revision and pinned_at, clears ended_at, sets resumed_at, and lists it active with last activity = resume time; 420 then resolves to the session; a repeated resume changes nothing; the old process's cached caller no longer sees the row. TestResumeRefusals: refused while the old process runs (PermissionDenied), from codex (PermissionDenied), where the new process would be in space 'personal' (FailedPrecondition), nested in another session (FailedPrecondition), and from a harness already holding an acme pin (FailedPrecondition, the round-1 audit's forged-resume case); same-process resume after SessionEnd clears ended_at. internal/hook TestSessionStartPinsEverySource checks the hook sends the source. Pass."
+    ],
+    "SP-017.2": [
+      "a1: TestSessionsListCommand (internal/daemon/liveness_test.go) runs the real 'orch sessions list' (cli.NewRootCmd over orchdclient.Dial) against orchd's gRPC server on a unix socket as the operator: header HARNESS SESSION PID SPACE DIRECTORY STATE LAST ACTIVITY EVENTS REFUSALS (9 columns); default shows sess-active and sess-idle only, --all adds sess-ended; each row's fields checked. TestSessionsList (internal/cli/sessions_cmd_test.go) checks the --all flag, '-' cells for unpinned rows, sanitized directory cells and the empty and error cases. Pass.",
+      "a2: TestUnpinnedHarnessesListed with a fake process table: unpinned = claude 501, codex 502, gemini 503, node running @anthropic-ai/claude-code (claude), version-named native binary under claude/versions (claude), node running @google/gemini-cli (gemini), codex 410 whose only pin ended, and a new process on pinned PID 400 with another start time; not listed: the pinned claude 400, zsh, the 'Claude' desktop app, node running another script or with an unreadable program, a version-named non-harness binary. Without a process table nothing is unpinned. TestProcessesIncludesSelf (internal/procstat) checks the real sysctl table. Pass.",
+      "a3: TestListSessionsCallerScope: the operator sees sess-a, sess-b and unpinned pid 600; session sess-a sees only its row (with and without --all; ended only with --all); a queued task and an unpinned harness see none; queued tasks are also refused at the interceptor (operatorActions, TestEveryRPCIsClassified). Pass.",
+      "a4: TestSessionSweepCost: 50 pins on 50 distinct real processes, start times read from the kernel (procstat.StartTime), on an M3 Max, darwin/arm64: first sweep (ending the 25 with mismatched start times) 1.33-1.51 ms; steady sweeps median 0.87-0.91 ms, max 0.97-1.04 ms over 3 runs of 20 at 8b7ab94. Threshold < 50 ms."
+    ]
+  }
+}

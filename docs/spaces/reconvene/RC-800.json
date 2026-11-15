@@ -1,0 +1,14 @@
+{
+  "id": "RC-800",
+  "kind": "follow-up",
+  "topic": "orch spaces explain is an alias of why; the matched pattern travels in the reason text",
+  "detail": "SP-076.1.a4 names 'orch spaces explain <path>'; the existing command is 'orch spaces why' (SP-022), so SP-076 adds 'explain' as an alias rather than a second command. PlacementExplanation has no field for the matched public_paths pattern and SP-076 may not change orchd.proto, so orchd appends it to the reason for the operator only (rule public_path), and the no_public_proof reason says no pattern matched. SpaceInfo (ListSpaces, the app) does not carry public_paths either. When the proto slot is free: add a public_path field to PlacementExplanation and public_paths to SpaceInfo, for SP-053's editor.",
+  "source": "https://github.com/willesq/orchestrator/pull/189",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-076",
+    "SP-053",
+    "SP-022"
+  ],
+  "status": "open"
+}

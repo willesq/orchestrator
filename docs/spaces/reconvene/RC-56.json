@@ -1,0 +1,14 @@
+{
+  "id": "RC-56",
+  "kind": "follow-up",
+  "topic": "Session pins are still never pruned",
+  "detail": "SP-015 deletes command-log records but keeps every session_pins row, because retention counts from ended_at/exited_at and a resume continues a deleted chain from its pruned head. RC-50 (3) remains: sweeps and ListSessions read every pin. Proposal: delete a pin (and its pruned head) once its chain has no records left and it ended more than 90 days ago, or cap pins per harness process.",
+  "source": "https://github.com/willesq/orchestrator/pull/157",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-015",
+    "SP-016",
+    "SP-017"
+  ],
+  "status": "open"
+}

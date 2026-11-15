@@ -1,0 +1,13 @@
+{
+  "id": "RC-101",
+  "kind": "decision",
+  "topic": "What SP-041 does for D-38",
+  "detail": "D-38 lets memory reads widen by a pin's space once the enforcing guard stops a session from starting a harness outside its tree. SP-041 refuses such a launch only when the command names another job's folder (cd, paths, git -C); a launch in a folder of no space, or hidden in an opaque command (bash -c \"$X\") under block-other-jobs (opaque_unverified), still runs, as do double forks and launchctl/open/osascript. SP-025 should not assume more, or should require strict mode or other evidence (D-39).",
+  "source": "https://github.com/willesq/orchestrator/pull/172",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-025",
+    "SP-041"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "RC-77",
+  "kind": "decision",
+  "topic": "block-other-jobs allows opaque calls (RC-36 (2))",
+  "detail": "SP-040's block-other-jobs mode allows an opaque call whose known targets stay out of other jobs (rule opaque_unverified, logged for audit); strict refuses it (opaque_strict); calls opaque because Targets hit a limit or had no absolute cwd or home are refused in both enforcing modes (analysis_limit, RC-36 (3)). Measured before choosing: 0 of the 46 recorded Claude Code and Codex PreToolUse fixtures (internal/hook/testdata/payloads) come back opaque; the real command log on this Mac is empty because the tool hooks are not wired yet (RC-33), so the rate on real agent work is unmeasured. Re-measure from the command log once the hooks run (counts of opaque_unverified per space via orch spaces log) before SP-041 enforces, and confirm or tighten.",
+  "source": "https://github.com/willesq/orchestrator/pull/166",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-040",
+    "SP-041"
+  ],
+  "status": "open"
+}

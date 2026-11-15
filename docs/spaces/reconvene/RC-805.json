@@ -1,0 +1,13 @@
+{
+  "id": "RC-805",
+  "kind": "follow-up",
+  "topic": "Sandbox rules should deny job sessions writes to public_paths folders",
+  "detail": "D-73 accepts that sessions can write into folders public_paths lists (or create folders a '*' or '**' pattern matches) and have them indexed into public. The planned mitigation: SP-046's per-checkout sandbox rules deny writes to every folder a public_paths pattern matches, and to the folders a '*' or '**' pattern could create, for the sessions of job (isolated) spaces. Patterns with wildcards need a rule form the sandbox can express (e.g. denying the pattern's literal prefix, or each existing matching folder refreshed on apply).",
+  "source": "https://github.com/willesq/orchestrator/pull/189",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046",
+    "SP-076"
+  ],
+  "status": "open"
+}

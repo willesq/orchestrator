@@ -1,0 +1,13 @@
+{
+  "id": "RC-70",
+  "kind": "follow-up",
+  "topic": "Session list rows do not name an unpinned process's log chain",
+  "detail": "ListSessions shows an unpinned process's tool events, refusals and last event, but SessionInfo has no field for its chain ID (process:<pid>-<start ns>); 'orch spaces log process:<pid>' resolves the latest chain of that PID instead. A log_owner field was not added to the proto, to avoid regenerating the Go and Swift stubs while SP-040, SP-070 and SP-073 run in parallel (D-55). Add it (and show process chains in the app, SP-054) when convenient.",
+  "source": "https://github.com/willesq/orchestrator/pull/165",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-073",
+    "SP-054"
+  ],
+  "status": "open"
+}

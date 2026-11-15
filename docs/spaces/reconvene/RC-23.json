@@ -1,0 +1,10 @@
+{
+  "id": "RC-23",
+  "kind": "follow-up",
+  "topic": "Real orch.db is at schema 25 ahead of installed orch 0.44.0",
+  "detail": "On 2026-11-08 an SP-011 test opened ~/.local/share/orch/orch.db without a temp ORCH_DATA_DIR and migrated it from 22 to 25 (spaces_revisions, spaces_applied, spaces_org_bindings, session_pins, all empty after cleanup per D-27). Unverified: that orchd 0.44.0 restarts cleanly when the database is ahead of its own migrations. Check at the next restart, or ignore once a release with the spaces migrations is installed.",
+  "source": "a local session and https://github.com/willesq/orchestrator/pull/149",
+  "raised": "2026-11-08",
+  "affects": [],
+  "status": "open"
+}

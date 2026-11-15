@@ -112,6 +112,8 @@ Plans that shaped the code, kept for context; the code is the source of truth:
 [GO_REWRITE_PLAN.md](GO_REWRITE_PLAN.md), [MODEL_ROUTING_PLAN.md](MODEL_ROUTING_PLAN.md),
 [RAG_SENSITIVITY_PLAN.md](RAG_SENSITIVITY_PLAN.md).
 
-Memory spaces are planned in [spaces/spaces-features.json](spaces/spaces-features.json)
-(rendered by [spaces/index.html](spaces/index.html)), with the background design docs in
+Memory spaces are planned in [spaces/spaces-features.json](spaces/spaces-features.json),
+with each feature's status and evidence in [spaces/state/](spaces/state/) and each reconvene item
+in [spaces/reconvene/](spaces/reconvene/) (rendered together by [spaces/index.html](spaces/index.html);
+tools in [spaces/tools/](spaces/tools/)), with the background design docs in
 [spaces/design/](spaces/design/). Where they disagree, the plan JSON wins.

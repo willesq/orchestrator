@@ -1,0 +1,13 @@
+{
+  "id": "RC-182",
+  "kind": "follow-up",
+  "topic": "Cross-space channels the deny rules leave open",
+  "detail": "Not denied: harness transcripts under ~/.claude/projects and ~/.codex/sessions (shared by sessions started without the launcher), orch's data folder outside spaces/ (orch.db, toollog.db; SP-042), the default gh login ~/.config/gh, the shared /tmp (D-53 residual) and /tmp/claude, which checkouts with no space share (no per-checkout TMPDIR).",
+  "source": "https://github.com/willesq/orchestrator/pull/171",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-046",
+    "SP-042"
+  ],
+  "status": "open"
+}

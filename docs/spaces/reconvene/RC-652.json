@@ -1,0 +1,12 @@
+{
+  "id": "RC-652",
+  "kind": "follow-up",
+  "topic": "Gaps left in the D-67 settings check (security audit lows)",
+  "detail": "The guard's settings_reopen check (PR #186) reads .claude folders from the call's cwd and the session's project folder up to the recorded checkout. Not covered: (1) settings folders above the checkout (which ancestors Claude Code loads is not measured); (2) a folder spelled in another Unicode normalization than orchd's record is not matched (APFS treats them as one); (3) a checkout's real path is recorded at sync, so a link re-pointed between syncs is matched only after the next sync (30 s). Measure (1) with TestClaudeE2E and compare canonical paths for (2) if wanted.",
+  "source": "https://github.com/willesq/orchestrator/pull/186",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-046"
+  ],
+  "status": "open"
+}

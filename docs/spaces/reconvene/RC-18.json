@@ -1,0 +1,13 @@
+{
+  "id": "RC-18",
+  "kind": "user-action",
+  "topic": "Re-apply spaces policies applied before SP-021",
+  "detail": "Their orgs are unconfirmed, so those owners' docs syncs stay stopped until 'orch spaces apply' runs again.",
+  "source": "https://github.com/willesq/orchestrator/pull/144",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-021"
+  ],
+  "status": "resolved",
+  "note": "Resolved by the user on 2026-11-10: no spaces policy had been applied before SP-021, so there is nothing to re-apply."
+}

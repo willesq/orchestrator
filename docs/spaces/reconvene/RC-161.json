@@ -1,0 +1,13 @@
+{
+  "id": "RC-161",
+  "kind": "follow-up",
+  "topic": "The app mirrors orchd's 'relaxed' rule to decide what to confirm",
+  "detail": "EnforcementSwitch.relaxes(to:) in macos/Sources/OrchKit/Spaces.swift treats 'off' (every layer) and the guard's 'log' as relaxing, matching internal/spaces Layer.Relaxed today. If orchd adds a relaxing state, the app would switch to it without asking. A per-state relaxed flag in EnforcementSwitch (orchd.proto; lane C owns proto) would remove the copy. Also a step down that still enforces (guard strict -> block-other-jobs) is sent without confirmation, by the same definition (security audit, informational).",
+  "source": "https://github.com/willesq/orchestrator/pull/169",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-072",
+    "SP-070"
+  ],
+  "status": "open"
+}

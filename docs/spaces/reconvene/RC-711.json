@@ -1,0 +1,14 @@
+{
+  "id": "RC-711",
+  "kind": "follow-up",
+  "topic": "Narrow Orch.app's recognition further",
+  "detail": "SP-025's D-71 review (low, informational): (1) a Developer ID build could also require 'anchor apple generic and certificate leaf[subject.OU] = <team>', so a planted ad-hoc bundle fails where the real app is Developer ID signed; (2) the genuine app can be started by an agent with ORCH_SOCKET or ORCH_DATA_DIR aimed at its own fake daemon (open --env, launchctl setenv), showing the user an agent's data to approve: release builds could ignore those variables or check orchd's signature on the socket; (3) a terminal with Accessibility permission can drive the app's buttons through System Events (SP-077's confirmation should show which terminal asked); (4) builds without cgo, and Linux, recognize no Orch.app, so under a policy no caller is the operator there and the policy can be changed only by editing orch.db with orchd stopped.",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-025",
+    "SP-077",
+    "SP-072"
+  ],
+  "status": "open"
+}

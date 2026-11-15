@@ -1,0 +1,15 @@
+{
+  "id": "RC-701",
+  "kind": "follow-up",
+  "topic": "Write paths still tell a session that another space holds a URI (RC-350 items 2 and 4)",
+  "detail": "DeleteSource, which sessions may call (rag_delete_source), deletes a URI from every space's collection and returns the count, so a session can both learn that another space holds a URI and delete it. Ingest answers 'is kept by the docs sync' or 'cannot be written by this caller' for a URI another space holds, and still ignores a failed Copy (fail-open). handoff.go canonicalStored matches synced copies in any space. SP-025 changed only read paths. Proposed: for non-operator callers scope DeleteSource and the Ingest checks to the writer's space, give one answer whether or not another space holds the URI, and fail closed when the store cannot be read.",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-023",
+    "SP-025",
+    "SP-071"
+  ],
+  "status": "open",
+  "note": "Mostly addressed by SP-026 (#200): Ingest no longer says which sync keeps a copy in a space the caller does not read (it gets the other-space refusal), and under a policy DeleteSource deletes only from a session's own space and counts only that (D-77, rag.Service.DeleteSourceIn). Still open: Ingest ignores a failed Copy (fail-open; a fresh store's missing-collection error is not told apart outside internal/rag), and handoff.go canonicalStored matches synced copies in any space (derived content, SP-029)."
+}

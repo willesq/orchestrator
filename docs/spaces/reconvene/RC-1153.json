@@ -1,0 +1,10 @@
+{
+  "id": "RC-1153",
+  "kind": "follow-up",
+  "topic": "Flaky tests, and make cover drops a package whose tests fail",
+  "detail": "Seen while validating SP-077 on 2026-11-15 under load from parallel lanes: TestRunMeasuresFailedRuns (internal/agentrun) failed 1 in 8 runs on main too ('a timed-out run must still record how long it took'); internal/daemon failed once inside 'make cover' and passed on the rerun. scripts/cover.sh skips a package whose tests fail (go test ... || true), so that run reported 'All files >= 80%' without any internal/daemon file. Proposed: make cover.sh fail when a package's tests fail, and look at the agentrun timing.",
+  "source": "https://github.com/willesq/orchestrator/pull/198",
+  "raised": "2026-11-15",
+  "affects": [],
+  "status": "open"
+}

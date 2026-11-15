@@ -1,0 +1,15 @@
+{
+  "id": "RC-42",
+  "kind": "decision",
+  "topic": "How strong the command log's tamper evidence should be",
+  "detail": "SP-014's chain detects modified, deleted and reordered records, but the anchors live in toollog.db itself: records removed after the last anchor, or a chain rewritten from its first record, cannot be detected, and task chains are never anchored (tasks send no SessionEnd). Options: copy each anchor's (seq, hash) into orch.db or another store the guard protects (SP-042), anchor a task's chain when it reaches a terminal state, or accept file-level tamper evidence and rely on the OS sandbox (SP-046) to keep sessions out of the file.",
+  "source": "https://github.com/willesq/orchestrator/pull/152",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-042",
+    "SP-046",
+    "SP-047"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: anchors copied into orch.db and task chains anchored at their end; see D-35 and SP-073."
+}

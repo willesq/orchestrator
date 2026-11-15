@@ -1,0 +1,14 @@
+{
+  "id": "RC-804",
+  "kind": "follow-up",
+  "topic": "Low findings of the SP-076 security audit",
+  "detail": "(1) Paths, roots and patterns compare by Go's strings.ToLower text, not as APFS compares names (Unicode NFC/NFD, full case folding): a source registered under another spelling of a private root's folder could miss that root and, under a '~/code/**' pattern, be placed public. The text comparison predates SP-076 but SP-076 makes it reachable; a fix needs Unicode normalization (golang.org/x/text, a new dependency) or an os.SameFile check against stricter roots. Not tested on disk. (2) An agent's ExplainPlacement answers only for public_path matches, so it can confirm a guessed folder name in a literal pattern even though the pattern is never shown; mitigations: refuse non-existent paths for agents, or rate-limit per caller. (3) Patterns are case-insensitive, so on a case-sensitive volume '~/code/oss' also matches a session-created '~/code/OSS'.",
+  "source": "https://github.com/willesq/orchestrator/pull/189",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-076",
+    "SP-020",
+    "SP-022"
+  ],
+  "status": "open"
+}

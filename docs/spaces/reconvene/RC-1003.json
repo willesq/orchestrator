@@ -1,0 +1,13 @@
+{
+  "id": "RC-1003",
+  "kind": "follow-up",
+  "topic": "Review counts checkouts, not chunks",
+  "detail": "The Review step's effect counts are estimates over the scanned checkouts (per space, to quarantine, conflicts), computed in the app with a mirror of orchd's placeCheckout and publicProof; chunk, PR and task counts per space need fields orchd does not report (RC-501). Proposed: a dry-run placement count in DiffSpaces when the next orchd.proto change is scheduled, replacing the app's mirror.",
+  "source": "https://github.com/willesq/orchestrator/pull/193",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-052",
+    "SP-051"
+  ],
+  "status": "open"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "RC-752",
+  "kind": "follow-up",
+  "topic": "A relabelled source is embedded again at its next write",
+  "detail": "The write hash includes the space and labels_v, and the relabel cannot recompute it (a source's original text and write options are not stored), so the next write of a relabelled source is stored again rather than skipped as unchanged: one embedding per source after each relabel, and every revision applied makes every chunk stale. Option: store a placement-free write hash, or skip rewrites whose content hash matches and restamp them instead.",
+  "source": "https://github.com/willesq/orchestrator/pull/187",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-027",
+    "SP-071"
+  ],
+  "status": "open"
+}

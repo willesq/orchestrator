@@ -1,0 +1,13 @@
+{
+  "id": "RC-104",
+  "kind": "follow-up",
+  "topic": "The command log stores the hook's reported decision",
+  "detail": "From the SP-041 security audit (low): orchd stores an enforced decision (refused, allowed) and its rule as the hook reports them in RecordToolEvent, without computing its own verdict or comparing guard_enforced with its own switch; any process can only write its own chain. Reserved queue room (D-37) goes only to enforced refusals of pinned sessions and tasks, so unpinned process chains cannot claim it, but a session can still fill its own reserve share with claimed refusals. Proposed: compute orchd's own would-verdict (server.guardVerdict) on the writer goroutine and flag records whose hook decision differs.",
+  "source": "https://github.com/willesq/orchestrator/pull/172",
+  "raised": "2026-11-12",
+  "affects": [
+    "SP-041",
+    "SP-016"
+  ],
+  "status": "open"
+}

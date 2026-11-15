@@ -1,0 +1,12 @@
+{
+  "id": "RC-1453",
+  "kind": "follow-up",
+  "topic": "DMs cannot be opened whole, and chat_kind is unindexed in older collections",
+  "detail": "(1) GetDocument, ListSources and orch rag show leave DMs out for every caller, so a DM the operator finds with orch search --direct-messages cannot be opened whole; a DM-aware document read would need the same operator gate. (2) The chat_kind keyword index is created only with a new collection; existing ones filter on it unindexed (correct, slower). Add it lazily when chat content first lands.",
+  "source": "https://github.com/willesq/orchestrator/pull/203",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-060"
+  ],
+  "status": "open"
+}

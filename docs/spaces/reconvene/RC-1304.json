@@ -1,0 +1,12 @@
+{
+  "id": "RC-1304",
+  "kind": "follow-up",
+  "topic": "TestRunMeasuresFailedRuns is flaky under load",
+  "detail": "internal/agentrun TestRunMeasuresFailedRuns expects a run that timed out after 200 ms to record DurationMS >= 200; under heavy load on the developer machine it records 199 (seen on origin/main without SP-029's changes too). It passes alone and in CI. Proposed: compare against the timeout minus a tolerance, or measure the duration from before the timeout's context is created.",
+  "source": "https://github.com/willesq/orchestrator/pull/196",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-029"
+  ],
+  "status": "open"
+}

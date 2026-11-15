@@ -1,0 +1,12 @@
+{
+  "id": "RC-79",
+  "kind": "follow-up",
+  "topic": "What SP-041 must do around Decide",
+  "detail": "From the SP-040 security reviews. (1) The zero GuardPolicy means 'no spaces configured' and allows everything (INV-10); SP-041 must refuse (INV-13) when the policy snapshot cannot be read or does not validate, never pass the zero value. (2) NewGuardPolicy resolves root and protected-path symlinks once; SP-041 must rebuild it when the policy, a root or its links change (replay is exact only against the same snapshot). (3) A missing pin refuses in enforcing modes (pin_missing); decide how queued tasks without a session pin are judged. (4) Limit reasons are matched by message text; TestLimitReasonsMatchTargets checks forceOpaque reasons and that every listed reason still exists, but a new limit raised with plain opaque() would not be flagged; consider a typed limit flag in ToolTargets. (5) Pass EventCwdChanged only for cwd-changed: every other kind, including an empty one, is enforced.",
+  "source": "https://github.com/willesq/orchestrator/pull/166",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-041"
+  ],
+  "status": "open"
+}

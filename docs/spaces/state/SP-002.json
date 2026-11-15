@@ -1,0 +1,21 @@
+{
+  "id": "SP-002",
+  "status": "done",
+  "passes": true,
+  "verified_sha": "712b0f3fd5c579a8c35ff0a8e56c3d29b0b7f671",
+  "verified_at": "2026-11-08T16:12:27Z",
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-002-qdrant-costs",
+  "pr": "https://github.com/willesq/orchestrator/pull/139",
+  "evidence": {
+    "SP-002.1": [
+      "a1: TestIntegrationSpacesCost (internal/rag/spaces_bench_it_test.go; ORCH_QDRANT_BENCH=1, qdrant v1.17.1 native, Apple M3 Max 16 cores, 2026-11-08). One hybrid collection of 40,000 synthetic chunks (384-d dense clustered around 256 centres, BM25 from the real tokenizer over a Zipf vocabulary), searched through Service.Search (hybrid, weighted ranking, TopK 10) with payload filter tags any [space:s0 space:s1] (50% of chunks), 200 queries after 20 warm-up. Default segments (auto): p50 16.45 ms, p95 17.06 ms. With ORCH_QDRANT_BENCH_SEGMENTS=2: p50 11.22 ms, p95 11.77 ms. Recorded."
+    ],
+    "SP-002.2": [
+      "a1: TestIntegrationSpacesCost, same corpus split across 4 collections; the 2 allowed collections searched in parallel through Service.Search (each with its own space tag filter as the second layer) and fused by RRF (k=60), 200 queries interleaved with the baseline. Default segments: p50 30.75-31.13 ms, p95 32.64-32.94 ms, ratio 1.93-1.94x over 3 runs. ORCH_QDRANT_BENCH_SEGMENTS=2: p50 16.45 ms, p95 17.54 ms, ratio 1.49x. Over the 1.3x threshold, so documented in docs/internals/memory.md ('Cost of a collection per space'): request latency barely depends on collection size; the keyword request returning dense vectors costs 8.2-9.0 ms (1.8-2.0 ms without them); the engine did not overlap concurrent requests (4 parallel raw requests 13-30 ms), so each extra collection adds a whole hybrid search. Top-10 agreement between layouts 85.5%. R-03 (now D-10) to be revisited with the user.",
+      "a2: TestIntegrationSpacesCost, POST /points/payload?wait=true with a filter matching all 40,000 chunks: one collection 0.33 s (default segments; 10.3 s with 2 segments); 4 space collections, one filtered set_payload each, 0.39-0.44 s total. Count afterwards = 40,000 relabelled. Threshold <= 120 s met.",
+      "a1 revisit: R-03 (D-10) revisited with the user on 2026-11-08 after this measurement; decision: keep a collection per space and accept the measured cost (recorded as D-24). Confirmed by user on 2026-11-08."
+    ]
+  }
+}

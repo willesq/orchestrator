@@ -1,0 +1,22 @@
+{
+  "id": "SP-054",
+  "status": "in_progress",
+  "passes": false,
+  "verified_sha": null,
+  "verified_at": null,
+  "blocked_reason": null,
+  "attempts": 1,
+  "branch": "feat/sp-054-activity-review",
+  "pr": "https://github.com/willesq/orchestrator/pull/194",
+  "evidence": {
+    "SP-054.1": [
+      "a1: tests pass at 855d4af. `make app-cover` exit 0 runs the whole Swift suite and the 80% per-file gate on OrchKit; the new files: DaemonClient+SpacesReview 100%, SpacesPolicyDoc 98.68%, SpacesReview 97.54%, SpacesReviewLines 100%, SpacesReviewModel 97.98%, SpacesActivity 98.59%, SpacesActivityModel 97.03%.",
+      "a1 (invalid lines marked): SpacesReviewTests.invalidLinesMarked (the refused line carries its rule and message, nothing else is marked); ruleTargets (16 orchd rules each find their line, including public_paths entries); unplacedProblems (a problem with no line is listed apart and blocks Apply); badBindingPhraseAnchored.",
+      "a1 (invalid lines excluded): SpacesReviewTests.excludingDropsInvalidLine (the saved draft lacks only the refused line and keeps every other field, unknown ones included; it has nothing left to drop); revertsSettingsAndSpaces; repeatedValues; unchangedLineIsNotExcludable, conflictsAreNotDropped and movedBindingsAreNotDropped (lines whose removal could move content or pick a side are marked but not dropped); SpacesReviewModelTests.dropThenApplyReviewed (Drop saves the cleaned draft with SetSpacesDraft and the page then reviews the new revision).",
+      "a1 (Apply sends the reviewed revision): SpacesReviewModelTests.dropThenApplyReviewed (calls in order: diff, save, diff, auth, apply 9; ApplySpaces gets reviewed_revision 9, the revision shown; Apply with problems never reaches orchd); staleReviewRefused (a newer draft saved after the review is refused by the fake orchd, not applied in its place); authenticationGatesApply (system authentication runs first and a cancel sends nothing); agentDraftNeedsAcceptance and agentDraftAccepted (accept_agent_draft and confirm_github_orgs); SpacesReviewClientTests.mapsRPCs (DiffSpaces, SetSpacesDraft, ApplySpaces and ListToolEvents fields over a fake orchd socket).",
+      "Activity (summary, no acceptance item): SpacesActivityTests (loadsLog, filters, rows, loadMore, select, emptyAndErrors).",
+      "Snapshots for the user's look (not an acceptance item): `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter SpacesActivityReviewSnapshots` renders spaces-activity-{default,companion}-{light,dark}.png, spaces-review-{default,companion}-{light,dark}.png and spaces-review-clean-default-{light,dark}.png (offscreen, sample data, no orchd).",
+      "Independent verification at 4b57d93 (a fresh verifier given only the diff, this feature, INV-06, INV-12 and definition_of_done): a1 PASS; DOD-1 (go test ./... exit 0), DOD-2, DOD-3 (no Go files; make app-cover exit 0), DOD-4, DOD-5, DOD-6 (0 critical/high/medium), DOD-7, DOD-8 PASS; DOD-9: the app check passed on PR #194 (no Go workflow runs, no Go files changed). a2 is manual and waits for the user (RC-1056)."
+    ]
+  }
+}

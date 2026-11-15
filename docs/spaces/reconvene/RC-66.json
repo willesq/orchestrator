@@ -1,0 +1,14 @@
+{
+  "id": "RC-66",
+  "kind": "follow-up",
+  "topic": "Flaky TestWatchTasksStreamsSnapshotChangesAndTicks hides internal/daemon from make cover",
+  "detail": "TestWatchTasksStreamsSnapshotChangesAndTicks (internal/daemon/taskwatch_test.go) fails about one run in five on main at ea0b147 with 'WatchTasks ended with context canceled' (also under -race); SP-073 does not touch it. scripts/cover.sh appends a package's profile only when its tests pass, so when this test flakes the whole internal/daemon package silently drops out of the per-file gate and make cover still prints 'All files >= 80%'. Fix the test (a send racing the client's cancel), and make cover.sh fail, or at least warn, when a package's tests fail. Also seen on PR #165: TestTargetsAuditRound2Scripts (internal/spaces/targets_audit2_test.go:153, 'fan-out sources', 6000 sourced scripts under a time budget) failed CI run 43049750035's first attempt with 'neither opaque nor reaching .../otherco' and passed on the re-run and locally; the budget-dependent case is likely flaky under CI load.",
+  "source": "https://github.com/willesq/orchestrator/pull/165",
+  "raised": "2026-11-11",
+  "affects": [
+    "SP-073",
+    "DOD-3"
+  ],
+  "status": "open",
+  "note": "The flaky-test part was fixed on 2026-11-11 by https://github.com/willesq/orchestrator/pull/168 (fixed on the user's instruction); see RC-92. Still open: scripts/cover.sh silently drops a package whose tests fail, so make cover can print 'All files >= 80%' with that package missing. TestTargetsAuditRound2Scripts' budget-dependent case is also unaddressed."
+}

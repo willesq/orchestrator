@@ -1,0 +1,14 @@
+{
+  "id": "RC-704",
+  "kind": "follow-up",
+  "topic": "A task's read space lives only in its durable workflow input",
+  "detail": "D-46 needs each task's dispatching space; SP-025 records it in AgentTaskInput.Space (no migration, no proto change) and carries it to the live run. The task ledger (queue.Task, ListTasks, GetTask) does not show it, PR-review tasks orchd dispatches itself record none, and tasks dispatched before SP-025 record none, so under a policy those read public memory only. SP-029 (task records carry the dispatching session's space) should add it to the ledger and decide what orchd's own review tasks read; RC-100's task pin file can use the same value. The SP-025 security review notes that a session may dispatch with a cwd in another space's folder: the task then runs there but reads, and would write, as the dispatcher's space, so content from that folder could be stored in the dispatcher's space unless the guard stops the task's file reads.",
+  "source": "https://github.com/willesq/orchestrator/pull/188",
+  "raised": "2026-11-14",
+  "affects": [
+    "SP-029",
+    "SP-026"
+  ],
+  "status": "open",
+  "note": "SP-026 (#200) reads each task's space from its durable input, including a waiting task's pending start event (queue.Runs.RecordedInput), to filter the task RPCs, and orchd's PR review tasks now record their PR owner's space. Still open for SP-029: the ledger row and the Task message do not carry the space; the dispatch-cwd note stands."
+}

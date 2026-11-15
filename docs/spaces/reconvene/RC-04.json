@@ -1,0 +1,14 @@
+{
+  "id": "RC-04",
+  "kind": "decision",
+  "topic": "Pins across orchd restarts on Linux",
+  "detail": "Optional: key pins on raw start ticks plus boot_id instead of wall-clock start time if pins must survive restarts on Linux.",
+  "source": "https://github.com/willesq/orchestrator/pull/140",
+  "raised": "2026-11-08",
+  "affects": [
+    "SP-010",
+    "SP-017"
+  ],
+  "status": "resolved",
+  "note": "Settled by the user on 2026-11-10: not needed; see D-49."
+}

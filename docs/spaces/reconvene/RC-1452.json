@@ -1,0 +1,13 @@
+{
+  "id": "RC-1452",
+  "kind": "follow-up",
+  "topic": "SP-060 security lows: chat in public spaces",
+  "detail": "From the PR security review. (1) Low: a chat tenant bound to a public space is quarantined at placement, but the policy still accepts the binding; consider refusing it at apply time. (2) Low: an operator retag of a chat source into a public space is honoured (honorsRetag treats chat like the syncs), so that thread would be read by every space; refuse retags of chat sources into public spaces. (3) Low, pre-existing D-71: with no spaces policy a process an agent detached from its session passes as the operator, so it can call SearchDirectMessages; with no policy there is no isolation either.",
+  "source": "https://github.com/willesq/orchestrator/pull/203",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-060",
+    "SP-071"
+  ],
+  "status": "open"
+}

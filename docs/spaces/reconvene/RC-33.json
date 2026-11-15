@@ -1,0 +1,12 @@
+{
+  "id": "RC-33",
+  "kind": "user-action",
+  "topic": "Wire the tool hooks on this Mac after release",
+  "detail": "Once a release contains SP-012: run `orch install --target claude-code --apply` and `orch install --target codex --apply` (dry run first), then review and trust the new PreToolUse entry in Codex. `orch status` shows '<harness> tool hooks wired' when done. Until then nothing is logged. Update 2026-11-10 (decision review): orch 0.45.1 is installed and contains SP-012, but orch status shows the tool hooks missing. Dry runs are clean: ~/.claude/settings.json gains PreToolUse and CwdChanged (19 third-party entries kept) and ~/.codex/hooks.json gains PreToolUse (6 kept). The user will run the two --apply commands and trust the Codex entry.",
+  "source": "https://github.com/willesq/orchestrator/pull/150",
+  "raised": "2026-11-09",
+  "affects": [
+    "SP-012"
+  ],
+  "status": "open"
+}
