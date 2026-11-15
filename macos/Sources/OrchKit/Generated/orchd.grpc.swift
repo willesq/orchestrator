@@ -306,6 +306,19 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "RetagSource" metadata.
+        public enum RetagSource: Sendable {
+            /// Request type for "RetagSource".
+            public typealias Input = Orchd_V1_RetagSourceRequest
+            /// Response type for "RetagSource".
+            public typealias Output = Orchd_V1_RetagSourceResponse
+            /// Descriptor for "RetagSource".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "RetagSource",
+                type: .unary
+            )
+        }
         /// Namespace for "BackfillSessions" metadata.
         public enum BackfillSessions: Sendable {
             /// Request type for "BackfillSessions".
@@ -1136,6 +1149,7 @@ public enum Orchd_V1_Orchd: Sendable {
             Relabel.descriptor,
             ListQuarantine.descriptor,
             PurgeQuarantine.descriptor,
+            RetagSource.descriptor,
             BackfillSessions.descriptor,
             ListPRs.descriptor,
             GetGitHubIdentity.descriptor,
@@ -1745,6 +1759,31 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PurgeQuarantineResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeQuarantineResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RetagSource" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RetagSource (SP-071) moves one source to the space the operator names,
+        /// > with its vectors (nothing is re-embedded), and records a sticky
+        /// > override that later writes of it honor. Resumable. Operator only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RetagSourceRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RetagSourceRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RetagSourceResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func retagSource<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RetagSourceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RetagSourceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RetagSourceResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RetagSourceResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "BackfillSessions" method.
@@ -4048,6 +4087,42 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.PurgeQuarantine.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "RetagSource" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RetagSource (SP-071) moves one source to the space the operator names,
+        /// > with its vectors (nothing is re-embedded), and records a sticky
+        /// > override that later writes of it honor. Resumable. Operator only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RetagSourceRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RetagSourceRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RetagSourceResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func retagSource<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RetagSourceRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RetagSourceRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RetagSourceResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RetagSourceResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.RetagSource.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -6918,6 +6993,37 @@ extension Orchd_V1_Orchd.ClientProtocol {
         )
     }
 
+    /// Call the "RetagSource" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RetagSource (SP-071) moves one source to the space the operator names,
+    /// > with its vectors (nothing is re-embedded), and records a sticky
+    /// > override that later writes of it honor. Resumable. Operator only.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RetagSourceRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func retagSource<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RetagSourceRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RetagSourceResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.retagSource(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RetagSourceRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RetagSourceResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "BackfillSessions" method.
     ///
     /// > Source IDL Documentation:
@@ -9552,6 +9658,41 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.purgeQuarantine(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RetagSource" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RetagSource (SP-071) moves one source to the space the operator names,
+    /// > with its vectors (nothing is re-embedded), and records a sticky
+    /// > override that later writes of it honor. Resumable. Operator only.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func retagSource<Result>(
+        _ message: Orchd_V1_RetagSourceRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RetagSourceResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RetagSourceRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.retagSource(
             request: request,
             options: options,
             onResponse: handleResponse

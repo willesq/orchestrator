@@ -192,9 +192,26 @@ To see and clear quarantine (operator only):
 
 ```sh
 orch quarantine list                              # quarantined sources and their chunk counts
-orch quarantine assign <source_uri> <space>       # move one to a space and keep it there
+orch quarantine assign <source_uri> <space> --confirm   # move one to a space and keep it there
 orch quarantine purge <source_uri>... | --all     # counts only; add --confirm to delete
 ```
 
-`orch status` shows how many sources and chunks quarantine holds. `assign` needs the retag
-command (SP-071); until that is merged it refuses and moves nothing.
+`orch status` shows how many sources and chunks quarantine holds. `assign` is a retag of a
+quarantined source (see below), so it needs `--confirm` like any move out of quarantine.
+
+## Retagging a source
+
+To move one source to another space (for example a note left in quarantine), run, in a terminal
+outside any agent session:
+
+```sh
+orch spaces retag <source_uri> <space>             # a space of the applied policy, or quarantine
+orch spaces retag <source_uri> oss --confirm       # into public, out of an isolated space or out of quarantine
+```
+
+Its chunks move with their vectors (nothing is re-embedded) and the source stays in that space:
+later docs syncs, sources refreshes and your own re-ingests of it go there. A session's note
+under that source_uri goes there only if the session's space is the one you chose; otherwise
+the write is refused. Session records and hand-offs that orch cannot tie to a pinned session or
+a bound folder stay in quarantine. An interrupted retag can be run again, and orchd also finishes it when it
+next starts.
