@@ -2,8 +2,8 @@
   "id": "SP-080",
   "status": "done",
   "passes": true,
-  "verified_sha": "999d033",
-  "verified_at": "2026-11-15T14:47:37Z",
+  "verified_sha": "bbf9f2b",
+  "verified_at": "2026-11-15T14:54:12Z",
   "blocked_reason": null,
   "attempts": 1,
   "branch": "feat/sp-080-state-files",
@@ -15,7 +15,8 @@
       "a3: test_reader.ReaderTotalsTest.test_same_totals_before_and_after_migration: serves a copy of docs/spaces over http://localhost before and after migrate.py, renders index.html in headless Chrome and reads the page: features done, per-status card counts, checkpoints with evidence, acceptance covered, in progress, blocked, open decisions, reconvene rows (ids in order) and open reconvene items equal plantotals.py's totals in both, and all criteria hashes match. On the real files at 6e7d956 vs 14bd105 plantotals.py prints the same totals: 58 features (done 43, in_progress 3, blocked 1, todo 11), checkpoints with evidence 78/90, acceptance 195/230, reconvene 251 (open 188, resolved 63).",
       "a4: test_merge.ConvertBranchTest.test_converts_and_merges_back_cleanly: a branch cut before the migration edits status, evidence, a reconvene item and the changelog in the plan file; merging the migrated main conflicts, convert_branch.py resolves and stages it, the merge commits, and main then merges the branch without conflict with both sides' edits kept. Also test_conflicting_edits_write_nothing, test_migration_branch_catches_up_with_unmigrated_main, test_neither_side_migrated_merges_by_meaning, test_dry_run_and_explicit_refs, test_refs_that_look_like_options_are_refused, test_read_ref_checks_file_names. Real use: merge a5c3880 brought main's #194 plan edits into this branch through convert_branch.py (7 new reconvene files, state/SP-054.json); the combined view equals origin/main's plan outside SP-080's own edits. A trial merge of this branch into the open SP-060 branch (#203) converted cleanly: state/SP-060.json and RC-1450..RC-1453 written, --check passes.",
       "a5: session_procedure steps 1, 5, 6, 7, 9, 12 and 13 and plan_location (state_files, reconvene_files, tools, note) changed in bc0762c; agent_instructions 3 and 6 changed to match.",
-      "Verification: an independent verifier re-ran a1-a5 and DOD at cb24917 (all items pass; DOD-6 failed on a medium: a fixed '<file>.tmp' temp name could be a planted symlink), fixed in 999d033 (mkstemp, plus three lows), and a second verifier at 999d033 passed a1-a5 and DOD-5 to DOD-8 with no critical, high or medium finding; one low recorded as RC-1500. DOD-1 to DOD-4 do not apply (no Go changes); go vet ./... exit 0; go test ./... had one timing failure (TestResolveCost p99 under full-suite load) that passes alone. DOD-9: CI path filters trigger no checks for this diff."
+      "Verification: an independent verifier re-ran a1-a5 and DOD at cb24917 (all items pass; DOD-6 failed on a medium: a fixed '<file>.tmp' temp name could be a planted symlink), fixed in 999d033 (mkstemp, plus three lows), and a second verifier at 999d033 passed a1-a5 and DOD-5 to DOD-8 with no critical, high or medium finding; one low recorded as RC-1500. DOD-1 to DOD-4 do not apply (no Go changes); go vet ./... exit 0; go test ./... had one timing failure (TestResolveCost p99 under full-suite load) that passes alone. DOD-9: CI path filters trigger no checks for this diff.",
+      "Re-verified at bbf9f2b after merging main (SP-060's plan edits converted by convert_branch.py in a7718c8; the combined view equals origin/main's plan except SP-080's own edits and RC-1500) and after the reader's fetch-retry fix (a full-suite run had once shown a dropped request as a missing state file): 32 tests pass on three runs, including ReaderTotalsTest.test_dropped_requests_are_retried_and_lost_files_reported; the reader on the migrated files and on the combined single file renders byte-identical DOMs whose totals equal plantotals.py's (58 features: done 45, in_progress 4, todo 8, blocked 1; 82/90 checkpoints; 269 reconvene items, 205 open); no critical, high or medium findings; one low recorded as RC-1501."
     ]
   }
 }

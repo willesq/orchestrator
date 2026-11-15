@@ -1,0 +1,12 @@
+{
+  "id": "RC-1501",
+  "kind": "follow-up",
+  "topic": "Reader refreshes can overlap on a slow server",
+  "detail": "Low finding from SP-080's verification of the reader's fetch retries: on a very slow server two 30-second refreshes can overlap and share the global failure count, so the 'could not be read' note can be wrong for one refresh; fetches have no timeout of their own. Fix: skip a refresh while one is running and give each load its own failure count.",
+  "source": "https://github.com/willesq/orchestrator/pull/205",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-080"
+  ],
+  "status": "open"
+}
