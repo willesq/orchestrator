@@ -1,12 +1,12 @@
 {
   "id": "SP-053",
-  "status": "todo",
+  "status": "in_progress",
   "passes": false,
   "verified_sha": null,
   "verified_at": null,
   "blocked_reason": null,
-  "attempts": 0,
-  "branch": null,
+  "attempts": 1,
+  "branch": "feat/sp-053-advanced-editors",
   "pr": null,
   "evidence": {
     "SP-053.1": []
