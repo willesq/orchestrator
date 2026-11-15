@@ -211,7 +211,7 @@ bindings.
   the applied revision already has (for example a root that a newly added root now contains) is
   not dropped for the user, since removing it could move content to a less strict space; nor is a
   line in a conflict between two spaces (a duplicate name, an org, prefix, tenant or root bound
-  twice, an isolated root inside another job's), since dropping a side picks which space wins; nor
+  twice, an isolated root inside another isolated space's root), since dropping a side picks which space wins; nor
   is a binding the applied revision has in any space, or a new space carrying one (a binding
   moved or a space renamed), since dropping it would leave that binding unbound rather than back
   where it was. Such lines say to fix the draft instead.
