@@ -8,5 +8,6 @@
   "affects": [
     "SP-048"
   ],
-  "status": "open"
+  "status": "resolved",
+  "note": "2026-11-15: SP-048's notification check waived by the user (D-82); covered by the automated tests and snapshots in the feature's evidence."
 }
