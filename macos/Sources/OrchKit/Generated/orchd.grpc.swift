@@ -280,6 +280,32 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "ListQuarantine" metadata.
+        public enum ListQuarantine: Sendable {
+            /// Request type for "ListQuarantine".
+            public typealias Input = Orchd_V1_ListQuarantineRequest
+            /// Response type for "ListQuarantine".
+            public typealias Output = Orchd_V1_ListQuarantineResponse
+            /// Descriptor for "ListQuarantine".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListQuarantine",
+                type: .unary
+            )
+        }
+        /// Namespace for "PurgeQuarantine" metadata.
+        public enum PurgeQuarantine: Sendable {
+            /// Request type for "PurgeQuarantine".
+            public typealias Input = Orchd_V1_PurgeQuarantineRequest
+            /// Response type for "PurgeQuarantine".
+            public typealias Output = Orchd_V1_PurgeQuarantineResponse
+            /// Descriptor for "PurgeQuarantine".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "PurgeQuarantine",
+                type: .unary
+            )
+        }
         /// Namespace for "RetagSource" metadata.
         public enum RetagSource: Sendable {
             /// Request type for "RetagSource".
@@ -1121,6 +1147,8 @@ public enum Orchd_V1_Orchd: Sendable {
             DropBackup.descriptor,
             ReindexKeywords.descriptor,
             Relabel.descriptor,
+            ListQuarantine.descriptor,
+            PurgeQuarantine.descriptor,
             RetagSource.descriptor,
             BackfillSessions.descriptor,
             ListPRs.descriptor,
@@ -1681,6 +1709,56 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RelabelResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RelabelResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListQuarantine" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListQuarantine (SP-028) lists the sources held in quarantine, the space
+        /// > of content that could not be placed, with their chunk counts. Operator
+        /// > only: no session may read quarantine.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListQuarantineRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListQuarantineRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListQuarantineResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listQuarantine<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListQuarantineRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListQuarantineRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListQuarantineResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListQuarantineResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "PurgeQuarantine" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PurgeQuarantine (SP-028) deletes quarantined sources, the named ones or
+        /// > all of them (all). It only counts unless confirm is set; orchd checks confirm,
+        /// > so every caller opts in deliberately. Operator only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_PurgeQuarantineRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_PurgeQuarantineRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PurgeQuarantineResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func purgeQuarantine<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_PurgeQuarantineRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_PurgeQuarantineRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PurgeQuarantineResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeQuarantineResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "RetagSource" method.
@@ -3937,6 +4015,78 @@ extension Orchd_V1_Orchd {
             try await self.client.unary(
                 request: request,
                 descriptor: Orchd_V1_Orchd.Method.Relabel.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListQuarantine" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListQuarantine (SP-028) lists the sources held in quarantine, the space
+        /// > of content that could not be placed, with their chunk counts. Operator
+        /// > only: no session may read quarantine.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListQuarantineRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListQuarantineRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListQuarantineResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listQuarantine<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListQuarantineRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListQuarantineRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListQuarantineResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListQuarantineResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListQuarantine.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "PurgeQuarantine" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PurgeQuarantine (SP-028) deletes quarantined sources, the named ones or
+        /// > all of them (all). It only counts unless confirm is set; orchd checks confirm,
+        /// > so every caller opts in deliberately. Operator only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_PurgeQuarantineRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_PurgeQuarantineRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_PurgeQuarantineResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func purgeQuarantine<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_PurgeQuarantineRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_PurgeQuarantineRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PurgeQuarantineResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeQuarantineResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.PurgeQuarantine.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -6781,6 +6931,68 @@ extension Orchd_V1_Orchd.ClientProtocol {
         )
     }
 
+    /// Call the "ListQuarantine" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListQuarantine (SP-028) lists the sources held in quarantine, the space
+    /// > of content that could not be placed, with their chunk counts. Operator
+    /// > only: no session may read quarantine.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListQuarantineRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listQuarantine<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListQuarantineRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListQuarantineResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listQuarantine(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListQuarantineRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListQuarantineResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "PurgeQuarantine" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > PurgeQuarantine (SP-028) deletes quarantined sources, the named ones or
+    /// > all of them (all). It only counts unless confirm is set; orchd checks confirm,
+    /// > so every caller opts in deliberately. Operator only.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_PurgeQuarantineRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func purgeQuarantine<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_PurgeQuarantineRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeQuarantineResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.purgeQuarantine(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_PurgeQuarantineRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PurgeQuarantineResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "RetagSource" method.
     ///
     /// > Source IDL Documentation:
@@ -9376,6 +9588,76 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.relabel(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListQuarantine" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListQuarantine (SP-028) lists the sources held in quarantine, the space
+    /// > of content that could not be placed, with their chunk counts. Operator
+    /// > only: no session may read quarantine.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listQuarantine<Result>(
+        _ message: Orchd_V1_ListQuarantineRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListQuarantineResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListQuarantineRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listQuarantine(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "PurgeQuarantine" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > PurgeQuarantine (SP-028) deletes quarantined sources, the named ones or
+    /// > all of them (all). It only counts unless confirm is set; orchd checks confirm,
+    /// > so every caller opts in deliberately. Operator only.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func purgeQuarantine<Result>(
+        _ message: Orchd_V1_PurgeQuarantineRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PurgeQuarantineResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_PurgeQuarantineRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.purgeQuarantine(
             request: request,
             options: options,
             onResponse: handleResponse
