@@ -87,18 +87,6 @@ func (r readScope) seesGitHubURL(url string) bool {
 	return ok && owner != "" && r.seesOwner(owner)
 }
 
-// callerSpace is the space caller c acts as: a session's pin, or the space
-// a tracked queued task recorded at dispatch; "" for anyone else.
-func callerSpace(c resolvedCaller) string {
-	switch {
-	case c.kind == callerSession:
-		return c.pin.Space
-	case c.kind == callerTask && c.task.TaskID != "":
-		return c.task.Space
-	}
-	return ""
-}
-
 // taskSpaces reads the space each task recorded at dispatch, from its
 // durable workflow input (D-46), once per task for one call. A task whose
 // input cannot be read has none.

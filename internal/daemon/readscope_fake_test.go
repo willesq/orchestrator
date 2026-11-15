@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -181,9 +182,12 @@ func cosine(a, b []float32) float64 {
 func chunkMatches(points map[string]fakeChunk, filter any) []string {
 	f, _ := filter.(map[string]any)
 	must, _ := f["must"].([]any)
+	notMust, _ := f["must_not"].([]any)
 	var out []string
 	for id, p := range points {
-		if matchesAll(p.payload, must) {
+		if matchesAll(p.payload, must) && !slices.ContainsFunc(notMust, func(cond any) bool {
+			return matchesAll(p.payload, []any{cond})
+		}) {
 			out = append(out, id)
 		}
 	}

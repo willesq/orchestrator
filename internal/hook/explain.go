@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"google.golang.org/grpc"
+
 	"github.com/willesq/orchestrator/internal/config"
 	"github.com/willesq/orchestrator/internal/memctx"
 	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
@@ -33,6 +35,33 @@ type Explanation struct {
 	// Block is exactly the text the hook would print.
 	Block   string
 	Written int
+	// Searched is what orchd let the caller search (SP-031); nil when no
+	// search answered or orchd is older and does not say.
+	Searched *Searched
+}
+
+// Searched is the boundary a search ran inside, as orchd decided it from the
+// caller alone: the caller's space, whether the search was limited to its
+// readable spaces, and the collections read.
+type Searched struct {
+	CallerSpace string
+	Scoped      bool
+	Collections []string
+}
+
+// searchRecorder passes searches through and keeps what the last answer
+// said was searched.
+type searchRecorder struct {
+	orchdv1.OrchdClient
+	last *Searched
+}
+
+func (r *searchRecorder) Search(ctx context.Context, in *orchdv1.SearchRequest, opts ...grpc.CallOption) (*orchdv1.SearchResponse, error) {
+	resp, err := r.OrchdClient.Search(ctx, in, opts...)
+	if err == nil && (resp.GetScoped() || len(resp.GetCollections()) > 0 || resp.GetCallerSpace() != "") {
+		r.last = &Searched{CallerSpace: resp.GetCallerSpace(), Scoped: resp.GetScoped(), Collections: resp.GetCollections()}
+	}
+	return resp, err
 }
 
 // LoadAutoRAG reads the prompt-context settings, as the hook does.
@@ -73,7 +102,9 @@ func Explain(ctx context.Context, cfg config.AutoRAGSettings, client orchdv1.Orc
 		}
 		ex.Decisions = append(ex.Decisions, d)
 	}
-	kept := selectHits(ctx, client, prompt, detectProject(cwd).searchTags(), cfg, nil, gate, trace)
+	rec := &searchRecorder{OrchdClient: client}
+	kept := selectHits(ctx, rec, prompt, detectProject(cwd).searchTags(), cfg, nil, gate, trace)
+	ex.Searched = rec.last
 	block, written := memctx.Render(shown, kept, injectOptions(cfg))
 	ex.Block, ex.Written = block, len(written)
 	return ex
