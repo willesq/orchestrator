@@ -62,13 +62,15 @@ final class AppModel {
     let spaces: SpacesOverviewModel
     /// Operator unlocks waiting for the user or in force (SP-077).
     let unlocks: UnlocksModel
+    let spacesActivity: SpacesActivityModel
+    let spacesReview: SpacesReviewModel
     let relabel: SpacesRelabelModel
     /// Keeps the sidebar's badges current between visits to their tabs.
     private(set) var badges: PeriodicRefresh?
 
     init() {
         let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & PRReviewAPI & PRLandingAPI & SystemAPI & CatalogAPI
-            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesOverviewAPI & UnlocksAPI & SpacesRelabelAPI
+            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesOverviewAPI & SpacesReviewAPI & SpacesActivityAPI & UnlocksAPI & SpacesRelabelAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -107,6 +109,8 @@ final class AppModel {
         self.relabel = relabel
         self.spaces = spaces
         unlocks = UnlocksModel(api: api, confirmer: DeviceOwnerConfirmer())
+        spacesActivity = SpacesActivityModel(api: api)
+        spacesReview = SpacesReviewModel(api: api, authenticator: SystemAuthentication())
         docsOwners = DocsOwnersModel(api: api, knownOwners: { [api] in try await api.gitHubScopes(refresh: false).scopes.map(\.owner) })
     }
 
@@ -294,6 +298,13 @@ extension UnreachableDaemon: SpacesOverviewAPI {
     func listSessions(includeEnded: Bool) async throws -> [PinnedSession] { throw failure }
     func toolLogSummary() async throws -> [SpaceActivity] { throw failure }
     func unconfirmedGitHubOrgs() async throws -> [String] { throw failure }
+}
+
+extension UnreachableDaemon: SpacesReviewAPI, SpacesActivityAPI {
+    func diffSpaces() async throws -> SpacesPolicyDiff { throw failure }
+    func saveSpacesDraft(policyJSON: String) async throws -> SavedSpacesDraft { throw failure }
+    func applySpaces(reviewedRevision: Int64, acceptAgentDraft: Bool, confirmGitHubOrgs: [String]) async throws -> Int64 { throw failure }
+    func toolEvents(owner: String, afterSeq: Int64, limit: Int32) async throws -> ToolLogPage { throw failure }
 }
 
 extension UnreachableDaemon: SpacesRelabelAPI {

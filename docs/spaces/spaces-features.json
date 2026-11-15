@@ -3949,6 +3949,97 @@
         "status": "open"
       },
       {
+        "id": "RC-1050",
+        "kind": "follow-up",
+        "topic": "Review's effect counts lack chunks, PRs and tasks",
+        "detail": "SP-054's Review counts spaces added, removed and changed, bindings and settings added and removed, and invalid lines, all read from the draft. How many chunks, cached PRs and tasks would move between spaces (the design's 'Preview every effect') needs orchd to compute it for a draft: a DiffSpaces field or a new RPC, so an orchd.proto change for the coordinator to schedule.",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-024",
+          "SP-027"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1051",
+        "kind": "follow-up",
+        "topic": "No way to discard a pending draft",
+        "detail": "The design's Review has 'Discard draft'. orchd has no RPC to discard a draft; today the user saves the applied policy again as a draft (orch spaces draft), which leaves a newer, identical draft pending. Add a DiscardSpacesDraft RPC (or let a draft equal to the applied revision clear drift) and a Discard button.",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-020"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1052",
+        "kind": "follow-up",
+        "topic": "A draft the app saves from an agent's draft is recorded as the operator's",
+        "detail": "From SP-054's security review (accepted as Low). 'Drop invalid lines' saves the rest of a draft as a new revision through SetSpacesDraft, which orchd records as the operator's (Orch.app is the operator, D-71), so the agent's authorship drops out of the record and accept_agent_draft is no longer asked for it. The app therefore requires 'I reviewed this draft' before it drops lines from an agent's draft. Server-side fix: SetSpacesDraft takes the revision it derives from and keeps its by-agent flag, so orchd still requires accept_agent_draft (orchd.proto change).",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-020"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1053",
+        "kind": "follow-up",
+        "topic": "Review finds a problem's line by parsing orchd's message",
+        "detail": "SpacesProblem carries rule, space and message. The app places each problem on its line from the rule and the value the message quotes (Go %q), or the public_paths entry number; a reworded message makes the problem unplaced (shown apart, Apply still blocked, so it fails safe). Add the field and value index to SpacesProblem (orchd.proto change) and use them.",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-020"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1054",
+        "kind": "follow-up",
+        "topic": "displaySafe lets line and paragraph separators through",
+        "detail": "From SP-054's security review (Low). OrchKit's displaySafe escapes control and format characters but not U+2028/U+2029 (Zl/Zp), so a command, draft value or message could fake extra lines in a row; long runs of combining marks are not capped either. It is a shared helper used by every pane, so it was left for its own change.",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-051"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1055",
+        "kind": "decision",
+        "topic": "Which invalid lines the app drops for the user",
+        "detail": "SP-054's 'Drop invalid lines' only reverts lines the draft adds or changes, and never: a line the applied revision already has, a line in a conflict between two spaces (duplicate name, org, prefix, tenant or root bound twice, an isolated root inside another job's), or a binding the applied revision has in any space (moved or renamed). Those are marked with 'fix this in the draft' and block Apply. Options: (a) keep this; (b) let the user pick a side or edit the draft in the app. Recommendation: (a), with (b) as a later Setup feature.",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054",
+          "SP-052"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-1056",
+        "kind": "user-action",
+        "topic": "Check SP-054 Apply's system authentication by hand, and look at the snapshots",
+        "detail": "SP-054.1 a2 is manual: with Orch.app built from PR #194 and a draft with no problems pending, Spaces > Review > Apply rev N should show the system Touch ID or password sheet before anything is applied; Cancel should show 'Not applied: authentication was cancelled or failed.' and orch spaces diff should still show the draft pending. Also look at the Activity and Review snapshots (light and dark, 790 pt and 320 pt).",
+        "source": "https://github.com/willesq/orchestrator/pull/194",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-054"
+        ],
+        "status": "open"
+      },
+      {
         "id": "RC-1150",
         "kind": "decision",
         "topic": "Should an unlocked terminal be allowed to weaken the spaces policy?",
@@ -7593,18 +7684,26 @@
               "threshold": "true"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: tests pass at 855d4af. `make app-cover` exit 0 runs the whole Swift suite and the 80% per-file gate on OrchKit; the new files: DaemonClient+SpacesReview 100%, SpacesPolicyDoc 98.68%, SpacesReview 97.54%, SpacesReviewLines 100%, SpacesReviewModel 97.98%, SpacesActivity 98.59%, SpacesActivityModel 97.03%.",
+            "a1 (invalid lines marked): SpacesReviewTests.invalidLinesMarked (the refused line carries its rule and message, nothing else is marked); ruleTargets (16 orchd rules each find their line, including public_paths entries); unplacedProblems (a problem with no line is listed apart and blocks Apply); badBindingPhraseAnchored.",
+            "a1 (invalid lines excluded): SpacesReviewTests.excludingDropsInvalidLine (the saved draft lacks only the refused line and keeps every other field, unknown ones included; it has nothing left to drop); revertsSettingsAndSpaces; repeatedValues; unchangedLineIsNotExcludable, conflictsAreNotDropped and movedBindingsAreNotDropped (lines whose removal could move content or pick a side are marked but not dropped); SpacesReviewModelTests.dropThenApplyReviewed (Drop saves the cleaned draft with SetSpacesDraft and the page then reviews the new revision).",
+            "a1 (Apply sends the reviewed revision): SpacesReviewModelTests.dropThenApplyReviewed (calls in order: diff, save, diff, auth, apply 9; ApplySpaces gets reviewed_revision 9, the revision shown; Apply with problems never reaches orchd); staleReviewRefused (a newer draft saved after the review is refused by the fake orchd, not applied in its place); authenticationGatesApply (system authentication runs first and a cancel sends nothing); agentDraftNeedsAcceptance and agentDraftAccepted (accept_agent_draft and confirm_github_orgs); SpacesReviewClientTests.mapsRPCs (DiffSpaces, SetSpacesDraft, ApplySpaces and ListToolEvents fields over a fake orchd socket).",
+            "Activity (summary, no acceptance item): SpacesActivityTests (loadsLog, filters, rows, loadMore, select, emptyAndErrors).",
+            "Snapshots for the user's look (not an acceptance item): `ORCH_SNAPSHOT_DIR=<dir> swift test --package-path macos --filter SpacesActivityReviewSnapshots` renders spaces-activity-{default,companion}-{light,dark}.png, spaces-review-{default,companion}-{light,dark}.png and spaces-review-clean-default-{light,dark}.png (offscreen, sample data, no orchd).",
+            "Independent verification at 4b57d93 (a fresh verifier given only the diff, this feature, INV-06, INV-12 and definition_of_done): a1 PASS; DOD-1 (go test ./... exit 0), DOD-2, DOD-3 (no Go files; make app-cover exit 0), DOD-4, DOD-5, DOD-6 (0 critical/high/medium), DOD-7, DOD-8 PASS; DOD-9: the app check passed on PR #194 (no Go workflow runs, no Go files changed). a2 is manual and waits for the user (RC-1056)."
+          ]
         }
       ],
-      "status": "todo",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "8898813f34128e91855054965a6bfac28a0a729888e1ecaf4b3aa6ca95fed588",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-054-activity-review",
+      "pr": "https://github.com/willesq/orchestrator/pull/194"
     },
     {
       "id": "SP-055",
