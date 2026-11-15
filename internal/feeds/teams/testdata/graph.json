@@ -1,0 +1,47 @@
+{
+  "_comment": "A Microsoft Graph tenant for the fake Graph API, in Graph's v1.0 wire format (chat, team, channel and chatMessage resources). Every name and ID is made up.",
+  "chats": [
+    {"id": "19:u-alex_u-sam@unq.gbl.spaces", "chatType": "oneOnOne", "tenantId": "0a1b2c3d-0000-4000-8000-00000000c0de", "topic": null},
+    {"id": "19:group-launch@thread.v2", "chatType": "group", "tenantId": "0a1b2c3d-0000-4000-8000-00000000c0de", "topic": "launch"},
+    {"id": "19:meeting_standup@thread.v2", "chatType": "meeting", "tenantId": "0a1b2c3d-0000-4000-8000-00000000c0de", "topic": "standup"}
+  ],
+  "teams": [
+    {"id": "team-eng", "displayName": "Engineering", "tenantId": "0a1b2c3d-0000-4000-8000-00000000c0de", "visibility": "public"}
+  ],
+  "channels": {
+    "team-eng": [
+      {"id": "19:general@thread.tacv2", "displayName": "General", "membershipType": "standard"},
+      {"id": "19:incidents@thread.tacv2", "displayName": "Incidents", "membershipType": "private"}
+    ]
+  },
+  "messages": {
+    "19:u-alex_u-sam@unq.gbl.spaces": [
+      {"id": "1731661200000", "messageType": "message", "createdDateTime": "2026-11-14T09:00:00.000Z", "lastModifiedDateTime": "2026-11-14T09:00:00.000Z", "deletedDateTime": null,
+       "from": {"user": {"id": "u-alex", "displayName": "Alex"}}, "body": {"contentType": "html", "content": "<p>can you look at my patch?</p>"}},
+      {"id": "1731661260000", "messageType": "message", "createdDateTime": "2026-11-14T09:01:00.000Z", "lastModifiedDateTime": "2026-11-14T09:01:00.000Z", "deletedDateTime": null,
+       "from": {"user": {"id": "u-sam", "displayName": "Sam"}}, "body": {"contentType": "text", "content": "after lunch"}}
+    ],
+    "19:group-launch@thread.v2": [
+      {"id": "1731664800000", "messageType": "systemEventMessage", "createdDateTime": "2026-11-14T10:00:00.000Z", "lastModifiedDateTime": "2026-11-14T10:00:00.000Z", "deletedDateTime": null,
+       "from": null, "body": {"contentType": "html", "content": "<systemEventMessage/>"}},
+      {"id": "1731664860000", "messageType": "message", "createdDateTime": "2026-11-14T10:01:00.000Z", "lastModifiedDateTime": "2026-11-14T10:01:00.000Z", "deletedDateTime": null,
+       "from": {"user": {"id": "u-kim", "displayName": "Kim"}}, "body": {"contentType": "html", "content": "launch is <b>thursday</b>&nbsp;&amp; not friday"}}
+    ],
+    "19:meeting_standup@thread.v2": [
+      {"id": "1731668400000", "messageType": "message", "createdDateTime": "2026-11-14T11:00:00.000Z", "lastModifiedDateTime": "2026-11-14T11:00:00.000Z", "deletedDateTime": null,
+       "from": {"user": {"id": "u-alex", "displayName": "Alex"}}, "body": {"contentType": "text", "content": "standup notes: ship the parser"}}
+    ],
+    "19:general@thread.tacv2": [
+      {"id": "1731672000000", "replyToId": null, "messageType": "message", "createdDateTime": "2026-11-14T12:00:00.000Z", "lastModifiedDateTime": "2026-11-14T12:00:00.000Z", "deletedDateTime": null,
+       "from": {"user": {"id": "u-kim", "displayName": "Kim"}}, "body": {"contentType": "html", "content": "<div>release train moves to thursday</div>"}},
+      {"id": "1731672060000", "replyToId": "1731672000000", "messageType": "message", "createdDateTime": "2026-11-14T12:01:00.000Z", "lastModifiedDateTime": "2026-11-14T12:01:00.000Z", "deletedDateTime": null,
+       "from": {"user": {"id": "u-sam", "displayName": "Sam"}}, "body": {"contentType": "text", "content": "noted"}},
+      {"id": "1731675600000", "replyToId": null, "messageType": "message", "createdDateTime": "2026-11-14T13:00:00.000Z", "lastModifiedDateTime": "2026-11-14T13:00:00.000Z", "deletedDateTime": null,
+       "from": {"user": {"id": "u-alex", "displayName": "Alex"}}, "body": {"contentType": "text", "content": "lunch order is in"}}
+    ],
+    "19:incidents@thread.tacv2": [
+      {"id": "1731679200000", "replyToId": null, "messageType": "message", "createdDateTime": "2026-11-14T14:00:00.000Z", "lastModifiedDateTime": "2026-11-14T14:00:00.000Z", "deletedDateTime": null,
+       "from": {"user": {"id": "u-kim", "displayName": "Kim"}}, "body": {"contentType": "text", "content": "the queue is backing up"}}
+    ]
+  }
+}
