@@ -155,6 +155,9 @@ type server struct {
 	spaces *spaces.Engine
 	// pins records each session's pin; nil when unavailable.
 	pins *pinRegistry
+	// files records the files sessions write outside every root (SP-029);
+	// nil records none.
+	files *sessionFiles
 	// enforcement holds the enforcement switches (SP-070); nil without a
 	// store, when every layer enforces.
 	enforcement *enforcement
@@ -666,7 +669,8 @@ func Run(ctx context.Context) error {
 	// starts, so nothing is stored unplaced.
 	pins := newPinRegistry(store)
 	repos := newRepoLookups(ghp.Routed())
-	placer := &writePlacer{spaces: sp, pins: pins, repos: repos}
+	files := newSessionFiles(store)
+	placer := &writePlacer{spaces: sp, pins: pins, repos: repos, files: files}
 	svc.Place = placer.place
 
 	// Durable workflow engine: the worker unit drains AgentTask instances; the
@@ -794,6 +798,7 @@ func Run(ctx context.Context) error {
 		config:       cfg,
 		spaces:       sp,
 		pins:         pins,
+		files:        files,
 		repos:        repos,
 		ghProfiles:   ghp,
 		claudeLogins: newClaudeLogins(),

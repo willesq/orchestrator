@@ -37,6 +37,9 @@ type writePlacer struct {
 	// relabel is set for a relabel's placer: every stored source follows
 	// its retag, whoever wrote it (withRetag).
 	relabel bool
+	// files records the files sessions wrote outside every root (SP-029);
+	// nil places such files by the classifier alone.
+	files *sessionFiles
 }
 
 // place is a rag.PlaceFunc.
@@ -73,6 +76,18 @@ func (w *writePlacer) placeMeta(ctx context.Context, m *rag.Meta) (spaces.Placem
 	p, err := w.placement(ctx, res, m.Origin)
 	if err != nil {
 		return spaces.Placement{}, fmt.Errorf("place %s: %w", m.SourceURI, err)
+	}
+	if m.Writer == rag.WriterFile && m.Origin.System == rag.OriginFS && m.Origin.Path != "" && !res.UnderRoot(m.Origin.Path) {
+		// Reason (SP-029, INV-09): no root places an edited file outside
+		// every root, so the space of the session that wrote this very
+		// text does; an operator's retag still wins (withRetag, below).
+		wp, ok, err := w.writtenPlacement(ctx, res, m)
+		if err != nil {
+			return spaces.Placement{}, fmt.Errorf("place %s: %w", m.SourceURI, err)
+		}
+		if ok {
+			p = wp
+		}
 	}
 	if p, err = w.withRetag(ctx, res, m, p); err != nil {
 		return spaces.Placement{}, err

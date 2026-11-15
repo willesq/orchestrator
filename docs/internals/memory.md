@@ -221,7 +221,7 @@ no origin, or that the placer leaves without a space, stores nothing.
 | docs sync | `github`: owner, repo, visibility (`private`/`public`; unknown when GitHub listed no owner node ID) and the owner's node ID, from the `gh api graphql` repo listing (`isPrivate`, `owner{id}`) | the owner's binding; public only when GitHub said the repo is public |
 | sources refresh | `fs` with the file's path (repo and owner sources); `web` with the URL the page was fetched from, after redirects | the deepest root; a checkout's remote can only keep it out, never place it (D-65), and nothing under a public root is public; the bound web prefix of the URL the content came from |
 | session hand-off, summaries | `session` with its first directory, from its record, and the session ID when the transcript is that session's, where its harness keeps it | the session's pin only; quarantine with no pin or no tied session |
-| edit hand-off | `fs` with the resolved file path | the deepest root and the checkout's remote; never the remote alone; never public (goes to `public_root_sessions` instead) |
+| edit hand-off | `fs` with the resolved file path | the deepest root and the checkout's remote; never the remote alone; never public (goes to `public_root_sessions` instead); under no root, the space of the session whose `Write` put that exact text there (SP-029) |
 | Ingest RPC | `client` with the caller kind (`session`, `task`, `operator`, `none`), the space the caller's pin writes to, and the URL when the URI is one | the caller's pinned space; quarantine for any other caller |
 | migration copy (`rag`) | carried over from the stored chunk | not placed again: `origin`, `space` and `labels_v` are copied as stored |
 
@@ -251,6 +251,26 @@ no origin, or that the placer leaves without a space, stores nothing.
   [task pins](daemon.md#task-pins)), so its transcript, record and summary go there, whatever
   directory it ran in, and the `queue` event of its completion records that space
   (`TestTaskRunsPinnedToItsDispatchersSpace`).
+- **Files a session writes outside every root keep its space (SP-029).** When orchd builds a
+  command-log record of a `Write` tool call from a pinned session or a tracked queued task, and no
+  root holds the path written (`spaces.Targets` `writes`, symlinks resolved), it records the path
+  (lower case), the writer's space and the hash of the redacted text the call writes in `orch.db`'s
+  `session_files` (migration 0032). A call the guard refused records nothing, nor does a caller
+  with no space, a public one or quarantine, nor an untrusted pin. An edit hand-off of a file no
+  root holds is then placed in the space whose writer wrote exactly the text being stored (the
+  hand-off passes its text's hash), in quarantine when writers of more than one space wrote that
+  text or the recorded space is no longer a private or isolated space of the applied policy, and
+  as before (quarantine) when none did. An operator's retag still wins. Reason for the hash: a
+  tool event is a claim any caller can send for any path before anything is written, so naming a
+  path never moves another space's file; only the writer of the very text can place it. Rows
+  expire after 30 days and at most 100,000 are kept (newest first), pruned with the session
+  sweep; an evicted row only sends its file to quarantine. A relabel places such a file again from
+  its stored text's hash, so within those 30 days it stays where it is; after them a relabel
+  quarantines it. Limits: only a `Write` call carries
+  the whole text, so a file changed since by an `Edit`, a shell command or a program, or written
+  that way, stays in quarantine; registered folders (the sources refresh) and a client's `Ingest`
+  of the text are not placed by this record; with the command log off nothing is recorded
+  (`TestFileWrittenOutsideRootsKeepsItsSpace`, `TestSessionFilesExpire`).
 - **A local file is not placed by its remote.** A remote that would place a file in a stricter
   space than its root (`remote_stricter`) quarantines it for every writer (SP-030, D-65): a session
   can write a `.git` naming another job's org beside files it registers as a source. Sessions are

@@ -359,7 +359,10 @@ func (s *Service) copyInto(ctx context.Context, base, dst *QdrantStore, space, u
 func metaOf(uri string, p map[string]any) Meta {
 	return Meta{SourceURI: uri, SourceType: str(p["source_type"]), Scope: str(p["scope"]), Tags: strSlice(p["tags"]),
 		Writer: str(p[fieldWriter]), Origin: originFrom(p[fieldOrigin]), Space: str(p[fieldSpace]),
-		LabelsV: labelsV(p[fieldLabelsV])}
+		// Reason (SP-029): an edited file under no root is placed by the
+		// session that wrote this text, matched by its hash.
+		ContentHash: str(p[fieldContentHash]),
+		LabelsV:     labelsV(p[fieldLabelsV])}
 }
 
 // holdsNewer reports whether dst already holds uri written under rev by a

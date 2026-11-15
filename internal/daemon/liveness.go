@@ -248,6 +248,7 @@ func (s *server) runSessionSweeps(ctx context.Context, every time.Duration) {
 	defer t.Stop()
 	for {
 		s.sweepSessions(ctx)
+		s.files.prune(ctx)
 		select {
 		case <-ctx.Done():
 			return
