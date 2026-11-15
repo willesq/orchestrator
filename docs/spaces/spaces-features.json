@@ -3369,6 +3369,57 @@
           "SP-076"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-850",
+        "kind": "decision",
+        "topic": "A sticky retag lets any writer of that URI write into the retag target",
+        "detail": "SP-071.2.a1 asks that a later client re-ingest of a retagged source_uri lands in the retagged space, and spaces.Classify lets an override win over every rule. A session pinned to another job's space could then write its own text under that URI into the target space (or into public), which is a cross-space write. Options: (a) honor the override for orchd's own writers (docs sync, sources refresh) and for client writes from the operator or from a session whose space is the target, and refuse other client writes of that URI; (b) honor it for every writer as written. Recommendation: (a); the lane implements (a) unless the user picks (b).",
+        "source": "https://github.com/willesq/orchestrator/pull/191",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-071",
+          "SP-023"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-851",
+        "kind": "follow-up",
+        "topic": "Retag low findings left open: whole source in memory, and a failed copy lookup skipping the replace check",
+        "detail": "Security audit of SP-071, low: (L3) rag.Service.Retag reads every chunk of the source with its vectors into memory while holding the migration lock; the RPC is operator-only and a 2,000-chunk source moves in under 3 s, but a very large source is unbounded. (L5, pre-existing) in the Ingest RPC, when reading the stored copy fails, the mayReplace check is skipped and the write goes on, so its removeElsewhere can delete a retagged copy in another space; failing closed when the copy cannot be read would close it. Options: page the move in batches; return Unavailable from Ingest when Copy errors.",
+        "source": "https://github.com/willesq/orchestrator/pull/191",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-071",
+          "SP-023"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-852",
+        "kind": "follow-up",
+        "topic": "Retag has no Orch.app control, no way to clear a retag, and its row outlives a deleted source",
+        "detail": "SP-071's summary mentions the UI; this lane added the RPC and 'orch spaces retag' only. A retag cannot be cleared (the operator can only retag the source again), and deleting a source (DeleteSource, a docs purge or a prune) leaves its spaces_retags row, so a later write of the same URI follows the old retag under the rules in docs/internals/memory.md 'Retag'. Proposed: a retag control in Orch.app's Spaces pane (SP-028's quarantine view can call RetagSource with expect_from), 'orch spaces retag --clear', and removing the row when its source is deleted.",
+        "source": "https://github.com/willesq/orchestrator/pull/191",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-071",
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-853",
+        "kind": "follow-up",
+        "topic": "The coverage gate passes without measuring a package whose tests fail",
+        "detail": "scripts/cover.sh drops a package's profile when its tests fail and prints nothing about it, so 'make cover' can report every file at 80% or more while internal/daemon was never measured. SP-071's verifier hit this when TestResolveCost (a p99 per-connection latency test in internal/daemon) failed under load. Options: make cover.sh fail, or at least name the package, when a package's tests fail; loosen or isolate the latency test.",
+        "source": "https://github.com/willesq/orchestrator/pull/191",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-071"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -5959,7 +6010,12 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a1: TestRetagMovesEveryChunk (internal/rag): rag.Service.Retag moves a 3-chunk source from acme's collection to globex's; globex holds 3 of its chunks, acme 0, the store's total is unchanged, and every moved chunk keeps its point ID and vector and is labelled with the new space and the applied revision. The move reuses SP-027's copyInto (copy with vectors, count, then delete). The RPC and command that call it wait for the proto slot (see SP-071.2).",
+            "a2: TestRetagEmbedsNothing: a counting embedder records 0 calls across retags into a collection that does not exist yet, back, and into shared. TestIntegrationRetag2000 also asserts 0 embed calls on a real engine.",
+            "a3: TestRetagSearchFollowsTheSource/new_space_finds_it and /old_space_does_not: after the retag a search scoped to globex finds the source and a search scoped to acme does not (2 pass).",
+            "a4: TestRetagResumesAfterInterruption: a delete in the old collection fails after the copy, leaving the source in both; the error names no space or collection; a second retag ends with one copy in globex, 0 in acme, the total unchanged and no embedding. TestRetagEdgeCases covers refusals (no URI, no policy, bad or traversal space names, not stored, during a migration), a retag in place (stamp only), two old copies of one write ending as one, copies of different writes refused with nothing changed, a chunk with no vector kept, and a failed copy keeping the old copy. Security audit: the migration check now runs under the source lock; copies of different writes are refused rather than guessed (both fixed)."
+          ]
         },
         {
           "id": "SP-071.2",
@@ -5987,18 +6043,24 @@
               "threshold": "<= 20 s"
             }
           ],
-          "evidence": []
+          "evidence": [
+            "a3: TestIntegrationRetag2000 (ORCH_QDRANT_BENCH=1, its own Qdrant 1.17.1 on 127.0.0.1:6481, temporary storage, collections sp-071-*): a 2,000-chunk source (384 dimensions, hybrid) moved from one space collection to another with its vectors in 2.63 s, and 2.74 s after the security-audit fixes; 0 embed calls. Threshold <= 20 s met.",
+            "a1: TestRetaggedSourceStaysForLaterWrites (internal/daemon), 3 subtests over the example policy: docs_sync (a repo doc synced into acme, retagged to personal, synced again at a new head: lands in personal, none back in acme), sources_refresh (a checkout file refreshed into acme, retagged to globex, refreshed with new content: lands in globex; a web page quarantined, retagged to personal with --confirm, refreshed: lands in personal), client_re-ingest (the operator's note, quarantined, retagged to personal: the operator's re-ingest and a personal session's re-ingest land in personal). The override is stored in orch.db (spaces_retags, migration 0031) before anything moves and applied in writePlacer.place (withRetag, spaces.ApplyOverride). RC-850 option (a): TestRetagDoesNotLetAnotherSpaceWriteIn refuses re-ingests of a retagged URI from the space it came from, another space and an unidentified caller; TestRetagIsNotBorrowedByUnplacedSessionOrFileWrites keeps quarantined session and file writes in quarantine; TestWritePlacedBeforeARetagIsRefused (internal/rag) refuses a write placed before a concurrent retag finished.",
+            "a2: TestRetagSourceRefusals (internal/daemon): agent_callers (harness session, queued task, process started by orchd, unidentified caller all get PermissionDenied through refuseNonOperator; RetagSource is also on the operator-only list in callers.go), into_public_without_confirm (refused, nothing moved, no override recorded; with confirm it moves), out_of_isolated_without_confirm (acme to personal, quarantine or globex refused; a retag in place needs nothing). TestRetagSourceRequestChecks covers bad requests, NotFound, expect_from (refused when the source is elsewhere, honored when it is there), a running migration and no policy. TestRetagResumesAtStart and TestRetagResumeFollowsTheCurrentPolicy cover resuming after an exit. TestSpacesRetagSendsTheRequestAndPrintsCounts (internal/cli) covers 'orch spaces retag'. Under D-71 the operator check is SP-025's refuseNonOperator, which this RPC calls.",
+            "Security audit of the wiring: no critical or high findings; four mediums fixed with tests: a write placed before a retag could undo it; quarantined session or file writes could borrow the override; a relabel bypassed RC-850; resume ignored the current policy. Lows L1 (policy changed mid-check), L2 (confirmation out of quarantine) and L4 (raw store error) also fixed; L3 and L5 recorded as RC-851.",
+            "Independent verifier at 3c1d857: every acceptance item and DOD check passes. It reran the named tests (SP-071.1 a1-a4, SP-071.2 a1 3 pass, a2 3 pass) and TestIntegrationRetag2000 on its own engine (2,000 chunks moved in 2.46 s, 0 embed calls). go test ./... failed once on TestResolveCost (a p99 latency test outside the diff, under load) and passed on rerun. go vet passes. make cover passes with the daemon files measured separately (retag.go 83.8%). gofmt is clean. The commits are SSH-signed. CI (app, build, test) is green. Its security read found no critical, high or medium issues."
+          ]
         }
       ],
-      "status": "todo",
-      "passes": false,
-      "verified_sha": null,
-      "verified_at": null,
+      "status": "done",
+      "passes": true,
+      "verified_sha": "3c1d857bd71c2944e8e93106f22cedd0e7335e4e",
+      "verified_at": "2026-11-15T02:15:03Z",
       "blocked_reason": null,
-      "attempts": 0,
+      "attempts": 1,
       "criteria_sha256": "29cdb8a3de681a76e509c5f246f6f5bf4dc36223c5feab836393e4dd133f5c8e",
-      "branch": null,
-      "pr": null
+      "branch": "feat/sp-071-retag",
+      "pr": "https://github.com/willesq/orchestrator/pull/191"
     },
     {
       "id": "SP-028",

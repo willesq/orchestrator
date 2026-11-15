@@ -65,6 +65,7 @@ orch spaces sandbox [auto|on|off]     # show or set whether orch writes sandbox 
 orch spaces terms rules               # the outbound terms check's rules and their state
 orch spaces terms rules disable plain_variables   # relax a baseline rule (operator only)
 orch spaces terms rules add fail_closed < rule.txt   # add a stricter rule; the value is read from input (operator only)
+orch spaces retag <source_uri> <space> [--confirm]   # move a source's content to another space and keep it there (operator only)
 orch guard git-hook --install [--apply]   # git hooks that refuse commits and pushes carrying another space's terms
 orch sessions list [--all]   # sessions and their state: active, idle, ended (with --all), unpinned
 orch run <space> -- claude   # start Claude Code with the space's profile, from any folder

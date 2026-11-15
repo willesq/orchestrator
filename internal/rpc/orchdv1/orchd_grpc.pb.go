@@ -39,6 +39,7 @@ const (
 	Orchd_DropBackup_FullMethodName               = "/orchd.v1.Orchd/DropBackup"
 	Orchd_ReindexKeywords_FullMethodName          = "/orchd.v1.Orchd/ReindexKeywords"
 	Orchd_Relabel_FullMethodName                  = "/orchd.v1.Orchd/Relabel"
+	Orchd_RetagSource_FullMethodName              = "/orchd.v1.Orchd/RetagSource"
 	Orchd_BackfillSessions_FullMethodName         = "/orchd.v1.Orchd/BackfillSessions"
 	Orchd_ListPRs_FullMethodName                  = "/orchd.v1.Orchd/ListPRs"
 	Orchd_GetGitHubIdentity_FullMethodName        = "/orchd.v1.Orchd/GetGitHubIdentity"
@@ -165,6 +166,10 @@ type OrchdClient interface {
 	// to its space's collection; counts unless apply. Resumable. Operator only:
 	// the report names spaces.
 	Relabel(ctx context.Context, in *RelabelRequest, opts ...grpc.CallOption) (*RelabelResponse, error)
+	// RetagSource (SP-071) moves one source to the space the operator names,
+	// with its vectors (nothing is re-embedded), and records a sticky
+	// override that later writes of it honor. Resumable. Operator only.
+	RetagSource(ctx context.Context, in *RetagSourceRequest, opts ...grpc.CallOption) (*RetagSourceResponse, error)
 	// BackfillSessions stores sessions again from their transcripts on disk.
 	BackfillSessions(ctx context.Context, in *BackfillSessionsRequest, opts ...grpc.CallOption) (*BackfillSessionsResponse, error)
 	// ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
@@ -597,6 +602,16 @@ func (c *orchdClient) Relabel(ctx context.Context, in *RelabelRequest, opts ...g
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RelabelResponse)
 	err := c.cc.Invoke(ctx, Orchd_Relabel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *orchdClient) RetagSource(ctx context.Context, in *RetagSourceRequest, opts ...grpc.CallOption) (*RetagSourceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RetagSourceResponse)
+	err := c.cc.Invoke(ctx, Orchd_RetagSource_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1285,6 +1300,10 @@ type OrchdServer interface {
 	// to its space's collection; counts unless apply. Resumable. Operator only:
 	// the report names spaces.
 	Relabel(context.Context, *RelabelRequest) (*RelabelResponse, error)
+	// RetagSource (SP-071) moves one source to the space the operator names,
+	// with its vectors (nothing is re-embedded), and records a sticky
+	// override that later writes of it honor. Resumable. Operator only.
+	RetagSource(context.Context, *RetagSourceRequest) (*RetagSourceResponse, error)
 	// BackfillSessions stores sessions again from their transcripts on disk.
 	BackfillSessions(context.Context, *BackfillSessionsRequest) (*BackfillSessionsResponse, error)
 	// ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
@@ -1573,6 +1592,9 @@ func (UnimplementedOrchdServer) ReindexKeywords(context.Context, *ReindexKeyword
 }
 func (UnimplementedOrchdServer) Relabel(context.Context, *RelabelRequest) (*RelabelResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Relabel not implemented")
+}
+func (UnimplementedOrchdServer) RetagSource(context.Context, *RetagSourceRequest) (*RetagSourceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RetagSource not implemented")
 }
 func (UnimplementedOrchdServer) BackfillSessions(context.Context, *BackfillSessionsRequest) (*BackfillSessionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method BackfillSessions not implemented")
@@ -2130,6 +2152,24 @@ func _Orchd_Relabel_Handler(srv interface{}, ctx context.Context, dec func(inter
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(OrchdServer).Relabel(ctx, req.(*RelabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Orchd_RetagSource_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RetagSourceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrchdServer).RetagSource(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Orchd_RetagSource_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrchdServer).RetagSource(ctx, req.(*RetagSourceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3332,6 +3372,10 @@ var Orchd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Relabel",
 			Handler:    _Orchd_Relabel_Handler,
+		},
+		{
+			MethodName: "RetagSource",
+			Handler:    _Orchd_RetagSource_Handler,
 		},
 		{
 			MethodName: "BackfillSessions",

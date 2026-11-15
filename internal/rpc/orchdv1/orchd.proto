@@ -62,6 +62,10 @@ service Orchd {
   // to its space's collection; counts unless apply. Resumable. Operator only:
   // the report names spaces.
   rpc Relabel(RelabelRequest) returns (RelabelResponse);
+  // RetagSource (SP-071) moves one source to the space the operator names,
+  // with its vectors (nothing is re-embedded), and records a sticky
+  // override that later writes of it honor. Resumable. Operator only.
+  rpc RetagSource(RetagSourceRequest) returns (RetagSourceResponse);
   // BackfillSessions stores sessions again from their transcripts on disk.
   rpc BackfillSessions(BackfillSessionsRequest) returns (BackfillSessionsResponse);
   // ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
@@ -677,6 +681,24 @@ message RelabelResponse {
   repeated RelabelTransition transitions = 7;
   bool applied = 8;
   string error = 9;   // why an applied run stopped early; what it did is still reported
+}
+
+message RetagSourceRequest {
+  string source_uri = 1;
+  string space = 2;        // a space of the applied policy, or "quarantine"
+  // Required to move a source into a public space, out of an isolated one,
+  // or out of quarantine into a space; without it such a retag is refused
+  // and nothing changes.
+  bool confirm = 3;
+  // When set, the retag is refused unless the source is stored in this
+  // space now (checked under the source's lock, with the move).
+  string expect_from = 4;
+}
+// RetagSourceResponse names spaces and counts only.
+message RetagSourceResponse {
+  repeated string from = 1; // spaces that held the source ("unplaced" for none)
+  int64 chunks = 2;         // the source's chunks in the target space after the retag
+  bool moved = 3;           // false when it was only stamped where it was
 }
 
 message ListPRsRequest {
