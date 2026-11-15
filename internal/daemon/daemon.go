@@ -168,6 +168,8 @@ type server struct {
 	// guard writes the files the enforcing tool guard in orch-hook reads
 	// (SP-041); nil writes none.
 	guard *guardWriter
+	// termsRules are the operator's outbound rules (SP-075).
+	termsRules *termsRules
 	// toolEvents takes the events pre-tool-use and cwd-changed hooks send.
 	toolEvents toolEventIntake
 	// toolLog stores them (SP-014); nil when it could not be opened.
@@ -799,6 +801,7 @@ func Run(ctx context.Context) error {
 		settings:     settingsSvc,
 		toolLog:      tlog,
 		enforcement:  newEnforcement(ctx, store, settingsSvc),
+		termsRules:   newTermsRules(ctx, store),
 		guard:        defaultGuardWriter(),
 	}
 	srv.startGuardFiles(runCtx)

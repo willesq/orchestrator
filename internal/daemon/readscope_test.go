@@ -404,8 +404,8 @@ func TestCallerFiltersOnlyNarrow(t *testing.T) {
 	}
 }
 
-// captureLog collects orchd's log lines for the rest of the test.
-func captureLog(t *testing.T) *lockedBuffer {
+// captureReadLog collects orchd's log lines for the rest of the test.
+func captureReadLog(t *testing.T) *lockedBuffer {
 	t.Helper()
 	buf := &lockedBuffer{}
 	prev := log.Writer()
@@ -437,7 +437,7 @@ func (l *lockedBuffer) String() string {
 func TestMemoryFilterOffIsLogged(t *testing.T) {
 	e := newReadEnv(t)
 	setSwitch(t, e.s, "memory", spaces.SwitchOff, 0)
-	logs := captureLog(t)
+	logs := captureReadLog(t)
 	acme := inSpace("acme")
 	got := e.readAll(t, acme, memoText("globex", 9), memoURI("globex", 9))
 	if !slices.Contains(got, memoURI("globex", 9)) {

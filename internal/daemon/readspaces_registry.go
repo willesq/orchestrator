@@ -19,7 +19,8 @@ const (
 	// inside orchd (readscope.go).
 	spaceFiltered = "filtered"
 	// spaceOperator: refused to every caller but the operator
-	// (refuseNonOperator), so no session or task reads it.
+	// (refuseNonOperator; under a spaces policy only Orch.app, D-71), so
+	// no session or task reads it.
 	spaceOperator = "operator"
 	// spaceOwn: answers a caller only about itself, or about public
 	// content.
@@ -41,21 +42,24 @@ var readSpaceDecisions = map[string]spaceDecision{
 	orchdv1.Orchd_GetDocument_FullMethodName: {spaceFiltered, "one stored source, read only from the caller's readable spaces; NotFound otherwise"},
 	orchdv1.Orchd_ListDocs_FullMethodName:    {spaceFiltered, "synced docs in the caller's readable spaces, with only their owners and repos"},
 
-	orchdv1.Orchd_DiffSpaces_FullMethodName:        {spaceOperator, "the whole spaces policy"},
-	orchdv1.Orchd_ApplySpaces_FullMethodName:       {spaceOperator, "applies the policy"},
-	orchdv1.Orchd_ListSpaces_FullMethodName:        {spaceOperator, "every space's orgs, roots and checkouts"},
-	orchdv1.Orchd_ScanSpaces_FullMethodName:        {spaceOperator, "folders found on disk"},
-	orchdv1.Orchd_ReplaySpaces_FullMethodName:      {spaceOperator, "any session's command log"},
-	orchdv1.Orchd_VerifyToolLog_FullMethodName:     {spaceOperator, "the command log's chains"},
-	orchdv1.Orchd_SummarizeToolLog_FullMethodName:  {spaceOperator, "every space's activity"},
-	orchdv1.Orchd_SetEnforcement_FullMethodName:    {spaceOperator, "switches a layer"},
-	orchdv1.Orchd_SetSandboxSetting_FullMethodName: {spaceOperator, "changes the sandbox setting"},
+	orchdv1.Orchd_DiffSpaces_FullMethodName:         {spaceOperator, "the whole spaces policy"},
+	orchdv1.Orchd_ApplySpaces_FullMethodName:        {spaceOperator, "applies the policy"},
+	orchdv1.Orchd_ListSpaces_FullMethodName:         {spaceOperator, "every space's orgs, roots and checkouts"},
+	orchdv1.Orchd_ScanSpaces_FullMethodName:         {spaceOperator, "folders found on disk"},
+	orchdv1.Orchd_ReplaySpaces_FullMethodName:       {spaceOperator, "any session's command log"},
+	orchdv1.Orchd_VerifyToolLog_FullMethodName:      {spaceOperator, "the command log's chains"},
+	orchdv1.Orchd_SummarizeToolLog_FullMethodName:   {spaceOperator, "every space's activity"},
+	orchdv1.Orchd_SetEnforcement_FullMethodName:     {spaceOperator, "switches a layer"},
+	orchdv1.Orchd_SetSandboxSetting_FullMethodName:  {spaceOperator, "changes the sandbox setting"},
+	orchdv1.Orchd_ChangeOutboundRule_FullMethodName: {spaceOperator, "changes an outbound rule"},
+	orchdv1.Orchd_Relabel_FullMethodName:            {spaceOperator, "relabels the RAG store; its report counts chunks per space"},
 
-	orchdv1.Orchd_ListToolEvents_FullMethodName:   {spaceOwn, "the caller's own command log; the operator's is everyone's (INV-12)"},
-	orchdv1.Orchd_ExplainPlacement_FullMethodName: {spaceOwn, "answers agents only about public placements"},
-	orchdv1.Orchd_GetEnforcement_FullMethodName:   {spaceOwn, "the switches' states, which every start digest names (INV-16)"},
-	orchdv1.Orchd_PinSession_FullMethodName:       {spaceOwn, "the caller's own pin"},
-	orchdv1.Orchd_EndSession_FullMethodName:       {spaceOwn, "ends the caller's own pin"},
+	orchdv1.Orchd_ListToolEvents_FullMethodName:    {spaceOwn, "the caller's own command log; the operator's is everyone's (INV-12)"},
+	orchdv1.Orchd_ExplainPlacement_FullMethodName:  {spaceOwn, "answers agents only about public placements"},
+	orchdv1.Orchd_GetEnforcement_FullMethodName:    {spaceOwn, "the switches' states, which every start digest names (INV-16)"},
+	orchdv1.Orchd_PinSession_FullMethodName:        {spaceOwn, "the caller's own pin"},
+	orchdv1.Orchd_EndSession_FullMethodName:        {spaceOwn, "ends the caller's own pin"},
+	orchdv1.Orchd_ListOutboundRules_FullMethodName: {spaceOwn, "rule summaries without values; the operator also sees who set them"},
 
 	orchdv1.Orchd_ListPRs_FullMethodName:               {spaceRecords, "cached PRs (SP-026)"},
 	orchdv1.Orchd_ListGitHubItems_FullMethodName:       {spaceRecords, "cached GitHub items (SP-026)"},

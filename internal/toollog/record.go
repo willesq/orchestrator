@@ -143,6 +143,10 @@ type Record struct {
 	Decision  string `json:"decision"`
 	Rule      string `json:"rule"`
 	PolicyRev int64  `json:"policy_rev"`
+	// RulesRev is the outbound rules revision (spaces SP-075, D-66) the
+	// call was judged under; 0 for the baseline. Reason for omitempty:
+	// records stored before it hash as they did.
+	RulesRev int64 `json:"rules_rev,omitempty"`
 
 	Dropped  int64  `json:"dropped"`
 	PrevHash string `json:"prev_hash"`

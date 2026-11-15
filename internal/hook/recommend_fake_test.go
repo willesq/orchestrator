@@ -49,6 +49,10 @@ func (f *fakeClient) ReindexKeywords(context.Context, *orchdv1.ReindexKeywordsRe
 	return &orchdv1.ReindexKeywordsResponse{}, nil
 }
 
+func (f *fakeClient) Relabel(context.Context, *orchdv1.RelabelRequest, ...grpc.CallOption) (*orchdv1.RelabelResponse, error) {
+	return &orchdv1.RelabelResponse{}, nil
+}
+
 func (f *fakeClient) ListPRs(context.Context, *orchdv1.ListPRsRequest, ...grpc.CallOption) (*orchdv1.ListPRsResponse, error) {
 	return &orchdv1.ListPRsResponse{}, nil
 }

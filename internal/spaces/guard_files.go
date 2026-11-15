@@ -81,8 +81,15 @@ type GuardSnapshot struct {
 	// Terms is the outbound terms layer's switch (SP-044, RC-116), which
 	// the hook's terms check reads from here rather than from orch.db.
 	// A snapshot without it holds the layer's default.
-	Terms     GuardSwitch `json:"terms,omitzero"`
-	WrittenAt time.Time   `json:"written_at"`
+	Terms GuardSwitch `json:"terms,omitzero"`
+	// Rules are the operator's outbound rules (SP-075) as of revision
+	// RulesRev; nil is the baseline. RulesBroken marks rules orchd could
+	// not read, which the terms check cannot vouch for: it refuses
+	// outbound calls.
+	Rules       *OutboundRules `json:"rules,omitempty"`
+	RulesRev    int64          `json:"rules_rev,omitempty"`
+	RulesBroken bool           `json:"rules_broken,omitempty"`
+	WrittenAt   time.Time      `json:"written_at"`
 }
 
 // Mode is the guard's mode at now, after a timed switch's end.
@@ -332,6 +339,14 @@ type GuardTerms struct {
 	// its terms files.
 	Policy *Resolved
 	Home   string
+	// Rules are the operator's outbound rules (SP-075); nil is the
+	// baseline. RulesBroken is set when orchd could not read them: the
+	// check then refuses every call they may have covered.
+	Rules       *OutboundRules
+	RulesBroken bool
+	// RulesRev is the rules' revision, which the hook hands to orchd with
+	// the call (guard_rules_rev, D-66).
+	RulesRev int64
 }
 
 // Decide decides in from the files. It never fails: what it cannot read
@@ -358,7 +373,7 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 	if f.OnMode != nil {
 		f.OnMode(mode)
 	}
-	terms := GuardTerms{State: snap.TermsState(now()), Home: snap.Home}
+	terms := GuardTerms{State: snap.TermsState(now()), Home: snap.Home, Rules: snap.Rules}
 	if snap.Broken {
 		return withTerms(fixed(mode, Refuse, RulePolicyUnreadable, snap.Revision), terms)
 	}
@@ -372,7 +387,7 @@ func (f GuardFiles) decide(ctx context.Context, in GuardInput) GuardResult {
 		}
 		res = r
 	}
-	terms.Known, terms.Policy = true, res
+	terms.Known, terms.Policy, terms.RulesBroken, terms.RulesRev = true, res, snap.RulesBroken, snap.RulesRev
 	prot := snap.Protection
 	switch {
 	case !res.Configured():

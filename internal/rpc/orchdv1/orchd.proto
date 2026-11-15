@@ -57,6 +57,11 @@ service Orchd {
   // tokenizer made, from each chunk's stored text; counts unless apply.
   // Resumable: chunks already re-indexed are skipped.
   rpc ReindexKeywords(ReindexKeywordsRequest) returns (ReindexKeywordsResponse);
+  // Relabel (SP-027) places every chunk whose labels_v is not the applied
+  // spaces policy revision again and stamps it, or moves it with its vectors
+  // to its space's collection; counts unless apply. Resumable. Operator only:
+  // the report names spaces.
+  rpc Relabel(RelabelRequest) returns (RelabelResponse);
   // BackfillSessions stores sessions again from their transcripts on disk.
   rpc BackfillSessions(BackfillSessionsRequest) returns (BackfillSessionsResponse);
   // ListPRs serves the PR babysitter's cache: the user's open PRs and PRs
@@ -216,6 +221,18 @@ service Orchd {
   // it. Operator-only like SetEnforcement; every change is logged with its
   // time and caller and emits an event on the "spaces" stream.
   rpc SetSandboxSetting(SetSandboxSettingRequest) returns (SetSandboxSettingResponse);
+  // ListOutboundRules lists the outbound terms check's rules (spaces
+  // SP-075): the baseline rules with their state and the rules the
+  // operator added, by id and kind. A rule's value is never returned
+  // (INV-07). Open to every caller; who changed the rules, and the change
+  // history, are shown to the operator only.
+  rpc ListOutboundRules(ListOutboundRulesRequest) returns (OutboundRules);
+  // ChangeOutboundRule enables, disables, adds or removes one outbound
+  // rule. Operator-only like SetEnforcement: refused to callers descended
+  // from a harness or from orchd. An added rule may only make the check
+  // stricter. Every change is logged with its time and caller (never a
+  // value) and emits an event on the "spaces" stream.
+  rpc ChangeOutboundRule(ChangeOutboundRuleRequest) returns (ChangeOutboundRuleResponse);
   // ListRegisteredSources lists the sources registered for refresh on a
   // cadence (web URLs, local repos, local owner directories).
   rpc ListRegisteredSources(ListRegisteredSourcesRequest) returns (ListRegisteredSourcesResponse);
@@ -636,6 +653,30 @@ message ReindexKeywordsResponse {
   int64 updated = 5; // chunks this run re-indexed
   bool applied = 6;
   string error = 7;  // why an applied run stopped early; what it did is still reported
+}
+
+message RelabelRequest {
+  bool apply = 1;
+}
+// RelabelTransition counts stale chunks by the space they were in
+// ("unplaced" for none) and the space they were placed in.
+message RelabelTransition {
+  string from = 1;
+  string to = 2;
+  int64 chunks = 3;
+}
+// RelabelResponse holds counts and space names only: never a source, its
+// text or a collection.
+message RelabelResponse {
+  int64 revision = 1; // the applied policy revision chunks were brought up to
+  int64 total = 2;    // chunks in every collection
+  int64 stale = 3;    // chunks not labelled by revision, before this run
+  int64 changed = 4;  // chunks stamped or moved (or, without apply, that would be)
+  int64 moved = 5;    // of those, chunks that changed collection
+  int64 failed = 6;   // stale chunks left stale, to be retried by the next run
+  repeated RelabelTransition transitions = 7;
+  bool applied = 8;
+  string error = 9;   // why an applied run stopped early; what it did is still reported
 }
 
 message ListPRsRequest {
@@ -1226,6 +1267,10 @@ message RecordToolEventRequest {
   string guard_rule = 14;     // a rule id; never a path or text
   bool guard_enforced = 15;   // the verdict took effect
   int64 guard_policy_rev = 16;
+  // The outbound rules revision the hook's terms check judged under
+  // (spaces SP-075, D-66), from the guard snapshot; 0 for the baseline.
+  // Unset from an older hook: orchd then records its own revision.
+  optional int64 guard_rules_rev = 17;
 }
 
 message RecordToolEventResponse {}
@@ -1906,4 +1951,53 @@ message SetEnforcementResponse {
   bool changed = 2;          // false when the layer already had that state
   // What else the switch did or could not do, for the operator.
   repeated string notes = 3;
+}
+
+message ListOutboundRulesRequest {}
+
+// OutboundRule is one rule of the outbound terms check, without its value.
+message OutboundRule {
+  string id = 1;        // a baseline rule id, or user-<n>
+  string kind = 2;      // baseline | command | destination | fail_closed
+  bool on = 3;
+  bool loosens = 4;     // a baseline rule that reads more than the strict reading (D-60)
+  string summary = 5;   // what the rule (or its kind) does; never its value
+  bool baseline = 6;
+}
+
+// OutboundRuleChange is one change of the rules, without any value.
+message OutboundRuleChange {
+  int64 revision = 1;
+  int64 at = 2;         // unix seconds
+  string by = 3;
+  string action = 4;    // enable | disable | add | remove
+  string rule_id = 5;
+}
+
+message OutboundRules {
+  repeated OutboundRule rules = 1; // baseline rules first, then added ones
+  int64 revision = 2;              // 0: the baseline, never changed
+  int64 set_at = 3;                // unix seconds of the last change; 0 for none
+  string set_by = 4;               // the operator only
+  // Set when orch.db's rules could not be read: the check then refuses
+  // every shell command and MCP tool while terms apply.
+  string problem = 5;
+  // The terms layer's switch (SP-070): with it off, no rule applies.
+  string terms_layer = 6;
+  repeated OutboundRuleChange history = 7; // newest first; the operator only
+  repeated string kinds = 8;               // the kinds a rule may be added as
+}
+
+message ChangeOutboundRuleRequest {
+  string action = 1;    // enable | disable | add | remove
+  string id = 2;        // the rule, for enable, disable and remove
+  string kind = 3;      // for add: command | destination | fail_closed
+  string value = 4;     // for add; never echoed, logged or returned
+}
+
+message ChangeOutboundRuleResponse {
+  string rule_id = 1;   // the rule changed; for add, the new rule's id
+  bool changed = 2;     // false when nothing changed
+  int64 revision = 3;   // the rules revision after the change
+  OutboundRules current = 4;
 }

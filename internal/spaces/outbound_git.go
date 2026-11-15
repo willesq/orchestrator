@@ -258,11 +258,15 @@ func (c OutboundChecker) excluded(ctx context.Context, a Outbound, remote string
 	if !isURLRemote(remote) {
 		return []string{"--remotes=" + remote}, nil
 	}
-	space := func(owner string) string {
+	// Reason: a remote is left out only when it lies in the URL's spaces
+	// both as the policy places owners and under the operator's
+	// destination rules (SP-075), so a rule that makes the URL hold no
+	// space never leaves out a remote it did not before.
+	base := func(owner, _ string) string {
 		s, _ := c.Policy.GitHubOrgSpace(owner)
 		return s
 	}
-	want := urlSpaces([]string{remote}, space)
+	want, wantRules := urlSpaces([]string{remote}, base), urlSpaces([]string{remote}, c.destSpace)
 	out, err := c.git(ctx, a.Dir, "remote")
 	if err != nil {
 		return nil, err
@@ -273,8 +277,8 @@ func (c OutboundChecker) excluded(ctx context.Context, a Outbound, remote string
 		if err != nil {
 			continue
 		}
-		got := urlSpaces(strings.Fields(string(urls)), space)
-		if sameSpaces(got, want) {
+		got, gotRules := urlSpaces(strings.Fields(string(urls)), base), urlSpaces(strings.Fields(string(urls)), c.destSpace)
+		if sameSpaces(got, want) && sameSpaces(gotRules, wantRules) {
 			not = append(not, "--remotes="+name)
 		}
 	}

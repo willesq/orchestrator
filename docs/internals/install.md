@@ -259,7 +259,10 @@ git config.
   how to remove itself. It runs `orch guard git-hook run commit-msg|pre-push -- <git's args>`.
 - **The check** reads the terms layer's switch and the applied policy from orchd's guard snapshot,
   as the tool hook does (no orchd connection), and runs SP-044's outbound terms check
-  ([hooks.md](hooks.md#outbound-terms)): `commit-msg` reads the message file and the staged diff
+  ([hooks.md](hooks.md#outbound-terms)), with the operator's destination
+  [outbound rules](hooks.md#outbound-rules) (SP-075; the baseline's switches are about reading
+  shell and do not apply to what git really sends; rules that cannot be read refuse):
+  `commit-msg` reads the message file and the staged diff
   (git sets `GIT_INDEX_FILE` for `commit -a` and `commit <paths>`, which the check keeps), with
   the checkout's push remote as the destination; `pre-push` takes the destination from the URL
   git passes (after `insteadOf`, `pushurl` and any `git -c` override, which the check's own git

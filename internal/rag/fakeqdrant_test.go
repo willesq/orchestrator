@@ -35,6 +35,8 @@ type fakeQdrant struct {
 	failVectorReads bool
 	// onList runs while a collection listing is served, before it is read.
 	onList func()
+	// failDeletes makes the next n point deletes in a collection fail.
+	failDeletes map[string]int
 }
 
 // fakeReq is one request the fake served: its collection ("" for the
@@ -57,7 +59,7 @@ type fakePoint struct {
 
 func newFakeQdrant(t *testing.T) (*fakeQdrant, string) {
 	t.Helper()
-	f := &fakeQdrant{collections: map[string]*fakeCollection{}, failUpserts: map[string]int{}, upserts: map[string]int{}, failUpsertNo: map[string]int{}}
+	f := &fakeQdrant{collections: map[string]*fakeCollection{}, failUpserts: map[string]int{}, upserts: map[string]int{}, failUpsertNo: map[string]int{}, failDeletes: map[string]int{}}
 	srv := httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(srv.Close)
 	return f, srv.URL
@@ -224,7 +226,11 @@ func (f *fakeQdrant) serve(w http.ResponseWriter, r *http.Request) {
 		end := min(start+limit, len(ids))
 		var out []map[string]any
 		for _, id := range ids[start:end] {
-			out = append(out, map[string]any{"id": id, "payload": c.points[id].Payload})
+			pt := map[string]any{"id": id, "payload": c.points[id].Payload}
+			if body["with_vector"] == true {
+				pt["vector"] = c.points[id].Vector
+			}
+			out = append(out, pt)
 		}
 		var next any
 		if end < len(ids) {
@@ -234,6 +240,11 @@ func (f *fakeQdrant) serve(w http.ResponseWriter, r *http.Request) {
 	case action == "points/count":
 		writeJSON(w, map[string]any{"result": map[string]any{"count": len(c.matching(body["filter"]))}})
 	case action == "points/delete":
+		if f.failDeletes[name] > 0 {
+			f.failDeletes[name]--
+			http.Error(w, "injected failure", http.StatusInternalServerError)
+			return
+		}
 		for _, id := range c.matching(body["filter"]) {
 			delete(c.points, id)
 		}

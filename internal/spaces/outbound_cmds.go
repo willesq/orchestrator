@@ -108,7 +108,10 @@ var gitSends = flagSet("send-email", "subtree", "request-pull", "imap-send", "p4
 // gitOutbound reads a git command (its arguments after "git") run in dir
 // with env; nil when it sends nothing out. unknown is set when it may send
 // text the check cannot read.
-func gitOutbound(args []string, dir string, env map[string]string) (*Outbound, bool) {
+//
+// harmless says whether git -c with a harmless key is read (baseline rule
+// git_config_harmless_keys) or, switched off, every -c fails closed.
+func gitOutbound(args []string, dir string, env map[string]string, harmless bool) (*Outbound, bool) {
 	unknown := redirectsGit(env)
 	i := 0
 	for ; i < len(args); i++ {
@@ -119,7 +122,7 @@ func gitOutbound(args []string, dir string, env map[string]string) (*Outbound, b
 			dir = inDir(dir, args[i])
 		case a == "-c" && i+1 < len(args):
 			i++
-			if !safeConfig(args[i]) {
+			if !harmless || !safeConfig(args[i]) {
 				unknown = true
 			}
 		case strings.HasPrefix(a, "-"):

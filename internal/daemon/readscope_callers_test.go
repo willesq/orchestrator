@@ -276,7 +276,7 @@ func TestPayloadLayerAndFailures(t *testing.T) {
 	}
 	e.s.rag = rag.NewService(wordEmbedder{}, rag.NewQdrantStore("http://127.0.0.1:1", "c", ""), 200, 0)
 	e.s.documents = e.s.rag.(*rag.Service)
-	logs := captureLog(t)
+	logs := captureReadLog(t)
 	for name, call := range map[string]func(context.Context) error{
 		"Search": func(ctx context.Context) error {
 			_, err := e.s.Search(ctx, &orchdv1.SearchRequest{Query: "x"})

@@ -105,6 +105,9 @@ var orchBinaries = []string{"orch", "orchd", "orch-hook"}
 func GuardProtection(home, configDir, dataDir, guardDir, binDir string, res *Resolved) Protection {
 	p := ProtectedPaths(home, configDir, dataDir, res)
 	p.Write = append(p.Write, literalName(guardDir))
+	// Reason (SP-075, INV-07): the snapshot carries the outbound rules'
+	// values; only orch-hook reads it, not through a tool call.
+	p.Read = append(p.Read, GuardSnapshotPath(guardDir))
 	if binDir != "" {
 		for _, b := range orchBinaries {
 			p.Write = append(p.Write, filepath.Join(binDir, b))
