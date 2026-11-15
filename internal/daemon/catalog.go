@@ -217,6 +217,12 @@ func (s *server) ListRegisteredSources(ctx context.Context, _ *orchdv1.ListRegis
 		return nil, err
 	}
 	out := &orchdv1.ListRegisteredSourcesResponse{}
+	// Reason: a registered source records no space, and its URI and folder
+	// may be any space's, so under a policy only the operator lists them
+	// (SP-026, RC-700).
+	if s.recordScope(ctx, orchdv1.Orchd_ListRegisteredSources_FullMethodName).filtered() {
+		return out, nil
+	}
 	for _, src := range list {
 		out.Sources = append(out.Sources, registeredSource(src))
 	}

@@ -93,7 +93,7 @@ func newEnv(t *testing.T) (*fakeEnv, *Watcher) {
 			e.posts = append(e.posts, posted{event, commit, body})
 			return e.postErr
 		},
-		Dispatch: func(_ context.Context, body string) (string, error) {
+		Dispatch: func(_ context.Context, _, body string) (string, error) {
 			if e.dispatchErr != nil {
 				return "", e.dispatchErr
 			}

@@ -28,6 +28,21 @@ func newPRsCmd(cf clientFactory) *cobra.Command {
 			if needsMe {
 				list = prs.NeedsMe(state)
 			}
+			// Reason: the cache holds every space's PRs; under a policy
+			// only those orchd lists for this caller are shown (SP-026).
+			if policyApplied(c.Context()) {
+				shown, err := orchdLists{cf: cf}.prURLs(c.Context())
+				if err != nil {
+					return err
+				}
+				kept := list[:0:0]
+				for _, pr := range list {
+					if shown[pr.URL] {
+						kept = append(kept, pr)
+					}
+				}
+				list = kept
+			}
 			if asJSON {
 				return json.NewEncoder(c.OutOrStdout()).Encode(list)
 			}

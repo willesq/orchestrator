@@ -147,6 +147,11 @@ func (s *server) RetryTask(ctx context.Context, req *orchdv1.RetryTaskRequest) (
 	if s.ctl == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "task control unavailable")
 	}
+	// Reason: a retry reruns the task with the space it recorded, reading
+	// that space's memory, so only its own space reruns it (RC-708).
+	if !s.changesTask(ctx, s.recordScope(ctx, orchdv1.Orchd_RetryTask_FullMethodName), req.GetId()) {
+		return nil, errTaskNotFound(req.GetId())
+	}
 	id, err := s.ctl.Retry(ctx, req.GetId())
 	if err != nil {
 		return nil, taskControlError(err)
@@ -157,6 +162,9 @@ func (s *server) RetryTask(ctx context.Context, req *orchdv1.RetryTaskRequest) (
 func (s *server) CancelTask(ctx context.Context, req *orchdv1.CancelTaskRequest) (*orchdv1.CancelTaskResponse, error) {
 	if s.ctl == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "task control unavailable")
+	}
+	if !s.changesTask(ctx, s.recordScope(ctx, orchdv1.Orchd_CancelTask_FullMethodName), req.GetId()) {
+		return nil, errTaskNotFound(req.GetId())
 	}
 	outcome, err := s.ctl.Cancel(ctx, req.GetId())
 	if err != nil {
