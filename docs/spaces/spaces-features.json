@@ -3282,6 +3282,43 @@
           "SP-052"
         ],
         "status": "open"
+      },
+      {
+        "id": "RC-900",
+        "kind": "follow-up",
+        "topic": "Wire quarantine assign to SP-071's RetagSource",
+        "detail": "'orch quarantine assign' calls a Retagger interface (source_uri, space, confirm, expect_from=quarantine). Until SP-071 merges, the build's Retagger refuses and moves nothing, and SP-028.1.a1's assign part is tested against a fake retag that records the override. After SP-071 merges: implement the Retagger with the RetagSource RPC and add a test through orchd showing the source leaves quarantine and the override is recorded.",
+        "source": "https://github.com/willesq/orchestrator/pull/192",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-028",
+          "SP-071"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-901",
+        "kind": "follow-up",
+        "topic": "Quarantine list is capped at 5,000 sources per answer",
+        "detail": "ListQuarantine names at most 5,000 sources (by URI) so one answer stays under gRPC's message size; totals count all. The proto has no paging, so 'orch quarantine list' shows the first 5,000 and 'assign' refuses a source beyond them. Options: (a) accept; (b) add paging (a proto change) if quarantine ever grows that large. Recommendation: (a).",
+        "source": "https://github.com/willesq/orchestrator/pull/192",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-028"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-902",
+        "kind": "follow-up",
+        "topic": "SP-028 security review lows accepted",
+        "detail": "(1) A failed quarantine scan or purge logs the store's error in orchd's local log, which may include a source URI (a local path); orchd's log already names source URIs elsewhere. (2) Quarantine totals are int32 on the wire; only displayed counts would overflow past 2^31. (3) Chunks marked quarantine but still outside the quarantine collection (not yet relabelled) are not listed, counted or purged until 'orch rag relabel' moves them. (4) Fixed in the PR: failed counts are cached for the TTL, and refusal text drops format characters.",
+        "source": "https://github.com/willesq/orchestrator/pull/192",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-028"
+        ],
+        "status": "open"
       }
     ]
   },
@@ -5950,7 +5987,18 @@
               "threshold": "passes"
             }
           ],
-          "evidence": []
+          "evidence": [
+            {
+              "item": "a1",
+              "result": "pass (assign against a fake retag, see RC-900)",
+              "detail": "List: internal/daemon TestListQuarantineRPC (operator sees each quarantined source with its chunk count, only quarantine's), internal/rag TestListQuarantineShowsSourcesAndCounts, internal/cli TestQuarantineListShowsSourcesAndCounts; status counts: TestStatusCountsQuarantine, internal/status TestSpacesSectionCountsQuarantine. Assign: internal/cli TestQuarantineAssignMovesAndRecordsOverride (asks a retag from quarantine with expect_from; the fake retag, standing in for SP-071's RetagSource, moves the source out and records the source_uri -> space override) and TestQuarantineAssignRefusals. Purge: internal/daemon TestPurgeQuarantineRPC (no confirm counts and deletes nothing; confirm deletes from quarantine only; a source in another space or nowhere is refused alike), internal/rag TestPurgeQuarantineCountsUnlessApplied, TestPurgeQuarantineNamedDeletesOnlyThere, TestPurgeQuarantineReachesTheShadow, internal/cli TestQuarantinePurgeIsDryRunUnlessConfirmed. 3 of 3 operations pass."
+            },
+            {
+              "item": "a2",
+              "result": "pass",
+              "detail": "internal/daemon TestQuarantineRPCsRefuseAgentCallers: ListQuarantine and PurgeQuarantine return PermissionDenied for a harness session, a queued task, a harness process and a process orchd started, and a refused purge with confirm deletes nothing. internal/cli TestQuarantineCommandsRefusedForAgentCallers: list, assign and purge refused inside a queued task and on orchd's refusal; assign asks for no retag."
+            }
+          ]
         }
       ],
       "status": "in_progress",
@@ -5961,7 +6009,7 @@
       "attempts": 1,
       "criteria_sha256": "8b78deb05b7ee728821d2452d6e11460f796408e9822bf1d03d2e68805efc1c7",
       "branch": "feat/sp-028-quarantine",
-      "pr": null
+      "pr": "https://github.com/willesq/orchestrator/pull/192"
     },
     {
       "id": "SP-029",
