@@ -3149,7 +3149,7 @@
           "SP-027"
         ],
         "status": "open",
-        "note": "Covered by SP-025 (in progress): the SP-025 lane was asked to filter reads on labels_v (2026-11-14)."
+        "note": "Covered by SP-025 (in progress): the SP-025 lane was asked to filter reads on labels_v (2026-11-14). SP-025 (PR #188) implements it: every filtered read (Search, ListSources, GetDocument, ListDocs) matches labels_v against the applied revision in each named space's second layer, as an integer; chunks with another or no labels_v are unreadable until relabelled (TestStaleLabelsAreUnreadable; the real-engine run TestIntegrationReadPathsRealQdrant)."
       },
       {
         "id": "RC-751",
@@ -3267,7 +3267,8 @@
         "affects": [
           "SP-025"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Superseded by D-71 (2026-11-14): terminals are no longer evidence under a policy, so the usability limits listed here no longer apply; terminal access returns with SP-077's unlock."
       },
       {
         "id": "RC-704",
@@ -3294,7 +3295,8 @@
           "SP-050",
           "SP-070"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14 as D-71: under a policy a terminal is not the operator; only Orch.app is, until the app-confirmed unlock (SP-077). Implemented in SP-025 (2f39200): an operator result without Orch.app's evidence reads public memory only (TestOnlyOrchAppIsTheOperator, including a process with a pty of its own)."
       },
       {
         "id": "RC-706",
@@ -3307,7 +3309,8 @@
           "SP-025",
           "SP-072"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14 as D-71: Orch.app is recognized by its code signature, not its path. Implemented in SP-025 (2f39200, internal/daemon/appsig_darwin.go): through the socket's audit token the running code must meet identifier \"com.willesq.orch\", carry the hardened runtime, run from the one installed bundle and have that bundle's code directory hash; ad-hoc builds are now signed with the hardened runtime (TestAppSignatureOfARealProcess, with real signed processes). Remaining accepted risk: an ad-hoc signature names no signer, so writing the install folder is replacing the app (RC-711 proposes a Team ID requirement for Developer ID builds)."
       },
       {
         "id": "RC-707",
@@ -3322,7 +3325,8 @@
           "SP-070",
           "SP-025"
         ],
-        "status": "open"
+        "status": "resolved",
+        "note": "Settled by the user on 2026-11-14 as D-71: operator-only RPCs need the same evidence. Implemented in SP-025 (2f39200): operator() refuses an operator result without Orch.app's evidence while a policy is applied, and the resolver interceptor gives such a caller a queued task's limits for every RPC in operatorActions (TestOperatorOnlyRPCsNeedOrchApp, TestUnprovenOperatorGetsTaskLimits). With no policy nothing changes (INV-10)."
       },
       {
         "id": "RC-708",
@@ -3347,6 +3351,34 @@
         "affects": [
           "SP-027",
           "SP-024"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-710",
+        "kind": "follow-up",
+        "topic": "Interactive sessions can still call task-refused settings RPCs under a policy",
+        "detail": "SP-025's D-71 review (medium, pre-existing): operatorActions RPCs are refused to queued tasks and, since D-71, to a caller that is the operator only by process tree while a policy is applied; interactive harness sessions still reach them as before, including SetConfig with Sensitive keys (command log retention and size caps, queue.worker.permission_mode, claude_bin, codex.sandbox: confirm_sensitive is the client's own flag), SetSettingEnabled, AddSetting and RemoveSetting (cc-safety-net), Restart, InstallSafetyNet, PurgeDocs, DeleteSource and LandPR. Proposed: decide which of these are the operator's alone and send them through refuseNonOperator (Orch.app under a policy), keeping Ingest, Dispatch and the task RPCs sessions use.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-070",
+          "SP-050",
+          "SP-025"
+        ],
+        "status": "open"
+      },
+      {
+        "id": "RC-711",
+        "kind": "follow-up",
+        "topic": "Narrow Orch.app's recognition further",
+        "detail": "SP-025's D-71 review (low, informational): (1) a Developer ID build could also require 'anchor apple generic and certificate leaf[subject.OU] = <team>', so a planted ad-hoc bundle fails where the real app is Developer ID signed; (2) the genuine app can be started by an agent with ORCH_SOCKET or ORCH_DATA_DIR aimed at its own fake daemon (open --env, launchctl setenv), showing the user an agent's data to approve: release builds could ignore those variables or check orchd's signature on the socket; (3) a terminal with Accessibility permission can drive the app's buttons through System Events (SP-077's confirmation should show which terminal asked); (4) builds without cgo, and Linux, recognize no Orch.app, so under a policy no caller is the operator there and the policy can be changed only by editing orch.db with orchd stopped.",
+        "source": "https://github.com/willesq/orchestrator/pull/188",
+        "raised": "2026-11-14",
+        "affects": [
+          "SP-025",
+          "SP-077",
+          "SP-072"
         ],
         "status": "open"
       }
@@ -5719,8 +5751,8 @@
             "a3: TestCallerFiltersOnlyNarrow: from acme, source_uri, tags, all_tags, scope and source_type naming globex's content return 0 hits, a URI prefix lists 0 sources, GetDocument is NotFound; a tag filter on acme's own content returns only acme's.",
             "a4: TestMemoryFilterOffIsLogged: with memory filtering switched off (SP-070), globex's chunk is returned to acme and 11 of 11 read responses are logged 'Search for session sess-acme: not enforced (memory filtering is switched off)' (and likewise per RPC); switched on again, nothing leaks.",
             "a5: TestJobReadsPersonalOnlyWhenOptedIn (acme, which lists personal, reads it; globex does not) and TestJobNeverReadsAnotherJob (acme and globex never read each other, personal reads neither): 2 pass.",
+            "a7 (as amended by D-71, 2026-11-14): TestOnlyOrchAppIsTheOperator: under a policy, Orch.app recognized by its code signature reads every collection; a command typed at a terminal, a process with a pty of its own (RC-705), a setsid double fork, a signed copy outside the installed folder, the app without the hardened runtime, running other code than its bundle's, with no code hash, installed in both folders, not installed, or in a build that cannot check signatures read public only. TestAppSignatureOfARealProcess checks real ad-hoc-signed processes over a socket: the hardened app in the installed folder passes; without the runtime, with another identifier, run from a copy, or re-signed on disk after starting it fails. TestOperatorOnlyRPCsNeedOrchApp and TestUnprovenOperatorGetsTaskLimits: SetEnforcement, DiffSpaces, ApplySpaces and every operatorActions RPC (unary and stream) are refused to those callers and allowed to Orch.app; with no policy a terminal is the operator as before.",
             "a6: TestDetachedHarnessReadsNoMore: the SP-041 guard (spaces.Decide, block-other-jobs) refuses 'cd <globex>/repo && nohup claude ... &' and '(cd <globex>/repo; setsid claude &)' from a session in acme; a fake claude detached under launchd in globex's folder gets no pin and reads public only; a claude nested in the session copies acme's pin and reads acme's set only. Residual D-38 cases are RC-702.",
-            "a7: TestOperatorReadsNeedEvidence: a command typed at a terminal (foreground group, unbroken parents) and Orch.app at /Applications keep operator-scope reads; a background job, a process left in a harness's group, a setsid double fork, osascript, launchctl/open, a copy of Orch.app elsewhere and a process left in a wrapper's group read public only. The security review found the terminal evidence can be forged with a pty the agent opens (RC-705, critical) and the app check is by path (RC-706, high): DOD-6 not met.",
             "a8: TestTasksReadTheirDispatchersSpaces: Dispatch records the dispatching session's space (acme, globex), the operator's working-directory placement (acme, personal; quarantine with no directory), and nothing for an operator with no evidence or an unpinned harness; the space reaches the runner (agentTask) and a task reads what that space reads (acme's task reads personal, never globex), writes there (placed in acme), and an untracked task or one with no space reads public only. Also TestDispatchRecordsReadSpace (internal/queue).",
             "Also: TestStaleLabelsAreUnreadable (INV-08: chunks with an earlier, later or missing labels_v are unreadable on every read path until relabelled; the operator still sees them), TestNoPolicyReadsAsBefore (INV-10), TestPayloadLayerAndFailures (second layer; store errors without collection names), TestReadScopeFailsClosed (broken policy reads nothing). go test ./..., go vet ./... and make cover (all files >= 80%) pass."
           ]
@@ -5742,11 +5774,11 @@
           ]
         }
       ],
-      "status": "blocked",
+      "status": "in_progress",
       "passes": false,
       "verified_sha": null,
       "verified_at": null,
-      "blocked_reason": "DOD-6: the security review of the read-path enforcement found that D-39's operator evidence can be forged (RC-705, critical: an agent opens its own pseudo-terminal; RC-706, high: Orch.app is recognized by path and ad-hoc builds can be injected) and that operator-only RPCs ignore that evidence (RC-707, high). Each needs a user decision. Every acceptance item's tests pass at 7c41af0; the independent verifier has not run yet.",
+      "blocked_reason": null,
       "attempts": 1,
       "criteria_sha256": "b1af57cfe7ce23368c77882ead3d99ad6081ed3e2eb32334e37edc4dccd2ca93",
       "branch": "feat/sp-025-read-path-spaces",
