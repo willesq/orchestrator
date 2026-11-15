@@ -72,6 +72,9 @@ func routePB(rec routing.Recommendation) *orchdv1.Route {
 	}
 }
 
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_RecommendModel_FullMethodName,
+	spaceDecision{spaceNone, "a model for a task kind"}))
+
 func (s *server) RecommendModel(ctx context.Context, req *orchdv1.RecommendModelRequest) (*orchdv1.RecommendModelResponse, error) {
 	kind := req.GetTaskKind()
 	if !routing.ValidKind(kind) {

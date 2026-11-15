@@ -86,6 +86,12 @@ const (
 	hookCostBinEnv    = "ORCH_TEST_HOOK_COST_BIN"
 	hookCostRuns      = 1000
 	hookCostP99       = 500 * time.Millisecond
+	// hookEventTimeout is the hook's toolEventTimeout (internal/hook): a
+	// hook that ran for less never gave up on its event.
+	hookEventTimeout = 20 * time.Millisecond
+	// hookGuardTimeout is the hook's guardTimeout (internal/hook): only a
+	// hook that ran at least that long can refuse a call for time.
+	hookGuardTimeout = 250 * time.Millisecond
 )
 
 // TestToolHookCostHelper is the fake harness TestToolHookCost starts as a
@@ -109,6 +115,13 @@ func TestToolHookCostHelper(t *testing.T) {
 		start := time.Now()
 		out, err := cmd.Output()
 		took := time.Since(start)
+		// A decision that outlasts the hook's guardTimeout is refused by
+		// design (fail-closed); the parent checks that the run was that slow.
+		if err == nil && strings.Contains(string(out), `"permissionDecision":"deny"`) &&
+			strings.Contains(string(out), "rule guard_timeout") {
+			fmt.Printf("took %d guard_timeout\n", took.Nanoseconds())
+			continue
+		}
 		if err != nil || len(out) != 0 {
 			fmt.Printf("fail %v %q\n", err, out)
 			return
@@ -220,11 +233,21 @@ func TestToolHookCost(t *testing.T) {
 	}
 
 	var took []time.Duration
+	timedOut := 0
 	for lines.Scan() {
 		f := strings.Fields(lines.Text())
-		if len(f) == 2 && f[0] == "took" {
+		if (len(f) == 2 || len(f) == 3) && f[0] == "took" {
 			ns, _ := strconv.ParseInt(f[1], 10, 64)
 			took = append(took, time.Duration(ns))
+			if len(f) == 3 {
+				// Reason: under load a decision can outlast the hook's
+				// guardTimeout and is then refused, fail-closed, by design
+				// (SP-082); only a run that took that long may be.
+				if f[2] != "guard_timeout" || time.Duration(ns) < hookGuardTimeout {
+					t.Fatalf("helper: %s", lines.Text())
+				}
+				timedOut++
+			}
 			continue
 		}
 		if len(f) > 0 && (f[0] == "fail" || f[0] == "---" || f[0] == "FAIL") {
@@ -237,19 +260,45 @@ func TestToolHookCost(t *testing.T) {
 	}
 	// The hook does not wait for the event to be processed, but orchd takes
 	// it before answering. A hook gives up after toolEventTimeout rather than
-	// slow the harness, so on a loaded machine (CI's shared runners) a few
-	// events are dropped by design; all that arrive must be attributed.
+	// slow the harness, so on a loaded machine (CI's shared runners) some
+	// events are lost by design. One whose hook gave up while orchd was
+	// resolving its caller arrives unresolved, and the command log does not
+	// store it (RC-29), so it is lost too. Reason: a fixed 1% allowance
+	// failed under load (SP-082); only a hook that ran for at least the
+	// timeout can lose its event, so that is the allowance. No event may
+	// go to another session.
+	slow := 0
+	for _, d := range took {
+		if d >= hookEventTimeout {
+			slow++
+		}
+	}
 	mu.Lock()
 	got := slices.Clone(sessions)
+	refusedLate := 0
+	for _, v := range verdicts {
+		if v == "refuse guard_timeout" {
+			refusedLate++
+		}
+	}
 	decided := slices.Compact(slices.Sorted(slices.Values(verdicts)))
 	mu.Unlock()
-	if len(decided) != 1 || decided[0] != "allow within_space" {
-		t.Errorf("the guard decided %v, want every call allowed within its space", decided)
+	if refusedLate > timedOut || slices.IndexFunc(decided, func(v string) bool {
+		return v != "allow within_space" && v != "refuse guard_timeout"
+	}) >= 0 {
+		t.Errorf("the guard decided %v (%d refused for time, %d hooks timed out), want every call allowed within its space",
+			decided, refusedLate, timedOut)
 	}
-	if len(got) < hookCostRuns*99/100 || len(got) > hookCostRuns ||
-		slices.IndexFunc(got, func(id string) bool { return id != "sess-hook" }) >= 0 {
-		t.Fatalf("orchd took %d events (want at least %d of %d), attributed to %v", len(got), hookCostRuns*99/100,
-			hookCostRuns, slices.Compact(slices.Sorted(slices.Values(got))))
+	attributed := 0
+	for _, id := range got {
+		if id == "sess-hook" {
+			attributed++
+		}
+	}
+	if attributed < hookCostRuns-slow || len(got) > hookCostRuns ||
+		slices.IndexFunc(got, func(id string) bool { return id != "sess-hook" && id != "" }) >= 0 {
+		t.Fatalf("orchd took %d events, %d attributed to the hook's session (want at least %d of %d: %d hooks ran %v or longer), attributed to %v",
+			len(got), attributed, hookCostRuns-slow, hookCostRuns, slow, hookEventTimeout, slices.Compact(slices.Sorted(slices.Values(got))))
 	}
 	slices.Sort(took)
 	q := func(p float64) time.Duration { return took[int(p*float64(len(took)-1))] }

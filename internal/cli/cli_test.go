@@ -707,6 +707,10 @@ func TestModelFetchAlreadyPresent(t *testing.T) {
 
 // fakeClient implements orchdv1.OrchdClient with canned responses.
 type fakeClient struct {
+	// OrchdClient is nil: it only supplies the RPCs this fake does not
+	// stub, so a new RPC needs no edit here or in a <feature>_fake_test.go
+	// file until a test calls it, when the call panics (SP-081).
+	orchdv1.OrchdClient
 	refreshReq   *orchdv1.RefreshSourceRequest
 	searchReq    *orchdv1.SearchRequest
 	listReq      *orchdv1.ListSourcesRequest

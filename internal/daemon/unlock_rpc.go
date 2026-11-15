@@ -16,6 +16,11 @@ import (
 
 // The operator unlock's RPCs (SP-077); the registry is unlock.go.
 
+// Reason (SP-077): an unlock makes a terminal the operator, so only the
+// user's own terminal asks for one and only Orch.app confirms it.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_RequestUnlock_FullMethodName, "ask for an operator unlock",
+	spaceDecision{spaceOwn, "the caller's own unlock request (SP-077)"}))
+
 // RequestUnlock asks Orch.app to confirm operator scope for the calling
 // process and its descendants, and waits for the answer. A confirmed
 // request grants nothing until the caller sends the code Orch.app shows
@@ -47,6 +52,9 @@ func (s *server) RequestUnlock(ctx context.Context, req *orchdv1.RequestUnlockRe
 	}
 	return &orchdv1.RequestUnlockResponse{Unlock: got}, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ProveUnlock_FullMethodName, "prove an operator unlock",
+	spaceDecision{spaceOwn, "the caller's own unlock, without its code (SP-077)"}))
 
 // ProveUnlock grants a confirmed unlock to the process that asked for it,
 // once it sends the code Orch.app shows.
@@ -126,6 +134,9 @@ func refuseNonApp(ctx context.Context, method, action string) error {
 	return grpcstatus.Errorf(codes.PermissionDenied, "only Orch.app can %s (caller: %s)", action, who)
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ListUnlocks_FullMethodName, "list operator unlocks",
+	spaceDecision{spaceOperator, "pending and active unlocks with their command lines; Orch.app only (SP-077)"}))
+
 // ListUnlocks lists pending and active unlocks for Orch.app. With no policy
 // applied there are none, and the operator gets an empty list.
 func (s *server) ListUnlocks(ctx context.Context, _ *orchdv1.ListUnlocksRequest) (*orchdv1.ListUnlocksResponse, error) {
@@ -144,6 +155,9 @@ func (s *server) ListUnlocks(ctx context.Context, _ *orchdv1.ListUnlocksRequest)
 	}
 	return &orchdv1.ListUnlocksResponse{Unlocks: s.unlocks.list()}, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ConfirmUnlock_FullMethodName, "confirm operator unlocks",
+	spaceDecision{spaceOperator, "confirms or denies an unlock; Orch.app only (SP-077)"}))
 
 // ConfirmUnlock confirms or denies a pending unlock; Orch.app only.
 func (s *server) ConfirmUnlock(ctx context.Context, req *orchdv1.ConfirmUnlockRequest) (*orchdv1.ConfirmUnlockResponse, error) {
@@ -165,6 +179,9 @@ func (s *server) ConfirmUnlock(ctx context.Context, req *orchdv1.ConfirmUnlockRe
 	log.Printf("orchd: unlock %s %s in Orch.app", printableID(req.GetId()), verb)
 	return &orchdv1.ConfirmUnlockResponse{Unlock: u}, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_Lock_FullMethodName, "end operator unlocks",
+	spaceDecision{spaceNone, "ends unlocks; answers a count (SP-077)"}))
 
 // Lock ends unlocks. Orch.app ends the one named, or every one; a terminal
 // ends those covering it (the one named, or all of them).

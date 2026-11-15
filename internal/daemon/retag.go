@@ -166,6 +166,12 @@ func retagStatus(err error) error {
 	return grpcstatus.Error(codes.Aborted, err.Error()+"; run the retag again to finish it")
 }
 
+// Reason (SP-071): a retag moves a source between spaces and its answer
+// says which spaces hold it; it is also refused to interactive harness
+// sessions.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_RetagSource_FullMethodName, "retag a source",
+	spaceDecision{spaceOperator, "moves a source between spaces; its answer names the space that held it"}))
+
 // RetagSource is the RPC: operator only, since it moves a source between
 // spaces and its answer says which spaces held it.
 func (s *server) RetagSource(ctx context.Context, req *orchdv1.RetagSourceRequest) (*orchdv1.RetagSourceResponse, error) {

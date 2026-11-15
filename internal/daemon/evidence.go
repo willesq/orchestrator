@@ -26,6 +26,9 @@ func (r dbRater) Rate(ctx context.Context, id, rating string) error {
 	return evidence.Rate(ctx, r.db, id, rating, time.Now().Unix())
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_RateTask_FullMethodName, "rate tasks",
+	spaceDecision{spaceNone, "rates a task of the caller's own space (SP-026)"}))
+
 func (s *server) RateTask(ctx context.Context, req *orchdv1.RateTaskRequest) (*orchdv1.RateTaskResponse, error) {
 	if !evidence.ValidOutcome(req.GetRating()) {
 		return nil, grpcstatus.Errorf(codes.InvalidArgument, "rating must be good, rework or bad")

@@ -24,6 +24,9 @@ type docsSyncer interface {
 	Request(prepare func() error) error
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SyncDocs_FullMethodName, "sync docs",
+	spaceDecision{spaceNone, "starts a docs sync; another space's owner reads as unregistered and its progress as idle (SP-026)"}))
+
 func (s *server) SyncDocs(ctx context.Context, req *orchdv1.SyncDocsRequest) (*orchdv1.DocsSyncState, error) {
 	if s.docsSync == nil || s.docsReg == nil {
 		return nil, grpcstatus.Error(codes.Unavailable, "docs sync unavailable")
@@ -112,6 +115,9 @@ func syncFor(scope readScope, p docs.Progress) *orchdv1.DocsSyncState {
 	}
 	return docsSyncState(p)
 }
+
+var _ = registerRPCs(taskRPC(orchdv1.Orchd_GetDocsSync_FullMethodName,
+	spaceDecision{spaceRecords, "the docs sync's progress; another space's owner reads as idle (SP-026, RC-700)"}))
 
 func (s *server) GetDocsSync(ctx context.Context, _ *orchdv1.GetDocsSyncRequest) (*orchdv1.DocsSyncState, error) {
 	if s.docsSync == nil {

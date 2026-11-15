@@ -646,6 +646,16 @@
         "id": "D-80",
         "decision": "Parallel lanes cut integration overhead: 24 PRs needed 27 catch-up merges, because every PR edited the shared plan file and a few junction files. From now on: (1) a lane writes its feature's mutable state and its reconvene items to per-feature files, not the shared plan file (SP-080); (2) shared registration points are split so additions don't touch the same lines (SP-081); (3) the recurring flaky tests are fixed (SP-082); (4) run 2-3 lanes on features with disjoint files, build in parallel, and merge one at a time as each turns green; (5) catching a branch up with main is a light merge: resolve, build, push, let CI test.",
         "date": "2026-11-15"
+      },
+      {
+        "id": "D-81",
+        "decision": "RC-1450: searching chat direct messages stays operator-only (SearchDirectMessages; D-71). Orch.app gets a DM search view so the operator can search them under a policy (SP-083). Terminals, even unlocked, and sessions do not search DMs.",
+        "date": "2026-11-15"
+      },
+      {
+        "id": "D-82",
+        "decision": "The user waives the hands-on acceptance checks for SP-072.1.a1, SP-048 (RC-451), SP-054.1.a2, SP-052.1.a1, SP-079.1.a3 and SP-077.1.a4. Each item's evidence records 'waived by user on 2026-11-15 (D-82)' plus the automated tests and snapshots that cover it. Each feature is marked done once its PR is merged on main. This supersedes D-70/D-79's deferral.",
+        "date": "2026-11-15"
       }
     ],
     "recommended_pending_confirmation": [],
@@ -3525,6 +3535,55 @@
       "criteria_sha256": "f0f14f5b8c199b7be636183df41b2454c6142a36acb8f5a54f2243b104299101"
     },
     {
+      "id": "SP-083",
+      "phase": "P5",
+      "priority": 44.5,
+      "title": "Direct-message search in Orch.app (D-81)",
+      "summary": "A view in Orch.app where the operator searches chat direct messages through SearchDirectMessages, showing each result's tenant and space, hidden in screen-share-safe mode.",
+      "why": "RC-1450: DM search is operator-only (D-81), and under a policy only Orch.app is the operator, so without a view DMs are stored but not searchable.",
+      "depends_on": [
+        "SP-060",
+        "SP-051"
+      ],
+      "touches": [
+        "macos/Sources (new Swift files)",
+        "macos/Sources/OrchKit (DaemonClient)"
+      ],
+      "docs_to_update": [
+        "docs/internals/app.md"
+      ],
+      "checkpoints": [
+        {
+          "id": "SP-083.1",
+          "title": "DM search view",
+          "acceptance": [
+            {
+              "id": "a1",
+              "type": "test",
+              "check": "Orch.app's DM search view calls SearchDirectMessages as the operator and shows each result with its tenant and space, and shows no direct messages while screen-share-safe mode is on.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a2",
+              "type": "test",
+              "check": "A refused or failed search shows why.",
+              "measure": "test",
+              "threshold": "passes"
+            },
+            {
+              "id": "a3",
+              "type": "manual",
+              "check": "Light and dark snapshots of the DM search view.",
+              "measure": "snapshots",
+              "threshold": "reviewed by the user"
+            }
+          ]
+        }
+      ],
+      "criteria_sha256": "31ee143f33a2d7c22ffb9ff7fbbedf0a97b5397f6ed6b45bb5a535215e21b6fc"
+    },
+    {
       "id": "SP-061",
       "phase": "P5",
       "priority": 45,
@@ -4287,6 +4346,10 @@
     {
       "date": "2026-11-15",
       "change": "D-79 records the admin merges of #194, #198, #193 and #202 before their hands-on checks; D-80 cuts lane integration overhead and adds SP-080 (per-feature state files), SP-081 (split shared registration points) and SP-082 (fix recurring flaky tests); parallel lanes: max 3, SP-060 and SP-080 to SP-082 active."
+    },
+    {
+      "date": "2026-11-15",
+      "change": "D-81 settles RC-1450 (DM search stays operator-only) and adds SP-083 (DM search in Orch.app); D-82 waives the hands-on checks of SP-072, SP-048, SP-054, SP-052, SP-079 and SP-077, which are now done; a sandbox temp path in SP-046's evidence replaced with a placeholder."
     }
   ],
   "plan_location": {
@@ -4359,16 +4422,6 @@
     },
     "active": [
       {
-        "feature": "SP-060",
-        "rc_range": "RC-1450..RC-1499",
-        "note": "PR #203"
-      },
-      {
-        "feature": "SP-080",
-        "rc_range": "RC-1500..RC-1549",
-        "note": "per-feature state files (D-80)"
-      },
-      {
         "feature": "SP-081",
         "rc_range": "RC-1550..RC-1599",
         "note": "split shared registration points (D-80)"
@@ -4384,7 +4437,7 @@
       "SP-053 after SP-071 and SP-072 (a1 needs the user)"
     ],
     "d_ids_reserved": [],
-    "next_d_id": "D-81",
+    "next_d_id": "D-83",
     "proto_slot": {
       "holder": "none",
       "next": "none"
@@ -4410,10 +4463,12 @@
       "SP-031 (#197)",
       "SP-078 (#199)",
       "SP-026 (#200)",
-      "SP-079 (#202, check pending under D-79)",
-      "SP-054 (#194, check pending under D-79)",
-      "SP-077 (#198, check pending under D-79)",
-      "SP-052 (#193, check pending under D-79)"
+      "SP-079 (#202, check waived under D-82)",
+      "SP-054 (#194, check waived under D-82)",
+      "SP-077 (#198, check waived under D-82)",
+      "SP-052 (#193, check waived under D-82)",
+      "SP-060 (#203)",
+      "SP-080 (#205)"
     ]
   }
 }

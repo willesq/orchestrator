@@ -20,7 +20,6 @@ import (
 
 	"github.com/willesq/orchestrator/internal/orchdclient"
 	"github.com/willesq/orchestrator/internal/procstat"
-	orchdv1 "github.com/willesq/orchestrator/internal/rpc/orchdv1"
 )
 
 // Queued sessions run as the user, so the owner-only socket admits them along
@@ -35,159 +34,14 @@ import (
 // serve the session's own work. Every other RPC changes what later sessions
 // see or run (further tasks, routing evidence, stored memory, the sources
 // orchd ingests, orchd's subsystems), so a new RPC is refused to tasks until
-// it is added here.
-var taskCallable = map[string]bool{
-	orchdv1.Orchd_Ping_FullMethodName:                  true,
-	orchdv1.Orchd_Search_FullMethodName:                true,
-	orchdv1.Orchd_ListSources_FullMethodName:           true,
-	orchdv1.Orchd_ListTasks_FullMethodName:             true,
-	orchdv1.Orchd_GetTask_FullMethodName:               true,
-	orchdv1.Orchd_Status_FullMethodName:                true,
-	orchdv1.Orchd_RecommendModel_FullMethodName:        true,
-	orchdv1.Orchd_ListPRs_FullMethodName:               true,
-	orchdv1.Orchd_GetGitHubIdentity_FullMethodName:     true,
-	orchdv1.Orchd_ListGitHubScopes_FullMethodName:      true,
-	orchdv1.Orchd_ListGitHubRepos_FullMethodName:       true,
-	orchdv1.Orchd_ListGitHubItems_FullMethodName:       true,
-	orchdv1.Orchd_TailLogs_FullMethodName:              true,
-	orchdv1.Orchd_GetSystemMetrics_FullMethodName:      true,
-	orchdv1.Orchd_ListDocs_FullMethodName:              true,
-	orchdv1.Orchd_GetDocument_FullMethodName:           true,
-	orchdv1.Orchd_GetDocsSync_FullMethodName:           true,
-	orchdv1.Orchd_ListRegisteredSources_FullMethodName: true,
-	orchdv1.Orchd_GetSafetyNet_FullMethodName:          true,
-	orchdv1.Orchd_ListSettings_FullMethodName:          true,
-	// ExplainPlacement answers agents only about public placements.
-	orchdv1.Orchd_ExplainPlacement_FullMethodName: true,
-	// Reason: a queued task's tool calls belong in the command log like any
-	// session's; the event is attributed to the task orchd resolved, never to
-	// the session it names.
-	orchdv1.Orchd_RecordToolEvent_FullMethodName: true,
-	// ListToolEvents gives a task only its own task's command log.
-	orchdv1.Orchd_ListToolEvents_FullMethodName: true,
-	// Reason: every session's start digest names a switched-off layer,
-	// queued tasks' included (INV-16).
-	orchdv1.Orchd_GetEnforcement_FullMethodName: true,
-	// Reason: rules are listed by id and kind only, never a value
-	// (INV-07); the history and who changed them go to the operator only.
-	orchdv1.Orchd_ListOutboundRules_FullMethodName: true,
-}
+// it is registered with taskRPC. Each RPC registers from the file of its
+// handler (registerRPCs, rpc_registry.go), so no shared list changes when an
+// RPC is added (SP-081).
+var taskCallable = map[string]bool{}
 
-// operatorActions says what each operator-only RPC would do, for the refusal.
-var operatorActions = map[string]string{
-	orchdv1.Orchd_Dispatch_FullMethodName:           "dispatch further tasks",
-	orchdv1.Orchd_RateTask_FullMethodName:           "rate tasks",
-	orchdv1.Orchd_RetryTask_FullMethodName:          "retry tasks",
-	orchdv1.Orchd_CancelTask_FullMethodName:         "cancel tasks",
-	orchdv1.Orchd_WatchTasks_FullMethodName:         "watch tasks (use ListTasks or GetTask)",
-	orchdv1.Orchd_Ingest_FullMethodName:             "write to the RAG store",
-	orchdv1.Orchd_DeleteSource_FullMethodName:       "delete from the RAG store",
-	orchdv1.Orchd_SummarizeSession_FullMethodName:   "write to the RAG store",
-	orchdv1.Orchd_MigrateHybrid_FullMethodName:      "migrate the RAG store",
-	orchdv1.Orchd_DropBackup_FullMethodName:         "migrate the RAG store",
-	orchdv1.Orchd_ReindexKeywords_FullMethodName:    "migrate the RAG store",
-	orchdv1.Orchd_BackfillSessions_FullMethodName:   "write to the RAG store",
-	orchdv1.Orchd_SaveSource_FullMethodName:         "change registered sources",
-	orchdv1.Orchd_RemoveSource_FullMethodName:       "change registered sources",
-	orchdv1.Orchd_RefreshSource_FullMethodName:      "refresh registered sources",
-	orchdv1.Orchd_SyncDocs_FullMethodName:           "sync docs",
-	orchdv1.Orchd_SetGitHubScope_FullMethodName:     "change GitHub monitoring",
-	orchdv1.Orchd_ListDocsOwners_FullMethodName:     "read docs owners (use ListDocs)",
-	orchdv1.Orchd_ListDocsOwnerRepos_FullMethodName: "ask orchd to list repos on GitHub",
-	orchdv1.Orchd_SaveDocsOwner_FullMethodName:      "change which docs are synced",
-	orchdv1.Orchd_RemoveDocsOwner_FullMethodName:    "change which docs are synced",
-	orchdv1.Orchd_PurgeDocs_FullMethodName:          "delete from the RAG store",
-	// Reason: config sets what tasks may run and how many, so a task must not
-	// be able to widen its own limits or permissions.
-	orchdv1.Orchd_GetConfig_FullMethodName:          "read orch's configuration",
-	orchdv1.Orchd_SetConfig_FullMethodName:          "change orch's configuration",
-	orchdv1.Orchd_RemoveLegacyConfig_FullMethodName: "change orch's configuration",
-	// Reason: every sweep spends the user's GitHub rate limit, and a task can
-	// read the cache instead. Tasks' gh pr mutations still request sweeps
-	// through the hook, within the same one-a-minute limit.
-	orchdv1.Orchd_RequestGitHubSweep_FullMethodName: "ask orchd to search GitHub",
-	// Reason: a watch can approve PRs, and verdicts carry text drawn from
-	// other people's code, so neither belongs in a task's reach.
-	orchdv1.Orchd_WatchPRReview_FullMethodName:            "change PR review watches",
-	orchdv1.Orchd_SetPRReviewUpdateInPlace_FullMethodName: "change PR review watches",
-	orchdv1.Orchd_StopPRReview_FullMethodName:             "change PR review watches",
-	orchdv1.Orchd_ListPRReviews_FullMethodName:            "read PR review verdicts",
-	orchdv1.Orchd_GetPRDetail_FullMethodName:              "read PR details through orchd (use gh)",
-	// Reason: landing is the user's gate on what an agent proposed, so an
-	// agent must not reach it; a transcript may quote other tasks' secrets.
-	orchdv1.Orchd_GetTaskActivity_FullMethodName:  "read other sessions' activity",
-	orchdv1.Orchd_GetPRLanding_FullMethodName:     "read PR landings",
-	orchdv1.Orchd_ListPRLandings_FullMethodName:   "read PR landings",
-	orchdv1.Orchd_LandPR_FullMethodName:           "push proposed commits",
-	orchdv1.Orchd_UndoPRLanding_FullMethodName:    "push proposed commits",
-	orchdv1.Orchd_DiscardPRLanding_FullMethodName: "decide PR landings",
-	orchdv1.Orchd_Restart_FullMethodName:          "restart orchd subsystems",
-	orchdv1.Orchd_InstallSafetyNet_FullMethodName: "install or upgrade cc-safety-net",
-	// Reason: a hook is a command Claude Code runs and a permission rule
-	// widens what agents may do, so changing either is the operator's call.
-	orchdv1.Orchd_SetSettingEnabled_FullMethodName: "change Claude Code, cc-safety-net or instruction, subagent and skill settings",
-	orchdv1.Orchd_AddSetting_FullMethodName:        "change Claude Code, cc-safety-net or instruction, subagent and skill settings",
-	orchdv1.Orchd_RemoveSetting_FullMethodName:     "change Claude Code, cc-safety-net or instruction, subagent and skill settings",
-	// Reason: the policy names every space's orgs and roots, which a task in
-	// one job must not learn about another; ApplySpaces is also refused to
-	// interactive harness sessions (refuseNonOperator).
-	orchdv1.Orchd_SetSpacesDraft_FullMethodName: "change the spaces policy",
-	orchdv1.Orchd_DiffSpaces_FullMethodName:     "read the spaces policy",
-	orchdv1.Orchd_ApplySpaces_FullMethodName:    "apply the spaces policy",
-	orchdv1.Orchd_VerifyToolLog_FullMethodName:  "read the command log",
-	// Reason: the summary names every space and its activity.
-	orchdv1.Orchd_SummarizeToolLog_FullMethodName: "summarize the command log",
-	// Reason: a switch turns off a layer that keeps one job's sessions out
-	// of another's; SetEnforcement is also refused to interactive harness
-	// sessions (refuseNonOperator).
-	orchdv1.Orchd_SetEnforcement_FullMethodName: "switch enforcement",
-	// Reason (D-61): the setting decides whether orch writes the sandbox
-	// rules; it is also refused to interactive harness sessions
-	// (refuseNonOperator).
-	orchdv1.Orchd_SetSandboxSetting_FullMethodName: "change the sandbox setting",
-	// Reason (SP-075): the rules decide what the outbound terms check
-	// refuses; also refused to interactive harness sessions.
-	orchdv1.Orchd_ChangeOutboundRule_FullMethodName: "change the outbound rules",
-	// Reason (SP-027): a relabel moves every space's content and its report
-	// names spaces; it is also refused to interactive harness sessions.
-	orchdv1.Orchd_Relabel_FullMethodName: "relabel the RAG store",
-	// Reason (SP-028): quarantine is readable by no session, and a purge
-	// deletes content; both are also refused to interactive harness sessions.
-	orchdv1.Orchd_ListQuarantine_FullMethodName:  "list quarantine",
-	orchdv1.Orchd_PurgeQuarantine_FullMethodName: "purge quarantine",
-	// Reason (SP-071): a retag moves a source between spaces and its answer
-	// says which spaces hold it; it is also refused to interactive harness
-	// sessions.
-	orchdv1.Orchd_RetagSource_FullMethodName: "retag a source",
-	// Reason (SP-060, D-19): chat direct messages never reach a queued
-	// task; the handler also refuses interactive harness sessions
-	// (refuseNonOperator).
-	orchdv1.Orchd_SearchDirectMessages_FullMethodName: "search direct messages",
-	// Reason: a queued task's identity comes from its task record, so a pin
-	// would only give it a second, self-reported one. Interactive sessions'
-	// hooks still pin (PinSession checks the harness process itself).
-	orchdv1.Orchd_PinSession_FullMethodName: "pin a session",
-	orchdv1.Orchd_EndSession_FullMethodName: "end a session's pin",
-	// Reason: a task has no session row, and the list names other sessions'
-	// spaces and directories (ListSessions also answers a task with none).
-	orchdv1.Orchd_ListSessions_FullMethodName: "list sessions",
-	// Reason (SP-047): a replay reads any session's command log and every
-	// policy revision; it is also refused to interactive harness sessions
-	// (refuseNonOperator).
-	orchdv1.Orchd_ReplaySpaces_FullMethodName: "replay the command log",
-	// Reason (SP-050): like DiffSpaces, these name every job's orgs, roots
-	// and checkouts; both are also refused to interactive harness sessions
-	// (refuseNonOperator).
-	orchdv1.Orchd_ListSpaces_FullMethodName: "list the spaces",
-	orchdv1.Orchd_ScanSpaces_FullMethodName: "scan folders for spaces",
-	// Reason (SP-077): an unlock makes a terminal the operator, so only the
-	// user's own terminal asks for one and only Orch.app confirms it.
-	orchdv1.Orchd_RequestUnlock_FullMethodName: "ask for an operator unlock",
-	orchdv1.Orchd_ListUnlocks_FullMethodName:   "list operator unlocks",
-	orchdv1.Orchd_ConfirmUnlock_FullMethodName: "confirm operator unlocks",
-	orchdv1.Orchd_ProveUnlock_FullMethodName:   "prove an operator unlock",
-	orchdv1.Orchd_Lock_FullMethodName:          "end operator unlocks",
-}
+// operatorActions says what each operator-only RPC would do, for the
+// refusal; operatorRPC registrations fill it (rpc_registry.go).
+var operatorActions = map[string]string{}
 
 // refuseQueued returns the refusal for method when ctx's caller is a queued
 // task and method is not one tasks may call, else nil.

@@ -27,6 +27,12 @@ var replayModes = map[string]bool{
 	string(spaces.GuardBlockOtherJobs): true, string(spaces.GuardStrict): true,
 }
 
+// Reason (SP-047): a replay reads any session's command log and every
+// policy revision; it is also refused to interactive harness sessions
+// (refuseNonOperator).
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ReplaySpaces_FullMethodName, "replay the command log",
+	spaceDecision{spaceOperator, "any session's command log"}))
+
 // ReplaySpaces decides one chain's recorded events again (SP-047). It reads
 // the command log, the owner's pin and stored revisions, and writes nothing.
 func (s *server) ReplaySpaces(ctx context.Context, req *orchdv1.ReplaySpacesRequest) (*orchdv1.ReplaySpacesResponse, error) {

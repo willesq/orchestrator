@@ -108,6 +108,11 @@ func (s *server) reviewWatcher() (*reviews.Watcher, error) {
 	return s.reviews, nil
 }
 
+// Reason: a watch can approve PRs, and verdicts carry text drawn from
+// other people's code, so neither belongs in a task's reach.
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_ListPRReviews_FullMethodName, "read PR review verdicts",
+	spaceDecision{spaceRecords, "PR review verdicts, by their PR owner's space (SP-026)"}))
+
 func (s *server) ListPRReviews(ctx context.Context, _ *orchdv1.ListPRReviewsRequest) (*orchdv1.ListPRReviewsResponse, error) {
 	w, err := s.reviewWatcher()
 	if err != nil {
@@ -132,6 +137,9 @@ func (s *server) ListPRReviews(ctx context.Context, _ *orchdv1.ListPRReviewsRequ
 	}
 	return out, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_WatchPRReview_FullMethodName, "change PR review watches",
+	spaceDecision{spaceNone, "starts a review watch, only from the PR owner's space (SP-026)"}))
 
 func (s *server) WatchPRReview(ctx context.Context, req *orchdv1.WatchPRReviewRequest) (*orchdv1.PRReview, error) {
 	w, err := s.reviewWatcher()
@@ -181,6 +189,9 @@ func (s *server) WatchPRReview(ctx context.Context, req *orchdv1.WatchPRReviewRe
 	return reviewPB(r), nil
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_SetPRReviewUpdateInPlace_FullMethodName, "change PR review watches",
+	spaceDecision{spaceNone, "changes a review watch, only from the PR owner's space (SP-026)"}))
+
 func (s *server) SetPRReviewUpdateInPlace(ctx context.Context, req *orchdv1.SetPRReviewUpdateInPlaceRequest) (*orchdv1.PRReview, error) {
 	w, err := s.reviewWatcher()
 	if err != nil {
@@ -202,6 +213,9 @@ func (s *server) SetPRReviewUpdateInPlace(ctx context.Context, req *orchdv1.SetP
 	return reviewPB(r), nil
 }
 
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_StopPRReview_FullMethodName, "change PR review watches",
+	spaceDecision{spaceNone, "stops a review watch, only from the PR owner's space (SP-026)"}))
+
 func (s *server) StopPRReview(ctx context.Context, req *orchdv1.StopPRReviewRequest) (*orchdv1.StopPRReviewResponse, error) {
 	w, err := s.reviewWatcher()
 	if err != nil {
@@ -220,6 +234,9 @@ func (s *server) StopPRReview(ctx context.Context, req *orchdv1.StopPRReviewRequ
 	}
 	return &orchdv1.StopPRReviewResponse{}, nil
 }
+
+var _ = registerRPCs(operatorRPC(orchdv1.Orchd_GetPRDetail_FullMethodName, "read PR details through orchd (use gh)",
+	spaceDecision{spaceRecords, "PR titles and bodies; another space's PR is NotFound before the detail cache is read (SP-026, RC-351)"}))
 
 func (s *server) GetPRDetail(ctx context.Context, req *orchdv1.GetPRDetailRequest) (*orchdv1.PRDetail, error) {
 	repo, _, err := reviews.ParseURL(req.GetUrl())

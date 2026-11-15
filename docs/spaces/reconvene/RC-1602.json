@@ -1,0 +1,12 @@
+{
+  "id": "RC-1602",
+  "kind": "follow-up",
+  "topic": "Other tests still fail now and then under parallel load",
+  "detail": "While SP-082 looped go test -count=1 ./... for load, 2 of about 36 full-suite runs failed outside SP-082's tests: once TestHTTPDownload/success_writes_file (internal/model or internal/qdrant), once a test whose log was not kept. Proposed: a follow-up feature to find and fix them as SP-082 did.",
+  "source": "https://github.com/willesq/orchestrator/pull/206",
+  "raised": "2026-11-15",
+  "affects": [
+    "SP-082"
+  ],
+  "status": "open"
+}
