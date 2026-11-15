@@ -11,6 +11,7 @@ struct OrchApp: App {
                 monitor: delegate.model.monitor, prMonitor: delegate.model.prMonitor,
                 loginItem: delegate.model.loginItem, control: delegate.model.control,
                 enforcement: delegate.model.enforcement,
+                unlocks: delegate.model.unlocks,
                 openMainWindow: { delegate.showMainWindow() },
                 openSpaces: {
                     delegate.model.navigator.showSettings(.spaces)
@@ -59,12 +60,14 @@ final class AppModel {
     let enforcement: EnforcementModel
     let placement: PlacementValidator
     let spaces: SpacesOverviewModel
+    /// Operator unlocks waiting for the user or in force (SP-077).
+    let unlocks: UnlocksModel
     /// Keeps the sidebar's badges current between visits to their tabs.
     private(set) var badges: PeriodicRefresh?
 
     init() {
         let api: any DaemonAPI & MemoryAPI & ControlAPI & TasksAPI & GitHubAPI & PRReviewAPI & PRLandingAPI & SystemAPI & CatalogAPI
-            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesOverviewAPI
+            & SafetyNetAPI & SettingsAPI & ConfigAPI & DocsOwnersAPI & SpacesOverviewAPI & UnlocksAPI
         do {
             let client = try DaemonClient()
             Task.detached { try? await client.run() }
@@ -97,6 +100,7 @@ final class AppModel {
         enforcement = EnforcementModel(api: api)
         placement = PlacementValidator(api: api)
         spaces = SpacesOverviewModel(api: api)
+        unlocks = UnlocksModel(api: api, confirmer: DeviceOwnerConfirmer())
         docsOwners = DocsOwnersModel(api: api, knownOwners: { [api] in try await api.gitHubScopes(refresh: false).scopes.map(\.owner) })
     }
 
@@ -143,6 +147,13 @@ final class AppModel {
         system.startSampling()
         // The "enforcement off" banner must show without opening anything.
         enforcement.start()
+        // A terminal waits on the user's answer, so its request must show
+        // without opening anything (SP-077).
+        unlocks.onNewRequests = { [spaces] requests in
+            guard spaces.allowsNotifications else { return }
+            postUnlockRequests(requests)
+        }
+        unlocks.start()
         // Docs, Safety Net and Claude change rarely; every few minutes is
         // plenty for a badge, and each tab reloads itself when opened.
         let badges = PeriodicRefresh(interval: .seconds(300), actions: [
@@ -264,6 +275,12 @@ extension UnreachableDaemon: SpacesAPI {
     func enforcement() async throws -> EnforcementState { throw failure }
     func setEnforcement(layer: String, state: String, forSeconds: Int64) async throws -> EnforcementChangeResult { throw failure }
     func explainPlacement(target: String) async throws -> PlacementExplanation { throw failure }
+}
+
+extension UnreachableDaemon: UnlocksAPI {
+    func unlocks() async throws -> [OperatorUnlock] { throw failure }
+    func confirmUnlock(id: String, allow: Bool) async throws { throw failure }
+    func lockUnlock(id: String) async throws -> Int { throw failure }
 }
 
 extension UnreachableDaemon: SpacesOverviewAPI {

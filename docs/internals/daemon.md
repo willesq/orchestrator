@@ -303,9 +303,9 @@ refuses it every RPC in `operatorActions` before the handler runs (`refuseUnprov
 `refuseNonOperator` refuses it too (applying or diffing the policy, the enforcement and sandbox
 switches, outbound rules, relabel, the command log, settings, ingest, dispatch and the rest).
 Interactive sessions keep what they could call before. With no policy applied, the process tree
-alone is the operator, as before spaces (INV-10). A terminal unlock confirmed in Orch.app is
-SP-077; until then, under a policy, the CLI's operator commands are refused and Orch.app is the
-way to run them.
+alone is the operator, as before spaces (INV-10). Under a policy a terminal becomes the operator
+only through an [unlock confirmed in Orch.app](#operator-unlock) (SP-077); without one, the CLI's
+operator commands are refused and Orch.app is the way to run them.
 
 orchd recognizes Orch.app by its code signature (RC-706; `appsig_darwin.go`, macOS with cgo).
 The check runs the first time a call on a connection needs evidence, while a policy is applied,
@@ -327,6 +327,79 @@ bundle with that identifier there, which is replacing the app the user opens.
 
 The recovery server (settings only) resolves no caller and keeps the process-tree rule.
 
+### Operator unlock
+
+`orch spaces unlock --for <duration>` (SP-077, D-71; `internal/daemon/unlock.go` and
+`unlock_rpc.go`) is how a terminal becomes the operator while a policy is applied, for example to
+run `orch rag relabel`. Its evidence is `operatorBy = "unlock"`, which every check that accepts
+Orch.app's evidence accepts too (reads of every space, `refuseNonOperator`, `refuseUnproven`,
+dispatch placement), except confirming or listing unlocks, which stay Orch.app's alone
+(`refuseNonApp`). An unlocked terminal can therefore also apply a policy or switch enforcement
+off, changes that outlast the unlock; Orch.app says so beside each request.
+
+1. **Request.** `RequestUnlock{for_seconds}` (1 s to 60 min) is accepted only from a caller that
+   resolves as the operator by process tree: no harness above it and not started by orchd
+   (`refuseQueued` and the caller kind refuse tasks, sessions and harness descendants), and only
+   while a policy is applied (with none, a terminal is the operator already). `refuseUnproven`
+   lets `RequestUnlock`, `ProveUnlock` and `Lock` through for such a caller (`unlockCallable`).
+   orchd records the requester by PID and start time, its command line (each argument quoted when
+   needed), its executable, its controlling terminal (`procstat.TTY`, e.g. `ttys003`, which the
+   CLI prints too) and its parents' programs (bounded, with control, separator and invisible
+   format characters replaced), then checks that the PID still names the process that
+   opened the connection (`livePeer`, see below), and holds the call open. Nothing is granted
+   while it waits. At most 4 requests wait at once (one per process), and at most 6 are accepted
+   a minute.
+2. **Confirm.** Orch.app lists requests with `ListUnlocks` and answers with `ConfirmUnlock{id,
+   allow}`; both are refused to every caller but Orch.app recognized by its code signature
+   ([operator evidence](#operator-evidence)), including an unlocked terminal. The app asks for
+   Touch ID or the login password before it confirms (LocalAuthentication's device-owner
+   policy, with a prompt naming only the duration and PID), so a program driving its buttons
+   through Accessibility cannot confirm (RC-711). Denying needs no authentication. A request ends
+   unconfirmed when denied, after 2 minutes, when its caller gives up (Ctrl-C, even as it is
+   confirmed), or when Orch.app locks it; `RequestUnlock` then fails.
+3. **Prove.** A confirmed request is not yet an unlock. orchd makes up a code (`NNN-NNN`) that
+   only Orch.app receives (in `ListUnlocks`), and `RequestUnlock` returns to the terminal without
+   it. The user types the code into the terminal, and the CLI sends it with
+   `ProveUnlock{id, code}` from the requesting process (the same PID and start time, its
+   connection checked with `livePeer`). A match within 2 minutes grants the unlock; a third wrong
+   code drops the request. Reason: the terminal is not a channel orchd can trust, since any
+   process of the user can write to it, so the proof flows from the app, which only the user
+   sees, to the terminal; a request an agent filed at the same time, even if confirmed by
+   mistake, never receives its code.
+4. **Grant.** At every call the resolver gives `operatorBy = "unlock"` to a caller resolved as
+   the operator by process tree whose process, or an ancestor, is the requester of an unlock in
+   force, matched by PID and start time. Because the walk starts from the connection's PID at
+   call time, orchd then checks again, against the socket's kernel token, that this PID still
+   names the process that opened the connection (`livePeer`, D-44): a connection handed on by a
+   process that exited does not inherit the unlock of whatever process reuses its PID. A
+   descendant inside an agent harness never resolves as the operator, and its first call (a
+   session's hooks and MCP servers connect as it starts) ends every unlock above its harness
+   (`endUnder`; only while the harness orchd identified at accept still runs), so an agent
+   started in an unlocked shell cannot drive that shell. A process an agent detaches is
+   reparented to launchd and leaves the tree. At most 8 unlocks are in force.
+5. **End.** An unlock ends at its duration, when its requesting process exits (its descendants
+   are then reparented and no longer covered), when `Lock` ends it, when an agent harness calls
+   from under it, or with orchd (unlocks are kept in memory only). `Lock{id}` from Orch.app ends
+   the one named or, with no id, every unlock (pending, confirmed or in force); from a terminal it
+   ends only the unlocks covering the caller. The CLI runs `$SHELL` (or the command after `--`)
+   as its child once granted and calls `Lock` when it exits.
+
+orchd logs each request (with the PID, never the command line), confirmation, denial, refused
+code, grant and lock, and its refusals at most once a second. Accepted risks (RC-1151): the user's
+choice of which request to confirm is the gate. A process an agent detached, or a terminal window
+an agent opened through the terminal app's scripting, can ask for an unlock at the same time as
+the user; the rows differ by terminal, process, executable and parents, all read from the kernel.
+If the user confirms the agent's row, the agent can print a fake code prompt into the user's
+terminal (any process of the user can write to and read from it, and nothing else reads it while
+`orch` waits for Orch.app) and prove its own request with what the user types, so the user should
+check that the row's terminal is theirs (the terminal app can show its tty name in the window
+title); requests
+held open or filed six a minute keep the user's own request out; an unlocked shell is as trusted
+as anything that can type into it (the one-command form narrows this), and the unlock ends on an
+agent's first call only when that harness connects to orchd (its orch hooks or MCP server); a
+stream opened while unlocked (`WatchTasks`) keeps the caller it resolved to; and only the
+harnesses orch knows (Claude Code, Codex) are told apart from a terminal.
+
 ### Reading memory by space
 
 Every memory read path applies the caller's readable spaces inside orchd (SP-025, INV-01,
@@ -338,8 +411,9 @@ and so every client built on them (`rag_search`, `rag_list_sources`, auto-RAG, s
 - **The applied revision does not verify:** nothing.
 - **Memory filtering switched off** (SP-070): every collection, and the response is logged as
   `<RPC> for <caller>: not enforced (memory filtering is switched off)`.
-- **Orch.app** ([operator evidence](#operator-evidence)): every collection, quarantine and the
-  base's unplaced chunks included, as before spaces.
+- **Orch.app** ([operator evidence](#operator-evidence)), or a terminal under a confirmed
+  [unlock](#operator-unlock): every collection, quarantine and the base's unplaced chunks
+  included, as before spaces.
 - **A session:** its pin's space, every public space and the private spaces it lists
   (`spaces.Resolved.CanRead`; D-16). A pin is taken only by a harness in its own session's tree
   or, for a new session, a harness started from a shell (an orphaned harness gets none), so a

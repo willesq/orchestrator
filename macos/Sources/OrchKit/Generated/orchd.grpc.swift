@@ -1099,6 +1099,71 @@ public enum Orchd_V1_Orchd: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "RequestUnlock" metadata.
+        public enum RequestUnlock: Sendable {
+            /// Request type for "RequestUnlock".
+            public typealias Input = Orchd_V1_RequestUnlockRequest
+            /// Response type for "RequestUnlock".
+            public typealias Output = Orchd_V1_RequestUnlockResponse
+            /// Descriptor for "RequestUnlock".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "RequestUnlock",
+                type: .unary
+            )
+        }
+        /// Namespace for "ListUnlocks" metadata.
+        public enum ListUnlocks: Sendable {
+            /// Request type for "ListUnlocks".
+            public typealias Input = Orchd_V1_ListUnlocksRequest
+            /// Response type for "ListUnlocks".
+            public typealias Output = Orchd_V1_ListUnlocksResponse
+            /// Descriptor for "ListUnlocks".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ListUnlocks",
+                type: .unary
+            )
+        }
+        /// Namespace for "ConfirmUnlock" metadata.
+        public enum ConfirmUnlock: Sendable {
+            /// Request type for "ConfirmUnlock".
+            public typealias Input = Orchd_V1_ConfirmUnlockRequest
+            /// Response type for "ConfirmUnlock".
+            public typealias Output = Orchd_V1_ConfirmUnlockResponse
+            /// Descriptor for "ConfirmUnlock".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ConfirmUnlock",
+                type: .unary
+            )
+        }
+        /// Namespace for "ProveUnlock" metadata.
+        public enum ProveUnlock: Sendable {
+            /// Request type for "ProveUnlock".
+            public typealias Input = Orchd_V1_ProveUnlockRequest
+            /// Response type for "ProveUnlock".
+            public typealias Output = Orchd_V1_ProveUnlockResponse
+            /// Descriptor for "ProveUnlock".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "ProveUnlock",
+                type: .unary
+            )
+        }
+        /// Namespace for "Lock" metadata.
+        public enum Lock: Sendable {
+            /// Request type for "Lock".
+            public typealias Input = Orchd_V1_LockRequest
+            /// Response type for "Lock".
+            public typealias Output = Orchd_V1_LockResponse
+            /// Descriptor for "Lock".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "orchd.v1.Orchd"),
+                method: "Lock",
+                type: .unary
+            )
+        }
         /// Descriptors for all methods in the "orchd.v1.Orchd" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             Ping.descriptor,
@@ -1183,7 +1248,12 @@ public enum Orchd_V1_Orchd: Sendable {
             ListPRLandings.descriptor,
             LandPR.descriptor,
             UndoPRLanding.descriptor,
-            DiscardPRLanding.descriptor
+            DiscardPRLanding.descriptor,
+            RequestUnlock.descriptor,
+            ListUnlocks.descriptor,
+            ConfirmUnlock.descriptor,
+            ProveUnlock.descriptor,
+            Lock.descriptor
         ]
     }
 }
@@ -3227,6 +3297,129 @@ extension Orchd_V1_Orchd {
             deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_PRLanding>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_PRLanding>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "RequestUnlock" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RequestUnlock asks Orch.app to confirm operator scope for the calling
+        /// > process and what it starts, for at most 60 minutes, while a spaces
+        /// > policy is applied (SP-077, D-71). It waits until Orch.app confirms or
+        /// > denies, the request lapses, or the caller gives up. Refused inside an
+        /// > agent session and inside tasks orchd runs.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RequestUnlockRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RequestUnlockRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RequestUnlockResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func requestUnlock<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RequestUnlockRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RequestUnlockRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RequestUnlockResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RequestUnlockResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ListUnlocks" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListUnlocks lists pending and active unlocks. Orch.app only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListUnlocksRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListUnlocksRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListUnlocksResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func listUnlocks<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListUnlocksRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListUnlocksRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListUnlocksResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListUnlocksResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ConfirmUnlock" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ConfirmUnlock confirms or denies a pending unlock. Orch.app only. A
+        /// > confirmed unlock shows a code in Orch.app, which the user types in the
+        /// > requesting terminal (ProveUnlock) before anything is granted.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ConfirmUnlockRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ConfirmUnlockRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ConfirmUnlockResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func confirmUnlock<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ConfirmUnlockRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ConfirmUnlockRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ConfirmUnlockResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfirmUnlockResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "ProveUnlock" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ProveUnlock sends the code Orch.app showed for a confirmed unlock, from
+        /// > the process that asked for it; a match grants the unlock.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ProveUnlockRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ProveUnlockRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ProveUnlockResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func proveUnlock<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ProveUnlockRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ProveUnlockRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ProveUnlockResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ProveUnlockResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "Lock" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Lock ends unlocks: from Orch.app the one named, or all; from a
+        /// > terminal the ones that cover the caller.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_LockRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_LockRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_LockResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func lock<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_LockRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_LockRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_LockResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_LockResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -6182,6 +6375,184 @@ extension Orchd_V1_Orchd {
                 onResponse: handleResponse
             )
         }
+
+        /// Call the "RequestUnlock" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > RequestUnlock asks Orch.app to confirm operator scope for the calling
+        /// > process and what it starts, for at most 60 minutes, while a spaces
+        /// > policy is applied (SP-077, D-71). It waits until Orch.app confirms or
+        /// > denies, the request lapses, or the caller gives up. Refused inside an
+        /// > agent session and inside tasks orchd runs.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_RequestUnlockRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_RequestUnlockRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_RequestUnlockResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func requestUnlock<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_RequestUnlockRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_RequestUnlockRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_RequestUnlockResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RequestUnlockResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.RequestUnlock.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ListUnlocks" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ListUnlocks lists pending and active unlocks. Orch.app only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ListUnlocksRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ListUnlocksRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ListUnlocksResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func listUnlocks<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ListUnlocksRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ListUnlocksRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ListUnlocksResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListUnlocksResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ListUnlocks.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ConfirmUnlock" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ConfirmUnlock confirms or denies a pending unlock. Orch.app only. A
+        /// > confirmed unlock shows a code in Orch.app, which the user types in the
+        /// > requesting terminal (ProveUnlock) before anything is granted.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ConfirmUnlockRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ConfirmUnlockRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ConfirmUnlockResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func confirmUnlock<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ConfirmUnlockRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ConfirmUnlockRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ConfirmUnlockResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfirmUnlockResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ConfirmUnlock.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "ProveUnlock" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > ProveUnlock sends the code Orch.app showed for a confirmed unlock, from
+        /// > the process that asked for it; a match grants the unlock.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_ProveUnlockRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_ProveUnlockRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_ProveUnlockResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func proveUnlock<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_ProveUnlockRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_ProveUnlockRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_ProveUnlockResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ProveUnlockResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.ProveUnlock.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "Lock" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > Lock ends unlocks: from Orch.app the one named, or all; from a
+        /// > terminal the ones that cover the caller.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Orchd_V1_LockRequest` message.
+        ///   - serializer: A serializer for `Orchd_V1_LockRequest` messages.
+        ///   - deserializer: A deserializer for `Orchd_V1_LockResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func lock<Result>(
+            request: GRPCCore.ClientRequest<Orchd_V1_LockRequest>,
+            serializer: some GRPCCore.MessageSerializer<Orchd_V1_LockRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Orchd_V1_LockResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_LockResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Orchd_V1_Orchd.Method.Lock.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
     }
 }
 
@@ -8700,6 +9071,159 @@ extension Orchd_V1_Orchd.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_DiscardPRLandingRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_PRLanding>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RequestUnlock" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RequestUnlock asks Orch.app to confirm operator scope for the calling
+    /// > process and what it starts, for at most 60 minutes, while a spaces
+    /// > policy is applied (SP-077, D-71). It waits until Orch.app confirms or
+    /// > denies, the request lapses, or the caller gives up. Refused inside an
+    /// > agent session and inside tasks orchd runs.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_RequestUnlockRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func requestUnlock<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_RequestUnlockRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RequestUnlockResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.requestUnlock(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_RequestUnlockRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_RequestUnlockResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListUnlocks" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListUnlocks lists pending and active unlocks. Orch.app only.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ListUnlocksRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listUnlocks<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ListUnlocksRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListUnlocksResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.listUnlocks(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ListUnlocksRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ListUnlocksResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ConfirmUnlock" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ConfirmUnlock confirms or denies a pending unlock. Orch.app only. A
+    /// > confirmed unlock shows a code in Orch.app, which the user types in the
+    /// > requesting terminal (ProveUnlock) before anything is granted.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ConfirmUnlockRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func confirmUnlock<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ConfirmUnlockRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfirmUnlockResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.confirmUnlock(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ConfirmUnlockRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ConfirmUnlockResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ProveUnlock" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ProveUnlock sends the code Orch.app showed for a confirmed unlock, from
+    /// > the process that asked for it; a match grants the unlock.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_ProveUnlockRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func proveUnlock<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_ProveUnlockRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ProveUnlockResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.proveUnlock(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_ProveUnlockRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_ProveUnlockResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "Lock" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Lock ends unlocks: from Orch.app the one named, or all; from a
+    /// > terminal the ones that cover the caller.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Orchd_V1_LockRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func lock<Result>(
+        request: GRPCCore.ClientRequest<Orchd_V1_LockRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_LockResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.lock(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Orchd_V1_LockRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Orchd_V1_LockResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -11552,6 +12076,179 @@ extension Orchd_V1_Orchd.ClientProtocol {
             metadata: metadata
         )
         return try await self.discardPRLanding(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "RequestUnlock" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > RequestUnlock asks Orch.app to confirm operator scope for the calling
+    /// > process and what it starts, for at most 60 minutes, while a spaces
+    /// > policy is applied (SP-077, D-71). It waits until Orch.app confirms or
+    /// > denies, the request lapses, or the caller gives up. Refused inside an
+    /// > agent session and inside tasks orchd runs.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func requestUnlock<Result>(
+        _ message: Orchd_V1_RequestUnlockRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_RequestUnlockResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_RequestUnlockRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.requestUnlock(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ListUnlocks" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ListUnlocks lists pending and active unlocks. Orch.app only.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func listUnlocks<Result>(
+        _ message: Orchd_V1_ListUnlocksRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ListUnlocksResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ListUnlocksRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.listUnlocks(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ConfirmUnlock" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ConfirmUnlock confirms or denies a pending unlock. Orch.app only. A
+    /// > confirmed unlock shows a code in Orch.app, which the user types in the
+    /// > requesting terminal (ProveUnlock) before anything is granted.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func confirmUnlock<Result>(
+        _ message: Orchd_V1_ConfirmUnlockRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ConfirmUnlockResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ConfirmUnlockRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.confirmUnlock(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "ProveUnlock" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > ProveUnlock sends the code Orch.app showed for a confirmed unlock, from
+    /// > the process that asked for it; a match grants the unlock.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func proveUnlock<Result>(
+        _ message: Orchd_V1_ProveUnlockRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_ProveUnlockResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_ProveUnlockRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.proveUnlock(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "Lock" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > Lock ends unlocks: from Orch.app the one named, or all; from a
+    /// > terminal the ones that cover the caller.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func lock<Result>(
+        _ message: Orchd_V1_LockRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Orchd_V1_LockResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Orchd_V1_LockRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.lock(
             request: request,
             options: options,
             onResponse: handleResponse

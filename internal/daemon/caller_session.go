@@ -86,6 +86,9 @@ type callerResolver struct {
 	// needsEvidence reports whether a spaces policy is applied (or does not
 	// verify), so the operator must be Orch.app (D-71); nil never needs it.
 	needsEvidence func() bool
+	// unlocks are the operator unlocks confirmed in Orch.app (SP-077); nil
+	// grants none.
+	unlocks *unlockRegistry
 }
 
 type resolvedKey struct{}
@@ -123,10 +126,21 @@ func (r *callerResolver) resolve(ctx context.Context) resolvedCaller {
 		return none("the caller's ancestry could not be read")
 	case a.harness == "":
 		c := resolvedCaller{kind: callerOperator, evidenceNeeded: r.needEvidence()}
-		if c.evidenceNeeded && a.app.isApp() {
+		switch {
+		case !c.evidenceNeeded:
+		case a.app.isApp():
 			c.operatorBy = operatorApp
+		case r != nil && r.unlocks.covers(a):
+			// Reason (SP-077): Orch.app confirmed an unlock for this
+			// process or one of its parents.
+			c.operatorBy = operatorUnlock
 		}
 		return c
+	}
+	if r != nil {
+		// Reason (SP-077): an agent must not act through an unlocked
+		// shell it runs in, so its first call ends the unlock above it.
+		r.unlocks.endUnder(a)
 	}
 	if r == nil || r.pins == nil {
 		return none("session pins are unavailable")
@@ -267,7 +281,7 @@ func (r *callerResolver) stream(srv any, ss grpc.ServerStream, info *grpc.Stream
 // check refuseNonOperator. Orch.app, sessions and, with no policy, the
 // operator are not affected.
 func refuseUnproven(c resolvedCaller, method string) error {
-	if c.kind != callerOperator || !c.evidenceNeeded || c.operatorBy != "" || taskCallable[method] {
+	if c.kind != callerOperator || !c.evidenceNeeded || c.operatorBy != "" || taskCallable[method] || unlockCallable[method] {
 		return nil
 	}
 	action, ok := operatorActions[method]
@@ -278,7 +292,7 @@ func refuseUnproven(c resolvedCaller, method string) error {
 		log.Printf("orchd: refused %s from a caller that is not Orch.app while a spaces policy is applied", rpcName(method))
 	}
 	return grpcstatus.Errorf(codes.PermissionDenied,
-		"only Orch.app can %s while a spaces policy is applied (D-71); a terminal is not the operator then", action)
+		"only Orch.app can %s while a spaces policy is applied (D-71); a terminal is the operator then only once unlocked: run 'orch spaces unlock --for 15m' and confirm it in Orch.app", action)
 }
 
 // resolvedStream is a server stream carrying the resolved caller.

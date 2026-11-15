@@ -156,6 +156,8 @@ type server struct {
 	// enforcement holds the enforcement switches (SP-070); nil without a
 	// store, when every layer enforces.
 	enforcement *enforcement
+	// unlocks are the operator unlocks confirmed in Orch.app (SP-077).
+	unlocks *unlockRegistry
 	// checkouts keeps per-checkout harness settings (SP-046); nil when not
 	// running.
 	checkouts *checkoutSettings
@@ -767,7 +769,8 @@ func Run(ctx context.Context) error {
 		tlog.policy = logPolicy(s.Sessions.CommandLog)
 		tlog.taskStatus = tasks.Status
 	}
-	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf, needsEvidence: policyApplied(sp)})
+	unlocks := newUnlockRegistry()
+	gs := newGRPCServer(&callerResolver{pins: pins, taskOf: live.taskOf, needsEvidence: policyApplied(sp), unlocks: unlocks})
 	srv = &server{
 		start: time.Now(), rag: svc, disp: disp, sup: sup, tasks: tasks, ctl: ctl, live: live, home: userHome(), hub: hub,
 		stopping:      runCtx.Done(),
@@ -803,6 +806,7 @@ func Run(ctx context.Context) error {
 		enforcement:  newEnforcement(ctx, store, settingsSvc),
 		termsRules:   newTermsRules(ctx, store),
 		guard:        defaultGuardWriter(),
+		unlocks:      unlocks,
 	}
 	srv.startGuardFiles(runCtx)
 	if tlog != nil {
