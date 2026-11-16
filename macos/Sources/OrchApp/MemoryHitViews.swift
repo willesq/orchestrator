@@ -87,6 +87,8 @@ struct HitInspector: View {
     var sensitive = false
 
     @AppStorage(HitInspectorView.storageKey) private var view = HitInspectorView.fields
+    /// The hit's JSON, made display-safe once per hit rather than per redraw.
+    @State private var json: String?
 
     var body: some View {
         ScrollView {
@@ -103,14 +105,25 @@ struct HitInspector: View {
                 switch view {
                 case .fields: fields
                 case .json:
-                    // JSON-escaped already; display-safe for bidi and the like.
-                    Text(verbatim: displaySafeLines(hit.json))
-                        .textStyle(.code)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let json {
+                        Text(verbatim: json)
+                            .textStyle(.code)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity)
+                    }
                 }
             }
             .padding(14)
+        }
+        .task(id: hit) {
+            json = nil
+            let hit = hit
+            // JSON-escaped already; display-safe for bidi and the like.
+            let safe = await Task.detached { displaySafeLines(hit.json) }.value
+            guard !Task.isCancelled else { return }
+            json = safe
         }
     }
 
