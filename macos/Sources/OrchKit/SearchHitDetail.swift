@@ -1,5 +1,21 @@
 import Foundation
 
+/// How a hit's inspector shows it: its fields laid out, or its raw JSON.
+public enum HitInspectorView: String, CaseIterable, Sendable {
+    case fields, json
+
+    /// The defaults key the choice is kept under, so it holds across hits
+    /// and launches.
+    public static let storageKey = "MemoryInspectorView"
+
+    public var title: String {
+        switch self {
+        case .fields: "Fields"
+        case .json: "JSON"
+        }
+    }
+}
+
 /// Where a hit's source can be opened from the app: a local file revealed in
 /// the Finder, or a plain web page.
 public enum SourceLink: Sendable, Equatable {

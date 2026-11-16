@@ -206,3 +206,19 @@ private func parse(_ raw: String) -> ParsedMemoryQuery { MemoryFilterParser.pars
         #expect(unixSeconds(nil) == 0 && unixSeconds(Date(timeIntervalSince1970: 12.7)) == 12)
     }
 }
+
+@Suite struct HitInspectorViewTests {
+    @Test func offersFieldsThenJSONUnderAStableKey() {
+        #expect(HitInspectorView.allCases == [.fields, .json])
+        #expect(HitInspectorView.allCases.map(\.title) == ["Fields", "JSON"])
+        #expect(HitInspectorView(rawValue: "json") == .json && HitInspectorView(rawValue: "x") == nil)
+        #expect(HitInspectorView.storageKey == "MemoryInspectorView")
+    }
+
+    @Test func jsonCarriesEveryFieldWithOrchdsNames() throws {
+        let hit = SearchHit(text: "body", sourceURI: "repo://o/r/README.md", sourceType: "repo_doc", tags: ["repo:r"])
+        let object = try #require(try JSONSerialization.jsonObject(with: Data(hit.json.utf8)) as? [String: Any])
+        #expect(object["source_uri"] as? String == "repo://o/r/README.md")
+        #expect(object["text"] as? String == "body" && object["tags"] as? [String] == ["repo:r"])
+    }
+}

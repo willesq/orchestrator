@@ -84,6 +84,11 @@ struct MemorySnapshots {
         let actions = HitActions(openSource: { _ in }, searchWithin: { _ in }, browseWithin: { _ in })
         try await renderBoth(HitInspector(hit: sampleHits[0], actions: actions), size: NSSize(width: 420, height: 720),
                              name: "memory-inspector", dir: dir)
+        // The view choice is kept in defaults; this test process's own.
+        UserDefaults.standard.set(HitInspectorView.json.rawValue, forKey: HitInspectorView.storageKey)
+        defer { UserDefaults.standard.removeObject(forKey: HitInspectorView.storageKey) }
+        try await renderBoth(HitInspector(hit: sampleHits[0], actions: actions), size: NSSize(width: 420, height: 720),
+                             name: "memory-inspector-json", dir: dir)
     }
 
     @Test func searchResults() async throws {
